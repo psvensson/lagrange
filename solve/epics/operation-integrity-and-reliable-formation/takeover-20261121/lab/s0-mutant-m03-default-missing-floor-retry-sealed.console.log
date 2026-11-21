@@ -1,0 +1,355 @@
+lab test: adams-gamla: ordinary (1 files) cores=4 mem=15.6GiB speed x2.57
+[adams-gamla] placement-shell=1934698
+[adams-gamla] placement-head=d48b1f59633148c3fae73798e3c0df40c456f81b
+[adams-gamla] placement-link=node_modules
+[adams-gamla] placement-link=data/examples
+[adams-gamla] placement-prepared=import-graph
+[adams-gamla] placement-env=factor:2.6 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adams-gamla] placement-pid=1935154
+[adams-gamla] # test-files planned=1
+[adams-gamla] classified lane ordinary: 1 file(s), jobs=3
+[adams-gamla] thermal: ok cpu 47C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] not ok test/control-plane/control-plane-owner-fact-read.test.js (120 assertions, 658ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 14
+[adams-gamla] # Subtest: readOwnerFact: a request that names no mode reaches the reader leader-required
+[adams-gamla]     ok 1 - one read
+[adams-gamla]     ok 2 - should be equal
+[adams-gamla]     ok 3 - should be equal
+[adams-gamla]     ok 4 - should be equivalent
+[adams-gamla]     ok 5 - never a weaker default mode
+[adams-gamla]     ok 6 - never a weaker default leader mode
+[adams-gamla]     ok 7 - the caller's floors travel with the read
+[adams-gamla]     ok 8 - the token cannot be weakened downstream
+[adams-gamla]     ok 9 - a failed read is typed unavailability, with no rows field
+[adams-gamla]     ok 10 - should be equal
+[adams-gamla]     1..10
+[adams-gamla] ok 1 - readOwnerFact: a request that names no mode reaches the reader leader-required # time=7.873ms
+[adams-gamla] 
+[adams-gamla] # Subtest: buildOwnerFactRequest: a caller-chosen, unknown or undefined mode is refused at construction
+[adams-gamla]     ok 1 - authoritativeReadMode=owner_local_only: typed refusal
+[adams-gamla]     ok 2 - authoritativeReadMode=owner_local_only: refusal code
+[adams-gamla]     ok 3 - authoritativeReadMode=owner_local_only: the refused field is named
+[adams-gamla]     ok 4 - authoritativeReadMode=owner_local_only: no read was issued
+[adams-gamla]     ok 5 - authoritativeReadMode=owner_rpc_preferred_sql_fallback: typed refusal
+[adams-gamla]     ok 6 - authoritativeReadMode=owner_rpc_preferred_sql_fallback: refusal code
+[adams-gamla]     ok 7 - authoritativeReadMode=owner_rpc_preferred_sql_fallback: the refused field is named
+[adams-gamla]     ok 8 - authoritativeReadMode=owner_rpc_preferred_sql_fallback: no read was issued
+[adams-gamla]     ok 9 - authoritativeReadMode=owner_rpc_required: typed refusal
+[adams-gamla]     ok 10 - authoritativeReadMode=owner_rpc_required: refusal code
+[adams-gamla]     ok 11 - authoritativeReadMode=owner_rpc_required: the refused field is named
+[adams-gamla]     ok 12 - authoritativeReadMode=owner_rpc_required: no read was issued
+[adams-gamla]     ok 13 - authoritativeReadMode=no_such_mode: typed refusal
+[adams-gamla]     ok 14 - authoritativeReadMode=no_such_mode: refusal code
+[adams-gamla]     ok 15 - authoritativeReadMode=no_such_mode: the refused field is named
+[adams-gamla]     ok 16 - authoritativeReadMode=no_such_mode: no read was issued
+[adams-gamla]     ok 17 - authoritativeReadMode=undefined: typed refusal
+[adams-gamla]     ok 18 - authoritativeReadMode=undefined: refusal code
+[adams-gamla]     ok 19 - authoritativeReadMode=undefined: the refused field is named
+[adams-gamla]     ok 20 - authoritativeReadMode=undefined: no read was issued
+[adams-gamla]     ok 21 - leaderMode=any: typed refusal
+[adams-gamla]     ok 22 - leaderMode=any: refusal code
+[adams-gamla]     ok 23 - leaderMode=any: the refused field is named
+[adams-gamla]     ok 24 - leaderMode=any: no read was issued
+[adams-gamla]     ok 25 - leaderMode=preferred: typed refusal
+[adams-gamla]     ok 26 - leaderMode=preferred: refusal code
+[adams-gamla]     ok 27 - leaderMode=preferred: the refused field is named
+[adams-gamla]     ok 28 - leaderMode=preferred: no read was issued
+[adams-gamla]     ok 29 - leaderMode=required: typed refusal
+[adams-gamla]     ok 30 - leaderMode=required: refusal code
+[adams-gamla]     ok 31 - leaderMode=required: the refused field is named
+[adams-gamla]     ok 32 - leaderMode=required: no read was issued
+[adams-gamla]     ok 33 - leaderMode=no_such_leader_mode: typed refusal
+[adams-gamla]     ok 34 - leaderMode=no_such_leader_mode: refusal code
+[adams-gamla]     ok 35 - leaderMode=no_such_leader_mode: the refused field is named
+[adams-gamla]     ok 36 - leaderMode=no_such_leader_mode: no read was issued
+[adams-gamla]     ok 37 - leaderMode=undefined: typed refusal
+[adams-gamla]     ok 38 - leaderMode=undefined: refusal code
+[adams-gamla]     ok 39 - leaderMode=undefined: the refused field is named
+[adams-gamla]     ok 40 - leaderMode=undefined: no read was issued
+[adams-gamla]     ok 41 - strategy=cache: typed refusal
+[adams-gamla]     ok 42 - strategy=cache: refusal code
+[adams-gamla]     ok 43 - strategy=cache: the refused field is named
+[adams-gamla]     ok 44 - strategy=cache: no read was issued
+[adams-gamla]     ok 45 - readProfile=planning: typed refusal
+[adams-gamla]     ok 46 - readProfile=planning: refusal code
+[adams-gamla]     ok 47 - readProfile=planning: the refused field is named
+[adams-gamla]     ok 48 - readProfile=planning: no read was issued
+[adams-gamla]     ok 49 - localReadConsistency=any_replica: typed refusal
+[adams-gamla]     ok 50 - localReadConsistency=any_replica: refusal code
+[adams-gamla]     ok 51 - localReadConsistency=any_replica: the refused field is named
+[adams-gamla]     ok 52 - localReadConsistency=any_replica: no read was issued
+[adams-gamla]     ok 53 - replicaFallbackConsistency=any_replica: typed refusal
+[adams-gamla]     ok 54 - replicaFallbackConsistency=any_replica: refusal code
+[adams-gamla]     ok 55 - replicaFallbackConsistency=any_replica: the refused field is named
+[adams-gamla]     ok 56 - replicaFallbackConsistency=any_replica: no read was issued
+[adams-gamla]     ok 57 - preferLeader=false: typed refusal
+[adams-gamla]     ok 58 - preferLeader=false: refusal code
+[adams-gamla]     ok 59 - preferLeader=false: the refused field is named
+[adams-gamla]     ok 60 - preferLeader=false: no read was issued
+[adams-gamla]     1..60
+[adams-gamla] ok 2 - buildOwnerFactRequest: a caller-chosen, unknown or undefined mode is refused at construction # time=5.681ms
+[adams-gamla] 
+[adams-gamla] # Subtest: buildOwnerFactRequest: floors, statement, table and reader are required, never defaulted
+[adams-gamla]     not ok 1 - no index floor: typed refusal
+[adams-gamla]       ---
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/control-plane/control-plane-owner-fact-read.test.js
+[adams-gamla]         lineNumber: 127
+[adams-gamla]         columnNumber: 9
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: >
+[adams-gamla]         Test.<anonymous>
+[adams-gamla]         (test/control-plane/control-plane-owner-fact-read.test.js:127:9)
+[adams-gamla]       source: >2
+[adams-gamla]               const reader = recordingReader();
+[adams-gamla]               const refusal = await refusalOf(reader, draft);
+[adams-gamla]               t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+[adams-gamla]         --------^
+[adams-gamla]               t.equal(refusal?.code, code, `${label}: refusal code`);
+[adams-gamla]               t.equal(refusal?.field, field, `${label}: the refused field is named`);
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     not ok 2 - no index floor: refusal code
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/control-plane/control-plane-owner-fact-read.test.js
+[adams-gamla]         lineNumber: 128
+[adams-gamla]         columnNumber: 9
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: >
+[adams-gamla]         Test.<anonymous>
+[adams-gamla]         (test/control-plane/control-plane-owner-fact-read.test.js:128:9)
+[adams-gamla]       source: >2
+[adams-gamla]               const refusal = await refusalOf(reader, draft);
+[adams-gamla]               t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+[adams-gamla]               t.equal(refusal?.code, code, `${label}: refusal code`);
+[adams-gamla]         --------^
+[adams-gamla]               t.equal(refusal?.field, field, `${label}: the refused field is named`);
+[adams-gamla]               t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -owner_fact_floor_required
+[adams-gamla]         +undefined
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     not ok 3 - no index floor: the refused field is named
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/control-plane/control-plane-owner-fact-read.test.js
+[adams-gamla]         lineNumber: 129
+[adams-gamla]         columnNumber: 9
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: >
+[adams-gamla]         Test.<anonymous>
+[adams-gamla]         (test/control-plane/control-plane-owner-fact-read.test.js:129:9)
+[adams-gamla]       source: >2
+[adams-gamla]               t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+[adams-gamla]               t.equal(refusal?.code, code, `${label}: refusal code`);
+[adams-gamla]               t.equal(refusal?.field, field, `${label}: the refused field is named`);
+[adams-gamla]         --------^
+[adams-gamla]               t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+[adams-gamla]             }
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -minimumIndex
+[adams-gamla]         +undefined
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     not ok 4 - no index floor: no read was issued
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/control-plane/control-plane-owner-fact-read.test.js
+[adams-gamla]         lineNumber: 130
+[adams-gamla]         columnNumber: 9
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: >
+[adams-gamla]         Test.<anonymous>
+[adams-gamla]         (test/control-plane/control-plane-owner-fact-read.test.js:130:9)
+[adams-gamla]       source: |2
+[adams-gamla]               t.equal(refusal?.code, code, `${label}: refusal code`);
+[adams-gamla]               t.equal(refusal?.field, field, `${label}: the refused field is named`);
+[adams-gamla]               t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+[adams-gamla]         --------^
+[adams-gamla]             }
+[adams-gamla]             const noReader = await refusalOf({read: null}, VALID);
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -0
+[adams-gamla]         +1
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     not ok 5 - no term floor: typed refusal
+[adams-gamla]       ---
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/control-plane/control-plane-owner-fact-read.test.js
+[adams-gamla]         lineNumber: 127
+[adams-gamla]         columnNumber: 9
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: >
+[adams-gamla]         Test.<anonymous>
+[adams-gamla]         (test/control-plane/control-plane-owner-fact-read.test.js:127:9)
+[adams-gamla]       source: >2
+[adams-gamla]               const reader = recordingReader();
+[adams-gamla]               const refusal = await refusalOf(reader, draft);
+[adams-gamla]               t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+[adams-gamla]         --------^
+[adams-gamla]               t.equal(refusal?.code, code, `${label}: refusal code`);
+[adams-gamla]               t.equal(refusal?.field, field, `${label}: the refused field is named`);
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     not ok 6 - no term floor: refusal code
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/control-plane/control-plane-owner-fact-read.test.js
+[adams-gamla]         lineNumber: 128
+[adams-gamla]         columnNumber: 9
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: >
+[adams-gamla]         Test.<anonymous>
+[adams-gamla]         (test/control-plane/control-plane-owner-fact-read.test.js:128:9)
+[adams-gamla]       source: >2
+[adams-gamla]               const refusal = await refusalOf(reader, draft);
+[adams-gamla]               t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+[adams-gamla]               t.equal(refusal?.code, code, `${label}: refusal code`);
+[adams-gamla]         --------^
+[adams-gamla]               t.equal(refusal?.field, field, `${label}: the refused field is named`);
+[adams-gamla]               t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -owner_fact_floor_required
+[adams-gamla]         +undefined
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     not ok 7 - no term floor: the refused field is named
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/control-plane/control-plane-owner-fact-read.test.js
+[adams-gamla]         lineNumber: 129
+[adams-gamla]         columnNumber: 9
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: >
+[adams-gamla]         Test.<anonymous>
+[adams-gamla]         (test/control-plane/control-plane-owner-fact-read.test.js:129:9)
+[adams-gamla]       source: >2
+[adams-gamla]               t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+[adams-gamla]               t.equal(refusal?.code, code, `${label}: refusal code`);
+[adams-gamla]               t.equal(refusal?.field, field, `${label}: the refused field is named`);
+[adams-gamla]         --------^
+[adams-gamla]               t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+[adams-gamla]             }
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -minimumTerm
+[adams-gamla]         +undefined
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     not ok 8 - no term floor: no read was issued
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/control-plane/control-plane-owner-fact-read.test.js
+[adams-gamla]         lineNumber: 130
+[adams-gamla]         columnNumber: 9
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: >
+[adams-gamla]         Test.<anonymous>
+[adams-gamla]         (test/control-plane/control-plane-owner-fact-read.test.js:130:9)
+[adams-gamla]       source: |2
+[adams-gamla]               t.equal(refusal?.code, code, `${label}: refusal code`);
+[adams-gamla]               t.equal(refusal?.field, field, `${label}: the refused field is named`);
+[adams-gamla]               t.equal(reader.calls.length, 0, `${label}: no read was issued`);
+[adams-gamla]         --------^
+[adams-gamla]             }
+[adams-gamla]             const noReader = await refusalOf({read: null}, VALID);
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -0
+[adams-gamla]         +1
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     ok 9 - negative index floor: typed refusal
+[adams-gamla]     ok 10 - negative index floor: refusal code
+[adams-gamla]     ok 11 - negative index floor: the refused field is named
+[adams-gamla]     ok 12 - negative index floor: no read was issued
+[adams-gamla]     ok 13 - fractional term floor: typed refusal
+[adams-gamla]     ok 14 - fractional term floor: refusal code
+[adams-gamla]     ok 15 - fractional term floor: the refused field is named
+[adams-gamla]     ok 16 - fractional term floor: no read was issued
+[adams-gamla]     ok 17 - text index floor: typed refusal
+[adams-gamla]     ok 18 - text index floor: refusal code
+[adams-gamla]     ok 19 - text index floor: the refused field is named
+[adams-gamla]     ok 20 - text index floor: no read was issued
+[adams-gamla]     ok 21 - no statement: typed refusal
+[adams-gamla]     ok 22 - no statement: refusal code
+[adams-gamla]     ok 23 - no statement: the refused field is named
+[adams-gamla]     ok 24 - no statement: no read was issued
+[adams-gamla]     ok 25 - params not a list: typed refusal
+[adams-gamla]     ok 26 - params not a list: refusal code
+[adams-gamla]     ok 27 - params not a list: the refused field is named
+[adams-gamla]     ok 28 - params not a list: no read was issued
+[adams-gamla]     ok 29 - a table with no owner partition: typed refusal
+[adams-gamla]     ok 30 - a table with no owner partition: refusal code
+[adams-gamla]     ok 31 - a table with no owner partition: the refused field is named
+[adams-gamla]     ok 32 - a table with no owner partition: no read was issued
+[adams-gamla]     ok 33 - half an expected replica: typed refusal
+[adams-gamla]     ok 34 - half an expected replica: refusal code
+[adams-gamla]     ok 35 - half an expected replica: the refused field is named
+[adams-gamla]     ok 36 - half an expected replica: no read was issued
+[adams-gamla]     ok 37 - a missing reader port: typed refusal
+[adams-gamla]     ok 38 - should be equal
+[adams-gamla]     1..38
+[adams-gamla] not ok 3 - buildOwnerFactRequest: floors, statement, table and reader are required, never defaulted # time=36.306ms
+[adams-gamla]   ---
+[adams-gamla]   at:
+[adams-gamla]     fileName: test/control-plane/control-plane-owner-fact-read.test.js
+[adams-gamla]     lineNumber: 104
+[adams-gamla]     columnNumber: 1
+[adams-gamla]     isToplevel: true
+[adams-gamla]   source: >2
+[adams-gamla]       });
+[adams-gamla]   
+[adams-gamla]     test('buildOwnerFactRequest: floors, statement, table and reader are required,
+[adams-gamla]     never defaulted',
+[adams-gamla]   
+[adams-gamla]     ^
+[adams-gamla]       async (t) => {
+[adams-gamla]         const {minimumIndex: _index, ...withoutIndex} = VALID;
+[adams-gamla]   ...
+[adams-gamla] 
+[adams-gamla] # Subtest: readHint: a hint is not an owner fact and cannot be read as one
+[adams-gamla]     ok 1 - should be equal
+[adams-gamla]     ok 2 - should be equivalent
+[adams-gamla]     ok 3 - a hint carries no owner-fact identity
+[adams-gamla]     ok 4 - a hint cannot be passed where an owner fact is required
+[adams-gamla]     ok 5 - a shape-compatible object is not an owner fact
+[adams-gamla]     ok 6 - only an answer readOwnerFact issued yields rows
+[adams-gamla]     ok 7 - a failed hint read is typed, never []
+[adams-gamla]     ok 8 - should be equal
+[adams-gamla]     1..8
+[adams-gamla] ok 4 - readHint: a hint is not an owner fact and cannot be read as one # time=1.636ms
+[adams-gamla] 
+[adams-gamla] 1..4
+[adams-gamla] # { total: 116, pass: 108, fail: 8 }
+[adams-gamla] # time=71.679ms
+[adams-gamla] # test-files total=1 pass=0 fail=1 assertions=120
+lab test: adams-gamla: # test-files total=1 pass=0 fail=1 assertions=120
+lab test: adams-gamla: results copied to test-output/reports/test-results-adams-gamla.ndjson
+# test-files total=1 pass=0 fail=1 assertions=120

@@ -1,0 +1,1 @@
+{"file":"test/raft/raft-rs-current-authority-observation.test.js","attempt":1,"ok":false,"assertions":4,"durationMs":1553,"retriedOnce":false,"firstFailureLine":"not ok 1 - (a) a deposed leader whose core already follows the newer term is observed as a follower while readStatus() still answers leader"}

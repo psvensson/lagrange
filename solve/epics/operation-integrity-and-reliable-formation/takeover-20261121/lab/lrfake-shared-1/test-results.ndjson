@@ -1,0 +1,12 @@
+{"file":"test/distributed/harness/__tests__/sql-engine-seam-conformance.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":2304,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/service-instance-selection-admission.test.js","attempt":1,"ok":true,"assertions":23,"durationMs":2646,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/runtime/service-runtime-consensus-publication.test.js","attempt":1,"ok":true,"assertions":16,"durationMs":2834,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/service-instance-creation-cas.test.js","attempt":1,"ok":true,"assertions":31,"durationMs":3265,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/test-helpers/committed-write-answer.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":1769,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/wasm-service/wasm-creation-local-record.test.js","attempt":1,"ok":true,"assertions":10,"durationMs":1954,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/register-service-move-handoff-refused.test.js","attempt":1,"ok":true,"assertions":16,"durationMs":2011,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/move-replica-assignment-token.test.js","attempt":1,"ok":false,"assertions":27,"durationMs":7120,"retriedOnce":false,"firstFailureLine":"not ok 1 - register-service cache visibility timeout should be retryable"}
+{"file":"test/wasm-service/bound-creation-handler-embedding.integration.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":2499,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/wasm-service/bound-creation-physical-custody.integration.test.js","attempt":1,"ok":true,"assertions":20,"durationMs":5715,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/wasm-service/bound-creation-restart.integration.test.js","attempt":1,"ok":true,"assertions":41,"durationMs":13592,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/wasm-service/bound-remove-physical-operation.integration.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":2783,"retriedOnce":false,"firstFailureLine":null}

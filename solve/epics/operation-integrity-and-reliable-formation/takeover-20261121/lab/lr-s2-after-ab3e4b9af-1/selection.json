@@ -1,0 +1,73 @@
+{
+  "sha": "ab3e4b9af19fc68c5b6b74b24042aee91bd77a3e",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/control-plane/named-write-outcome-total.test.js",
+    "test/query/named-write-real-producer-applied.test.js",
+    "test/query/provisioning-deadline-error-message.test.js",
+    "test/bootstrap/register-service-retryable-refusal.test.js",
+    "test/rebalancer/placement-explicit-replica-refusal-code.test.js",
+    "test/control-plane/heartbeat-liveness-at-commit.test.js",
+    "test/runtime/service-runtime-consensus-publication.test.js",
+    "test/bootstrap/register-service-move-handoff-refused.test.js",
+    "test/control-plane/service-instance-creation-cas.test.js",
+    "test/integration/control-plane-postgres-wire-scale.integration.test.js",
+    "test/query/sql-query-engine-create-table-quorum.test.js",
+    "test/bootstrap/bootstrap-api.test.js",
+    "test/bootstrap/node-registration-idempotency.test.js",
+    "test/control-plane/heartbeat-memory-trend.test.js",
+    "test/wasm-service/bound-remove-physical-operation.integration.test.js",
+    "test/control-plane/control-plane-write-identity.test.js",
+    "test/control-plane/endpoint-incarnation-authority.test.js",
+    "test/control-plane/control-plane-error-classification.test.js",
+    "test/rebalancer/coordinator-reservation-lifecycle.test.js",
+    "test/bootstrap/durable-rejoin-incarnation-advance.test.js",
+    "test/query/write-identity-instance.test.js",
+    "test/control-plane/membership-publication-native-ack-order.test.js",
+    "test/query/write-exactly-once-property.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/control-plane/membership-publication-native-ack-order.test.js",
+        "test/control-plane/named-write-outcome-total.test.js",
+        "test/query/named-write-real-producer-applied.test.js",
+        "test/query/provisioning-deadline-error-message.test.js",
+        "test/rebalancer/placement-explicit-replica-refusal-code.test.js",
+        "test/query/write-identity-instance.test.js",
+        "test/query/write-exactly-once-property.test.js",
+        "test/control-plane/heartbeat-memory-trend.test.js",
+        "test/runtime/service-runtime-consensus-publication.test.js",
+        "test/control-plane/service-instance-creation-cas.test.js",
+        "test/rebalancer/coordinator-reservation-lifecycle.test.js",
+        "test/control-plane/control-plane-write-identity.test.js",
+        "test/control-plane/endpoint-incarnation-authority.test.js",
+        "test/control-plane/heartbeat-liveness-at-commit.test.js",
+        "test/query/sql-query-engine-create-table-quorum.test.js",
+        "test/control-plane/control-plane-error-classification.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/bootstrap/register-service-retryable-refusal.test.js",
+        "test/bootstrap/bootstrap-api.test.js",
+        "test/bootstrap/register-service-move-handoff-refused.test.js",
+        "test/bootstrap/durable-rejoin-incarnation-advance.test.js",
+        "test/bootstrap/node-registration-idempotency.test.js"
+      ],
+      "jobs": 2,
+      "resourceClass": "bootstrap"
+    },
+    {
+      "files": [
+        "test/integration/control-plane-postgres-wire-scale.integration.test.js",
+        "test/wasm-service/bound-remove-physical-operation.integration.test.js"
+      ],
+      "jobs": 1,
+      "resourceClass": "exclusive"
+    }
+  ]
+}

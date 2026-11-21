@@ -1,0 +1,302 @@
+placement-shell=1926092
+placement-head=cf43a76ff1f3af507953d8d69f92358b27fc8de9
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.2 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=1926548
+# test-files planned=5
+classified lane ordinary: 4 file(s), jobs=3
+thermal: ok cpu 45C (coretemp/Package id 0) nvme unmeasured
+ok test/control-plane/gateway-sql-mutation-fallback-phase-scope.test.js (16 assertions, 1379ms)
+ok test/control-plane/membership-count-neutral-steady-trim.test.js (35 assertions, 1657ms)
+not ok test/rebalancer/rebalancer-entity-interaction-contract.test.js (31 assertions, 1878ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: runtime authoritative entity read owns canonical replica lineage
+    ok 1 - all consumers use the runtime lineage query
+    ok 2 - the broad SQL prefix is parameterized
+    ok 3 - the owner rejects wildcard, near-prefix, and alternate row forms
+    1..3
+ok 1 - runtime authoritative entity read owns canonical replica lineage # time=10.174ms
+
+# Subtest: non-partition remove safety serializes and evaluates its actual entity
+    not ok 1 - context.buildDeferredRemoveSafetyEvaluation is not a function
+      ---
+      stack: >
+        evaluateRemoveSafetyWithCompetitors
+        (src/rebalancer/operation-workflow-remove-safety-evaluator.js:456:20)
+      
+        evaluateRemoveSafety
+        (src/rebalancer/operation-workflow-remove-safety-evaluator.js:710:10)
+      
+        Test.<anonymous>
+        (test/rebalancer/rebalancer-entity-interaction-contract.test.js:173:26)
+      at:
+        fileName: src/rebalancer/operation-workflow-remove-safety-evaluator.js
+        lineNumber: 456
+        columnNumber: 20
+        functionName: evaluateRemoveSafetyWithCompetitors
+      type: TypeError
+      tapCaught: returnedPromiseRejection
+      source: >2
+          } catch (cause) {
+            const detail = cause?.cause ?? cause;
+            return context.buildDeferredRemoveSafetyEvaluation(
+        -------------------^
+              `Entity ${entityType}/${entityId} operation ledger is unavailable for removal arbitration: ` +
+                String(detail?.message ?? detail),
+      ...
+    
+    1..1
+not ok 2 - non-partition remove safety serializes and evaluates its actual entity # time=31.432ms
+  ---
+  at:
+    fileName: test/rebalancer/rebalancer-entity-interaction-contract.test.js
+    lineNumber: 158
+    columnNumber: 1
+    isToplevel: true
+  source: |2
+      });
+  
+    test('non-partition remove safety serializes and evaluates its actual entity',
+    ^
+      async (t) => {
+        const entityId = 'svc-runtime-safety';
+  ...
+
+# Subtest: move preflight preserves canonical entity identity at the safety owner
+    not ok 1 - Cannot read properties of undefined (reading 'isReplaceRemoveDispatchPhase')
+      ---
+      stack: >
+        evaluateRemoveSafetyWithCompetitors
+        (src/rebalancer/operation-workflow-remove-safety-evaluator.js:430:24)
+      
+        evaluateProspectiveRemoveSafety
+        (src/rebalancer/operation-workflow-remove-safety-evaluator.js:717:10)
+      
+        PriorityRecoverySupersededTarget.getMoveSafetyError
+        (src/rebalancer/priority-recovery-superseded-target.js:626:30)
+      
+        Test.<anonymous>
+        (test/rebalancer/rebalancer-entity-interaction-contract.test.js:200:17)
+      at:
+        fileName: src/rebalancer/operation-workflow-remove-safety-evaluator.js
+        lineNumber: 430
+        columnNumber: 24
+        functionName: evaluateRemoveSafetyWithCompetitors
+      type: TypeError
+      tapCaught: returnedPromiseRejection
+      source: |2
+          // T5' re-send, the post-WAIT redrive) run the same checks (F3).
+          const isReplaceRemoveDispatch =
+            context.repository.isReplaceRemoveDispatchPhase(operation);
+        -----------------------^
+          if (!isRemoveInitialDispatch && !isReplaceRemoveDispatch) {
+            return context.buildSafeRemoveSafetyEvaluation();
+      ...
+    
+    1..1
+not ok 3 - move preflight preserves canonical entity identity at the safety owner # time=4.699ms
+  ---
+  at:
+    fileName: test/rebalancer/rebalancer-entity-interaction-contract.test.js
+    lineNumber: 191
+    columnNumber: 1
+    isToplevel: true
+  source: |2
+      });
+  
+    test('move preflight preserves canonical entity identity at the safety owner',
+    ^
+      async (t) => {
+        const owner = Object.create(PriorityRecoverySupersededTarget.prototype);
+  ...
+
+# Subtest: planner handoff emits one complete move identity
+    ok 1 - the owner stamps identity once before any decision boundary
+    ok 2 - a rebalancer cannot silently switch entity domains
+    1..2
+ok 4 - planner handoff emits one complete move identity # time=2.346ms
+
+# Subtest: non-partition remove safety never substitutes cache projection for owner rows
+    ok 1 - an unavailable owner read fails closed without consulting cache
+    ok 2 - a successful owner read is the complete safety evidence
+    1..2
+ok 5 - non-partition remove safety never substitutes cache projection for owner rows # time=1.442ms
+
+# Subtest: message-group and runtime-service floors remain entity-owned
+    not ok 1 - context.buildDeferredRemoveSafetyEvaluation is not a function
+      ---
+      stack: >
+        evaluateRemoveSafetyWithCompetitors
+        (src/rebalancer/operation-workflow-remove-safety-evaluator.js:456:20)
+      
+        evaluateRemoveSafety
+        (src/rebalancer/operation-workflow-remove-safety-evaluator.js:710:10)
+      
+        Test.<anonymous>
+        (test/rebalancer/rebalancer-entity-interaction-contract.test.js:300:31)
+      at:
+        fileName: src/rebalancer/operation-workflow-remove-safety-evaluator.js
+        lineNumber: 456
+        columnNumber: 20
+        functionName: evaluateRemoveSafetyWithCompetitors
+      type: TypeError
+      tapCaught: returnedPromiseRejection
+      source: >2
+          } catch (cause) {
+            const detail = cause?.cause ?? cause;
+            return context.buildDeferredRemoveSafetyEvaluation(
+        -------------------^
+              `Entity ${entityType}/${entityId} operation ledger is unavailable for removal arbitration: ` +
+                String(detail?.message ?? detail),
+      ...
+    
+    1..1
+not ok 6 - message-group and runtime-service floors remain entity-owned # time=3.778ms
+  ---
+  at:
+    fileName: test/rebalancer/rebalancer-entity-interaction-contract.test.js
+    lineNumber: 291
+    columnNumber: 1
+    isToplevel: true
+  source: |2
+      });
+  
+    test('message-group and runtime-service floors remain entity-owned',
+    ^
+      async (t) => {
+        const groupId = 'group-safety';
+  ...
+
+# Subtest: entity interaction contracts are explicit and unknown types fail closed
+    ok 1 - every unified lifecycle type has exactly one dispatch handler owner
+    ok 2 - the rebalancer exposes no stale entity type outside unified lifecycle
+    ok 3 - every supported non-partition workflow has an explicit safety policy
+    ok 4 - partition dispatch remains explicit
+    ok 5 - the stale WASM enum cannot silently route into the partition handler
+    ok 6 - unsupported entity safety rejects instead of borrowing partition rules
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+    ok 7 - unsupported entities are rejected before an operation row is persisted
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+    1..7
+ok 7 - entity interaction contracts are explicit and unknown types fail closed # time=70.662ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: untyped operation rows are outside canonical entity reads
+    ok 1 - runtime serialization sees only typed runtime operations
+    ok 2 - an untyped row cannot acquire partition semantics from partition_id
+    ok 3 - direct replay rejects an untyped operation instead of inventing identity
+Skipping in-flight operation count during coordinator shutdown {
+  nodeId: 'test-node-1',
+  error: 'Unsupported rebalancer entity type: null'
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+    1..3
+ok 8 - untyped operation rows are outside canonical entity reads # time=5.179ms
+
+# Subtest: observed completion consumes the same entity identity contract
+    ok 1 - canonical runtime lineage completes the exact operation
+    ok 2 - a row cannot complete an operation for a different entity
+    1..2
+ok 9 - observed completion consumes the same entity identity contract # time=0.964ms
+
+1..9
+# { total: 22, pass: 19, fail: 3 }
+# time=150.787ms
+ok test/raft/snapshot-dispatcher-wiring.test.js (21 assertions, 3344ms)
+# test-files total=4 pass=3 fail=1 assertions=103
+classified lane exclusive: 1 file(s), jobs=1
+thermal: ok cpu 50C (coretemp/Package id 0) nvme unmeasured
+not ok test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js (6 assertions, 2085ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: partition concurrent initialize callers join one native opening
+ok 1 - partition concurrent initialize callers join one native opening
+  ---
+  duration_ms: 157.975864
+  type: 'test'
+  ...
+# Subtest: partition shutdown waits for in-flight initialization before teardown
+ok 2 - partition shutdown waits for in-flight initialization before teardown
+  ---
+  duration_ms: 88.41563
+  type: 'test'
+  ...
+# Subtest: message-group concurrent initialize callers join one native opening
+ok 3 - message-group concurrent initialize callers join one native opening
+  ---
+  duration_ms: 69.843015
+  type: 'test'
+  ...
+# Subtest: message-group shutdown waits for in-flight initialization before teardown
+ok 4 - message-group shutdown waits for in-flight initialization before teardown
+  ---
+  duration_ms: 69.54997
+  type: 'test'
+  ...
+# Subtest: ReplicaHandler rechecks shutdown after awaited cleanup before CREATE mutation
+ok 5 - ReplicaHandler rechecks shutdown after awaited cleanup before CREATE mutation
+  ---
+  duration_ms: 57.175438
+  type: 'test'
+  ...
+# Subtest: ReplicaHandler releases CREATE claim when shutdown cleanup rejects
+not ok 6 - ReplicaHandler releases CREATE claim when shutdown cleanup rejects
+  ---
+  duration_ms: 55.69746
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/cf43a76ff1f3-mwqnnbto-1627053/test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js:128:1'
+  failureType: 'testCodeFailure'
+  error: 'Missing expected rejection.'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/cf43a76ff1f3-mwqnnbto-1627053/test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js:163:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 5
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 506.628879
+# time=2085ms
+# test-files total=1 pass=0 fail=1 assertions=6
+placement-results={"file":"test/control-plane/gateway-sql-mutation-fallback-phase-scope.test.js","attempt":1,"ok":true,"assertions":16,"durationMs":1379,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/membership-count-neutral-steady-trim.test.js","attempt":1,"ok":true,"assertions":35,"durationMs":1657,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/rebalancer-entity-interaction-contract.test.js","attempt":1,"ok":false,"assertions":31,"durationMs":1878,"retriedOnce":false,"firstFailureLine":"not ok 1 - context.buildDeferredRemoveSafetyEvaluation is not a function"}
+placement-results={"file":"test/raft/snapshot-dispatcher-wiring.test.js","attempt":1,"ok":true,"assertions":21,"durationMs":3344,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js","attempt":1,"ok":false,"assertions":6,"durationMs":2085,"retriedOnce":false,"firstFailureLine":"not ok 6 - ReplicaHandler releases CREATE claim when shutdown cleanup rejects"}

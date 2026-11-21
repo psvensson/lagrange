@@ -1,0 +1,213 @@
+placement-shell=1937203
+placement-head=a4d3d4833fa29f03c62aed0c11916e3dd6a48807
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.3 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=1937661
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=3
+thermal: ok cpu 49C (coretemp/Package id 0) nvme unmeasured
+not ok test/cdc/cdc-owner-fact-non-leader-absence.test.js (32 assertions, 2242ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: readOwnerFact: an empty answer from a replica that does not lead is never absence
+    # Subtest: the leader is unreachable; followers are local and reachable
+        ok 1 - unavailable, never READY with no rows
+        ok 2 - a named reason (owner_fact_read_failed)
+        ok 3 - unavailability has no rows field
+        ok 4 - should be equal
+        ok 5 - unavailability yields no rows to a consumer
+        ok 6 - no follower answers the owner-fact read successfully or ships rows
+        1..6
+    ok 1 - the leader is unreachable; followers are local and reachable # time=104.323ms
+    
+    # Subtest: the leader is reachable again: the same read is READY
+        ok 1 - progress once the authority is reachable
+        ok 2 - should be equivalent
+        ok 3 - should be equal
+        ok 4 - should be equal
+        ok 5 - should be equal
+        ok 6 - should be equal
+        ok 7 - should be equal
+        ok 8 - the leader's own empty answer is absence
+        ok 9 - should be equivalent
+        ok 10 - absence carries the witness of the leader that asserted it
+        ok 11 - the floors are inclusive
+        not ok 12 - a leader that has not applied the caller's index is not an answer
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-fact-non-leader-absence.test.js
+            lineNumber: 91
+            columnNumber: 9
+            typeName: Test
+          stack: |
+            Test.<anonymous> (test/cdc/cdc-owner-fact-non-leader-absence.test.js:91:9)
+          source: |2
+                  const belowIndex = await read(requestFor(OPERATION,
+                    {minimumIndex: appliedIndex + FAR_INDEX}));
+                  t.equal(belowIndex.state, STATE.UNAVAILABLE,
+            --------^
+                    'a leader that has not applied the caller\'s index is not an answer');
+                  t.equal(belowIndex.reason, REASON.BELOW_INDEX_FLOOR);
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -unavailable
+            +ready
+          ...
+        
+        not ok 13 - should be equal
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-fact-non-leader-absence.test.js
+            lineNumber: 93
+            columnNumber: 9
+            typeName: Test
+          stack: |
+            Test.<anonymous> (test/cdc/cdc-owner-fact-non-leader-absence.test.js:93:9)
+          source: >2
+                  t.equal(belowIndex.state, STATE.UNAVAILABLE,
+                    'a leader that has not applied the caller\'s index is not an answer');
+                  t.equal(belowIndex.reason, REASON.BELOW_INDEX_FLOOR);
+            --------^
+                  t.equal(Object.hasOwn(belowIndex, 'rows'), false);
+                  const belowTerm = await read(requestFor(OPERATION, {minimumTerm: term + 1}));
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -owner_fact_below_index_floor
+            +undefined
+          ...
+        
+        not ok 14 - should be equal
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-fact-non-leader-absence.test.js
+            lineNumber: 94
+            columnNumber: 9
+            typeName: Test
+          stack: |
+            Test.<anonymous> (test/cdc/cdc-owner-fact-non-leader-absence.test.js:94:9)
+          source: >2
+                    'a leader that has not applied the caller\'s index is not an answer');
+                  t.equal(belowIndex.reason, REASON.BELOW_INDEX_FLOOR);
+                  t.equal(Object.hasOwn(belowIndex, 'rows'), false);
+            --------^
+                  const belowTerm = await read(requestFor(OPERATION, {minimumTerm: term + 1}));
+                  t.equal(belowTerm.state, STATE.UNAVAILABLE,
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -false
+            +true
+          ...
+        
+        not ok 15 - a leader of an older term than the caller has seen is not an answer
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-fact-non-leader-absence.test.js
+            lineNumber: 96
+            columnNumber: 9
+            typeName: Test
+          stack: |
+            Test.<anonymous> (test/cdc/cdc-owner-fact-non-leader-absence.test.js:96:9)
+          source: >2
+                  t.equal(Object.hasOwn(belowIndex, 'rows'), false);
+                  const belowTerm = await read(requestFor(OPERATION, {minimumTerm: term + 1}));
+                  t.equal(belowTerm.state, STATE.UNAVAILABLE,
+            --------^
+                    'a leader of an older term than the caller has seen is not an answer');
+                  t.equal(belowTerm.reason, REASON.BELOW_TERM_FLOOR);
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -unavailable
+            +ready
+          ...
+        
+        not ok 16 - should be equal
+          ---
+          compare: ===
+          at:
+            fileName: test/cdc/cdc-owner-fact-non-leader-absence.test.js
+            lineNumber: 98
+            columnNumber: 9
+            typeName: Test
+          stack: |
+            Test.<anonymous> (test/cdc/cdc-owner-fact-non-leader-absence.test.js:98:9)
+          source: >2
+                  t.equal(belowTerm.state, STATE.UNAVAILABLE,
+                    'a leader of an older term than the caller has seen is not an answer');
+                  t.equal(belowTerm.reason, REASON.BELOW_TERM_FLOOR);
+            --------^
+                  const pinned = await read(requestFor(OPERATION, {expectedReplica:
+                    {nodeId: follower.nodeId, replicaId: follower.replicaId}}));
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -owner_fact_below_term_floor
+            +undefined
+          ...
+        
+        ok 17 - a caller-pinned serving replica is part of the witness predicate
+        ok 18 - should be equal
+        1..18
+    not ok 2 - the leader is reachable again: the same read is READY # time=63.227ms
+      ---
+      at:
+        fileName: test/cdc/cdc-owner-fact-non-leader-absence.test.js
+        lineNumber: 66
+        columnNumber: 13
+        typeName: Test
+      source: >2
+            });
+      
+            await t.test('the leader is reachable again: the same read is READY', async (t) => {
+        ------------^
+              group.setReachable(leader.nodeId, true);
+              const read = await openReader();
+      ...
+    
+    # Subtest: the node hosting the leader reads it in process, unreachable peers or not
+        ok 1 - no published leader and no reachable peer needed
+        ok 2 - should be equivalent
+        ok 3 - should be equal
+        ok 4 - no query transit was used
+        1..4
+    ok 3 - the node hosting the leader reads it in process, unreachable peers or not # time=4.012ms
+    
+    1..3
+not ok 1 - readOwnerFact: an empty answer from a replica that does not lead is never absence # time=524.631ms
+  ---
+  at:
+    fileName: test/cdc/cdc-owner-fact-non-leader-absence.test.js
+    lineNumber: 34
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    }
+  
+  
+    test('readOwnerFact: an empty answer from a replica that does not lead is
+    never absence',
+  
+    ^
+      {timeout: TEST_TIMEOUT_MS}, async (t) => {
+        const group = await openLedgerGroupSurface(t, import.meta.url);
+  ...
+
+1..1
+# { total: 28, pass: 23, fail: 5 }
+# time=538.441ms
+# test-files total=1 pass=0 fail=1 assertions=32
+placement-results={"file":"test/cdc/cdc-owner-fact-non-leader-absence.test.js","attempt":1,"ok":false,"assertions":32,"durationMs":2242,"retriedOnce":false,"firstFailureLine":"not ok 12 - a leader that has not applied the caller's index is not an answer"}

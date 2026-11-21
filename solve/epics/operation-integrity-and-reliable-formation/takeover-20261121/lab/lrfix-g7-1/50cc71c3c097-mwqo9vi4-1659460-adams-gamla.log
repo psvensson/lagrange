@@ -1,0 +1,77 @@
+placement-shell=1930112
+placement-head=50cc71c3c097cf50834907a131edd705cbd0daac
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=1930568
+# test-files planned=3
+classified lane ordinary: 3 file(s), jobs=3
+thermal: ok cpu 42C (coretemp/Package id 0) nvme unmeasured
+ok test/rebalancer/operation-record-step-shape.test.js (5 assertions, 1577ms)
+not ok test/rebalancer/replica-operation-insert-retry-idempotency.test.js (8 assertions, 1988ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: lost-outcome insert retry converges to already-applied success
+    not ok 1 - Authoritative replica operation not confirmed: op-idem-1
+      ---
+      stack: |
+        resolveNewOperationInsertCollision (src/rebalancer/replica-operation-repository-mutation-persistence-methods.js:257:13)
+      at:
+        fileName: src/rebalancer/replica-operation-repository-mutation-persistence-methods.js
+        lineNumber: 257
+        columnNumber: 13
+        functionName: resolveNewOperationInsertCollision
+      tapCaught: returnedPromiseRejection
+      source: |2
+                );
+              }
+              throw new Error(
+        ------------^
+                REPLICA_OPERATION_REPOSITORY_LITERAL
+                  .AUTHORITATIVE_REPLICA_OPERATION_NOT_CONFIRMED +
+      ...
+    
+    1..1
+not ok 1 - lost-outcome insert retry converges to already-applied success # time=26.904ms
+  ---
+  at:
+    fileName: test/rebalancer/replica-operation-insert-retry-idempotency.test.js
+    lineNumber: 93
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    }
+  
+  
+    test('lost-outcome insert retry converges to already-applied success', async
+    (t) => {
+  
+    ^
+      // The OR-IGNORE collision surface: the gateway reports success with zero
+      // affected rows because an identical-id row (this op's own earlier landed
+  ...
+
+# Subtest: fresh insert keeps returning success unchanged
+    ok 1 - a fresh insert persists as before
+    1..1
+ok 2 - fresh insert keeps returning success unchanged # time=3.803ms
+
+# Subtest: collision without an authoritative row stays a hard failure
+    ok 1 - an unobservable collision must not claim success (false or a thrown not-confirmed are both honest outcomes)
+    1..1
+ok 3 - collision without an authoritative row stays a hard failure # time=1.465ms
+
+# Subtest: collision with content-mismatched authoritative row stays a hard failure
+    ok 1 - a mismatched same-id row must not be claimed as already-applied
+    1..1
+ok 4 - collision with content-mismatched authoritative row stays a hard failure # time=1.21ms
+
+1..4
+# { total: 4, pass: 3, fail: 1 }
+# time=51.144ms
+ok test/rebalancer/admission-real-size-estimates.test.js (27 assertions, 2328ms)
+# test-files total=3 pass=2 fail=1 assertions=40
+placement-results={"file":"test/rebalancer/operation-record-step-shape.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":1577,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/replica-operation-insert-retry-idempotency.test.js","attempt":1,"ok":false,"assertions":8,"durationMs":1988,"retriedOnce":false,"firstFailureLine":"not ok 1 - Authoritative replica operation not confirmed: op-idem-1"}
+placement-results={"file":"test/rebalancer/admission-real-size-estimates.test.js","attempt":1,"ok":true,"assertions":27,"durationMs":2328,"retriedOnce":false,"firstFailureLine":null}

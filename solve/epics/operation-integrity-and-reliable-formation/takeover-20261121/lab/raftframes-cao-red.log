@@ -1,0 +1,132 @@
+lab test: adams-gamla: ordinary (1 files) cores=4 mem=15.6GiB speed x2.07
+[adams-gamla] placement-shell=1947216
+[adams-gamla] placement-head=90021de24752c35862ee5a174bd71805dd056217
+[adams-gamla] placement-link=node_modules
+[adams-gamla] placement-link=data/examples
+[adams-gamla] placement-prepared=import-graph
+[adams-gamla] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adams-gamla] placement-pid=1947672
+[adams-gamla] # test-files planned=1
+[adams-gamla] classified lane ordinary: 1 file(s), jobs=3
+[adams-gamla] thermal: ok cpu 43C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] not ok test/raft/raft-rs-current-authority-observation.test.js (4 assertions, 1553ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 13
+[adams-gamla] # Subtest: (a) a deposed leader whose core already follows the newer term is observed as a follower while readStatus() still answers leader
+[adams-gamla] not ok 1 - (a) a deposed leader whose core already follows the newer term is observed as a follower while readStatus() still answers leader
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 148.416725
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/90021de24752-mwqpiwxp-1738589/test/raft/raft-rs-current-authority-observation.test.js:178:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     the port has no current authority observation: readStatus() is its only status read
+[adams-gamla]     + actual - expected
+[adams-gamla]     
+[adams-gamla]     + 'undefined'
+[adams-gamla]     - 'function'
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected: 'function'
+[adams-gamla]   actual: 'undefined'
+[adams-gamla]   operator: 'strictEqual'
+[adams-gamla]   stack: |-
+[adams-gamla]     observe (file:///home/peter/projects/lagrange/test-output/placement-worktrees/90021de24752-mwqpiwxp-1738589/test/raft/raft-rs-current-authority-observation.test.js:78:10)
+[adams-gamla]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/90021de24752-mwqpiwxp-1738589/test/raft/raft-rs-current-authority-observation.test.js:206:34
+[adams-gamla]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/90021de24752-mwqpiwxp-1738589/test/raft/raft-rs-current-authority-observation.test.js:114:20
+[adams-gamla]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/90021de24752-mwqpiwxp-1738589/test/raft/raft-rs-current-authority-observation.test.js:206:22)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adams-gamla]   ...
+[adams-gamla] # Subtest: (b)(d) an observation enters the core for status and has_ready only, with and without delivered inbound
+[adams-gamla] not ok 2 - (b)(d) an observation enters the core for status and has_ready only, with and without delivered inbound
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 62.033435
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/90021de24752-mwqpiwxp-1738589/test/raft/raft-rs-current-authority-observation.test.js:263:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     the port has no current authority observation: readStatus() is its only status read
+[adams-gamla]     + actual - expected
+[adams-gamla]     
+[adams-gamla]     + 'undefined'
+[adams-gamla]     - 'function'
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected: 'function'
+[adams-gamla]   actual: 'undefined'
+[adams-gamla]   operator: 'strictEqual'
+[adams-gamla]   stack: |-
+[adams-gamla]     observe (file:///home/peter/projects/lagrange/test-output/placement-worktrees/90021de24752-mwqpiwxp-1738589/test/raft/raft-rs-current-authority-observation.test.js:78:10)
+[adams-gamla]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/90021de24752-mwqpiwxp-1738589/test/raft/raft-rs-current-authority-observation.test.js:269:30
+[adams-gamla]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/90021de24752-mwqpiwxp-1738589/test/raft/raft-rs-current-authority-observation.test.js:114:20
+[adams-gamla]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/90021de24752-mwqpiwxp-1738589/test/raft/raft-rs-current-authority-observation.test.js:269:18)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adams-gamla]   ...
+[adams-gamla] # Subtest: (c) observations across an apply report the applied position of the rows
+[adams-gamla] not ok 3 - (c) observations across an apply report the applied position of the rows
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 58.75351
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/90021de24752-mwqpiwxp-1738589/test/raft/raft-rs-current-authority-observation.test.js:301:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     the port has no current authority observation: readStatus() is its only status read
+[adams-gamla]     + actual - expected
+[adams-gamla]     
+[adams-gamla]     + 'undefined'
+[adams-gamla]     - 'function'
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected: 'function'
+[adams-gamla]   actual: 'undefined'
+[adams-gamla]   operator: 'strictEqual'
+[adams-gamla]   stack: |-
+[adams-gamla]     observe (file:///home/peter/projects/lagrange/test-output/placement-worktrees/90021de24752-mwqpiwxp-1738589/test/raft/raft-rs-current-authority-observation.test.js:78:10)
+[adams-gamla]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/90021de24752-mwqpiwxp-1738589/test/raft/raft-rs-current-authority-observation.test.js:306:19)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adams-gamla]   ...
+[adams-gamla] # Subtest: (e) a leader whose own-term entry has not applied is NOT_SETTLED while the turn that elected it waits
+[adams-gamla] not ok 4 - (e) a leader whose own-term entry has not applied is NOT_SETTLED while the turn that elected it waits
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 48.37431
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/90021de24752-mwqpiwxp-1738589/test/raft/raft-rs-current-authority-observation.test.js:326:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     the port has no current authority observation: readStatus() is its only status read
+[adams-gamla]     + actual - expected
+[adams-gamla]     
+[adams-gamla]     + 'undefined'
+[adams-gamla]     - 'function'
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected: 'function'
+[adams-gamla]   actual: 'undefined'
+[adams-gamla]   operator: 'strictEqual'
+[adams-gamla]   stack: |-
+[adams-gamla]     observe (file:///home/peter/projects/lagrange/test-output/placement-worktrees/90021de24752-mwqpiwxp-1738589/test/raft/raft-rs-current-authority-observation.test.js:78:10)
+[adams-gamla]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/90021de24752-mwqpiwxp-1738589/test/raft/raft-rs-current-authority-observation.test.js:342:20)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adams-gamla]   ...
+[adams-gamla] 1..4
+[adams-gamla] # tests 4
+[adams-gamla] # suites 0
+[adams-gamla] # pass 0
+[adams-gamla] # fail 4
+[adams-gamla] # cancelled 0
+[adams-gamla] # skipped 0
+[adams-gamla] # todo 0
+[adams-gamla] # duration_ms 339.728448
+[adams-gamla] # time=1553ms
+[adams-gamla] # test-files total=1 pass=0 fail=1 assertions=4
+lab test: adams-gamla: # test-files total=1 pass=0 fail=1 assertions=4
+lab test: adams-gamla: results copied to test-output/reports/test-results-adams-gamla.ndjson
+# test-files total=1 pass=0 fail=1 assertions=4

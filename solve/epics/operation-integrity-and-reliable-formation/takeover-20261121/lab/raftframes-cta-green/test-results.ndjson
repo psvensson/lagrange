@@ -1,0 +1,12 @@
+{"file":"test/message-group/message-group-fresh-learner-promotion.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":2427,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-admission-redrive-wakes.test.js","attempt":1,"ok":true,"assertions":38,"durationMs":2592,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/message-group/message-group-replace-removal-fence.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":3677,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/conf-state-authority.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":752,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/committed-membership-read.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":2162,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/conf-change-leader-self-removal.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":2832,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-current-term-applied.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":2163,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/message-group-fresh-identity-two-replace.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":3032,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/integration/message-group-fresh-identity-replacement.integration.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":5456,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/integration/message-group-learner-promotion-selection-guards.integration.test.js","attempt":1,"ok":true,"assertions":22,"durationMs":7552,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/integration/message-group-learner-promotion.integration.test.js","attempt":1,"ok":true,"assertions":16,"durationMs":5826,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/integration/message-group-learner-successor-ordering.integration.test.js","attempt":1,"ok":true,"assertions":20,"durationMs":4253,"retriedOnce":false,"firstFailureLine":null}

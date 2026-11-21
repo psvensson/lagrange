@@ -1,0 +1,77 @@
+{
+  "sha": "873570c54b7a32c779a061a50ca4f3fd52b853ff",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/partition/partition-cdc-currentness-stamp-witness.test.js",
+    "test/cache/system-table-cache-mutation-version-survives-clear.test.js",
+    "test/config/configuration-manager-revision.test.js",
+    "test/topology/latency-tree-routing-generation.test.js",
+    "test/cache/system-table-cache.test.js",
+    "test/cache/system-table-cache-observation.test.js",
+    "test/cache/system-table-cache-row-preview.test.js",
+    "test/cache/read-only-system-table-cache.test.js",
+    "test/config/configuration-manager.test.js",
+    "test/topology/latency-tree-service.test.js",
+    "test/partition/partition-cdc-topology-progress-currentness.test.js",
+    "test/partition/partition-cdc-lane-wave-isolation.test.js",
+    "test/partition/partition-cdc-lane-typed-backpressure.test.js",
+    "test/topology/cdc-group-propagation-service.test.js",
+    "test/topology/cdc-group-propagation-wave-lifecycle.test.js",
+    "test/topology/cdc-group-propagation-foreground-boundary.test.js",
+    "test/topology/cdc-group-propagation-wave-isolation.test.js",
+    "test/topology/cdc-group-propagation-stop-arms-nothing.test.js",
+    "test/topology/cdc-group-propagation-proposal-cost.test.js",
+    "test/topology/cdc-group-propagation-transport-outcome-failed-set.test.js",
+    "test/topology/cdc-recipient-domain-and-retained-debt.test.js",
+    "test/message-group/message-group-cdc-receiver-admission.test.js",
+    "test/message-group/message-group-native-provisional-route.test.js",
+    "test/message-group/message-group-native-custody-handoff.test.js",
+    "test/bootstrap/seed-teardown-pending-cdc-delivery.test.js",
+    "test/bootstrap/cdc-source-occurrence-delivery.integration.test.js",
+    "test/bootstrap/cache-hydration-strictness.test.js",
+    "test/config/latency-topology-ownership-guardrails.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/cache/system-table-cache-mutation-version-survives-clear.test.js",
+        "test/config/configuration-manager-revision.test.js",
+        "test/partition/partition-cdc-currentness-stamp-witness.test.js",
+        "test/topology/latency-tree-routing-generation.test.js",
+        "test/message-group/message-group-native-custody-handoff.test.js",
+        "test/message-group/message-group-native-provisional-route.test.js",
+        "test/message-group/message-group-cdc-receiver-admission.test.js",
+        "test/partition/partition-cdc-topology-progress-currentness.test.js",
+        "test/topology/cdc-group-propagation-foreground-boundary.test.js",
+        "test/partition/partition-cdc-lane-wave-isolation.test.js",
+        "test/partition/partition-cdc-lane-typed-backpressure.test.js",
+        "test/topology/cdc-group-propagation-proposal-cost.test.js",
+        "test/cache/system-table-cache.test.js",
+        "test/topology/cdc-group-propagation-service.test.js",
+        "test/topology/cdc-group-propagation-wave-lifecycle.test.js",
+        "test/topology/cdc-group-propagation-stop-arms-nothing.test.js",
+        "test/topology/cdc-group-propagation-wave-isolation.test.js",
+        "test/config/configuration-manager.test.js",
+        "test/topology/cdc-recipient-domain-and-retained-debt.test.js",
+        "test/cache/system-table-cache-row-preview.test.js",
+        "test/cache/read-only-system-table-cache.test.js",
+        "test/topology/cdc-group-propagation-transport-outcome-failed-set.test.js",
+        "test/config/latency-topology-ownership-guardrails.test.js",
+        "test/topology/latency-tree-service.test.js",
+        "test/cache/system-table-cache-observation.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/bootstrap/cdc-source-occurrence-delivery.integration.test.js",
+        "test/bootstrap/seed-teardown-pending-cdc-delivery.test.js",
+        "test/bootstrap/cache-hydration-strictness.test.js"
+      ],
+      "jobs": 2,
+      "resourceClass": "bootstrap"
+    }
+  ]
+}

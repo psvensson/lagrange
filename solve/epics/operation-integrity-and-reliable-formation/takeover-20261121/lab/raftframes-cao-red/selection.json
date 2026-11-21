@@ -1,0 +1,17 @@
+{
+  "sha": "90021de24752c35862ee5a174bd71805dd056217",
+  "host": "adams-gamla",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/raft/raft-rs-current-authority-observation.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/raft/raft-rs-current-authority-observation.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

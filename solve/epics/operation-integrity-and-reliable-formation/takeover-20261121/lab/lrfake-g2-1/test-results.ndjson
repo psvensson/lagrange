@@ -1,0 +1,4 @@
+{"file":"test/control-plane/runtime-access-settled-replay-projection.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":2511,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/heartbeat-liveness-at-commit.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":2752,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-placement-owner-core.test.js","attempt":1,"ok":false,"assertions":20,"durationMs":6503,"retriedOnce":false,"firstFailureLine":"not ok 18 - Item 2 production witness: 1-voter PartitionService admits 2 learners via normal ADD with placementAdmissionEnabled, RebalanceCoordinator/OperationWorkflowOwner dispatches GROWTH_PROMOTE, recovers an interrupted attempt, observes 3 committed vo"}
+{"file":"test/rebalancer/placement-admission-cross-coordinator-target-census.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":6975,"retriedOnce":false,"firstFailureLine":null}

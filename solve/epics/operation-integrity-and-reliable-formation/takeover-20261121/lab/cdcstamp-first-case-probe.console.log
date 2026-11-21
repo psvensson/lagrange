@@ -1,0 +1,49 @@
+lab test: adam-laptop: ordinary (1 files) cores=8 mem=15.5GiB speed x2.07
+[adam-laptop] placement-shell=3647185
+[adam-laptop] placement-head=b04d1f84b183ee48cc1e2e028769b50f9ecc934a
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3647642
+[adam-laptop] # test-files planned=1
+[adam-laptop] classified lane ordinary: 1 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 78C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 78C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 40C (coretemp/Package id 0) nvme 17C (nvme/Composite)
+[adam-laptop] not ok test/topology/cdc-first-case-cost-probe.test.js (1 assertions, 4693ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] {"level":50,"time":"2026-11-21T19:00:50.803Z","nodeId":"node-a","pid":3647746,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[adam-laptop] {"level":50,"time":"2026-11-21T19:00:50.815Z","nodeId":"node-a","pid":3647746,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[adam-laptop] # Subtest: probe: cold and warm cost of the first foreground-boundary case
+[adam-laptop] not ok 1 - probe: cold and warm cost of the first foreground-boundary case
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 3324.021637
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/b04d1f84b183-mwqrvkn6-1883246/test/topology/cdc-first-case-cost-probe.test.js:38:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'probe timings (ms): {"parse1":9,"parse2":1,"leader1":3195,"leader2":14,"fixture1":16,"drive1":15,"fixture2":7,"drive2":3}'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   operator: 'fail'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/b04d1f84b183-mwqrvkn6-1883246/test/topology/cdc-first-case-cost-probe.test.js:50:10)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adam-laptop]   ...
+[adam-laptop] # {"parse1":9,"parse2":1,"leader1":3195,"leader2":14,"fixture1":16,"drive1":15,"fixture2":7,"drive2":3}
+[adam-laptop] 1..1
+[adam-laptop] # tests 1
+[adam-laptop] # suites 0
+[adam-laptop] # pass 0
+[adam-laptop] # fail 1
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 3330.540599
+[adam-laptop] # time=4693ms
+[adam-laptop] # test-files total=1 pass=0 fail=1 assertions=1
+lab test: adam-laptop: # test-files total=1 pass=0 fail=1 assertions=1
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=1 pass=0 fail=1 assertions=1
+exit 1

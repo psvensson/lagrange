@@ -1,0 +1,35 @@
+{
+  "sha": "fe3f89ab182cc87e0b967848ae89fadad82f315a",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/bootstrap/node-joining-lease-registration.test.js",
+    "test/bootstrap/node-joining-service-message-group-activation.test.js",
+    "test/bootstrap/node-registration-idempotency.test.js",
+    "test/bootstrap/register-node-in-cluster.test.js",
+    "test/bootstrap/storage-budget-bootstrap.test.js",
+    "test/rebalancer/node-storage-budget-service.test.js",
+    "test/rebalancer/executor-bypasses-workflow-owner.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/rebalancer/executor-bypasses-workflow-owner.test.js",
+        "test/rebalancer/node-storage-budget-service.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/bootstrap/storage-budget-bootstrap.test.js",
+        "test/bootstrap/node-joining-service-message-group-activation.test.js",
+        "test/bootstrap/register-node-in-cluster.test.js",
+        "test/bootstrap/node-registration-idempotency.test.js",
+        "test/bootstrap/node-joining-lease-registration.test.js"
+      ],
+      "jobs": 2,
+      "resourceClass": "bootstrap"
+    }
+  ]
+}

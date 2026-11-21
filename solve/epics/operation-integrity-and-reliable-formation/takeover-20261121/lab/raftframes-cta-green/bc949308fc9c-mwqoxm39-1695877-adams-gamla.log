@@ -1,0 +1,38 @@
+placement-shell=1933085
+placement-head=bc949308fc9c26aed3c5e8eae3f31343742d90c1
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.2 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=1933541
+# test-files planned=12
+classified lane ordinary: 8 file(s), jobs=3
+thermal: ok cpu 42C (coretemp/Package id 0) nvme unmeasured
+ok test/message-group/message-group-fresh-learner-promotion.test.js (7 assertions, 2427ms)
+ok test/partition/partition-admission-redrive-wakes.test.js (38 assertions, 2592ms)
+ok test/message-group/message-group-replace-removal-fence.test.js (3 assertions, 3677ms)
+ok test/raft/raft-rs-backend/conf-state-authority.test.js (2 assertions, 752ms)
+ok test/raft/raft-rs-backend/committed-membership-read.test.js (5 assertions, 2162ms)
+ok test/raft/raft-rs-backend/conf-change-leader-self-removal.test.js (5 assertions, 2832ms)
+ok test/raft/raft-rs-current-term-applied.test.js (1 assertions, 2163ms)
+ok test/rebalancer/message-group-fresh-identity-two-replace.test.js (3 assertions, 3032ms)
+# test-files total=8 pass=8 fail=0 assertions=64
+classified lane exclusive: 4 file(s), jobs=1
+thermal: ok cpu 52C (coretemp/Package id 0) nvme unmeasured
+ok test/integration/message-group-fresh-identity-replacement.integration.test.js (1 assertions, 5456ms)
+ok test/integration/message-group-learner-promotion-selection-guards.integration.test.js (22 assertions, 7552ms)
+ok test/integration/message-group-learner-promotion.integration.test.js (16 assertions, 5826ms)
+ok test/integration/message-group-learner-successor-ordering.integration.test.js (20 assertions, 4253ms)
+# test-files total=4 pass=4 fail=0 assertions=59
+placement-results={"file":"test/message-group/message-group-fresh-learner-promotion.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":2427,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/partition-admission-redrive-wakes.test.js","attempt":1,"ok":true,"assertions":38,"durationMs":2592,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/message-group/message-group-replace-removal-fence.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":3677,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/conf-state-authority.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":752,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/committed-membership-read.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":2162,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/conf-change-leader-self-removal.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":2832,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-current-term-applied.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":2163,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/message-group-fresh-identity-two-replace.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":3032,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/integration/message-group-fresh-identity-replacement.integration.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":5456,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/integration/message-group-learner-promotion-selection-guards.integration.test.js","attempt":1,"ok":true,"assertions":22,"durationMs":7552,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/integration/message-group-learner-promotion.integration.test.js","attempt":1,"ok":true,"assertions":16,"durationMs":5826,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/integration/message-group-learner-successor-ordering.integration.test.js","attempt":1,"ok":true,"assertions":20,"durationMs":4253,"retriedOnce":false,"firstFailureLine":null}

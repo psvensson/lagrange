@@ -1,0 +1,21 @@
+{
+  "sha": "8b1cd678654c937d1c4ccc46516ca62af6bad6f9",
+  "host": "adams-gamla",
+  "checkBase": "0993265e53601cba4a6a41baa08158725cfcea7f",
+  "files": [
+    "test/rebalancer/replica-placement-owner-blocked-attempt.test.js",
+    "test/rebalancer/replica-placement-owner-blocked-release.test.js",
+    "test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js",
+        "test/rebalancer/replica-placement-owner-blocked-attempt.test.js",
+        "test/rebalancer/replica-placement-owner-blocked-release.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

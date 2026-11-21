@@ -1,0 +1,1710 @@
+placement-shell=3639515
+placement-head=c79fb9f02de769e3711c27134d93f348d2478660
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3639972
+# test-files planned=2
+classified lane ordinary: 2 file(s), jobs=4
+thermal: hold cpu 77C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 77C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 40C (coretemp/Package id 0) nvme 17C (nvme/Composite)
+not ok test/partition/placement-create-dispatch-execution-mirror.test.js (10 assertions, 5268ms)
+# TAP assertions failed; test process exited 1
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node',
+  replicaCount: 3,
+  dbPath: ':memory:'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+TAP version 13
+Became leader {
+  term: 1,
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1',
+  rebalancerActive: true
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:placement',
+  logIndex: 3,
+  obligations: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'node-a',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+Extracted table name from SQL { tableName: 'replica_operations' }
+Extracted data from parameterized UPDATE {
+  tableName: 'replica_operations',
+  dataKeys: [
+    'type',
+    'partition_id',
+    'source_node_id',
+    'target_node_id',
+    'entity_type',
+    'entity_id',
+    'membership_publication_epoch',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'lease_expires_at',
+    'error_message',
+    'steps_history',
+    'replica_id',
+    'target_claim_key',
+    'operation_id'
+  ]
+}
+Fetching updated row for CDC {
+  tableName: 'replica_operations',
+  keyColumn: 'operation_id',
+  keyValue: 'pl-sql_transactions-p1-3-0',
+  cdcPartitionId: 'replica_operations-p1',
+  cdcReplicaId: 'tx1-v3-r1',
+  suppressedSinceLastEmit: 0
+}
+Fetched updated row for CDC {
+  tableName: 'replica_operations',
+  rowKeys: [
+    'operation_id',
+    'type',
+    'partition_id',
+    'entity_type',
+    'entity_id',
+    'membership_publication_epoch',
+    'message_group_membership_owner_claim',
+    'message_group_membership_permit',
+    'source_replica_id',
+    'message_group_membership_lane_key',
+    'message_group_membership_phase',
+    'message_group_membership_obligation_state',
+    'message_group_membership_identity',
+    'message_group_learner_stamp',
+    'message_group_voter_stamp',
+    'message_group_removal_stamp',
+    'message_group_source_lifecycle_claim',
+    'create_admission_state',
+    'create_admission_token',
+    'create_admission_replica_created_at',
+    'create_admission_attempt_token',
+    'create_admission_previous_attempt_token',
+    'create_admission_attempt_seq',
+    'create_admission_workflow_updated_at',
+    'create_admission_owner_incarnation',
+    'replica_id',
+    'target_claim_key',
+    'source_node_id',
+    'target_node_id',
+    'status',
+    'workflow_step',
+    'created_at',
+    'updated_at',
+    'completed_at',
+    'lease_expires_at',
+    'error_message',
+    'steps_history',
+    'copy_source_node_id'
+  ],
+  cdcPartitionId: 'replica_operations-p1',
+  cdcReplicaId: 'tx1-v3-r1',
+  suppressedSinceLastEmit: 0
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:write:1',
+  logIndex: 4,
+  obligations: 1
+}
+Operation step changed {
+  operationId: 'pl-sql_transactions-p1-3-0',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  reason: 'dispatch_sending',
+  status: 'pending',
+  partitionId: 'sql_transactions-p1'
+}
+Sending replica operation {
+  operationId: 'pl-sql_transactions-p1-3-0',
+  target: 'node-b/service/replica-handler',
+  type: 'CREATE_REPLICA',
+  entityType: 'partition',
+  entityId: 'sql_transactions-p1',
+  replaceRemovePhase: false,
+  firstAttemptForStep: true
+}
+Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+Extracted table name from SQL { tableName: 'replica_operations' }
+Extracted data from parameterized UPDATE {
+  tableName: 'replica_operations',
+  dataKeys: [
+    'type',
+    'partition_id',
+    'source_node_id',
+    'target_node_id',
+    'entity_type',
+    'entity_id',
+    'membership_publication_epoch',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'lease_expires_at',
+    'error_message',
+    'steps_history',
+    'replica_id',
+    'target_claim_key',
+    'operation_id'
+  ]
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:write:2',
+  logIndex: 5,
+  obligations: 1
+}
+Operation step changed {
+  operationId: 'pl-sql_transactions-p1-3-0',
+  previousStep: 'SENDING',
+  newStep: 'CREATING',
+  reason: 'dispatch_creating',
+  status: 'creating',
+  partitionId: 'sql_transactions-p1'
+}
+Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node',
+  replicaCount: 3,
+  dbPath: ':memory:'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:placement',
+  logIndex: 3,
+  obligations: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'node-a',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+Extracted table name from SQL { tableName: 'replica_operations' }
+Extracted data from parameterized UPDATE {
+  tableName: 'replica_operations',
+  dataKeys: [
+    'type',
+    'partition_id',
+    'source_node_id',
+    'target_node_id',
+    'entity_type',
+    'entity_id',
+    'membership_publication_epoch',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'lease_expires_at',
+    'error_message',
+    'steps_history',
+    'replica_id',
+    'target_claim_key',
+    'operation_id'
+  ]
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:write:1',
+  logIndex: 4,
+  obligations: 1
+}
+Operation step changed {
+  operationId: 'pl-sql_transactions-p1-3-0',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  reason: 'dispatch_sending',
+  status: 'pending',
+  partitionId: 'sql_transactions-p1'
+}
+Storage reservation created with operation {
+  reservationId: 'res-pl-sql_transactions-p1-3-0',
+  operationId: 'pl-sql_transactions-p1-3-0',
+  targetNodeId: 'node-b',
+  estimatedBytes: 1,
+  expiresAt: 1795287441397
+}
+Sending replica operation {
+  operationId: 'pl-sql_transactions-p1-3-0',
+  target: 'node-b/service/replica-handler',
+  type: 'CREATE_REPLICA',
+  entityType: 'partition',
+  entityId: 'sql_transactions-p1',
+  replaceRemovePhase: false,
+  firstAttemptForStep: true
+}
+Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+Extracted table name from SQL { tableName: 'replica_operations' }
+Extracted data from parameterized UPDATE {
+  tableName: 'replica_operations',
+  dataKeys: [
+    'type',
+    'partition_id',
+    'source_node_id',
+    'target_node_id',
+    'entity_type',
+    'entity_id',
+    'membership_publication_epoch',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'lease_expires_at',
+    'error_message',
+    'steps_history',
+    'replica_id',
+    'target_claim_key',
+    'operation_id'
+  ]
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:write:2',
+  logIndex: 5,
+  obligations: 1
+}
+Operation step changed {
+  operationId: 'pl-sql_transactions-p1-3-0',
+  previousStep: 'SENDING',
+  newStep: 'CREATING',
+  reason: 'dispatch_creating',
+  status: 'creating',
+  partitionId: 'sql_transactions-p1'
+}
+Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node',
+  replicaCount: 3,
+  dbPath: ':memory:'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:placement',
+  logIndex: 3,
+  obligations: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'node-a',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+Extracted table name from SQL { tableName: 'replica_operations' }
+Extracted data from parameterized UPDATE {
+  tableName: 'replica_operations',
+  dataKeys: [
+    'type',
+    'partition_id',
+    'source_node_id',
+    'target_node_id',
+    'entity_type',
+    'entity_id',
+    'membership_publication_epoch',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'lease_expires_at',
+    'error_message',
+    'steps_history',
+    'replica_id',
+    'target_claim_key',
+    'operation_id'
+  ]
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:write:1',
+  logIndex: 4,
+  obligations: 1
+}
+Operation step changed {
+  operationId: 'pl-sql_transactions-p1-3-0',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  reason: 'dispatch_sending',
+  status: 'pending',
+  partitionId: 'sql_transactions-p1'
+}
+Storage reservation created with operation {
+  reservationId: 'res-pl-sql_transactions-p1-3-0',
+  operationId: 'pl-sql_transactions-p1-3-0',
+  targetNodeId: 'node-b',
+  estimatedBytes: 1,
+  expiresAt: 1795287441427
+}
+Sending replica operation {
+  operationId: 'pl-sql_transactions-p1-3-0',
+  target: 'node-b/service/replica-handler',
+  type: 'CREATE_REPLICA',
+  entityType: 'partition',
+  entityId: 'sql_transactions-p1',
+  replaceRemovePhase: false,
+  firstAttemptForStep: true
+}
+Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+Extracted table name from SQL { tableName: 'replica_operations' }
+Extracted data from parameterized UPDATE {
+  tableName: 'replica_operations',
+  dataKeys: [
+    'type',
+    'partition_id',
+    'source_node_id',
+    'target_node_id',
+    'entity_type',
+    'entity_id',
+    'membership_publication_epoch',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'lease_expires_at',
+    'error_message',
+    'steps_history',
+    'replica_id',
+    'target_claim_key',
+    'operation_id'
+  ]
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:write:2',
+  logIndex: 5,
+  obligations: 1
+}
+Operation step changed {
+  operationId: 'pl-sql_transactions-p1-3-0',
+  previousStep: 'SENDING',
+  newStep: 'CREATING',
+  reason: 'dispatch_creating',
+  status: 'creating',
+  partitionId: 'sql_transactions-p1'
+}
+Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node',
+  replicaCount: 3,
+  dbPath: ':memory:'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:placement',
+  logIndex: 3,
+  obligations: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'node-a',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+Extracted table name from SQL { tableName: 'replica_operations' }
+Extracted data from parameterized UPDATE {
+  tableName: 'replica_operations',
+  dataKeys: [
+    'type',
+    'partition_id',
+    'source_node_id',
+    'target_node_id',
+    'entity_type',
+    'entity_id',
+    'membership_publication_epoch',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'lease_expires_at',
+    'error_message',
+    'steps_history',
+    'replica_id',
+    'target_claim_key',
+    'operation_id'
+  ]
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:write:1',
+  logIndex: 4,
+  obligations: 1
+}
+Operation step changed {
+  operationId: 'pl-sql_transactions-p1-3-0',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  reason: 'dispatch_sending',
+  status: 'pending',
+  partitionId: 'sql_transactions-p1'
+}
+Storage reservation created with operation {
+  reservationId: 'res-pl-sql_transactions-p1-3-0',
+  operationId: 'pl-sql_transactions-p1-3-0',
+  targetNodeId: 'node-b',
+  estimatedBytes: 1,
+  expiresAt: 1795287441455
+}
+Sending replica operation {
+  operationId: 'pl-sql_transactions-p1-3-0',
+  target: 'node-b/service/replica-handler',
+  type: 'CREATE_REPLICA',
+  entityType: 'partition',
+  entityId: 'sql_transactions-p1',
+  replaceRemovePhase: false,
+  firstAttemptForStep: true
+}
+Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+Extracted table name from SQL { tableName: 'replica_operations' }
+Extracted data from parameterized UPDATE {
+  tableName: 'replica_operations',
+  dataKeys: [
+    'type',
+    'partition_id',
+    'source_node_id',
+    'target_node_id',
+    'entity_type',
+    'entity_id',
+    'membership_publication_epoch',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'lease_expires_at',
+    'error_message',
+    'steps_history',
+    'replica_id',
+    'target_claim_key',
+    'operation_id'
+  ]
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:write:2',
+  logIndex: 5,
+  obligations: 1
+}
+Operation step changed {
+  operationId: 'pl-sql_transactions-p1-3-0',
+  previousStep: 'SENDING',
+  newStep: 'CREATING',
+  reason: 'dispatch_creating',
+  status: 'creating',
+  partitionId: 'sql_transactions-p1'
+}
+Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node',
+  replicaCount: 3,
+  dbPath: ':memory:'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:placement',
+  logIndex: 3,
+  obligations: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'node-a',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+Extracted table name from SQL { tableName: 'replica_operations' }
+Extracted data from parameterized UPDATE {
+  tableName: 'replica_operations',
+  dataKeys: [
+    'type',
+    'partition_id',
+    'source_node_id',
+    'target_node_id',
+    'entity_type',
+    'entity_id',
+    'membership_publication_epoch',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'lease_expires_at',
+    'error_message',
+    'steps_history',
+    'replica_id',
+    'target_claim_key',
+    'operation_id'
+  ]
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:write:1',
+  logIndex: 4,
+  obligations: 1
+}
+Operation step changed {
+  operationId: 'pl-sql_transactions-p1-3-0',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  reason: 'dispatch_sending',
+  status: 'pending',
+  partitionId: 'sql_transactions-p1'
+}
+Storage reservation created with operation {
+  reservationId: 'res-pl-sql_transactions-p1-3-0',
+  operationId: 'pl-sql_transactions-p1-3-0',
+  targetNodeId: 'node-b',
+  estimatedBytes: 1,
+  expiresAt: 1795287441484
+}
+Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node',
+  replicaCount: 3,
+  dbPath: ':memory:'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:placement',
+  logIndex: 3,
+  obligations: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'node-a',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+Detected operation type from SQL { originalType: 'QUERY', detectedType: 'DELETE' }
+Extracted table name from SQL { tableName: 'replica_operations' }
+Extracted data from parameterized DELETE { tableName: 'replica_operations', dataKeys: [ 'operation_id' ] }
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:absent-elsewhere',
+  logIndex: 4,
+  obligations: 1
+}
+Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node',
+  replicaCount: 3,
+  dbPath: ':memory:'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:placement',
+  logIndex: 3,
+  obligations: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'node-a',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r2',
+  nodeId: 'node-c',
+  replicaCount: 3,
+  dbPath: ':memory:'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r1',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r2',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r2',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r2',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r2',
+  nodeId: 'node-c',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+Detected operation type from SQL { originalType: 'QUERY', detectedType: 'INSERT' }
+Extracted table name from SQL { tableName: 'replica_operations' }
+Extracted data from parameterized INSERT {
+  tableName: 'replica_operations',
+  dataKeys: [
+    'operation_id',
+    'type',
+    'partition_id',
+    'entity_type',
+    'entity_id',
+    'membership_publication_epoch',
+    'message_group_membership_owner_claim',
+    'message_group_membership_permit',
+    'source_replica_id',
+    'message_group_membership_lane_key',
+    'message_group_membership_phase',
+    'message_group_membership_obligation_state',
+    'message_group_membership_identity',
+    'message_group_learner_stamp',
+    'message_group_voter_stamp',
+    'message_group_removal_stamp',
+    'message_group_source_lifecycle_claim',
+    'create_admission_state',
+    'create_admission_token',
+    'create_admission_replica_created_at',
+    'create_admission_attempt_token',
+    'create_admission_previous_attempt_token',
+    'create_admission_attempt_seq',
+    'create_admission_workflow_updated_at',
+    'create_admission_owner_incarnation',
+    'replica_id',
+    'target_claim_key',
+    'source_node_id',
+    'target_node_id',
+    'status',
+    'workflow_step',
+    'created_at',
+    'updated_at',
+    'completed_at',
+    'lease_expires_at',
+    'error_message',
+    'steps_history',
+    'copy_source_node_id'
+  ]
+}
+Fetched inserted row for CDC {
+  tableName: 'replica_operations',
+  rowKeys: [
+    'operation_id',
+    'type',
+    'partition_id',
+    'entity_type',
+    'entity_id',
+    'membership_publication_epoch',
+    'message_group_membership_owner_claim',
+    'message_group_membership_permit',
+    'source_replica_id',
+    'message_group_membership_lane_key',
+    'message_group_membership_phase',
+    'message_group_membership_obligation_state',
+    'message_group_membership_identity',
+    'message_group_learner_stamp',
+    'message_group_voter_stamp',
+    'message_group_removal_stamp',
+    'message_group_source_lifecycle_claim',
+    'create_admission_state',
+    'create_admission_token',
+    'create_admission_replica_created_at',
+    'create_admission_attempt_token',
+    'create_admission_previous_attempt_token',
+    'create_admission_attempt_seq',
+    'create_admission_workflow_updated_at',
+    'create_admission_owner_incarnation',
+    'replica_id',
+    'target_claim_key',
+    'source_node_id',
+    'target_node_id',
+    'status',
+    'workflow_step',
+    'created_at',
+    'updated_at',
+    'completed_at',
+    'lease_expires_at',
+    'error_message',
+    'steps_history',
+    'copy_source_node_id'
+  ],
+  cdcPartitionId: 'replica_operations-p1',
+  cdcReplicaId: 'tx1-v3-r2',
+  suppressedSinceLastEmit: 0
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:deposed-copy',
+  logIndex: 3,
+  obligations: 1
+}
+Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+Detected operation type from SQL { originalType: 'QUERY', detectedType: 'DELETE' }
+Extracted table name from SQL { tableName: 'replica_operations' }
+Extracted data from parameterized DELETE { tableName: 'replica_operations', dataKeys: [ 'operation_id' ] }
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:retired',
+  logIndex: 4,
+  obligations: 1
+}
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r2' }
+Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node',
+  replicaCount: 3,
+  dbPath: ':memory:'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:placement',
+  logIndex: 3,
+  obligations: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'node-a',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+Extracted table name from SQL { tableName: 'replica_operations' }
+Extracted data from parameterized UPDATE {
+  tableName: 'replica_operations',
+  dataKeys: [
+    'type',
+    'partition_id',
+    'source_node_id',
+    'target_node_id',
+    'entity_type',
+    'entity_id',
+    'membership_publication_epoch',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'lease_expires_at',
+    'error_message',
+    'steps_history',
+    'replica_id',
+    'target_claim_key',
+    'operation_id'
+  ]
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:write:1',
+  logIndex: 4,
+  obligations: 1
+}
+Operation step changed {
+  operationId: 'pl-sql_transactions-p1-3-0',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  reason: 'dispatch_sending',
+  status: 'pending',
+  partitionId: 'sql_transactions-p1'
+}
+Storage reservation created with operation {
+  reservationId: 'res-pl-sql_transactions-p1-3-0',
+  operationId: 'pl-sql_transactions-p1-3-0',
+  targetNodeId: 'node-b',
+  estimatedBytes: 1,
+  expiresAt: 1795287441542
+}
+# Subtest: fresh placement CREATE binds its topology and advances through actual dispatch transitions
+ok 1 - fresh placement CREATE binds its topology and advances through actual dispatch transitions
+  ---
+  duration_ms: 3478.033448
+  type: 'test'
+  ...
+# Subtest: a SENDING placement CREATE re-entered by ledger CDC advances through real acknowledgement
+ok 2 - a SENDING placement CREATE re-entered by ledger CDC advances through real acknowledgement
+  ---
+  duration_ms: 43.250471
+  type: 'test'
+  ...
+# Subtest: a present placement row dispatches its CREATE once, without delay, through the retained owner's confirmation (cached ledger route: published)
+ok 3 - a present placement row dispatches its CREATE once, without delay, through the retained owner's confirmation (cached ledger route: published)
+  ---
+  duration_ms: 27.622442
+  type: 'test'
+  ...
+# Subtest: a present placement row dispatches its CREATE once, without delay, through the retained owner's confirmation (cached ledger route: unpublished)
+ok 4 - a present placement row dispatches its CREATE once, without delay, through the retained owner's confirmation (cached ledger route: unpublished)
+  ---
+  duration_ms: 26.410387
+  type: 'test'
+  ...
+# Subtest: a read served by another replica than the cached ledger route settles nothing: the CREATE dispatch is withheld and owed to the route publication
+ok 5 - a read served by another replica than the cached ledger route settles nothing: the CREATE dispatch is withheld and owed to the route publication
+  ---
+  duration_ms: 24.53252
+  type: 'test'
+  ...
+# Subtest: an absence served by another replica than the cached ledger route settles nothing: nothing is prepared or presented, the route publication owns the reconsideration
+not ok 6 - an absence served by another replica than the cached ledger route settles nothing: nothing is prepared or presented, the route publication owns the reconsideration
+  ---
+  duration_ms: 14.785498
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c79fb9f02de7-mwqrknt4-1862285/test/partition/placement-create-dispatch-execution-mirror.test.js:253:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'placement_repair_owner_unavailable'
+    - 'unqualified_binding'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'unqualified_binding'
+  actual: 'placement_repair_owner_unavailable'
+  operator: 'strictEqual'
+  stack: |-
+    assertOwedToRoute (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c79fb9f02de7-mwqrknt4-1862285/test/partition/placement-create-dispatch-execution-mirror.test.js:215:10)
+    withPlacementExecution.ledgerRoute (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c79fb9f02de7-mwqrknt4-1862285/test/partition/placement-create-dispatch-execution-mirror.test.js:266:5)
+    async file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c79fb9f02de7-mwqrknt4-1862285/test/partition/placement-create-dispatch-execution-mirror.test.js:142:7
+    async onLedgerLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c79fb9f02de7-mwqrknt4-1862285/test/partition/placement-admission-fixture.js:40:12)
+    async withPlacementExecution (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c79fb9f02de7-mwqrknt4-1862285/test/partition/placement-create-dispatch-execution-mirror.test.js:77:3)
+    async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c79fb9f02de7-mwqrknt4-1862285/test/partition/placement-create-dispatch-execution-mirror.test.js:255:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: a row still present on a deposed ledger leader but retired on the current one is not confirmed for dispatch
+ok 7 - a row still present on a deposed ledger leader but retired on the current one is not confirmed for dispatch
+  ---
+  duration_ms: 23.436957
+  type: 'test'
+  ...
+Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node',
+  replicaCount: 3,
+  dbPath: ':memory:'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:placement',
+  logIndex: 3,
+  obligations: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'node-a',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+Detected operation type from SQL { originalType: 'QUERY', detectedType: 'DELETE' }
+Extracted table name from SQL { tableName: 'replica_operations' }
+Extracted data from parameterized DELETE { tableName: 'replica_operations', dataKeys: [ 'operation_id' ] }
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:lost-row',
+  logIndex: 4,
+  obligations: 1
+}
+Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node',
+  replicaCount: 3,
+  dbPath: ':memory:'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:placement',
+  logIndex: 3,
+  obligations: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'node-a',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+Extracted table name from SQL { tableName: 'replica_operations' }
+Extracted data from parameterized UPDATE {
+  tableName: 'replica_operations',
+  dataKeys: [
+    'type',
+    'partition_id',
+    'source_node_id',
+    'target_node_id',
+    'entity_type',
+    'entity_id',
+    'membership_publication_epoch',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'lease_expires_at',
+    'error_message',
+    'steps_history',
+    'replica_id',
+    'target_claim_key',
+    'operation_id'
+  ]
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:write:1',
+  logIndex: 4,
+  obligations: 1
+}
+Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+Extracted table name from SQL { tableName: 'replica_operations' }
+Extracted data from parameterized UPDATE {
+  tableName: 'replica_operations',
+  dataKeys: [
+    'type',
+    'partition_id',
+    'source_node_id',
+    'target_node_id',
+    'entity_type',
+    'entity_id',
+    'membership_publication_epoch',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'lease_expires_at',
+    'error_message',
+    'steps_history',
+    'replica_id',
+    'target_claim_key',
+    'operation_id'
+  ]
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:write:2',
+  logIndex: 5,
+  obligations: 1
+}
+Operation step changed {
+  operationId: 'pl-sql_transactions-p1-3-0',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  reason: 'dispatch_sending',
+  status: 'pending',
+  partitionId: 'sql_transactions-p1'
+}
+Sending replica operation {
+  operationId: 'pl-sql_transactions-p1-3-0',
+  target: 'node-b/service/replica-handler',
+  type: 'CREATE_REPLICA',
+  entityType: 'partition',
+  entityId: 'sql_transactions-p1',
+  replaceRemovePhase: false,
+  firstAttemptForStep: true
+}
+Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+Extracted table name from SQL { tableName: 'replica_operations' }
+Extracted data from parameterized UPDATE {
+  tableName: 'replica_operations',
+  dataKeys: [
+    'workflow_step',
+    'status',
+    'updated_at',
+    'completed_at',
+    'error_message',
+    'steps_history',
+    'operation_id'
+  ]
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'execution-mirror:competing-terminal',
+  logIndex: 6,
+  obligations: 1
+}
+Durable terminal release obligations registered {
+  operationId: 'pl-sql_transactions-p1-3-0',
+  workflowStep: 'FAILED',
+  partitionId: 'sql_transactions-p1',
+  cause: 'terminal_release_pending',
+  attempt: 0,
+  delayMs: 500
+}
+Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+# Subtest: a CREATE dispatch withheld at the gate is dispatched exactly once after the retained owner confirms the row
+not ok 8 - a CREATE dispatch withheld at the gate is dispatched exactly once after the retained owner confirms the row
+  ---
+  duration_ms: 23.948167
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c79fb9f02de7-mwqrknt4-1862285/test/partition/placement-create-dispatch-execution-mirror.test.js:302:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the withheld CREATE dispatch is re-driven exactly once
+    
+    0 !== 1
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1
+  actual: 0
+  operator: 'strictEqual'
+  stack: |-
+    withPlacementExecution.ledgerRoute (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c79fb9f02de7-mwqrknt4-1862285/test/partition/placement-create-dispatch-execution-mirror.test.js:323:12)
+    async file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c79fb9f02de7-mwqrknt4-1862285/test/partition/placement-create-dispatch-execution-mirror.test.js:142:7
+    async onLedgerLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c79fb9f02de7-mwqrknt4-1862285/test/partition/placement-admission-fixture.js:40:12)
+    async withPlacementExecution (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c79fb9f02de7-mwqrknt4-1862285/test/partition/placement-create-dispatch-execution-mirror.test.js:77:3)
+    async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c79fb9f02de7-mwqrknt4-1862285/test/partition/placement-create-dispatch-execution-mirror.test.js:304:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: an absent placement row is withheld from dispatch while no ledger route is published; the retained owner keeps the obligation, owed to the route publication
+ok 9 - an absent placement row is withheld from dispatch while no ledger route is published; the retained owner keeps the obligation, owed to the route publication
+  ---
+  duration_ms: 14.805622
+  type: 'test'
+  ...
+# Subtest: a competing terminal result survives acknowledgement of a previously stamped CREATE
+ok 10 - a competing terminal result survives acknowledgement of a previously stamped CREATE
+  ---
+  duration_ms: 25.185201
+  type: 'test'
+  ...
+1..10
+# tests 10
+# suites 0
+# pass 8
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3709.891658
+# time=5268ms
+ok test/partition/placement-retained-publication.test.js (6 assertions, 5633ms)
+# test-files total=2 pass=1 fail=1 assertions=16
+placement-results={"file":"test/partition/placement-create-dispatch-execution-mirror.test.js","attempt":1,"ok":false,"assertions":10,"durationMs":5268,"retriedOnce":false,"firstFailureLine":"not ok 6 - an absence served by another replica than the cached ledger route settles nothing: nothing is prepared or presented, the route publication owns the reconsideration"}
+placement-results={"file":"test/partition/placement-retained-publication.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":5633,"retriedOnce":false,"firstFailureLine":null}

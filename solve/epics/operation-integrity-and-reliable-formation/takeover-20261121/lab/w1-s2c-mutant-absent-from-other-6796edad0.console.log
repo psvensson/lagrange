@@ -1,0 +1,10 @@
+file:///mnt/data/peter/projects/lagrange/scripts/lab/probe.js:2613
+  if (result.status !== 0) throw new Error(`${name}${LAB_TEST_TEXT.NOT_A_COMMIT}`);
+                                 ^
+
+Error: 6796edad0ebea8f6a1d5e18b30bb4b3e36d21dea is not a commit here
+    at resolveCommit (file:///mnt/data/peter/projects/lagrange/scripts/lab/probe.js:2613:34)
+    at labTestCommit (file:///mnt/data/peter/projects/lagrange/scripts/lab/probe.js:2587:26)
+    at file:///mnt/data/peter/projects/lagrange-takeover-20261121/tools/focused.mjs:16:16
+
+Node.js v22.23.2

@@ -1,0 +1,198 @@
+lab test: adams-gamla: ordinary (3 files) cores=4 mem=15.6GiB speed x2.15
+[adams-gamla] placement-shell=1951191
+[adams-gamla] placement-head=8b1cd678654c937d1c4ccc46516ca62af6bad6f9
+[adams-gamla] placement-link=node_modules
+[adams-gamla] placement-link=data/examples
+[adams-gamla] placement-prepared=import-graph
+[adams-gamla] placement-env=factor:2.2 mode:local retry:0 timeout: lanecap:3 base:0993265e53601cba4a6a41baa08158725cfcea7f
+[adams-gamla] placement-pid=1951647
+[adams-gamla] # test-files planned=3
+[adams-gamla] classified lane ordinary: 3 file(s), jobs=3
+[adams-gamla] thermal: ok cpu 44C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] not ok test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js (3 assertions, 1992ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 13
+[adams-gamla] # Subtest: an unresolved attempt is discharged only by the record of its exact command
+[adams-gamla] not ok 1 - an unresolved attempt is discharged only by the record of its exact command
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 10.047164
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/8b1cd678654c-mwqq1thd-1769127/test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js:92:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     every kept near miss is visible blocked work; the unsettled one is not
+[adams-gamla]     + actual - expected
+[adams-gamla]     
+[adams-gamla]     + {}
+[adams-gamla]     - {
+[adams-gamla]     -   'admit:indices-p1': 'blocked_on_key_collision:owner_command',
+[adams-gamla]     -   'admit:tables-p1': 'blocked_on_key_collision:statement',
+[adams-gamla]     -   'release:pl-tables-p1-3-0': 'blocked_on_key_collision:owner_command'
+[adams-gamla]     - }
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected:
+[adams-gamla]     admit:tables-p1: 'blocked_on_key_collision:statement'
+[adams-gamla]     admit:indices-p1: 'blocked_on_key_collision:owner_command'
+[adams-gamla]     release:pl-tables-p1-3-0: 'blocked_on_key_collision:owner_command'
+[adams-gamla]   actual:
+[adams-gamla]   operator: 'deepStrictEqual'
+[adams-gamla]   stack: |-
+[adams-gamla]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8b1cd678654c-mwqq1thd-1769127/test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js:128:12)
+[adams-gamla]     Test.runInAsyncScope (node:async_hooks:214:14)
+[adams-gamla]     Test.run (node:internal/test_runner/test:1047:25)
+[adams-gamla]     Test.start (node:internal/test_runner/test:944:17)
+[adams-gamla]     startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+[adams-gamla]   ...
+[adams-gamla] # Subtest: the ledger census never discharges an attempt: a row under its entry id from another command is not its exact record
+[adams-gamla] not ok 2 - the ledger census never discharges an attempt: a row under its entry id from another command is not its exact record
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 2.631379
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/8b1cd678654c-mwqq1thd-1769127/test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js:143:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     the colliding admit is blocked work; the unsettled release is not
+[adams-gamla]     + actual - expected
+[adams-gamla]     
+[adams-gamla]     + {}
+[adams-gamla]     - {
+[adams-gamla]     -   'admit:tables-p1': 'blocked_on_key_collision:owner_command'
+[adams-gamla]     - }
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected:
+[adams-gamla]     admit:tables-p1: 'blocked_on_key_collision:owner_command'
+[adams-gamla]   actual:
+[adams-gamla]   operator: 'deepStrictEqual'
+[adams-gamla]   stack: |-
+[adams-gamla]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8b1cd678654c-mwqq1thd-1769127/test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js:169:12)
+[adams-gamla]     Test.runInAsyncScope (node:async_hooks:214:14)
+[adams-gamla]     Test.run (node:internal/test_runner/test:1047:25)
+[adams-gamla]     Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+[adams-gamla]     Test.postRun (node:internal/test_runner/test:1173:19)
+[adams-gamla]     Test.run (node:internal/test_runner/test:1101:12)
+[adams-gamla]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adams-gamla]   ...
+[adams-gamla] # Subtest: an uncertain release whose hold is no longer engaged retires as superseded by ledger state; one whose hold is engaged is kept
+[adams-gamla] ok 3 - an uncertain release whose hold is no longer engaged retires as superseded by ledger state; one whose hold is engaged is kept
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 2.088992
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] 1..3
+[adams-gamla] # tests 3
+[adams-gamla] # suites 0
+[adams-gamla] # pass 1
+[adams-gamla] # fail 2
+[adams-gamla] # cancelled 0
+[adams-gamla] # skipped 0
+[adams-gamla] # todo 0
+[adams-gamla] # duration_ms 24.614129
+[adams-gamla] # time=1992ms
+[adams-gamla] not ok test/rebalancer/replica-placement-owner-blocked-attempt.test.js (1 assertions, 5615ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 13
+[adams-gamla] # Subtest: a kept attempt blocked on an entry-key collision is typed blocked work in the owner diagnostic, warned once, and stays durable
+[adams-gamla] not ok 1 - a kept attempt blocked on an entry-key collision is typed blocked work in the owner diagnostic, warned once, and stays durable
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 3749.134227
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/8b1cd678654c-mwqq1thd-1769127/test/rebalancer/replica-placement-owner-blocked-attempt.test.js:36:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     the blocked attempt is a typed, named state
+[adams-gamla]     + actual - expected
+[adams-gamla]     
+[adams-gamla]     + []
+[adams-gamla]     - [
+[adams-gamla]     -   {
+[adams-gamla]     -     attemptKey: 'admit:tables-p1',
+[adams-gamla]     -     entryId: 'placement-owner:blocked-attempt-node:admit:tables-p1:39c32c3d-0b70-4279-a886-37bb1ee27b04',
+[adams-gamla]     -     recordClass: 'statement',
+[adams-gamla]     -     state: 'blocked_on_key_collision'
+[adams-gamla]     -   }
+[adams-gamla]     - ]
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected:
+[adams-gamla]     0:
+[adams-gamla]       state: 'blocked_on_key_collision'
+[adams-gamla]       attemptKey: 'admit:tables-p1'
+[adams-gamla]       entryId: 'placement-owner:blocked-attempt-node:admit:tables-p1:39c32c3d-0b70-4279-a886-37bb1ee27b04'
+[adams-gamla]       recordClass: 'statement'
+[adams-gamla]   actual:
+[adams-gamla]   operator: 'deepStrictEqual'
+[adams-gamla]   stack: |-
+[adams-gamla]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/8b1cd678654c-mwqq1thd-1769127/test/rebalancer/replica-placement-owner-blocked-attempt.test.js:69:12
+[adams-gamla]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8b1cd678654c-mwqq1thd-1769127/test/partition/placement-admission-fixture.js:40:12)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adams-gamla]   ...
+[adams-gamla] 1..1
+[adams-gamla] # tests 1
+[adams-gamla] # suites 0
+[adams-gamla] # pass 0
+[adams-gamla] # fail 1
+[adams-gamla] # cancelled 0
+[adams-gamla] # skipped 0
+[adams-gamla] # todo 0
+[adams-gamla] # duration_ms 3756.631905
+[adams-gamla] # time=5615ms
+[adams-gamla] not ok test/rebalancer/replica-placement-owner-blocked-release.test.js (3 assertions, 5791ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 13
+[adams-gamla] # Subtest: PLACEMENT_RELEASE_HOLD is idempotent by operation identity: two entry ids, one effect, a definite second answer
+[adams-gamla] ok 1 - PLACEMENT_RELEASE_HOLD is idempotent by operation identity: two entry ids, one effect, a definite second answer
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 3671.741108
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: N1: a release attempt blocked on an entry-key collision is re-driven under a fresh entry; other partitions proceed; both blocked attempts are in the pass snapshot
+[adams-gamla] not ok 2 - N1: a release attempt blocked on an entry-key collision is re-driven under a fresh entry; other partitions proceed; both blocked attempts are in the pass snapshot
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 93.845414
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/8b1cd678654c-mwqq1thd-1769127/test/rebalancer/replica-placement-owner-blocked-release.test.js:175:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     Expected values to be strictly equal:
+[adams-gamla]     + actual - expected
+[adams-gamla]     
+[adams-gamla]     + 'undefined'
+[adams-gamla]     - 'string'
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected: 'string'
+[adams-gamla]   actual: 'undefined'
+[adams-gamla]   operator: 'strictEqual'
+[adams-gamla]   stack: |-
+[adams-gamla]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/8b1cd678654c-mwqq1thd-1769127/test/rebalancer/replica-placement-owner-blocked-release.test.js:225:14
+[adams-gamla]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/8b1cd678654c-mwqq1thd-1769127/test/partition/placement-admission-fixture.js:40:12)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adams-gamla]   ...
+[adams-gamla] # Subtest: F4 residue: an uncertain release whose hold another leader released retires as superseded by ledger state, never as its own settlement, listed once
+[adams-gamla] ok 3 - F4 residue: an uncertain release whose hold another leader released retires as superseded by ledger state, never as its own settlement, listed once
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 48.570989
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] 1..3
+[adams-gamla] # tests 3
+[adams-gamla] # suites 0
+[adams-gamla] # pass 2
+[adams-gamla] # fail 1
+[adams-gamla] # cancelled 0
+[adams-gamla] # skipped 0
+[adams-gamla] # todo 0
+[adams-gamla] # duration_ms 3820.774016
+[adams-gamla] # time=5791ms
+[adams-gamla] # test-files total=3 pass=0 fail=3 assertions=7
+lab test: adams-gamla: # test-files total=3 pass=0 fail=3 assertions=7
+lab test: adams-gamla: results copied to test-output/reports/test-results-adams-gamla.ndjson
+# test-files total=3 pass=0 fail=3 assertions=7

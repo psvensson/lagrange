@@ -817,3 +817,188 @@ content unless another owner proposes under that id; it is not moved onto
 
 Not rerun for C2-C4: the change cone vs `0993265e5` (C2-C4 touch the step-2 owner files plus
 `replica-placement-owner.js`), and the pair commit's whole-corpus selection: lead to schedule.
+
+## 20. Round 3 (verify-w1b-corrective.md): N1, F4 residue, N4, the real blocked-attempt red, hand-offs
+
+Commits on `work/placement-outcome-format-20261121`, pushed:
+
+| Commit | Kind | Content |
+| --- | --- | --- |
+| R1 `ce2d8e18f74fc17edbe0d0fb1b0ebced931cf482` | red tests | `replica-placement-owner-blocked-release.test.js` (idempotence proof, N1, F4 residue); F11 literal DEFINITE pin |
+| R2 `ec1b2f77c85c39940aa856bba0ad2a7548a75b98` | fix | N1 re-drive, F4-residue retirement, one engaged-hold predicate, snapshot fields; unit witness adapted. The R1 witness read the snapshot field `retiredAttempts`; the pre-commit navigability rule forbids `retired` in an identifier, so the field is `supersededAttempts` and R2 renames that read (no assertion changed) |
+
+### N1: branch (i) taken, with the idempotence evidence [exec]
+
+- Idempotence by operation identity [read + exec]: `decideHoldRelease`
+  (`partition-placement-admission-decision.js`) finds the hold by
+  `release.operationId`; a lifted hold answers a committed
+  `REFUSED HOLD_NOT_HELD` with no rows (`isEngagedLedgerHold`, now the one
+  predicate). The hold is set only at admission (`operationOf`, a new row whose
+  id `pl-<partition>-<logIndex>-<n>` is minted from the admitting log index)
+  and lifted only by a release; no owner deletes `replica_operations` rows.
+  Witness `blocked-release` #1 (real partition): release under `release-first`
+  -> RELEASED, hold lifted; release under `release-second` -> committed,
+  `REFUSED HOLD_NOT_HELD`, the row byte-identical to after the first, both
+  outcome records settled; `PLACEMENT_CLEARING_TRIGGER[HOLD_NOT_HELD] === null`.
+  Green at R1 (`w1b-r3-red-a1`) and at R2.
+- Re-drive: `submitHoldRelease` -> `redrivenReleaseAttempt`
+  (`replica-placement-owner-attempts.js`): only when the answer is `BYTES`
+  AND the outcome owner reads `OTHER_RECORD` under the attempt's entry key. The
+  fresh entry id is minted by the attempt owner exactly as every attempt's:
+  `placement-owner:<nodeId>:release:<operationId>:<uuid>` (`nextEntryId`). The
+  fresh attempt replaces the old one in memory and in the durable attempt row
+  (same `attempt_key`, upsert) BEFORE it is submitted, so a crash re-drives the
+  fresh id, never the dead one. The colliding id can never succeed (outcome rows
+  are never deleted), so nothing is lost by abandoning it; the fresh id cannot
+  double-apply (idempotence above).
+- Visible: the blocked record moves to a bounded history (32) as
+  `{state: REDRIVEN_UNDER_FRESH_ENTRY, attemptKey, entryId, recordClass,
+  redrivenEntryId}` in `blockedAttempts`; one `warn` when it is first blocked,
+  one `info` when it is re-driven. A blocked ADMIT keeps
+  `BLOCKED_ON_KEY_COLLISION` (released when its intent changes; it stops only
+  its own partition's intent).
+- Witness `blocked-release` #2 (real partition, real owner passes, foreign
+  committed SQL record planted under the first RELEASE entry and the first
+  ADMIT entry): red at R1, `w1b-r3-red-a1`: "placement proceeds for the
+  partition that is not blocked: admitted []" (the hold stayed engaged, the
+  ledger move never left PENDING, every pass stopped). Green at R2: the hold is
+  released, the ledger move completes, the unblocked user partition is admitted;
+  it READS `lastPassSnapshot.blockedAttempts` for the RELEASE (REDRIVEN, naming
+  the fresh entry, whose outcome record is RELEASED) and for the ADMIT
+  (BLOCKED, durable row kept); one warning per blocked entry.
+
+### F4 residue: superseded by ledger state [exec]
+
+- Rule: an uncertain RELEASE attempt whose hold the committed ledger no longer
+  holds engaged retires as `PLACEMENT_ATTEMPT_RETIREMENT.SUPERSEDED_BY_LEDGER`.
+  The receipt (`readSettledOwnerCommandIn`) and the hold
+  (`readEngagedLedgerHoldIn`) are read in ONE read transaction on the ledger
+  leader's own store (`attemptDecisionIn`). SAME_COMMAND is checked first and
+  is the only settlement; superseded is a separate branch that deletes the
+  attempt, never marks the command applied, and lists it once in
+  `supersededAttempts` (bounded history) with one `info` line. RELEASE only;
+  hold absence only; ADMIT attempts never use it.
+- When: all attempts at leadership start (`reconcilePlacementAttempts`), and
+  the RELEASE attempts on every pass (`reconcileReleaseAttempts`), because a
+  release is re-driven only while its hold is engaged.
+- Transient absence: none found. A hold, once lifted, is never re-engaged
+  under the same operation id: set only on insert at admission (fresh id per
+  log index), cleared only by release; no owner deletes a ledger row, so a
+  retained repair (`decideRetainedPlacementRepair`, which inserts only an ABSENT
+  row) cannot re-create the row with a retained hold inside one ledger lineage.
+  Not traced exhaustively: a writer that rewrites `steps_history` from a stale
+  copy of a held, never-dispatched operation (the expected-step CAS would not
+  stop it). Even then retirement is safe: the release obligation is re-derived
+  from the census on every pass (`submitReleaseIfCopyIdle` mints a fresh
+  attempt for an engaged hold), and a late commit of the retired entry is a
+  release of the same hold (idempotent).
+- Witness `blocked-release` #3 (real partition: leader a's lost release under
+  `...:lost` persisted, leader b releases, a regains leadership): red at R1
+  (attempt kept); green at R2 (attempt row gone, `supersededAttempts` lists it
+  once across two passes, its entry UNSETTLED, one info line).
+  `attempts-exact-settlement` #3 pins the same at unit level (lifted hold
+  retires, engaged hold kept).
+
+### N4: the DEFINITE set pinned in the test [exec]
+
+`replica-placement-owner-clearing-triggers.test.js` carries
+`PINNED_DEFINITE_ANSWERS`, 13 codes each with its reason, and asserts equality
+with `PLACEMENT_DEFINITE_ANSWER_CODES`; the structural assertions stay.
+Mutant `probe/w1b-mutant-definite-moved` (BACKPRESSURE moved into the DEFINITE
+declaration and out of the waiting map: consistent with every structural
+assertion): see the run table.
+
+### Item 4: the real blocked-attempt red [exec]
+
+Mutant `probe/w1b-mutant-blocked-invisible` on R2 (the registry never records
+a blocked state and lists nothing; the attempt is kept silently; re-drive
+itself untouched): see the run table. The witnesses that must kill it:
+`replica-placement-owner-blocked-attempt` (ADMIT, `blockedPlacementAttempts()`)
+and `blocked-release` #2 (reads `lastPassSnapshot.blockedAttempts`).
+
+### Hand-off (a): snapshot catch-up / install owner (not implemented here)
+
+1. Validate the outcome-table format on the STAGING database before the
+   destructive swap: in `requestSnapshotInstall`
+   (`src/raft/snapshot-install.js`, staging DB opened at ~:611, before
+   `populateStagedInstallDb` and `commitPreparedInstall` ~:619), call the
+   outcome owner's `detectCommittedStatementOutcomeFormat(stagingDb)`; on
+   UNSUPPORTED, `rejectInstall(checkpointsRoot, marker, <new REJECTION code,
+   e.g. OUTCOME_FORMAT_UNSUPPORTED>)`, leaving the replica store untouched.
+   Alternative earlier site: `validateRaftRsPayloadTables`
+   (`snapshot-checkpoint-store.js:481`), before any marker. Also trace whether
+   the boot-time `resolvePendingSnapshotInstall` (`snapshot-install.js:693`) can
+   complete a staged install that never passed the check. More than two lines:
+   a new rejection code and a witness.
+2. Carry `error.code` in `RECREATE_FAILED` (`src/raft/snapshot-catchup.js:384-388`,
+   today `detail: error.message` only).
+3. Format identity: today it is the normalized `CREATE_TABLE` text (F9), so ANY
+   edit of that text is an unfenced format break. Proposal, owned by the
+   outcome owner: a declared integer
+   `PARTITION_COMMITTED_STATEMENT_FORMAT_REVISION` (current = 1) in
+   `partition-committed-statement-outcome-constants.js`, written by
+   `createCommittedStatementOutcomeTable` into a one-row owner table
+   (`_partition_statement_outcome_format(revision INTEGER NOT NULL)`) in the
+   same DDL, and decided by `detectCommittedStatementOutcomeFormat` (revision
+   equal AND definition equal; the CREATE text stays the integrity check). A
+   test pins `sha256(CREATE_TABLE)` to the revision, so editing the text without
+   bumping the revision fails. Checked at: store open (init-base, through the
+   one decider), the staging-DB check of item 1, and the cluster format fence
+   (`support-envelope-owner.js:24` `CLUSTER_FORMAT_REVISION`), which a revision
+   bump must raise so mixed builds refuse at join, not at snapshot install.
+4. Exposure: cross-build only. Between nodes of one build it is theoretical:
+   the producer opened its table through the same decider and text, nothing
+   alters it after, and the image is a byte copy.
+
+### Hand-off (b): merger
+
+- `git merge-base ec1b2f77c 1ede7a19d` = `0993265e5` (retained-repair tip; the
+  14 WIP commits arrive through it). This branch merges after the
+  retained-repair branch.
+- The placement-owner repair branch (`work/placement-owner-repair-20261121`,
+  b92a5d6ce and later, tip seen 87a34cb4d) rewrites
+  `src/rebalancer/replica-placement-owner.js` (pass object, tenure,
+  `submitPlacementAttempt(attempt, submitFn, pass)`, `placementPassSnapshot` in
+  `replica-placement-owner-pass-observation.js`). My owner hunks vs
+  `0993265e5`, to re-apply by hand there:
+  1. imports from `./replica-placement-owner-attempts.js`: add
+     `createBlockedPlacementAttempts`, `observePlacementAttemptAnswer`,
+     `reconcileReleaseAttempts`, `redrivenReleaseAttempt`.
+  2. constructor: `this.blockedAttempts = createBlockedPlacementAttempts(this.logger);`
+     next to `this.uncertainEntryIds`.
+  3. new method `blockedPlacementAttempts()` returning
+     `this.blockedAttempts.list()` (the diagnostic API).
+  4. `submitPlacementAttempt`: after the committed-answer deletion, call
+     `observePlacementAttemptAnswer(db, this.blockedAttempts, attempt, answer)`;
+     on the repair branch place it AFTER the `isPassCurrent(pass)` early
+     return (an obsolete continuation records nothing).
+  5. `submitHoldRelease`: after the submit, `redrivenReleaseAttempt(db, this,
+     attempt, answer, () => this.nextEntryId(ENTRY_KIND_RELEASE, operationId))`
+     and submit the fresh attempt when non-null; on the repair branch pass
+     `pass` through and re-drive only while `isPassCurrent(pass)` (after its
+     `BEFORE_HOLD_RELEASE` checkpoint).
+  6. `reconcileUnresolvedAttemptsOnLeadershipStart`: the third argument of
+     `reconcilePlacementAttempts` is `this.blockedAttempts` (no longer the
+     refreshed census).
+  7. `runPass` (repair branch: `runPassSteps`, after the leadership-start
+     reconcile at ~:688): `reconcileReleaseAttempts(db, this.uncertainEntryIds,
+     this.blockedAttempts)` on every pass.
+  8. both pass snapshots: `...this.blockedAttempts.snapshot()` (adds
+     `blockedAttempts` and `supersededAttempts`). On the repair branch:
+     `this.lastPassSnapshot = Object.freeze({...placementPassSnapshot(pass,
+     PLACEMENT_CLEARING_TRIGGER), ...this.blockedAttempts.snapshot()})`, or add
+     it inside `placementPassSnapshot`. Without it F6/N1 visibility is lost
+     silently (the witnesses read `lastPassSnapshot.blockedAttempts`).
+- Constants: the repair branch's `LEADER_UNKNOWN` row (`SERVICES_CHANGED` ->
+  `PARTITIONS_CHANGED`) belongs in `PLACEMENT_WAITING_CLEARING_TRIGGER` with
+  trigger `PARTITIONS_CHANGED` and must never join
+  `PLACEMENT_DEFINITE_ANSWER_CODES` (the F11 literal pin would fail).
+  `TERM_START_APPLIED` is a trigger, not a clearing row.
+
+### Round-3 lab runs [exec, adams-gamla]
+
+| Run dir | Sha | Files | Result |
+| --- | --- | --- | --- |
+| `w1b-r3-red-a1` | `ce2d8e18f` (R1) | blocked-release, F11 | blocked-release #1 green (idempotence), #2 red ("admitted []"), #3 red (attempt kept); F11 green (pin equals the declaration) |
+| `w1b-r3-green-a1` | `ec1b2f77c85c39940aa856bba0ad2a7548a75b98` (R2, branch tip) | 12 files: blocked-release, F11, attempts-exact-settlement, blocked-attempt, owner core, copy-occupancy, apply, outcome format, boundary, growth-promote, found, retained-row-repair | 9/12 green: all round-3 witnesses (blocked-release 3/3, F11, attempts 3/3, blocked-attempt). Red, identical at base `0993265e5`: owner core #20; growth-promote #7 subtests 40/42; `placement-retained-row-repair` #15, #33-#36, #44 (same six subtests red in `w1b-base-attribution-step1-fails-r2-a1`) |
+| `w1b-mutant-blocked-invisible-a1` | `8b1cd678654c937d1c4ccc46516ca62af6bad6f9` (mutant of R2, local ref `probe/w1b-mutant-blocked-invisible`) | blocked-attempt, blocked-release, attempts-exact-settlement | KILLED: 0/3 files. blocked-attempt #1 "the blocked attempt is a typed, named state"; blocked-release #2 at the snapshot read (the REDRIVEN entry is absent; its behaviour assertions, the release and the other partition's admission, pass); attempts #1/#2 at the blocked-work assertions. F4 residue #3 passes (not visibility-dependent) |

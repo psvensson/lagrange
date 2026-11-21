@@ -1,0 +1,1391 @@
+lab test: adam-laptop: ordinary, bootstrap (20 files) cores=8 mem=15.5GiB speed x1.94
+[adam-laptop] placement-shell=3680834
+[adam-laptop] placement-head=baa2a25802570aa5cf6ecd9c3e106f76cd93b0a5
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3681434
+[adam-laptop] # test-files planned=20
+[adam-laptop] classified lane ordinary: 16 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 75C (coretemp/Package id 0) nvme 21C (nvme/Composite) - CPU package 75C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 42C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] ok test/control-plane/control-plane-error-classification.test.js (53 assertions, 883ms)
+[adam-laptop] ok test/control-plane/control-plane-write-identity.test.js (11 assertions, 987ms)
+[adam-laptop] ok test/control-plane/control-plane-mutation-outcome-classifier.test.js (168 assertions, 1276ms)
+[adam-laptop] ok test/control-plane/named-write-outcome-total.test.js (3 assertions, 1313ms)
+[adam-laptop] ok test/control-plane/endpoint-incarnation-authority.test.js (53 assertions, 1725ms)
+[adam-laptop] ok test/control-plane/named-write-unknown-outcome-shape.test.js (4 assertions, 1376ms)
+[adam-laptop] not ok test/constants/message-table-census.test.js (1 assertions, 4196ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: every message-table member referenced under src is defined
+[adam-laptop] not ok 1 - every message-table member referenced under src is defined
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 3879.075386
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/baa2a2580257-mwqt1q8x-1967155/test/constants/message-table-census.test.js:138:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     references to members no message table defines (3164 accesses checked; not checked: 3 computed, 66 on tables bound otherwise)
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]     + [
+[adam-laptop]     +   'src/bootstrap/owners/service-leader-readiness-owner.js:594 BOOTSTRAP_API_LOG_MSG.LEADERS_READY',
+[adam-laptop]     +   'src/bootstrap/shared/node-state-publication-outcome.js:115 JOINING_ERROR_MSG.CONTROL_PLANE_MESSAGE_WAS_NOT_ACKNOWLEDGED',
+[adam-laptop]     +   'src/transport/message-router-connection-close-reconnect.js:391 ROUTER_LOG_MSG.CONNECTION_PING_TIMEOUT_SKIPPED_ALIVE',
+[adam-laptop]     +   'src/transport/message-router-peer-liveness.js:95 ROUTER_LOG_MSG.PING_TIMEOUT_SATISFIED_BY_INBOUND',
+[adam-laptop]     +   'src/transport/router-server-manager.js:196 ROUTER_ERROR_MSG.addressInUse'
+[adam-laptop]     + ]
+[adam-laptop]     - []
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected:
+[adam-laptop]   actual:
+[adam-laptop]     0: 'src/bootstrap/owners/service-leader-readiness-owner.js:594 BOOTSTRAP_API_LOG_MSG.LEADERS_READY'
+[adam-laptop]     1: 'src/bootstrap/shared/node-state-publication-outcome.js:115 JOINING_ERROR_MSG.CONTROL_PLANE_MESSAGE_WAS_NOT_ACKNOWLEDGED'
+[adam-laptop]     2: 'src/transport/message-router-connection-close-reconnect.js:391 ROUTER_LOG_MSG.CONNECTION_PING_TIMEOUT_SKIPPED_ALIVE'
+[adam-laptop]     3: 'src/transport/message-router-peer-liveness.js:95 ROUTER_LOG_MSG.PING_TIMEOUT_SATISFIED_BY_INBOUND'
+[adam-laptop]     4: 'src/transport/router-server-manager.js:196 ROUTER_ERROR_MSG.addressInUse'
+[adam-laptop]   operator: 'deepStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/baa2a2580257-mwqt1q8x-1967155/test/constants/message-table-census.test.js:161:10)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adam-laptop]   ...
+[adam-laptop] 1..1
+[adam-laptop] # tests 1
+[adam-laptop] # suites 0
+[adam-laptop] # pass 0
+[adam-laptop] # fail 1
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 3886.94997
+[adam-laptop] # time=4196ms
+[adam-laptop] not ok test/query/provisioning-deadline-error-message.test.js (4 assertions, 2027ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: the real assertProvisioningAttemptBudget answers a typed, non-empty error
+[adam-laptop] ok 1 - the real assertProvisioningAttemptBudget answers a typed, non-empty error
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 2.480724
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: CREATE TABLE provisioning past its deadline rejects with the typed, non-empty error
+[adam-laptop] ok 2 - CREATE TABLE provisioning past its deadline rejects with the typed, non-empty error
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 35.391483
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: a managed split child provisioning past its deadline answers the same typed error
+[adam-laptop] not ok 3 - a managed split child provisioning past its deadline answers the same typed error
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 1.252214
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/baa2a2580257-mwqt1q8x-1967155/test/query/provisioning-deadline-error-message.test.js:91:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     the typed timeout code
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]     + undefined
+[adam-laptop]     - 'TIMEOUT'
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: 'TIMEOUT'
+[adam-laptop]   operator: 'strictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     Object.assertTypedNonEmptyTimeout (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/baa2a2580257-mwqt1q8x-1967155/test/query/provisioning-deadline-error-message.test.js:36:10)
+[adam-laptop]     expectedException (node:assert:576:17)
+[adam-laptop]     expectsError (node:assert:701:21)
+[adam-laptop]     Function.throws (node:assert:757:3)
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/baa2a2580257-mwqt1q8x-1967155/test/query/provisioning-deadline-error-message.test.js:92:10)
+[adam-laptop]     Test.runInAsyncScope (node:async_hooks:214:14)
+[adam-laptop]     Test.run (node:internal/test_runner/test:1047:25)
+[adam-laptop]     Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+[adam-laptop]     Test.postRun (node:internal/test_runner/test:1173:19)
+[adam-laptop]     Test.run (node:internal/test_runner/test:1101:12)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: every QUERY_ERROR_MSG member referenced under src is defined
+[adam-laptop] ok 4 - every QUERY_ERROR_MSG member referenced under src is defined
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 67.428381
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] 1..4
+[adam-laptop] # tests 4
+[adam-laptop] # suites 0
+[adam-laptop] # pass 3
+[adam-laptop] # fail 1
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 135.358572
+[adam-laptop] # time=2027ms
+[adam-laptop] ok test/query/named-write-real-producer-applied.test.js (3 assertions, 9997ms)
+[adam-laptop] ok test/control-plane/membership-publication-native-ack-order.test.js (19 assertions, 12177ms)
+[adam-laptop] not ok test/raft/authoritative-row-mutation-outcome-classifier.test.js (133 assertions, 1679ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 14
+[adam-laptop] # Subtest: Raft authoritative-row completion has an explicit disposition for every canonical mutation outcome
+[adam-laptop]     ok 1 - the Raft decision table must exhaust the frozen gateway enum
+[adam-laptop]     ok 2 - applied should retain its Raft disposition
+[adam-laptop]     ok 3 - applied should use the canonical apply effect
+[adam-laptop]     ok 4 - applied should clear pending state
+[adam-laptop]     ok 5 - applied should record persistence
+[adam-laptop]     ok 6 - applied should not arm a bounded retry
+[adam-laptop]     ok 7 - applied should refresh only for observed-state changes
+[adam-laptop]     ok 8 - no_op should retain its Raft disposition
+[adam-laptop]     ok 9 - no_op should use the canonical apply effect
+[adam-laptop]     ok 10 - no_op should preserve pending state
+[adam-laptop]     ok 11 - no_op should not record persistence
+[adam-laptop]     ok 12 - no_op should arm a bounded retry
+[adam-laptop]     ok 13 - no_op should refresh only for observed-state changes
+[adam-laptop]     ok 14 - deferred should retain its Raft disposition
+[adam-laptop]     ok 15 - deferred should use the canonical apply effect
+[adam-laptop]     ok 16 - deferred should preserve pending state
+[adam-laptop]     ok 17 - deferred should not record persistence
+[adam-laptop]     ok 18 - deferred should arm a bounded retry
+[adam-laptop]     ok 19 - deferred should refresh only for observed-state changes
+[adam-laptop]     ok 20 - rejected should retain its Raft disposition
+[adam-laptop]     ok 21 - rejected should use the canonical apply effect
+[adam-laptop]     ok 22 - rejected should preserve pending state
+[adam-laptop]     ok 23 - rejected should not record persistence
+[adam-laptop]     ok 24 - rejected should arm a bounded retry
+[adam-laptop]     ok 25 - rejected should refresh only for observed-state changes
+[adam-laptop]     ok 26 - owner_not_ready should retain its Raft disposition
+[adam-laptop]     ok 27 - owner_not_ready should use the canonical apply effect
+[adam-laptop]     ok 28 - owner_not_ready should preserve pending state
+[adam-laptop]     ok 29 - owner_not_ready should not record persistence
+[adam-laptop]     ok 30 - owner_not_ready should arm a bounded retry
+[adam-laptop]     ok 31 - owner_not_ready should refresh only for observed-state changes
+[adam-laptop]     ok 32 - observed_state_changed should retain its Raft disposition
+[adam-laptop]     ok 33 - observed_state_changed should use the canonical apply effect
+[adam-laptop]     ok 34 - observed_state_changed should preserve pending state
+[adam-laptop]     ok 35 - observed_state_changed should not record persistence
+[adam-laptop]     ok 36 - observed_state_changed should arm a bounded retry
+[adam-laptop]     ok 37 - observed_state_changed should refresh only for observed-state changes
+[adam-laptop]     not ok 38 - unknown should retain its Raft disposition
+[adam-laptop]       ---
+[adam-laptop]       compare: ===
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/raft/authoritative-row-mutation-outcome-classifier.test.js
+[adam-laptop]         lineNumber: 72
+[adam-laptop]         columnNumber: 7
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: >
+[adam-laptop]         Test.<anonymous>
+[adam-laptop]         (test/raft/authoritative-row-mutation-outcome-classifier.test.js:72:7)
+[adam-laptop]       source: |2
+[adam-laptop]               await flushMutationResult({outcome});
+[adam-laptop]             const applied = outcome === CONTROL_PLANE_MUTATION_OUTCOME.APPLIED;
+[adam-laptop]             t.equal(result.reason, EXPECTED_REASON_BY_OUTCOME[outcome],
+[adam-laptop]         ------^
+[adam-laptop]               `${outcome} should retain its Raft disposition`);
+[adam-laptop]             t.equal(result.applied, applied,
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,1 +1,1 @@
+[adam-laptop]         -outcome-unknown
+[adam-laptop]         +undefined
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     ok 39 - unknown should use the canonical apply effect
+[adam-laptop]     ok 40 - unknown should preserve pending state
+[adam-laptop]     ok 41 - unknown should not record persistence
+[adam-laptop]     ok 42 - unknown should arm a bounded retry
+[adam-laptop]     ok 43 - unknown should refresh only for observed-state changes
+[adam-laptop]     1..43
+[adam-laptop] not ok 1 - Raft authoritative-row completion has an explicit disposition for every canonical mutation outcome # time=52.003ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/raft/authoritative-row-mutation-outcome-classifier.test.js
+[adam-laptop]     lineNumber: 60
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: |
+[adam-laptop]     }
+[adam-laptop]   
+[adam-laptop]     test('Raft authoritative-row completion has an explicit disposition for ' +
+[adam-laptop]     ^
+[adam-laptop]       'every canonical mutation outcome', async (t) => {
+[adam-laptop]       t.same(
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] # Subtest: Raft authoritative-row completion preserves valid legacy results and fails closed on contradictory or coercive envelopes
+[adam-laptop]     ok 1 - legacy success: apply effect
+[adam-laptop]     ok 2 - legacy success: typed Raft reason
+[adam-laptop]     ok 3 - legacy success: persisted state
+[adam-laptop]     ok 4 - legacy success: pending state
+[adam-laptop]     ok 5 - legacy success: retry ownership
+[adam-laptop]     ok 6 - legacy positive nested rows: apply effect
+[adam-laptop]     ok 7 - legacy positive nested rows: typed Raft reason
+[adam-laptop]     ok 8 - legacy positive nested rows: persisted state
+[adam-laptop]     ok 9 - legacy positive nested rows: pending state
+[adam-laptop]     ok 10 - legacy positive nested rows: retry ownership
+[adam-laptop]     ok 11 - legacy positive top-level rows: apply effect
+[adam-laptop]     ok 12 - legacy positive top-level rows: typed Raft reason
+[adam-laptop]     ok 13 - legacy positive top-level rows: persisted state
+[adam-laptop]     ok 14 - legacy positive top-level rows: pending state
+[adam-laptop]     ok 15 - legacy positive top-level rows: retry ownership
+[adam-laptop]     ok 16 - legacy zero rows: apply effect
+[adam-laptop]     ok 17 - legacy zero rows: typed Raft reason
+[adam-laptop]     ok 18 - legacy zero rows: persisted state
+[adam-laptop]     ok 19 - legacy zero rows: pending state
+[adam-laptop]     ok 20 - legacy zero rows: retry ownership
+[adam-laptop]     ok 21 - legacy failure: apply effect
+[adam-laptop]     ok 22 - legacy failure: typed Raft reason
+[adam-laptop]     ok 23 - legacy failure: persisted state
+[adam-laptop]     ok 24 - legacy failure: pending state
+[adam-laptop]     ok 25 - legacy failure: retry ownership
+[adam-laptop]     ok 26 - unknown typed success: apply effect
+[adam-laptop]     ok 27 - unknown typed success: typed Raft reason
+[adam-laptop]     ok 28 - unknown typed success: persisted state
+[adam-laptop]     ok 29 - unknown typed success: pending state
+[adam-laptop]     ok 30 - unknown typed success: retry ownership
+[adam-laptop]     ok 31 - contradictory applied failure: apply effect
+[adam-laptop]     ok 32 - contradictory applied failure: typed Raft reason
+[adam-laptop]     ok 33 - contradictory applied failure: persisted state
+[adam-laptop]     ok 34 - contradictory applied failure: pending state
+[adam-laptop]     ok 35 - contradictory applied failure: retry ownership
+[adam-laptop]     ok 36 - string row count: apply effect
+[adam-laptop]     ok 37 - string row count: typed Raft reason
+[adam-laptop]     ok 38 - string row count: persisted state
+[adam-laptop]     ok 39 - string row count: pending state
+[adam-laptop]     ok 40 - string row count: retry ownership
+[adam-laptop]     ok 41 - boxed row count: apply effect
+[adam-laptop]     ok 42 - boxed row count: typed Raft reason
+[adam-laptop]     ok 43 - boxed row count: persisted state
+[adam-laptop]     ok 44 - boxed row count: pending state
+[adam-laptop]     ok 45 - boxed row count: retry ownership
+[adam-laptop]     ok 46 - negative row count: apply effect
+[adam-laptop]     ok 47 - negative row count: typed Raft reason
+[adam-laptop]     ok 48 - negative row count: persisted state
+[adam-laptop]     ok 49 - negative row count: pending state
+[adam-laptop]     ok 50 - negative row count: retry ownership
+[adam-laptop]     ok 51 - negative zero row count: apply effect
+[adam-laptop]     ok 52 - negative zero row count: typed Raft reason
+[adam-laptop]     ok 53 - negative zero row count: persisted state
+[adam-laptop]     ok 54 - negative zero row count: pending state
+[adam-laptop]     ok 55 - negative zero row count: retry ownership
+[adam-laptop]     ok 56 - unsafe row count: apply effect
+[adam-laptop]     ok 57 - unsafe row count: typed Raft reason
+[adam-laptop]     ok 58 - unsafe row count: persisted state
+[adam-laptop]     ok 59 - unsafe row count: pending state
+[adam-laptop]     ok 60 - unsafe row count: retry ownership
+[adam-laptop]     1..60
+[adam-laptop] ok 2 - Raft authoritative-row completion preserves valid legacy results and fails closed on contradictory or coercive envelopes # time=15.394ms
+[adam-laptop] 
+[adam-laptop] # Subtest: Raft authoritative-row completion rejects inherited, accessor, and proxy envelopes without invoking hostile code
+[adam-laptop]     ok 1 - outcome accessor should fail closed
+[adam-laptop]     ok 2 - outcome accessor should not record persistence
+[adam-laptop]     ok 3 - outcome accessor should preserve pending state
+[adam-laptop]     ok 4 - outcome accessor should arm a retry
+[adam-laptop]     ok 5 - affectedRows accessor should fail closed
+[adam-laptop]     ok 6 - affectedRows accessor should not record persistence
+[adam-laptop]     ok 7 - affectedRows accessor should preserve pending state
+[adam-laptop]     ok 8 - affectedRows accessor should arm a retry
+[adam-laptop]     ok 9 - inherited fields should fail closed
+[adam-laptop]     ok 10 - inherited fields should not record persistence
+[adam-laptop]     ok 11 - inherited fields should preserve pending state
+[adam-laptop]     ok 12 - inherited fields should arm a retry
+[adam-laptop]     ok 13 - proxy should fail closed
+[adam-laptop]     ok 14 - proxy should not record persistence
+[adam-laptop]     ok 15 - proxy should preserve pending state
+[adam-laptop]     ok 16 - proxy should arm a retry
+[adam-laptop]     ok 17 - retry accessor does not invalidate the canonical mutation fields
+[adam-laptop]     ok 18 - retry accessor is ignored in favor of bounded backoff
+[adam-laptop]     ok 19 - mutation and retry accessors never execute
+[adam-laptop]     ok 20 - only async promise assimilation reads the proxy; classification does not
+[adam-laptop]     1..20
+[adam-laptop] ok 3 - Raft authoritative-row completion rejects inherited, accessor, and proxy envelopes without invoking hostile code # time=3.774ms
+[adam-laptop] 
+[adam-laptop] # Subtest: Raft authoritative-row completion accepts only an own finite retry hint
+[adam-laptop]     ok 1 - an own finite retry hint can widen the bounded delay
+[adam-laptop]     ok 2 - coercive or non-positive retry hints use bounded backoff
+[adam-laptop]     ok 3 - coercive or non-positive retry hints use bounded backoff
+[adam-laptop]     ok 4 - coercive or non-positive retry hints use bounded backoff
+[adam-laptop]     ok 5 - coercive or non-positive retry hints use bounded backoff
+[adam-laptop]     ok 6 - coercive or non-positive retry hints use bounded backoff
+[adam-laptop]     1..6
+[adam-laptop] ok 4 - Raft authoritative-row completion accepts only an own finite retry hint # time=1.972ms
+[adam-laptop] 
+[adam-laptop] 1..4
+[adam-laptop] # { total: 129, pass: 128, fail: 1 }
+[adam-laptop] # time=97.299ms
+[adam-laptop] ok test/query/named-write-real-producer-definite.test.js (7 assertions, 11782ms)
+[adam-laptop] not ok test/rebalancer/placement-explicit-replica-refusal-code.test.js (2 assertions, 2927ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: ADD naming a replica identity: refused with its own typed code, not the corrupt-bytes code
+[adam-laptop] not ok 1 - ADD naming a replica identity: refused with its own typed code, not the corrupt-bytes code
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 2.758182
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/baa2a2580257-mwqt1q8x-1967155/test/rebalancer/placement-explicit-replica-refusal-code.test.js:25:3'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'a request-shape refusal is not the committed-bytes refusal'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: 'placement_admission_bytes_invalid'
+[adam-laptop]   actual: 'placement_admission_bytes_invalid'
+[adam-laptop]   operator: 'notStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/baa2a2580257-mwqt1q8x-1967155/test/rebalancer/placement-explicit-replica-refusal-code.test.js:39:12)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: REPLACE naming source and target replicas: refused with its own typed code, not the corrupt-bytes code
+[adam-laptop] not ok 2 - REPLACE naming source and target replicas: refused with its own typed code, not the corrupt-bytes code
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 0.38054
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/baa2a2580257-mwqt1q8x-1967155/test/rebalancer/placement-explicit-replica-refusal-code.test.js:25:3'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'a request-shape refusal is not the committed-bytes refusal'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: 'placement_admission_bytes_invalid'
+[adam-laptop]   actual: 'placement_admission_bytes_invalid'
+[adam-laptop]   operator: 'notStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/baa2a2580257-mwqt1q8x-1967155/test/rebalancer/placement-explicit-replica-refusal-code.test.js:39:12)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] 1..2
+[adam-laptop] # tests 2
+[adam-laptop] # suites 0
+[adam-laptop] # pass 0
+[adam-laptop] # fail 2
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 43.981736
+[adam-laptop] # time=2927ms
+[adam-laptop] ok test/rebalancer/coordinator-reservation-lifecycle.test.js (101 assertions, 4898ms)
+[adam-laptop] not ok test/query/write-exactly-once-property.test.js (3 assertions, 146195ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] property seed 20261005: {"answers":73,"redriven":19,"notYetApplied":33,"unknown":19,"outlasting-replacement":4,"insert":10,"none":4,"named-birth":12,"runtime-replacement":9,"cas":11,"duplicate":5,"delete":7,"leader-change":4,"outlasting-partition":6,"lost":4,"drop":4}
+[adam-laptop] # Subtest: exactly-once property, seed 20261005: 40 logical writes under random faults
+[adam-laptop] not ok 1 - exactly-once property, seed 20261005: 40 logical writes under random faults
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 59707.15829
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/baa2a2580257-mwqt1q8x-1967155/test/query/write-exactly-once-property.test.js:232:3'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     every answer keeps the contract
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]     + [
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 1,
+[adam-laptop]     +     seed: 20261005,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n0',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '0'
+[adam-laptop]     +     }
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 9,
+[adam-laptop]     +     seed: 20261005,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n0',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '0'
+[adam-laptop]     +     }
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 10,
+[adam-laptop]     +     seed: 20261005,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n0',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '10'
+[adam-laptop]     +     }
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 16,
+[adam-laptop]     +     seed: 20261005,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n1',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '0'
+[adam-laptop]     +     }
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 17,
+[adam-laptop]     +     seed: 20261005,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n0',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '17'
+[adam-laptop]     +     }
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 22,
+[adam-laptop]     +     seed: 20261005,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n2',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '22'
+[adam-laptop]     +     }
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 23,
+[adam-laptop]     +     seed: 20261005,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n2',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '0'
+[adam-laptop]     +     }
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 29,
+[adam-laptop]     +     seed: 20261005,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n1',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '0'
+[adam-laptop]     +     }
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 31,
+[adam-laptop]     +     seed: 20261005,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n0',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '0'
+[adam-laptop]     +     }
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 32,
+[adam-laptop]     +     seed: 20261005,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n1',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '0'
+[adam-laptop]     +     }
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 37,
+[adam-laptop]     +     seed: 20261005,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n1',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '37'
+[adam-laptop]     +     }
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 38,
+[adam-laptop]     +     seed: 20261005,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n2',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '38'
+[adam-laptop]     +     }
+[adam-laptop]     +   }
+[adam-laptop]     + ]
+[adam-laptop]     - []
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected:
+[adam-laptop]   actual:
+[adam-laptop]     0:
+[adam-laptop]       seed: 20261005
+[adam-laptop]       index: 1
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n0'
+[adam-laptop]         value: '0'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]     1:
+[adam-laptop]       seed: 20261005
+[adam-laptop]       index: 9
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n0'
+[adam-laptop]         value: '0'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]     2:
+[adam-laptop]       seed: 20261005
+[adam-laptop]       index: 10
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n0'
+[adam-laptop]         value: '10'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]     3:
+[adam-laptop]       seed: 20261005
+[adam-laptop]       index: 16
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n1'
+[adam-laptop]         value: '0'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]     4:
+[adam-laptop]       seed: 20261005
+[adam-laptop]       index: 17
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n0'
+[adam-laptop]         value: '17'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]     5:
+[adam-laptop]       seed: 20261005
+[adam-laptop]       index: 22
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n2'
+[adam-laptop]         value: '22'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]     6:
+[adam-laptop]       seed: 20261005
+[adam-laptop]       index: 23
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n2'
+[adam-laptop]         value: '0'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]     7:
+[adam-laptop]       seed: 20261005
+[adam-laptop]       index: 29
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n1'
+[adam-laptop]         value: '0'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]     8:
+[adam-laptop]       seed: 20261005
+[adam-laptop]       index: 31
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n0'
+[adam-laptop]         value: '0'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]     9:
+[adam-laptop]       seed: 20261005
+[adam-laptop]       index: 32
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n1'
+[adam-laptop]         value: '0'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]     10:
+[adam-laptop]       seed: 20261005
+[adam-laptop]       index: 37
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n1'
+[adam-laptop]         value: '37'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]     11:
+[adam-laptop]       seed: 20261005
+[adam-laptop]       index: 38
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n2'
+[adam-laptop]         value: '38'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]   operator: 'deepStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/baa2a2580257-mwqt1q8x-1967155/test/query/write-exactly-once-property.test.js:276:14
+[adam-laptop]     async withGroupSurface (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/baa2a2580257-mwqt1q8x-1967155/test/query/unknown-outcome-surface-fixture.js:571:5)
+[adam-laptop]     async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/baa2a2580257-mwqt1q8x-1967155/test/query/write-exactly-once-property.test.js:235:5)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adam-laptop]   ...
+[adam-laptop] property seed 7: {"answers":55,"redriven":10,"notYetApplied":15,"unknown":10,"drop":5,"insert":9,"leader-change":7,"cas":12,"runtime-replacement":6,"outlasting-partition":8,"lost":4,"named-birth":14,"outlasting-replacement":2,"delete":5,"duplicate":5,"none":3}
+[adam-laptop] # Subtest: exactly-once property, seed 7: 40 logical writes under random faults
+[adam-laptop] not ok 2 - exactly-once property, seed 7: 40 logical writes under random faults
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 30589.280104
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/baa2a2580257-mwqt1q8x-1967155/test/query/write-exactly-once-property.test.js:232:3'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     every answer keeps the contract
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]     + [
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 8,
+[adam-laptop]     +     seed: 7,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n2',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '8'
+[adam-laptop]     +     }
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 10,
+[adam-laptop]     +     seed: 7,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n1',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '10'
+[adam-laptop]     +     }
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 11,
+[adam-laptop]     +     seed: 7,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n2',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '11'
+[adam-laptop]     +     }
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 18,
+[adam-laptop]     +     seed: 7,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n0',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '0'
+[adam-laptop]     +     }
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 19,
+[adam-laptop]     +     seed: 7,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n1',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '0'
+[adam-laptop]     +     }
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 22,
+[adam-laptop]     +     seed: 7,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n0',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '22'
+[adam-laptop]     +     }
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 23,
+[adam-laptop]     +     seed: 7,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n1',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '0'
+[adam-laptop]     +     }
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 24,
+[adam-laptop]     +     seed: 7,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n2',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '0'
+[adam-laptop]     +     }
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 25,
+[adam-laptop]     +     seed: 7,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n0',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '25'
+[adam-laptop]     +     }
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 27,
+[adam-laptop]     +     seed: 7,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n0',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '27'
+[adam-laptop]     +     }
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 29,
+[adam-laptop]     +     seed: 7,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n0',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '29'
+[adam-laptop]     +     }
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 31,
+[adam-laptop]     +     seed: 7,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n2',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '31'
+[adam-laptop]     +     }
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 32,
+[adam-laptop]     +     seed: 7,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n1',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '32'
+[adam-laptop]     +     }
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 33,
+[adam-laptop]     +     seed: 7,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n1',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '0'
+[adam-laptop]     +     }
+[adam-laptop]     +   }
+[adam-laptop]     + ]
+[adam-laptop]     - []
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected:
+[adam-laptop]   actual:
+[adam-laptop]     0:
+[adam-laptop]       seed: 7
+[adam-laptop]       index: 8
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n2'
+[adam-laptop]         value: '8'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]     1:
+[adam-laptop]       seed: 7
+[adam-laptop]       index: 10
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n1'
+[adam-laptop]         value: '10'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]     2:
+[adam-laptop]       seed: 7
+[adam-laptop]       index: 11
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n2'
+[adam-laptop]         value: '11'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]     3:
+[adam-laptop]       seed: 7
+[adam-laptop]       index: 18
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n0'
+[adam-laptop]         value: '0'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]     4:
+[adam-laptop]       seed: 7
+[adam-laptop]       index: 19
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n1'
+[adam-laptop]         value: '0'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]     5:
+[adam-laptop]       seed: 7
+[adam-laptop]       index: 22
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n0'
+[adam-laptop]         value: '22'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]     6:
+[adam-laptop]       seed: 7
+[adam-laptop]       index: 23
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n1'
+[adam-laptop]         value: '0'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]     7:
+[adam-laptop]       seed: 7
+[adam-laptop]       index: 24
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n2'
+[adam-laptop]         value: '0'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]     8:
+[adam-laptop]       seed: 7
+[adam-laptop]       index: 25
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n0'
+[adam-laptop]         value: '25'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]     9:
+[adam-laptop]       seed: 7
+[adam-laptop]       index: 27
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n0'
+[adam-laptop]         value: '27'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]     10:
+[adam-laptop]       seed: 7
+[adam-laptop]       index: 29
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n0'
+[adam-laptop]         value: '29'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]     11:
+[adam-laptop]       seed: 7
+[adam-laptop]       index: 31
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n2'
+[adam-laptop]         value: '31'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]     12:
+[adam-laptop]       seed: 7
+[adam-laptop]       index: 32
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n1'
+[adam-laptop]         value: '32'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]     13:
+[adam-laptop]       seed: 7
+[adam-laptop]       index: 33
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n1'
+[adam-laptop]         value: '0'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]   operator: 'deepStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/baa2a2580257-mwqt1q8x-1967155/test/query/write-exactly-once-property.test.js:276:14
+[adam-laptop]     async withGroupSurface (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/baa2a2580257-mwqt1q8x-1967155/test/query/unknown-outcome-surface-fixture.js:571:5)
+[adam-laptop]     async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/baa2a2580257-mwqt1q8x-1967155/test/query/write-exactly-once-property.test.js:235:5)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] property seed 424242: {"answers":72,"redriven":19,"notYetApplied":32,"unknown":19,"duplicate":5,"insert":13,"outlasting-partition":11,"delete":9,"runtime-replacement":4,"lost":4,"cas":6,"named-birth":12,"drop":7,"outlasting-replacement":5,"leader-change":2,"none":2}
+[adam-laptop] # Subtest: exactly-once property, seed 424242: 40 logical writes under random faults
+[adam-laptop] not ok 3 - exactly-once property, seed 424242: 40 logical writes under random faults
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 52466.580772
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/baa2a2580257-mwqt1q8x-1967155/test/query/write-exactly-once-property.test.js:232:3'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     every answer keeps the contract
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]     + [
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 4,
+[adam-laptop]     +     seed: 424242,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n1',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '4'
+[adam-laptop]     +     }
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 8,
+[adam-laptop]     +     seed: 424242,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n0',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '8'
+[adam-laptop]     +     }
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 10,
+[adam-laptop]     +     seed: 424242,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n0',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '10'
+[adam-laptop]     +     }
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 11,
+[adam-laptop]     +     seed: 424242,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n0',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '11'
+[adam-laptop]     +     }
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 12,
+[adam-laptop]     +     seed: 424242,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n0',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '0'
+[adam-laptop]     +     }
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 13,
+[adam-laptop]     +     seed: 424242,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n2',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '0'
+[adam-laptop]     +     }
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 17,
+[adam-laptop]     +     seed: 424242,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n2',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '17'
+[adam-laptop]     +     }
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 25,
+[adam-laptop]     +     seed: 424242,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n1',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '25'
+[adam-laptop]     +     }
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 28,
+[adam-laptop]     +     seed: 424242,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n1',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '0'
+[adam-laptop]     +     }
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 30,
+[adam-laptop]     +     seed: 424242,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n2',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '30'
+[adam-laptop]     +     }
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 32,
+[adam-laptop]     +     seed: 424242,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n0',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '0'
+[adam-laptop]     +     }
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     attempt: 0,
+[adam-laptop]     +     error: 'A named control-plane write requires a declared system partition',
+[adam-laptop]     +     failure: null,
+[adam-laptop]     +     index: 38,
+[adam-laptop]     +     seed: 424242,
+[adam-laptop]     +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+[adam-laptop]     +     write: {
+[adam-laptop]     +       key: 'n2',
+[adam-laptop]     +       kind: 'named-birth',
+[adam-laptop]     +       value: '0'
+[adam-laptop]     +     }
+[adam-laptop]     +   }
+[adam-laptop]     + ]
+[adam-laptop]     - []
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected:
+[adam-laptop]   actual:
+[adam-laptop]     0:
+[adam-laptop]       seed: 424242
+[adam-laptop]       index: 4
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n1'
+[adam-laptop]         value: '4'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]     1:
+[adam-laptop]       seed: 424242
+[adam-laptop]       index: 8
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n0'
+[adam-laptop]         value: '8'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]     2:
+[adam-laptop]       seed: 424242
+[adam-laptop]       index: 10
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n0'
+[adam-laptop]         value: '10'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]     3:
+[adam-laptop]       seed: 424242
+[adam-laptop]       index: 11
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n0'
+[adam-laptop]         value: '11'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]     4:
+[adam-laptop]       seed: 424242
+[adam-laptop]       index: 12
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n0'
+[adam-laptop]         value: '0'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]     5:
+[adam-laptop]       seed: 424242
+[adam-laptop]       index: 13
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n2'
+[adam-laptop]         value: '0'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]     6:
+[adam-laptop]       seed: 424242
+[adam-laptop]       index: 17
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n2'
+[adam-laptop]         value: '17'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]     7:
+[adam-laptop]       seed: 424242
+[adam-laptop]       index: 25
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n1'
+[adam-laptop]         value: '25'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]     8:
+[adam-laptop]       seed: 424242
+[adam-laptop]       index: 28
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n1'
+[adam-laptop]         value: '0'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]     9:
+[adam-laptop]       seed: 424242
+[adam-laptop]       index: 30
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n2'
+[adam-laptop]         value: '30'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]     10:
+[adam-laptop]       seed: 424242
+[adam-laptop]       index: 32
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n0'
+[adam-laptop]         value: '0'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]     11:
+[adam-laptop]       seed: 424242
+[adam-laptop]       index: 38
+[adam-laptop]       write:
+[adam-laptop]         kind: 'named-birth'
+[adam-laptop]         key: 'n2'
+[adam-laptop]         value: '0'
+[adam-laptop]       attempt: 0
+[adam-laptop]       violation: 'answered with neither its application nor a typed not-yet-applied failure'
+[adam-laptop]       error: 'A named control-plane write requires a declared system partition'
+[adam-laptop]       failure: ~
+[adam-laptop]   operator: 'deepStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/baa2a2580257-mwqt1q8x-1967155/test/query/write-exactly-once-property.test.js:276:14
+[adam-laptop]     async withGroupSurface (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/baa2a2580257-mwqt1q8x-1967155/test/query/unknown-outcome-surface-fixture.js:571:5)
+[adam-laptop]     async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/baa2a2580257-mwqt1q8x-1967155/test/query/write-exactly-once-property.test.js:235:5)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] 1..3
+[adam-laptop] # tests 3
+[adam-laptop] # suites 0
+[adam-laptop] # pass 0
+[adam-laptop] # fail 3
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 142776.092684
+[adam-laptop] # time=146195ms
+[adam-laptop] ok test/query/write-identity-instance.test.js (19 assertions, 246839ms)
+[adam-laptop] # test-files total=16 pass=11 fail=5 assertions=584
+[adam-laptop] classified lane bootstrap: 4 file(s), jobs=2
+[adam-laptop] thermal: ok cpu 59C (coretemp/Package id 0) nvme 26C (nvme/Composite)
+[adam-laptop] ok test/bootstrap/node-registration-owner.test.js (132 assertions, 1204ms)
+[adam-laptop] ok test/bootstrap/durable-rejoin-incarnation-advance.test.js (228 assertions, 1455ms)
+[adam-laptop] ok test/bootstrap/register-service-retryable-refusal.test.js (7 assertions, 3711ms)
+[adam-laptop] ok test/bootstrap/seed-bootstrap-direct-lane.integration.test.js (1 assertions, 27801ms)
+[adam-laptop] # test-files total=4 pass=4 fail=0 assertions=368
+lab test: adam-laptop: # test-files total=20 pass=15 fail=5 assertions=952
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=20 pass=15 fail=5 assertions=952

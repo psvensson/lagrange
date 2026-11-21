@@ -1,0 +1,2036 @@
+lab test: adam-laptop: ordinary (2 files) cores=8 mem=15.5GiB speed x2.02
+[adam-laptop] placement-shell=3639515
+[adam-laptop] placement-head=c79fb9f02de769e3711c27134d93f348d2478660
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3639972
+[adam-laptop] # test-files planned=2
+[adam-laptop] classified lane ordinary: 2 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 77C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 77C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 40C (coretemp/Package id 0) nvme 17C (nvme/Composite)
+[adam-laptop] not ok test/partition/placement-create-dispatch-execution-mirror.test.js (10 assertions, 5268ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] Initializing partition service {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   tableId: 'replica_operations',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   nodeId: 'test-node',
+[adam-laptop]   replicaCount: 3,
+[adam-laptop]   dbPath: ':memory:'
+[adam-laptop] }
+[adam-laptop] Created table {
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   partitionId: 'replica_operations-p1'
+[adam-laptop] }
+[adam-laptop] Joining peer with fully qualified address {
+[adam-laptop]   peerId: 'tx1-v3-r2',
+[adam-laptop]   peerAddress: null,
+[adam-laptop]   addressStatus: 'unavailable',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   partitionId: 'replica_operations-p1'
+[adam-laptop] }
+[adam-laptop] Joining peer with fully qualified address {
+[adam-laptop]   peerId: 'tx1-v3-r3',
+[adam-laptop]   peerAddress: null,
+[adam-laptop]   addressStatus: 'unavailable',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   partitionId: 'replica_operations-p1'
+[adam-laptop] }
+[adam-laptop] Partition size updated {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   sizeBytes: 118784,
+[adam-laptop]   sizeMB: '0.11'
+[adam-laptop] }
+[adam-laptop] Partition service initialized {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   sizeBytes: 118784
+[adam-laptop] }
+[adam-laptop] Applying committed entry {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+[adam-laptop] }
+[adam-laptop] Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+[adam-laptop] Raft leadership transition evidence {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   nodeId: 'test-node',
+[adam-laptop]   peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+[adam-laptop]   eventType: 'role_transition',
+[adam-laptop]   role: 'leader',
+[adam-laptop]   trigger: 'quorum_elected',
+[adam-laptop]   term: 1
+[adam-laptop] }
+[adam-laptop] TAP version 13
+[adam-laptop] Became leader {
+[adam-laptop]   term: 1,
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   rebalancerActive: true
+[adam-laptop] }
+[adam-laptop] Applying committed entry {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   commandType: 'PLACEMENT_ADMIT'
+[adam-laptop] }
+[adam-laptop] CDC obligations recorded with the committed decision {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   entryId: 'execution-mirror:placement',
+[adam-laptop]   logIndex: 3,
+[adam-laptop]   obligations: 1
+[adam-laptop] }
+[adam-laptop] RebalanceCoordinator initialized {
+[adam-laptop]   nodeId: 'node-a',
+[adam-laptop]   config: {
+[adam-laptop]     pendingTimeoutMs: 30000,
+[adam-laptop]     creatingTimeoutMs: 60000,
+[adam-laptop]     syncingTimeoutMs: 300000,
+[adam-laptop]     removingTimeoutMs: 60000,
+[adam-laptop]     maxConcurrentAdds: 5,
+[adam-laptop]     reservedRuntimeServicePlacementSlots: 1,
+[adam-laptop]     maxConcurrentRemoves: 5,
+[adam-laptop]     periodicCheckIntervalMs: 60000,
+[adam-laptop]     reservationTtlMs: 300000
+[adam-laptop]   }
+[adam-laptop] }
+[adam-laptop] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[adam-laptop] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+[adam-laptop] Extracted table name from SQL { tableName: 'replica_operations' }
+[adam-laptop] Extracted data from parameterized UPDATE {
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   dataKeys: [
+[adam-laptop]     'type',
+[adam-laptop]     'partition_id',
+[adam-laptop]     'source_node_id',
+[adam-laptop]     'target_node_id',
+[adam-laptop]     'entity_type',
+[adam-laptop]     'entity_id',
+[adam-laptop]     'membership_publication_epoch',
+[adam-laptop]     'status',
+[adam-laptop]     'workflow_step',
+[adam-laptop]     'updated_at',
+[adam-laptop]     'completed_at',
+[adam-laptop]     'lease_expires_at',
+[adam-laptop]     'error_message',
+[adam-laptop]     'steps_history',
+[adam-laptop]     'replica_id',
+[adam-laptop]     'target_claim_key',
+[adam-laptop]     'operation_id'
+[adam-laptop]   ]
+[adam-laptop] }
+[adam-laptop] Fetching updated row for CDC {
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   keyColumn: 'operation_id',
+[adam-laptop]   keyValue: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]   cdcPartitionId: 'replica_operations-p1',
+[adam-laptop]   cdcReplicaId: 'tx1-v3-r1',
+[adam-laptop]   suppressedSinceLastEmit: 0
+[adam-laptop] }
+[adam-laptop] Fetched updated row for CDC {
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   rowKeys: [
+[adam-laptop]     'operation_id',
+[adam-laptop]     'type',
+[adam-laptop]     'partition_id',
+[adam-laptop]     'entity_type',
+[adam-laptop]     'entity_id',
+[adam-laptop]     'membership_publication_epoch',
+[adam-laptop]     'message_group_membership_owner_claim',
+[adam-laptop]     'message_group_membership_permit',
+[adam-laptop]     'source_replica_id',
+[adam-laptop]     'message_group_membership_lane_key',
+[adam-laptop]     'message_group_membership_phase',
+[adam-laptop]     'message_group_membership_obligation_state',
+[adam-laptop]     'message_group_membership_identity',
+[adam-laptop]     'message_group_learner_stamp',
+[adam-laptop]     'message_group_voter_stamp',
+[adam-laptop]     'message_group_removal_stamp',
+[adam-laptop]     'message_group_source_lifecycle_claim',
+[adam-laptop]     'create_admission_state',
+[adam-laptop]     'create_admission_token',
+[adam-laptop]     'create_admission_replica_created_at',
+[adam-laptop]     'create_admission_attempt_token',
+[adam-laptop]     'create_admission_previous_attempt_token',
+[adam-laptop]     'create_admission_attempt_seq',
+[adam-laptop]     'create_admission_workflow_updated_at',
+[adam-laptop]     'create_admission_owner_incarnation',
+[adam-laptop]     'replica_id',
+[adam-laptop]     'target_claim_key',
+[adam-laptop]     'source_node_id',
+[adam-laptop]     'target_node_id',
+[adam-laptop]     'status',
+[adam-laptop]     'workflow_step',
+[adam-laptop]     'created_at',
+[adam-laptop]     'updated_at',
+[adam-laptop]     'completed_at',
+[adam-laptop]     'lease_expires_at',
+[adam-laptop]     'error_message',
+[adam-laptop]     'steps_history',
+[adam-laptop]     'copy_source_node_id'
+[adam-laptop]   ],
+[adam-laptop]   cdcPartitionId: 'replica_operations-p1',
+[adam-laptop]   cdcReplicaId: 'tx1-v3-r1',
+[adam-laptop]   suppressedSinceLastEmit: 0
+[adam-laptop] }
+[adam-laptop] CDC obligations recorded with the committed decision {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   entryId: 'execution-mirror:write:1',
+[adam-laptop]   logIndex: 4,
+[adam-laptop]   obligations: 1
+[adam-laptop] }
+[adam-laptop] Operation step changed {
+[adam-laptop]   operationId: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]   previousStep: 'PENDING',
+[adam-laptop]   newStep: 'SENDING',
+[adam-laptop]   reason: 'dispatch_sending',
+[adam-laptop]   status: 'pending',
+[adam-laptop]   partitionId: 'sql_transactions-p1'
+[adam-laptop] }
+[adam-laptop] Sending replica operation {
+[adam-laptop]   operationId: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]   target: 'node-b/service/replica-handler',
+[adam-laptop]   type: 'CREATE_REPLICA',
+[adam-laptop]   entityType: 'partition',
+[adam-laptop]   entityId: 'sql_transactions-p1',
+[adam-laptop]   replaceRemovePhase: false,
+[adam-laptop]   firstAttemptForStep: true
+[adam-laptop] }
+[adam-laptop] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[adam-laptop] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+[adam-laptop] Extracted table name from SQL { tableName: 'replica_operations' }
+[adam-laptop] Extracted data from parameterized UPDATE {
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   dataKeys: [
+[adam-laptop]     'type',
+[adam-laptop]     'partition_id',
+[adam-laptop]     'source_node_id',
+[adam-laptop]     'target_node_id',
+[adam-laptop]     'entity_type',
+[adam-laptop]     'entity_id',
+[adam-laptop]     'membership_publication_epoch',
+[adam-laptop]     'status',
+[adam-laptop]     'workflow_step',
+[adam-laptop]     'updated_at',
+[adam-laptop]     'completed_at',
+[adam-laptop]     'lease_expires_at',
+[adam-laptop]     'error_message',
+[adam-laptop]     'steps_history',
+[adam-laptop]     'replica_id',
+[adam-laptop]     'target_claim_key',
+[adam-laptop]     'operation_id'
+[adam-laptop]   ]
+[adam-laptop] }
+[adam-laptop] CDC obligations recorded with the committed decision {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   entryId: 'execution-mirror:write:2',
+[adam-laptop]   logIndex: 5,
+[adam-laptop]   obligations: 1
+[adam-laptop] }
+[adam-laptop] Operation step changed {
+[adam-laptop]   operationId: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]   previousStep: 'SENDING',
+[adam-laptop]   newStep: 'CREATING',
+[adam-laptop]   reason: 'dispatch_creating',
+[adam-laptop]   status: 'creating',
+[adam-laptop]   partitionId: 'sql_transactions-p1'
+[adam-laptop] }
+[adam-laptop] Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+[adam-laptop] Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+[adam-laptop] Initializing partition service {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   tableId: 'replica_operations',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   nodeId: 'test-node',
+[adam-laptop]   replicaCount: 3,
+[adam-laptop]   dbPath: ':memory:'
+[adam-laptop] }
+[adam-laptop] Created table {
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   partitionId: 'replica_operations-p1'
+[adam-laptop] }
+[adam-laptop] Joining peer with fully qualified address {
+[adam-laptop]   peerId: 'tx1-v3-r2',
+[adam-laptop]   peerAddress: null,
+[adam-laptop]   addressStatus: 'unavailable',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   partitionId: 'replica_operations-p1'
+[adam-laptop] }
+[adam-laptop] Joining peer with fully qualified address {
+[adam-laptop]   peerId: 'tx1-v3-r3',
+[adam-laptop]   peerAddress: null,
+[adam-laptop]   addressStatus: 'unavailable',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   partitionId: 'replica_operations-p1'
+[adam-laptop] }
+[adam-laptop] Partition size updated {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   sizeBytes: 118784,
+[adam-laptop]   sizeMB: '0.11'
+[adam-laptop] }
+[adam-laptop] Partition service initialized {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   sizeBytes: 118784
+[adam-laptop] }
+[adam-laptop] Applying committed entry {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+[adam-laptop] }
+[adam-laptop] Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+[adam-laptop] Raft leadership transition evidence {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   nodeId: 'test-node',
+[adam-laptop]   peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+[adam-laptop]   eventType: 'role_transition',
+[adam-laptop]   role: 'leader',
+[adam-laptop]   trigger: 'quorum_elected',
+[adam-laptop]   term: 1
+[adam-laptop] }
+[adam-laptop] Applying committed entry {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   commandType: 'PLACEMENT_ADMIT'
+[adam-laptop] }
+[adam-laptop] CDC obligations recorded with the committed decision {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   entryId: 'execution-mirror:placement',
+[adam-laptop]   logIndex: 3,
+[adam-laptop]   obligations: 1
+[adam-laptop] }
+[adam-laptop] RebalanceCoordinator initialized {
+[adam-laptop]   nodeId: 'node-a',
+[adam-laptop]   config: {
+[adam-laptop]     pendingTimeoutMs: 30000,
+[adam-laptop]     creatingTimeoutMs: 60000,
+[adam-laptop]     syncingTimeoutMs: 300000,
+[adam-laptop]     removingTimeoutMs: 60000,
+[adam-laptop]     maxConcurrentAdds: 5,
+[adam-laptop]     reservedRuntimeServicePlacementSlots: 1,
+[adam-laptop]     maxConcurrentRemoves: 5,
+[adam-laptop]     periodicCheckIntervalMs: 60000,
+[adam-laptop]     reservationTtlMs: 300000
+[adam-laptop]   }
+[adam-laptop] }
+[adam-laptop] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[adam-laptop] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+[adam-laptop] Extracted table name from SQL { tableName: 'replica_operations' }
+[adam-laptop] Extracted data from parameterized UPDATE {
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   dataKeys: [
+[adam-laptop]     'type',
+[adam-laptop]     'partition_id',
+[adam-laptop]     'source_node_id',
+[adam-laptop]     'target_node_id',
+[adam-laptop]     'entity_type',
+[adam-laptop]     'entity_id',
+[adam-laptop]     'membership_publication_epoch',
+[adam-laptop]     'status',
+[adam-laptop]     'workflow_step',
+[adam-laptop]     'updated_at',
+[adam-laptop]     'completed_at',
+[adam-laptop]     'lease_expires_at',
+[adam-laptop]     'error_message',
+[adam-laptop]     'steps_history',
+[adam-laptop]     'replica_id',
+[adam-laptop]     'target_claim_key',
+[adam-laptop]     'operation_id'
+[adam-laptop]   ]
+[adam-laptop] }
+[adam-laptop] CDC obligations recorded with the committed decision {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   entryId: 'execution-mirror:write:1',
+[adam-laptop]   logIndex: 4,
+[adam-laptop]   obligations: 1
+[adam-laptop] }
+[adam-laptop] Operation step changed {
+[adam-laptop]   operationId: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]   previousStep: 'PENDING',
+[adam-laptop]   newStep: 'SENDING',
+[adam-laptop]   reason: 'dispatch_sending',
+[adam-laptop]   status: 'pending',
+[adam-laptop]   partitionId: 'sql_transactions-p1'
+[adam-laptop] }
+[adam-laptop] Storage reservation created with operation {
+[adam-laptop]   reservationId: 'res-pl-sql_transactions-p1-3-0',
+[adam-laptop]   operationId: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]   targetNodeId: 'node-b',
+[adam-laptop]   estimatedBytes: 1,
+[adam-laptop]   expiresAt: 1795287441397
+[adam-laptop] }
+[adam-laptop] Sending replica operation {
+[adam-laptop]   operationId: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]   target: 'node-b/service/replica-handler',
+[adam-laptop]   type: 'CREATE_REPLICA',
+[adam-laptop]   entityType: 'partition',
+[adam-laptop]   entityId: 'sql_transactions-p1',
+[adam-laptop]   replaceRemovePhase: false,
+[adam-laptop]   firstAttemptForStep: true
+[adam-laptop] }
+[adam-laptop] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[adam-laptop] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+[adam-laptop] Extracted table name from SQL { tableName: 'replica_operations' }
+[adam-laptop] Extracted data from parameterized UPDATE {
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   dataKeys: [
+[adam-laptop]     'type',
+[adam-laptop]     'partition_id',
+[adam-laptop]     'source_node_id',
+[adam-laptop]     'target_node_id',
+[adam-laptop]     'entity_type',
+[adam-laptop]     'entity_id',
+[adam-laptop]     'membership_publication_epoch',
+[adam-laptop]     'status',
+[adam-laptop]     'workflow_step',
+[adam-laptop]     'updated_at',
+[adam-laptop]     'completed_at',
+[adam-laptop]     'lease_expires_at',
+[adam-laptop]     'error_message',
+[adam-laptop]     'steps_history',
+[adam-laptop]     'replica_id',
+[adam-laptop]     'target_claim_key',
+[adam-laptop]     'operation_id'
+[adam-laptop]   ]
+[adam-laptop] }
+[adam-laptop] CDC obligations recorded with the committed decision {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   entryId: 'execution-mirror:write:2',
+[adam-laptop]   logIndex: 5,
+[adam-laptop]   obligations: 1
+[adam-laptop] }
+[adam-laptop] Operation step changed {
+[adam-laptop]   operationId: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]   previousStep: 'SENDING',
+[adam-laptop]   newStep: 'CREATING',
+[adam-laptop]   reason: 'dispatch_creating',
+[adam-laptop]   status: 'creating',
+[adam-laptop]   partitionId: 'sql_transactions-p1'
+[adam-laptop] }
+[adam-laptop] Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+[adam-laptop] Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+[adam-laptop] Initializing partition service {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   tableId: 'replica_operations',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   nodeId: 'test-node',
+[adam-laptop]   replicaCount: 3,
+[adam-laptop]   dbPath: ':memory:'
+[adam-laptop] }
+[adam-laptop] Created table {
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   partitionId: 'replica_operations-p1'
+[adam-laptop] }
+[adam-laptop] Joining peer with fully qualified address {
+[adam-laptop]   peerId: 'tx1-v3-r2',
+[adam-laptop]   peerAddress: null,
+[adam-laptop]   addressStatus: 'unavailable',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   partitionId: 'replica_operations-p1'
+[adam-laptop] }
+[adam-laptop] Joining peer with fully qualified address {
+[adam-laptop]   peerId: 'tx1-v3-r3',
+[adam-laptop]   peerAddress: null,
+[adam-laptop]   addressStatus: 'unavailable',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   partitionId: 'replica_operations-p1'
+[adam-laptop] }
+[adam-laptop] Partition size updated {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   sizeBytes: 118784,
+[adam-laptop]   sizeMB: '0.11'
+[adam-laptop] }
+[adam-laptop] Partition service initialized {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   sizeBytes: 118784
+[adam-laptop] }
+[adam-laptop] Applying committed entry {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+[adam-laptop] }
+[adam-laptop] Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+[adam-laptop] Raft leadership transition evidence {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   nodeId: 'test-node',
+[adam-laptop]   peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+[adam-laptop]   eventType: 'role_transition',
+[adam-laptop]   role: 'leader',
+[adam-laptop]   trigger: 'quorum_elected',
+[adam-laptop]   term: 1
+[adam-laptop] }
+[adam-laptop] Applying committed entry {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   commandType: 'PLACEMENT_ADMIT'
+[adam-laptop] }
+[adam-laptop] CDC obligations recorded with the committed decision {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   entryId: 'execution-mirror:placement',
+[adam-laptop]   logIndex: 3,
+[adam-laptop]   obligations: 1
+[adam-laptop] }
+[adam-laptop] RebalanceCoordinator initialized {
+[adam-laptop]   nodeId: 'node-a',
+[adam-laptop]   config: {
+[adam-laptop]     pendingTimeoutMs: 30000,
+[adam-laptop]     creatingTimeoutMs: 60000,
+[adam-laptop]     syncingTimeoutMs: 300000,
+[adam-laptop]     removingTimeoutMs: 60000,
+[adam-laptop]     maxConcurrentAdds: 5,
+[adam-laptop]     reservedRuntimeServicePlacementSlots: 1,
+[adam-laptop]     maxConcurrentRemoves: 5,
+[adam-laptop]     periodicCheckIntervalMs: 60000,
+[adam-laptop]     reservationTtlMs: 300000
+[adam-laptop]   }
+[adam-laptop] }
+[adam-laptop] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[adam-laptop] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+[adam-laptop] Extracted table name from SQL { tableName: 'replica_operations' }
+[adam-laptop] Extracted data from parameterized UPDATE {
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   dataKeys: [
+[adam-laptop]     'type',
+[adam-laptop]     'partition_id',
+[adam-laptop]     'source_node_id',
+[adam-laptop]     'target_node_id',
+[adam-laptop]     'entity_type',
+[adam-laptop]     'entity_id',
+[adam-laptop]     'membership_publication_epoch',
+[adam-laptop]     'status',
+[adam-laptop]     'workflow_step',
+[adam-laptop]     'updated_at',
+[adam-laptop]     'completed_at',
+[adam-laptop]     'lease_expires_at',
+[adam-laptop]     'error_message',
+[adam-laptop]     'steps_history',
+[adam-laptop]     'replica_id',
+[adam-laptop]     'target_claim_key',
+[adam-laptop]     'operation_id'
+[adam-laptop]   ]
+[adam-laptop] }
+[adam-laptop] CDC obligations recorded with the committed decision {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   entryId: 'execution-mirror:write:1',
+[adam-laptop]   logIndex: 4,
+[adam-laptop]   obligations: 1
+[adam-laptop] }
+[adam-laptop] Operation step changed {
+[adam-laptop]   operationId: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]   previousStep: 'PENDING',
+[adam-laptop]   newStep: 'SENDING',
+[adam-laptop]   reason: 'dispatch_sending',
+[adam-laptop]   status: 'pending',
+[adam-laptop]   partitionId: 'sql_transactions-p1'
+[adam-laptop] }
+[adam-laptop] Storage reservation created with operation {
+[adam-laptop]   reservationId: 'res-pl-sql_transactions-p1-3-0',
+[adam-laptop]   operationId: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]   targetNodeId: 'node-b',
+[adam-laptop]   estimatedBytes: 1,
+[adam-laptop]   expiresAt: 1795287441427
+[adam-laptop] }
+[adam-laptop] Sending replica operation {
+[adam-laptop]   operationId: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]   target: 'node-b/service/replica-handler',
+[adam-laptop]   type: 'CREATE_REPLICA',
+[adam-laptop]   entityType: 'partition',
+[adam-laptop]   entityId: 'sql_transactions-p1',
+[adam-laptop]   replaceRemovePhase: false,
+[adam-laptop]   firstAttemptForStep: true
+[adam-laptop] }
+[adam-laptop] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[adam-laptop] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+[adam-laptop] Extracted table name from SQL { tableName: 'replica_operations' }
+[adam-laptop] Extracted data from parameterized UPDATE {
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   dataKeys: [
+[adam-laptop]     'type',
+[adam-laptop]     'partition_id',
+[adam-laptop]     'source_node_id',
+[adam-laptop]     'target_node_id',
+[adam-laptop]     'entity_type',
+[adam-laptop]     'entity_id',
+[adam-laptop]     'membership_publication_epoch',
+[adam-laptop]     'status',
+[adam-laptop]     'workflow_step',
+[adam-laptop]     'updated_at',
+[adam-laptop]     'completed_at',
+[adam-laptop]     'lease_expires_at',
+[adam-laptop]     'error_message',
+[adam-laptop]     'steps_history',
+[adam-laptop]     'replica_id',
+[adam-laptop]     'target_claim_key',
+[adam-laptop]     'operation_id'
+[adam-laptop]   ]
+[adam-laptop] }
+[adam-laptop] CDC obligations recorded with the committed decision {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   entryId: 'execution-mirror:write:2',
+[adam-laptop]   logIndex: 5,
+[adam-laptop]   obligations: 1
+[adam-laptop] }
+[adam-laptop] Operation step changed {
+[adam-laptop]   operationId: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]   previousStep: 'SENDING',
+[adam-laptop]   newStep: 'CREATING',
+[adam-laptop]   reason: 'dispatch_creating',
+[adam-laptop]   status: 'creating',
+[adam-laptop]   partitionId: 'sql_transactions-p1'
+[adam-laptop] }
+[adam-laptop] Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+[adam-laptop] Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+[adam-laptop] Initializing partition service {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   tableId: 'replica_operations',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   nodeId: 'test-node',
+[adam-laptop]   replicaCount: 3,
+[adam-laptop]   dbPath: ':memory:'
+[adam-laptop] }
+[adam-laptop] Created table {
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   partitionId: 'replica_operations-p1'
+[adam-laptop] }
+[adam-laptop] Joining peer with fully qualified address {
+[adam-laptop]   peerId: 'tx1-v3-r2',
+[adam-laptop]   peerAddress: null,
+[adam-laptop]   addressStatus: 'unavailable',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   partitionId: 'replica_operations-p1'
+[adam-laptop] }
+[adam-laptop] Joining peer with fully qualified address {
+[adam-laptop]   peerId: 'tx1-v3-r3',
+[adam-laptop]   peerAddress: null,
+[adam-laptop]   addressStatus: 'unavailable',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   partitionId: 'replica_operations-p1'
+[adam-laptop] }
+[adam-laptop] Partition size updated {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   sizeBytes: 118784,
+[adam-laptop]   sizeMB: '0.11'
+[adam-laptop] }
+[adam-laptop] Partition service initialized {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   sizeBytes: 118784
+[adam-laptop] }
+[adam-laptop] Applying committed entry {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+[adam-laptop] }
+[adam-laptop] Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+[adam-laptop] Raft leadership transition evidence {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   nodeId: 'test-node',
+[adam-laptop]   peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+[adam-laptop]   eventType: 'role_transition',
+[adam-laptop]   role: 'leader',
+[adam-laptop]   trigger: 'quorum_elected',
+[adam-laptop]   term: 1
+[adam-laptop] }
+[adam-laptop] Applying committed entry {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   commandType: 'PLACEMENT_ADMIT'
+[adam-laptop] }
+[adam-laptop] CDC obligations recorded with the committed decision {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   entryId: 'execution-mirror:placement',
+[adam-laptop]   logIndex: 3,
+[adam-laptop]   obligations: 1
+[adam-laptop] }
+[adam-laptop] RebalanceCoordinator initialized {
+[adam-laptop]   nodeId: 'node-a',
+[adam-laptop]   config: {
+[adam-laptop]     pendingTimeoutMs: 30000,
+[adam-laptop]     creatingTimeoutMs: 60000,
+[adam-laptop]     syncingTimeoutMs: 300000,
+[adam-laptop]     removingTimeoutMs: 60000,
+[adam-laptop]     maxConcurrentAdds: 5,
+[adam-laptop]     reservedRuntimeServicePlacementSlots: 1,
+[adam-laptop]     maxConcurrentRemoves: 5,
+[adam-laptop]     periodicCheckIntervalMs: 60000,
+[adam-laptop]     reservationTtlMs: 300000
+[adam-laptop]   }
+[adam-laptop] }
+[adam-laptop] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[adam-laptop] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+[adam-laptop] Extracted table name from SQL { tableName: 'replica_operations' }
+[adam-laptop] Extracted data from parameterized UPDATE {
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   dataKeys: [
+[adam-laptop]     'type',
+[adam-laptop]     'partition_id',
+[adam-laptop]     'source_node_id',
+[adam-laptop]     'target_node_id',
+[adam-laptop]     'entity_type',
+[adam-laptop]     'entity_id',
+[adam-laptop]     'membership_publication_epoch',
+[adam-laptop]     'status',
+[adam-laptop]     'workflow_step',
+[adam-laptop]     'updated_at',
+[adam-laptop]     'completed_at',
+[adam-laptop]     'lease_expires_at',
+[adam-laptop]     'error_message',
+[adam-laptop]     'steps_history',
+[adam-laptop]     'replica_id',
+[adam-laptop]     'target_claim_key',
+[adam-laptop]     'operation_id'
+[adam-laptop]   ]
+[adam-laptop] }
+[adam-laptop] CDC obligations recorded with the committed decision {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   entryId: 'execution-mirror:write:1',
+[adam-laptop]   logIndex: 4,
+[adam-laptop]   obligations: 1
+[adam-laptop] }
+[adam-laptop] Operation step changed {
+[adam-laptop]   operationId: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]   previousStep: 'PENDING',
+[adam-laptop]   newStep: 'SENDING',
+[adam-laptop]   reason: 'dispatch_sending',
+[adam-laptop]   status: 'pending',
+[adam-laptop]   partitionId: 'sql_transactions-p1'
+[adam-laptop] }
+[adam-laptop] Storage reservation created with operation {
+[adam-laptop]   reservationId: 'res-pl-sql_transactions-p1-3-0',
+[adam-laptop]   operationId: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]   targetNodeId: 'node-b',
+[adam-laptop]   estimatedBytes: 1,
+[adam-laptop]   expiresAt: 1795287441455
+[adam-laptop] }
+[adam-laptop] Sending replica operation {
+[adam-laptop]   operationId: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]   target: 'node-b/service/replica-handler',
+[adam-laptop]   type: 'CREATE_REPLICA',
+[adam-laptop]   entityType: 'partition',
+[adam-laptop]   entityId: 'sql_transactions-p1',
+[adam-laptop]   replaceRemovePhase: false,
+[adam-laptop]   firstAttemptForStep: true
+[adam-laptop] }
+[adam-laptop] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[adam-laptop] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+[adam-laptop] Extracted table name from SQL { tableName: 'replica_operations' }
+[adam-laptop] Extracted data from parameterized UPDATE {
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   dataKeys: [
+[adam-laptop]     'type',
+[adam-laptop]     'partition_id',
+[adam-laptop]     'source_node_id',
+[adam-laptop]     'target_node_id',
+[adam-laptop]     'entity_type',
+[adam-laptop]     'entity_id',
+[adam-laptop]     'membership_publication_epoch',
+[adam-laptop]     'status',
+[adam-laptop]     'workflow_step',
+[adam-laptop]     'updated_at',
+[adam-laptop]     'completed_at',
+[adam-laptop]     'lease_expires_at',
+[adam-laptop]     'error_message',
+[adam-laptop]     'steps_history',
+[adam-laptop]     'replica_id',
+[adam-laptop]     'target_claim_key',
+[adam-laptop]     'operation_id'
+[adam-laptop]   ]
+[adam-laptop] }
+[adam-laptop] CDC obligations recorded with the committed decision {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   entryId: 'execution-mirror:write:2',
+[adam-laptop]   logIndex: 5,
+[adam-laptop]   obligations: 1
+[adam-laptop] }
+[adam-laptop] Operation step changed {
+[adam-laptop]   operationId: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]   previousStep: 'SENDING',
+[adam-laptop]   newStep: 'CREATING',
+[adam-laptop]   reason: 'dispatch_creating',
+[adam-laptop]   status: 'creating',
+[adam-laptop]   partitionId: 'sql_transactions-p1'
+[adam-laptop] }
+[adam-laptop] Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+[adam-laptop] Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+[adam-laptop] Initializing partition service {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   tableId: 'replica_operations',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   nodeId: 'test-node',
+[adam-laptop]   replicaCount: 3,
+[adam-laptop]   dbPath: ':memory:'
+[adam-laptop] }
+[adam-laptop] Created table {
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   partitionId: 'replica_operations-p1'
+[adam-laptop] }
+[adam-laptop] Joining peer with fully qualified address {
+[adam-laptop]   peerId: 'tx1-v3-r2',
+[adam-laptop]   peerAddress: null,
+[adam-laptop]   addressStatus: 'unavailable',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   partitionId: 'replica_operations-p1'
+[adam-laptop] }
+[adam-laptop] Joining peer with fully qualified address {
+[adam-laptop]   peerId: 'tx1-v3-r3',
+[adam-laptop]   peerAddress: null,
+[adam-laptop]   addressStatus: 'unavailable',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   partitionId: 'replica_operations-p1'
+[adam-laptop] }
+[adam-laptop] Partition size updated {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   sizeBytes: 118784,
+[adam-laptop]   sizeMB: '0.11'
+[adam-laptop] }
+[adam-laptop] Partition service initialized {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   sizeBytes: 118784
+[adam-laptop] }
+[adam-laptop] Applying committed entry {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+[adam-laptop] }
+[adam-laptop] Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+[adam-laptop] Raft leadership transition evidence {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   nodeId: 'test-node',
+[adam-laptop]   peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+[adam-laptop]   eventType: 'role_transition',
+[adam-laptop]   role: 'leader',
+[adam-laptop]   trigger: 'quorum_elected',
+[adam-laptop]   term: 1
+[adam-laptop] }
+[adam-laptop] Applying committed entry {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   commandType: 'PLACEMENT_ADMIT'
+[adam-laptop] }
+[adam-laptop] CDC obligations recorded with the committed decision {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   entryId: 'execution-mirror:placement',
+[adam-laptop]   logIndex: 3,
+[adam-laptop]   obligations: 1
+[adam-laptop] }
+[adam-laptop] RebalanceCoordinator initialized {
+[adam-laptop]   nodeId: 'node-a',
+[adam-laptop]   config: {
+[adam-laptop]     pendingTimeoutMs: 30000,
+[adam-laptop]     creatingTimeoutMs: 60000,
+[adam-laptop]     syncingTimeoutMs: 300000,
+[adam-laptop]     removingTimeoutMs: 60000,
+[adam-laptop]     maxConcurrentAdds: 5,
+[adam-laptop]     reservedRuntimeServicePlacementSlots: 1,
+[adam-laptop]     maxConcurrentRemoves: 5,
+[adam-laptop]     periodicCheckIntervalMs: 60000,
+[adam-laptop]     reservationTtlMs: 300000
+[adam-laptop]   }
+[adam-laptop] }
+[adam-laptop] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[adam-laptop] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+[adam-laptop] Extracted table name from SQL { tableName: 'replica_operations' }
+[adam-laptop] Extracted data from parameterized UPDATE {
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   dataKeys: [
+[adam-laptop]     'type',
+[adam-laptop]     'partition_id',
+[adam-laptop]     'source_node_id',
+[adam-laptop]     'target_node_id',
+[adam-laptop]     'entity_type',
+[adam-laptop]     'entity_id',
+[adam-laptop]     'membership_publication_epoch',
+[adam-laptop]     'status',
+[adam-laptop]     'workflow_step',
+[adam-laptop]     'updated_at',
+[adam-laptop]     'completed_at',
+[adam-laptop]     'lease_expires_at',
+[adam-laptop]     'error_message',
+[adam-laptop]     'steps_history',
+[adam-laptop]     'replica_id',
+[adam-laptop]     'target_claim_key',
+[adam-laptop]     'operation_id'
+[adam-laptop]   ]
+[adam-laptop] }
+[adam-laptop] CDC obligations recorded with the committed decision {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   entryId: 'execution-mirror:write:1',
+[adam-laptop]   logIndex: 4,
+[adam-laptop]   obligations: 1
+[adam-laptop] }
+[adam-laptop] Operation step changed {
+[adam-laptop]   operationId: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]   previousStep: 'PENDING',
+[adam-laptop]   newStep: 'SENDING',
+[adam-laptop]   reason: 'dispatch_sending',
+[adam-laptop]   status: 'pending',
+[adam-laptop]   partitionId: 'sql_transactions-p1'
+[adam-laptop] }
+[adam-laptop] Storage reservation created with operation {
+[adam-laptop]   reservationId: 'res-pl-sql_transactions-p1-3-0',
+[adam-laptop]   operationId: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]   targetNodeId: 'node-b',
+[adam-laptop]   estimatedBytes: 1,
+[adam-laptop]   expiresAt: 1795287441484
+[adam-laptop] }
+[adam-laptop] Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+[adam-laptop] Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+[adam-laptop] Initializing partition service {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   tableId: 'replica_operations',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   nodeId: 'test-node',
+[adam-laptop]   replicaCount: 3,
+[adam-laptop]   dbPath: ':memory:'
+[adam-laptop] }
+[adam-laptop] Created table {
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   partitionId: 'replica_operations-p1'
+[adam-laptop] }
+[adam-laptop] Joining peer with fully qualified address {
+[adam-laptop]   peerId: 'tx1-v3-r2',
+[adam-laptop]   peerAddress: null,
+[adam-laptop]   addressStatus: 'unavailable',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   partitionId: 'replica_operations-p1'
+[adam-laptop] }
+[adam-laptop] Joining peer with fully qualified address {
+[adam-laptop]   peerId: 'tx1-v3-r3',
+[adam-laptop]   peerAddress: null,
+[adam-laptop]   addressStatus: 'unavailable',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   partitionId: 'replica_operations-p1'
+[adam-laptop] }
+[adam-laptop] Partition size updated {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   sizeBytes: 118784,
+[adam-laptop]   sizeMB: '0.11'
+[adam-laptop] }
+[adam-laptop] Partition service initialized {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   sizeBytes: 118784
+[adam-laptop] }
+[adam-laptop] Applying committed entry {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+[adam-laptop] }
+[adam-laptop] Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+[adam-laptop] Raft leadership transition evidence {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   nodeId: 'test-node',
+[adam-laptop]   peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+[adam-laptop]   eventType: 'role_transition',
+[adam-laptop]   role: 'leader',
+[adam-laptop]   trigger: 'quorum_elected',
+[adam-laptop]   term: 1
+[adam-laptop] }
+[adam-laptop] Applying committed entry {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   commandType: 'PLACEMENT_ADMIT'
+[adam-laptop] }
+[adam-laptop] CDC obligations recorded with the committed decision {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   entryId: 'execution-mirror:placement',
+[adam-laptop]   logIndex: 3,
+[adam-laptop]   obligations: 1
+[adam-laptop] }
+[adam-laptop] RebalanceCoordinator initialized {
+[adam-laptop]   nodeId: 'node-a',
+[adam-laptop]   config: {
+[adam-laptop]     pendingTimeoutMs: 30000,
+[adam-laptop]     creatingTimeoutMs: 60000,
+[adam-laptop]     syncingTimeoutMs: 300000,
+[adam-laptop]     removingTimeoutMs: 60000,
+[adam-laptop]     maxConcurrentAdds: 5,
+[adam-laptop]     reservedRuntimeServicePlacementSlots: 1,
+[adam-laptop]     maxConcurrentRemoves: 5,
+[adam-laptop]     periodicCheckIntervalMs: 60000,
+[adam-laptop]     reservationTtlMs: 300000
+[adam-laptop]   }
+[adam-laptop] }
+[adam-laptop] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[adam-laptop] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'DELETE' }
+[adam-laptop] Extracted table name from SQL { tableName: 'replica_operations' }
+[adam-laptop] Extracted data from parameterized DELETE { tableName: 'replica_operations', dataKeys: [ 'operation_id' ] }
+[adam-laptop] CDC obligations recorded with the committed decision {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   entryId: 'execution-mirror:absent-elsewhere',
+[adam-laptop]   logIndex: 4,
+[adam-laptop]   obligations: 1
+[adam-laptop] }
+[adam-laptop] Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+[adam-laptop] Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+[adam-laptop] Initializing partition service {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   tableId: 'replica_operations',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   nodeId: 'test-node',
+[adam-laptop]   replicaCount: 3,
+[adam-laptop]   dbPath: ':memory:'
+[adam-laptop] }
+[adam-laptop] Created table {
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   partitionId: 'replica_operations-p1'
+[adam-laptop] }
+[adam-laptop] Joining peer with fully qualified address {
+[adam-laptop]   peerId: 'tx1-v3-r2',
+[adam-laptop]   peerAddress: null,
+[adam-laptop]   addressStatus: 'unavailable',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   partitionId: 'replica_operations-p1'
+[adam-laptop] }
+[adam-laptop] Joining peer with fully qualified address {
+[adam-laptop]   peerId: 'tx1-v3-r3',
+[adam-laptop]   peerAddress: null,
+[adam-laptop]   addressStatus: 'unavailable',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   partitionId: 'replica_operations-p1'
+[adam-laptop] }
+[adam-laptop] Partition size updated {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   sizeBytes: 118784,
+[adam-laptop]   sizeMB: '0.11'
+[adam-laptop] }
+[adam-laptop] Partition service initialized {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   sizeBytes: 118784
+[adam-laptop] }
+[adam-laptop] Applying committed entry {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+[adam-laptop] }
+[adam-laptop] Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+[adam-laptop] Raft leadership transition evidence {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   nodeId: 'test-node',
+[adam-laptop]   peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+[adam-laptop]   eventType: 'role_transition',
+[adam-laptop]   role: 'leader',
+[adam-laptop]   trigger: 'quorum_elected',
+[adam-laptop]   term: 1
+[adam-laptop] }
+[adam-laptop] Applying committed entry {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   commandType: 'PLACEMENT_ADMIT'
+[adam-laptop] }
+[adam-laptop] CDC obligations recorded with the committed decision {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   entryId: 'execution-mirror:placement',
+[adam-laptop]   logIndex: 3,
+[adam-laptop]   obligations: 1
+[adam-laptop] }
+[adam-laptop] RebalanceCoordinator initialized {
+[adam-laptop]   nodeId: 'node-a',
+[adam-laptop]   config: {
+[adam-laptop]     pendingTimeoutMs: 30000,
+[adam-laptop]     creatingTimeoutMs: 60000,
+[adam-laptop]     syncingTimeoutMs: 300000,
+[adam-laptop]     removingTimeoutMs: 60000,
+[adam-laptop]     maxConcurrentAdds: 5,
+[adam-laptop]     reservedRuntimeServicePlacementSlots: 1,
+[adam-laptop]     maxConcurrentRemoves: 5,
+[adam-laptop]     periodicCheckIntervalMs: 60000,
+[adam-laptop]     reservationTtlMs: 300000
+[adam-laptop]   }
+[adam-laptop] }
+[adam-laptop] Initializing partition service {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   tableId: 'replica_operations',
+[adam-laptop]   replicaId: 'tx1-v3-r2',
+[adam-laptop]   nodeId: 'node-c',
+[adam-laptop]   replicaCount: 3,
+[adam-laptop]   dbPath: ':memory:'
+[adam-laptop] }
+[adam-laptop] Created table {
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   partitionId: 'replica_operations-p1'
+[adam-laptop] }
+[adam-laptop] Joining peer with fully qualified address {
+[adam-laptop]   peerId: 'tx1-v3-r1',
+[adam-laptop]   peerAddress: null,
+[adam-laptop]   addressStatus: 'unavailable',
+[adam-laptop]   replicaId: 'tx1-v3-r2',
+[adam-laptop]   partitionId: 'replica_operations-p1'
+[adam-laptop] }
+[adam-laptop] Joining peer with fully qualified address {
+[adam-laptop]   peerId: 'tx1-v3-r3',
+[adam-laptop]   peerAddress: null,
+[adam-laptop]   addressStatus: 'unavailable',
+[adam-laptop]   replicaId: 'tx1-v3-r2',
+[adam-laptop]   partitionId: 'replica_operations-p1'
+[adam-laptop] }
+[adam-laptop] Partition size updated {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   sizeBytes: 118784,
+[adam-laptop]   sizeMB: '0.11'
+[adam-laptop] }
+[adam-laptop] Partition service initialized {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   replicaId: 'tx1-v3-r2',
+[adam-laptop]   sizeBytes: 118784
+[adam-laptop] }
+[adam-laptop] Applying committed entry {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+[adam-laptop] }
+[adam-laptop] Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+[adam-laptop] Raft leadership transition evidence {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   replicaId: 'tx1-v3-r2',
+[adam-laptop]   nodeId: 'node-c',
+[adam-laptop]   peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+[adam-laptop]   eventType: 'role_transition',
+[adam-laptop]   role: 'leader',
+[adam-laptop]   trigger: 'quorum_elected',
+[adam-laptop]   term: 1
+[adam-laptop] }
+[adam-laptop] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[adam-laptop] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'INSERT' }
+[adam-laptop] Extracted table name from SQL { tableName: 'replica_operations' }
+[adam-laptop] Extracted data from parameterized INSERT {
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   dataKeys: [
+[adam-laptop]     'operation_id',
+[adam-laptop]     'type',
+[adam-laptop]     'partition_id',
+[adam-laptop]     'entity_type',
+[adam-laptop]     'entity_id',
+[adam-laptop]     'membership_publication_epoch',
+[adam-laptop]     'message_group_membership_owner_claim',
+[adam-laptop]     'message_group_membership_permit',
+[adam-laptop]     'source_replica_id',
+[adam-laptop]     'message_group_membership_lane_key',
+[adam-laptop]     'message_group_membership_phase',
+[adam-laptop]     'message_group_membership_obligation_state',
+[adam-laptop]     'message_group_membership_identity',
+[adam-laptop]     'message_group_learner_stamp',
+[adam-laptop]     'message_group_voter_stamp',
+[adam-laptop]     'message_group_removal_stamp',
+[adam-laptop]     'message_group_source_lifecycle_claim',
+[adam-laptop]     'create_admission_state',
+[adam-laptop]     'create_admission_token',
+[adam-laptop]     'create_admission_replica_created_at',
+[adam-laptop]     'create_admission_attempt_token',
+[adam-laptop]     'create_admission_previous_attempt_token',
+[adam-laptop]     'create_admission_attempt_seq',
+[adam-laptop]     'create_admission_workflow_updated_at',
+[adam-laptop]     'create_admission_owner_incarnation',
+[adam-laptop]     'replica_id',
+[adam-laptop]     'target_claim_key',
+[adam-laptop]     'source_node_id',
+[adam-laptop]     'target_node_id',
+[adam-laptop]     'status',
+[adam-laptop]     'workflow_step',
+[adam-laptop]     'created_at',
+[adam-laptop]     'updated_at',
+[adam-laptop]     'completed_at',
+[adam-laptop]     'lease_expires_at',
+[adam-laptop]     'error_message',
+[adam-laptop]     'steps_history',
+[adam-laptop]     'copy_source_node_id'
+[adam-laptop]   ]
+[adam-laptop] }
+[adam-laptop] Fetched inserted row for CDC {
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   rowKeys: [
+[adam-laptop]     'operation_id',
+[adam-laptop]     'type',
+[adam-laptop]     'partition_id',
+[adam-laptop]     'entity_type',
+[adam-laptop]     'entity_id',
+[adam-laptop]     'membership_publication_epoch',
+[adam-laptop]     'message_group_membership_owner_claim',
+[adam-laptop]     'message_group_membership_permit',
+[adam-laptop]     'source_replica_id',
+[adam-laptop]     'message_group_membership_lane_key',
+[adam-laptop]     'message_group_membership_phase',
+[adam-laptop]     'message_group_membership_obligation_state',
+[adam-laptop]     'message_group_membership_identity',
+[adam-laptop]     'message_group_learner_stamp',
+[adam-laptop]     'message_group_voter_stamp',
+[adam-laptop]     'message_group_removal_stamp',
+[adam-laptop]     'message_group_source_lifecycle_claim',
+[adam-laptop]     'create_admission_state',
+[adam-laptop]     'create_admission_token',
+[adam-laptop]     'create_admission_replica_created_at',
+[adam-laptop]     'create_admission_attempt_token',
+[adam-laptop]     'create_admission_previous_attempt_token',
+[adam-laptop]     'create_admission_attempt_seq',
+[adam-laptop]     'create_admission_workflow_updated_at',
+[adam-laptop]     'create_admission_owner_incarnation',
+[adam-laptop]     'replica_id',
+[adam-laptop]     'target_claim_key',
+[adam-laptop]     'source_node_id',
+[adam-laptop]     'target_node_id',
+[adam-laptop]     'status',
+[adam-laptop]     'workflow_step',
+[adam-laptop]     'created_at',
+[adam-laptop]     'updated_at',
+[adam-laptop]     'completed_at',
+[adam-laptop]     'lease_expires_at',
+[adam-laptop]     'error_message',
+[adam-laptop]     'steps_history',
+[adam-laptop]     'copy_source_node_id'
+[adam-laptop]   ],
+[adam-laptop]   cdcPartitionId: 'replica_operations-p1',
+[adam-laptop]   cdcReplicaId: 'tx1-v3-r2',
+[adam-laptop]   suppressedSinceLastEmit: 0
+[adam-laptop] }
+[adam-laptop] CDC obligations recorded with the committed decision {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   entryId: 'execution-mirror:deposed-copy',
+[adam-laptop]   logIndex: 3,
+[adam-laptop]   obligations: 1
+[adam-laptop] }
+[adam-laptop] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[adam-laptop] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'DELETE' }
+[adam-laptop] Extracted table name from SQL { tableName: 'replica_operations' }
+[adam-laptop] Extracted data from parameterized DELETE { tableName: 'replica_operations', dataKeys: [ 'operation_id' ] }
+[adam-laptop] CDC obligations recorded with the committed decision {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   entryId: 'execution-mirror:retired',
+[adam-laptop]   logIndex: 4,
+[adam-laptop]   obligations: 1
+[adam-laptop] }
+[adam-laptop] Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r2' }
+[adam-laptop] Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+[adam-laptop] Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+[adam-laptop] Initializing partition service {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   tableId: 'replica_operations',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   nodeId: 'test-node',
+[adam-laptop]   replicaCount: 3,
+[adam-laptop]   dbPath: ':memory:'
+[adam-laptop] }
+[adam-laptop] Created table {
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   partitionId: 'replica_operations-p1'
+[adam-laptop] }
+[adam-laptop] Joining peer with fully qualified address {
+[adam-laptop]   peerId: 'tx1-v3-r2',
+[adam-laptop]   peerAddress: null,
+[adam-laptop]   addressStatus: 'unavailable',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   partitionId: 'replica_operations-p1'
+[adam-laptop] }
+[adam-laptop] Joining peer with fully qualified address {
+[adam-laptop]   peerId: 'tx1-v3-r3',
+[adam-laptop]   peerAddress: null,
+[adam-laptop]   addressStatus: 'unavailable',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   partitionId: 'replica_operations-p1'
+[adam-laptop] }
+[adam-laptop] Partition size updated {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   sizeBytes: 118784,
+[adam-laptop]   sizeMB: '0.11'
+[adam-laptop] }
+[adam-laptop] Partition service initialized {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   sizeBytes: 118784
+[adam-laptop] }
+[adam-laptop] Applying committed entry {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+[adam-laptop] }
+[adam-laptop] Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+[adam-laptop] Raft leadership transition evidence {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   nodeId: 'test-node',
+[adam-laptop]   peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+[adam-laptop]   eventType: 'role_transition',
+[adam-laptop]   role: 'leader',
+[adam-laptop]   trigger: 'quorum_elected',
+[adam-laptop]   term: 1
+[adam-laptop] }
+[adam-laptop] Applying committed entry {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   commandType: 'PLACEMENT_ADMIT'
+[adam-laptop] }
+[adam-laptop] CDC obligations recorded with the committed decision {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   entryId: 'execution-mirror:placement',
+[adam-laptop]   logIndex: 3,
+[adam-laptop]   obligations: 1
+[adam-laptop] }
+[adam-laptop] RebalanceCoordinator initialized {
+[adam-laptop]   nodeId: 'node-a',
+[adam-laptop]   config: {
+[adam-laptop]     pendingTimeoutMs: 30000,
+[adam-laptop]     creatingTimeoutMs: 60000,
+[adam-laptop]     syncingTimeoutMs: 300000,
+[adam-laptop]     removingTimeoutMs: 60000,
+[adam-laptop]     maxConcurrentAdds: 5,
+[adam-laptop]     reservedRuntimeServicePlacementSlots: 1,
+[adam-laptop]     maxConcurrentRemoves: 5,
+[adam-laptop]     periodicCheckIntervalMs: 60000,
+[adam-laptop]     reservationTtlMs: 300000
+[adam-laptop]   }
+[adam-laptop] }
+[adam-laptop] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[adam-laptop] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+[adam-laptop] Extracted table name from SQL { tableName: 'replica_operations' }
+[adam-laptop] Extracted data from parameterized UPDATE {
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   dataKeys: [
+[adam-laptop]     'type',
+[adam-laptop]     'partition_id',
+[adam-laptop]     'source_node_id',
+[adam-laptop]     'target_node_id',
+[adam-laptop]     'entity_type',
+[adam-laptop]     'entity_id',
+[adam-laptop]     'membership_publication_epoch',
+[adam-laptop]     'status',
+[adam-laptop]     'workflow_step',
+[adam-laptop]     'updated_at',
+[adam-laptop]     'completed_at',
+[adam-laptop]     'lease_expires_at',
+[adam-laptop]     'error_message',
+[adam-laptop]     'steps_history',
+[adam-laptop]     'replica_id',
+[adam-laptop]     'target_claim_key',
+[adam-laptop]     'operation_id'
+[adam-laptop]   ]
+[adam-laptop] }
+[adam-laptop] CDC obligations recorded with the committed decision {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   entryId: 'execution-mirror:write:1',
+[adam-laptop]   logIndex: 4,
+[adam-laptop]   obligations: 1
+[adam-laptop] }
+[adam-laptop] Operation step changed {
+[adam-laptop]   operationId: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]   previousStep: 'PENDING',
+[adam-laptop]   newStep: 'SENDING',
+[adam-laptop]   reason: 'dispatch_sending',
+[adam-laptop]   status: 'pending',
+[adam-laptop]   partitionId: 'sql_transactions-p1'
+[adam-laptop] }
+[adam-laptop] Storage reservation created with operation {
+[adam-laptop]   reservationId: 'res-pl-sql_transactions-p1-3-0',
+[adam-laptop]   operationId: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]   targetNodeId: 'node-b',
+[adam-laptop]   estimatedBytes: 1,
+[adam-laptop]   expiresAt: 1795287441542
+[adam-laptop] }
+[adam-laptop] # Subtest: fresh placement CREATE binds its topology and advances through actual dispatch transitions
+[adam-laptop] ok 1 - fresh placement CREATE binds its topology and advances through actual dispatch transitions
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 3478.033448
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: a SENDING placement CREATE re-entered by ledger CDC advances through real acknowledgement
+[adam-laptop] ok 2 - a SENDING placement CREATE re-entered by ledger CDC advances through real acknowledgement
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 43.250471
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: a present placement row dispatches its CREATE once, without delay, through the retained owner's confirmation (cached ledger route: published)
+[adam-laptop] ok 3 - a present placement row dispatches its CREATE once, without delay, through the retained owner's confirmation (cached ledger route: published)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 27.622442
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: a present placement row dispatches its CREATE once, without delay, through the retained owner's confirmation (cached ledger route: unpublished)
+[adam-laptop] ok 4 - a present placement row dispatches its CREATE once, without delay, through the retained owner's confirmation (cached ledger route: unpublished)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 26.410387
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: a read served by another replica than the cached ledger route settles nothing: the CREATE dispatch is withheld and owed to the route publication
+[adam-laptop] ok 5 - a read served by another replica than the cached ledger route settles nothing: the CREATE dispatch is withheld and owed to the route publication
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 24.53252
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: an absence served by another replica than the cached ledger route settles nothing: nothing is prepared or presented, the route publication owns the reconsideration
+[adam-laptop] not ok 6 - an absence served by another replica than the cached ledger route settles nothing: nothing is prepared or presented, the route publication owns the reconsideration
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 14.785498
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c79fb9f02de7-mwqrknt4-1862285/test/partition/placement-create-dispatch-execution-mirror.test.js:253:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     Expected values to be strictly equal:
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]     + 'placement_repair_owner_unavailable'
+[adam-laptop]     - 'unqualified_binding'
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: 'unqualified_binding'
+[adam-laptop]   actual: 'placement_repair_owner_unavailable'
+[adam-laptop]   operator: 'strictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     assertOwedToRoute (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c79fb9f02de7-mwqrknt4-1862285/test/partition/placement-create-dispatch-execution-mirror.test.js:215:10)
+[adam-laptop]     withPlacementExecution.ledgerRoute (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c79fb9f02de7-mwqrknt4-1862285/test/partition/placement-create-dispatch-execution-mirror.test.js:266:5)
+[adam-laptop]     async file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c79fb9f02de7-mwqrknt4-1862285/test/partition/placement-create-dispatch-execution-mirror.test.js:142:7
+[adam-laptop]     async onLedgerLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c79fb9f02de7-mwqrknt4-1862285/test/partition/placement-admission-fixture.js:40:12)
+[adam-laptop]     async withPlacementExecution (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c79fb9f02de7-mwqrknt4-1862285/test/partition/placement-create-dispatch-execution-mirror.test.js:77:3)
+[adam-laptop]     async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c79fb9f02de7-mwqrknt4-1862285/test/partition/placement-create-dispatch-execution-mirror.test.js:255:3)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: a row still present on a deposed ledger leader but retired on the current one is not confirmed for dispatch
+[adam-laptop] ok 7 - a row still present on a deposed ledger leader but retired on the current one is not confirmed for dispatch
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 23.436957
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+[adam-laptop] Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+[adam-laptop] Initializing partition service {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   tableId: 'replica_operations',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   nodeId: 'test-node',
+[adam-laptop]   replicaCount: 3,
+[adam-laptop]   dbPath: ':memory:'
+[adam-laptop] }
+[adam-laptop] Created table {
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   partitionId: 'replica_operations-p1'
+[adam-laptop] }
+[adam-laptop] Joining peer with fully qualified address {
+[adam-laptop]   peerId: 'tx1-v3-r2',
+[adam-laptop]   peerAddress: null,
+[adam-laptop]   addressStatus: 'unavailable',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   partitionId: 'replica_operations-p1'
+[adam-laptop] }
+[adam-laptop] Joining peer with fully qualified address {
+[adam-laptop]   peerId: 'tx1-v3-r3',
+[adam-laptop]   peerAddress: null,
+[adam-laptop]   addressStatus: 'unavailable',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   partitionId: 'replica_operations-p1'
+[adam-laptop] }
+[adam-laptop] Partition size updated {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   sizeBytes: 118784,
+[adam-laptop]   sizeMB: '0.11'
+[adam-laptop] }
+[adam-laptop] Partition service initialized {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   sizeBytes: 118784
+[adam-laptop] }
+[adam-laptop] Applying committed entry {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+[adam-laptop] }
+[adam-laptop] Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+[adam-laptop] Raft leadership transition evidence {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   nodeId: 'test-node',
+[adam-laptop]   peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+[adam-laptop]   eventType: 'role_transition',
+[adam-laptop]   role: 'leader',
+[adam-laptop]   trigger: 'quorum_elected',
+[adam-laptop]   term: 1
+[adam-laptop] }
+[adam-laptop] Applying committed entry {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   commandType: 'PLACEMENT_ADMIT'
+[adam-laptop] }
+[adam-laptop] CDC obligations recorded with the committed decision {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   entryId: 'execution-mirror:placement',
+[adam-laptop]   logIndex: 3,
+[adam-laptop]   obligations: 1
+[adam-laptop] }
+[adam-laptop] RebalanceCoordinator initialized {
+[adam-laptop]   nodeId: 'node-a',
+[adam-laptop]   config: {
+[adam-laptop]     pendingTimeoutMs: 30000,
+[adam-laptop]     creatingTimeoutMs: 60000,
+[adam-laptop]     syncingTimeoutMs: 300000,
+[adam-laptop]     removingTimeoutMs: 60000,
+[adam-laptop]     maxConcurrentAdds: 5,
+[adam-laptop]     reservedRuntimeServicePlacementSlots: 1,
+[adam-laptop]     maxConcurrentRemoves: 5,
+[adam-laptop]     periodicCheckIntervalMs: 60000,
+[adam-laptop]     reservationTtlMs: 300000
+[adam-laptop]   }
+[adam-laptop] }
+[adam-laptop] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[adam-laptop] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'DELETE' }
+[adam-laptop] Extracted table name from SQL { tableName: 'replica_operations' }
+[adam-laptop] Extracted data from parameterized DELETE { tableName: 'replica_operations', dataKeys: [ 'operation_id' ] }
+[adam-laptop] CDC obligations recorded with the committed decision {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   entryId: 'execution-mirror:lost-row',
+[adam-laptop]   logIndex: 4,
+[adam-laptop]   obligations: 1
+[adam-laptop] }
+[adam-laptop] Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+[adam-laptop] Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+[adam-laptop] Initializing partition service {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   tableId: 'replica_operations',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   nodeId: 'test-node',
+[adam-laptop]   replicaCount: 3,
+[adam-laptop]   dbPath: ':memory:'
+[adam-laptop] }
+[adam-laptop] Created table {
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   partitionId: 'replica_operations-p1'
+[adam-laptop] }
+[adam-laptop] Joining peer with fully qualified address {
+[adam-laptop]   peerId: 'tx1-v3-r2',
+[adam-laptop]   peerAddress: null,
+[adam-laptop]   addressStatus: 'unavailable',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   partitionId: 'replica_operations-p1'
+[adam-laptop] }
+[adam-laptop] Joining peer with fully qualified address {
+[adam-laptop]   peerId: 'tx1-v3-r3',
+[adam-laptop]   peerAddress: null,
+[adam-laptop]   addressStatus: 'unavailable',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   partitionId: 'replica_operations-p1'
+[adam-laptop] }
+[adam-laptop] Partition size updated {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   sizeBytes: 118784,
+[adam-laptop]   sizeMB: '0.11'
+[adam-laptop] }
+[adam-laptop] Partition service initialized {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   sizeBytes: 118784
+[adam-laptop] }
+[adam-laptop] Applying committed entry {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+[adam-laptop] }
+[adam-laptop] Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+[adam-laptop] Raft leadership transition evidence {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   replicaId: 'tx1-v3-r1',
+[adam-laptop]   nodeId: 'test-node',
+[adam-laptop]   peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+[adam-laptop]   eventType: 'role_transition',
+[adam-laptop]   role: 'leader',
+[adam-laptop]   trigger: 'quorum_elected',
+[adam-laptop]   term: 1
+[adam-laptop] }
+[adam-laptop] Applying committed entry {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   commandType: 'PLACEMENT_ADMIT'
+[adam-laptop] }
+[adam-laptop] CDC obligations recorded with the committed decision {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   entryId: 'execution-mirror:placement',
+[adam-laptop]   logIndex: 3,
+[adam-laptop]   obligations: 1
+[adam-laptop] }
+[adam-laptop] RebalanceCoordinator initialized {
+[adam-laptop]   nodeId: 'node-a',
+[adam-laptop]   config: {
+[adam-laptop]     pendingTimeoutMs: 30000,
+[adam-laptop]     creatingTimeoutMs: 60000,
+[adam-laptop]     syncingTimeoutMs: 300000,
+[adam-laptop]     removingTimeoutMs: 60000,
+[adam-laptop]     maxConcurrentAdds: 5,
+[adam-laptop]     reservedRuntimeServicePlacementSlots: 1,
+[adam-laptop]     maxConcurrentRemoves: 5,
+[adam-laptop]     periodicCheckIntervalMs: 60000,
+[adam-laptop]     reservationTtlMs: 300000
+[adam-laptop]   }
+[adam-laptop] }
+[adam-laptop] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[adam-laptop] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+[adam-laptop] Extracted table name from SQL { tableName: 'replica_operations' }
+[adam-laptop] Extracted data from parameterized UPDATE {
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   dataKeys: [
+[adam-laptop]     'type',
+[adam-laptop]     'partition_id',
+[adam-laptop]     'source_node_id',
+[adam-laptop]     'target_node_id',
+[adam-laptop]     'entity_type',
+[adam-laptop]     'entity_id',
+[adam-laptop]     'membership_publication_epoch',
+[adam-laptop]     'status',
+[adam-laptop]     'workflow_step',
+[adam-laptop]     'updated_at',
+[adam-laptop]     'completed_at',
+[adam-laptop]     'lease_expires_at',
+[adam-laptop]     'error_message',
+[adam-laptop]     'steps_history',
+[adam-laptop]     'replica_id',
+[adam-laptop]     'target_claim_key',
+[adam-laptop]     'operation_id'
+[adam-laptop]   ]
+[adam-laptop] }
+[adam-laptop] CDC obligations recorded with the committed decision {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   entryId: 'execution-mirror:write:1',
+[adam-laptop]   logIndex: 4,
+[adam-laptop]   obligations: 1
+[adam-laptop] }
+[adam-laptop] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[adam-laptop] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+[adam-laptop] Extracted table name from SQL { tableName: 'replica_operations' }
+[adam-laptop] Extracted data from parameterized UPDATE {
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   dataKeys: [
+[adam-laptop]     'type',
+[adam-laptop]     'partition_id',
+[adam-laptop]     'source_node_id',
+[adam-laptop]     'target_node_id',
+[adam-laptop]     'entity_type',
+[adam-laptop]     'entity_id',
+[adam-laptop]     'membership_publication_epoch',
+[adam-laptop]     'status',
+[adam-laptop]     'workflow_step',
+[adam-laptop]     'updated_at',
+[adam-laptop]     'completed_at',
+[adam-laptop]     'lease_expires_at',
+[adam-laptop]     'error_message',
+[adam-laptop]     'steps_history',
+[adam-laptop]     'replica_id',
+[adam-laptop]     'target_claim_key',
+[adam-laptop]     'operation_id'
+[adam-laptop]   ]
+[adam-laptop] }
+[adam-laptop] CDC obligations recorded with the committed decision {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   entryId: 'execution-mirror:write:2',
+[adam-laptop]   logIndex: 5,
+[adam-laptop]   obligations: 1
+[adam-laptop] }
+[adam-laptop] Operation step changed {
+[adam-laptop]   operationId: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]   previousStep: 'PENDING',
+[adam-laptop]   newStep: 'SENDING',
+[adam-laptop]   reason: 'dispatch_sending',
+[adam-laptop]   status: 'pending',
+[adam-laptop]   partitionId: 'sql_transactions-p1'
+[adam-laptop] }
+[adam-laptop] Sending replica operation {
+[adam-laptop]   operationId: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]   target: 'node-b/service/replica-handler',
+[adam-laptop]   type: 'CREATE_REPLICA',
+[adam-laptop]   entityType: 'partition',
+[adam-laptop]   entityId: 'sql_transactions-p1',
+[adam-laptop]   replaceRemovePhase: false,
+[adam-laptop]   firstAttemptForStep: true
+[adam-laptop] }
+[adam-laptop] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[adam-laptop] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+[adam-laptop] Extracted table name from SQL { tableName: 'replica_operations' }
+[adam-laptop] Extracted data from parameterized UPDATE {
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   dataKeys: [
+[adam-laptop]     'workflow_step',
+[adam-laptop]     'status',
+[adam-laptop]     'updated_at',
+[adam-laptop]     'completed_at',
+[adam-laptop]     'error_message',
+[adam-laptop]     'steps_history',
+[adam-laptop]     'operation_id'
+[adam-laptop]   ]
+[adam-laptop] }
+[adam-laptop] CDC obligations recorded with the committed decision {
+[adam-laptop]   partitionId: 'replica_operations-p1',
+[adam-laptop]   entryId: 'execution-mirror:competing-terminal',
+[adam-laptop]   logIndex: 6,
+[adam-laptop]   obligations: 1
+[adam-laptop] }
+[adam-laptop] Durable terminal release obligations registered {
+[adam-laptop]   operationId: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]   workflowStep: 'FAILED',
+[adam-laptop]   partitionId: 'sql_transactions-p1',
+[adam-laptop]   cause: 'terminal_release_pending',
+[adam-laptop]   attempt: 0,
+[adam-laptop]   delayMs: 500
+[adam-laptop] }
+[adam-laptop] Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+[adam-laptop] Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+[adam-laptop] # Subtest: a CREATE dispatch withheld at the gate is dispatched exactly once after the retained owner confirms the row
+[adam-laptop] not ok 8 - a CREATE dispatch withheld at the gate is dispatched exactly once after the retained owner confirms the row
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 23.948167
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c79fb9f02de7-mwqrknt4-1862285/test/partition/placement-create-dispatch-execution-mirror.test.js:302:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     the withheld CREATE dispatch is re-driven exactly once
+[adam-laptop]     
+[adam-laptop]     0 !== 1
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: 1
+[adam-laptop]   actual: 0
+[adam-laptop]   operator: 'strictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     withPlacementExecution.ledgerRoute (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c79fb9f02de7-mwqrknt4-1862285/test/partition/placement-create-dispatch-execution-mirror.test.js:323:12)
+[adam-laptop]     async file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c79fb9f02de7-mwqrknt4-1862285/test/partition/placement-create-dispatch-execution-mirror.test.js:142:7
+[adam-laptop]     async onLedgerLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c79fb9f02de7-mwqrknt4-1862285/test/partition/placement-admission-fixture.js:40:12)
+[adam-laptop]     async withPlacementExecution (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c79fb9f02de7-mwqrknt4-1862285/test/partition/placement-create-dispatch-execution-mirror.test.js:77:3)
+[adam-laptop]     async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c79fb9f02de7-mwqrknt4-1862285/test/partition/placement-create-dispatch-execution-mirror.test.js:304:3)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: an absent placement row is withheld from dispatch while no ledger route is published; the retained owner keeps the obligation, owed to the route publication
+[adam-laptop] ok 9 - an absent placement row is withheld from dispatch while no ledger route is published; the retained owner keeps the obligation, owed to the route publication
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 14.805622
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: a competing terminal result survives acknowledgement of a previously stamped CREATE
+[adam-laptop] ok 10 - a competing terminal result survives acknowledgement of a previously stamped CREATE
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 25.185201
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] 1..10
+[adam-laptop] # tests 10
+[adam-laptop] # suites 0
+[adam-laptop] # pass 8
+[adam-laptop] # fail 2
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 3709.891658
+[adam-laptop] # time=5268ms
+[adam-laptop] Cache/authoritative divergence detected during reconciliation {
+[adam-laptop]   divergenceType: 'cache_missing',
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   ownerComponent: 'RebalanceCoordinator',
+[adam-laptop]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[adam-laptop]   rowKey: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]   cacheValue: null,
+[adam-laptop]   authoritativeValue: {
+[adam-laptop]     operation_id: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]     replica_id: 'replace-replica-3632c6d856f4a51d34069381e711949b',
+[adam-laptop]     status: 'pending',
+[adam-laptop]     workflow_step: 'SENDING',
+[adam-laptop]     updated_at: 1795287141337,
+[adam-laptop]     completed_at: null,
+[adam-laptop]     error_message: null
+[adam-laptop]   },
+[adam-laptop]   divergentFields: [
+[adam-laptop]     'operation_id',
+[adam-laptop]     'replica_id',
+[adam-laptop]     'status',
+[adam-laptop]     'workflow_step',
+[adam-laptop]     'updated_at',
+[adam-laptop]     'completed_at',
+[adam-laptop]     'error_message'
+[adam-laptop]   ],
+[adam-laptop]   detectedAt: 1795287141348
+[adam-laptop] }
+[adam-laptop] Cache/authoritative divergence detected during reconciliation {
+[adam-laptop]   divergenceType: 'cache_missing',
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   ownerComponent: 'RebalanceCoordinator',
+[adam-laptop]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[adam-laptop]   rowKey: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]   cacheValue: null,
+[adam-laptop]   authoritativeValue: {
+[adam-laptop]     operation_id: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]     replica_id: 'replace-replica-3632c6d856f4a51d34069381e711949b',
+[adam-laptop]     status: 'creating',
+[adam-laptop]     workflow_step: 'CREATING',
+[adam-laptop]     updated_at: 1795287141355,
+[adam-laptop]     completed_at: null,
+[adam-laptop]     error_message: null
+[adam-laptop]   },
+[adam-laptop]   divergentFields: [
+[adam-laptop]     'operation_id',
+[adam-laptop]     'replica_id',
+[adam-laptop]     'status',
+[adam-laptop]     'workflow_step',
+[adam-laptop]     'updated_at',
+[adam-laptop]     'completed_at',
+[adam-laptop]     'error_message'
+[adam-laptop]   ],
+[adam-laptop]   detectedAt: 1795287141359
+[adam-laptop] }
+[adam-laptop] Cache/authoritative divergence detected during reconciliation {
+[adam-laptop]   divergenceType: 'cache_missing',
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   ownerComponent: 'RebalanceCoordinator',
+[adam-laptop]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[adam-laptop]   rowKey: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]   cacheValue: null,
+[adam-laptop]   authoritativeValue: {
+[adam-laptop]     operation_id: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]     replica_id: 'replace-replica-3632c6d856f4a51d34069381e711949b',
+[adam-laptop]     status: 'pending',
+[adam-laptop]     workflow_step: 'SENDING',
+[adam-laptop]     updated_at: 1795287141384,
+[adam-laptop]     completed_at: null,
+[adam-laptop]     error_message: null
+[adam-laptop]   },
+[adam-laptop]   divergentFields: [
+[adam-laptop]     'operation_id',
+[adam-laptop]     'replica_id',
+[adam-laptop]     'status',
+[adam-laptop]     'workflow_step',
+[adam-laptop]     'updated_at',
+[adam-laptop]     'completed_at',
+[adam-laptop]     'error_message'
+[adam-laptop]   ],
+[adam-laptop]   detectedAt: 1795287141387
+[adam-laptop] }
+[adam-laptop] Cache/authoritative divergence detected during reconciliation {
+[adam-laptop]   divergenceType: 'cache_missing',
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   ownerComponent: 'RebalanceCoordinator',
+[adam-laptop]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[adam-laptop]   rowKey: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]   cacheValue: null,
+[adam-laptop]   authoritativeValue: {
+[adam-laptop]     operation_id: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]     replica_id: 'replace-replica-3632c6d856f4a51d34069381e711949b',
+[adam-laptop]     status: 'creating',
+[adam-laptop]     workflow_step: 'CREATING',
+[adam-laptop]     updated_at: 1795287141403,
+[adam-laptop]     completed_at: null,
+[adam-laptop]     error_message: null
+[adam-laptop]   },
+[adam-laptop]   divergentFields: [
+[adam-laptop]     'operation_id',
+[adam-laptop]     'replica_id',
+[adam-laptop]     'status',
+[adam-laptop]     'workflow_step',
+[adam-laptop]     'updated_at',
+[adam-laptop]     'completed_at',
+[adam-laptop]     'error_message'
+[adam-laptop]   ],
+[adam-laptop]   detectedAt: 1795287141406
+[adam-laptop] }
+[adam-laptop] Cache/authoritative divergence detected during reconciliation {
+[adam-laptop]   divergenceType: 'cache_missing',
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   ownerComponent: 'RebalanceCoordinator',
+[adam-laptop]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[adam-laptop]   rowKey: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]   cacheValue: null,
+[adam-laptop]   authoritativeValue: {
+[adam-laptop]     operation_id: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]     replica_id: 'replace-replica-3632c6d856f4a51d34069381e711949b',
+[adam-laptop]     status: 'pending',
+[adam-laptop]     workflow_step: 'SENDING',
+[adam-laptop]     updated_at: 1795287141421,
+[adam-laptop]     completed_at: null,
+[adam-laptop]     error_message: null
+[adam-laptop]   },
+[adam-laptop]   divergentFields: [
+[adam-laptop]     'operation_id',
+[adam-laptop]     'replica_id',
+[adam-laptop]     'status',
+[adam-laptop]     'workflow_step',
+[adam-laptop]     'updated_at',
+[adam-laptop]     'completed_at',
+[adam-laptop]     'error_message'
+[adam-laptop]   ],
+[adam-laptop]   detectedAt: 1795287141424
+[adam-laptop] }
+[adam-laptop] Cache/authoritative divergence detected during reconciliation {
+[adam-laptop]   divergenceType: 'cache_missing',
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   ownerComponent: 'RebalanceCoordinator',
+[adam-laptop]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[adam-laptop]   rowKey: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]   cacheValue: null,
+[adam-laptop]   authoritativeValue: {
+[adam-laptop]     operation_id: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]     replica_id: 'replace-replica-3632c6d856f4a51d34069381e711949b',
+[adam-laptop]     status: 'creating',
+[adam-laptop]     workflow_step: 'CREATING',
+[adam-laptop]     updated_at: 1795287141430,
+[adam-laptop]     completed_at: null,
+[adam-laptop]     error_message: null
+[adam-laptop]   },
+[adam-laptop]   divergentFields: [
+[adam-laptop]     'operation_id',
+[adam-laptop]     'replica_id',
+[adam-laptop]     'status',
+[adam-laptop]     'workflow_step',
+[adam-laptop]     'updated_at',
+[adam-laptop]     'completed_at',
+[adam-laptop]     'error_message'
+[adam-laptop]   ],
+[adam-laptop]   detectedAt: 1795287141434
+[adam-laptop] }
+[adam-laptop] Cache/authoritative divergence detected during reconciliation {
+[adam-laptop]   divergenceType: 'cache_missing',
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   ownerComponent: 'RebalanceCoordinator',
+[adam-laptop]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[adam-laptop]   rowKey: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]   cacheValue: null,
+[adam-laptop]   authoritativeValue: {
+[adam-laptop]     operation_id: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]     replica_id: 'replace-replica-3632c6d856f4a51d34069381e711949b',
+[adam-laptop]     status: 'pending',
+[adam-laptop]     workflow_step: 'SENDING',
+[adam-laptop]     updated_at: 1795287141449,
+[adam-laptop]     completed_at: null,
+[adam-laptop]     error_message: null
+[adam-laptop]   },
+[adam-laptop]   divergentFields: [
+[adam-laptop]     'operation_id',
+[adam-laptop]     'replica_id',
+[adam-laptop]     'status',
+[adam-laptop]     'workflow_step',
+[adam-laptop]     'updated_at',
+[adam-laptop]     'completed_at',
+[adam-laptop]     'error_message'
+[adam-laptop]   ],
+[adam-laptop]   detectedAt: 1795287141452
+[adam-laptop] }
+[adam-laptop] Cache/authoritative divergence detected during reconciliation {
+[adam-laptop]   divergenceType: 'cache_missing',
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   ownerComponent: 'RebalanceCoordinator',
+[adam-laptop]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[adam-laptop]   rowKey: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]   cacheValue: null,
+[adam-laptop]   authoritativeValue: {
+[adam-laptop]     operation_id: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]     replica_id: 'replace-replica-3632c6d856f4a51d34069381e711949b',
+[adam-laptop]     status: 'creating',
+[adam-laptop]     workflow_step: 'CREATING',
+[adam-laptop]     updated_at: 1795287141458,
+[adam-laptop]     completed_at: null,
+[adam-laptop]     error_message: null
+[adam-laptop]   },
+[adam-laptop]   divergentFields: [
+[adam-laptop]     'operation_id',
+[adam-laptop]     'replica_id',
+[adam-laptop]     'status',
+[adam-laptop]     'workflow_step',
+[adam-laptop]     'updated_at',
+[adam-laptop]     'completed_at',
+[adam-laptop]     'error_message'
+[adam-laptop]   ],
+[adam-laptop]   detectedAt: 1795287141460
+[adam-laptop] }
+[adam-laptop] Cache/authoritative divergence detected during reconciliation {
+[adam-laptop]   divergenceType: 'cache_missing',
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   ownerComponent: 'RebalanceCoordinator',
+[adam-laptop]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[adam-laptop]   rowKey: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]   cacheValue: null,
+[adam-laptop]   authoritativeValue: {
+[adam-laptop]     operation_id: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]     replica_id: 'replace-replica-3632c6d856f4a51d34069381e711949b',
+[adam-laptop]     status: 'pending',
+[adam-laptop]     workflow_step: 'SENDING',
+[adam-laptop]     updated_at: 1795287141474,
+[adam-laptop]     completed_at: null,
+[adam-laptop]     error_message: null
+[adam-laptop]   },
+[adam-laptop]   divergentFields: [
+[adam-laptop]     'operation_id',
+[adam-laptop]     'replica_id',
+[adam-laptop]     'status',
+[adam-laptop]     'workflow_step',
+[adam-laptop]     'updated_at',
+[adam-laptop]     'completed_at',
+[adam-laptop]     'error_message'
+[adam-laptop]   ],
+[adam-laptop]   detectedAt: 1795287141477
+[adam-laptop] }
+[adam-laptop] Cache/authoritative divergence detected during reconciliation {
+[adam-laptop]   divergenceType: 'cache_missing',
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   ownerComponent: 'RebalanceCoordinator',
+[adam-laptop]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[adam-laptop]   rowKey: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]   cacheValue: null,
+[adam-laptop]   authoritativeValue: {
+[adam-laptop]     operation_id: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]     replica_id: 'replace-replica-3632c6d856f4a51d34069381e711949b',
+[adam-laptop]     status: 'pending',
+[adam-laptop]     workflow_step: 'SENDING',
+[adam-laptop]     updated_at: 1795287141536,
+[adam-laptop]     completed_at: null,
+[adam-laptop]     error_message: null
+[adam-laptop]   },
+[adam-laptop]   divergentFields: [
+[adam-laptop]     'operation_id',
+[adam-laptop]     'replica_id',
+[adam-laptop]     'status',
+[adam-laptop]     'workflow_step',
+[adam-laptop]     'updated_at',
+[adam-laptop]     'completed_at',
+[adam-laptop]     'error_message'
+[adam-laptop]   ],
+[adam-laptop]   detectedAt: 1795287141539
+[adam-laptop] }
+[adam-laptop] Cache/authoritative divergence detected during reconciliation {
+[adam-laptop]   divergenceType: 'cache_missing',
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   ownerComponent: 'RebalanceCoordinator',
+[adam-laptop]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[adam-laptop]   rowKey: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]   cacheValue: null,
+[adam-laptop]   authoritativeValue: {
+[adam-laptop]     operation_id: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]     replica_id: 'replace-replica-3632c6d856f4a51d34069381e711949b',
+[adam-laptop]     status: 'pending',
+[adam-laptop]     workflow_step: 'PENDING',
+[adam-laptop]     updated_at: 1795287141572,
+[adam-laptop]     completed_at: null,
+[adam-laptop]     error_message: null
+[adam-laptop]   },
+[adam-laptop]   divergentFields: [
+[adam-laptop]     'operation_id',
+[adam-laptop]     'replica_id',
+[adam-laptop]     'status',
+[adam-laptop]     'workflow_step',
+[adam-laptop]     'updated_at',
+[adam-laptop]     'completed_at',
+[adam-laptop]     'error_message'
+[adam-laptop]   ],
+[adam-laptop]   detectedAt: 1795287141578
+[adam-laptop] }
+[adam-laptop] Cache/authoritative divergence detected during reconciliation {
+[adam-laptop]   divergenceType: 'cache_missing',
+[adam-laptop]   tableName: 'replica_operations',
+[adam-laptop]   ownerComponent: 'RebalanceCoordinator',
+[adam-laptop]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[adam-laptop]   rowKey: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]   cacheValue: null,
+[adam-laptop]   authoritativeValue: {
+[adam-laptop]     operation_id: 'pl-sql_transactions-p1-3-0',
+[adam-laptop]     replica_id: 'replace-replica-3632c6d856f4a51d34069381e711949b',
+[adam-laptop]     status: 'pending',
+[adam-laptop]     workflow_step: 'SENDING',
+[adam-laptop]     updated_at: 1795287141580,
+[adam-laptop]     completed_at: null,
+[adam-laptop]     error_message: null
+[adam-laptop]   },
+[adam-laptop]   divergentFields: [
+[adam-laptop]     'operation_id',
+[adam-laptop]     'replica_id',
+[adam-laptop]     'status',
+[adam-laptop]     'workflow_step',
+[adam-laptop]     'updated_at',
+[adam-laptop]     'completed_at',
+[adam-laptop]     'error_message'
+[adam-laptop]   ],
+[adam-laptop]   detectedAt: 1795287141582
+[adam-laptop] }
+[adam-laptop] ok test/partition/placement-retained-publication.test.js (6 assertions, 5633ms)
+[adam-laptop] # test-files total=2 pass=1 fail=1 assertions=16
+lab test: adam-laptop: # test-files total=2 pass=1 fail=1 assertions=16
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=2 pass=1 fail=1 assertions=16

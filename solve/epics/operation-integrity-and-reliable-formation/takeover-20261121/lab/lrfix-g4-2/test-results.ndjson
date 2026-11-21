@@ -1,0 +1,5 @@
+{"file":"test/control-plane/gateway-sql-mutation-fallback-phase-scope.test.js","attempt":1,"ok":true,"assertions":16,"durationMs":1379,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/membership-count-neutral-steady-trim.test.js","attempt":1,"ok":true,"assertions":35,"durationMs":1657,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/rebalancer-entity-interaction-contract.test.js","attempt":1,"ok":false,"assertions":31,"durationMs":1878,"retriedOnce":false,"firstFailureLine":"not ok 1 - context.buildDeferredRemoveSafetyEvaluation is not a function"}
+{"file":"test/raft/snapshot-dispatcher-wiring.test.js","attempt":1,"ok":true,"assertions":21,"durationMs":3344,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js","attempt":1,"ok":false,"assertions":6,"durationMs":2085,"retriedOnce":false,"firstFailureLine":"not ok 6 - ReplicaHandler releases CREATE claim when shutdown cleanup rejects"}

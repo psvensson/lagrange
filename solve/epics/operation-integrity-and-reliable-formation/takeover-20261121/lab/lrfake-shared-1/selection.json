@@ -1,0 +1,51 @@
+{
+  "sha": "0950b16e284cf6a613999643e17b4d9896f93489",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/test-helpers/committed-write-answer.test.js",
+    "test/control-plane/service-instance-creation-cas.test.js",
+    "test/control-plane/service-instance-selection-admission.test.js",
+    "test/wasm-service/bound-creation-handler-embedding.integration.test.js",
+    "test/wasm-service/bound-creation-physical-custody.integration.test.js",
+    "test/wasm-service/bound-creation-restart.integration.test.js",
+    "test/wasm-service/bound-remove-physical-operation.integration.test.js",
+    "test/runtime/service-runtime-consensus-publication.test.js",
+    "test/bootstrap/register-service-move-handoff-refused.test.js",
+    "test/distributed/harness/__tests__/sql-engine-seam-conformance.test.js",
+    "test/wasm-service/wasm-creation-local-record.test.js",
+    "test/bootstrap/move-replica-assignment-token.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/test-helpers/committed-write-answer.test.js",
+        "test/runtime/service-runtime-consensus-publication.test.js",
+        "test/control-plane/service-instance-creation-cas.test.js",
+        "test/wasm-service/wasm-creation-local-record.test.js",
+        "test/control-plane/service-instance-selection-admission.test.js",
+        "test/distributed/harness/__tests__/sql-engine-seam-conformance.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/bootstrap/move-replica-assignment-token.test.js",
+        "test/bootstrap/register-service-move-handoff-refused.test.js"
+      ],
+      "jobs": 2,
+      "resourceClass": "bootstrap"
+    },
+    {
+      "files": [
+        "test/wasm-service/bound-creation-handler-embedding.integration.test.js",
+        "test/wasm-service/bound-remove-physical-operation.integration.test.js",
+        "test/wasm-service/bound-creation-physical-custody.integration.test.js",
+        "test/wasm-service/bound-creation-restart.integration.test.js"
+      ],
+      "jobs": 1,
+      "resourceClass": "exclusive"
+    }
+  ]
+}

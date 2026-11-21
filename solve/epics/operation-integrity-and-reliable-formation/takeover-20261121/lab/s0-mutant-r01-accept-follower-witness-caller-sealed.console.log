@@ -1,0 +1,165 @@
+lab test: adams-gamla: ordinary (1 files) cores=4 mem=15.6GiB speed x2.12
+[adams-gamla] placement-shell=1938224
+[adams-gamla] placement-head=3de15e2c6399a11a3e41b4c2514b5577052d366c
+[adams-gamla] placement-link=node_modules
+[adams-gamla] placement-link=data/examples
+[adams-gamla] placement-prepared=import-graph
+[adams-gamla] placement-env=factor:2.2 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adams-gamla] placement-pid=1939168
+[adams-gamla] # test-files planned=1
+[adams-gamla] classified lane ordinary: 1 file(s), jobs=3
+[adams-gamla] thermal: ok cpu 51C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] not ok test/cdc/cdc-owner-fact-receiver-read-point.test.js (42 assertions, 6928ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 14
+[adams-gamla] # Subtest: readOwnerFact: a fresh leader that has not applied its election log refuses typed, in process and routed
+[adams-gamla]     ok 1 - in process: never READY without the row
+[adams-gamla]     ok 2 - should be equal
+[adams-gamla]     ok 3 - should be equal
+[adams-gamla]     ok 4 - routed: never READY without the row
+[adams-gamla]     ok 5 - should be equal
+[adams-gamla]     ok 6 - the fresh leader ships no rows
+[adams-gamla]     1..6
+[adams-gamla] ok 1 - readOwnerFact: a fresh leader that has not applied its election log refuses typed, in process and routed # time=3777.204ms
+[adams-gamla] 
+[adams-gamla] # Subtest: one receiver contract: the same owner-fact request gets the same typed answer in process and over the transport
+[adams-gamla]     ok 1 - leader: same typed answer
+[adams-gamla]     ok 2 - should be equal
+[adams-gamla]     ok 3 - should be equal
+[adams-gamla]     ok 4 - follower: same typed answer
+[adams-gamla]     ok 5 - should be equal
+[adams-gamla]     ok 6 - should be equal
+[adams-gamla]     ok 7 - names the leader it knows
+[adams-gamla]     ok 8 - insufficiently applied leader: same typed answer
+[adams-gamla]     ok 9 - should be equal
+[adams-gamla]     ok 10 - should be equal
+[adams-gamla]     ok 11 - deposed leader: same typed answer
+[adams-gamla]     ok 12 - should be equal
+[adams-gamla]     ok 13 - should be equal
+[adams-gamla]     ok 14 - names the leader that replaced it
+[adams-gamla]     1..14
+[adams-gamla] ok 2 - one receiver contract: the same owner-fact request gets the same typed answer in process and over the transport # time=463.137ms
+[adams-gamla] 
+[adams-gamla] # Subtest: readOwnerFact: leadership moving while the leader reads never yields the old leader's rows
+[adams-gamla]     ok 1 - the read reaches the replica that leads now
+[adams-gamla]     ok 2 - never the replica that stopped leading during its read
+[adams-gamla]     ok 3 - should be equivalent
+[adams-gamla]     ok 4 - the old leader refused after its read, shipping no rows
+[adams-gamla]     1..4
+[adams-gamla] ok 3 - readOwnerFact: leadership moving while the leader reads never yields the old leader's rows # time=314.297ms
+[adams-gamla] 
+[adams-gamla] # Subtest: readOwnerFact: an apply landing while the leader reads never mis-states the witness
+[adams-gamla]     ok 1 - beforeRead: typed
+[adams-gamla]     ok 2 - beforeRead: the receiver cannot name the snapshot it read, so it refuses
+[adams-gamla]     ok 3 - beforeRead: a read that spans no apply is READY
+[adams-gamla]     ok 4 - should be equivalent
+[adams-gamla]     ok 5 - should be equal
+[adams-gamla]     ok 6 - afterRead: typed
+[adams-gamla]     ok 7 - afterRead: the receiver cannot name the snapshot it read, so it refuses
+[adams-gamla]     ok 8 - afterRead: a read that spans no apply is READY
+[adams-gamla]     ok 9 - should be equivalent
+[adams-gamla]     ok 10 - should be equal
+[adams-gamla]     1..10
+[adams-gamla] ok 4 - readOwnerFact: an apply landing while the leader reads never mis-states the witness # time=380.789ms
+[adams-gamla] 
+[adams-gamla] # Subtest: readOwnerFact: the caller verifies what it received; a successful empty answer carrying a follower's witness is not absence
+[adams-gamla]     not ok 1 - never READY with no rows
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[adams-gamla]         lineNumber: 183
+[adams-gamla]         columnNumber: 5
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:183:5)
+[adams-gamla]       source: |2
+[adams-gamla]             readAuthorityWitness: follower.buildRemoteReadAuthorityWitness(false)});
+[adams-gamla]           const answer = await readOwnerFact(unverified, requestFor(OPERATION));
+[adams-gamla]           t.equal(answer.state, STATE.UNAVAILABLE, 'never READY with no rows');
+[adams-gamla]         ----^
+[adams-gamla]           t.equal(answer.reason, REASON.NOT_LEADER);
+[adams-gamla]           t.equal(Object.hasOwn(answer, 'rows'), false);
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -unavailable
+[adams-gamla]         +ready
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     not ok 2 - should be equal
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[adams-gamla]         lineNumber: 184
+[adams-gamla]         columnNumber: 5
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:184:5)
+[adams-gamla]       source: |2
+[adams-gamla]           const answer = await readOwnerFact(unverified, requestFor(OPERATION));
+[adams-gamla]           t.equal(answer.state, STATE.UNAVAILABLE, 'never READY with no rows');
+[adams-gamla]           t.equal(answer.reason, REASON.NOT_LEADER);
+[adams-gamla]         ----^
+[adams-gamla]           t.equal(Object.hasOwn(answer, 'rows'), false);
+[adams-gamla]         });
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -owner_fact_not_leader
+[adams-gamla]         +undefined
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     not ok 3 - should be equal
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[adams-gamla]         lineNumber: 185
+[adams-gamla]         columnNumber: 5
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:185:5)
+[adams-gamla]       source: |2
+[adams-gamla]           t.equal(answer.state, STATE.UNAVAILABLE, 'never READY with no rows');
+[adams-gamla]           t.equal(answer.reason, REASON.NOT_LEADER);
+[adams-gamla]           t.equal(Object.hasOwn(answer, 'rows'), false);
+[adams-gamla]         ----^
+[adams-gamla]         });
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -false
+[adams-gamla]         +true
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     1..3
+[adams-gamla] not ok 5 - readOwnerFact: the caller verifies what it received; a successful empty answer carrying a follower's witness is not absence # time=300.75ms
+[adams-gamla]   ---
+[adams-gamla]   at:
+[adams-gamla]     fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[adams-gamla]     lineNumber: 172
+[adams-gamla]     columnNumber: 1
+[adams-gamla]     isToplevel: true
+[adams-gamla]   source: >2
+[adams-gamla]       });
+[adams-gamla]   
+[adams-gamla]     test('readOwnerFact: the caller verifies what it received; a successful empty
+[adams-gamla]     answer ' +
+[adams-gamla]   
+[adams-gamla]     ^
+[adams-gamla]       'carrying a follower\'s witness is not absence', {timeout: TEST_TIMEOUT_MS}, async (t) => {
+[adams-gamla]       const group = await openLedgerGroupSurface(t, import.meta.url);
+[adams-gamla]   ...
+[adams-gamla] 
+[adams-gamla] 1..5
+[adams-gamla] # { total: 37, pass: 34, fail: 3 }
+[adams-gamla] # time=5255.598ms
+[adams-gamla] # test-files total=1 pass=0 fail=1 assertions=42
+lab test: adams-gamla: # test-files total=1 pass=0 fail=1 assertions=42
+lab test: adams-gamla: results copied to test-output/reports/test-results-adams-gamla.ndjson
+# test-files total=1 pass=0 fail=1 assertions=42

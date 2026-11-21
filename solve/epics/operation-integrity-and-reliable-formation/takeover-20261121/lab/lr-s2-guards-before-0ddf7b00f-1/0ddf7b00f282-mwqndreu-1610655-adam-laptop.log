@@ -1,0 +1,1038 @@
+placement-shell=3569712
+placement-head=0ddf7b00f282145cedf64db14360b5c5120de926
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3570163
+# test-files planned=8
+classified lane ordinary: 7 file(s), jobs=4
+thermal: ok cpu 70C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+ok test/control-plane/control-plane-error-classification.test.js (53 assertions, 934ms)
+ok test/control-plane/control-plane-write-identity.test.js (11 assertions, 1009ms)
+ok test/control-plane/endpoint-incarnation-authority.test.js (53 assertions, 1693ms)
+ok test/rebalancer/coordinator-reservation-lifecycle.test.js (101 assertions, 4245ms)
+ok test/control-plane/membership-publication-native-ack-order.test.js (19 assertions, 8978ms)
+not ok test/query/write-exactly-once-property.test.js (3 assertions, 143516ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+property seed 20261005: {"answers":71,"redriven":19,"notYetApplied":31,"unknown":19,"outlasting-replacement":4,"insert":10,"none":4,"named-birth":12,"runtime-replacement":9,"cas":11,"duplicate":5,"delete":7,"leader-change":4,"outlasting-partition":6,"lost":4,"drop":4}
+# Subtest: exactly-once property, seed 20261005: 40 logical writes under random faults
+not ok 1 - exactly-once property, seed 20261005: 40 logical writes under random faults
+  ---
+  duration_ms: 56643.109097
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqndreu-1610655/test/query/write-exactly-once-property.test.js:232:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    every answer keeps the contract
+    + actual - expected
+    
+    + [
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 1,
+    +     seed: 20261005,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n0',
+    +       kind: 'named-birth',
+    +       value: '0'
+    +     }
+    +   },
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 9,
+    +     seed: 20261005,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n0',
+    +       kind: 'named-birth',
+    +       value: '0'
+    +     }
+    +   },
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 10,
+    +     seed: 20261005,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n0',
+    +       kind: 'named-birth',
+    +       value: '10'
+    +     }
+    +   },
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 16,
+    +     seed: 20261005,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n1',
+    +       kind: 'named-birth',
+    +       value: '0'
+    +     }
+    +   },
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 17,
+    +     seed: 20261005,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n0',
+    +       kind: 'named-birth',
+    +       value: '17'
+    +     }
+    +   },
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 22,
+    +     seed: 20261005,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n2',
+    +       kind: 'named-birth',
+    +       value: '22'
+    +     }
+    +   },
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 23,
+    +     seed: 20261005,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n2',
+    +       kind: 'named-birth',
+    +       value: '0'
+    +     }
+    +   },
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 29,
+    +     seed: 20261005,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n1',
+    +       kind: 'named-birth',
+    +       value: '0'
+    +     }
+    +   },
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 31,
+    +     seed: 20261005,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n0',
+    +       kind: 'named-birth',
+    +       value: '0'
+    +     }
+    +   },
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 32,
+    +     seed: 20261005,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n1',
+    +       kind: 'named-birth',
+    +       value: '0'
+    +     }
+    +   },
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 37,
+    +     seed: 20261005,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n1',
+    +       kind: 'named-birth',
+    +       value: '37'
+    +     }
+    +   },
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 38,
+    +     seed: 20261005,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n2',
+    +       kind: 'named-birth',
+    +       value: '38'
+    +     }
+    +   }
+    + ]
+    - []
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0:
+      seed: 20261005
+      index: 1
+      write:
+        kind: 'named-birth'
+        key: 'n0'
+        value: '0'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+    1:
+      seed: 20261005
+      index: 9
+      write:
+        kind: 'named-birth'
+        key: 'n0'
+        value: '0'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+    2:
+      seed: 20261005
+      index: 10
+      write:
+        kind: 'named-birth'
+        key: 'n0'
+        value: '10'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+    3:
+      seed: 20261005
+      index: 16
+      write:
+        kind: 'named-birth'
+        key: 'n1'
+        value: '0'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+    4:
+      seed: 20261005
+      index: 17
+      write:
+        kind: 'named-birth'
+        key: 'n0'
+        value: '17'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+    5:
+      seed: 20261005
+      index: 22
+      write:
+        kind: 'named-birth'
+        key: 'n2'
+        value: '22'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+    6:
+      seed: 20261005
+      index: 23
+      write:
+        kind: 'named-birth'
+        key: 'n2'
+        value: '0'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+    7:
+      seed: 20261005
+      index: 29
+      write:
+        kind: 'named-birth'
+        key: 'n1'
+        value: '0'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+    8:
+      seed: 20261005
+      index: 31
+      write:
+        kind: 'named-birth'
+        key: 'n0'
+        value: '0'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+    9:
+      seed: 20261005
+      index: 32
+      write:
+        kind: 'named-birth'
+        key: 'n1'
+        value: '0'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+    10:
+      seed: 20261005
+      index: 37
+      write:
+        kind: 'named-birth'
+        key: 'n1'
+        value: '37'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+    11:
+      seed: 20261005
+      index: 38
+      write:
+        kind: 'named-birth'
+        key: 'n2'
+        value: '38'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+  operator: 'deepStrictEqual'
+  stack: |-
+    file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqndreu-1610655/test/query/write-exactly-once-property.test.js:276:14
+    async withGroupSurface (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqndreu-1610655/test/query/unknown-outcome-surface-fixture.js:571:5)
+    async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqndreu-1610655/test/query/write-exactly-once-property.test.js:235:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+property seed 7: {"answers":62,"redriven":12,"notYetApplied":22,"unknown":12,"drop":5,"insert":9,"leader-change":7,"cas":12,"runtime-replacement":6,"outlasting-partition":8,"lost":4,"named-birth":14,"outlasting-replacement":2,"delete":5,"duplicate":5,"none":3}
+# Subtest: exactly-once property, seed 7: 40 logical writes under random faults
+not ok 2 - exactly-once property, seed 7: 40 logical writes under random faults
+  ---
+  duration_ms: 32930.173301
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqndreu-1610655/test/query/write-exactly-once-property.test.js:232:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    every answer keeps the contract
+    + actual - expected
+    
+    + [
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 8,
+    +     seed: 7,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n2',
+    +       kind: 'named-birth',
+    +       value: '8'
+    +     }
+    +   },
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 10,
+    +     seed: 7,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n1',
+    +       kind: 'named-birth',
+    +       value: '10'
+    +     }
+    +   },
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 11,
+    +     seed: 7,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n2',
+    +       kind: 'named-birth',
+    +       value: '11'
+    +     }
+    +   },
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 18,
+    +     seed: 7,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n0',
+    +       kind: 'named-birth',
+    +       value: '0'
+    +     }
+    +   },
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 19,
+    +     seed: 7,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n1',
+    +       kind: 'named-birth',
+    +       value: '0'
+    +     }
+    +   },
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 22,
+    +     seed: 7,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n0',
+    +       kind: 'named-birth',
+    +       value: '22'
+    +     }
+    +   },
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 23,
+    +     seed: 7,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n1',
+    +       kind: 'named-birth',
+    +       value: '0'
+    +     }
+    +   },
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 24,
+    +     seed: 7,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n2',
+    +       kind: 'named-birth',
+    +       value: '0'
+    +     }
+    +   },
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 25,
+    +     seed: 7,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n0',
+    +       kind: 'named-birth',
+    +       value: '25'
+    +     }
+    +   },
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 27,
+    +     seed: 7,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n0',
+    +       kind: 'named-birth',
+    +       value: '27'
+    +     }
+    +   },
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 29,
+    +     seed: 7,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n0',
+    +       kind: 'named-birth',
+    +       value: '29'
+    +     }
+    +   },
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 31,
+    +     seed: 7,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n2',
+    +       kind: 'named-birth',
+    +       value: '31'
+    +     }
+    +   },
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 32,
+    +     seed: 7,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n1',
+    +       kind: 'named-birth',
+    +       value: '32'
+    +     }
+    +   },
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 33,
+    +     seed: 7,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n1',
+    +       kind: 'named-birth',
+    +       value: '0'
+    +     }
+    +   }
+    + ]
+    - []
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0:
+      seed: 7
+      index: 8
+      write:
+        kind: 'named-birth'
+        key: 'n2'
+        value: '8'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+    1:
+      seed: 7
+      index: 10
+      write:
+        kind: 'named-birth'
+        key: 'n1'
+        value: '10'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+    2:
+      seed: 7
+      index: 11
+      write:
+        kind: 'named-birth'
+        key: 'n2'
+        value: '11'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+    3:
+      seed: 7
+      index: 18
+      write:
+        kind: 'named-birth'
+        key: 'n0'
+        value: '0'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+    4:
+      seed: 7
+      index: 19
+      write:
+        kind: 'named-birth'
+        key: 'n1'
+        value: '0'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+    5:
+      seed: 7
+      index: 22
+      write:
+        kind: 'named-birth'
+        key: 'n0'
+        value: '22'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+    6:
+      seed: 7
+      index: 23
+      write:
+        kind: 'named-birth'
+        key: 'n1'
+        value: '0'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+    7:
+      seed: 7
+      index: 24
+      write:
+        kind: 'named-birth'
+        key: 'n2'
+        value: '0'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+    8:
+      seed: 7
+      index: 25
+      write:
+        kind: 'named-birth'
+        key: 'n0'
+        value: '25'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+    9:
+      seed: 7
+      index: 27
+      write:
+        kind: 'named-birth'
+        key: 'n0'
+        value: '27'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+    10:
+      seed: 7
+      index: 29
+      write:
+        kind: 'named-birth'
+        key: 'n0'
+        value: '29'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+    11:
+      seed: 7
+      index: 31
+      write:
+        kind: 'named-birth'
+        key: 'n2'
+        value: '31'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+    12:
+      seed: 7
+      index: 32
+      write:
+        kind: 'named-birth'
+        key: 'n1'
+        value: '32'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+    13:
+      seed: 7
+      index: 33
+      write:
+        kind: 'named-birth'
+        key: 'n1'
+        value: '0'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+  operator: 'deepStrictEqual'
+  stack: |-
+    file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqndreu-1610655/test/query/write-exactly-once-property.test.js:276:14
+    async withGroupSurface (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqndreu-1610655/test/query/unknown-outcome-surface-fixture.js:571:5)
+    async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqndreu-1610655/test/query/write-exactly-once-property.test.js:235:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+property seed 424242: {"answers":73,"redriven":19,"notYetApplied":33,"unknown":19,"duplicate":5,"insert":13,"outlasting-partition":11,"delete":9,"runtime-replacement":4,"lost":4,"cas":6,"named-birth":12,"drop":7,"outlasting-replacement":5,"leader-change":2,"none":2}
+# Subtest: exactly-once property, seed 424242: 40 logical writes under random faults
+not ok 3 - exactly-once property, seed 424242: 40 logical writes under random faults
+  ---
+  duration_ms: 51401.675497
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqndreu-1610655/test/query/write-exactly-once-property.test.js:232:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    every answer keeps the contract
+    + actual - expected
+    
+    + [
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 4,
+    +     seed: 424242,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n1',
+    +       kind: 'named-birth',
+    +       value: '4'
+    +     }
+    +   },
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 8,
+    +     seed: 424242,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n0',
+    +       kind: 'named-birth',
+    +       value: '8'
+    +     }
+    +   },
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 10,
+    +     seed: 424242,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n0',
+    +       kind: 'named-birth',
+    +       value: '10'
+    +     }
+    +   },
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 11,
+    +     seed: 424242,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n0',
+    +       kind: 'named-birth',
+    +       value: '11'
+    +     }
+    +   },
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 12,
+    +     seed: 424242,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n0',
+    +       kind: 'named-birth',
+    +       value: '0'
+    +     }
+    +   },
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 13,
+    +     seed: 424242,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n2',
+    +       kind: 'named-birth',
+    +       value: '0'
+    +     }
+    +   },
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 17,
+    +     seed: 424242,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n2',
+    +       kind: 'named-birth',
+    +       value: '17'
+    +     }
+    +   },
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 25,
+    +     seed: 424242,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n1',
+    +       kind: 'named-birth',
+    +       value: '25'
+    +     }
+    +   },
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 28,
+    +     seed: 424242,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n1',
+    +       kind: 'named-birth',
+    +       value: '0'
+    +     }
+    +   },
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 30,
+    +     seed: 424242,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n2',
+    +       kind: 'named-birth',
+    +       value: '30'
+    +     }
+    +   },
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 32,
+    +     seed: 424242,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n0',
+    +       kind: 'named-birth',
+    +       value: '0'
+    +     }
+    +   },
+    +   {
+    +     attempt: 0,
+    +     error: 'A named control-plane write requires a declared system partition',
+    +     failure: null,
+    +     index: 38,
+    +     seed: 424242,
+    +     violation: 'answered with neither its application nor a typed not-yet-applied failure',
+    +     write: {
+    +       key: 'n2',
+    +       kind: 'named-birth',
+    +       value: '0'
+    +     }
+    +   }
+    + ]
+    - []
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0:
+      seed: 424242
+      index: 4
+      write:
+        kind: 'named-birth'
+        key: 'n1'
+        value: '4'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+    1:
+      seed: 424242
+      index: 8
+      write:
+        kind: 'named-birth'
+        key: 'n0'
+        value: '8'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+    2:
+      seed: 424242
+      index: 10
+      write:
+        kind: 'named-birth'
+        key: 'n0'
+        value: '10'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+    3:
+      seed: 424242
+      index: 11
+      write:
+        kind: 'named-birth'
+        key: 'n0'
+        value: '11'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+    4:
+      seed: 424242
+      index: 12
+      write:
+        kind: 'named-birth'
+        key: 'n0'
+        value: '0'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+    5:
+      seed: 424242
+      index: 13
+      write:
+        kind: 'named-birth'
+        key: 'n2'
+        value: '0'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+    6:
+      seed: 424242
+      index: 17
+      write:
+        kind: 'named-birth'
+        key: 'n2'
+        value: '17'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+    7:
+      seed: 424242
+      index: 25
+      write:
+        kind: 'named-birth'
+        key: 'n1'
+        value: '25'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+    8:
+      seed: 424242
+      index: 28
+      write:
+        kind: 'named-birth'
+        key: 'n1'
+        value: '0'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+    9:
+      seed: 424242
+      index: 30
+      write:
+        kind: 'named-birth'
+        key: 'n2'
+        value: '30'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+    10:
+      seed: 424242
+      index: 32
+      write:
+        kind: 'named-birth'
+        key: 'n0'
+        value: '0'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+    11:
+      seed: 424242
+      index: 38
+      write:
+        kind: 'named-birth'
+        key: 'n2'
+        value: '0'
+      attempt: 0
+      violation: 'answered with neither its application nor a typed not-yet-applied failure'
+      error: 'A named control-plane write requires a declared system partition'
+      failure: ~
+  operator: 'deepStrictEqual'
+  stack: |-
+    file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqndreu-1610655/test/query/write-exactly-once-property.test.js:276:14
+    async withGroupSurface (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqndreu-1610655/test/query/unknown-outcome-surface-fixture.js:571:5)
+    async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqndreu-1610655/test/query/write-exactly-once-property.test.js:235:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 0
+# fail 3
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 140991.678729
+# time=143516ms
+ok test/query/write-identity-instance.test.js (19 assertions, 246335ms)
+# test-files total=7 pass=6 fail=1 assertions=259
+classified lane bootstrap: 1 file(s), jobs=2
+thermal: ok cpu 53C (coretemp/Package id 0) nvme 30C (nvme/Composite)
+ok test/bootstrap/durable-rejoin-incarnation-advance.test.js (228 assertions, 1093ms)
+# test-files total=1 pass=1 fail=0 assertions=228
+placement-results={"file":"test/control-plane/control-plane-error-classification.test.js","attempt":1,"ok":true,"assertions":53,"durationMs":934,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/control-plane-write-identity.test.js","attempt":1,"ok":true,"assertions":11,"durationMs":1009,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/endpoint-incarnation-authority.test.js","attempt":1,"ok":true,"assertions":53,"durationMs":1693,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/coordinator-reservation-lifecycle.test.js","attempt":1,"ok":true,"assertions":101,"durationMs":4245,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/membership-publication-native-ack-order.test.js","attempt":1,"ok":true,"assertions":19,"durationMs":8978,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/query/write-exactly-once-property.test.js","attempt":1,"ok":false,"assertions":3,"durationMs":143516,"retriedOnce":false,"firstFailureLine":"not ok 1 - exactly-once property, seed 20261005: 40 logical writes under random faults"}
+placement-results={"file":"test/query/write-identity-instance.test.js","attempt":1,"ok":true,"assertions":19,"durationMs":246335,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/durable-rejoin-incarnation-advance.test.js","attempt":1,"ok":true,"assertions":228,"durationMs":1093,"retriedOnce":false,"firstFailureLine":null}

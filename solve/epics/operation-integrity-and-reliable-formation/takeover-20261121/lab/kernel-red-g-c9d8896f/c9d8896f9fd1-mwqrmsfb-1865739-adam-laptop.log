@@ -1,0 +1,248 @@
+placement-shell=3641114
+placement-head=c9d8896f9fd144e6f92b0d88fbe948b36710198f
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3642180
+# test-files planned=2
+classified lane ordinary: 2 file(s), jobs=4
+thermal: hold cpu 78C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 78C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 40C (coretemp/Package id 0) nvme 17C (nvme/Composite)
+not ok test/partition/partition-write-kernel-tenure-fence.test.js (4 assertions, 5166ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: kernel tenure fence (e, f): an ordinary write the port deferred is released NOT_LEADER and never proposed under a tenure renewed without a role edge; nothing of it stays queued or timed
+not ok 1 - kernel tenure fence (e, f): an ordinary write the port deferred is released NOT_LEADER and never proposed under a tenure renewed without a role edge; nothing of it stays queued or timed
+  ---
+  duration_ms: 3547.004862
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c9d8896f9fd1-mwqrmsfb-1865739/test/partition/partition-write-kernel-tenure-fence.test.js:185:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    deferred at term 1, renewed to 2: released as on leadership loss, nothing proposed, nothing left; {"handed":[{"id":"kernel-fence-deferred","portTerm":1,"deferred":true},{"id":"kernel-fence-deferred","portTerm":2,"deferred":false}],"consensus":null}
+    + actual - expected
+    
+      {
+    +   answer: 'pending',
+    +   enteredUnderRenewedTerm: 1,
+    +   kernelTimers: 1,
+    +   pendingOutcome: true,
+    +   queued: 1
+    -   answer: {
+    -     failureCode: 'partition_write_not_leader',
+    -     success: false
+    -   },
+    -   enteredUnderRenewedTerm: 0,
+    -   kernelTimers: 0,
+    -   pendingOutcome: false,
+    -   queued: 0
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    enteredUnderRenewedTerm: 0
+    answer:
+      success: false
+      failureCode: 'partition_write_not_leader'
+    queued: 0
+    pendingOutcome: false
+    kernelTimers: 0
+  actual:
+    enteredUnderRenewedTerm: 1
+    answer: 'pending'
+    queued: 1
+    pendingOutcome: true
+    kernelTimers: 1
+  operator: 'deepStrictEqual'
+  stack: |-
+    file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c9d8896f9fd1-mwqrmsfb-1865739/test/partition/partition-write-kernel-tenure-fence.test.js:203:10
+    async onFixtureLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c9d8896f9fd1-mwqrmsfb-1865739/test/test-helpers/participant-transaction-fixture.js:834:14)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: kernel tenure fence (b, f): a write parked on a reserved partition is released NOT_LEADER at its readmit, never proposed, when the tenure was renewed without a role edge; a later readmit proposes nothing of it
+not ok 2 - kernel tenure fence (b, f): a write parked on a reserved partition is released NOT_LEADER at its readmit, never proposed, when the tenure was renewed without a role edge; a later readmit proposes nothing of it
+  ---
+  duration_ms: 75.13732
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c9d8896f9fd1-mwqrmsfb-1865739/test/partition/partition-write-kernel-tenure-fence.test.js:211:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    parked under the previous tenure, readmitted under term 2: released as on leadership loss, nothing proposed, nothing left; {"handed":[{"id":"kernel-fence-parked","portTerm":2}],"consensus":null}
+    + actual - expected
+    
+      {
+    +   answer: 'pending',
+    +   enteredUnderRenewedTerm: 1,
+    +   handOversAfterLaterReadmit: 1,
+    +   kernelTimers: 1,
+    -   answer: {
+    -     failureCode: 'partition_write_not_leader',
+    -     success: false
+    -   },
+    -   enteredUnderRenewedTerm: 0,
+    -   handOversAfterLaterReadmit: 0,
+    -   kernelTimers: 0,
+        laterDecision: null,
+        laterReservation: null,
+    +   pendingOutcome: true,
+    +   queued: 1
+    -   pendingOutcome: false,
+    -   queued: 0
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    enteredUnderRenewedTerm: 0
+    answer:
+      success: false
+      failureCode: 'partition_write_not_leader'
+    queued: 0
+    pendingOutcome: false
+    kernelTimers: 0
+    laterReservation: ~
+    laterDecision: ~
+    handOversAfterLaterReadmit: 0
+  actual:
+    enteredUnderRenewedTerm: 1
+    answer: 'pending'
+    queued: 1
+    pendingOutcome: true
+    kernelTimers: 1
+    laterReservation: ~
+    laterDecision: ~
+    handOversAfterLaterReadmit: 1
+  operator: 'deepStrictEqual'
+  stack: |-
+    file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c9d8896f9fd1-mwqrmsfb-1865739/test/partition/partition-write-kernel-tenure-fence.test.js:243:10
+    async onFixtureLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c9d8896f9fd1-mwqrmsfb-1865739/test/test-helpers/participant-transaction-fixture.js:834:14)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: kernel tenure fence (d): a write handed to consensus before the renewal completes under its own entryId and is answered committed (inherited work is kept)
+ok 3 - kernel tenure fence (d): a write handed to consensus before the renewal completes under its own entryId and is answered committed (inherited work is kept)
+  ---
+  duration_ms: 46.663228
+  type: 'test'
+  ...
+# Subtest: kernel tenure fence (g): an ordinary write is not registered under a tenure renewed inside the kernel's own leadership read (refused NOT_LEADER, nothing proposed)
+not ok 4 - kernel tenure fence (g): an ordinary write is not registered under a tenure renewed inside the kernel's own leadership read (refused NOT_LEADER, nothing proposed)
+  ---
+  duration_ms: 39.499464
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c9d8896f9fd1-mwqrmsfb-1865739/test/partition/partition-write-kernel-tenure-fence.test.js:279:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    renewed to term 2 inside the kernel's leadership read: refused, nothing registered or proposed; {"handed":[{"id":"kernel-fence-read-renewal","portTerm":2}],"answer":null}
+    + actual - expected
+    
+      {
+    +   answer: 'pending',
+    +   enteredUnderRenewedTerm: 1,
+    +   kernelTimers: 1,
+    +   pendingOutcome: true,
+    +   queued: 1
+    -   answer: {
+    -     failureCode: 'partition_write_not_leader',
+    -     success: false
+    -   },
+    -   enteredUnderRenewedTerm: 0,
+    -   kernelTimers: 0,
+    -   pendingOutcome: false,
+    -   queued: 0
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    enteredUnderRenewedTerm: 0
+    answer:
+      success: false
+      failureCode: 'partition_write_not_leader'
+    queued: 0
+    pendingOutcome: false
+    kernelTimers: 0
+  actual:
+    enteredUnderRenewedTerm: 1
+    answer: 'pending'
+    queued: 1
+    pendingOutcome: true
+    kernelTimers: 1
+  operator: 'deepStrictEqual'
+  stack: |-
+    file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c9d8896f9fd1-mwqrmsfb-1865739/test/partition/partition-write-kernel-tenure-fence.test.js:297:10
+    async onFixtureLeader (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c9d8896f9fd1-mwqrmsfb-1865739/test/test-helpers/participant-transaction-fixture.js:834:14)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 1
+# fail 3
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3714.506185
+# time=5166ms
+not ok test/rebalancer/placement-owner-authority-write-kernel.test.js (2 assertions, 6549ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+{"level":50,"time":"2026-11-21T18:54:02.358Z","nodeId":"test-node","pid":3642202,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+{"level":50,"time":"2026-11-21T18:54:02.378Z","nodeId":"test-node","pid":3642202,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n2","msg":"Failed to query operations from system table"}
+{"level":50,"time":"2026-11-21T18:54:02.384Z","nodeId":"test-node","pid":3642202,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n3","msg":"Failed to query operations from system table"}
+{"level":50,"time":"2026-11-21T18:54:03.184Z","nodeId":"test-node","pid":3642202,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+# Subtest: kernel: a placement write the port deferred is not proposed under a tenure renewed without a role edge (released as on leadership loss, or refused typed)
+not ok 1 - kernel: a placement write the port deferred is not proposed under a tenure renewed without a role edge (released as on leadership loss, or refused typed)
+  ---
+  duration_ms: 4243.427845
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c9d8896f9fd1-mwqrmsfb-1865739/test/rebalancer/placement-owner-authority-write-kernel.test.js:66:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the write decided under the previous tenure is not proposed under the renewed one (it was deferred at term 2); {"deferredAt":{"entryId":"placement-owner:n1:admit:sql_transactions-p1:05aaf666-96ba-42f2-b3f5-98e68e99bbc1","portTerm":2},"renewedTerm":3,"attemptOutcome":"ADMITTED","proposals":[{"portTerm":3,"disposition":"log[2]"}],"transfer":{"nodes":[{"nodeId":"n1","currentTenure":"n1#1@t3","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n1#2@t2","done":true},{"sequence":2,"triggers":"LEADERSHIP_START","startTenure":"n1#1@t3","done":true},{"sequence":3,"triggers":"LEDGER_COMMIT","startTenure":"n1#1@t3","done":true}],"constructionPasses":{"n1#2@t2":1,"n1#1@t3":2},"capacityChecks":{"n1#2@t2":1,"n1#1@t3":2},"candidateChecks":{"n1#2@t2":1},"admissionAttempts":[{"entryId":"placement-owner:n1:admit:sql_transactions-p1:99bbc1","decisionTenure":"n1#2@t2","boundaryTenure":"n1#2@t2","boundaryCore":"leader@t2","outcome":"ADMITTED"}]},{"nodeId":"n2","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]},{"nodeId":"n3","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]}],"proposals":[{"nodeId":"n1","entryTail":"99bbc1","portTerm":3,"groupTerm":3,"disposition":"log[2]"}],"admitted":[{"replica":"n1","operations":["pl-sql_transactions-p1-3-0<=n1:99bbc1"]},{"replica":"n2","operations":["pl-sql_transactions-p1-3-0<=n1:99bbc1"]},{"replica":"n3","operations":["pl-sql_transactions-p1-3-0<=n1:99bbc1"]}],"committedOutcomes":[{"entryTail":"99bbc1","outcome":"ADMITTED","reason":null,"operationIds":["pl-sql_transactions-p1-3-0"]}]}}
+    + actual - expected
+    
+    + [
+    +   'placement-owner:n1:admit:sql_transactions-p1:05aaf666-96ba-42f2-b3f5-98e68e99bbc1'
+    + ]
+    - []
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0: 'placement-owner:n1:admit:sql_transactions-p1:05aaf666-96ba-42f2-b3f5-98e68e99bbc1'
+  operator: 'deepStrictEqual'
+  stack: |-
+    file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c9d8896f9fd1-mwqrmsfb-1865739/test/rebalancer/placement-owner-authority-write-kernel.test.js:97:10
+    async withPlacementWorld (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/c9d8896f9fd1-mwqrmsfb-1865739/test/rebalancer/placement-owner-authority-fixture.js:1047:14)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# {"deferredAt":{"entryId":"placement-owner:n1:admit:sql_transactions-p1:05aaf666-96ba-42f2-b3f5-98e68e99bbc1","portTerm":2},"renewedTerm":3,"attemptOutcome":"ADMITTED","proposals":[{"portTerm":3,"disposition":"log[2]"}],"transfer":{"nodes":[{"nodeId":"n1","currentTenure":"n1\#1@t3","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n1\#2@t2","done":true},{"sequence":2,"triggers":"LEADERSHIP_START","startTenure":"n1\#1@t3","done":true},{"sequence":3,"triggers":"LEDGER_COMMIT","startTenure":"n1\#1@t3","done":true}],"constructionPasses":{"n1\#2@t2":1,"n1\#1@t3":2},"capacityChecks":{"n1\#2@t2":1,"n1\#1@t3":2},"candidateChecks":{"n1\#2@t2":1},"admissionAttempts":[{"entryId":"placement-owner:n1:admit:sql_transactions-p1:99bbc1","decisionTenure":"n1\#2@t2","boundaryTenure":"n1\#2@t2","boundaryCore":"leader@t2","outcome":"ADMITTED"}]},{"nodeId":"n2","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]},{"nodeId":"n3","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]}],"proposals":[{"nodeId":"n1","entryTail":"99bbc1","portTerm":3,"groupTerm":3,"disposition":"log[2]"}],"admitted":[{"replica":"n1","operations":["pl-sql_transactions-p1-3-0<=n1:99bbc1"]},{"replica":"n2","operations":["pl-sql_transactions-p1-3-0<=n1:99bbc1"]},{"replica":"n3","operations":["pl-sql_transactions-p1-3-0<=n1:99bbc1"]}],"committedOutcomes":[{"entryTail":"99bbc1","outcome":"ADMITTED","reason":null,"operationIds":["pl-sql_transactions-p1-3-0"]}]}}
+{"level":50,"time":"2026-11-21T18:54:03.196Z","nodeId":"test-node","pid":3642202,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n2","msg":"Failed to query operations from system table"}
+{"level":50,"time":"2026-11-21T18:54:03.198Z","nodeId":"test-node","pid":3642202,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n3","msg":"Failed to query operations from system table"}
+# Subtest: kernel: a placement write is not proposed under a tenure renewed inside the kernel's own leadership read, between the owner's fence and the propose (refused, nothing proposed)
+ok 2 - kernel: a placement write is not proposed under a tenure renewed inside the kernel's own leadership read, between the owner's fence and the propose (refused, nothing proposed)
+  ---
+  duration_ms: 593.596223
+  type: 'test'
+  ...
+# {"decidedUnderTerm":2,"renewedTerm":3,"attemptOutcome":"partition_write_cutover_paused","proposals":[],"transfer":{"nodes":[{"nodeId":"n1","currentTenure":"n1\#1@t3","passes":[{"sequence":1,"triggers":"LEADERSHIP_START","startTenure":"n1\#2@t2","done":true},{"sequence":2,"triggers":"LEADERSHIP_START","startTenure":"n1\#1@t3","done":true}],"constructionPasses":{"n1\#2@t2":1,"n1\#1@t3":1},"capacityChecks":{"n1\#2@t2":1,"n1\#1@t3":1},"candidateChecks":{"n1\#2@t2":1},"admissionAttempts":[{"entryId":"placement-owner:n1:admit:sql_transactions-p1:0556e5","decisionTenure":"n1\#2@t2","boundaryTenure":"n1\#2@t2","boundaryCore":"leader@t2","outcome":"partition_write_cutover_paused"}]},{"nodeId":"n2","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]},{"nodeId":"n3","currentTenure":"none","passes":[],"constructionPasses":{},"capacityChecks":{},"candidateChecks":{},"admissionAttempts":[]}],"proposals":[],"admitted":[{"replica":"n1","operations":[]},{"replica":"n2","operations":[]},{"replica":"n3","operations":[]}],"committedOutcomes":[]}}
+1..2
+# tests 2
+# suites 0
+# pass 1
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4846.372942
+# time=6549ms
+# test-files total=2 pass=0 fail=2 assertions=6
+placement-results={"file":"test/partition/partition-write-kernel-tenure-fence.test.js","attempt":1,"ok":false,"assertions":4,"durationMs":5166,"retriedOnce":false,"firstFailureLine":"not ok 1 - kernel tenure fence (e, f): an ordinary write the port deferred is released NOT_LEADER and never proposed under a tenure renewed without a role edge; nothing of it stays queued or timed"}
+placement-results={"file":"test/rebalancer/placement-owner-authority-write-kernel.test.js","attempt":1,"ok":false,"assertions":2,"durationMs":6549,"retriedOnce":false,"firstFailureLine":"not ok 1 - kernel: a placement write the port deferred is not proposed under a tenure renewed without a role edge (released as on leadership loss, or refused typed)"}

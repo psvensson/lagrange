@@ -1,0 +1,301 @@
+placement-shell=1941856
+placement-head=1b258479036fd479439088b839fe1071bed64424
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=1942804
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=3
+thermal: ok cpu 51C (coretemp/Package id 0) nvme unmeasured
+not ok test/cdc/cdc-owner-fact-receiver-read-point.test.js (42 assertions, 6684ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: readOwnerFact: a fresh leader that has not applied its election log refuses typed, in process and routed
+    not ok 1 - in process: never READY without the row
+      ---
+      compare: ===
+      at:
+        fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+        lineNumber: 69
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:69:5)
+      source: >2
+          const inProcess = await group.surfaceOf(fresh.nodeId, {leaderNodeId:
+        fresh.nodeId});
+          const hosted = await readOwnerFact(inProcess.readLeaderRequired, requestFor(OPERATION));
+          t.equal(hosted.state, STATE.UNAVAILABLE, 'in process: never READY without the row');
+        ----^
+          t.equal(hosted.reason, REASON.ELECTION_LOG_NOT_APPLIED);
+          t.equal(Object.hasOwn(hosted, 'rows'), false);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -unavailable
+        +ready
+      ...
+    
+    not ok 2 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+        lineNumber: 70
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:70:5)
+      source: >2
+          const hosted = await readOwnerFact(inProcess.readLeaderRequired,
+        requestFor(OPERATION));
+          t.equal(hosted.state, STATE.UNAVAILABLE, 'in process: never READY without the row');
+          t.equal(hosted.reason, REASON.ELECTION_LOG_NOT_APPLIED);
+        ----^
+          t.equal(Object.hasOwn(hosted, 'rows'), false);
+          const routedSurface = await group.surfaceOf(other.nodeId, {leaderNodeId: fresh.nodeId});
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -owner_fact_election_log_not_applied
+        +undefined
+      ...
+    
+    not ok 3 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+        lineNumber: 71
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:71:5)
+      source: >2
+          t.equal(hosted.state, STATE.UNAVAILABLE, 'in process: never READY without
+        the row');
+          t.equal(hosted.reason, REASON.ELECTION_LOG_NOT_APPLIED);
+          t.equal(Object.hasOwn(hosted, 'rows'), false);
+        ----^
+          const routedSurface = await group.surfaceOf(other.nodeId, {leaderNodeId: fresh.nodeId});
+          const routed = await readOwnerFact(routedSurface.readLeaderRequired, requestFor(OPERATION));
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -false
+        +true
+      ...
+    
+    not ok 4 - routed: never READY without the row
+      ---
+      compare: ===
+      at:
+        fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+        lineNumber: 74
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:74:5)
+      source: >2
+          const routedSurface = await group.surfaceOf(other.nodeId, {leaderNodeId:
+        fresh.nodeId});
+          const routed = await readOwnerFact(routedSurface.readLeaderRequired, requestFor(OPERATION));
+          t.equal(routed.state, STATE.UNAVAILABLE, 'routed: never READY without the row');
+        ----^
+          t.equal(routed.reason, REASON.ELECTION_LOG_NOT_APPLIED);
+          t.ok(group.transit.filter(({targetNodeId}) => targetNodeId === fresh.nodeId)
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -unavailable
+        +ready
+      ...
+    
+    not ok 5 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+        lineNumber: 75
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:75:5)
+      source: >2
+          const routed = await readOwnerFact(routedSurface.readLeaderRequired,
+        requestFor(OPERATION));
+          t.equal(routed.state, STATE.UNAVAILABLE, 'routed: never READY without the row');
+          t.equal(routed.reason, REASON.ELECTION_LOG_NOT_APPLIED);
+        ----^
+          t.ok(group.transit.filter(({targetNodeId}) => targetNodeId === fresh.nodeId)
+            .every(({answer}) => answer?.success === false && answer?.rowSet === undefined),
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -owner_fact_election_log_not_applied
+        +undefined
+      ...
+    
+    not ok 6 - the fresh leader ships no rows
+      ---
+      at:
+        fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+        lineNumber: 76
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:76:5)
+      source: >2
+          t.equal(routed.state, STATE.UNAVAILABLE, 'routed: never READY without the
+        row');
+          t.equal(routed.reason, REASON.ELECTION_LOG_NOT_APPLIED);
+          t.ok(group.transit.filter(({targetNodeId}) => targetNodeId === fresh.nodeId)
+        ----^
+            .every(({answer}) => answer?.success === false && answer?.rowSet === undefined),
+          'the fresh leader ships no rows');
+      ...
+    
+    1..6
+not ok 1 - readOwnerFact: a fresh leader that has not applied its election log refuses typed, in process and routed # time=3693.506ms
+  ---
+  at:
+    fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+    lineNumber: 61
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    }
+  
+  
+    test('readOwnerFact: a fresh leader that has not applied its election log
+    refuses typed, ' +
+  
+    ^
+      'in process and routed', {timeout: TEST_TIMEOUT_MS}, async (t) => {
+      const group = await openLedgerGroupSurface(t, import.meta.url);
+  ...
+
+# Subtest: one receiver contract: the same owner-fact request gets the same typed answer in process and over the transport
+    ok 1 - leader: same typed answer
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - follower: same typed answer
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - names the leader it knows
+    ok 8 - insufficiently applied leader: same typed answer
+    not ok 9 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+        lineNumber: 103
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:103:5)
+      source: >2
+          await group.freshLeaderBehindCommit(first, second, `${OPERATION}-fresh`);
+          const insufficient = await compare('insufficiently applied leader', second, follower.nodeId);
+          t.equal(insufficient.failureCode, REASON.ELECTION_LOG_NOT_APPLIED);
+        ----^
+          t.equal(insufficient.shipsRows, false);
+          // A deposed replica learns its successor from the successor's first
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -owner_fact_election_log_not_applied
+        +null
+      ...
+    
+    not ok 10 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+        lineNumber: 104
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:104:5)
+      source: >2
+          const insufficient = await compare('insufficiently applied leader', second,
+        follower.nodeId);
+          t.equal(insufficient.failureCode, REASON.ELECTION_LOG_NOT_APPLIED);
+          t.equal(insufficient.shipsRows, false);
+        ----^
+          // A deposed replica learns its successor from the successor's first
+          // heartbeat; the comparison is made once it has.
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -false
+        +true
+      ...
+    
+    ok 11 - deposed leader: same typed answer
+    ok 12 - should be equal
+    ok 13 - should be equal
+    ok 14 - names the leader that replaced it
+    1..14
+not ok 2 - one receiver contract: the same owner-fact request gets the same typed answer in process and over the transport # time=411.713ms
+  ---
+  at:
+    fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+    lineNumber: 81
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('one receiver contract: the same owner-fact request gets the same typed
+    answer in ' +
+  
+    ^
+      'process and over the transport', {timeout: TEST_TIMEOUT_MS}, async (t) => {
+      const group = await openLedgerGroupSurface(t, import.meta.url);
+  ...
+
+# Subtest: readOwnerFact: leadership moving while the leader reads never yields the old leader's rows
+    ok 1 - the read reaches the replica that leads now
+    ok 2 - never the replica that stopped leading during its read
+    ok 3 - should be equivalent
+    ok 4 - the old leader refused after its read, shipping no rows
+    1..4
+ok 3 - readOwnerFact: leadership moving while the leader reads never yields the old leader's rows # time=287.99ms
+
+# Subtest: readOwnerFact: an apply landing while the leader reads never mis-states the witness
+    ok 1 - beforeRead: typed
+    ok 2 - beforeRead: the receiver cannot name the snapshot it read, so it refuses
+    ok 3 - beforeRead: a read that spans no apply is READY
+    ok 4 - should be equivalent
+    ok 5 - should be equal
+    ok 6 - afterRead: typed
+    ok 7 - afterRead: the receiver cannot name the snapshot it read, so it refuses
+    ok 8 - afterRead: a read that spans no apply is READY
+    ok 9 - should be equivalent
+    ok 10 - should be equal
+    1..10
+ok 4 - readOwnerFact: an apply landing while the leader reads never mis-states the witness # time=317.824ms
+
+# Subtest: readOwnerFact: the caller verifies what it received; a successful empty answer carrying a follower's witness is not absence
+    ok 1 - never READY with no rows
+    ok 2 - should be equal
+    ok 3 - should be equal
+    1..3
+ok 5 - readOwnerFact: the caller verifies what it received; a successful empty answer carrying a follower's witness is not absence # time=251.603ms
+
+1..5
+# { total: 37, pass: 29, fail: 8 }
+# time=4977.752ms
+# test-files total=1 pass=0 fail=1 assertions=42
+placement-results={"file":"test/cdc/cdc-owner-fact-receiver-read-point.test.js","attempt":1,"ok":false,"assertions":42,"durationMs":6684,"retriedOnce":false,"firstFailureLine":"not ok 1 - in process: never READY without the row"}

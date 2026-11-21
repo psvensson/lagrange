@@ -1,0 +1,37 @@
+{
+  "sha": "0ddf7b00f282145cedf64db14360b5c5120de926",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/control-plane/control-plane-write-identity.test.js",
+    "test/control-plane/endpoint-incarnation-authority.test.js",
+    "test/control-plane/control-plane-error-classification.test.js",
+    "test/rebalancer/coordinator-reservation-lifecycle.test.js",
+    "test/bootstrap/durable-rejoin-incarnation-advance.test.js",
+    "test/query/write-identity-instance.test.js",
+    "test/control-plane/membership-publication-native-ack-order.test.js",
+    "test/query/write-exactly-once-property.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/control-plane/membership-publication-native-ack-order.test.js",
+        "test/query/write-identity-instance.test.js",
+        "test/query/write-exactly-once-property.test.js",
+        "test/rebalancer/coordinator-reservation-lifecycle.test.js",
+        "test/control-plane/control-plane-write-identity.test.js",
+        "test/control-plane/endpoint-incarnation-authority.test.js",
+        "test/control-plane/control-plane-error-classification.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/bootstrap/durable-rejoin-incarnation-advance.test.js"
+      ],
+      "jobs": 2,
+      "resourceClass": "bootstrap"
+    }
+  ]
+}

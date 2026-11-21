@@ -1,0 +1,1583 @@
+placement-shell=3644018
+placement-head=70dfcdba85a6f3aa74ddbc296d47abe730a1eb8e
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.3 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3644475
+# test-files planned=8
+classified lane ordinary: 7 file(s), jobs=4
+thermal: hold cpu 75C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 75C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 41C (coretemp/Package id 0) nvme 17C (nvme/Composite)
+not ok test/control-plane/named-write-outcome-total.test.js (3 assertions, 1231ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: judgeNamedWriteOutcome is total over answer shapes and never throws
+not ok 1 - judgeNamedWriteOutcome is total over answer shapes and never throws
+  ---
+  duration_ms: 17.023149
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/control-plane/named-write-outcome-total.test.js:189:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    ... Skipped lines
+    
+      [
+        [
+          'partition answer with its bound witness',
+          'applied'
+        ],
+    ...
+          'zero participants: no partition was asked',
+    +     'applied'
+    -     'unknown'
+        ],
+        [
+          'zero participants, CDC-wrapped',
+    +     'applied'
+    -     'unknown'
+        ],
+        [
+          'a failure that carries a commit witness',
+          'unknown'
+        ],
+        [
+          'a refusal that carries a commit witness (contradictory evidence)',
+    +     'not_proposed'
+    -     'unknown'
+        ],
+        [
+          'a deferred answer that carries a commit witness',
+          'unknown'
+        ],
+    ...
+          'a CDC wrapper that wraps itself',
+    +     'THROWS RangeError: Maximum call stack size exceeded'
+    -     'unknown'
+        ]
+      ]
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0:
+      0: 'partition answer with its bound witness'
+      1: 'applied'
+    1:
+      0: 'partition answer without a witness'
+      1: 'unknown'
+    2:
+      0: 'the exact shape that threw: success and a count, no witness, no partitionId'
+      1: 'unknown'
+    3:
+      0: 'the engine fake behind the real CDC service (threw)'
+      1: 'unknown'
+    4:
+      0: 'the heartbeat engine fake (threw)'
+      1: 'unknown'
+    5:
+      0: 'bare success'
+      1: 'unknown'
+    6:
+      0: 'witness without a top-level partitionId'
+      1: 'unknown'
+    7:
+      0: 'witness for another partition than declared'
+      1: 'unknown'
+    8:
+      0: 'answer partition differs from its witness'
+      1: 'unknown'
+    9:
+      0: 'witness bound to another entry'
+      1: 'unknown'
+    10:
+      0: 'witness that is not an object'
+      1: 'unknown'
+    11:
+      0: 'witness without logIndex'
+      1: 'unknown'
+    12:
+      0: 'CDC-wrapped bound partition answer'
+      1: 'applied'
+    13:
+      0: 'CDC-wrapped partition answer without witness'
+      1: 'unknown'
+    14:
+      0: 'CDC-wrapped non-object partition result'
+      1: 'unknown'
+    15:
+      0: 'complete distributed answer with bound participant'
+      1: 'applied'
+    16:
+      0: 'CDC-wrapped complete distributed answer'
+      1: 'applied'
+    17:
+      0: 'distributed participant without witness'
+      1: 'unknown'
+    18:
+      0: 'distributed participant that is not an object'
+      1: 'unknown'
+    19:
+      0: 'distributed answer for another key'
+      1: 'unknown'
+    20:
+      0: 'distributed answer and attempt both without a key'
+      1: 'unknown'
+    21:
+      0: 'attempt without a declared partition'
+      1: 'unknown'
+    22:
+      0: 'bound committed statement failure'
+      1: 'failed'
+    23:
+      0: 'pre-proposal refusal on the declared partition'
+      1: 'not_proposed'
+    24:
+      0: 'single nested failure without partition ids (double undefined)'
+      1: 'unknown'
+    25:
+      0: 'single nested failure that is not an object'
+      1: 'unknown'
+    26:
+      0: 'null answer'
+      1: 'unknown'
+    27:
+      0: 'undefined answer'
+      1: 'unknown'
+    28:
+      0: 'string answer'
+      1: 'unknown'
+    29:
+      0: 'numeric answer'
+      1: 'unknown'
+    30:
+      0: 'missing attempt'
+      1: 'unknown'
+    31:
+      0: 'zero participants: no partition was asked'
+      1: 'unknown'
+    32:
+      0: 'zero participants, CDC-wrapped'
+      1: 'unknown'
+    33:
+      0: 'a failure that carries a commit witness'
+      1: 'unknown'
+    34:
+      0: 'a refusal that carries a commit witness (contradictory evidence)'
+      1: 'unknown'
+    35:
+      0: 'a deferred answer that carries a commit witness'
+      1: 'unknown'
+    36:
+      0: 'witness for the right entry on the wrong partition'
+      1: 'unknown'
+    37:
+      0: 'answer and witness on the wrong partition, entry of the declared one'
+      1: 'unknown'
+    38:
+      0: 'the settled replay of an earlier attempt under the same key (same entry)'
+      1: 'applied'
+    39:
+      0: 'the settled replay of an earlier instance of the name (another key)'
+      1: 'unknown'
+    40:
+      0: 'participants partially witnessed: primary witnessed, mirror not'
+      1: 'unknown'
+    41:
+      0: 'participants partially witnessed: two primaries, one witnessed'
+      1: 'unknown'
+    42:
+      0: 'witness term absent'
+      1: 'unknown'
+    43:
+      0: 'witness term zero'
+      1: 'unknown'
+    44:
+      0: 'witness logIndex zero'
+      1: 'unknown'
+    45:
+      0: 'witness logIndex negative'
+      1: 'unknown'
+    46:
+      0: 'witness logIndex as text'
+      1: 'unknown'
+    47:
+      0: 'array answer'
+      1: 'unknown'
+    48:
+      0: 'array witness'
+      1: 'unknown'
+    49:
+      0: 'counts that disagree (affectedRows !== changes)'
+      1: 'unknown'
+    50:
+      0: 'a CDC wrapper that wraps itself'
+      1: 'unknown'
+  actual:
+    0:
+      0: 'partition answer with its bound witness'
+      1: 'applied'
+    1:
+      0: 'partition answer without a witness'
+      1: 'unknown'
+    2:
+      0: 'the exact shape that threw: success and a count, no witness, no partitionId'
+      1: 'unknown'
+    3:
+      0: 'the engine fake behind the real CDC service (threw)'
+      1: 'unknown'
+    4:
+      0: 'the heartbeat engine fake (threw)'
+      1: 'unknown'
+    5:
+      0: 'bare success'
+      1: 'unknown'
+    6:
+      0: 'witness without a top-level partitionId'
+      1: 'unknown'
+    7:
+      0: 'witness for another partition than declared'
+      1: 'unknown'
+    8:
+      0: 'answer partition differs from its witness'
+      1: 'unknown'
+    9:
+      0: 'witness bound to another entry'
+      1: 'unknown'
+    10:
+      0: 'witness that is not an object'
+      1: 'unknown'
+    11:
+      0: 'witness without logIndex'
+      1: 'unknown'
+    12:
+      0: 'CDC-wrapped bound partition answer'
+      1: 'applied'
+    13:
+      0: 'CDC-wrapped partition answer without witness'
+      1: 'unknown'
+    14:
+      0: 'CDC-wrapped non-object partition result'
+      1: 'unknown'
+    15:
+      0: 'complete distributed answer with bound participant'
+      1: 'applied'
+    16:
+      0: 'CDC-wrapped complete distributed answer'
+      1: 'applied'
+    17:
+      0: 'distributed participant without witness'
+      1: 'unknown'
+    18:
+      0: 'distributed participant that is not an object'
+      1: 'unknown'
+    19:
+      0: 'distributed answer for another key'
+      1: 'unknown'
+    20:
+      0: 'distributed answer and attempt both without a key'
+      1: 'unknown'
+    21:
+      0: 'attempt without a declared partition'
+      1: 'unknown'
+    22:
+      0: 'bound committed statement failure'
+      1: 'failed'
+    23:
+      0: 'pre-proposal refusal on the declared partition'
+      1: 'not_proposed'
+    24:
+      0: 'single nested failure without partition ids (double undefined)'
+      1: 'unknown'
+    25:
+      0: 'single nested failure that is not an object'
+      1: 'unknown'
+    26:
+      0: 'null answer'
+      1: 'unknown'
+    27:
+      0: 'undefined answer'
+      1: 'unknown'
+    28:
+      0: 'string answer'
+      1: 'unknown'
+    29:
+      0: 'numeric answer'
+      1: 'unknown'
+    30:
+      0: 'missing attempt'
+      1: 'unknown'
+    31:
+      0: 'zero participants: no partition was asked'
+      1: 'applied'
+    32:
+      0: 'zero participants, CDC-wrapped'
+      1: 'applied'
+    33:
+      0: 'a failure that carries a commit witness'
+      1: 'unknown'
+    34:
+      0: 'a refusal that carries a commit witness (contradictory evidence)'
+      1: 'not_proposed'
+    35:
+      0: 'a deferred answer that carries a commit witness'
+      1: 'unknown'
+    36:
+      0: 'witness for the right entry on the wrong partition'
+      1: 'unknown'
+    37:
+      0: 'answer and witness on the wrong partition, entry of the declared one'
+      1: 'unknown'
+    38:
+      0: 'the settled replay of an earlier attempt under the same key (same entry)'
+      1: 'applied'
+    39:
+      0: 'the settled replay of an earlier instance of the name (another key)'
+      1: 'unknown'
+    40:
+      0: 'participants partially witnessed: primary witnessed, mirror not'
+      1: 'unknown'
+    41:
+      0: 'participants partially witnessed: two primaries, one witnessed'
+      1: 'unknown'
+    42:
+      0: 'witness term absent'
+      1: 'unknown'
+    43:
+      0: 'witness term zero'
+      1: 'unknown'
+    44:
+      0: 'witness logIndex zero'
+      1: 'unknown'
+    45:
+      0: 'witness logIndex negative'
+      1: 'unknown'
+    46:
+      0: 'witness logIndex as text'
+      1: 'unknown'
+    47:
+      0: 'array answer'
+      1: 'unknown'
+    48:
+      0: 'array witness'
+      1: 'unknown'
+    49:
+      0: 'counts that disagree (affectedRows !== changes)'
+      1: 'unknown'
+    50:
+      0: 'a CDC wrapper that wraps itself'
+      1: 'THROWS RangeError: Maximum call stack size exceeded'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/control-plane/named-write-outcome-total.test.js:197:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  ...
+# Subtest: an unknown named write never says applied: the gateway-normalized success
+ok 2 - an unknown named write never says applied: the gateway-normalized success
+  ---
+  duration_ms: 3.646688
+  type: 'test'
+  ...
+# Subtest: gateway and real CDC: a receipt-less engine answer is the typed unknown, twice
+ok 3 - gateway and real CDC: a receipt-less engine answer is the typed unknown, twice
+  ---
+  duration_ms: 166.496572
+  type: 'test'
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 2
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 216.120671
+# time=1231ms
+not ok test/control-plane/named-write-unknown-outcome-shape.test.js (4 assertions, 1359ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: the vocabulary names the unknown outcome
+not ok 1 - the vocabulary names the unknown outcome
+  ---
+  duration_ms: 2.60456
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/control-plane/named-write-unknown-outcome-shape.test.js:175:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + undefined
+    - 'unknown'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'unknown'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/control-plane/named-write-unknown-outcome-shape.test.js:176:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  ...
+# Subtest: every consumer sees the one named unknown outcome - returned: a success without the producer receipt
+not ok 2 - every consumer sees the one named unknown outcome - returned: a success without the producer receipt
+  ---
+  duration_ms: 165.07153
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/control-plane/named-write-unknown-outcome-shape.test.js:180:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+      {
+    +   adminMutationOutcome: null,
+    +   adminOutcome: 'owner_not_ready',
+    +   adminSaysNotReady: true,
+    -   adminMutationOutcome: 'unknown',
+    -   adminOutcome: 'unknown',
+    -   adminSaysNotReady: false,
+        callerDelivery: 'returned',
+    +   callerOutcome: null,
+    -   callerOutcome: 'unknown',
+        classifier: {
+          applied: false,
+    +     known: false,
+    +     outcome: '',
+    -     known: true,
+    -     outcome: 'unknown',
+          zeroAffectedRows: false
+        },
+        ledger: [
+    +     null
+    -     'unknown'
+        ],
+    +   ownerError: null,
+    +   snapshot: 'owner_not_ready',
+    -   ownerError: 'unknown',
+    -   snapshot: 'unknown',
+        telemetry: [
+    +     'owner_not_ready'
+    -     'unknown'
+        ]
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    callerDelivery: 'returned'
+    callerOutcome: 'unknown'
+    telemetry:
+      0: 'unknown'
+    ledger:
+      0: 'unknown'
+    snapshot: 'unknown'
+    classifier:
+      known: true
+      outcome: 'unknown'
+      applied: false
+      zeroAffectedRows: false
+    ownerError: 'unknown'
+    adminOutcome: 'unknown'
+    adminMutationOutcome: 'unknown'
+    adminSaysNotReady: false
+  actual:
+    callerDelivery: 'returned'
+    callerOutcome: ~
+    telemetry:
+      0: 'owner_not_ready'
+    ledger:
+      0: ~
+    snapshot: 'owner_not_ready'
+    classifier:
+      known: false
+      outcome: ''
+      applied: false
+      zeroAffectedRows: false
+    ownerError: ~
+    adminOutcome: 'owner_not_ready'
+    adminMutationOutcome: ~
+    adminSaysNotReady: true
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/control-plane/named-write-unknown-outcome-shape.test.js:183:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: every consumer sees the one named unknown outcome - thrown: a transport timeout after delivery
+not ok 3 - every consumer sees the one named unknown outcome - thrown: a transport timeout after delivery
+  ---
+  duration_ms: 95.351084
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/control-plane/named-write-unknown-outcome-shape.test.js:180:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+      {
+    +   adminMutationOutcome: null,
+    +   adminOutcome: 'failed',
+    -   adminMutationOutcome: 'unknown',
+    -   adminOutcome: 'unknown',
+        adminSaysNotReady: false,
+    +   callerDelivery: 'thrown',
+    +   callerOutcome: null,
+    -   callerDelivery: 'returned',
+    -   callerOutcome: 'unknown',
+        classifier: {
+          applied: false,
+    +     known: false,
+    +     outcome: '',
+    -     known: true,
+    -     outcome: 'unknown',
+          zeroAffectedRows: false
+        },
+        ledger: [
+    +     'owner_not_ready'
+    -     'unknown'
+        ],
+    +   ownerError: null,
+    +   snapshot: 'rejected',
+    -   ownerError: 'unknown',
+    -   snapshot: 'unknown',
+        telemetry: [
+    +     'owner_not_ready'
+    -     'unknown'
+        ]
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    callerDelivery: 'returned'
+    callerOutcome: 'unknown'
+    telemetry:
+      0: 'unknown'
+    ledger:
+      0: 'unknown'
+    snapshot: 'unknown'
+    classifier:
+      known: true
+      outcome: 'unknown'
+      applied: false
+      zeroAffectedRows: false
+    ownerError: 'unknown'
+    adminOutcome: 'unknown'
+    adminMutationOutcome: 'unknown'
+    adminSaysNotReady: false
+  actual:
+    callerDelivery: 'thrown'
+    callerOutcome: ~
+    telemetry:
+      0: 'owner_not_ready'
+    ledger:
+      0: 'owner_not_ready'
+    snapshot: 'rejected'
+    classifier:
+      known: false
+      outcome: ''
+      applied: false
+      zeroAffectedRows: false
+    ownerError: ~
+    adminOutcome: 'failed'
+    adminMutationOutcome: ~
+    adminSaysNotReady: false
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/control-plane/named-write-unknown-outcome-shape.test.js:183:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: a returned and a thrown unknown arrive as the same typed answer, cause carried
+not ok 4 - a returned and a thrown unknown arrive as the same typed answer, cause carried
+  ---
+  duration_ms: 65.706533
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/control-plane/named-write-unknown-outcome-shape.test.js:187:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    returned: a success without the producer receipt: the canonical unknown
+    + actual - expected
+    
+      {
+    +   completionState: undefined,
+    -   completionState: 'unknown',
+        contractState: 'pending',
+    +   countFields: [
+    +     'affectedRows',
+    +     'partitionResult',
+    +     'committed'
+    +   ],
+    -   countFields: [],
+        deferRetry: true,
+        failureCode: 'partition_write_outcome_unknown',
+    +   hasCause: false,
+    -   hasCause: true,
+        nextAction: 'retry',
+    +   outcome: undefined,
+    -   outcome: 'unknown',
+        pendingEntry: true,
+        pendingOutcome: 'unknown',
+        success: false,
+        unknownByPredicate: true
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    success: false
+    outcome: 'unknown'
+    completionState: 'unknown'
+    deferRetry: true
+    failureCode: 'partition_write_outcome_unknown'
+    contractState: 'pending'
+    nextAction: 'retry'
+    pendingOutcome: 'unknown'
+    pendingEntry: true
+    unknownByPredicate: true
+    countFields:
+    hasCause: true
+  actual:
+    success: false
+    deferRetry: true
+    failureCode: 'partition_write_outcome_unknown'
+    contractState: 'pending'
+    nextAction: 'retry'
+    pendingOutcome: 'unknown'
+    pendingEntry: true
+    unknownByPredicate: true
+    countFields:
+      0: 'affectedRows'
+      1: 'partitionResult'
+      2: 'committed'
+    hasCause: false
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/control-plane/named-write-unknown-outcome-shape.test.js:195:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 0
+# fail 4
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 342.006932
+# time=1359ms
+not ok test/control-plane/control-plane-mutation-outcome-classifier.test.js (165 assertions, 1465ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: control-plane mutation classification exhaustively owns every gateway outcome
+    not ok 1 - the apply-effect oracle must cover every gateway outcome
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,8 +1,9 @@
+         Array [
+           "applied",
+           "deferred",
+           "no_op",
+           "observed_state_changed",
+           "owner_not_ready",
+           "rejected",
+        +  "undefined",
+         ]
+      at:
+        fileName: test/control-plane/control-plane-mutation-outcome-classifier.test.js
+        lineNumber: 60
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-mutation-outcome-classifier.test.js:60:7)
+      
+        test/control-plane/control-plane-mutation-outcome-classifier.test.js:57:1
+      source: |2
+          (t) => {
+            const outcomes = Object.values(CONTROL_PLANE_MUTATION_OUTCOME).sort();
+            t.same(
+        ------^
+              Object.keys(EXPECTED_EFFECT_BY_OUTCOME).sort(),
+              outcomes,
+      ...
+    
+    ok 2 - applied should be recognized
+    ok 3 - applied classification should be immutable
+    ok 4 - applied should have one canonical effect tuple
+    ok 5 - deferred should be recognized
+    ok 6 - deferred classification should be immutable
+    ok 7 - deferred should have one canonical effect tuple
+    ok 8 - no_op should be recognized
+    ok 9 - no_op classification should be immutable
+    ok 10 - no_op should have one canonical effect tuple
+    ok 11 - observed_state_changed should be recognized
+    ok 12 - observed_state_changed classification should be immutable
+    ok 13 - observed_state_changed should have one canonical effect tuple
+    ok 14 - owner_not_ready should be recognized
+    ok 15 - owner_not_ready classification should be immutable
+    ok 16 - owner_not_ready should have one canonical effect tuple
+    ok 17 - rejected should be recognized
+    ok 18 - rejected classification should be immutable
+    ok 19 - rejected should have one canonical effect tuple
+    1..19
+not ok 1 - control-plane mutation classification exhaustively owns every gateway outcome # time=52.134ms
+  ---
+  at:
+    fileName: test/control-plane/control-plane-mutation-outcome-classifier.test.js
+    lineNumber: 57
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    )).href;
+  
+  
+    test('control-plane mutation classification exhaustively owns every gateway
+    outcome',
+  
+    ^
+      (t) => {
+        const outcomes = Object.values(CONTROL_PLANE_MUTATION_OUTCOME).sort();
+  ...
+
+# Subtest: an unknown outcome carries no count; a contradictory outcome fails closed
+    not ok 1 - the unknown outcome is named and carries no count
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,6 +1,6 @@
+         Object {
+        -  "known": true,
+        -  "outcome": "unknown",
+        -  "failed": true,
+        -  "affectedRowsPresent": false,
+        +  "known": false,
+        +  "outcome": "",
+        +  "failed": false,
+        +  "affectedRowsPresent": true,
+         }
+      at:
+        fileName: test/control-plane/control-plane-mutation-outcome-classifier.test.js
+        lineNumber: 94
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-mutation-outcome-classifier.test.js:94:5)
+      
+        test/control-plane/control-plane-mutation-outcome-classifier.test.js:89:1
+      source: >2
+            partitionResult: {affectedRows: 0},
+          });
+          t.same({known: unknown.known, outcome: unknown.outcome, applied: unknown.applied,
+        ----^
+            failed: unknown.failed, affectedRowsPresent: unknown.affectedRowsPresent,
+            zeroAffectedRows: unknown.zeroAffectedRows}, {known: true, outcome: 'unknown',
+      ...
+    
+    not ok 2 - applied outcome on a failed answer: fails closed
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,5 +1,5 @@
+         Object {
+        -  "valid": false,
+        -  "known": false,
+        -  "accepted": false,
+        +  "valid": true,
+        +  "known": true,
+        +  "accepted": true,
+         }
+      at:
+        fileName: test/control-plane/control-plane-mutation-outcome-classifier.test.js
+        lineNumber: 106
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/control-plane/control-plane-mutation-outcome-classifier.test.js:106:7)
+      
+        test/control-plane/control-plane-mutation-outcome-classifier.test.js:89:1
+      source: >2
+          ]) {
+            const view = classifyControlPlaneMutationResult(result);
+            t.same({valid: view.valid, known: view.known, accepted: view.accepted,
+        ------^
+              applied: view.applied}, {valid: false, known: false, accepted: false, applied: false},
+            `${label}: fails closed`);
+      ...
+    
+    ok 3 - unknown outcome on a successful answer: fails closed
+    1..3
+not ok 2 - an unknown outcome carries no count; a contradictory outcome fails closed # time=15.633ms
+  ---
+  at:
+    fileName: test/control-plane/control-plane-mutation-outcome-classifier.test.js
+    lineNumber: 89
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    // count (an unproven count is not an observation), and an outcome that
+  
+    // contradicts the answer's own success fails closed.
+  
+    test('an unknown outcome carries no count; a contradictory outcome fails
+    closed', (t) => {
+  
+    ^
+      const unknown = classifyControlPlaneMutationResult({
+        outcome: 'unknown', success: false, affectedRows: 0,
+  ...
+
+# Subtest: control-plane mutation apply classification rejects non-apply envelopes without relying on success:false
+    ok 1 - no_op is not a durable apply when success is absent
+    ok 2 - deferred is not a durable apply when success is absent
+    ok 3 - legacy zero-row envelopes remain non-applies
+    ok 4 - legacy successful envelopes without typed outcomes remain compatible
+    1..4
+ok 3 - control-plane mutation apply classification rejects non-apply envelopes without relying on success:false # time=0.871ms
+
+# Subtest: control-plane mutation classification rejects inherited and unknown outcomes
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - should be equal
+    ok 8 - should be equal
+    1..8
+ok 4 - control-plane mutation classification rejects inherited and unknown outcomes # time=1.209ms
+
+# Subtest: control-plane mutation classification rejects proxies without running traps
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - proxy rejection precedes property inspection
+    1..5
+ok 5 - control-plane mutation classification rejects proxies without running traps # time=0.894ms
+
+# Subtest: control-plane mutation view reads every gateway field without accessors
+    ok 1 - outcome accessor must invalidate
+    ok 2 - outcome accessor must fail closed at the gateway
+    ok 3 - outcome accessor must never execute
+    ok 4 - success accessor must invalidate
+    ok 5 - success accessor must fail closed at the gateway
+    ok 6 - success accessor must never execute
+    ok 7 - partitionResult accessor must invalidate
+    ok 8 - partitionResult accessor must fail closed at the gateway
+    ok 9 - partitionResult accessor must never execute
+    ok 10 - affectedRows accessor must invalidate
+    ok 11 - affectedRows accessor must fail closed at the gateway
+    ok 12 - affectedRows accessor must never execute
+    ok 13 - completionState accessor must invalidate
+    ok 14 - completionState accessor must fail closed at the gateway
+    ok 15 - completionState accessor must never execute
+    ok 16 - pressureAction accessor must invalidate
+    ok 17 - pressureAction accessor must fail closed at the gateway
+    ok 18 - pressureAction accessor must never execute
+    ok 19 - should be equal
+    ok 20 - nested affectedRows accessor must never execute
+    1..20
+ok 6 - control-plane mutation view reads every gateway field without accessors # time=4.525ms
+
+# Subtest: nullish partition containers preserve top-level row-count compatibility
+    ok 1 - nullish partition container remains a valid legacy shape
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - nullish partition container remains a valid legacy shape
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - nullish partition container remains a valid legacy shape
+    ok 8 - should be equal
+    ok 9 - should be equal
+    ok 10 - nullish partition container remains a valid legacy shape
+    ok 11 - should be equal
+    ok 12 - should be equal
+    ok 13 - an empty plain partition result falls back to the top-level count
+    ok 14 - a present nested count retains precedence
+    1..14
+ok 7 - nullish partition containers preserve top-level row-count compatibility # time=2.57ms
+
+# Subtest: ordinary legacy envelopes ignore Object.prototype pollution
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equivalent
+    ok 4 - custom-prototype envelopes remain invalid
+    1..4
+ok 8 - ordinary legacy envelopes ignore Object.prototype pollution # time=2.44ms
+
+# Subtest: effect table construction resists pre-import prototype pollution
+    ok 1 - fresh module import should pass
+    ok 2 - should be equal
+    1..2
+ok 9 - effect table construction resists pre-import prototype pollution # time=101.542ms
+
+# Subtest: mutation view reads each gateway data field exactly once
+    ok 1 - descriptor census should pass
+    ok 2 - should be equivalent
+    1..2
+ok 10 - mutation view reads each gateway data field exactly once # time=92.67ms
+
+# Subtest: mutation view accepts null prototypes and ignores inherited accessors
+    ok 1 - null-prototype root and partition records are valid data records
+    ok 2 - inherited accessors never execute
+    ok 3 - should be equal
+    ok 4 - should be equal
+    1..4
+ok 11 - mutation view accepts null prototypes and ignores inherited accessors # time=0.99ms
+
+# Subtest: mutation view rejects hostile scalar values without executing hooks
+    ok 1 - outcome rejects one hostile scalar
+    ok 2 - outcome rejects one hostile scalar
+    ok 3 - outcome rejects one hostile scalar
+    ok 4 - outcome rejects one hostile scalar
+    ok 5 - outcome rejects one hostile scalar
+    ok 6 - outcome rejects one hostile scalar
+    ok 7 - success rejects one hostile scalar
+    ok 8 - success rejects one hostile scalar
+    ok 9 - success rejects one hostile scalar
+    ok 10 - success rejects one hostile scalar
+    ok 11 - success rejects one hostile scalar
+    ok 12 - success rejects one hostile scalar
+    ok 13 - affectedRows rejects one hostile scalar
+    ok 14 - affectedRows rejects one hostile scalar
+    ok 15 - affectedRows rejects one hostile scalar
+    ok 16 - affectedRows rejects one hostile scalar
+    ok 17 - affectedRows rejects one hostile scalar
+    ok 18 - affectedRows rejects one hostile scalar
+    ok 19 - completionState rejects one hostile scalar
+    ok 20 - completionState rejects one hostile scalar
+    ok 21 - completionState rejects one hostile scalar
+    ok 22 - completionState rejects one hostile scalar
+    ok 23 - completionState rejects one hostile scalar
+    ok 24 - completionState rejects one hostile scalar
+    ok 25 - pressureAction rejects one hostile scalar
+    ok 26 - pressureAction rejects one hostile scalar
+    ok 27 - pressureAction rejects one hostile scalar
+    ok 28 - pressureAction rejects one hostile scalar
+    ok 29 - pressureAction rejects one hostile scalar
+    ok 30 - pressureAction rejects one hostile scalar
+    ok 31 - hostile scalar hooks and traps never execute
+    1..31
+ok 12 - mutation view rejects hostile scalar values without executing hooks # time=2.961ms
+
+# Subtest: mutation view uses captured reflection and numeric intrinsics
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    1..4
+ok 13 - mutation view uses captured reflection and numeric intrinsics # time=0.71ms
+
+# Subtest: normalized mutation view is detached from later source mutation
+    ok 1 - should match pattern
+    ok 2 - should be equivalent
+    ok 3 - the normalized view cannot be mutated
+    ok 4 - the derived outcome snapshot cannot be mutated
+    1..4
+ok 14 - normalized mutation view is detached from later source mutation # time=1.887ms
+
+# Subtest: control-plane mutation classification rejects coercive row counts
+    ok 1 - invalid present row counts fail closed
+    ok 2 - invalid present row counts fail closed
+    ok 3 - invalid present row counts fail closed
+    ok 4 - invalid present row counts fail closed
+    ok 5 - invalid present row counts fail closed
+    ok 6 - invalid present row counts fail closed
+    ok 7 - invalid present row counts fail closed
+    ok 8 - invalid present row counts fail closed
+    ok 9 - invalid present row counts fail closed
+    ok 10 - invalid present row counts fail closed
+    ok 11 - invalid present row counts fail closed
+    ok 12 - invalid present row counts fail closed
+    ok 13 - invalid present row counts fail closed
+    ok 14 - row-count classification never coerces objects
+    ok 15 - should be equal
+    ok 16 - classification never invokes outcome accessors
+    ok 17 - captured safe-integer validation preserves a valid count when the mutable intrinsic gives the opposite answer
+    ok 18 - captured safe-integer validation still rejects a fractional count when the mutable intrinsic admits it
+    1..18
+ok 15 - control-plane mutation classification rejects coercive row counts # time=1.887ms
+
+# Subtest: gateway normalization consumes the validated classifier effect
+    ok 1 - invalid present row counts fail closed at the production seam
+    ok 2 - zero-row behavior does not depend on the mutable global intrinsic
+    ok 3 - the gateway outcome snapshot is immutable
+    1..3
+ok 16 - gateway normalization consumes the validated classifier effect # time=0.647ms
+
+# Subtest: gateway completion and outcome consume one normalized precedence view
+    ok 1 - known outcome and explicit completion retain independent precedence
+    ok 2 - pressure owns an untyped failed outcome and its completion
+    ok 3 - should be equivalent
+    1..3
+ok 17 - gateway completion and outcome consume one normalized precedence view # time=0.732ms
+
+1..17
+# { total: 148, pass: 145, fail: 3 }
+# time=323.74ms
+not ok test/raft/authoritative-row-mutation-outcome-classifier.test.js (127 assertions, 1490ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: Raft authoritative-row completion has an explicit disposition for every canonical mutation outcome
+    not ok 1 - the Raft decision table must exhaust the frozen gateway enum
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,8 +1,9 @@
+         Array [
+           "applied",
+           "deferred",
+           "no_op",
+           "observed_state_changed",
+           "owner_not_ready",
+           "rejected",
+        +  "undefined",
+         ]
+      at:
+        fileName: test/raft/authoritative-row-mutation-outcome-classifier.test.js
+        lineNumber: 62
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/raft/authoritative-row-mutation-outcome-classifier.test.js:62:5)
+      
+        test/raft/authoritative-row-mutation-outcome-classifier.test.js:60:1
+      source: |
+        test('Raft authoritative-row completion has an explicit disposition for ' +
+          'every canonical mutation outcome', async (t) => {
+          t.same(
+        ----^
+            Object.keys(EXPECTED_REASON_BY_OUTCOME).sort(),
+            Object.values(CONTROL_PLANE_MUTATION_OUTCOME).sort(),
+      ...
+    
+    ok 2 - applied should retain its Raft disposition
+    ok 3 - applied should use the canonical apply effect
+    ok 4 - applied should clear pending state
+    ok 5 - applied should record persistence
+    ok 6 - applied should not arm a bounded retry
+    ok 7 - applied should refresh only for observed-state changes
+    ok 8 - no_op should retain its Raft disposition
+    ok 9 - no_op should use the canonical apply effect
+    ok 10 - no_op should preserve pending state
+    ok 11 - no_op should not record persistence
+    ok 12 - no_op should arm a bounded retry
+    ok 13 - no_op should refresh only for observed-state changes
+    ok 14 - deferred should retain its Raft disposition
+    ok 15 - deferred should use the canonical apply effect
+    ok 16 - deferred should preserve pending state
+    ok 17 - deferred should not record persistence
+    ok 18 - deferred should arm a bounded retry
+    ok 19 - deferred should refresh only for observed-state changes
+    ok 20 - rejected should retain its Raft disposition
+    ok 21 - rejected should use the canonical apply effect
+    ok 22 - rejected should preserve pending state
+    ok 23 - rejected should not record persistence
+    ok 24 - rejected should arm a bounded retry
+    ok 25 - rejected should refresh only for observed-state changes
+    ok 26 - owner_not_ready should retain its Raft disposition
+    ok 27 - owner_not_ready should use the canonical apply effect
+    ok 28 - owner_not_ready should preserve pending state
+    ok 29 - owner_not_ready should not record persistence
+    ok 30 - owner_not_ready should arm a bounded retry
+    ok 31 - owner_not_ready should refresh only for observed-state changes
+    ok 32 - observed_state_changed should retain its Raft disposition
+    ok 33 - observed_state_changed should use the canonical apply effect
+    ok 34 - observed_state_changed should preserve pending state
+    ok 35 - observed_state_changed should not record persistence
+    ok 36 - observed_state_changed should arm a bounded retry
+    ok 37 - observed_state_changed should refresh only for observed-state changes
+    1..37
+not ok 1 - Raft authoritative-row completion has an explicit disposition for every canonical mutation outcome # time=68.464ms
+  ---
+  at:
+    fileName: test/raft/authoritative-row-mutation-outcome-classifier.test.js
+    lineNumber: 60
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    }
+  
+    test('Raft authoritative-row completion has an explicit disposition for ' +
+    ^
+      'every canonical mutation outcome', async (t) => {
+      t.same(
+  ...
+
+# Subtest: Raft authoritative-row completion preserves valid legacy results and fails closed on contradictory or coercive envelopes
+    ok 1 - legacy success: apply effect
+    ok 2 - legacy success: typed Raft reason
+    ok 3 - legacy success: persisted state
+    ok 4 - legacy success: pending state
+    ok 5 - legacy success: retry ownership
+    ok 6 - legacy positive nested rows: apply effect
+    ok 7 - legacy positive nested rows: typed Raft reason
+    ok 8 - legacy positive nested rows: persisted state
+    ok 9 - legacy positive nested rows: pending state
+    ok 10 - legacy positive nested rows: retry ownership
+    ok 11 - legacy positive top-level rows: apply effect
+    ok 12 - legacy positive top-level rows: typed Raft reason
+    ok 13 - legacy positive top-level rows: persisted state
+    ok 14 - legacy positive top-level rows: pending state
+    ok 15 - legacy positive top-level rows: retry ownership
+    ok 16 - legacy zero rows: apply effect
+    ok 17 - legacy zero rows: typed Raft reason
+    ok 18 - legacy zero rows: persisted state
+    ok 19 - legacy zero rows: pending state
+    ok 20 - legacy zero rows: retry ownership
+    ok 21 - legacy failure: apply effect
+    ok 22 - legacy failure: typed Raft reason
+    ok 23 - legacy failure: persisted state
+    ok 24 - legacy failure: pending state
+    ok 25 - legacy failure: retry ownership
+    ok 26 - unknown typed success: apply effect
+    ok 27 - unknown typed success: typed Raft reason
+    ok 28 - unknown typed success: persisted state
+    ok 29 - unknown typed success: pending state
+    ok 30 - unknown typed success: retry ownership
+    ok 31 - contradictory applied failure: apply effect
+    ok 32 - contradictory applied failure: typed Raft reason
+    ok 33 - contradictory applied failure: persisted state
+    ok 34 - contradictory applied failure: pending state
+    ok 35 - contradictory applied failure: retry ownership
+    ok 36 - string row count: apply effect
+    ok 37 - string row count: typed Raft reason
+    ok 38 - string row count: persisted state
+    ok 39 - string row count: pending state
+    ok 40 - string row count: retry ownership
+    ok 41 - boxed row count: apply effect
+    ok 42 - boxed row count: typed Raft reason
+    ok 43 - boxed row count: persisted state
+    ok 44 - boxed row count: pending state
+    ok 45 - boxed row count: retry ownership
+    ok 46 - negative row count: apply effect
+    ok 47 - negative row count: typed Raft reason
+    ok 48 - negative row count: persisted state
+    ok 49 - negative row count: pending state
+    ok 50 - negative row count: retry ownership
+    ok 51 - negative zero row count: apply effect
+    ok 52 - negative zero row count: typed Raft reason
+    ok 53 - negative zero row count: persisted state
+    ok 54 - negative zero row count: pending state
+    ok 55 - negative zero row count: retry ownership
+    ok 56 - unsafe row count: apply effect
+    ok 57 - unsafe row count: typed Raft reason
+    ok 58 - unsafe row count: persisted state
+    ok 59 - unsafe row count: pending state
+    ok 60 - unsafe row count: retry ownership
+    1..60
+ok 2 - Raft authoritative-row completion preserves valid legacy results and fails closed on contradictory or coercive envelopes # time=14.41ms
+
+# Subtest: Raft authoritative-row completion rejects inherited, accessor, and proxy envelopes without invoking hostile code
+    ok 1 - outcome accessor should fail closed
+    ok 2 - outcome accessor should not record persistence
+    ok 3 - outcome accessor should preserve pending state
+    ok 4 - outcome accessor should arm a retry
+    ok 5 - affectedRows accessor should fail closed
+    ok 6 - affectedRows accessor should not record persistence
+    ok 7 - affectedRows accessor should preserve pending state
+    ok 8 - affectedRows accessor should arm a retry
+    ok 9 - inherited fields should fail closed
+    ok 10 - inherited fields should not record persistence
+    ok 11 - inherited fields should preserve pending state
+    ok 12 - inherited fields should arm a retry
+    ok 13 - proxy should fail closed
+    ok 14 - proxy should not record persistence
+    ok 15 - proxy should preserve pending state
+    ok 16 - proxy should arm a retry
+    ok 17 - retry accessor does not invalidate the canonical mutation fields
+    ok 18 - retry accessor is ignored in favor of bounded backoff
+    ok 19 - mutation and retry accessors never execute
+    ok 20 - only async promise assimilation reads the proxy; classification does not
+    1..20
+ok 3 - Raft authoritative-row completion rejects inherited, accessor, and proxy envelopes without invoking hostile code # time=5.643ms
+
+# Subtest: Raft authoritative-row completion accepts only an own finite retry hint
+    ok 1 - an own finite retry hint can widen the bounded delay
+    ok 2 - coercive or non-positive retry hints use bounded backoff
+    ok 3 - coercive or non-positive retry hints use bounded backoff
+    ok 4 - coercive or non-positive retry hints use bounded backoff
+    ok 5 - coercive or non-positive retry hints use bounded backoff
+    ok 6 - coercive or non-positive retry hints use bounded backoff
+    1..6
+ok 4 - Raft authoritative-row completion accepts only an own finite retry hint # time=4.413ms
+
+1..4
+# { total: 123, pass: 122, fail: 1 }
+# time=123.371ms
+not ok test/query/provisioning-deadline-error-message.test.js (4 assertions, 2210ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: the real assertProvisioningAttemptBudget answers a typed, non-empty error
+ok 1 - the real assertProvisioningAttemptBudget answers a typed, non-empty error
+  ---
+  duration_ms: 1.836968
+  type: 'test'
+  ...
+# Subtest: CREATE TABLE provisioning past its deadline rejects with the typed, non-empty error
+ok 2 - CREATE TABLE provisioning past its deadline rejects with the typed, non-empty error
+  ---
+  duration_ms: 30.166639
+  type: 'test'
+  ...
+# Subtest: a managed split child provisioning past its deadline answers the same typed error
+not ok 3 - a managed split child provisioning past its deadline answers the same typed error
+  ---
+  duration_ms: 1.415194
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/query/provisioning-deadline-error-message.test.js:91:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the typed timeout code
+    + actual - expected
+    
+    + undefined
+    - 'TIMEOUT'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'TIMEOUT'
+  operator: 'strictEqual'
+  stack: |-
+    Object.assertTypedNonEmptyTimeout (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/query/provisioning-deadline-error-message.test.js:36:10)
+    expectedException (node:assert:576:17)
+    expectsError (node:assert:701:21)
+    Function.throws (node:assert:757:3)
+    TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/query/provisioning-deadline-error-message.test.js:92:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+  ...
+# Subtest: every QUERY_ERROR_MSG member referenced under src is defined
+not ok 4 - every QUERY_ERROR_MSG member referenced under src is defined
+  ---
+  duration_ms: 52.533202
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/query/provisioning-deadline-error-message.test.js:104:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    references to undefined error messages answer empty errors
+    + actual - expected
+    
+    + [
+    +   'src/partition/managed-split-workflow-state-methods.js:86 QUERY_ERROR_MSG.TABLE_PARTITION_TARGET_NODE_WAIT_TIMEOUT'
+    + ]
+    - []
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0: 'src/partition/managed-split-workflow-state-methods.js:86 QUERY_ERROR_MSG.TABLE_PARTITION_TARGET_NODE_WAIT_TIMEOUT'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/query/provisioning-deadline-error-message.test.js:115:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 2
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 113.53875
+# time=2210ms
+not ok test/constants/message-table-census.test.js (1 assertions, 4323ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: every message-table member referenced under src is defined
+not ok 1 - every message-table member referenced under src is defined
+  ---
+  duration_ms: 4036.963861
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/constants/message-table-census.test.js:138:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    references to members no message table defines (3163 accesses checked; not checked: 3 computed, 66 on tables bound otherwise)
+    + actual - expected
+    
+    + [
+    +   'src/bootstrap/owners/service-leader-readiness-owner.js:594 BOOTSTRAP_API_LOG_MSG.LEADERS_READY',
+    +   'src/bootstrap/shared/node-state-publication-outcome.js:115 JOINING_ERROR_MSG.CONTROL_PLANE_MESSAGE_WAS_NOT_ACKNOWLEDGED',
+    +   'src/partition/managed-split-workflow-state-methods.js:86 QUERY_ERROR_MSG.TABLE_PARTITION_TARGET_NODE_WAIT_TIMEOUT',
+    +   'src/transport/message-router-connection-close-reconnect.js:391 ROUTER_LOG_MSG.CONNECTION_PING_TIMEOUT_SKIPPED_ALIVE',
+    +   'src/transport/message-router-peer-liveness.js:95 ROUTER_LOG_MSG.PING_TIMEOUT_SATISFIED_BY_INBOUND',
+    +   'src/transport/router-server-manager.js:196 ROUTER_ERROR_MSG.addressInUse'
+    + ]
+    - []
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0: 'src/bootstrap/owners/service-leader-readiness-owner.js:594 BOOTSTRAP_API_LOG_MSG.LEADERS_READY'
+    1: 'src/bootstrap/shared/node-state-publication-outcome.js:115 JOINING_ERROR_MSG.CONTROL_PLANE_MESSAGE_WAS_NOT_ACKNOWLEDGED'
+    2: 'src/partition/managed-split-workflow-state-methods.js:86 QUERY_ERROR_MSG.TABLE_PARTITION_TARGET_NODE_WAIT_TIMEOUT'
+    3: 'src/transport/message-router-connection-close-reconnect.js:391 ROUTER_LOG_MSG.CONNECTION_PING_TIMEOUT_SKIPPED_ALIVE'
+    4: 'src/transport/message-router-peer-liveness.js:95 ROUTER_LOG_MSG.PING_TIMEOUT_SATISFIED_BY_INBOUND'
+    5: 'src/transport/router-server-manager.js:196 ROUTER_ERROR_MSG.addressInUse'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/constants/message-table-census.test.js:161:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4046.232056
+# time=4323ms
+not ok test/query/named-write-real-producer-definite.test.js (7 assertions, 7613ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: item 2: a statement matching no row is a proven zero; only an empty plan has no participant, and it is not APPLIED
+not ok 1 - item 2: a statement matching no row is a proven zero; only an empty plan has no participant, and it is not APPLIED
+  ---
+  duration_ms: 3304.816918
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/query/named-write-real-producer-definite.test.js:147:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    ... Skipped lines
+    
+      [
+        {
+          callerRows: 0,
+          callerSuccess: true,
+          label: 'UPDATE matching no row',
+    ...
+          verdicts: [
+    +       'applied'
+    -       'unknown'
+          ]
+        }
+      ]
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0:
+      label: 'UPDATE matching no row'
+      participants:
+        0:
+          partitionId: 'storage_reservations-p1'
+          affectedRows: 0
+          witnessed: true
+      verdicts:
+        0: 'applied'
+      callerSuccess: true
+      callerRows: 0
+    1:
+      label: 'DELETE matching no row'
+      participants:
+        0:
+          partitionId: 'storage_reservations-p1'
+          affectedRows: 0
+          witnessed: true
+      verdicts:
+        0: 'applied'
+      callerSuccess: true
+      callerRows: 0
+    2:
+      label: 'empty plan'
+      participants:
+      verdicts:
+        0: 'unknown'
+      callerSuccess: true
+      callerRows: 0
+  actual:
+    0:
+      label: 'UPDATE matching no row'
+      participants:
+        0:
+          partitionId: 'storage_reservations-p1'
+          affectedRows: 0
+          witnessed: true
+      verdicts:
+        0: 'applied'
+      callerSuccess: true
+      callerRows: 0
+    1:
+      label: 'DELETE matching no row'
+      participants:
+        0:
+          partitionId: 'storage_reservations-p1'
+          affectedRows: 0
+          witnessed: true
+      verdicts:
+        0: 'applied'
+      callerSuccess: true
+      callerRows: 0
+    2:
+      label: 'empty plan'
+      participants:
+      verdicts:
+        0: 'applied'
+      callerSuccess: true
+      callerRows: 0
+  operator: 'deepStrictEqual'
+  stack: |-
+    file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/query/named-write-real-producer-definite.test.js:179:12
+    async withSurface (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/query/unknown-outcome-surface-fixture.js:328:5)
+    async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/query/named-write-real-producer-definite.test.js:149:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: item 3: a constraint violation is FAILED (definite) - SQL gateway
+ok 2 - item 3: a constraint violation is FAILED (definite) - SQL gateway
+  ---
+  duration_ms: 113.653422
+  type: 'test'
+  ...
+# Subtest: item 3: a constraint violation is FAILED (definite) - CDC through the engine
+not ok 3 - item 3: a constraint violation is FAILED (definite) - CDC through the engine
+  ---
+  duration_ms: 82.138067
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/query/named-write-real-producer-definite.test.js:191:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    answer {"error":"Distributed operation failed due to participant failures","code":"DISTRIBUTED_PARTICIPANT_FAILURE","participants":[{"partitionId":"storage_reservations-p1","failureCode":"SQLITE_CONSTRAINT_PRIMARYKEY","committed":true,"outcome":"statement_failed"}]}; attempt {"error":"Distributed operation failed due to participant failures","code":"DISTRIBUTED_PARTICIPANT_FAILURE","participants":[{"partitionId":"storage_reservations-p1","failureCode":"SQLITE_CONSTRAINT_PRIMARYKEY","committed":true,"outcome":"statement_failed"}]}
+    + actual - expected
+    
+      {
+    +   definite: false,
+    -   definite: true,
+        verdicts: [
+    +     'unknown'
+    -     'failed'
+        ]
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    verdicts:
+      0: 'failed'
+    definite: true
+  actual:
+    verdicts:
+      0: 'unknown'
+    definite: false
+  operator: 'deepStrictEqual'
+  stack: |-
+    withSurface.cdc (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/query/named-write-real-producer-definite.test.js:204:18)
+    async withSurface (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/query/unknown-outcome-surface-fixture.js:328:5)
+    async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/query/named-write-real-producer-definite.test.js:193:7)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: item 3: a constraint violation is FAILED (definite) - CDC on the local leader
+ok 4 - item 3: a constraint violation is FAILED (definite) - CDC on the local leader
+  ---
+  duration_ms: 79.86362
+  type: 'test'
+  ...
+# Subtest: item 3: CDC shut down refuses before routing - NOT_PROPOSED (definite)
+ok 5 - item 3: CDC shut down refuses before routing - NOT_PROPOSED (definite)
+  ---
+  duration_ms: 55.388362
+  type: 'test'
+  ...
+# Subtest: item 3: the partition's NOT_LEADER refusal is NOT_PROPOSED (definite) - SQL gateway
+ok 6 - item 3: the partition's NOT_LEADER refusal is NOT_PROPOSED (definite) - SQL gateway
+  ---
+  duration_ms: 667.217089
+  type: 'test'
+  ...
+# Subtest: item 3: the partition's NOT_LEADER refusal is NOT_PROPOSED (definite) - CDC through the engine
+not ok 7 - item 3: the partition's NOT_LEADER refusal is NOT_PROPOSED (definite) - CDC through the engine
+  ---
+  duration_ms: 697.6771
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/query/named-write-real-producer-definite.test.js:249:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    answer {"error":"Distributed operation failed due to participant failures","code":"DISTRIBUTED_PARTICIPANT_FAILURE","participants":[{"partitionId":"storage_reservations-p1","failureCode":"partition_write_not_leader","committed":false,"outcome":null}]}; attempt {"error":"Distributed operation failed due to participant failures","code":"DISTRIBUTED_PARTICIPANT_FAILURE","participants":[{"partitionId":"storage_reservations-p1","failureCode":"partition_write_not_leader","committed":false,"outcome":null}]}
+    + actual - expected
+    
+      {
+    +   definite: false,
+    -   definite: true,
+        verdicts: [
+    +     'unknown'
+    -     'not_proposed'
+        ]
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    verdicts:
+      0: 'not_proposed'
+    definite: true
+  actual:
+    verdicts:
+      0: 'unknown'
+    definite: false
+  operator: 'deepStrictEqual'
+  stack: |-
+    withSurface.cdc (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/query/named-write-real-producer-definite.test.js:272:16)
+    async withSurface (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/query/unknown-outcome-surface-fixture.js:328:5)
+    async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/query/named-write-real-producer-definite.test.js:251:7)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 4
+# fail 3
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 5009.653525
+# time=7613ms
+# test-files total=7 pass=0 fail=7 assertions=311
+classified lane bootstrap: 1 file(s), jobs=2
+thermal: ok cpu 48C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+ok test/bootstrap/seed-bootstrap-direct-lane.integration.test.js (1 assertions, 26017ms)
+# test-files total=1 pass=1 fail=0 assertions=1
+placement-results={"file":"test/control-plane/named-write-outcome-total.test.js","attempt":1,"ok":false,"assertions":3,"durationMs":1231,"retriedOnce":false,"firstFailureLine":"not ok 1 - judgeNamedWriteOutcome is total over answer shapes and never throws"}
+placement-results={"file":"test/control-plane/named-write-unknown-outcome-shape.test.js","attempt":1,"ok":false,"assertions":4,"durationMs":1359,"retriedOnce":false,"firstFailureLine":"not ok 1 - the vocabulary names the unknown outcome"}
+placement-results={"file":"test/control-plane/control-plane-mutation-outcome-classifier.test.js","attempt":1,"ok":false,"assertions":165,"durationMs":1465,"retriedOnce":false,"firstFailureLine":"not ok 1 - the apply-effect oracle must cover every gateway outcome"}
+placement-results={"file":"test/raft/authoritative-row-mutation-outcome-classifier.test.js","attempt":1,"ok":false,"assertions":127,"durationMs":1490,"retriedOnce":false,"firstFailureLine":"not ok 1 - the Raft decision table must exhaust the frozen gateway enum"}
+placement-results={"file":"test/query/provisioning-deadline-error-message.test.js","attempt":1,"ok":false,"assertions":4,"durationMs":2210,"retriedOnce":false,"firstFailureLine":"not ok 3 - a managed split child provisioning past its deadline answers the same typed error"}
+placement-results={"file":"test/constants/message-table-census.test.js","attempt":1,"ok":false,"assertions":1,"durationMs":4323,"retriedOnce":false,"firstFailureLine":"not ok 1 - every message-table member referenced under src is defined"}
+placement-results={"file":"test/query/named-write-real-producer-definite.test.js","attempt":1,"ok":false,"assertions":7,"durationMs":7613,"retriedOnce":false,"firstFailureLine":"not ok 1 - item 2: a statement matching no row is a proven zero; only an empty plan has no participant, and it is not APPLIED"}
+placement-results={"file":"test/bootstrap/seed-bootstrap-direct-lane.integration.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":26017,"retriedOnce":false,"firstFailureLine":null}

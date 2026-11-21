@@ -1,0 +1,72 @@
+lab test: tv-dator: ordinary (1 files) cores=12 mem=15.4GiB speed x1.37
+[tv-dator] placement-shell=3237307
+[tv-dator] placement-head=7f85d7f0bd6e8a66d173985767b72757d75bce39
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.4 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=3238295
+[tv-dator] # test-files planned=1
+[tv-dator] classified lane ordinary: 1 file(s), jobs=4
+[tv-dator] thermal: ok cpu 65C (coretemp/Package id 0) nvme 48C (nvme/Sensor 1)
+[tv-dator] not ok test/rebalancer/topology-guard-owner-fact-deposed-leader.test.js (2 assertions, 10863ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] {"level":50,"time":"2026-11-21T19:07:58.858Z","nodeId":"planner-node","pid":3238310,"subsystem":"query-executor","event":"wait_bound_spent","wait":"getReadRetryAttemptLimit","awaited":"successful partition read within the read attempt limit","boundMs":null,"elapsedMs":117,"lastObserved":{"attempts":3,"lastError":"owner_fact_not_leader","lastErrorCode":null,"lastParticipantNodeId":"peer-node-a","awaitedRoutingRepair":false,"maxAttempts":3},"scope":{"partitionId":"services-p1","forRead":true,"nodeId":"planner-node"},"repeats":0,"nodeId":"planner-node","msg":"Wait bound spent"}
+[tv-dator] # Subtest: residual: the guard asks a deposed services-p1 leader that does not know it yet and must not admit a second replica onto the node that just received one
+[tv-dator]     # OBSERVATION deposed-leader {"newLeaderNodeId":"peer-node-b","deposedRoleAtRead":"pre-candidate","msFromElectionToRead":10,"hops":[{"nodeId":"peer-node-a","refused":false,"success":false,"failureCode":"owner_fact_not_leader","witnessRole":"pre-candidate"},{"nodeId":"peer-node-a","refused":false,"success":false,"failureCode":"owner_fact_not_leader","witnessRole":"pre-candidate"},{"nodeId":"peer-node-a","refused":false,"success":false,"failureCode":"owner_fact_not_leader","witnessRole":"pre-candidate"}],"refusal":{"message":"Topology guard blocked for ADD on planner-node: replica_inventory_unavailable","reason":"replica_inventory_unavailable","blockingReasons":["replica_inventory_unavailable"],"decisionType":"deferred","authoritativeAvailable":false,"authoritativeReasonCode":"owner_fact_not_leader","authoritativeRetryAfterMs":null,"reconsideration":{"nextAction":"retry"}},"ledger":[]}
+[tv-dator]     not ok 1 - t.notEqual is not a function
+[tv-dator]       ---
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/topology-guard-owner-fact-deposed-leader.test.js:70:5)
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/topology-guard-owner-fact-deposed-leader.test.js
+[tv-dator]         lineNumber: 70
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]         methodName: <anonymous>
+[tv-dator]         functionName: Test.<anonymous>
+[tv-dator]       type: TypeError
+[tv-dator]       tapCaught: returnedPromiseRejection
+[tv-dator]       source: >2
+[tv-dator]             refusal: refusalOf(first.error),
+[tv-dator]             ledger: ledger.map((row) => [row.target_node_id, row.replica_id])})}`);
+[tv-dator]           t.notEqual(newLeaderNodeId, NODE.PEER_A, 'setup: another replica leads services-p1');
+[tv-dator]         ----^
+[tv-dator]           t.type(deposedRoleAtRead, 'string',
+[tv-dator]             `setup: the deposed replica's core role at the read is recorded (${deposedRoleAtRead})`);
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..1
+[tv-dator] not ok 1 - residual: the guard asks a deposed services-p1 leader that does not know it yet and must not admit a second replica onto the node that just received one # time=9769.357ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/topology-guard-owner-fact-deposed-leader.test.js
+[tv-dator]     lineNumber: 37
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     const CASE_TIMEOUT_MS = 120000;
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('residual: the guard asks a deposed services-p1 leader that does not know
+[tv-dator]     it yet ' +
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       'and must not admit a second replica onto the node that just received one',
+[tv-dator]     {timeout: CASE_TIMEOUT_MS}, async (t) => {
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] 1..1
+[tv-dator] # { total: 1, pass: 0, fail: 1 }
+[tv-dator] # time=9777.595ms
+[tv-dator] # test-files total=1 pass=0 fail=1 assertions=2
+lab test: tv-dator: # test-files total=1 pass=0 fail=1 assertions=2
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=1 pass=0 fail=1 assertions=2
+exit=1

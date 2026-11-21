@@ -1,0 +1,45 @@
+{
+  "sha": "bc949308fc9c26aed3c5e8eae3f31343742d90c1",
+  "host": "adams-gamla",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/raft/raft-rs-current-term-applied.test.js",
+    "test/message-group/message-group-replace-removal-fence.test.js",
+    "test/rebalancer/message-group-fresh-identity-two-replace.test.js",
+    "test/raft/raft-rs-backend/conf-state-authority.test.js",
+    "test/raft/raft-rs-backend/conf-change-leader-self-removal.test.js",
+    "test/raft/raft-rs-backend/committed-membership-read.test.js",
+    "test/message-group/message-group-fresh-learner-promotion.test.js",
+    "test/partition/partition-admission-redrive-wakes.test.js",
+    "test/integration/message-group-fresh-identity-replacement.integration.test.js",
+    "test/integration/message-group-learner-promotion-selection-guards.integration.test.js",
+    "test/integration/message-group-learner-promotion.integration.test.js",
+    "test/integration/message-group-learner-successor-ordering.integration.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/raft/raft-rs-current-term-applied.test.js",
+        "test/message-group/message-group-replace-removal-fence.test.js",
+        "test/rebalancer/message-group-fresh-identity-two-replace.test.js",
+        "test/raft/raft-rs-backend/conf-change-leader-self-removal.test.js",
+        "test/raft/raft-rs-backend/committed-membership-read.test.js",
+        "test/message-group/message-group-fresh-learner-promotion.test.js",
+        "test/raft/raft-rs-backend/conf-state-authority.test.js",
+        "test/partition/partition-admission-redrive-wakes.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/integration/message-group-learner-successor-ordering.integration.test.js",
+        "test/integration/message-group-learner-promotion.integration.test.js",
+        "test/integration/message-group-learner-promotion-selection-guards.integration.test.js",
+        "test/integration/message-group-fresh-identity-replacement.integration.test.js"
+      ],
+      "jobs": 1,
+      "resourceClass": "exclusive"
+    }
+  ]
+}

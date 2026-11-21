@@ -1,0 +1,65 @@
+placement-shell=1924123
+placement-head=1d4125c7b6f4c12b1538dc25f317b35de24b12d4
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.2 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=1924579
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=3
+thermal: ok cpu 42C (coretemp/Package id 0) nvme unmeasured
+not ok test/raft/raft-rs-current-term-applied.test.js (1 assertions, 1458ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: currentTermApplied is "the leader applied an entry of its own term", through election, a configuration change and a restart
+not ok 1 - currentTermApplied is "the leader applied an entry of its own term", through election, a configuration change and a restart
+  ---
+  duration_ms: 191.432138
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/1d4125c7b6f4-mwqnkbfj-1621335/test/raft/raft-rs-current-term-applied.test.js:84:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    currentTermApplied follows "applied an entry of its own term": measured {"atElection":{"role":"leader","term":1,"appliedIndex":0,"commitIndex":0,"currentTermApplied":false,"confChangePending":false},"afterTermEntry":{"role":"leader","term":1,"appliedIndex":1,"commitIndex":1,"currentTermApplied":true,"confChangePending":false},"learnerAdded":true,"afterConfChange":{"role":"leader","term":1,"appliedIndex":2,"commitIndex":2,"currentTermApplied":false,"confChangePending":false},"reElected":{"role":"leader","term":2,"appliedIndex":2,"commitIndex":2,"currentTermApplied":false,"confChangePending":false},"afterRestartTermEntry":{"role":"leader","term":2,"appliedIndex":3,"commitIndex":3,"currentTermApplied":true,"confChangePending":false}}
+    + actual - expected
+    
+      {
+    +   afterItsConfChangeApplied: false,
+    -   afterItsConfChangeApplied: true,
+        freshLeaderAfterItsEntry: true,
+        freshLeaderBeforeItsEntry: false,
+        reElectedAfterItsEntry: true,
+        reElectedBeforeItsEntry: false
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    freshLeaderBeforeItsEntry: false
+    freshLeaderAfterItsEntry: true
+    afterItsConfChangeApplied: true
+    reElectedBeforeItsEntry: false
+    reElectedAfterItsEntry: true
+  actual:
+    freshLeaderBeforeItsEntry: false
+    freshLeaderAfterItsEntry: true
+    afterItsConfChangeApplied: false
+    reElectedBeforeItsEntry: false
+    reElectedAfterItsEntry: true
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/1d4125c7b6f4-mwqnkbfj-1621335/test/raft/raft-rs-current-term-applied.test.js:125:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 211.679992
+# time=1458ms
+# test-files total=1 pass=0 fail=1 assertions=1
+placement-results={"file":"test/raft/raft-rs-current-term-applied.test.js","attempt":1,"ok":false,"assertions":1,"durationMs":1458,"retriedOnce":false,"firstFailureLine":"not ok 1 - currentTermApplied is \"the leader applied an entry of its own term\", through election, a configuration change and a restart"}

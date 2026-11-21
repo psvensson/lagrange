@@ -1,0 +1,31 @@
+{
+  "sha": "0ddf7b00f282145cedf64db14360b5c5120de926",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/control-plane/named-write-outcome-total.test.js",
+    "test/query/named-write-real-producer-applied.test.js",
+    "test/query/provisioning-deadline-error-message.test.js",
+    "test/bootstrap/register-service-retryable-refusal.test.js",
+    "test/rebalancer/placement-explicit-replica-refusal-code.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/control-plane/named-write-outcome-total.test.js",
+        "test/query/named-write-real-producer-applied.test.js",
+        "test/query/provisioning-deadline-error-message.test.js",
+        "test/rebalancer/placement-explicit-replica-refusal-code.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/bootstrap/register-service-retryable-refusal.test.js"
+      ],
+      "jobs": 2,
+      "resourceClass": "bootstrap"
+    }
+  ]
+}

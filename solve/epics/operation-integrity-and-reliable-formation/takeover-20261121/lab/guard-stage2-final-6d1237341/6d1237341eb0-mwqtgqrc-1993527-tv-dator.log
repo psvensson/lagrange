@@ -1,0 +1,2769 @@
+placement-shell=3267811
+placement-head=6d1237341eb06809ed83196c7ced7ecd599ffa67
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.6 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3268262
+# test-files planned=15
+classified lane ordinary: 15 file(s), jobs=4
+thermal: ok cpu 60C (coretemp/Package id 0) nvme 46C (nvme/Sensor 1)
+ok test/rebalancer/required-entity-operation-observation.test.js (177 assertions, 1849ms)
+ok test/rebalancer/topology-guard-inventory-authority.test.js (57 assertions, 2808ms)
+ok test/rebalancer/services-inventory-owner-fact-siblings.test.js (34 assertions, 4963ms)
+ok test/cdc/cdc-owner-fact-receiver-read-point.test.js (42 assertions, 5418ms)
+not ok test/control-plane/readiness-snapshot-persistence.test.js (49 assertions, 1355ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: compactSnapshotSummary extracts key fields from full snapshot
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equivalent
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - should be equal
+    ok 8 - should match pattern
+    1..8
+ok 1 - compactSnapshotSummary extracts key fields from full snapshot # time=7.64ms
+
+# Subtest: compactSnapshotSummary returns null for null input
+    ok 1 - should be equal
+    1..1
+ok 2 - compactSnapshotSummary returns null for null input # time=0.392ms
+
+# Subtest: compactSnapshotSummary returns frozen object
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    1..3
+ok 3 - compactSnapshotSummary returns frozen object # time=0.449ms
+
+Storage admission allowed {
+  targetNodeId: 'node-test-1',
+  decision: 'allow',
+  reason: 'capacity_available',
+  estimatedBytes: 100,
+  projectedUtilizationPercent: 0.01,
+  projectedAvailableBytes: 999900,
+  suppressedSinceLastEmit: 0
+}
+# Subtest: admission result includes readinessSnapshots per candidate node
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - result has readinessSnapshots
+    ok 4 - snapshot present for target node
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - should be equal
+    ok 8 - should be equal
+    1..8
+ok 4 - admission result includes readinessSnapshots per candidate node # time=41.909ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+# Subtest: coordinator createOperation persists readiness snapshot in initial step
+    not ok 1 - SERVICES inventory of partition partition-1 unavailable: owner_fact_read_failed
+      ---
+      stack: |
+        FixtureCommittedReadCoordinator.buildServicesInventoryUnavailableError (src/rebalancer/rebalance-coordinator-operation-read-methods.js:513:19)
+        FixtureCommittedReadCoordinator.readEntityServiceOwnerRows (src/rebalancer/rebalance-coordinator-operation-read-methods.js:489:18)
+        async FixtureCommittedReadCoordinator.allocateCanonicalReplicaId (src/rebalancer/rebalance-coordinator-replica-identity-methods.js:413:7)
+        async FixtureCommittedReadCoordinator.createOperationRecordInternal (src/rebalancer/rebalance-coordinator-operation-creation.js:558:9)
+        async FixtureCommittedReadCoordinator.runOperationLedgerInterlockAccountedCreate (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)
+        async file:/home/peter/projects/lagrange/test-output/placement-worktrees/6d1237341eb0-mwqtgqrc-1993527/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13
+        async FixtureCommittedReadCoordinator.runCreateOperationForIntent (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:263:22)
+        async Test.<anonymous> (test/control-plane/readiness-snapshot-persistence.test.js:438:25)
+      at:
+        fileName: src/rebalancer/rebalance-coordinator-operation-read-methods.js
+        lineNumber: 513
+        columnNumber: 19
+        typeName: FixtureCommittedReadCoordinator
+        methodName: buildServicesInventoryUnavailableError
+        functionName: FixtureCommittedReadCoordinator.buildServicesInventoryUnavailableError
+      rebalanceSkipReason: services_inventory_unavailable
+      reasonCode: owner_fact_read_failed
+      nextAction: retry
+      deferRetry: true
+      tapCaught: returnedPromiseRejection
+      source: >2
+           */
+          buildServicesInventoryUnavailableError(answer, {entityType, entityId}) {
+            const error = new Error(`SERVICES inventory of ${entityType} ${entityId} ` +
+        ------------------^
+              `unavailable: ${answer.reason}`);
+            error.rebalanceSkipReason = REBALANCER_SKIP_REASON.SERVICES_INVENTORY_UNAVAILABLE;
+      ...
+    
+    1..1
+not ok 5 - coordinator createOperation persists readiness snapshot in initial step # time=50.791ms
+  ---
+  at:
+    fileName: test/control-plane/readiness-snapshot-persistence.test.js
+    lineNumber: 373
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    // --- RebalanceCoordinator persists readiness snapshot in stepsHistory ---
+  
+  
+    test('coordinator createOperation persists readiness snapshot in initial
+    step',
+  
+    ^
+      async (t) => {
+        initializeConfig();
+  ...
+
+# Subtest: dispatch service emits readiness snapshot with dispatch event
+    ok 1 - dispatch event was emitted
+    ok 2 - dispatch event includes readinessSnapshot
+    ok 3 - should be equal
+    ok 4 - should be equal
+    1..4
+Reconcile queue shutdown { queue: 'dispatch-operation-reconcile-0' }
+Reconcile queue shutdown { queue: 'dispatch-operation-reconcile-1' }
+Reconcile queue shutdown { queue: 'dispatch-operation-reconcile-2' }
+Reconcile queue shutdown { queue: 'dispatch-operation-reconcile-3' }
+Reconcile queue shutdown { queue: 'dispatch-node-ready-reconcile' }
+Reconcile queue shutdown { queue: 'dispatch-membership-publication-advance-reconcile' }
+ReplicaDispatchService stopped { nodeId: 'node-local' }
+ok 6 - dispatch service emits readiness snapshot with dispatch event # time=31.449ms
+
+# Subtest: dispatch service passes row metadata through direct dispatch
+    ok 1 - dispatch coordinator received an operation
+    ok 2 - dispatch uses replica metadata from the row context
+    ok 3 - dispatch uses peer metadata from the row context
+    ok 4 - dispatch uses bootstrap table metadata from the row context
+    ok 5 - dispatch uses bootstrap partition metadata from the row context
+    1..5
+ok 7 - dispatch service passes row metadata through direct dispatch # time=29.445ms
+
+Deferred replica operation dispatch while control-plane path recovers {
+  nodeId: 'node-local',
+  operationId: 'op-dispatch-blocked',
+  retryAfterMs: 250,
+  error: 'Target node node-dispatch-blocked is not ready for dispatch'
+}
+# Subtest: dispatch service emits failure event when target is not ready
+    ok 1 - dispatch failure event was emitted
+    ok 2 - failure event reports readiness gate reason
+    ok 3 - failure event reports target node
+    ok 4 - failure event includes readiness snapshot
+    1..4
+Reconcile queue shutdown { queue: 'dispatch-operation-reconcile-0' }
+Reconcile queue shutdown { queue: 'dispatch-operation-reconcile-1' }
+Reconcile queue shutdown { queue: 'dispatch-operation-reconcile-2' }
+Reconcile queue shutdown { queue: 'dispatch-operation-reconcile-3' }
+Reconcile queue shutdown { queue: 'dispatch-node-ready-reconcile' }
+Reconcile queue shutdown { queue: 'dispatch-membership-publication-advance-reconcile' }
+ReplicaDispatchService stopped { nodeId: 'node-local' }
+ok 8 - dispatch service emits failure event when target is not ready # time=22.334ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: coordinator updateStep persists readiness snapshot in step entry
+    ok 1 - the founding PENDING row was inserted
+Operation step changed {
+  operationId: 'op-step-test',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  reason: 'dispatch_sending',
+  status: 'pending',
+  partitionId: 'partition-1'
+}
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - SENDING step entry exists
+    ok 5 - SENDING step has readinessSnapshot
+    ok 6 - should be equal
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..6
+ok 9 - coordinator updateStep persists readiness snapshot in step entry # time=36.261ms
+
+1..9
+# { total: 40, pass: 39, fail: 1 }
+# time=250.098ms
+ok test/rebalancer/topology-guard-owner-fact-inventory.test.js (25 assertions, 4730ms)
+ok test/rebalancer/coordinator-dedup-gap.test.js (69 assertions, 1967ms)
+not ok test/rebalancer/rebalance-coordinator-topology-guard.test.js (85 assertions, 1818ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: RebalanceCoordinator blocks same-node duplicate topology creation
+    not ok 1 - createOperation should fail closed when the target node already hosts the partition
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 246
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:246:5)
+      source: |2
+          }));
+      
+          t.equal(
+        ----^
+            error?.admissionResult?.decisionType,
+            STORAGE_ADMISSION_DECISION_TYPE.BLOCKED,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -blocked
+        +undefined
+      ...
+    
+    not ok 2 - same-node duplicate adds should surface the occupied-target reason
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,3 +1,1 @@
+        -Array [
+        -  "target_node_already_occupied",
+        -]
+        +undefined
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 251
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:251:5)
+      source: >2
+            'createOperation should fail closed when the target node already hosts the partition',
+          );
+          t.same(
+        ----^
+            error?.admissionResult?.blockingReasons,
+            ['target_node_already_occupied'],
+      ...
+    
+    ok 3 - blocked topology creation should not persist a replica operation
+    1..3
+not ok 1 - RebalanceCoordinator blocks same-node duplicate topology creation # time=75.176ms
+  ---
+  at:
+    fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+    lineNumber: 228
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    }
+  
+  
+    test('RebalanceCoordinator blocks same-node duplicate topology creation',
+    async (t) => {
+  
+    ^
+      initializeTestEnvironment();
+  ...
+
+# Subtest: RebalanceCoordinator topology guard invokes the injected inventory owner
+    not ok 1 - create-time occupancy and target census share one canonical capture
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 288
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:288:7)
+      source: |2
+            }));
+      
+            t.equal(inventoryBuildCount, 1,
+        ------^
+              'create-time occupancy and target census share one canonical capture');
+            coordinator.shutdown();
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -1
+        +0
+      ...
+    
+    1..1
+not ok 2 - RebalanceCoordinator topology guard invokes the injected inventory owner # time=29.065ms
+  ---
+  at:
+    fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+    lineNumber: 266
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('RebalanceCoordinator topology guard invokes the injected inventory
+    owner',
+  
+    ^
+      async (t) => {
+        initializeTestEnvironment();
+  ...
+
+# Subtest: RebalanceCoordinator fails topology increase closed when service owner rows are unavailable
+    not ok 1 - cache presence cannot turn unavailable owner evidence into empty
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,3 +1,1 @@
+        -Array [
+        -  "replica_inventory_unavailable",
+        -]
+        +undefined
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 323
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:323:7)
+      source: |2
+            );
+      
+            t.same(error?.admissionResult?.blockingReasons,
+        ------^
+              ['replica_inventory_unavailable'],
+              'cache presence cannot turn unavailable owner evidence into empty');
+      ...
+    
+    not ok 2 - no decision: a deferral, retried on the caller's scheduled turn
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 326
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:326:7)
+      source: >2
+              ['replica_inventory_unavailable'],
+              'cache presence cannot turn unavailable owner evidence into empty');
+            t.equal(error?.admissionResult?.decisionType, STORAGE_ADMISSION_DECISION_TYPE.DEFERRED,
+        ------^
+              'no decision: a deferral, retried on the caller\'s scheduled turn');
+            coordinator.shutdown();
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -deferred
+        +undefined
+      ...
+    
+    1..2
+not ok 3 - RebalanceCoordinator fails topology increase closed when service owner rows are unavailable # time=30.569ms
+  ---
+  at:
+    fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+    lineNumber: 294
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    );
+  
+  
+    test('RebalanceCoordinator fails topology increase closed when service owner
+    rows are unavailable',
+  
+    ^
+      async (t) => {
+        initializeTestEnvironment();
+  ...
+
+# Subtest: RebalanceCoordinator does not fabricate inventory skew from slow successful reads without source timestamps
+    ok 1 - read duration alone cannot make a successful inventory unusable
+    ok 2 - the recovery REPLACE remains admissible
+    1..2
+ok 4 - RebalanceCoordinator does not fabricate inventory skew from slow successful reads without source timestamps # time=26.065ms
+
+# Subtest: RebalanceCoordinator decides nothing, not even the declared concentrated-ledger cure, while the services owner fact is unavailable (the conservative-union escapes are deleted: ruling 2026-11-21)
+    ok 1 - no decision for REPLACE to target-node
+    ok 2 - should be equal
+    ok 3 - should be equivalent
+    ok 4 - the deferral names why the owner fact is unavailable
+    ok 5 - no decision for REPLACE to spread-node
+    ok 6 - should be equal
+    ok 7 - should be equivalent
+    ok 8 - the deferral names why the owner fact is unavailable
+    ok 9 - no decision for ADD to first-ready-target
+    ok 10 - should be equal
+    ok 11 - should be equivalent
+    ok 12 - the deferral names why the owner fact is unavailable
+    ok 13 - no decision for ADD to unready-node
+    ok 14 - should be equal
+    ok 15 - should be equivalent
+    ok 16 - the deferral names why the owner fact is unavailable
+    ok 17 - no decision for ADD to stale-transport-target
+    ok 18 - should be equal
+    ok 19 - should be equivalent
+    ok 20 - the deferral names why the owner fact is unavailable
+    ok 21 - no decision for ADD to non-authority-target
+    ok 22 - should be equal
+    ok 23 - should be equivalent
+    ok 24 - the deferral names why the owner fact is unavailable
+    ok 25 - no decision for ADD to target-node
+    ok 26 - should be equal
+    ok 27 - should be equivalent
+    ok 28 - the deferral names why the owner fact is unavailable
+    1..28
+ok 5 - RebalanceCoordinator decides nothing, not even the declared concentrated-ledger cure, while the services owner fact is unavailable (the conservative-union escapes are deleted: ruling 2026-11-21) # time=26.841ms
+
+# Subtest: RebalanceCoordinator blocks stale ADD when authoritative topology already satisfies target
+    not ok 1 - createOperation should fail closed when authoritative topology already satisfies the target replica count
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 521
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:521:5)
+      source: |2
+          }));
+      
+          t.equal(
+        ----^
+            error?.admissionResult?.decisionType,
+            STORAGE_ADMISSION_DECISION_TYPE.BLOCKED,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -blocked
+        +undefined
+      ...
+    
+    not ok 2 - stale planner adds should surface the target-satisfied reason
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,3 +1,1 @@
+        -Array [
+        -  "target_replica_count_already_satisfied",
+        -]
+        +undefined
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 526
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:526:5)
+      source: >2
+            'createOperation should fail closed when authoritative topology already satisfies the target replica count',
+          );
+          t.same(
+        ----^
+            error?.admissionResult?.blockingReasons,
+            ['target_replica_count_already_satisfied'],
+      ...
+    
+    not ok 3 - topology guard should preserve the canonical distinct-node count in diagnostics
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 531
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:531:5)
+      source: |2
+            'stale planner adds should surface the target-satisfied reason',
+          );
+          t.equal(
+        ----^
+            error?.admissionResult?.topologySnapshot?.observedDistinctNodeCount,
+            3,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -3
+        +undefined
+      ...
+    
+    ok 4 - stale planner add should not persist a replica operation
+    1..4
+not ok 6 - RebalanceCoordinator blocks stale ADD when authoritative topology already satisfies target # time=32.481ms
+  ---
+  at:
+    fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+    lineNumber: 498
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    );
+  
+  
+    test('RebalanceCoordinator blocks stale ADD when authoritative topology
+    already satisfies target', async (t) => {
+  
+    ^
+      initializeTestEnvironment();
+  ...
+
+# Subtest: RebalanceCoordinator blocks REPLACE when target node already has partition topology
+    not ok 1 - createOperation should fail closed when REPLACE targets an occupied partition node
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 569
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:569:5)
+      source: |2
+          }));
+      
+          t.equal(
+        ----^
+            error?.admissionResult?.decisionType,
+            STORAGE_ADMISSION_DECISION_TYPE.BLOCKED,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -blocked
+        +undefined
+      ...
+    
+    not ok 2 - duplicate replacement target rows should surface the occupied-target reason
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,3 +1,1 @@
+        -Array [
+        -  "target_node_already_occupied",
+        -]
+        +undefined
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 574
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:574:5)
+      source: >2
+            'createOperation should fail closed when REPLACE targets an occupied partition node',
+          );
+          t.same(
+        ----^
+            error?.admissionResult?.blockingReasons,
+            ['target_node_already_occupied'],
+      ...
+    
+    ok 3 - blocked replacement topology creation should not persist a replica operation
+    1..3
+not ok 7 - RebalanceCoordinator blocks REPLACE when target node already has partition topology # time=26.189ms
+  ---
+  at:
+    fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+    lineNumber: 546
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('RebalanceCoordinator blocks REPLACE when target node already has
+    partition topology', async (t) => {
+  
+    ^
+      initializeTestEnvironment();
+  ...
+
+# Subtest: RebalanceCoordinator applies topology occupancy guard to message-group creates
+    not ok 1 - message-group ADD should use the shared topology occupancy guard
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 614
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:614:5)
+      source: |2
+          }));
+      
+          t.equal(
+        ----^
+            error?.admissionResult?.decisionType,
+            STORAGE_ADMISSION_DECISION_TYPE.BLOCKED,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -blocked
+        +undefined
+      ...
+    
+    not ok 2 - message-group duplicate topology should surface the occupied-target reason
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,3 +1,1 @@
+        -Array [
+        -  "target_node_already_occupied",
+        -]
+        +undefined
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 619
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:619:5)
+      source: |2
+            'message-group ADD should use the shared topology occupancy guard',
+          );
+          t.same(
+        ----^
+            error?.admissionResult?.blockingReasons,
+            ['target_node_already_occupied'],
+      ...
+    
+    ok 3 - blocked message-group topology creation should not persist a replica operation
+    1..3
+not ok 8 - RebalanceCoordinator applies topology occupancy guard to message-group creates # time=30.567ms
+  ---
+  at:
+    fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+    lineNumber: 589
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('RebalanceCoordinator applies topology occupancy guard to message-group
+    creates', async (t) => {
+  
+    ^
+      initializeTestEnvironment();
+  ...
+
+# Subtest: count-keyed lane HOLDS a REPLACE churn create while the critical partition is over target on alive replicas (red-on-revert: the rows-only ADD guard exempts REPLACE, so without the hold the churn is admitted)
+    ok 1 - over-target REPLACE churn is rejected by the count-keyed lane hold
+    ok 2 - the held REPLACE churn create persists no replica operation
+    1..2
+ok 9 - count-keyed lane HOLDS a REPLACE churn create while the critical partition is over target on alive replicas (red-on-revert: the rows-only ADD guard exempts REPLACE, so without the hold the churn is admitted) # time=23.84ms
+
+# Subtest: count-keyed lane consumes canonical identity deduplication
+    not ok 1 - Authoritative operation visibility deferred for partition:control_plane_publications-p1 (entity_operation_observation_incomplete)
+      ---
+      stack: |
+        FixtureCommittedReadCoordinator.createDeferredOperationVisibilityError (src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js:238:19)
+        FixtureCommittedReadCoordinator.requireEntityOperationRows (src/rebalancer/rebalance-coordinator-operation-read-methods.js:269:18)
+        FixtureCommittedReadCoordinator.getEntityRetiredReplaceSourceReplicaIds (src/rebalancer/rebalance-coordinator-replica-identity-methods.js:167:42)
+        async FixtureCommittedReadCoordinator.getRetiredReplaceSourceMoveSafetyError (src/rebalancer/rebalance-coordinator-replica-identity-methods.js:373:7)
+        async FixtureCommittedReadCoordinator.createOperationInternal (src/rebalancer/rebalance-coordinator-operation-creation.js:421:7)
+        async FixtureCommittedReadCoordinator.runOperationLedgerInterlockAccountedCreate (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)
+        async file:/home/peter/projects/lagrange/test-output/placement-worktrees/6d1237341eb0-mwqtgqrc-1993527/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13
+        async FixtureCommittedReadCoordinator.runCreateOperationForIntent (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:263:22)
+        async Test.<anonymous> (test/rebalancer/rebalance-coordinator-topology-guard.test.js:697:21)
+      at:
+        fileName: src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js
+        lineNumber: 238
+        columnNumber: 19
+        typeName: FixtureCommittedReadCoordinator
+        methodName: createDeferredOperationVisibilityError
+        functionName: FixtureCommittedReadCoordinator.createDeferredOperationVisibilityError
+      rebalanceSkipReason: deferred_retry_pending
+      operationType: null
+      entityType: partition
+      entityId: control_plane_publications-p1
+      partitionId: null
+      replicaId: null
+      operationVisibilityState: deferred
+      completionState: operation_visibility_deferred
+      reasonCode: entity_operation_observation_incomplete
+      retryAfterMs: 100
+      tapCaught: returnedPromiseRejection
+      source: |2
+                deferredOutcome.reasonCode :
+                'authoritative_operation_visibility_deferred';
+            const error = new Error(
+        ------------------^
+              'Authoritative operation visibility deferred for ' +
+                entityType +
+      ...
+    
+    1..1
+not ok 10 - count-keyed lane consumes canonical identity deduplication # time=28.211ms
+  ---
+  at:
+    fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+    lineNumber: 682
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('count-keyed lane consumes canonical identity deduplication', async (t)
+    => {
+  
+    ^
+      initializeTestEnvironment();
+      const first = critRow(CRIT_PARTITION_ID + '-r1', 'node-1');
+  ...
+
+# Subtest: count-keyed lane ALIVE-GUARD: a FAILED replica does not count toward the alive occupancy, so a legitimate re-placement REPLACE is admitted (the hold never over-blocks a dead-replica fix)
+    not ok 1 - Authoritative operation visibility deferred for partition:control_plane_publications-p1 (entity_operation_observation_incomplete)
+      ---
+      stack: |
+        FixtureCommittedReadCoordinator.createDeferredOperationVisibilityError (src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js:238:19)
+        FixtureCommittedReadCoordinator.requireEntityOperationRows (src/rebalancer/rebalance-coordinator-operation-read-methods.js:269:18)
+        FixtureCommittedReadCoordinator.getEntityRetiredReplaceSourceReplicaIds (src/rebalancer/rebalance-coordinator-replica-identity-methods.js:167:42)
+        async FixtureCommittedReadCoordinator.getRetiredReplaceSourceMoveSafetyError (src/rebalancer/rebalance-coordinator-replica-identity-methods.js:373:7)
+        async FixtureCommittedReadCoordinator.createOperationInternal (src/rebalancer/rebalance-coordinator-operation-creation.js:421:7)
+        async FixtureCommittedReadCoordinator.runOperationLedgerInterlockAccountedCreate (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)
+        async file:/home/peter/projects/lagrange/test-output/placement-worktrees/6d1237341eb0-mwqtgqrc-1993527/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13
+        async FixtureCommittedReadCoordinator.runCreateOperationForIntent (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:263:22)
+        async Test.<anonymous> (test/rebalancer/rebalance-coordinator-topology-guard.test.js:729:3)
+      at:
+        fileName: src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js
+        lineNumber: 238
+        columnNumber: 19
+        typeName: FixtureCommittedReadCoordinator
+        methodName: createDeferredOperationVisibilityError
+        functionName: FixtureCommittedReadCoordinator.createDeferredOperationVisibilityError
+      rebalanceSkipReason: deferred_retry_pending
+      operationType: null
+      entityType: partition
+      entityId: control_plane_publications-p1
+      partitionId: null
+      replicaId: null
+      operationVisibilityState: deferred
+      completionState: operation_visibility_deferred
+      reasonCode: entity_operation_observation_incomplete
+      retryAfterMs: 100
+      tapCaught: returnedPromiseRejection
+      source: |2
+                deferredOutcome.reasonCode :
+                'authoritative_operation_visibility_deferred';
+            const error = new Error(
+        ------------------^
+              'Authoritative operation visibility deferred for ' +
+                entityType +
+      ...
+    
+    1..1
+not ok 11 - count-keyed lane ALIVE-GUARD: a FAILED replica does not count toward the alive occupancy, so a legitimate re-placement REPLACE is admitted (the hold never over-blocks a dead-replica fix) # time=37.82ms
+  ---
+  at:
+    fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+    lineNumber: 713
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('count-keyed lane ALIVE-GUARD: a FAILED replica does not count toward the
+    alive occupancy, so ' +
+  
+    ^
+      'a legitimate re-placement REPLACE is admitted (the hold never over-blocks a dead-replica fix)',
+    async (t) => {
+  ...
+
+# Subtest: count-keyed lane HOLDS a REPLACE churn create when the surplus is a draining (REMOVING) source -- the real over-replication signature: 3 active + 1 removing source on ready nodes is over target
+    ok 1 - a draining (removing) source keeps the partition over target -> churn create is held
+    ok 2 - the held churn create persists no replica operation
+    1..2
+ok 12 - count-keyed lane HOLDS a REPLACE churn create when the surplus is a draining (REMOVING) source -- the real over-replication signature: 3 active + 1 removing source on ready nodes is over target # time=24.39ms
+
+# Subtest: count-keyed lane EXEMPTS the priority-spread cure ADD: over target on alive replicas but below distinct-node coverage, an ADD typed spread_replicas to an unoccupied node is ADMITTED (red-on-revert: the unconditional hold deadlocks the planner-yielded drain)
+    not ok 1 - Authoritative operation visibility deferred for partition:control_plane_publications-p1 (entity_operation_observation_incomplete)
+      ---
+      stack: |
+        FixtureCommittedReadCoordinator.createDeferredOperationVisibilityError (src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js:238:19)
+        FixtureCommittedReadCoordinator.ensureEntityAddLikeCreateLaneAvailable (src/rebalancer/rebalance-coordinator-priority-budget-admission.js:426:18)
+        async FixtureCommittedReadCoordinator.createOperationInternal (src/rebalancer/rebalance-coordinator-operation-creation.js:467:7)
+        async FixtureCommittedReadCoordinator.runOperationLedgerInterlockAccountedCreate (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)
+        async file:/home/peter/projects/lagrange/test-output/placement-worktrees/6d1237341eb0-mwqtgqrc-1993527/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13
+        async FixtureCommittedReadCoordinator.runCreateOperationForIntent (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:263:22)
+        async Test.<anonymous> (test/rebalancer/rebalance-coordinator-topology-guard.test.js:799:3)
+      at:
+        fileName: src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js
+        lineNumber: 238
+        columnNumber: 19
+        typeName: FixtureCommittedReadCoordinator
+        methodName: createDeferredOperationVisibilityError
+        functionName: FixtureCommittedReadCoordinator.createDeferredOperationVisibilityError
+      rebalanceSkipReason: deferred_retry_pending
+      operationType: ADD
+      entityType: partition
+      entityId: control_plane_publications-p1
+      partitionId: control_plane_publications-p1
+      replicaId: null
+      operationVisibilityState: deferred
+      completionState: operation_visibility_deferred
+      reasonCode: entity_operation_observation_incomplete
+      retryAfterMs: 100
+      tapCaught: returnedPromiseRejection
+      source: |2
+                deferredOutcome.reasonCode :
+                'authoritative_operation_visibility_deferred';
+            const error = new Error(
+        ------------------^
+              'Authoritative operation visibility deferred for ' +
+                entityType +
+      ...
+    
+    1..1
+not ok 13 - count-keyed lane EXEMPTS the priority-spread cure ADD: over target on alive replicas but below distinct-node coverage, an ADD typed spread_replicas to an unoccupied node is ADMITTED (red-on-revert: the unconditional hold deadlocks the planner-yielded drain) # time=27.906ms
+  ---
+  at:
+    fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+    lineNumber: 782
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    // 2/3 all run). The hold must admit exactly the cure shape and nothing else.
+  
+  
+    test('count-keyed lane EXEMPTS the priority-spread cure ADD: over target on
+    alive ' +
+  
+    ^
+      'replicas but below distinct-node coverage, an ADD typed spread_replicas to an ' +
+      'unoccupied node is ADMITTED (red-on-revert: the unconditional hold deadlocks ' +
+  ...
+
+# Subtest: count-keyed lane STILL HOLDS an over-target ADD without the spread-cure typing (the exemption admits only the planner-retained cure shape)
+    ok 1 - an untyped over-target ADD stays held
+    ok 2 - no operation persists
+    1..2
+ok 14 - count-keyed lane STILL HOLDS an over-target ADD without the spread-cure typing (the exemption admits only the planner-retained cure shape) # time=23.273ms
+
+# Subtest: count-keyed lane STILL HOLDS a spread-typed over-target ADD once distinct-node coverage meets the target (spread satisfied -> the surplus must drain, not grow)
+    ok 1 - a spread-typed ADD with coverage at target stays held
+    ok 2 - no operation persists
+    1..2
+ok 15 - count-keyed lane STILL HOLDS a spread-typed over-target ADD once distinct-node coverage meets the target (spread satisfied -> the surplus must drain, not grow) # time=22.92ms
+
+# Subtest: count-keyed lane STILL HOLDS a spread-typed over-target ADD whose target node already hosts a replica (no coverage gain -> not the cure shape)
+    ok 1 - a spread-typed ADD to an already-hosting node stays held
+    ok 2 - no operation persists
+    1..2
+ok 16 - count-keyed lane STILL HOLDS a spread-typed over-target ADD whose target node already hosts a replica (no coverage gain -> not the cure shape) # time=26.019ms
+
+# Subtest: s14 orphan census: 2 voters + 1 ORPHAN (active, non-voter, no in-flight op) on 3 nodes does NOT satisfy target 3 — the spread ADD to a 4th node is ADMITTED (RED on the status-only-census head)
+    not ok 1 - Authoritative operation visibility deferred for partition:control_plane_publications-p1 (entity_operation_observation_incomplete)
+      ---
+      stack: |
+        FixtureCommittedReadCoordinator.createDeferredOperationVisibilityError (src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js:238:19)
+        FixtureCommittedReadCoordinator.ensureEntityAddLikeCreateLaneAvailable (src/rebalancer/rebalance-coordinator-priority-budget-admission.js:426:18)
+        async FixtureCommittedReadCoordinator.createOperationInternal (src/rebalancer/rebalance-coordinator-operation-creation.js:467:7)
+        async FixtureCommittedReadCoordinator.runOperationLedgerInterlockAccountedCreate (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)
+        async file:/home/peter/projects/lagrange/test-output/placement-worktrees/6d1237341eb0-mwqtgqrc-1993527/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13
+        async FixtureCommittedReadCoordinator.runCreateOperationForIntent (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:263:22)
+        async Test.<anonymous> (test/rebalancer/rebalance-coordinator-topology-guard.test.js:918:3)
+      at:
+        fileName: src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js
+        lineNumber: 238
+        columnNumber: 19
+        typeName: FixtureCommittedReadCoordinator
+        methodName: createDeferredOperationVisibilityError
+        functionName: FixtureCommittedReadCoordinator.createDeferredOperationVisibilityError
+      rebalanceSkipReason: deferred_retry_pending
+      operationType: ADD
+      entityType: partition
+      entityId: control_plane_publications-p1
+      partitionId: control_plane_publications-p1
+      replicaId: null
+      operationVisibilityState: deferred
+      completionState: operation_visibility_deferred
+      reasonCode: entity_operation_observation_incomplete
+      retryAfterMs: 100
+      tapCaught: returnedPromiseRejection
+      source: |2
+                deferredOutcome.reasonCode :
+                'authoritative_operation_visibility_deferred';
+            const error = new Error(
+        ------------------^
+              'Authoritative operation visibility deferred for ' +
+                entityType +
+      ...
+    
+    1..1
+not ok 17 - s14 orphan census: 2 voters + 1 ORPHAN (active, non-voter, no in-flight op) on 3 nodes does NOT satisfy target 3 — the spread ADD to a 4th node is ADMITTED (RED on the status-only-census head) # time=24.349ms
+  ---
+  at:
+    fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+    lineNumber: 904
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    }
+  
+  
+    test('s14 orphan census: 2 voters + 1 ORPHAN (active, non-voter, no in-flight
+    op) ' +
+  
+    ^
+      'on 3 nodes does NOT satisfy target 3 — the spread ADD to a 4th node is ADMITTED ' +
+      '(RED on the status-only-census head)', async (t) => {
+  ...
+
+# Subtest: s14 orphan census: a CATCHING-UP learner (status=creating) still counts, so a redundant 4th ADD is HELD — over-creation is not admitted
+    ok 1 - catching-up learner counts (3 nodes == target) -> redundant ADD held
+    ok 2 - no over-creating replica operation persisted
+    1..2
+ok 18 - s14 orphan census: a CATCHING-UP learner (status=creating) still counts, so a redundant 4th ADD is HELD — over-creation is not admitted # time=26.968ms
+
+# Subtest: s14 orphan census: the one-node-per-replica occupancy check is UNCHANGED — an add-like create targeting the ORPHAN's node is still blocked (no double-placement)
+    ok 1 - target node already occupied (full-occupancy check intact) -> blocked
+    ok 2 - no double-placement on the orphan node
+    1..2
+ok 19 - s14 orphan census: the one-node-per-replica occupancy check is UNCHANGED — an add-like create targeting the ORPHAN's node is still blocked (no double-placement) # time=21.35ms
+
+# Subtest: ADD and REPLACE refuse unavailable policy before persistence and recover through the same topology guard
+    not ok 1 - Cannot read properties of undefined (reading 'blockingReasons')
+      ---
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:1003:36)
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 1003
+        columnNumber: 36
+        typeName: Test
+        methodName: <anonymous>
+        functionName: Test.<anonymous>
+      type: TypeError
+      tapCaught: returnedPromiseRejection
+      source: >2
+                enforceConcurrentOperationBudget: true};
+              const error = await captureOperationCreateError(() => coordinator.createOperation(move));
+              t.same(error.admissionResult.blockingReasons, ['partition_target_unavailable']);
+        -----------------------------------^
+              t.equal(sqlEngine.getOperations().length, 0, 'no operation is recorded without its target');
+              coordinator.tablePolicyService = owner;
+      ...
+    
+    1..1
+not ok 20 - ADD and REPLACE refuse unavailable policy before persistence and recover through the same topology guard # time=24.546ms
+  ---
+  at:
+    fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+    lineNumber: 985
+    columnNumber: 1
+    isToplevel: true
+  source: |
+  
+  
+    test('ADD and REPLACE refuse unavailable policy before persistence ' +
+    ^
+      'and recover through the same topology guard', async (t) => {
+      initializeTestEnvironment();
+  ...
+
+1..20
+# { total: 65, pass: 48, fail: 17 }
+# time=630.557ms
+ok test/rebalancer/topology-guard-owner-fact-read-point.test.js (11 assertions, 4817ms)
+not ok test/rebalancer/rebalance-coordinator-operation-ownership.test.js (229 assertions, 1551ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator executeOperation skips operations owned by another node
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - non-owner coordinator must not dispatch operation requests
+    ok 5 - workflow step should remain unchanged when non-owner skips execution
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..5
+ok 1 - RebalanceCoordinator executeOperation skips operations owned by another node # time=60.729ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator keeps priority control-plane REPLACE ownership on the target during SENDING
+    ok 1 - priority control-plane replace must remain target-owned while dispatch is in SENDING
+    ok 2 - local target node should keep ownership across deferred dispatch retries
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..2
+ok 2 - RebalanceCoordinator keeps priority control-plane REPLACE ownership on the target during SENDING # time=2.127ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator keeps the ordinary priority lane available while an emergency priority replace is already in flight
+    ok 1 - ordinary priority work should retain its configured lane while one emergency replace uses the overflow slot
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..1
+ok 3 - RebalanceCoordinator keeps the ordinary priority lane available while an emergency priority replace is already in flight # time=23.69ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator preserves the emergency overflow slot from ordinary priority work
+    ok 1 - ordinary priority work should not consume the reserved emergency overflow slot once its own lane is full
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..1
+ok 4 - RebalanceCoordinator preserves the emergency overflow slot from ordinary priority work # time=5.836ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator admits the second emergency recovery owner while ordinary priority work and one emergency owner are already in flight
+    ok 1 - replica-operation recovery should keep its emergency owner slot while publication recovery is already in flight
+    ok 2 - ordinary priority work should still be serialized by the configured lane
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..2
+ok 5 - RebalanceCoordinator admits the second emergency recovery owner while ordinary priority work and one emergency owner are already in flight # time=12.744ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+# Subtest: RebalanceCoordinator createOperation uses injected workflow coordinator single-flight
+    not ok 1 - SERVICES inventory of partition partition-1 unavailable: hint_read_failed
+      ---
+      stack: |
+        RebalanceCoordinator.buildServicesInventoryUnavailableError (src/rebalancer/rebalance-coordinator-operation-read-methods.js:513:19)
+        RebalanceCoordinator.readBootstrapServiceRows (src/rebalancer/rebalance-coordinator-operation-creation.js:383:18)
+        async buildCommittedBootstrapTopology (src/rebalancer/committed-membership-bootstrap-read.js:212:41)
+        async RebalanceCoordinator.createOperationRecordInternal (src/rebalancer/rebalance-coordinator-operation-creation.js:649:31)
+        async RebalanceCoordinator.runOperationLedgerInterlockAccountedCreate (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)
+        async file:/home/peter/projects/lagrange/test-output/placement-worktrees/6d1237341eb0-mwqtgqrc-1993527/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13
+        async RebalanceCoordinator.runCreateOperationForIntent (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:263:22)
+        async Test.<anonymous> (test/rebalancer/rebalance-coordinator-operation-ownership.test.js:707:7)
+      at:
+        fileName: src/rebalancer/rebalance-coordinator-operation-read-methods.js
+        lineNumber: 513
+        columnNumber: 19
+        typeName: RebalanceCoordinator
+        methodName: buildServicesInventoryUnavailableError
+        functionName: RebalanceCoordinator.buildServicesInventoryUnavailableError
+      rebalanceSkipReason: services_inventory_unavailable
+      reasonCode: hint_read_failed
+      nextAction: retry
+      deferRetry: true
+      tapCaught: returnedPromiseRejection
+      source: >2
+           */
+          buildServicesInventoryUnavailableError(answer, {entityType, entityId}) {
+            const error = new Error(`SERVICES inventory of ${entityType} ${entityId} ` +
+        ------------------^
+              `unavailable: ${answer.reason}`);
+            error.rebalanceSkipReason = REBALANCER_SKIP_REASON.SERVICES_INVENTORY_UNAVAILABLE;
+      ...
+    
+    1..1
+not ok 6 - RebalanceCoordinator createOperation uses injected workflow coordinator single-flight # time=26.106ms
+  ---
+  at:
+    fileName: test/rebalancer/rebalance-coordinator-operation-ownership.test.js
+    lineNumber: 671
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('RebalanceCoordinator createOperation uses injected workflow coordinator
+    single-flight',
+  
+    ^
+      async (t) => {
+        const workflowCoordinator = createWorkflowCoordinatorSpy();
+  ...
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator createOperation defers background mutation when local control-plane publication is unhealthy
+    ok 1 - background creation should expose a typed rebalance skip reason
+    ok 2 - background creation should defer rather than fail open
+    ok 3 - defer diagnostics should carry readiness reason codes
+    ok 4 - background mutation must not hit SQL when local publication is unhealthy
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..4
+ok 7 - RebalanceCoordinator createOperation defers background mutation when local control-plane publication is unhealthy # time=2.337ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator createOperation enforces concurrent add budget when requested
+    ok 1 - requested create should fail with a typed budget error
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..1
+ok 8 - RebalanceCoordinator createOperation enforces concurrent add budget when requested # time=6.413ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator createOperation rejects stale membership publication epoch plans
+    ok 1 - stale epoch-bound placement should expose a typed skip reason
+    ok 2 - error should expose requested publication epoch
+    ok 3 - error should expose current publication epoch
+    ok 4 - stale epoch-bound placement must not persist any operation row
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..4
+ok 9 - RebalanceCoordinator createOperation rejects stale membership publication epoch plans # time=1.693ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator createOperation rejects stale membership plans using the shared publication planning snapshot
+    ok 1 - shared publication planning snapshot should drive stale-epoch rejection
+    ok 2 - shared publication planning snapshot should define the current epoch
+    ok 3 - stale snapshot-bound placement must not persist any operation row
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..3
+ok 10 - RebalanceCoordinator createOperation rejects stale membership plans using the shared publication planning snapshot # time=1.257ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+# Subtest: RebalanceCoordinator createOperation persists membership publication epoch metadata
+    not ok 1 - SERVICES inventory of partition partition-1 unavailable: hint_read_failed
+      ---
+      stack: |
+        RebalanceCoordinator.buildServicesInventoryUnavailableError (src/rebalancer/rebalance-coordinator-operation-read-methods.js:513:19)
+        RebalanceCoordinator.readBootstrapServiceRows (src/rebalancer/rebalance-coordinator-operation-creation.js:383:18)
+        async buildCommittedBootstrapTopology (src/rebalancer/committed-membership-bootstrap-read.js:212:41)
+        async RebalanceCoordinator.createOperationRecordInternal (src/rebalancer/rebalance-coordinator-operation-creation.js:649:31)
+        async RebalanceCoordinator.runOperationLedgerInterlockAccountedCreate (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)
+        async file:/home/peter/projects/lagrange/test-output/placement-worktrees/6d1237341eb0-mwqtgqrc-1993527/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13
+        async RebalanceCoordinator.runCreateOperationForIntent (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:263:22)
+        async Test.<anonymous> (test/rebalancer/rebalance-coordinator-operation-ownership.test.js:1080:25)
+      at:
+        fileName: src/rebalancer/rebalance-coordinator-operation-read-methods.js
+        lineNumber: 513
+        columnNumber: 19
+        typeName: RebalanceCoordinator
+        methodName: buildServicesInventoryUnavailableError
+        functionName: RebalanceCoordinator.buildServicesInventoryUnavailableError
+      rebalanceSkipReason: services_inventory_unavailable
+      reasonCode: hint_read_failed
+      nextAction: retry
+      deferRetry: true
+      tapCaught: returnedPromiseRejection
+      source: >2
+           */
+          buildServicesInventoryUnavailableError(answer, {entityType, entityId}) {
+            const error = new Error(`SERVICES inventory of ${entityType} ${entityId} ` +
+        ------------------^
+              `unavailable: ${answer.reason}`);
+            error.rebalanceSkipReason = REBALANCER_SKIP_REASON.SERVICES_INVENTORY_UNAVAILABLE;
+      ...
+    
+    1..1
+not ok 11 - RebalanceCoordinator createOperation persists membership publication epoch metadata # time=5.176ms
+  ---
+  at:
+    fileName: test/rebalancer/rebalance-coordinator-operation-ownership.test.js
+    lineNumber: 1033
+    columnNumber: 1
+    isToplevel: true
+  source: >2
+      });
+  
+    test('RebalanceCoordinator createOperation persists membership publication
+    epoch metadata',
+  
+    ^
+      async (t) => {
+        const coordinator = createCoordinator({
+  ...
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+# Subtest: RebalanceCoordinator createOperation checks the critical create lane before the topology guard
+    1..0
+ok 12 - RebalanceCoordinator createOperation checks the critical create lane before the topology guard # time=5.949ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator limits critical partitions to one add-like operation in flight
+    ok 1 - critical partition create should fail with a typed budget error
+    ok 2 - error should expose the conflicting in-flight operation
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..2
+ok 13 - RebalanceCoordinator limits critical partitions to one add-like operation in flight # time=7.581ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator critical add-like gate uses authoritative replica_operations reads when cache is empty
+    ok 1 - critical partition create should still fail with a typed budget error
+    ok 2 - authoritative conflicting operation should surface through the gate
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..2
+ok 14 - RebalanceCoordinator critical add-like gate uses authoritative replica_operations reads when cache is empty # time=4.673ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+# Subtest: RebalanceCoordinator defers critical add-like admission when authoritative operation visibility remains unresolved
+    1..0
+ok 15 - RebalanceCoordinator defers critical add-like admission when authoritative operation visibility remains unresolved # time=1.577ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator keeps emergency publication create admission moving when deferred visibility is caused only by contained background pressure
+    ok 1 - emergency publication create admission should keep moving when only the reserved pressure lane is backpressured
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..1
+ok 16 - RebalanceCoordinator keeps emergency publication create admission moving when deferred visibility is caused only by contained background pressure # time=1.307ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Reconcile work enqueued {
+  queue: 'readiness-planning-snapshot-owner',
+  ownerKey: '11:node-remotenode-remote::refresh=false::stale=false::planning=owner_answer::requireFresh=false::background=false::dimension=controlPlaneRecoveryEligible',
+  reason: 'readiness_planning_source_changed'
+}
+Readiness planning admission transition {
+  ownerKey: 'node-remote',
+  buildOptionsKey: 'node-remote::refresh=false::stale=false::planning=owner_answer::requireFresh=false::background=false::dimension=controlPlaneRecoveryEligible',
+  participationKind: 'unstated',
+  previousState: 'unobserved',
+  state: 'deferred',
+  failedTerms: [ 'completed_record_absent' ],
+  failedTermsWithheld: 0,
+  inheritedRecordAgeMs: null,
+  deferredForMs: null,
+  suppressedReads: 0,
+  droppedLineCount: 0
+}
+Creating operation {
+  operationId: '1b49c3aa-d8a3-4041-997f-663e9bc99fb5',
+  type: 'REPLACE',
+  partitionId: 'sql_write_operations-p1',
+  targetNodeId: 'node-remote',
+  entityType: 'partition',
+  entityId: 'sql_write_operations-p1',
+  bootstrapTopologyStamped: true,
+  bootstrapReplicaIdCount: 2
+}
+Storage reservation created with operation {
+  reservationId: 'res-1b49c3aa-d8a3-4041-997f-663e9bc99fb5',
+  operationId: '1b49c3aa-d8a3-4041-997f-663e9bc99fb5',
+  targetNodeId: 'node-remote',
+  estimatedBytes: 1,
+  expiresAt: 1795290588118
+}
+# Subtest: RebalanceCoordinator creates blocked ordinary priority replace work when deferred visibility is caused only by contained background pressure
+    ok 1 - blocked ordinary priority partition should still admit the next replace step when only contained background pressure deferred visibility
+    ok 2 - creation used the owner-allocated target
+    ok 3 - the target ID supplied to creation came from the canonical allocator
+    ok 4 - the actual creation checked retired-source safety through the same owner
+    ok 5 - should be equal
+    ok 6 - the existing pressure owner explicitly authorized every recovery identity observation
+    ok 7 - the strict consumer still refuses under the same contained pressure
+    ok 8 - nonzero retained work cannot acquire bounded use
+    ok 9 - expected to throw
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..9
+ok 17 - RebalanceCoordinator creates blocked ordinary priority replace work when deferred visibility is caused only by contained background pressure # time=25.781ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+# Subtest: RebalanceCoordinator defers conflicting-remove admission when authoritative operation visibility remains unresolved
+    1..0
+ok 18 - RebalanceCoordinator defers conflicting-remove admission when authoritative operation visibility remains unresolved # time=2.281ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator keeps emergency publication remove admission moving when deferred visibility is caused only by contained background pressure
+    ok 1 - emergency publication remove admission should keep moving when only the reserved pressure lane is backpressured
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..1
+ok 19 - RebalanceCoordinator keeps emergency publication remove admission moving when deferred visibility is caused only by contained background pressure # time=1.813ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+# Subtest: RebalanceCoordinator serializes critical publication removes behind in-flight source removal
+    1..0
+ok 20 - RebalanceCoordinator serializes critical publication removes behind in-flight source removal # time=1.07ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+# Subtest: RebalanceCoordinator critical add-like gate ignores replace remove-phase work
+    not ok 1 - SERVICES inventory of partition config-p1 unavailable: owner_fact_read_failed
+      ---
+      stack: |
+        RebalanceCoordinator.buildServicesInventoryUnavailableError (src/rebalancer/rebalance-coordinator-operation-read-methods.js:513:19)
+        RebalanceCoordinator.readEntityServiceOwnerRows (src/rebalancer/rebalance-coordinator-operation-read-methods.js:489:18)
+        async RebalanceCoordinator.holdCriticalPartitionCreateLaneIfOverTarget (src/rebalancer/rebalance-coordinator-priority-budget-admission.js:231:25)
+        async RebalanceCoordinator.ensureCriticalPartitionCreateLaneAvailable (src/rebalancer/rebalance-coordinator-priority-budget-admission.js:180:7)
+        async Test.<anonymous> (test/rebalancer/rebalance-coordinator-operation-ownership-critical-admission-test-cases.js:760:9)
+      at:
+        fileName: src/rebalancer/rebalance-coordinator-operation-read-methods.js
+        lineNumber: 513
+        columnNumber: 19
+        typeName: RebalanceCoordinator
+        methodName: buildServicesInventoryUnavailableError
+        functionName: RebalanceCoordinator.buildServicesInventoryUnavailableError
+      rebalanceSkipReason: services_inventory_unavailable
+      reasonCode: owner_fact_read_failed
+      nextAction: retry
+      deferRetry: true
+      tapCaught: returnedPromiseRejection
+      source: >2
+           */
+          buildServicesInventoryUnavailableError(answer, {entityType, entityId}) {
+            const error = new Error(`SERVICES inventory of ${entityType} ${entityId} ` +
+        ------------------^
+              `unavailable: ${answer.reason}`);
+            error.rebalanceSkipReason = REBALANCER_SKIP_REASON.SERVICES_INVENTORY_UNAVAILABLE;
+      ...
+    
+    1..1
+not ok 21 - RebalanceCoordinator critical add-like gate ignores replace remove-phase work # time=4.714ms
+  ---
+  at:
+    fileName: test/rebalancer/rebalance-coordinator-operation-ownership-critical-admission-test-cases.js
+    lineNumber: 717
+    columnNumber: 3
+    functionName: registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionTests
+    isToplevel: true
+  source: >2
+      });
+  
+      test('RebalanceCoordinator critical add-like gate ignores replace remove-phase work',
+    --^
+        async (t) => {
+          const coordinator = new RebalanceCoordinator(withNodeReadinessService('RebalanceCoordinator', {
+  ...
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator rejects a second add-like create while the same entity already has replace remove-phase work in flight
+    ok 1 - same-entity add-like work should wait for replace remove-phase completion
+    ok 2 - same-entity add-like overlap should surface stable conflict skip reason
+    ok 3 - conflicting replace remove-phase operation id should be attached
+    ok 4 - entity-scoped conflict should report the blocked entity id
+    ok 5 - conflicting same-entity add-like create should not persist a new operation
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..5
+ok 22 - RebalanceCoordinator rejects a second add-like create while the same entity already has replace remove-phase work in flight # time=4.927ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator critical add-like gate still counts superseded priority recovery rows outside the current eligible cohort
+    ok 1 - critical add-like gating should continue to count the superseded priority recovery row
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..1
+ok 23 - RebalanceCoordinator critical add-like gate still counts superseded priority recovery rows outside the current eligible cohort # time=9.572ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator bypasses empty-cache admission backoff for critical partition create
+    ok 1 - non-critical partitions should still respect empty-cache admission backoff
+    ok 2 - critical partition create admission should issue authoritative operation-count reads
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..2
+ok 24 - RebalanceCoordinator bypasses empty-cache admission backoff for critical partition create # time=4.542ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator keeps priority add budget independent from non-priority in-flight adds
+    ok 1 - non-priority add/replace should still respect shared add budget
+    ok 2 - priority control-plane add/replace should use its dedicated add budget lane
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 1 }
+    1..2
+ok 25 - RebalanceCoordinator keeps priority add budget independent from non-priority in-flight adds # time=2.428ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator lets repeated critical dispatch retry grace consume the enclosing operation budget
+    ok 1 - should be equal
+    ok 2 - should be equal
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..2
+ok 26 - RebalanceCoordinator lets repeated critical dispatch retry grace consume the enclosing operation budget # time=1.086ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator reserves one shared add slot for priority recovery while non-priority scheduling remains capped below the full add budget
+    ok 1 - non-priority add scheduling should preserve one reserved slot for priority recovery
+    ok 2 - priority control-plane add scheduling should still consume the reserved recovery slot
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..2
+ok 27 - RebalanceCoordinator reserves one shared add slot for priority recovery while non-priority scheduling remains capped below the full add budget # time=6.184ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator keeps reserved priority add capacity during transient publication-summary gaps and after immediate summary recovery
+    ok 1 - active recovery should reserve one shared add slot from non-priority scheduling
+    ok 2 - transient summary loss should keep the reserved slot active during stale-grace window
+    ok 3 - an immediately satisfied summary does not clear the reserved slot while the in-flight recovery signal is still active
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..3
+ok 28 - RebalanceCoordinator keeps reserved priority add capacity during transient publication-summary gaps and after immediate summary recovery # time=1.983ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator caps repeated transition retry grace at the durable creating timeout ceiling
+    ok 1 - should be equal
+    ok 2 - should be equal
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..2
+ok 29 - RebalanceCoordinator caps repeated transition retry grace at the durable creating timeout ceiling # time=0.977ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator reserves one emergency priority add slot for transport-critical recovery while ordinary priority work is already in flight
+    ok 1 - ordinary priority add scheduling should preserve the emergency transport recovery slot
+    ok 2 - transport-critical control-plane add scheduling should still use the reserved emergency slot
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..2
+ok 30 - RebalanceCoordinator reserves one emergency priority add slot for transport-critical recovery while ordinary priority work is already in flight # time=18.478ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator keeps priority add admission on the critical pressure lane
+    ok 1 - ordinary add admission should still defer when the local router is saturated
+    ok 2 - priority control-plane add admission should bypass background router pressure
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..2
+ok 31 - RebalanceCoordinator keeps priority add admission on the critical pressure lane # time=3.417ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+# Subtest: RebalanceCoordinator uses a dedicated emergency create-budget scope for transport-critical priority recovery
+    not ok 1 - SERVICES inventory of partition control_plane_publications-p1 unavailable: hint_read_failed
+      ---
+      stack: |
+        RebalanceCoordinator.buildServicesInventoryUnavailableError (src/rebalancer/rebalance-coordinator-operation-read-methods.js:513:19)
+        RebalanceCoordinator.readBootstrapServiceRows (src/rebalancer/rebalance-coordinator-operation-creation.js:383:18)
+        async buildCommittedBootstrapTopology (src/rebalancer/committed-membership-bootstrap-read.js:212:41)
+        async RebalanceCoordinator.createOperationRecordInternal (src/rebalancer/rebalance-coordinator-operation-creation.js:649:31)
+        async runConcurrentCreateBudgetGate (src/rebalancer/rebalance-coordinator-concurrent-add-budget.js:77:25)
+        async RebalanceCoordinator.createOperationWithinConcurrentCreateBudgetTurn (src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js:60:23)
+        async RebalanceCoordinator.runOperationLedgerInterlockAccountedCreate (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)
+        async file:/home/peter/projects/lagrange/test-output/placement-worktrees/6d1237341eb0-mwqtgqrc-1993527/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13
+        async RebalanceCoordinator.runCreateOperationForIntent (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:263:22)
+        async Test.<anonymous> (test/rebalancer/rebalance-coordinator-operation-ownership-priority-admission-test-cases.js:807:9)
+      at:
+        fileName: src/rebalancer/rebalance-coordinator-operation-read-methods.js
+        lineNumber: 513
+        columnNumber: 19
+        typeName: RebalanceCoordinator
+        methodName: buildServicesInventoryUnavailableError
+        functionName: RebalanceCoordinator.buildServicesInventoryUnavailableError
+      rebalanceSkipReason: services_inventory_unavailable
+      reasonCode: hint_read_failed
+      nextAction: retry
+      deferRetry: true
+      tapCaught: returnedPromiseRejection
+      source: >2
+           */
+          buildServicesInventoryUnavailableError(answer, {entityType, entityId}) {
+            const error = new Error(`SERVICES inventory of ${entityType} ${entityId} ` +
+        ------------------^
+              `unavailable: ${answer.reason}`);
+            error.rebalanceSkipReason = REBALANCER_SKIP_REASON.SERVICES_INVENTORY_UNAVAILABLE;
+      ...
+    
+    1..1
+not ok 32 - RebalanceCoordinator uses a dedicated emergency create-budget scope for transport-critical priority recovery # time=10.031ms
+  ---
+  at:
+    fileName: test/rebalancer/rebalance-coordinator-operation-ownership-priority-admission-test-cases.js
+    lineNumber: 764
+    columnNumber: 3
+    functionName: registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionTests
+    isToplevel: true
+  source: >2
+      );
+  
+      test(
+    --^
+        'RebalanceCoordinator uses a dedicated emergency create-budget scope for ' +
+        'transport-critical priority recovery',
+  ...
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator does not treat REPLACE STOPPING phase as add-budget in-flight for priority recovery
+    ok 1 - priority recovery should continue while prior REPLACE source-removal is still reconciling
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..1
+ok 33 - RebalanceCoordinator does not treat REPLACE STOPPING phase as add-budget in-flight for priority recovery # time=2.173ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator does not let spread-satisfied priority REPLACE rows monopolize the priority add budget
+    ok 1 - priority add budget should stay open for the next partition once the existing REPLACE already satisfies spread on an eligible target
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 1 }
+    1..1
+ok 34 - RebalanceCoordinator does not let spread-satisfied priority REPLACE rows monopolize the priority add budget # time=2.151ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator does not let combined spread-satisfied priority REPLACE rows monopolize the priority add budget
+    ok 1 - priority add budget should stay open once combined REPLACE targets already satisfy spread for one partition
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 2 }
+    1..1
+ok 35 - RebalanceCoordinator does not let combined spread-satisfied priority REPLACE rows monopolize the priority add budget # time=2.666ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator reuses the workflow-owner priority decision snapshot before falling back to planning snapshots for grouped priority add budget
+    ok 1 - priority add budget should consume the runtime decision snapshot directly when grouped in-flight work is already spread-satisfied
+    ok 2 - the grouped priority add-budget path should not fall back to planning snapshots when the workflow owner already exposes the canonical decision snapshot
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 1 }
+    1..2
+ok 36 - RebalanceCoordinator reuses the workflow-owner priority decision snapshot before falling back to planning snapshots for grouped priority add budget # time=2.622ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator accepts planning-owned priority spread completion when transition rows are stale
+    ok 1 - stale SENDING rows should not consume the ordinary priority lane once the planning snapshot proves spread completion
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 1 }
+    1..1
+ok 37 - RebalanceCoordinator accepts planning-owned priority spread completion when transition rows are stale # time=2.01ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator accepts planning-owned priority spread completion from raw operation rows
+    ok 1 - raw priority rows should use planning snapshots before deciding whether they still consume the ordinary priority lane
+    ok 2 - the grouped priority add-budget path should request planning-owned decision evidence beyond the pressure gate
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 1 }
+    1..2
+ok 38 - RebalanceCoordinator accepts planning-owned priority spread completion from raw operation rows # time=1.739ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator releases priority add budget from admission blocked-partition evidence when workflow snapshots are unavailable
+    ok 1 - current blocked partition should retain the ordinary priority lane when stale rows belong to partitions outside the blocked set
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 1 }
+    1..1
+ok 39 - RebalanceCoordinator releases priority add budget from admission blocked-partition evidence when workflow snapshots are unavailable # time=1.966ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-priority-pressure-admission',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator keeps blocked priority add admission open when the critical reserve is exhausted
+    ok 1 - blocked priority recovery should retain its add lane under critical-reserve pressure
+    ok 2 - priority partitions outside the blocked recovery set should still pause under critical-reserve pressure
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-priority-pressure-admission', inFlightOperations: 0 }
+    1..2
+ok 40 - RebalanceCoordinator keeps blocked priority add admission open when the critical reserve is exhausted # time=2.052ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator lets a different blocked priority partition use the add lane when a stale priority row timed out
+    ok 1 - a stale row should still reserve its own blocked partition lane
+    ok 2 - a different blocked priority partition should not be stranded behind the stale row
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 1 }
+    1..2
+ok 41 - RebalanceCoordinator lets a different blocked priority partition use the add lane when a stale priority row timed out # time=2.163ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Reconcile work enqueued {
+  queue: 'readiness-planning-snapshot-owner',
+  ownerKey: '11:node-remotenode-remote::refresh=false::stale=false::planning=owner_answer::requireFresh=false::background=false::dimension=repairEligible',
+  reason: 'readiness_planning_source_changed'
+}
+Readiness planning admission transition {
+  ownerKey: 'node-remote',
+  buildOptionsKey: 'node-remote::refresh=false::stale=false::planning=owner_answer::requireFresh=false::background=false::dimension=repairEligible',
+  participationKind: 'unstated',
+  previousState: 'unobserved',
+  state: 'deferred',
+  failedTerms: [ 'completed_record_absent' ],
+  failedTermsWithheld: 0,
+  inheritedRecordAgeMs: null,
+  deferredForMs: null,
+  suppressedReads: 0,
+  droppedLineCount: 0
+}
+# Subtest: RebalanceCoordinator executeOperation uses injected workflow coordinator single-flight
+    ok 1 - executeOperation should be guarded by shared workflow single-flight
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..1
+ok 42 - RebalanceCoordinator executeOperation uses injected workflow coordinator single-flight # time=8.845ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator executeReplicaOperationsRead uses injected control-plane system-table gateway
+    ok 1 - gateway read should succeed
+    ok 2 - gateway should own the read
+    ok 3 - replica_operations reads should go through the gateway
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..3
+ok 43 - RebalanceCoordinator executeReplicaOperationsRead uses injected control-plane system-table gateway # time=2.423ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator checkTimeouts reconciles only local-owner operations
+    ok 1 - timeout reconciliation must skip non-owner operations but keep target-owned system REPLACE reconciliation
+    ok 2 - fresh operations stay nonterminal
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 3 }
+    1..2
+ok 44 - RebalanceCoordinator checkTimeouts reconciles only local-owner operations # time=10.001ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator re-arms critical PENDING operations when observed replica status remains pending
+    ok 1 - a skipped pending-status dispatch remains waiting without durable progress
+    ok 2 - reconciliation should re-enter dispatch when observed status is pending
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..2
+ok 45 - RebalanceCoordinator re-arms critical PENDING operations when observed replica status remains pending # time=2.178ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator reconciles overdue critical PENDING and commits progress before failure
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+Operation step changed {
+  operationId: 'op-critical-pending-timeout-rearm',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  reason: 'dispatch_sending',
+  status: 'pending',
+  partitionId: 'sql_transactions-p1',
+  ingress: 'priority_claim_cas'
+}
+Sending replica operation {
+  operationId: 'op-critical-pending-timeout-rearm',
+  target: 'node-local/service/replica-handler',
+  type: 'CREATE_REPLICA',
+  entityType: 'partition',
+  entityId: 'sql_transactions-p1',
+  replaceRemovePhase: false,
+  firstAttemptForStep: true
+}
+Operation step changed {
+  operationId: 'op-critical-pending-timeout-rearm',
+  previousStep: 'SENDING',
+  newStep: 'CREATING',
+  reason: 'dispatch_creating',
+  status: 'creating',
+  partitionId: 'sql_transactions-p1'
+}
+    ok 4 - the reconcile re-enters dispatch before settling the expired step
+    ok 5 - the owner dispatches one target CREATE
+    ok 6 - should be equal
+    ok 7 - committed progress keeps the operation open
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 1 }
+    1..7
+ok 46 - RebalanceCoordinator reconciles overdue critical PENDING and commits progress before failure # time=18.433ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator reconciles overdue critical PENDING and can settle elapsed pre-admission work after a skip without custody
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - should be equal
+Durable terminal release obligations registered {
+  operationId: 'op-critical-pending-timeout-rearm',
+  workflowStep: 'FAILED',
+  partitionId: 'sql_transactions-p1',
+  cause: 'terminal_release_pending',
+  attempt: 0,
+  delayMs: 500
+}
+metrics.rebalance.operation {
+  operationId: 'op-critical-pending-timeout-rearm',
+  entityType: 'partition',
+  finalState: 'failed',
+  totalDurationMs: 31004
+}
+    ok 4 - the reconcile re-enters dispatch before settling the expired step
+    ok 5 - should be equivalent
+    ok 6 - the skipped reply acquired no retry custody
+    ok 7 - should be equal
+    ok 8 - should be equal
+    ok 9 - should match pattern
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..9
+ok 47 - RebalanceCoordinator reconciles overdue critical PENDING and can settle elapsed pre-admission work after a skip without custody # time=12.046ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator dispatch waits for available planning and retains the exact eligible target
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - the exact bound retiring source survives the durable read
+    ok 4 - dispatch does no replica work while the canonical answer is held
+    ok 5 - should be equal
+Sending replica operation {
+  operationId: 'op-priority-planning-eligible',
+  target: 'node-local/service/replica-handler',
+  type: 'CREATE_REPLICA',
+  entityType: 'partition',
+  entityId: 'sql_write_operations-p1',
+  replaceRemovePhase: false,
+  firstAttemptForStep: true
+}
+Operation step changed {
+  operationId: 'op-priority-planning-eligible',
+  previousStep: 'SENDING',
+  newStep: 'CREATING',
+  reason: 'dispatch_creating',
+  status: 'creating',
+  partitionId: 'sql_write_operations-p1'
+}
+    ok 6 - should be equal
+    ok 7 - the observed eligible target receives one request
+    ok 8 - should be equal
+    ok 9 - should be equal
+    ok 10 - should be equal
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 1 }
+    1..10
+ok 48 - RebalanceCoordinator dispatch waits for available planning and retains the exact eligible target # time=10.488ms
+
+# Subtest: OperationWorkflowOwner prefers canonical priority-recovery planning answers
+    ok 1 - canonical planning answer should be used for priority gates
+    ok 2 - canonical priority planning answer surface should be the first choice
+    ok 3 - priority create-budget gates should read the local canonical planning view instead of a remote operation participant snapshot
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..3
+ok 49 - OperationWorkflowOwner prefers canonical priority-recovery planning answers # time=0.778ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator dispatch waits for available planning and fences the superseded target
+    ok 1 - should be equal
+    ok 2 - should be equal
+    ok 3 - the exact bound retiring source survives the durable read
+    ok 4 - dispatch does no replica work while the canonical answer is held
+    ok 5 - should be equal
+Durable terminal release obligations registered {
+  operationId: 'op-priority-planning-superseded',
+  workflowStep: 'FAILED',
+  partitionId: 'sql_write_operations-p1',
+  cause: 'terminal_release_pending',
+  attempt: 0,
+  delayMs: 500
+}
+Storage reservation released { operationId: 'op-priority-planning-superseded', releasedCount: 1 }
+metrics.rebalance.operation {
+  operationId: 'op-priority-planning-superseded',
+  entityType: 'partition',
+  finalState: 'failed',
+  totalDurationMs: 5
+}
+    ok 6 - should be equal
+    ok 7 - the superseded operation sends no replica request
+    ok 8 - should be equal
+    ok 9 - should be equal
+    ok 10 - should match pattern
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..10
+ok 50 - RebalanceCoordinator dispatch waits for available planning and fences the superseded target # time=10.317ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+# Subtest: RebalanceCoordinator timeout sweeps fail overdue operations before verify windows
+    ok 1 - the first sweep preserves an operation whose step has time remaining
+Reconcile work enqueued {
+  queue: 'readiness-planning-snapshot-owner',
+  ownerKey: '11:node-remotenode-remote::refresh=false::stale=false::planning=owner_answer::requireFresh=false::background=false::dimension=repairEligible',
+  reason: 'readiness_planning_source_changed'
+}
+Readiness planning admission transition {
+  ownerKey: 'node-remote',
+  buildOptionsKey: 'node-remote::refresh=false::stale=false::planning=owner_answer::requireFresh=false::background=false::dimension=repairEligible',
+  participationKind: 'unstated',
+  previousState: 'unobserved',
+  state: 'deferred',
+  failedTerms: [ 'completed_record_absent' ],
+  failedTermsWithheld: 0,
+  inheritedRecordAgeMs: null,
+  deferredForMs: null,
+  suppressedReads: 0,
+  droppedLineCount: 0
+}
+Durable terminal release obligations registered {
+  operationId: 'op-timeout-window-gap',
+  workflowStep: 'FAILED',
+  partitionId: 'partition-1',
+  cause: 'terminal_release_pending',
+  attempt: 0,
+  delayMs: 500
+}
+metrics.rebalance.operation {
+  operationId: 'op-timeout-window-gap',
+  entityType: 'partition',
+  finalState: 'failed',
+  totalDurationMs: 41000
+}
+    ok 2 - the SQLite operation is FAILED before the verification snapshot
+    ok 3 - the durable completion falls within the sweep window
+    ok 4 - the timeout advances the exact row once
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..4
+ok 51 - RebalanceCoordinator timeout sweeps fail overdue operations before verify windows # time=9.597ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator updateStep persists durable transition fields
+    ok 1 - should be equal
+    ok 2 - should be equal
+Reconcile work enqueued {
+  queue: 'readiness-planning-snapshot-owner',
+  ownerKey: '11:node-remotenode-remote::refresh=false::stale=false::planning=owner_answer::requireFresh=false::background=false::dimension=repairEligible',
+  reason: 'readiness_planning_source_changed'
+}
+Readiness planning admission transition {
+  ownerKey: 'node-remote',
+  buildOptionsKey: 'node-remote::refresh=false::stale=false::planning=owner_answer::requireFresh=false::background=false::dimension=repairEligible',
+  participationKind: 'unstated',
+  previousState: 'unobserved',
+  state: 'deferred',
+  failedTerms: [ 'completed_record_absent' ],
+  failedTermsWithheld: 0,
+  inheritedRecordAgeMs: null,
+  deferredForMs: null,
+  suppressedReads: 0,
+  droppedLineCount: 0
+}
+Operation step changed {
+  operationId: 'op-durable-step',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  reason: 'dispatch_sending',
+  status: 'pending',
+  partitionId: 'partition-1'
+}
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - should be equivalent
+    ok 8 - step must be persisted
+    ok 9 - previousStep must be persisted
+    ok 10 - reason must be persisted
+    ok 11 - timestamp must be persisted
+    ok 12 - ownerKey must be persisted
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 1 }
+    1..12
+ok 52 - RebalanceCoordinator updateStep persists durable transition fields # time=10.565ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator completeOperation persists durable transition fields
+    ok 1 - should be equal
+    ok 2 - should be equal
+Reconcile work enqueued {
+  queue: 'readiness-planning-snapshot-owner',
+  ownerKey: '11:node-remotenode-remote::refresh=false::stale=false::planning=owner_answer::requireFresh=false::background=false::dimension=repairEligible',
+  reason: 'readiness_planning_source_changed'
+}
+Readiness planning admission transition {
+  ownerKey: 'node-remote',
+  buildOptionsKey: 'node-remote::refresh=false::stale=false::planning=owner_answer::requireFresh=false::background=false::dimension=repairEligible',
+  participationKind: 'unstated',
+  previousState: 'unobserved',
+  state: 'deferred',
+  failedTerms: [ 'completed_record_absent' ],
+  failedTermsWithheld: 0,
+  inheritedRecordAgeMs: null,
+  deferredForMs: null,
+  suppressedReads: 0,
+  droppedLineCount: 0
+}
+Durable terminal release obligations registered {
+  operationId: 'op-complete-durable',
+  workflowStep: 'ACTIVE',
+  partitionId: 'partition-1',
+  cause: 'terminal_release_pending',
+  attempt: 0,
+  delayMs: 500
+}
+Operation completed {
+  operationId: 'op-complete-durable',
+  type: 'ADD',
+  partitionId: 'partition-1',
+  targetNodeId: 'node-remote'
+}
+metrics.rebalance.operation {
+  operationId: 'op-complete-durable',
+  entityType: 'partition',
+  finalState: 'active',
+  totalDurationMs: 3
+}
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - should be equal
+    ok 8 - should be equivalent
+    ok 9 - step must be persisted
+    ok 10 - previousStep must be persisted
+    ok 11 - reason must be persisted
+    ok 12 - timestamp must be persisted
+    ok 13 - ownerKey must be persisted
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..13
+ok 53 - RebalanceCoordinator completeOperation persists durable transition fields # time=9.217ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator failOperation persists durable transition fields
+    ok 1 - should be equal
+    ok 2 - should be equal
+Reconcile work enqueued {
+  queue: 'readiness-planning-snapshot-owner',
+  ownerKey: '11:node-remotenode-remote::refresh=false::stale=false::planning=owner_answer::requireFresh=false::background=false::dimension=repairEligible',
+  reason: 'readiness_planning_source_changed'
+}
+Readiness planning admission transition {
+  ownerKey: 'node-remote',
+  buildOptionsKey: 'node-remote::refresh=false::stale=false::planning=owner_answer::requireFresh=false::background=false::dimension=repairEligible',
+  participationKind: 'unstated',
+  previousState: 'unobserved',
+  state: 'deferred',
+  failedTerms: [ 'completed_record_absent' ],
+  failedTermsWithheld: 0,
+  inheritedRecordAgeMs: null,
+  deferredForMs: null,
+  suppressedReads: 0,
+  droppedLineCount: 0
+}
+Durable terminal release obligations registered {
+  operationId: 'op-fail-durable',
+  workflowStep: 'FAILED',
+  partitionId: 'partition-1',
+  cause: 'terminal_release_pending',
+  attempt: 0,
+  delayMs: 500
+}
+metrics.rebalance.operation {
+  operationId: 'op-fail-durable',
+  entityType: 'partition',
+  finalState: 'failed',
+  totalDurationMs: 3
+}
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - should be equal
+    ok 8 - should be equivalent
+    ok 9 - step must be persisted
+    ok 10 - previousStep must be persisted
+    ok 11 - reason must be persisted
+    ok 12 - timestamp must be persisted
+    ok 13 - ownerKey must be persisted
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 0 }
+    1..13
+ok 54 - RebalanceCoordinator failOperation persists durable transition fields # time=14.344ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'node-local',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: RebalanceCoordinator updateStep routes through workflow coordinator transitionStep
+    ok 1 - should be equal
+Reconcile work enqueued {
+  queue: 'readiness-planning-snapshot-owner',
+  ownerKey: '11:node-remotenode-remote::refresh=false::stale=false::planning=owner_answer::requireFresh=false::background=false::dimension=repairEligible',
+  reason: 'readiness_planning_source_changed'
+}
+Readiness planning admission transition {
+  ownerKey: 'node-remote',
+  buildOptionsKey: 'node-remote::refresh=false::stale=false::planning=owner_answer::requireFresh=false::background=false::dimension=repairEligible',
+  participationKind: 'unstated',
+  previousState: 'unobserved',
+  state: 'deferred',
+  failedTerms: [ 'completed_record_absent' ],
+  failedTermsWithheld: 0,
+  inheritedRecordAgeMs: null,
+  deferredForMs: null,
+  suppressedReads: 0,
+  droppedLineCount: 0
+}
+Operation step changed {
+  operationId: 'op-route-check',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  reason: 'dispatch_sending',
+  status: 'pending',
+  partitionId: 'partition-1'
+}
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - updateStep must route through workflow coordinator transitionStep
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - should be equal
+Reconcile queue shutdown { queue: 'readiness-planning-snapshot-owner' }
+Shutting down RebalanceCoordinator { nodeId: 'node-local', inFlightOperations: 1 }
+    1..7
+ok 55 - RebalanceCoordinator updateStep routes through workflow coordinator transitionStep # time=6.992ms
+
+1..55
+# { total: 178, pass: 174, fail: 4 }
+# time=463.1ms
+ok test/rebalancer/critical-spread-terminal-stall-repro.test.js (23 assertions, 1369ms)
+ok test/rebalancer/spread-cure-at-target-minting-gap.test.js (28 assertions, 1481ms)
+ok test/rebalancer/failed-authoritative-read-admission-verdict.test.js (9 assertions, 1421ms)
+ok test/rebalancer/recent-completed-replace-target-visibility.test.js (28 assertions, 1269ms)
+ok test/rebalancer/topology-guard-owner-fact-deposed-leader.test.js (4 assertions, 11565ms)
+# test-files total=15 pass=12 fail=3 assertions=870
+placement-results={"file":"test/rebalancer/required-entity-operation-observation.test.js","attempt":1,"ok":true,"assertions":177,"durationMs":1849,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/topology-guard-inventory-authority.test.js","attempt":1,"ok":true,"assertions":57,"durationMs":2808,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/services-inventory-owner-fact-siblings.test.js","attempt":1,"ok":true,"assertions":34,"durationMs":4963,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/cdc/cdc-owner-fact-receiver-read-point.test.js","attempt":1,"ok":true,"assertions":42,"durationMs":5418,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/readiness-snapshot-persistence.test.js","attempt":1,"ok":false,"assertions":49,"durationMs":1355,"retriedOnce":false,"firstFailureLine":"not ok 1 - SERVICES inventory of partition partition-1 unavailable: owner_fact_read_failed"}
+placement-results={"file":"test/rebalancer/topology-guard-owner-fact-inventory.test.js","attempt":1,"ok":true,"assertions":25,"durationMs":4730,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/coordinator-dedup-gap.test.js","attempt":1,"ok":true,"assertions":69,"durationMs":1967,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/rebalance-coordinator-topology-guard.test.js","attempt":1,"ok":false,"assertions":85,"durationMs":1818,"retriedOnce":false,"firstFailureLine":"not ok 1 - createOperation should fail closed when the target node already hosts the partition"}
+placement-results={"file":"test/rebalancer/topology-guard-owner-fact-read-point.test.js","attempt":1,"ok":true,"assertions":11,"durationMs":4817,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/rebalance-coordinator-operation-ownership.test.js","attempt":1,"ok":false,"assertions":229,"durationMs":1551,"retriedOnce":false,"firstFailureLine":"not ok 1 - SERVICES inventory of partition partition-1 unavailable: hint_read_failed"}
+placement-results={"file":"test/rebalancer/critical-spread-terminal-stall-repro.test.js","attempt":1,"ok":true,"assertions":23,"durationMs":1369,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/spread-cure-at-target-minting-gap.test.js","attempt":1,"ok":true,"assertions":28,"durationMs":1481,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/failed-authoritative-read-admission-verdict.test.js","attempt":1,"ok":true,"assertions":9,"durationMs":1421,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/recent-completed-replace-target-visibility.test.js","attempt":1,"ok":true,"assertions":28,"durationMs":1269,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/topology-guard-owner-fact-deposed-leader.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":11565,"retriedOnce":false,"firstFailureLine":null}

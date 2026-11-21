@@ -1,0 +1,19 @@
+{
+  "sha": "c9d8896f9fd144e6f92b0d88fbe948b36710198f",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/partition/partition-write-kernel-tenure-fence.test.js",
+    "test/rebalancer/placement-owner-authority-write-kernel.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/partition/partition-write-kernel-tenure-fence.test.js",
+        "test/rebalancer/placement-owner-authority-write-kernel.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

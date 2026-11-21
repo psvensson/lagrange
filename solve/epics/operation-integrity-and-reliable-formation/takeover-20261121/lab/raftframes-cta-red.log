@@ -1,0 +1,68 @@
+lab test: adams-gamla: ordinary (1 files) cores=4 mem=15.6GiB speed x2.11
+[adams-gamla] placement-shell=1924123
+[adams-gamla] placement-head=1d4125c7b6f4c12b1538dc25f317b35de24b12d4
+[adams-gamla] placement-link=node_modules
+[adams-gamla] placement-link=data/examples
+[adams-gamla] placement-prepared=import-graph
+[adams-gamla] placement-env=factor:2.2 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adams-gamla] placement-pid=1924579
+[adams-gamla] # test-files planned=1
+[adams-gamla] classified lane ordinary: 1 file(s), jobs=3
+[adams-gamla] thermal: ok cpu 42C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] not ok test/raft/raft-rs-current-term-applied.test.js (1 assertions, 1458ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 13
+[adams-gamla] # Subtest: currentTermApplied is "the leader applied an entry of its own term", through election, a configuration change and a restart
+[adams-gamla] not ok 1 - currentTermApplied is "the leader applied an entry of its own term", through election, a configuration change and a restart
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 191.432138
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/1d4125c7b6f4-mwqnkbfj-1621335/test/raft/raft-rs-current-term-applied.test.js:84:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     currentTermApplied follows "applied an entry of its own term": measured {"atElection":{"role":"leader","term":1,"appliedIndex":0,"commitIndex":0,"currentTermApplied":false,"confChangePending":false},"afterTermEntry":{"role":"leader","term":1,"appliedIndex":1,"commitIndex":1,"currentTermApplied":true,"confChangePending":false},"learnerAdded":true,"afterConfChange":{"role":"leader","term":1,"appliedIndex":2,"commitIndex":2,"currentTermApplied":false,"confChangePending":false},"reElected":{"role":"leader","term":2,"appliedIndex":2,"commitIndex":2,"currentTermApplied":false,"confChangePending":false},"afterRestartTermEntry":{"role":"leader","term":2,"appliedIndex":3,"commitIndex":3,"currentTermApplied":true,"confChangePending":false}}
+[adams-gamla]     + actual - expected
+[adams-gamla]     
+[adams-gamla]       {
+[adams-gamla]     +   afterItsConfChangeApplied: false,
+[adams-gamla]     -   afterItsConfChangeApplied: true,
+[adams-gamla]         freshLeaderAfterItsEntry: true,
+[adams-gamla]         freshLeaderBeforeItsEntry: false,
+[adams-gamla]         reElectedAfterItsEntry: true,
+[adams-gamla]         reElectedBeforeItsEntry: false
+[adams-gamla]       }
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected:
+[adams-gamla]     freshLeaderBeforeItsEntry: false
+[adams-gamla]     freshLeaderAfterItsEntry: true
+[adams-gamla]     afterItsConfChangeApplied: true
+[adams-gamla]     reElectedBeforeItsEntry: false
+[adams-gamla]     reElectedAfterItsEntry: true
+[adams-gamla]   actual:
+[adams-gamla]     freshLeaderBeforeItsEntry: false
+[adams-gamla]     freshLeaderAfterItsEntry: true
+[adams-gamla]     afterItsConfChangeApplied: false
+[adams-gamla]     reElectedBeforeItsEntry: false
+[adams-gamla]     reElectedAfterItsEntry: true
+[adams-gamla]   operator: 'deepStrictEqual'
+[adams-gamla]   stack: |-
+[adams-gamla]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/1d4125c7b6f4-mwqnkbfj-1621335/test/raft/raft-rs-current-term-applied.test.js:125:12)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adams-gamla]   ...
+[adams-gamla] 1..1
+[adams-gamla] # tests 1
+[adams-gamla] # suites 0
+[adams-gamla] # pass 0
+[adams-gamla] # fail 1
+[adams-gamla] # cancelled 0
+[adams-gamla] # skipped 0
+[adams-gamla] # todo 0
+[adams-gamla] # duration_ms 211.679992
+[adams-gamla] # time=1458ms
+[adams-gamla] # test-files total=1 pass=0 fail=1 assertions=1
+lab test: adams-gamla: # test-files total=1 pass=0 fail=1 assertions=1
+lab test: adams-gamla: results copied to test-output/reports/test-results-adams-gamla.ndjson
+# test-files total=1 pass=0 fail=1 assertions=1

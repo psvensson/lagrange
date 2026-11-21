@@ -1,0 +1,27 @@
+lab test: tv-dator: ordinary, exclusive (4 files) cores=12 mem=15.4GiB speed x1.48
+[tv-dator] placement-shell=3166859
+[tv-dator] placement-head=5880e9d350e6dcb675d4a83b59f0af88975fe16e
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=3167319
+[tv-dator] # test-files planned=4
+[tv-dator] classified lane ordinary: 3 file(s), jobs=4
+[tv-dator] thermal: ok cpu 61C (coretemp/Package id 0) nvme 46C (nvme/Sensor 1)
+[tv-dator] ok test/control-plane/replica-dispatch-direct-wakeup-delivery-decision.test.js (6 assertions, 1228ms)
+[tv-dator] ok test/rebalancer/self-owned-coordinator-handoff-dispatches-in-process.test.js (9 assertions, 1301ms)
+[tv-dator] ok test/rebalancer/reservation-expiry-operation-aware.test.js (10 assertions, 1380ms)
+[tv-dator] # test-files total=3 pass=3 fail=0 assertions=25
+[tv-dator] classified lane exclusive: 1 file(s), jobs=1
+[tv-dator] thermal: ok cpu 57C (coretemp/Package id 0) nvme 47C (nvme/Sensor 1)
+[tv-dator] ok test/rebalancer/message-group-operation-routing.integration.test.js (21 assertions, 1226ms)
+[tv-dator] # test-files total=1 pass=1 fail=0 assertions=21
+lab test: tv-dator: # test-files total=4 pass=4 fail=0 assertions=46
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=4 pass=4 fail=0 assertions=46
+exit=0

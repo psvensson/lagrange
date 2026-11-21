@@ -1,0 +1,3 @@
+lab: /home/peter/.nvm/versions/node/v22.23.2/bin/node failed (1): MODULAR PROOF NOT SAFE
+  reason: UNKNOWN_SCOPE
+  SAFE TEST SCOPE UNKNOWN: import graph unavailable for changed test support code test/cdc/cdc-owner-fact-group-fixture.js (import graph is not the one the committed seal binds); run: node scripts/generate-global-owner-debt-inventory.js --refresh-import-graph-only

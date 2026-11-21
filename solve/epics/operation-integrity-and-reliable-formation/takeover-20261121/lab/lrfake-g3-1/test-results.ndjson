@@ -1,0 +1,4 @@
+{"file":"test/control-plane/heartbeat-storage-budget-preservation.test.js","attempt":1,"ok":true,"assertions":41,"durationMs":3199,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/heartbeat-periodic-writes.property.test.js","attempt":1,"ok":true,"assertions":41,"durationMs":3445,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/heartbeat-memory-trend-reporter-and-shutdown.test.js","attempt":1,"ok":true,"assertions":53,"durationMs":3625,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/heartbeat-memory-trend.test.js","attempt":1,"ok":true,"assertions":144,"durationMs":5429,"retriedOnce":false,"firstFailureLine":null}

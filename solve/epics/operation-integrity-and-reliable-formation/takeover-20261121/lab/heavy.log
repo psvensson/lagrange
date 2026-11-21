@@ -281,3 +281,153 @@ heavy.sh: end   16:35:08 rc=0: git commit
 heavy.sh: start 16:35:08 load=1.67 availGB=12 cpu=50C: git commit
 heavy.sh: end   16:38:34 rc=0: git commit
 heavy.sh: start 16:38:34 load=2.20 availGB=12 cpu=66C: git commit
+heavy.sh: end   16:41:56 rc=1: git commit
+heavy.sh: start 16:41:56 load=2.00 availGB=12 cpu=61C: git commit
+heavy.sh: end   16:43:36 rc=0: git commit
+heavy.sh: start 16:43:36 load=2.13 availGB=12 cpu=48C: node scripts/generate-global-owner-debt-inventory.js
+heavy.sh: end   16:45:23 rc=0: node scripts/generate-global-owner-debt-inventory.js
+heavy.sh: start 16:45:23 load=2.57 availGB=12 cpu=60C: git commit
+heavy.sh: end   16:48:49 rc=0: git commit
+heavy.sh: start 16:48:49 load=2.75 availGB=12 cpu=51C: git commit
+heavy.sh: end   16:52:10 rc=0: git commit
+heavy.sh: start 16:52:10 load=1.67 availGB=12 cpu=54C: git commit
+heavy.sh: end   16:55:37 rc=0: git commit
+heavy.sh: start 16:55:37 load=1.88 availGB=12 cpu=44C: git commit
+heavy.sh: end   16:58:08 rc=0: git commit
+heavy.sh: start 16:58:08 load=2.06 availGB=12 cpu=47C: node scripts/check-guideline-navigability.js
+heavy.sh: end   16:58:10 rc=1: node scripts/check-guideline-navigability.js
+heavy.sh: start 16:58:10 load=2.06 availGB=12 cpu=48C: git commit
+heavy.sh: end   17:00:37 rc=0: git commit
+heavy.sh: start 17:00:37 load=2.28 availGB=11 cpu=50C: node scripts/generate-global-owner-debt-inventory.js
+heavy.sh: end   17:02:22 rc=0: node scripts/generate-global-owner-debt-inventory.js
+heavy.sh: start 17:02:22 load=2.17 availGB=12 cpu=49C: git commit
+heavy.sh: end   17:04:57 rc=0: git commit
+heavy.sh: start 17:04:57 load=2.59 availGB=12 cpu=50C: git commit
+heavy.sh: end   17:07:25 rc=0: git commit
+heavy.sh: start 17:07:25 load=1.78 availGB=12 cpu=44C: git commit
+heavy.sh: end   17:09:55 rc=0: git commit
+heavy.sh: start 17:09:55 load=1.84 availGB=12 cpu=54C: git commit
+heavy.sh: end   17:11:45 rc=0: git commit
+heavy.sh: start 17:11:45 load=1.96 availGB=12 cpu=45C: node scripts/check-guideline-navigability.js
+heavy.sh: end   17:11:47 rc=0: node scripts/check-guideline-navigability.js
+heavy.sh: start 17:11:47 load=1.88 availGB=12 cpu=52C: git commit
+heavy.sh: end   17:15:09 rc=1: git commit
+heavy.sh: start 17:15:09 load=1.45 availGB=12 cpu=49C: git commit
+heavy.sh: end   17:18:31 rc=0: git commit
+heavy.sh: start 17:18:31 load=1.75 availGB=12 cpu=48C: node scripts/generate-global-owner-debt-inventory.js
+heavy.sh: end   17:20:15 rc=0: node scripts/generate-global-owner-debt-inventory.js
+heavy.sh: start 17:20:15 load=1.61 availGB=12 cpu=51C: git commit
+heavy.sh: end   17:23:39 rc=0: git commit
+heavy.sh: start 17:23:39 load=1.54 availGB=11 cpu=58C: git commit
+heavy.sh: end   17:25:32 rc=1: git commit
+heavy.sh: start 17:25:32 load=1.86 availGB=11 cpu=46C: git commit
+heavy.sh: end   17:28:59 rc=1: git commit
+heavy.sh: start 17:28:59 load=1.79 availGB=11 cpu=50C: git commit
+heavy.sh: end   17:31:26 rc=0: git commit
+heavy.sh: start 17:31:26 load=1.60 availGB=11 cpu=48C: git commit
+heavy.sh: end   17:34:55 rc=0: git commit
+heavy.sh: start 17:34:55 load=1.92 availGB=11 cpu=48C: git commit
+heavy.sh: end   17:36:49 rc=0: git commit
+heavy.sh: start 17:36:49 load=2.44 availGB=11 cpu=46C: node scripts/generate-global-owner-debt-inventory.js
+heavy.sh: end   17:38:36 rc=0: node scripts/generate-global-owner-debt-inventory.js
+heavy.sh: start 17:38:36 load=2.78 availGB=11 cpu=58C: git merge
+heavy.sh: end   17:38:36 rc=0: git merge
+heavy.sh: start 17:38:36 load=2.78 availGB=11 cpu=58C: git commit
+heavy.sh: end   17:40:27 rc=0: git commit
+heavy.sh: start 17:40:27 load=2.06 availGB=11 cpu=58C: git commit
+heavy.sh: end   17:42:23 rc=0: git commit
+heavy.sh: start 17:42:23 load=1.61 availGB=11 cpu=62C: git commit
+heavy.sh: end   17:45:45 rc=0: git commit
+heavy.sh: start 17:45:45 load=1.70 availGB=11 cpu=45C: git commit
+heavy.sh: end   17:49:10 rc=0: git commit
+heavy.sh: start 17:49:10 load=1.95 availGB=12 cpu=47C: git commit
+heavy.sh: end   17:51:04 rc=0: git commit
+heavy.sh: start 17:51:04 load=2.79 availGB=11 cpu=66C: git commit
+heavy.sh: end   17:53:34 rc=0: git commit
+heavy.sh: start 17:53:34 load=2.06 availGB=11 cpu=51C: git commit
+heavy.sh: end   17:55:27 rc=0: git commit
+heavy.sh: start 17:55:27 load=2.31 availGB=12 cpu=45C: git commit
+heavy.sh: end   17:57:18 rc=0: git commit
+heavy.sh: start 17:57:18 load=2.25 availGB=12 cpu=46C: git commit
+heavy.sh: end   18:00:41 rc=0: git commit
+heavy.sh: start 18:00:41 load=1.85 availGB=11 cpu=62C: git commit
+heavy.sh: end   18:03:08 rc=0: git commit
+heavy.sh: start 18:03:38 load=1.75 availGB=11 cpu=71C: git commit
+heavy.sh: end   18:06:04 rc=0: git commit
+heavy.sh: start 18:06:34 load=2.61 availGB=11 cpu=71C: git commit
+heavy.sh: end   18:08:24 rc=0: git commit
+heavy.sh: start 18:09:24 load=2.17 availGB=11 cpu=71C: git commit
+heavy.sh: end   18:11:13 rc=0: git commit
+heavy.sh: start 18:11:43 load=2.38 availGB=11 cpu=70C: node scripts/generate-global-owner-debt-inventory.js
+heavy.sh: end   18:11:44 rc=0: node scripts/generate-global-owner-debt-inventory.js
+heavy.sh: start 18:11:44 load=2.38 availGB=11 cpu=70C: git commit
+heavy.sh: end   18:15:17 rc=1: git commit
+heavy.sh: start 18:15:17 load=1.49 availGB=11 cpu=54C: git commit
+heavy.sh: end   18:17:46 rc=1: git commit
+heavy.sh: start 18:17:46 load=1.49 availGB=11 cpu=58C: git commit
+heavy.sh: end   18:21:09 rc=0: git commit
+heavy.sh: start 18:21:09 load=2.17 availGB=11 cpu=45C: git commit
+heavy.sh: end   18:24:32 rc=0: git commit
+heavy.sh: start 18:24:32 load=1.74 availGB=11 cpu=50C: git commit
+heavy.sh: end   18:27:55 rc=1: git commit
+heavy.sh: start 18:27:55 load=1.69 availGB=11 cpu=46C: git commit
+heavy.sh: end   18:29:43 rc=0: git commit
+heavy.sh: start 18:29:43 load=1.75 availGB=11 cpu=52C: git commit
+heavy.sh: end   18:32:15 rc=0: git commit
+heavy.sh: start 18:32:15 load=2.04 availGB=11 cpu=48C: git commit
+heavy.sh: end   18:34:46 rc=0: git commit
+heavy.sh: start 18:34:46 load=2.21 availGB=11 cpu=48C: git commit
+heavy.sh: end   18:36:38 rc=0: git commit
+heavy.sh: start 18:36:38 load=2.05 availGB=11 cpu=53C: git commit
+heavy.sh: end   18:39:09 rc=1: git commit
+heavy.sh: start 18:39:09 load=1.64 availGB=11 cpu=49C: git commit
+heavy.sh: end   18:41:05 rc=0: git commit
+heavy.sh: start 18:41:05 load=2.34 availGB=11 cpu=45C: git commit
+heavy.sh: end   18:43:32 rc=0: git commit
+heavy.sh: start 18:43:32 load=2.10 availGB=11 cpu=48C: git commit
+heavy.sh: end   18:45:22 rc=0: git commit
+heavy.sh: start 18:45:22 load=1.93 availGB=11 cpu=50C: git commit
+heavy.sh: end   18:48:06 rc=0: git commit
+heavy.sh: start 18:48:06 load=1.97 availGB=11 cpu=67C: git commit
+heavy.sh: end   18:50:01 rc=0: git commit
+heavy.sh: start 18:50:01 load=2.41 availGB=11 cpu=49C: git commit
+heavy.sh: end   18:52:34 rc=0: git commit
+heavy.sh: start 18:52:34 load=2.89 availGB=11 cpu=45C: git commit
+heavy.sh: end   18:56:04 rc=0: git commit
+heavy.sh: start 18:56:04 load=2.65 availGB=11 cpu=50C: git commit
+heavy.sh: end   18:59:31 rc=0: git commit
+heavy.sh: start 18:59:31 load=1.99 availGB=11 cpu=49C: git commit
+heavy.sh: end   19:02:03 rc=0: git commit
+heavy.sh: start 19:02:03 load=2.10 availGB=11 cpu=47C: git commit
+heavy.sh: end   19:04:30 rc=0: git commit
+heavy.sh: start 19:04:30 load=2.06 availGB=11 cpu=64C: git commit
+heavy.sh: end   19:06:58 rc=0: git commit
+heavy.sh: start 19:06:58 load=1.48 availGB=11 cpu=59C: git commit
+heavy.sh: end   19:08:50 rc=0: git commit
+heavy.sh: start 19:08:50 load=2.08 availGB=11 cpu=62C: git commit
+heavy.sh: end   19:11:26 rc=0: git commit
+heavy.sh: start 19:11:26 load=3.18 availGB=11 cpu=45C: git commit
+heavy.sh: end   19:14:48 rc=1: git commit
+heavy.sh: start 19:14:48 load=2.84 availGB=11 cpu=51C: git commit
+heavy.sh: end   19:17:20 rc=0: git commit
+heavy.sh: start 19:17:20 load=1.92 availGB=11 cpu=58C: git commit
+heavy.sh: end   19:19:14 rc=0: git commit
+heavy.sh: start 19:19:14 load=2.12 availGB=11 cpu=51C: git commit
+heavy.sh: end   19:21:46 rc=0: git commit
+heavy.sh: start 19:21:46 load=1.77 availGB=11 cpu=53C: git commit
+heavy.sh: end   19:25:18 rc=0: git commit
+heavy.sh: start 19:25:18 load=1.58 availGB=11 cpu=61C: git commit
+heavy.sh: end   19:27:50 rc=1: git commit
+heavy.sh: start 19:27:50 load=1.62 availGB=11 cpu=58C: git commit
+heavy.sh: end   19:30:20 rc=0: git commit
+heavy.sh: start 19:30:20 load=2.41 availGB=11 cpu=44C: git commit
+heavy.sh: end   19:32:15 rc=0: git commit
+heavy.sh: start 19:32:15 load=1.66 availGB=11 cpu=44C: git commit
+heavy.sh: end   19:35:37 rc=1: git commit
+heavy.sh: start 19:35:37 load=1.95 availGB=11 cpu=49C: git commit
+heavy.sh: end   19:38:04 rc=0: git commit
+heavy.sh: start 19:38:04 load=1.52 availGB=11 cpu=62C: git commit
+heavy.sh: end   19:41:28 rc=0: git commit
+heavy.sh: start 19:41:28 load=1.93 availGB=11 cpu=62C: git commit
+heavy.sh: end   19:43:57 rc=0: git commit
+heavy.sh: start 19:43:57 load=1.28 availGB=11 cpu=49C: git commit

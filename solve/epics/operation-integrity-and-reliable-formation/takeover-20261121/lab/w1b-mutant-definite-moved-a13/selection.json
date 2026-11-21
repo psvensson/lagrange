@@ -1,0 +1,17 @@
+{
+  "sha": "58d1b07f65700e1aa6490e90f54ef5a4427838c4",
+  "host": "adams-gamla",
+  "checkBase": "0993265e53601cba4a6a41baa08158725cfcea7f",
+  "files": [
+    "test/rebalancer/replica-placement-owner-clearing-triggers.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/rebalancer/replica-placement-owner-clearing-triggers.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

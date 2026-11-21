@@ -1,0 +1,61 @@
+{
+  "sha": "8e1571c6a47320eb484d455b4682f9d17e18d73c",
+  "host": "adams-gamla",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/control-plane/replica-dispatch-node-state-update-node-row-bootstrap-failures.test.js",
+    "test/rebalancer/message-group-operation-routing.integration.test.js",
+    "test/rebalancer/reservation-expiry-operation-aware.test.js",
+    "test/control-plane/replica-dispatch-routing.property.test.js",
+    "test/control-plane/replica-dispatch-direct-wakeup-delivery-decision.test.js",
+    "test/rebalancer/self-owned-coordinator-handoff-dispatches-in-process.test.js",
+    "test/control-plane/gateway-sql-mutation-fallback-phase-scope.test.js",
+    "test/control-plane/membership-count-neutral-steady-trim.test.js",
+    "test/raft/snapshot-dispatcher-wiring.test.js",
+    "test/rebalancer/operation-record-step-shape.test.js",
+    "test/rebalancer/admission-real-size-estimates.test.js",
+    "test/control-plane/replica-dispatch-node-state-update-remote-direct-wakeup.test.js",
+    "test/control-plane/replica-dispatch-node-state-update-ready-node-retry-cache-priority.test.js",
+    "test/control-plane/replica-dispatch-node-state-update-ready-node-retry-dispatch.test.js",
+    "test/rebalancer/replica-operation-insert-retry-idempotency.test.js",
+    "test/rebalancer/duplicate-operation-prevention.property.test.js",
+    "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js",
+    "test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js",
+    "test/partition/placement-create-bootstrap-binding.test.js",
+    "test/rebalancer/rebalancer-entity-interaction-contract.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/partition/placement-create-bootstrap-binding.test.js",
+        "test/rebalancer/admission-real-size-estimates.test.js",
+        "test/rebalancer/duplicate-operation-prevention.property.test.js",
+        "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js",
+        "test/rebalancer/operation-record-step-shape.test.js",
+        "test/control-plane/replica-dispatch-node-state-update-ready-node-retry-cache-priority.test.js",
+        "test/raft/snapshot-dispatcher-wiring.test.js",
+        "test/control-plane/replica-dispatch-node-state-update-node-row-bootstrap-failures.test.js",
+        "test/control-plane/replica-dispatch-node-state-update-ready-node-retry-dispatch.test.js",
+        "test/control-plane/replica-dispatch-routing.property.test.js",
+        "test/control-plane/replica-dispatch-node-state-update-remote-direct-wakeup.test.js",
+        "test/control-plane/replica-dispatch-direct-wakeup-delivery-decision.test.js",
+        "test/rebalancer/reservation-expiry-operation-aware.test.js",
+        "test/rebalancer/rebalancer-entity-interaction-contract.test.js",
+        "test/rebalancer/self-owned-coordinator-handoff-dispatches-in-process.test.js",
+        "test/control-plane/membership-count-neutral-steady-trim.test.js",
+        "test/control-plane/gateway-sql-mutation-fallback-phase-scope.test.js",
+        "test/rebalancer/replica-operation-insert-retry-idempotency.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js",
+        "test/rebalancer/message-group-operation-routing.integration.test.js"
+      ],
+      "jobs": 1,
+      "resourceClass": "exclusive"
+    }
+  ]
+}

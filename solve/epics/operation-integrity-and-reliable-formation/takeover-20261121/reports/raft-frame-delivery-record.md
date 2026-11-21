@@ -503,3 +503,146 @@ line's. Not tightened here; for the lead to decide whether one tightening commit
 **F-5 (pre-existing red, routed):** `test/simulation/formation-sim-production-partitions.test.js` C-1 and C-2 fail at
 `d6cfa14ab` (source identical to the base `23344cddc`) exactly as after the repair: 46 partition runtimes on node-0
 where 138 (46 x 3) are expected. Not this line's; for the formation-sim composition owner.
+
+## 14. Raft-owner item A: `currentTermApplied` (lead, 2026-11-21; own red-first pair)
+
+**Fact required:** this replica leads and the term of the last entry it applied is its current term (an entry of its
+own term applied), monotone within a term.
+
+**Census (at `1d4125c7b`).** Computed in one place, `src/raft/raft-rs-status-observation.js` (`currentTermApplied`,
+then `applied > pendingConfIndex`, and `confChangePending = pendingConfIndex > applied` in the same shaper), from the
+binding's `status` (`vendor/raft-rs-wasm/src/lib.rs:694-736`: `pending_conf_index`, `st.applied`). raft-rs sets
+`pending_conf_index` to the last index at `become_leader` (before the term-start entry; raft-0.7.0
+`src/raft.rs:1207-1232`) and raises it to a proposed configuration entry's index, so after the leader applies its own
+configuration change `applied == pendingConfIndex` and the old form read false on a quiet group.
+- `currentTermApplied` consumers (src): `raft/raft-rs-committed-membership-read.js:278-287` (carried into the
+  committed view); `rebalancer/replica-operation-message-group-membership-authorization.js:371, :397` (absence flag,
+  leader authority); `rebalancer/replica-operation-message-group-removal.js:149`;
+  `rebalancer/replica-operation-message-group-promotion.js:221-231` (`leaderTermApplied`: the native flag OR "the
+  recorded learner action is an entry of the leader's term and applied" - a workaround written for exactly this
+  defect; after the repair its second branch implies the first, so the consumer owner may delete it; not edited here).
+  Tests: the learner-promotion fixture and integration tests, replace-removal fence, fresh-identity tests.
+- `confChangePending` consumers (unchanged; its meaning "a proposed configuration change not yet applied" is right
+  for them): `partition-participant-release-contract.js:129`, `partition-service-split-accessor-base.js:99,107,650`,
+  `partition-participant-transaction-pause.js:122`, `raft-rs-committed-membership-read.js:192`,
+  `bootstrap/owners/partition-quorum-authority.js:539`.
+- The conf-change admission's own form, `hasAppliedOwnTermEntry` (`raft-rs-conf-change-admission.js:236-248`,
+  callers `:497`, `:677`): `appliedTerm === term` when `appliedTerm > 0`, else the fallback `applied >=
+  pendingConfIndex`. Not provably the same decision (the fallback says true for a fresh leader whose prior log is
+  applied and whose own entry is not), so it is left as it is and reported: whether its fallback can be reached at
+  all (a leader with `appliedTerm == 0`) is for its owner.
+
+**Obtained without a binding change.** The runtime owner already keeps the term of the last applied entry
+(`group.appliedTerm`: set on every applied slice `raft-rs-runtime-owner.js` `applyCommittedSlice`, on an installed
+snapshot `syncTakenSnapshot`, restored at opening by `restoreAppliedTerm` - entry at the applied index, else snapshot
+term, else hard-state term). After a restart the restored value is at most the old term and the new leadership's
+term is higher, so the field is false until the new term's entry applies.
+
+**Repair (`bc949308f`).** One field, one computation: `currentTermApplied(status, appliedTerm)` = leader and
+`appliedTerm === term`; the recorded observation carries `appliedTerm` read in the same turn as its applied index. No
+second field, no fallback. The runtime owner did not grow (file-size ratchet; two single-statement ifs folded).
+
+| Run | Head | Result |
+| --- | --- | --- |
+| `lab/raftframes-cta-red` | `1d4125c7b` (witness only) | **red**: `afterItsConfChangeApplied` false (leader term 1, applied 2 == pendingConfIndex 2); the other four cases as required (fresh leader false/true, re-elected after restart false on its first status, true after its entry) |
+| `lab/raftframes-cta-green` | `bc949308f` | **12 / 12 green**: the witness and every consumer test (learner promotion x4 integration, fresh-identity x2, replace-removal fence, conf-state authority, leader self-removal, committed-membership read, admission redrive wakes, fresh learner promotion) |
+
+**What the two other lanes should read (not edited here).**
+- Placement owner (`work/placement-owner-repair-20261121`, `replica-placement-owner-tenure.js:52-55`
+  `isTermStartApplied`): it reads `ledger.raft.readStatus().currentTermApplied && term === tenure.term`. After this
+  repair the field is the exact fact; its comment ("applied past the index it held when it became leader") should say
+  "applied an entry of its own term". It should read it from the current observation of section 15
+  (`observeCurrentAuthority().currentTermApplied` and `.term`), because `readStatus()` answers the last completed
+  entry's status while a turn is pending.
+- Owner-fact read (`work/owner-fact-read-20261121`, `partition-service-remote-query-methods.js:219`
+  `readAuthorityWitnessOf`): `electionLogApplied: status?.confChangePending === false` is the conf-change fact, not
+  the own-term fact (a fresh leader whose prior log is applied reads true before its term-start entry applies). It
+  should read `currentTermApplied === true`, from the current observation (section 15).
+
+## 15. Raft-owner item B: a current, non-driving authority observation (lead, 2026-11-21; own red-first pair)
+
+Defect (verify-owner-fact-read.md F1, F2): `readStatus()` -> `readStatusNow` -> `readStatusObserved`
+(`raft-rs-runtime-owner.js:1560-1578` at `1d4125c7b`) returns `group.statusObservation`, the status recorded by
+`announce` at the end of the last completed drain, whenever a core turn is pending; with delivered inbound it first
+enqueues a READ_STATUS turn that steps that inbound. A receiver deciding "still leader" on it can answer "leader at
+T" from a core that already follows T+1 (F1) and name an applied index below the rows its connection reads (F2).
+
+**History, and why it is so.**
+- `f4f5b5a6e` (2026-09-22, #46, operation-only port): `readStatus()` returned the fresh core read when the group's
+  queue was idle and a Promise otherwise; delivered inbound was driven by the read.
+- Amendment A7.1 of quest `raft-rs-single-path-partition-cutover` (lead, 2026-09-23,
+  `solve/epics/raft-rs-full-cutover/quest-records/raft-rs-single-path-partition-cutover/design.md:262-267`): "readStatus()
+  is a synchronous observation, never a Promise ... the frozen snapshot refreshed after the last completed core entry
+  when the queue is busy. Measured cause: 22-35% of a busy seed's 135 replicas answered a Promise at any instant (F4),
+  which made the sealed seed witness red and left twelve production sites reading undefined." (F4 of the same design
+  lists those twelve synchronous `readStatus().x` sites.)
+- `1aea11baf` (2026-09-30, #63) implemented A7.1 as `readStatusObserved` ("a read still drives delivered inbound, as
+  before"); `54dd2d7ce` (0.2.6 release) and `2d4dfcf60` (2026-11-08, always-promise-port-answers: the answer became a
+  settled turn) kept the semantics. The cache answered a typing problem (a Promise where a value was expected), not an
+  authority question; no consumer of the time needed currentness mid-turn.
+
+**Per field, during a pending turn.** A turn is pending only at an await of `finishReady` (a peer send, or the
+persistence admission), and every Ready the turn took was persisted (`persistReady`, SQLite) before that await; raft-rs
+asserts the whole log is persisted when a replica becomes leader (raft-0.7.0 `src/raft.rs:1207-1214`), and the
+runtime sends a candidate's vote requests only after persisting its term and vote.
+
+| Field | Core in memory vs durable | Conservative for a receiver that refuses unless leader? |
+| --- | --- | --- |
+| term | equal at the await for the taken Ready; ahead only while a Ready is held untaken (persistence deferral) | yes: a higher term the core knows makes it refuse |
+| role, leader id | current; a deposed leader is a follower in memory at once | non-leader: yes. LEADER: its election is durable, only its term-start entry may not be -> reported `NOT_SETTLED` unless it has applied an entry of its term |
+| commit | in memory >= durable; always a quorum fact | yes (never names an uncommitted entry) |
+| applied (runtime's) | equal: advanced in the same synchronous run as the apply transaction | exact: the position of the rows |
+| own-term applied | from the durable applied term and the in-memory term/role | yes |
+| cached `readStatus()` | behind on every field (last completed entry) | **no**: reports leader at T after the core stepped T+1 |
+
+**F-6 (code read, routed to the runtime owner, not witnessed):** after a persistence deferral inside a drain
+(`processReadyCycle` -> READY_DEFERRED, a CORE_OK outcome), `drainInbound` keeps stepping the remaining inbound into
+the core with the Ready untaken, so the core's in-memory state runs ahead of the durable record by several envelopes
+(safety holds: nothing is sent unpersisted). `raft-rs-persistence-admission.js:7-9` says "inbound envelopes stay
+queued", which is true only for the first deferral of a drain.
+
+**The operation (`97ba4431b`).** `port.observeCurrentAuthority()` (`RAFT_OPERATION.OBSERVE_CURRENT_AUTHORITY`, on the
+frozen port method list) -> the port's `dispatch` (lifecycle admission, closed-port refusal, throw containment) ->
+the runtime dispatcher's `observeCurrentAuthority` (not a runtime command, never a turn, never queued) ->
+`src/raft/raft-rs-current-authority.js` (new). It enters the core twice (`status`, `has_ready`; both `&self` in
+raft-rs, through the runtime owner's `invokeCoreAt`) and reads the owner's own fields; it steps, drains, takes a
+Ready, persists, applies, announces, records an observation, reconstructs or replaces nothing. A runtime that is
+not HEALTHY answers `runtimeRecoveryOutcome`, a reseed-held group its hold, a RECOVERY_REQUIRED group (including one
+awaiting resumption after a replacement) `recoveryOutcome(RECOVERY_DEFERRED)`, a closed or handle-less group the
+generation refusal of `invokeCoreAt` - all without starting the work that ends them. A core trap during the read is
+recorded as every core trap is (the runtime is marked unhealthy and reported), which the read cannot avoid.
+
+Answer (CORE_OK): `groupId, replicaIdentity, peerId, settled (= !turnPending && !readyHeld), turnPending,
+readyHeld, inboundQueued, role, term, leaderPeerId, commitIndex, appliedIndex, appliedTerm, currentTermApplied,
+lifecycleIncarnation, runtimeGeneration, runtimeHealth, groupHealth`. `role` and `leaderPeerId` are
+`RAFT_AUTHORITY_OBSERVATION.NOT_SETTLED` for a core that leads, has not applied an entry of its term, and is not
+settled. That rule is conservative: in the witnessed case (e) the term-start entry was already persisted before the
+held send, but nothing in the binding's status names the core's last index, so the observation cannot tell a
+persisted term-start entry from a held one without a binding change; it reports NOT_SETTLED until the entry applies
+or the core is settled. No binding change was needed for anything else.
+
+`readStatus()` is unchanged. The runtime owner did not grow (file-size ratchet): the observation lives in its own
+module; two single-statement ifs at the top of `executeCommand` were folded onto one line each (formatting only).
+Contract-required test edits: `operation-port-boundary.test.js` (the port's method list) and the controllable test
+double (`test/test-helpers/controllable-consensus-port.js`, the same shape: never pending, a leading double has
+applied its term).
+
+Writable paths used by items A and B: `src/raft/raft-rs-status-observation.js`, `src/raft/raft-rs-runtime-owner.js`,
+`src/raft/raft-rs-current-authority.js` (new), `src/raft/raft-operation-port-constants.js`,
+`src/raft/raft-operation-port.js`, `src/raft/raft-rs-operation-port.js`; tests
+`test/raft/raft-rs-current-term-applied.test.js`, `test/raft/raft-rs-current-authority-observation.test.js` (new
+witnesses), `test/raft/raft-rs-backend/operation-port-boundary.test.js`,
+`test/test-helpers/controllable-consensus-port.js`.
+
+**What `partition-service-remote-query-methods.js` should call (another writer's file; not edited).** Both the
+decision and the post-read re-check of `answerLeaderQualifiedRead` (`readOwnRaftStatus()` at `:304` and in
+`leaderReadRefusalAfter` `:272-282`, at `ee58d307f`) should read `this.raft.observeCurrentAuthority()` (through the
+service's own seam), not `readStatus()`. Mid-turn it may rely on: `outcome === CORE_OK` (anything else refuses);
+`role === LEADER` (`NOT_SETTLED` and every other role refuse); `currentTermApplied === true` (the exact own-term fact:
+its `electionLogApplied` witness field should be this, not `confChangePending === false`); `term`;
+`appliedIndex` (the position of the rows: the statement runs in the same synchronous run, with no await, as the
+reviewer verified); `lifecycleIncarnation` and `runtimeGeneration`. It must not use `commitIndex` as the rows'
+position (in-memory, may be ahead of applied), and need not use `settled` (a leader with its term applied is
+authoritative mid-turn). The redirect (`resolveLeaderAddress`) can stay on `readStatus()`: it needs addresses, and a
+stale address only misroutes a retry. Residual that no read closes: a deposed leader whose core has not yet received
+the newer term (the documented stale-leader class).

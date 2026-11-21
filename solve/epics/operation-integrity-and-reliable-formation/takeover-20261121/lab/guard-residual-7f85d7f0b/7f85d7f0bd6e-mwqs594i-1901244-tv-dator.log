@@ -1,0 +1,68 @@
+placement-shell=3237307
+placement-head=7f85d7f0bd6e8a66d173985767b72757d75bce39
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.4 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3238295
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: ok cpu 65C (coretemp/Package id 0) nvme 48C (nvme/Sensor 1)
+not ok test/rebalancer/topology-guard-owner-fact-deposed-leader.test.js (2 assertions, 10863ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+{"level":50,"time":"2026-11-21T19:07:58.858Z","nodeId":"planner-node","pid":3238310,"subsystem":"query-executor","event":"wait_bound_spent","wait":"getReadRetryAttemptLimit","awaited":"successful partition read within the read attempt limit","boundMs":null,"elapsedMs":117,"lastObserved":{"attempts":3,"lastError":"owner_fact_not_leader","lastErrorCode":null,"lastParticipantNodeId":"peer-node-a","awaitedRoutingRepair":false,"maxAttempts":3},"scope":{"partitionId":"services-p1","forRead":true,"nodeId":"planner-node"},"repeats":0,"nodeId":"planner-node","msg":"Wait bound spent"}
+# Subtest: residual: the guard asks a deposed services-p1 leader that does not know it yet and must not admit a second replica onto the node that just received one
+    # OBSERVATION deposed-leader {"newLeaderNodeId":"peer-node-b","deposedRoleAtRead":"pre-candidate","msFromElectionToRead":10,"hops":[{"nodeId":"peer-node-a","refused":false,"success":false,"failureCode":"owner_fact_not_leader","witnessRole":"pre-candidate"},{"nodeId":"peer-node-a","refused":false,"success":false,"failureCode":"owner_fact_not_leader","witnessRole":"pre-candidate"},{"nodeId":"peer-node-a","refused":false,"success":false,"failureCode":"owner_fact_not_leader","witnessRole":"pre-candidate"}],"refusal":{"message":"Topology guard blocked for ADD on planner-node: replica_inventory_unavailable","reason":"replica_inventory_unavailable","blockingReasons":["replica_inventory_unavailable"],"decisionType":"deferred","authoritativeAvailable":false,"authoritativeReasonCode":"owner_fact_not_leader","authoritativeRetryAfterMs":null,"reconsideration":{"nextAction":"retry"}},"ledger":[]}
+    not ok 1 - t.notEqual is not a function
+      ---
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/topology-guard-owner-fact-deposed-leader.test.js:70:5)
+      at:
+        fileName: test/rebalancer/topology-guard-owner-fact-deposed-leader.test.js
+        lineNumber: 70
+        columnNumber: 5
+        typeName: Test
+        methodName: <anonymous>
+        functionName: Test.<anonymous>
+      type: TypeError
+      tapCaught: returnedPromiseRejection
+      source: >2
+            refusal: refusalOf(first.error),
+            ledger: ledger.map((row) => [row.target_node_id, row.replica_id])})}`);
+          t.notEqual(newLeaderNodeId, NODE.PEER_A, 'setup: another replica leads services-p1');
+        ----^
+          t.type(deposedRoleAtRead, 'string',
+            `setup: the deposed replica's core role at the read is recorded (${deposedRoleAtRead})`);
+      ...
+    
+    1..1
+not ok 1 - residual: the guard asks a deposed services-p1 leader that does not know it yet and must not admit a second replica onto the node that just received one # time=9769.357ms
+  ---
+  at:
+    fileName: test/rebalancer/topology-guard-owner-fact-deposed-leader.test.js
+    lineNumber: 37
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    const CASE_TIMEOUT_MS = 120000;
+  
+  
+    test('residual: the guard asks a deposed services-p1 leader that does not know
+    it yet ' +
+  
+    ^
+      'and must not admit a second replica onto the node that just received one',
+    {timeout: CASE_TIMEOUT_MS}, async (t) => {
+  ...
+
+1..1
+# { total: 1, pass: 0, fail: 1 }
+# time=9777.595ms
+# test-files total=1 pass=0 fail=1 assertions=2
+placement-results={"file":"test/rebalancer/topology-guard-owner-fact-deposed-leader.test.js","attempt":1,"ok":false,"assertions":2,"durationMs":10863,"retriedOnce":false,"firstFailureLine":"not ok 1 - t.notEqual is not a function"}

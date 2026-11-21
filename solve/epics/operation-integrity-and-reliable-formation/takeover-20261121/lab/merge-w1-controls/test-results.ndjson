@@ -1,0 +1,15 @@
+{"file":"test/rebalancer/replace-named-handoff-attempt.test.js","attempt":1,"ok":true,"assertions":52,"durationMs":1959,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/application-write-formation-authority.test.js","attempt":1,"ok":true,"assertions":84,"durationMs":3225,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/node/group-retirement-redrive.test.js","attempt":1,"ok":true,"assertions":117,"durationMs":3425,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/spread-cure-transition-authorization-row.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1148,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/convergence/dt-ledger-completion-continuity-discriminator.test.js","attempt":1,"ok":true,"assertions":64,"durationMs":1690,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-operation-membership-epoch-binding.test.js","attempt":1,"ok":false,"assertions":122,"durationMs":1503,"retriedOnce":false,"firstFailureLine":"not ok 6 - src/partition/partition-placement-retained-repair.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough"}
+{"file":"test/rebalancer/surplus-drain-prefers-non-leader-source.test.js","attempt":1,"ok":true,"assertions":33,"durationMs":1500,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/operation-ownership-lease-fencing.test.js","attempt":1,"ok":true,"assertions":231,"durationMs":3282,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/remove-active-dispatch-redrive.test.js","attempt":1,"ok":true,"assertions":181,"durationMs":1617,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/scripts/check-runtime-grammar-contracts.test.js","attempt":1,"ok":true,"assertions":70,"durationMs":515,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-operation-terminal-cas.test.js","attempt":1,"ok":true,"assertions":61,"durationMs":1180,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-service-row-owner.test.js","attempt":1,"ok":true,"assertions":212,"durationMs":595,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/query/replica-operation-structured-mutation-native.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":18509,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-operation-repository.test.js","attempt":1,"ok":true,"assertions":466,"durationMs":25520,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/bootstrap-topology-snapshot-owner.test.js","attempt":1,"ok":true,"assertions":65,"durationMs":537,"retriedOnce":false,"firstFailureLine":null}

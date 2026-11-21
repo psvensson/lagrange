@@ -1,0 +1,245 @@
+lab test: tv-dator: ordinary, bootstrap (15 files) cores=12 mem=15.4GiB speed x1.56
+[tv-dator] placement-shell=3256575
+[tv-dator] placement-head=78c40b57bfa38e3aca59d634b6f7670451096e2a
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.6 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=3257015
+[tv-dator] # test-files planned=15
+[tv-dator] classified lane ordinary: 14 file(s), jobs=4
+[tv-dator] thermal: ok cpu 61C (coretemp/Package id 0) nvme 49C (nvme/Sensor 1)
+[tv-dator] ok test/rebalancer/replace-named-handoff-attempt.test.js (52 assertions, 1959ms)
+[tv-dator] ok test/rebalancer/application-write-formation-authority.test.js (84 assertions, 3225ms)
+[tv-dator] ok test/node/group-retirement-redrive.test.js (117 assertions, 3425ms)
+[tv-dator] ok test/rebalancer/spread-cure-transition-authorization-row.test.js (1 assertions, 1148ms)
+[tv-dator] ok test/convergence/dt-ledger-completion-continuity-discriminator.test.js (64 assertions, 1690ms)
+[tv-dator] not ok test/rebalancer/replica-operation-membership-epoch-binding.test.js (122 assertions, 1503ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] # Subtest: E1-null-round-trip: a durable SQL NULL epoch rehydrates as unbound, never as epoch 0, through the SQL and cache read routes
+[tv-dator]     ok 1 - the unbound create persists membership_publication_epoch as SQL NULL
+[tv-dator]     ok 2 - the SQL route rehydrates the operation
+[tv-dator]     ok 3 - SQL NULL rehydrates with no bound epoch (field absent)
+[tv-dator]     ok 4 - SQL NULL never rehydrates as epoch 0
+[tv-dator]     ok 5 - the canonical decode of the rehydrated field is UNBOUND
+[tv-dator]     ok 6 - the cache route rehydrates the operation
+[tv-dator]     ok 7 - the cache route rehydrates NULL as unbound too
+[tv-dator]     1..7
+[tv-dator] ok 1 - E1-null-round-trip: a durable SQL NULL epoch rehydrates as unbound, never as epoch 0, through the SQL and cache read routes # time=124.709ms
+[tv-dator] 
+[tv-dator] # Subtest: E2-epoch-zero-preserved: a durable epoch 0 rehydrates as bound epoch 0, not as an unbound sentinel
+[tv-dator]     ok 1 - the bound-zero create persists integer 0
+[tv-dator]     ok 2 - SQL 0 rehydrates as in-memory 0
+[tv-dator]     ok 3 - the canonical decode is BOUND 0
+[tv-dator]     1..3
+[tv-dator] ok 2 - E2-epoch-zero-preserved: a durable epoch 0 rehydrates as bound epoch 0, not as an unbound sentinel # time=42.309ms
+[tv-dator] 
+[tv-dator] # Subtest: E3-positive-epoch-preserved: a durable epoch 2 rehydrates as bound epoch 2
+[tv-dator]     ok 1 - the bound create persists integer 2
+[tv-dator]     ok 2 - SQL 2 rehydrates as in-memory 2
+[tv-dator]     1..2
+[tv-dator] ok 3 - E3-positive-epoch-preserved: a durable epoch 2 rehydrates as bound epoch 2 # time=40.322ms
+[tv-dator] 
+[tv-dator] # Subtest: E4-unbound-dispatch-follows-unbound-rule: a rehydrated NULL-epoch ADD dispatches under the unbound rule when the current epoch is 2
+[tv-dator]     ok 1 - the unbound operation is not failed as a stale epoch-0 dispatch
+[tv-dator]     ok 2 - no stale-dispatch failure is recorded for an unbound operation
+[tv-dator]     ok 3 - the unbound ADD reaches the executor (existing unbound rule)
+[tv-dator]     ok 4 - the executor request carries no fabricated epoch
+[tv-dator]     1..4
+[tv-dator] ok 4 - E4-unbound-dispatch-follows-unbound-rule: a rehydrated NULL-epoch ADD dispatches under the unbound rule when the current epoch is 2 # time=36.55ms
+[tv-dator] 
+[tv-dator] # Subtest: E5-stale-bound-still-rejected: a rehydrated epoch-1 ADD is rejected as stale when the current epoch is 2
+[tv-dator]     ok 1 - the bound epoch rehydrates as 1
+[tv-dator]     ok 2 - the stale bound ADD does not dispatch
+[tv-dator]     ok 3 - the executor never receives the stale request
+[tv-dator]     ok 4 - the stale operation is failed closed
+[tv-dator]     ok 5 - the failure names the real bound epoch and the current epoch
+[tv-dator]     1..5
+[tv-dator] ok 5 - E5-stale-bound-still-rejected: a rehydrated epoch-1 ADD is rejected as stale when the current epoch is 2 # time=33.014ms
+[tv-dator] 
+[tv-dator] # Subtest: E6-current-bound-accepted: a rehydrated epoch-2 ADD dispatches when the current epoch is 2 and carries its epoch to the executor
+[tv-dator]     ok 1 - a current bound ADD is not failed
+[tv-dator]     ok 2 - a current bound ADD dispatches
+[tv-dator]     ok 3 - the executor request carries the bound epoch 2
+[tv-dator]     1..3
+[tv-dator] ok 6 - E6-current-bound-accepted: a rehydrated epoch-2 ADD dispatches when the current epoch is 2 and carries its epoch to the executor # time=33.557ms
+[tv-dator] 
+[tv-dator] # Subtest: E7-malformed-durable-fails-closed: malformed durable epoch values throw a typed error instead of becoming a legitimate epoch
+[tv-dator]     ok 1 - durable text: rehydration fails closed with the typed binding error
+[tv-dator]     ok 2 - durable negative: rehydration fails closed with the typed binding error
+[tv-dator]     ok 3 - durable fractional: rehydration fails closed with the typed binding error
+[tv-dator]     ok 4 - durable empty text: rehydration fails closed with the typed binding error
+[tv-dator]     ok 5 - numeric text is stored as integer 2 by SQLite column affinity
+[tv-dator]     ok 6 - cache string epoch: rehydration fails closed with the typed binding error
+[tv-dator]     ok 7 - decode(undefined:undefined) is unbound
+[tv-dator]     ok 8 - decode(object:null) is unbound
+[tv-dator]     ok 9 - decode(number:0) is bound
+[tv-dator]     ok 10 - decode(number:2) is bound
+[tv-dator]     ok 11 - decode(string:) is invalid
+[tv-dator]     ok 12 - decode(string:0) is invalid
+[tv-dator]     ok 13 - decode(string:2) is invalid
+[tv-dator]     ok 14 - decode(number:NaN) is invalid
+[tv-dator]     ok 15 - decode(number:Infinity) is invalid
+[tv-dator]     ok 16 - decode(number:-1) is invalid
+[tv-dator]     ok 17 - decode(number:1.5) is invalid
+[tv-dator]     ok 18 - decode(boolean:true) is invalid
+[tv-dator]     ok 19 - decode(object:[object Object]) is invalid
+[tv-dator]     ok 20 - decode(object:2) is invalid
+[tv-dator]     ok 21 - decode(object:2) is invalid
+[tv-dator]     ok 22 - decode(bigint:2) is invalid
+[tv-dator]     1..22
+[tv-dator] ok 7 - E7-malformed-durable-fails-closed: malformed durable epoch values throw a typed error instead of becoming a legitimate epoch # time=27.748ms
+[tv-dator] 
+[tv-dator] # Subtest: E8-single-decoder-inventory: every src reader of the membership epoch is classified and behaviour-changing readers consume the one decoder
+[tv-dator]     ok 1 - src/bootstrap/system-table-runtime-schema-definitions.js: no local numeric reinterpretation of the field
+[tv-dator]     ok 2 - src/bootstrap/system-table-runtime-schema-definitions.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+[tv-dator]     ok 3 - src/partition/partition-placement-admission-decision.js: no local numeric reinterpretation of the field
+[tv-dator]     ok 4 - src/partition/partition-placement-admission-decision.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+[tv-dator]     ok 5 - src/partition/partition-placement-retained-repair.js: no local numeric reinterpretation of the field
+[tv-dator]     not ok 6 - src/partition/partition-placement-retained-repair.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/replica-operation-membership-epoch-binding.test.js
+[tv-dator]         lineNumber: 713
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/replica-operation-membership-epoch-binding.test.js:713:7)
+[tv-dator]       source: >2
+[tv-dator]               continue;
+[tv-dator]             }
+[tv-dator]             t.ok(
+[tv-dator]         ------^
+[tv-dator]               passthrough.has(relative),
+[tv-dator]               `${relative}: an unclassified reader of the membership epoch appeared; ` +
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     ok 7 - src/partition/partition-service-constants.js: no local numeric reinterpretation of the field
+[tv-dator]     ok 8 - src/partition/partition-service-constants.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+[tv-dator]     ok 9 - src/partition/partition-service-entry-apply-base.js: no local numeric reinterpretation of the field
+[tv-dator]     ok 10 - src/partition/partition-service-entry-apply-base.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+[tv-dator]     ok 11 - src/rebalancer/move-planner-move-calculation-methods.js: no local numeric reinterpretation of the field
+[tv-dator]     ok 12 - src/rebalancer/move-planner-move-calculation-methods.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+[tv-dator]     ok 13 - src/rebalancer/operation-workflow-dispatch-epoch-gate.js: no local numeric reinterpretation of the field
+[tv-dator]     ok 14 - src/rebalancer/operation-workflow-dispatch-epoch-gate.js: behaviour-changing reader imports the decode owner
+[tv-dator]     ok 15 - src/rebalancer/operation-workflow-dispatch-response-reconcile.js: no local numeric reinterpretation of the field
+[tv-dator]     ok 16 - src/rebalancer/operation-workflow-dispatch-response-reconcile.js: behaviour-changing reader imports the decode owner
+[tv-dator]     ok 17 - src/rebalancer/operation-workflow-reentry-authority.js: no local numeric reinterpretation of the field
+[tv-dator]     ok 18 - src/rebalancer/operation-workflow-reentry-authority.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+[tv-dator]     ok 19 - src/rebalancer/operation-workflow-replace-target-binding.js: no local numeric reinterpretation of the field
+[tv-dator]     ok 20 - src/rebalancer/operation-workflow-replace-target-binding.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+[tv-dator]     ok 21 - src/rebalancer/rebalance-coordinator-operation-creation-admission.js: no local numeric reinterpretation of the field
+[tv-dator]     ok 22 - src/rebalancer/rebalance-coordinator-operation-creation-admission.js: behaviour-changing reader imports the decode owner
+[tv-dator]     ok 23 - src/rebalancer/rebalance-coordinator-operation-creation-support.js: no local numeric reinterpretation of the field
+[tv-dator]     ok 24 - src/rebalancer/rebalance-coordinator-operation-creation-support.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+[tv-dator]     ok 25 - src/rebalancer/rebalance-coordinator-operation-creation.js: no local numeric reinterpretation of the field
+[tv-dator]     ok 26 - src/rebalancer/rebalance-coordinator-operation-creation.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+[tv-dator]     ok 27 - src/rebalancer/rebalance-coordinator-operation-intent-methods.js: no local numeric reinterpretation of the field
+[tv-dator]     ok 28 - src/rebalancer/rebalance-coordinator-operation-intent-methods.js: behaviour-changing reader imports the decode owner
+[tv-dator]     ok 29 - src/rebalancer/rebalance-coordinator-owner-delegation-methods.js: no local numeric reinterpretation of the field
+[tv-dator]     ok 30 - src/rebalancer/rebalance-coordinator-owner-delegation-methods.js: behaviour-changing reader imports the decode owner
+[tv-dator]     ok 31 - src/rebalancer/replica-operation-constants.js: no local numeric reinterpretation of the field
+[tv-dator]     ok 32 - src/rebalancer/replica-operation-constants.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+[tv-dator]     ok 33 - src/rebalancer/replica-operation-creation-request.js: no local numeric reinterpretation of the field
+[tv-dator]     ok 34 - src/rebalancer/replica-operation-creation-request.js: behaviour-changing reader imports the decode owner
+[tv-dator]     ok 35 - src/rebalancer/replica-operation-repository-mutation-row-methods.js: no local numeric reinterpretation of the field
+[tv-dator]     ok 36 - src/rebalancer/replica-operation-repository-mutation-row-methods.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+[tv-dator]     ok 37 - src/rebalancer/replica-operation-repository-row-methods.js: no local numeric reinterpretation of the field
+[tv-dator]     ok 38 - src/rebalancer/replica-operation-repository-row-methods.js: behaviour-changing reader imports the decode owner
+[tv-dator]     ok 39 - src/rebalancer/replica-placement-owner-admission-statement.js: no local numeric reinterpretation of the field
+[tv-dator]     ok 40 - src/rebalancer/replica-placement-owner-admission-statement.js: behaviour-changing reader imports the decode owner
+[tv-dator]     ok 41 - src/rebalancer/replica-placement-owner-retained-repair-statement.js: no local numeric reinterpretation of the field
+[tv-dator]     not ok 42 - src/rebalancer/replica-placement-owner-retained-repair-statement.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/replica-operation-membership-epoch-binding.test.js
+[tv-dator]         lineNumber: 713
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/replica-operation-membership-epoch-binding.test.js:713:7)
+[tv-dator]       source: >2
+[tv-dator]               continue;
+[tv-dator]             }
+[tv-dator]             t.ok(
+[tv-dator]         ------^
+[tv-dator]               passthrough.has(relative),
+[tv-dator]               `${relative}: an unclassified reader of the membership epoch appeared; ` +
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     ok 43 - src/rebalancer/replica-placement-owner.js: no local numeric reinterpretation of the field
+[tv-dator]     ok 44 - src/rebalancer/replica-placement-owner.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+[tv-dator]     ok 45 - src/rebalancer/replica-status.js: no local numeric reinterpretation of the field
+[tv-dator]     ok 46 - src/rebalancer/replica-status.js: behaviour-changing reader imports the decode owner
+[tv-dator]     ok 47 - src/rebalancer/storage-reservation-authority.js: no local numeric reinterpretation of the field
+[tv-dator]     ok 48 - src/rebalancer/storage-reservation-authority.js: behaviour-changing reader imports the decode owner
+[tv-dator]     ok 49 - src/rebalancer/unified-rebalancer-move-execution.js: no local numeric reinterpretation of the field
+[tv-dator]     ok 50 - src/rebalancer/unified-rebalancer-move-execution.js: behaviour-changing reader imports the decode owner
+[tv-dator]     ok 51 - src/rebalancer/unified-rebalancer-rebalance-loop.js: no local numeric reinterpretation of the field
+[tv-dator]     ok 52 - src/rebalancer/unified-rebalancer-rebalance-loop.js: behaviour-changing reader imports the decode owner
+[tv-dator]     ok 53 - src/rebalancer/replica-operation-repository-row-methods.js: still reads the field (vacuity)
+[tv-dator]     ok 54 - src/rebalancer/operation-workflow-dispatch-epoch-gate.js: still reads the field (vacuity)
+[tv-dator]     ok 55 - src/rebalancer/rebalance-coordinator-owner-delegation-methods.js: still reads the field (vacuity)
+[tv-dator]     ok 56 - src/rebalancer/replica-status.js: still reads the field (vacuity)
+[tv-dator]     ok 57 - src/rebalancer/unified-rebalancer-move-execution.js: still reads the field (vacuity)
+[tv-dator]     ok 58 - src/rebalancer/operation-workflow-dispatch-response-reconcile.js: still reads the field (vacuity)
+[tv-dator]     ok 59 - src/rebalancer/unified-rebalancer-rebalance-loop.js: still reads the field (vacuity)
+[tv-dator]     ok 60 - src/rebalancer/rebalance-coordinator-operation-creation-admission.js: still reads the field (vacuity)
+[tv-dator]     ok 61 - src/rebalancer/storage-reservation-authority.js: still reads the field (vacuity)
+[tv-dator]     ok 62 - src/rebalancer/rebalance-coordinator-operation-intent-methods.js: still reads the field (vacuity)
+[tv-dator]     ok 63 - src/rebalancer/replica-operation-creation-request.js: still reads the field (vacuity)
+[tv-dator]     ok 64 - src/rebalancer/replica-placement-owner-admission-statement.js: still reads the field (vacuity)
+[tv-dator]     ok 65 - the decode owner exists (vacuity)
+[tv-dator]     ok 66 - zero local Number(...) reinterpretations
+[tv-dator]     ok 67 - 12 behaviour-changing readers, one canonical decode
+[tv-dator]     1..67
+[tv-dator] not ok 8 - E8-single-decoder-inventory: every src reader of the membership epoch is classified and behaviour-changing readers consume the one decoder # time=101.967ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/replica-operation-membership-epoch-binding.test.js
+[tv-dator]     lineNumber: 682
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     }
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('E8-single-decoder-inventory: every src reader of the membership epoch '
+[tv-dator]     +
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       'is classified and behaviour-changing readers consume the one decoder',
+[tv-dator]     async (t) => {
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: shutdown: release the shared durable replica_operations partition
+[tv-dator]     1..0
+[tv-dator] ok 9 - shutdown: release the shared durable replica_operations partition # time=6.977ms
+[tv-dator] 
+[tv-dator] 1..9
+[tv-dator] # { total: 114, pass: 112, fail: 2 }
+[tv-dator] # time=461.661ms
+[tv-dator] ok test/rebalancer/surplus-drain-prefers-non-leader-source.test.js (33 assertions, 1500ms)
+[tv-dator] ok test/rebalancer/operation-ownership-lease-fencing.test.js (231 assertions, 3282ms)
+[tv-dator] ok test/rebalancer/remove-active-dispatch-redrive.test.js (181 assertions, 1617ms)
+[tv-dator] ok test/scripts/check-runtime-grammar-contracts.test.js (70 assertions, 515ms)
+[tv-dator] ok test/rebalancer/replica-operation-terminal-cas.test.js (61 assertions, 1180ms)
+[tv-dator] ok test/partition/partition-service-row-owner.test.js (212 assertions, 595ms)
+[tv-dator] ok test/query/replica-operation-structured-mutation-native.test.js (2 assertions, 18509ms)
+[tv-dator] ok test/rebalancer/replica-operation-repository.test.js (466 assertions, 25520ms)
+[tv-dator] # test-files total=14 pass=13 fail=1 assertions=1696
+[tv-dator] classified lane bootstrap: 1 file(s), jobs=2
+[tv-dator] thermal: ok cpu 52C (coretemp/Package id 0) nvme 46C (nvme/Sensor 1)
+[tv-dator] ok test/bootstrap/bootstrap-topology-snapshot-owner.test.js (65 assertions, 537ms)
+[tv-dator] # test-files total=1 pass=1 fail=0 assertions=65
+lab test: tv-dator: # test-files total=15 pass=14 fail=1 assertions=1761
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=15 pass=14 fail=1 assertions=1761
+exit=1

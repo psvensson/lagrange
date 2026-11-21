@@ -1,0 +1,1 @@
+{"file":"test/rebalancer/rebalancer-entity-interaction-contract.test.js","attempt":1,"ok":false,"assertions":34,"durationMs":976,"retriedOnce":false,"firstFailureLine":"not ok 1 - message-group removal cannot cross its replicated-group floor"}

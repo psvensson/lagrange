@@ -425,3 +425,384 @@ rebalancer question needs a read or a witness (missing).
   move-replica-assignment-token) were outside this brief and were not examined.
 - `node/replica-cleanup-tombstone-owner.js:107` double-undefined comparison: recorded, not examined.
 - Intermittency: one probe run per file.
+
+---
+
+# Stage 2: product repairs (red-first), 2026-11-21 ~16:30-17:45Z
+
+Branch `work/line-regression-causes-20261121` (pushed): 0ddf7b00f282145cedf64db14360b5c5120de926 (witnesses
+only, red) -> ab3e4b9af19fc68c5b6b74b24042aee91bd77a3e (repairs). Both through heavy.sh; lab only (adam-laptop).
+Scope kept: `control-plane-named-write-outcome.js`, `control-plane-write-identity.js`, `query-constants.js`
++ its one caller, `bootstrap-api-control-plane-methods.js`; new test files only; no existing assertion touched.
+
+## Lab runs
+
+| Run | Sha | Result | Directory under `lab/` |
+|---|---|---|---|
+| Red-before: 5 new witnesses | 0ddf7b00f | 4 red for the intended reasons, 1 green (the real-producer guard) | `lr-s2-red-0ddf7b00f-1/` |
+| Guards before: 8 existing named-write files | 0ddf7b00f | 7 green; `write-exactly-once-property` already red ("A named control-plane write requires a declared system partition", d471620a9's scope check on a user table) | `lr-s2-guards-before-0ddf7b00f-1/` |
+| After: witnesses + 10 representative red files + 8 guards | ab3e4b9af | 13/23 green; details below | `lr-s2-after-ab3e4b9af-1/` |
+
+## Item 1: the named-write judge is total [X]
+
+- Repair (`control-plane-named-write-outcome.js`): `isRecord`/`isDeclaredAttempt` guards; every comparison
+  requires presence first. APPLIED only when `durableCommitWitness` is an object, the answer has a
+  `partitionId`, the witness names that partition, it equals the attempt's declared partition, and
+  `witness.entryId === deriveParticipantEntryId(attempt.key, partition)`. The double-undefined class fixed at
+  :38 (witness vs answer partition), :69 (single nested failure selection, now `singlePartitionFailureOf`),
+  the distributed key comparison (`result.idempotencyKey !== attempt.key` passed with both absent), and
+  non-object participants / nested failures / attempts. `git grep` of the two files found no other
+  optional-chain comparison (`control-plane-write-identity.js:489` compares to a constant).
+- Witness `test/control-plane/named-write-outcome-total.test.js`: 31-shape table. Red at 0ddf7b00f:
+  3 shapes threw `TypeError ... reading 'partitionId'` (the exact receipt-less success, the engine fake
+  behind the real CDC service, the heartbeat fake), 1 threw `reading 'committed'` (nested `[null]`), 1 threw
+  on a missing attempt, and "distributed answer and attempt both without a key" was APPLIED. Green at
+  ab3e4b9af. The gateway + real `CDCIntegrationService` case (production construction, the shape that threw)
+  now returns the typed unknown twice (the held instance re-delivered under its own key) instead of throwing.
+- Guard `test/query/named-write-real-producer-applied.test.js` (real rs-raft leader, engine, coordinator, CDC,
+  gateway): green before and after on the SQL gateway, CDC-through-engine and CDC-local-leader paths.
+- Guards green after: control-plane-write-identity, endpoint-incarnation-authority,
+  control-plane-error-classification, coordinator-reservation-lifecycle, durable-rejoin-incarnation-advance,
+  write-identity-instance, membership-publication-native-ack-order; write-exactly-once-property unchanged red.
+
+## Item 2: an unknown answer never says "applied" [X]
+
+- Built in `unresolvedAnswer` (`control-plane-write-identity.js:351`), which spread the gateway-normalized
+  transport answer. Repair: the transport classification (`outcome`, `completionState`) no longer travels;
+  the one unknown shape is `success:false, deferRetry:true, failureCode:'partition_write_outcome_unknown',
+  pendingInstance{outcome:'unknown'}, contractState:'pending', nextAction:'retry'` (accepted into consensus,
+  not proven; owned next action = re-send under the same key; read-back stays the owner's).
+- Witness: named-write-outcome-total case 2 (red: `outcome:'applied'`; green after) and case 3 (through the
+  gateway and the real CDC service).
+- Consumer census (readers of `outcome`/`completionState`/`contractState`/`nextAction` of a named-write answer,
+  or of the classifier's `known`/`outcome`/`accepted`, which derive from `outcome`):
+  - `classifyControlPlaneMutationResult` (control-plane-mutation-outcome-classifier.js): stale `applied` +
+    `success:false` gave `known:true, outcome:'applied', accepted:true` but `applied:false` (`failed` gates only
+    `applied`). Consumers that decide on `.applied`/`success` were safe: registration `attempt()`
+    (node-registration-incarnation-write.js ~:389-399), endpoint authority `attemptApplied` and
+    `mutateEndpointAtIncarnation` (:216-219), service-registration-handoff-owner.js:607,
+    control-plane-single-row-confirmation.js:16-25 (checks `failed` first), postgres-wire-scale-contract.js:72
+    and nodes-owner.js:103 (`!effect.failed`).
+  - authoritative-row-mutation-vocabulary.js:98-118: a known `applied` that is not applied maps to REJECTED
+    (identical to an absent outcome); the helper schedules a retry. Not acted on as applied.
+  - node-registration-owner-publication-methods.js:136-203 (`classifyJoinAdmissionMutationAcceptance`, join
+    withdrawal): reads `mutation.accepted` (not gated by `failed`) and `contractState`/`nextAction`; the stale
+    answer gave `accepted:true, success:false, withdrawalDeferred:true`. After the repair the same report comes
+    from the declared pending contract (`pending`+`retry`). Not acted on as applied.
+  - system-metadata-owner-base.js:102-104 copies `outcome` onto the owner error; the admin route
+    (admin-owner-operations.js:165-174) answered 503 by `deferRetry` with `mutationOutcome:'applied'` in the body.
+  - gateway ledger/telemetry (`executeMutationWithDiagnostics`, mutation-submission.js:418-436) recorded
+    `outcome:'applied'` with `success:false` for every unknown named write (diagnostic only).
+  - heartbeat `shouldTreatEndpointHeartbeatWriteAsDeferred` (publication-methods.js:80-90): decides on
+    `deferRetry` first; unchanged.
+  - **No consumer acted on the stale "applied" as an acknowledged write: no safety finding.** Residual for the
+    classifier's owner: `accepted`/`known` are not gated by `failed` for a known outcome; with the repair no
+    named-write answer carries a contradictory outcome any more.
+- Handed to the owner of the mutation-outcome vocabulary (not edited, outside scope):
+  `CONTROL_PLANE_MUTATION_OUTCOME` (control-plane-system-table-gateway-constants.js:136) has no member for an
+  unproven write; adding `UNKNOWN: 'unknown'` with a classifier row `{applied:false, accepted:true,
+  deferred:true, retryable:true, terminal:false}` would let the unknown answer carry a named outcome instead of
+  none.
+
+## Item 3: the CDC bootstrap-direct window [R]
+
+- Window: `systemTableWriter.enable()` (seed-registration-phase.js:126, CDC bootstrap mode on) until
+  `d.swapSystemTableWriter()` (seed-cache-hydration-phase.js:278, `currentWriter.disable()` at
+  seed-registration-phase.js:729).
+- Writes issued inside it: registerMessageGroup, registerServices, registerMetaServiceDefinitions,
+  registerSystemTables, updatePartitionSizes, persistCurrentEpochIfMissing, persistClusterIdIfMissing,
+  persistFormationDeclarationIfMissing, all through `BootstrapSystemTableWriter` straight to
+  `cdcIntegrationService.insert/upsert/updateSystemTableRow` (system-table-writer.js:28-50), never through
+  `runControlPlaneWrite`; seedDynamicConfiguration (seed-registration-phase.js:502-560) through a gateway
+  `insertSystemTableRow` WITHOUT `writeIdentity` (dynamic-config-service.js:187-198), so unnamed; the latency
+  owners started in hydration write unnamed (latency-measurement-service.js:552-574); heartbeat and the
+  registration owners start after bootstrap (lagrange-runtime-startup.js). **By reading, no named write runs
+  in the window**, so no repair was made.
+- The key-dropping lane is NOT dead code: it carries every bootstrap-window write. What it drops is the
+  idempotency key (`executeBootstrapDirectSql(service, sql, params)` passes no options to
+  `raftLaneService.executeQuery`), so a keyed retry inside the window is a new entry (R14). Recommended edit for
+  its owner (not made): carry `idempotencyKey` and the derived `entryId` into the raft lane, or refuse a named
+  write while bootstrap mode is on. Not deleted.
+
+## Item 4: the empty provisioning-deadline error [X]
+
+- Repair: `QUERY_ERROR_MSG.TABLE_PARTITION_PROVISION_DEADLINE_EXHAUSTED` ('Table partition provisioning
+  deadline exhausted before target admission') used by `assertProvisioningAttemptBudget`
+  (sql-query-engine-provisioning-admission-methods.js:290).
+- Census of `QUERY_ERROR_MSG.<NAME>` under src/query (static; also a test): 3 undefined members, all fixed at the
+  owner (query-constants.js `QUERY_ERROR_MSG`): `TABLE_PARTITION_TARGET_NODE_WAIT_TIMEOUT` (provisioning, above),
+  `PRIMARY_KEY_REQUIRED` (distributed-write-coordinator.js:505, an INSERT row that does not route to one
+  partition threw an empty Error), `QUERY_EXECUTION_FAILED` (sql-query-engine-write-failure-methods.js:284,
+  the fallback text of a tracked write failure was undefined). Texts are distinct from the log vocabulary.
+  The other `*_MSG` tables referenced under src/query resolved (LOCKING_ERROR_MSG is local to
+  sql-locking-read-grammar.js and complete).
+- Witness `test/query/provisioning-deadline-error-message.test.js`: unit on the real
+  `assertProvisioningAttemptBudget`, the CREATE TABLE provisioning path with an exhausted deadline (no
+  admission read spent), and the census. Red (message `""`, 3 missing members), green after.
+- Fixture debt (not edited): `test/query/sql-query-engine-create-table-quorum.test.js` sets
+  `tablePartitionProvisioningTimeoutMs: 10`; after the repair it rejects with the named deadline message
+  instead of `""`, still not `/insufficient/`.
+
+## Item 5: retryable refusal answered as 500 [X]
+
+- Cause: `buildBootstrapControlPlaneMutationError` (bootstrap-api-control-plane-methods.js:351) rebuilt the
+  error without `deferRetry`, so the one retryable mapping (`isRetryableBootstrapControlPlaneQueryFailure` ->
+  503 typed error) never saw it. Repair: carry `deferRetry`. The pre-CDC SQL fallback stays removed.
+- Witness `test/bootstrap/register-service-retryable-refusal.test.js` (real BootstrapAPI route): red (500
+  "ControlPlaneSystemTableGateway requires cdcIntegrationService"), green after (503, typed code, retry hint,
+  non-terminal handoff contract, 0 SQL calls).
+- PG-wire scale 500 (G12) was NOT this gap: the admin route already maps `deferRetry` to 503; its 500 was the
+  item-1 TypeError (no `deferRetry`, no code). After the repair it answers 503 owner_not_ready.
+
+## Item 6: misleading refusal code (witness only; edit handed over) [X]
+
+- Witness `test/rebalancer/placement-explicit-replica-refusal-code.test.js` (real
+  `createPartitionOperationViaPlacementAdmission`): red before and after (code
+  `placement_admission_bytes_invalid` for ADD with `replicaId` and REPLACE with both replicas).
+- Exact edit for the merger:
+  1. `src/partition/partition-placement-admission-constants.js`, `PLACEMENT_ADMISSION_ERROR`: add
+     `REPLICA_IDENTITY_NOT_ADMITTED: 'placement_admission_replica_identity_not_admitted',`.
+  2. `src/rebalancer/rebalance-coordinator-operation-creation-support.js:528`: `reason:
+     PLACEMENT_ADMISSION_ERROR.BYTES,` -> `reason: PLACEMENT_ADMISSION_ERROR.REPLICA_IDENTITY_NOT_ADMITTED,`.
+  No clearing-trigger row is needed: `replica-placement-owner-clearing-triggers` enumerates `PLACEMENT_REFUSAL`
+  and `PLACEMENT_WAITING_REASON` (replica-placement-owner-constants.js), not `PLACEMENT_ADMISSION_ERROR`, and the
+  refusal is terminal for the request.
+- Can a production caller send `replicaId` on a partition ADD? [R] No caller found:
+  `buildProvisioningCreateOperationMove` (sql-query-engine-provisioning-admission-methods.js:455-475) has no
+  replicaId; the unified rebalancer forwards `move.replicaId` (unified-rebalancer-move-execution.js:62) but its
+  ADD moves come from the deficit cure (move-planner-move-calculation-methods.js:130-135) without one; the
+  planner moves that carry `replicaId` are the failed-replica, surplus and relocation REMOVE cures
+  (:332-336, :689-693, :804-808). REPLACE with both `sourceReplicaId` and `replicaId` was not found in a
+  production planner either.
+
+## Representative red files at ab3e4b9af: their next honest state
+
+| File | Before (b07094a76 probe) | After | Owner of the remainder |
+|---|---|---|---|
+| control-plane/heartbeat-liveness-at-commit | TypeError on the endpoint write, beats fail | **green** (endpoint write is a typed unknown, deferred) | none |
+| bootstrap/register-service-move-handoff-refused | 500 TypeError | **green** | none |
+| runtime/service-runtime-consensus-publication | SERVICES_ROW_PROJECTION_FAILED (TypeError) | typed unknown re-sent under its key until the owner's 30 s bound per write, so the file hits the 600 s budget | fixture (createCreationSqliteFixture engine has no receipt) |
+| control-plane/service-instance-creation-cas | UNKNOWN (swallowed TypeError) | same 30 s bound per receipt-less write (34 attempts each, `wait_bound_spent`), 600 s budget | fixture (same) |
+| wasm-service/bound-remove-physical-operation | founders not settled (TypeError) | still not settled, 243 s instead of 2.8 s | fixture (same) |
+| integration/control-plane-postgres-wire-scale | 500 TypeError | 503 owner_not_ready after the retry bound (121 s) | fixture (engine fake `{success,affectedRows}`) |
+| bootstrap/node-registration-idempotency | outcome not known | unchanged (typed unknown, no read-back in the mock) | fixture |
+| control-plane/heartbeat-memory-trend | 1 vs 3 upserts | unchanged | fixture |
+| query/sql-query-engine-create-table-quorum | empty message | named deadline message, still not /insufficient/ (10 ms budget) | fixture |
+| bootstrap/bootstrap-api | 500 | 503 typed (test stands on the removed SQL fallback) | fixture |
+
+Fixture-debt note for the other writer: the receipt-less fakes now cost each owner write its full retry
+bound (system-metadata owner: 30 s, 34 re-sends under one key) before the typed unknown, so unmigrated files
+are slow (up to the 600 s file budget) rather than fast-failing. That is the owned continuation of an
+unproven write, not a hang.
+
+## Could not close
+
+- Item 6 product edit (vocabulary owned by two other writers): handed over above; its witness stays red.
+- Item 3: no execution covers the seed's bootstrap window; the conclusion is by reading.
+- The classifier's ungated `accepted`/`known` for failed answers with a known outcome (item 2 residual) and
+  the missing `UNKNOWN` mutation outcome: reported to their owner, not edited.
+- `write-exactly-once-property` is red before and after (d471620a9 scope refusal on a user table); not
+  examined.
+
+---
+
+# Stage 3 (corrective), 2026-11-21 ~19:00Z-
+
+Agent `claude:named-write-2` (single writer), worktree
+`/mnt/data/peter/projects/.worktrees/line-regression-causes-20261121`, branch
+`work/line-regression-causes-20261121`, taken over at ab3e4b9af (clean). Instruction sources: CLAUDE.md,
+`docs/steering/rules.md` (R07, R08, R11, R14), `test/guidelines/INDEX.md`, the lead's corrective brief,
+`reports/verify-named-write-judge.md` (APPROVE-WITH-CONDITIONS). Lab only (adam-laptop), commits through
+heavy.sh. Marking as in stages 1-2: [X] executed, [R] read, [I] inferred.
+
+## Files declared before editing (item 1)
+
+- Owner of the vocabulary and its classifier: `src/control-plane/control-plane-system-table-gateway-constants.js`
+  (`CONTROL_PLANE_MUTATION_OUTCOME`), `src/control-plane/control-plane-mutation-outcome-classifier.js`.
+- Producer of the one unknown shape (returned and thrown): `src/control-plane/control-plane-write-identity.js`
+  (`unresolvedAnswer`, `observedWriteResult`, `resolvePendingInstance`: where a thrown transport unknown of a
+  named write is converted).
+- The four consumers: (1) gateway telemetry + ledger: `control-plane-system-table-gateway-telemetry.js`,
+  `control-plane-system-table-gateway-mutation-submission.js`; (2) the outcome snapshot / owner contract:
+  `control-plane-system-table-gateway-mutation-contracts.js`; (3) the admin owner route:
+  `src/admin/admin-owner-operations.js`; (4) the authoritative-row helper:
+  `src/raft/authoritative-row-mutation-vocabulary.js` - under `src/raft/**`, which the brief forbids: NOT edited,
+  exact edit handed over below; its guard `test/raft/authoritative-row-mutation-outcome-classifier.test.js` is
+  updated to the target and stays red until that edit lands.
+- `control-plane-system-table-gateway-telemetry.js` needed no edit: it already reads `result.outcome`; the
+  gateway's catch path (mutation-submission) now hands it the named outcome.
+
+## Red-before [X]
+
+Witness commit 70dfcdba85a6f3aa74ddbc296d47abe730a1eb8e (tests only; pushed), adam-laptop,
+`lab/nw2-red-70dfcdba8-1/` (+`.console.log`): 8 files, 7 red, 1 green, 312 assertions.
+
+| File | Result at 70dfcdba8 (= product of ab3e4b9af) |
+|---|---|
+| control-plane/named-write-outcome-total | red on exactly 4 new rows: zero participants APPLIED (plain and CDC-wrapped), a NOT_LEADER refusal carrying a commit witness NOT_PROPOSED, a self-wrapping CDC answer THROWS RangeError; the other new rows (failure/deferred with witness, right entry wrong partition, earlier attempt replay APPLIED, earlier instance replay, partial witnesses, term/logIndex 0/negative/text, array answer/witness, counts disagree) already as expected |
+| control-plane/named-write-unknown-outcome-shape | red: no UNKNOWN member; returned unknown: caller outcome none, telemetry `owner_not_ready`, ledger null, snapshot `owner_not_ready`, classifier `known:false`, owner error outcome none, admin 503 `owner_not_ready` with code ADMIN_OWNER_NOT_READY; thrown transport timeout: the caller gets a THROWN error, telemetry `owner_not_ready`, snapshot `rejected`, admin answers **500 `failed`** |
+| query/named-write-real-producer-definite | item 2: no-match UPDATE and DELETE are one witnessed participant with 0 rows, APPLIED (a proven zero); the real coordinator's empty plan answers `participantResults: []` and is judged APPLIED (red). item 3: SQL gateway and CDC-local-leader constraint violations FAILED; CDC shutdown NOT_PROPOSED; SQL-gateway NOT_LEADER NOT_PROPOSED; **CDC through the engine: constraint violation UNKNOWN and NOT_LEADER refusal UNKNOWN** (red), both not definite at the caller |
+| control-plane/control-plane-mutation-outcome-classifier | red (no UNKNOWN row; contradictions accepted) |
+| raft/authoritative-row-mutation-outcome-classifier | red (no UNKNOWN in the vocabulary) |
+| query/provisioning-deadline-error-message | red: managed split child deadline message `""`; QUERY_ERROR_MSG census over src finds the managed-split reference |
+| constants/message-table-census | red: 6 undefined members (3163 accesses checked; 3 computed and 66 on parameter-bound tables not checked), list in item 4 |
+| bootstrap/seed-bootstrap-direct-lane.integration | **green**: a real fresh seed (public startLagrangeRuntime child, warn logging) bootstrapped in 26 s without one BOOTSTRAP_RAFT_WRITE_LANE_FELL_BACK |
+
+Item 3 reproduction [X]: the CDC's thrown error (`buildSystemTableMutationError`) carried `participantFailures`
+(partition `storage_reservations-p1`, `SQLITE_CONSTRAINT_PRIMARYKEY`, `committed:true`,
+`outcome:'statement_failed'`, resp. `partition_write_not_leader`) but no top-level `partitionId`, no
+`participantResults`, partition set or key, so the judge could take neither its distributed branch nor the
+single nested failure: UNKNOWN. That is the place that loses the partition identity.
+
+## Item 5 (report only): the CDC bootstrap-direct lane's fallback arm
+
+- Reachable [R]: only on the seed (`BootstrapSystemTableWriter` is constructed once, seed-registration-phase.js:707)
+  while the shared CDC service is in bootstrap mode: `systemTableWriter.enable()` (seed-registration-phase.js:126,
+  after `waitForRequiredPartitionLeadership()` for the PARTITIONS, SERVICES, TABLES and MESSAGE_GROUPS partitions
+  only) until CDC normal mode / `swapSystemTableWriter()` in cache hydration (seed-cache-hydration-phase.js:~250-278).
+  Not later. Within that window the arm runs whenever the raft lane (`raftLaneService.executeQuery(sql, params)`,
+  no key) answers `success:false` for ANY reason or throws for ANY reason: NOT_LEADER/no leader, backpressure,
+  commit-deadline exceeded, OUTCOME_UNKNOWN (handed to consensus, may commit), a committed statement failure,
+  a statement refusal, a thrown transport or apply error.
+- What it does [R]: `executeLocalQuery` on every local candidate replica, outside raft, under no key. It is
+  fenced only by `unreplicatedLocalMutationRefusal` (refuses once the partition's TX1 write origin exists or
+  the cutover pause is up); the origin is proposed later by the participant release owner's ENABLE
+  (replica-handler-participant-release.js:186), so in the seed window the fence does not refuse [I: no
+  execution shows the origin absent in the window].
+- Double apply / divergence [R+I]: after an OUTCOME_UNKNOWN or post-proposal throw, the direct execution
+  applies the row locally and the raft entry may still commit and apply again: an INSERT then fails at raft
+  apply on that replica (its committed outcome row says statement_failed for an entry whose effect exists),
+  a non-idempotent UPDATE applies twice; a replica that catches up by log replay applies the entry once and
+  records `applied`: the outcome records diverge. After a pre-proposal refusal the row exists only on the
+  local replica, not in the log: any replica that catches up by log replay never gets it (the round-11
+  divergence the code comment cites). A definite committed failure is simply re-run and fails again.
+- Witness [X]: `test/bootstrap/seed-bootstrap-direct-lane.integration.test.js` (no product change; the shared
+  public child gained an optional log-level argument, default unchanged) - green at 70dfcdba8: the arm did
+  not run in one real fresh-seed bootstrap. This is evidence the arm is not needed for a normal fresh seed,
+  not proof it is dead (one run; registration waits for the leaders of four partitions, while the window
+  also writes service_definitions, dynamic config, epoch, cluster id and formation declaration rows whose
+  partitions are not in that wait [R]). A proof of necessity would need the arm removed (a product change):
+  bootstrap a seed N times with the arm deleted and the raft lane's failures surfaced typed.
+- Recommendation: delete the arm (R11, no fallback): on a raft-lane failure in the window answer the raft
+  lane's own typed result (the registration owner already retries), and make the window wait for the
+  leaders of every partition it writes. Gate: the witness above, repeated (e.g. 10 fresh seeds on the lab),
+  plus one run with the arm deleted.
+- Named writes in the window [R, partly I]: registration-phase writes go through `BootstrapSystemTableWriter`
+  straight to the CDC service (unnamed); seed partition service rows are activated through the same writer
+  (seed-registration-phase.js:295, unnamed); dynamic configuration goes through the gateway without
+  `writeIdentity` (a minted key, unnamed); `runRetryableControlPlaneWrite` names only writes whose executor
+  passes the minted identity on (system-metadata owners do; the partition write commit and replica-handler
+  status retries do not). Heartbeat, registration and endpoint owners start after bootstrap; log persistence
+  after readiness (verifier [V]). Not established: whether any system-metadata owner write, reservation,
+  replica_operations or membership-publication write is issued by a background owner started in the
+  INFRASTRUCTURE/MESSAGE_GROUPS/PARTITIONS phases while the window is open [I: none found]. The bootstrap lane
+  ignores the write options entirely (`executeSQLDirectToLocalPartition(sql, params, _options)`), so such a
+  write would lose its key (stage 2 finding).
+
+## Item 6 (record for the merge)
+
+- Correction of the stage-2 hand-off (item 6 there): its claim "no clearing-trigger row is needed:
+  replica-placement-owner-clearing-triggers enumerates PLACEMENT_REFUSAL and PLACEMENT_WAITING_REASON, not
+  PLACEMENT_ADMISSION_ERROR" is wrong. On `work/placement-outcome-format-20261121`,
+  `src/rebalancer/replica-placement-owner-constants.js` ~:170-199 classifies EVERY admission code: either in
+  `PLACEMENT_DEFINITE_ANSWER_CODES` or in `PLACEMENT_WAITING_CLEARING_TRIGGER` (which lists the admission
+  errors OWNER_UNAVAILABLE and REPAIR_PENDING), "a code reachable on the admission path that is in neither
+  declaration is a defect". The new `PLACEMENT_ADMISSION_ERROR.REPLICA_IDENTITY_NOT_ADMITTED` must join
+  `PLACEMENT_DEFINITE_ANSWER_CODES` (a request-shape refusal never becomes admissible by waiting; next to its
+  sibling REMOVE_INTENT_UNSCOPED). Whether it also belongs to `STATIC_PRE_PROPOSAL_FAILURE_CODES`
+  (placement-admission-attempt.js:14-19) is the owner's call (the coordinator throw passes no answer, so that
+  set is not consulted today).
+- Merge note: this branch must NOT be merged ahead of the receipt-fake fixture migration: unproven writes are
+  re-sent under their key to the owner's bound (34 attempts in 30 s), so the four unmigrated files of the
+  stage-2 after-run went from 8 s to 1565 s (two at the 600 s file limit).
+
+## Hand-over edits outside this writer's scope (exact)
+
+1. Item 1, the fourth consumer (`src/raft/**` is forbidden to this writer):
+   `src/raft/authoritative-row-mutation-vocabulary.js` - add `OUTCOME_UNKNOWN: 'outcome-unknown',` to
+   `AUTHORITATIVE_ROW_MUTATION_REASON`, and
+   `GATEWAY_OUTCOME_MUTATION_REASON[CONTROL_PLANE_MUTATION_OUTCOME.UNKNOWN] = AUTHORITATIVE_ROW_MUTATION_REASON.OUTCOME_UNKNOWN;`
+   before the `objectFreeze`. Behaviour: unchanged retry (`resolveMutationFailure` schedules one for every
+   non-applied answer); the label stops saying `rejected` (today an UNKNOWN answer gets `reason: undefined`
+   after this branch's vocabulary change, a label only, no branch reads it [V verifier]). Witness:
+   `test/raft/authoritative-row-mutation-outcome-classifier.test.js` (updated here to expect
+   `'outcome-unknown'`; red until the edit lands).
+2. Item 4, undefined message members the all-src census found outside `QUERY_ERROR_MSG` (witness
+   `test/constants/message-table-census.test.js`, red until these land):
+   - `src/bootstrap/owners/service-leader-readiness-owner.js:594` `BOOTSTRAP_API_LOG_MSG.LEADERS_READY || LOCAL_STR_ALL_SERVICE_LEADERS_READY`
+     (a fallback): add `LEADERS_READY: 'All service leaders ready'` to `BOOTSTRAP_API_LOG_MSG`
+     (`src/bootstrap/bootstrap-api-constants.js`), drop the `||` and the local string (:38).
+   - `src/bootstrap/shared/node-state-publication-outcome.js:115` `JOINING_ERROR_MSG.CONTROL_PLANE_MESSAGE_WAS_NOT_ACKNOWLEDGED`:
+     the text exists only in `NODE_JOINING_SERVICE_LITERAL` (node-joining-service-shared.js:233); move it to
+     `JOINING_ERROR_MSG` (`src/bootstrap/node-joining-constants.js`). Today an undelivered node-state
+     publication without transport text throws an Error with an EMPTY message.
+   - `src/transport/message-router-connection-close-reconnect.js:391` `ROUTER_LOG_MSG.CONNECTION_PING_TIMEOUT_SKIPPED_ALIVE`
+     and `src/transport/message-router-peer-liveness.js:95` `ROUTER_LOG_MSG.PING_TIMEOUT_SATISFIED_BY_INBOUND`:
+     add both to `ROUTER_LOG_MSG` (`src/constants/transport.js`); today they log `undefined` as the message.
+   - `src/transport/router-server-manager.js:196` `ROUTER_ERROR_MSG.addressInUse(portKey)`: add
+     `addressInUse: (port) => \`Address in use: in-process port ${port}\`` to `ROUTER_ERROR_MSG`; today an
+     in-process port collision throws `TypeError: ROUTER_ERROR_MSG.addressInUse is not a function` instead of
+     the EADDRINUSE error.
+
+## Repairs and green-after [X]
+
+Repair commit baa2a25802570aa5cf6ecd9c3e106f76cd93b0a5 (pushed), adam-laptop,
+`lab/nw2-after-baa2a2580-1/` (+`.console.log`): 21 files.
+
+- Green after: named-write-outcome-total (all 52 rows), named-write-unknown-outcome-shape (4/4),
+  named-write-real-producer-definite (7/7, incl. the owner sending a definite CDC constraint failure exactly
+  once), control-plane-mutation-outcome-classifier, node-registration-owner (UNKNOWN row added: withdrawal
+  deferred), seed-bootstrap-direct-lane (again no fallback, 27.8 s), and the QUERY_ERROR_MSG all-src census.
+- Red by design (hand-over above): message-table-census (exactly the 5 out-of-scope members),
+  raft/authoritative-row-mutation-outcome-classifier (`reason` for UNKNOWN until the src/raft edit).
+- Witness defect found and corrected (not a product defect): provisioning-deadline-error-message case 3
+  asserted `code:'TIMEOUT'`; the timeout owner (`createTimeoutBudgetError`) sets only `errorCode`, the
+  founding path copies it to `code` (sql-query-engine-provisioning-admission-methods.js:296), the managed
+  split does not. It was red at 70dfcdba8 for that reason, not for the message. Corrected to assert
+  `errorCode` + the named message (commit below). Finding for the timeout owner: one deadline error, two
+  shapes (`code` present on one path only) [R].
+- Comparison with `lr-s2-after-ab3e4b9af-1` (previous writer's 5 witnesses + 8 guards): identical status for
+  all 13 (placement-explicit red by design, write-exactly-once-property red for the same d471620a9 scope
+  refusal, 76 refusal lines; all others green), durations within noise (write-identity-instance 247.3 s vs
+  246.8 s, write-exactly-once 148.4 s vs 146.2 s, membership-publication 9.8 s vs 12.2 s).
+
+## Item 1: what each consumer reports and does for an unknown write (after baa2a2580)
+
+The unknown named write is ONE returned answer whether the producer answered without proof or the transport
+threw the typed unknown: `{success:false, outcome:'unknown', completionState:'unknown', deferRetry:true,
+failureCode:'partition_write_outcome_unknown', entryId, contractState:'pending', nextAction:'retry',
+pendingInstance (its own, outcome 'unknown'), cause: <the producer's answer or error, unchanged>}`; no
+count, no transport classification. A thrown failure that names no unknown (a refusal before delivery, an
+internal error) stays thrown as before. Witnessed identical for both producers (same field set).
+
+| Consumer | Reports | Does |
+|---|---|---|
+| Caller (gateway answer) | outcome `unknown`, contract PENDING / RETRY | re-sends under the same key (owner retry loop, held instance) or reads back |
+| Gateway telemetry | `mutationOutcomeCounts.unknown` (also for a thrown unnamed write carrying the typed code) | diagnostic only |
+| Gateway ledger | `outcome:'unknown'`, `success:false`, `affectedRows:0` | diagnostic only |
+| Outcome snapshot / owner contract | `unknown` / completion `unknown`; contract PENDING, next action RETRY, freshness STALE | as above |
+| Classifier | `known:true, outcome:'unknown', applied:false, accepted:true, deferred:true, retryable:true, terminal:false, failed:true`, no count (`affectedRowsPresent:false, zeroAffectedRows:false`) | single-row confirmation, PG-wire scale, node removal: not applied, not "changed" -> their OUTCOME_UNCONFIRMED (deferRetry) |
+| System-metadata owner error | `outcome:'unknown'`, `deferRetry:true` | caller retries or reads back |
+| Admin owner route | HTTP 503, `outcome:'unknown'`, `errorCode:'ADMIN_OWNER_OUTCOME_UNKNOWN'`, `mutationOutcome:'unknown'`, owner's own code as `ownerErrorCode` | the client must not read it as refused / not-ready (the split-brain verifier's PRE_MUTATION_REFUSALS treated ADMIN_OWNER_NOT_READY as "not admitted"); before: 503 owner_not_ready (returned) or 500 failed (thrown) |
+| Authoritative-row helper (src/raft, hand-over) | today `reason: undefined`; with the edit `outcome-unknown` | schedules its retry (unchanged) |
+
+Classifier flags after the change (stated in the owner): `known` - the answer names a vocabulary outcome that
+agrees with its own success; `applied` - proven applied; `accepted` - not refused (admitted, deferred or
+handed over); `deferred` - its owner continues it later; `retryable` - may be sent again; `terminal` - nothing
+continues it; `failed` - the producer's own `success:false`. They are properties of the named outcome and
+deliberately NOT gated by `failed` (a failed answer legitimately names DEFERRED, OWNER_NOT_READY or UNKNOWN);
+the verifier's case (APPLIED on a failed answer) is a contradiction and now fails closed (invalid), as does
+UNKNOWN on a successful answer.
+
+## Item 2 decision [X]
+
+Real producers: a named UPDATE or DELETE matching no row is answered by its one partition with a durable
+commit witness and 0 rows (a proven zero, APPLIED) on the SQL gateway path; the engine refuses a write plan
+with no partition before the coordinator (`resolveWriteExecutionPlanWithAuthorityRefresh` /
+`hasRoutableTablePlan`: table-not-found or authority-unavailable) and the parser refuses INSERT ... SELECT, so
+no real engine answer for a named system-table write has zero participants [R]; only the coordinator called
+directly with an empty plan produces `participantResults: []` [X]. Decision: such an answer means "no
+partition was asked", proves nothing of the named entry on its declared partition, and is UNKNOWN (not
+APPLIED; not NOT_PROPOSED either, which is reserved for a typed refusal ON the declared partition).
+Also decided: a refusal that carries a durable commit witness is contradictory evidence -> UNKNOWN (it was
+NOT_PROPOSED and would have released the instance); the judge's CDC recursion is depth-bounded.

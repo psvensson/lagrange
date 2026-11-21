@@ -1,0 +1,17 @@
+{
+  "sha": "ac0ed01932dca583e436f320de00a3798bccc219",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/partition/partition-cdc-currentness-stamp-witness.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/partition/partition-cdc-currentness-stamp-witness.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

@@ -1,0 +1,82 @@
+placement-owner-authority-fixture: active resources after the last world: ["Immediate","Immediate","Immediate"]
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'REBALANCE_OPERATION_STEP_TIMEOUT',
+  awaited: 'replica operation progressed past its current workflow step',
+  boundMs: 30000,
+  elapsedMs: 120000,
+  lastObserved: {
+    type: 'REMOVE',
+    workflowStep: 'PENDING',
+    status: 'pending',
+    targetNodeId: 'node-leader-1',
+    stepExceeded: true,
+    budgetExhausted: false,
+    timeoutClassification: {
+      classification: 'rebalance_operation_timeout',
+      configuredBudgetMs: 300000,
+      remainingBudgetMs: 180000,
+      boundaryHit: false,
+      nestedOperation: 'rebalance:pending',
+      operationName: 'rebalance',
+      originalClassification: null
+    }
+  },
+  scope: {
+    nodeId: 'node-leader-1',
+    partitionId: 'user_orders-p1',
+    operationId: 'op-remove-stuck-dispatch'
+  },
+  repeats: 0
+}
+Operation row missing from authoritative partition after zero-row update; re-inserting owner copy {
+  operationId: 'op-real-repo-reinserted',
+  partitionId: 'user_orders-p1',
+  workflowStep: 'ACTIVE',
+  expectedWorkflowStep: null
+}
+Terminal transition persist not committed; retry ownership kept and repair armed {
+  operationId: 'op-real-repo-reinserted',
+  disposition: 'refused',
+  step: 'ACTIVE',
+  partitionId: 'user_orders-p1'
+}
+Committed terminal transition not authoritatively visible; repair scheduled {
+  operationId: 'op-real-repo-reinserted',
+  workflowStep: 'ACTIVE',
+  partitionId: 'user_orders-p1',
+  cause: 'persist_not_committed',
+  attempt: 0,
+  delayMs: 500
+}
+Operation row missing from authoritative partition after zero-row update; re-inserting owner copy {
+  operationId: 'op-real-repo-refused',
+  partitionId: 'user_orders-p1',
+  workflowStep: 'ACTIVE',
+  expectedWorkflowStep: null
+}
+Terminal transition persist not committed; retry ownership kept and repair armed {
+  operationId: 'op-real-repo-refused',
+  disposition: 'refused',
+  step: 'ACTIVE',
+  partitionId: 'user_orders-p1'
+}
+Committed terminal transition not authoritatively visible; repair scheduled {
+  operationId: 'op-real-repo-refused',
+  workflowStep: 'ACTIVE',
+  partitionId: 'user_orders-p1',
+  cause: 'persist_not_committed',
+  attempt: 0,
+  delayMs: 500
+}
+Committed terminal transition not authoritatively visible; repair scheduled {
+  operationId: 'op-real-repo-lost-reply',
+  workflowStep: 'ACTIVE',
+  partitionId: 'user_orders-p1',
+  cause: 'persist_not_committed',
+  attempt: 0,
+  delayMs: 500
+}
+placement-owner-authority-fixture: active resources after the last world: ["Immediate"]
+placement-owner-authority-fixture: active resources after the last world: ["Immediate"]
+placement-owner-authority-fixture: active resources after the last world: ["Immediate"]

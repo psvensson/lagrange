@@ -1,0 +1,331 @@
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'pl-placement-bootstrap-p1-3-0',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'pl-placement-bootstrap-p1-3-0',
+    replica_id: 'replace-replica-df5251ee6106a35895a3732c00f9eb58',
+    status: 'pending',
+    workflow_step: 'PENDING',
+    updated_at: 1795289468669,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795289468694
+}
+Deferred retryable replica operation dispatch failure {
+  operationId: 'pl-placement-bootstrap-p1-3-0',
+  partitionId: 'placement-bootstrap-p1',
+  targetNodeId: 'node-b',
+  workflowStep: 'PENDING',
+  delayMs: 250,
+  errorMessage: 'Placement CREATE bootstrap compare-and-set did not commit',
+  transportReasonCode: 'placement_bootstrap_authority_wait'
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'pl-placement-bootstrap-p1-3-0',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'pl-placement-bootstrap-p1-3-0',
+    replica_id: 'replace-replica-df5251ee6106a35895a3732c00f9eb58',
+    status: 'pending',
+    workflow_step: 'PENDING',
+    updated_at: 1795289468751,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795289468756
+}
+Operation deferred by safety policy {
+  operationId: 'pl-placement-bootstrap-p1-3-0',
+  partitionId: 'placement-bootstrap-p1',
+  sourceNodeId: 'node-a',
+  targetNodeId: 'node-b',
+  workflowStep: 'ACTIVE',
+  reason: 'replace_remove_safety_blocked',
+  errorMessage: 'Critical partition placement-bootstrap-p1 safety check unavailable'
+}
+Deferred retryable replica operation dispatch failure {
+  operationId: 'pl-placement-bootstrap-p1-3-0',
+  partitionId: 'placement-bootstrap-p1',
+  targetNodeId: 'node-b',
+  workflowStep: 'PENDING',
+  delayMs: 250,
+  errorMessage: 'Placement CREATE bootstrap binding was not confirmed',
+  transportReasonCode: 'placement_bootstrap_authority_wait'
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'pl-placement-bootstrap-p1-3-0',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'pl-placement-bootstrap-p1-3-0',
+    replica_id: 'replace-replica-df5251ee6106a35895a3732c00f9eb58',
+    status: 'pending',
+    workflow_step: 'SENDING',
+    updated_at: 1795289498772,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795289468779
+}
+Deferred retryable replica operation dispatch failure {
+  operationId: 'pl-nodes-p1-3-0',
+  partitionId: 'nodes-p1',
+  targetNodeId: 'node-b',
+  workflowStep: 'PENDING',
+  delayMs: 250,
+  errorMessage: 'Placement CREATE bootstrap binding was not confirmed',
+  transportReasonCode: 'placement_bootstrap_authority_wait'
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'pl-nodes-p1-3-0',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'pl-nodes-p1-3-0',
+    replica_id: 'replace-replica-14dc202731840291385c52eca8d3a397',
+    status: 'pending',
+    workflow_step: 'SENDING',
+    updated_at: 1795289498788,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795289468794
+}
+Deferred retryable replica operation dispatch failure {
+  operationId: 'pl-placement-bootstrap-p1-3-0',
+  partitionId: 'placement-bootstrap-p1',
+  targetNodeId: 'node-b',
+  workflowStep: 'PENDING',
+  delayMs: 250,
+  errorMessage: 'Placement CREATE bootstrap compare-and-set did not commit',
+  transportReasonCode: 'placement_bootstrap_authority_wait'
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'pl-placement-bootstrap-p1-3-0',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'pl-placement-bootstrap-p1-3-0',
+    replica_id: 'replace-replica-df5251ee6106a35895a3732c00f9eb58',
+    status: 'pending',
+    workflow_step: 'PENDING',
+    updated_at: 1795289468827,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795289468836
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'pl-placement-bootstrap-p1-3-0',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'pl-placement-bootstrap-p1-3-0',
+    replica_id: 'replace-replica-df5251ee6106a35895a3732c00f9eb58',
+    status: 'pending',
+    workflow_step: 'PENDING',
+    updated_at: 1795289468855,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795289468864
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'pl-placement-bootstrap-p1-3-0',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'pl-placement-bootstrap-p1-3-0',
+    replica_id: 'replace-replica-df5251ee6106a35895a3732c00f9eb58',
+    status: 'pending',
+    workflow_step: 'SENDING',
+    updated_at: 1795289468887,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795289468890
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'pl-placement-bootstrap-p1-3-0',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'pl-placement-bootstrap-p1-3-0',
+    replica_id: 'replace-replica-df5251ee6106a35895a3732c00f9eb58',
+    status: 'creating',
+    workflow_step: 'CREATING',
+    updated_at: 1795289468892,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795289468894
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'pl-placement-bootstrap-p1-3-0',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'pl-placement-bootstrap-p1-3-0',
+    replica_id: 'replace-replica-df5251ee6106a35895a3732c00f9eb58',
+    status: 'pending',
+    workflow_step: 'SENDING',
+    updated_at: 1795289468905,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795289468915
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'pl-placement-bootstrap-p1-3-0',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'pl-placement-bootstrap-p1-3-0',
+    replica_id: 'replace-replica-df5251ee6106a35895a3732c00f9eb58',
+    status: 'creating',
+    workflow_step: 'CREATING',
+    updated_at: 1795289468917,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795289468919
+}
+Deferred retryable replica operation dispatch failure {
+  operationId: 'bootstrap-ledger-waiter',
+  partitionId: 'replica_operations-p1',
+  targetNodeId: 'node-a',
+  workflowStep: 'PENDING',
+  delayMs: 250,
+  errorMessage: 'operation-ledger self-move waiting for incumbent operation pl-placement-bootstrap-p1-3-0'
+}
+Deferred retryable replica operation dispatch failure {
+  operationId: 'bootstrap-ledger-waiter',
+  partitionId: 'replica_operations-p1',
+  targetNodeId: 'node-a',
+  workflowStep: 'PENDING',
+  delayMs: 250,
+  errorMessage: 'operation-ledger self-move waiting for incumbent operation pl-placement-bootstrap-p1-3-0'
+}

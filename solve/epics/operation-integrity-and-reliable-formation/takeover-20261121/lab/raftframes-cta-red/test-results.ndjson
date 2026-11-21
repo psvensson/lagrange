@@ -1,0 +1,1 @@
+{"file":"test/raft/raft-rs-current-term-applied.test.js","attempt":1,"ok":false,"assertions":1,"durationMs":1458,"retriedOnce":false,"firstFailureLine":"not ok 1 - currentTermApplied is \"the leader applied an entry of its own term\", through election, a configuration change and a restart"}

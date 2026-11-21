@@ -1,0 +1,1330 @@
+lab test: tv-dator: ordinary (3 files) cores=12 mem=15.4GiB speed x1.50
+[tv-dator] placement-shell=3182959
+[tv-dator] placement-head=625381bd62c1bc8645d8a2ad26deeb8a7c1b93de
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.6 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=3183999
+[tv-dator] # test-files planned=3
+[tv-dator] classified lane ordinary: 3 file(s), jobs=4
+[tv-dator] thermal: ok cpu 67C (coretemp/Package id 0) nvme 55C (nvme/Sensor 1)
+[tv-dator] not ok test/rebalancer/topology-guard-inventory-authority.test.js (114 assertions, 2971ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] # Subtest: services-p1 led by another node: the planner's topology guard and the SERVICES authority
+[tv-dator]     ok 1 - setup: the planner node's router is connected to peer-node-a
+[tv-dator]     ok 2 - setup: the planner node's router is connected to peer-node-b
+[tv-dator]     ok 3 - setup: peer-node-a leads services-p1 (its consensus core)
+[tv-dator]     ok 4 - setup: no partition SERVICES row is published with raft_role leader
+[tv-dator]     ok 5 - setup: the planner node hosts a services-p1 replica that follows
+[tv-dator]     # Subtest: witness (red today): leader reachable, the guard refuses from the local follower's incomplete answer
+[tv-dator]         # OBSERVATION completeness {"mode":{},"success":true,"rowSetComplete":false,"rows":[],"source":"local_partition_replica","localReadHit":true,"localReplicaFallbackHit":true,"outcome":"authoritative","strategyUsed":"authoritative","readAuthorityWitness":null,"readAuthorityWitnesses":[],"diagnostics":{"leaderNodeId":"peer-node-a","localReadHit":true,"localReplicaFallbackHit":true,"routedToNode":null}}
+[tv-dator]         # OBSERVATION witness {"accompanying":null,"accompanyingList":[],"servingReplica":{"nodeId":"planner-node","replicaId":"services-p1-r2","role":"follower","consensusRole":"follower"},"servingReplicaOwnWitness":{"state":"observed","partitionId":"services-p1","servingNodeId":"planner-node","servingReplicaId":"services-p1-r2","term":1,"appliedIndex":3,"commitIndex":3,"electionLogApplied":true,"role":"follower","observedAtMs":1795282332972}}
+[tv-dator]         # OBSERVATION routing {"guardOwnerRpcCalls":0,"transportHops":[],"route":{"publishedLeaderNodeId":"peer-node-a","publishedRaftRoles":[["peer-node-a","follower"],["planner-node","follower"],["peer-node-b","follower"]],"routingCanonicalLeaderNodeId":"peer-node-a","correctTarget":{"nodeId":"peer-node-a","replicaId":"services-p1-r1","address":"peer-node-a/partition/services-p1-r1","consensusRole":"leader"},"plannerReplica":{"nodeId":"planner-node","replicaId":"services-p1-r2","role":"follower","consensusRole":"follower"}}}
+[tv-dator]         # OBSERVATION guard-decision {"refusal":{"message":"Topology guard blocked for ADD on planner-node: replica_inventory_unusable","reason":"replica_inventory_unusable","blockingReasons":["replica_inventory_unusable"],"decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"authoritativeRetryAfterMs":null,"inventoryProvenance":{"atomicityClaim":"not_claimed","committedRowsState":"unavailable","inFlightOperationsState":"empty","observedAtSkewMs":null,"consistency":"source_unavailable","topologyIncreaseUsable":false},"reconsideration":null},"operationsCreated":0,"ledger":[],"plannerMove":{"success":false,"skipped":true,"reason":"blocked","operation":"add","nodeId":"planner-node","admission":{"allowed":false,"decisionType":"blocked","blockingReasons":["replica_inventory_unusable"],"eligibleNodeIds":[],"ineligibleNodes":[],"reason":"replica_inventory_unusable","topologySnapshot":{"observedDistinctNodeIds":[],"observedDistinctNodeCount":0,"observedServiceRowCount":0,"targetNodeId":"planner-node","targetReplicaCount":null,"authoritativeAvailable":false,"authoritativeReasonCode":null,"authoritativeRetryAfterMs":null,"inventoryProvenance":{"atomicityClaim":"not_claimed","committedRowsState":"unavailable","inFlightOperationsState":"empty","observedAtSkewMs":null,"consistency":"source_unavailable","topologyIncreaseUsable":false},"inventorySourceRevisions":{"committedRows":null,"inFlightOperations":null},"inventorySourceWatermarks":{"committedRows":{"before":1795282332941,"after":1795282332941,"causeId":null},"inFlightOperations":{"before":null,"after":null,"causeId":null}}}}}}
+[tv-dator]         # OBSERVATION retry {"identical":true,"second":{"message":"Topology guard blocked for ADD on planner-node: replica_inventory_unusable","reason":"replica_inventory_unusable","blockingReasons":["replica_inventory_unusable"],"decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"authoritativeRetryAfterMs":null,"inventoryProvenance":{"atomicityClaim":"not_claimed","committedRowsState":"unavailable","inFlightOperationsState":"empty","observedAtSkewMs":null,"consistency":"source_unavailable","topologyIncreaseUsable":false},"reconsideration":null},"secondRead":{"mode":{},"success":true,"rowSetComplete":false,"rows":[],"source":"local_partition_replica","localReadHit":true,"localReplicaFallbackHit":true,"outcome":"authoritative","strategyUsed":"authoritative","readAuthorityWitness":null,"readAuthorityWitnesses":[],"diagnostics":{"leaderNodeId":"peer-node-a","localReadHit":true,"localReplicaFallbackHit":true,"routedToNode":null}},"secondOwnerRpcCalls":0}
+[tv-dator]         # Subtest: diagnosis completeness: the guard's SERVICES read is the local follower's success with an incomplete row set
+[tv-dator]             ok 1 - the guard issued its SERVICES inventory read
+[tv-dator]             ok 2 - the read names no mode: the gateway default applies
+[tv-dator]             ok 3 - the read reports success
+[tv-dator]             ok 4 - its row set is incomplete
+[tv-dator]             ok 5 - and carries no rows
+[tv-dator]             ok 6 - it was answered by the local replica
+[tv-dator]             ok 7 - through the any-replica fallback after the local-leader pass found none
+[tv-dator]             ok 8 - with no error
+[tv-dator]             ok 9 - and no reason code
+[tv-dator]             1..9
+[tv-dator]         ok 1 - diagnosis completeness: the guard's SERVICES read is the local follower's success with an incomplete row set # time=2.573ms
+[tv-dator]         
+[tv-dator]         # Subtest: diagnosis witness: no leader witness accompanied that answer; the replica that served it follows
+[tv-dator]             ok 1 - no witness accompanied it
+[tv-dator]             ok 2 - none at all
+[tv-dator]             ok 3 - the serving replica is the planner node's follower
+[tv-dator]             ok 4 - the witness it would build names a follower
+[tv-dator]             ok 5 - which is not a leader witness
+[tv-dator]             1..5
+[tv-dator]         ok 2 - diagnosis witness: no leader witness accompanied that answer; the replica that served it follows # time=0.723ms
+[tv-dator]         
+[tv-dator]         # Subtest: diagnosis routing: the owner RPC is never attempted although the published leader is reachable
+[tv-dator]             ok 1 - no owner RPC for the read
+[tv-dator]             ok 2 - no transport hop at all
+[tv-dator]             ok 3 - the answer's own diagnostics name the published leader node
+[tv-dator]             ok 4 - and route nowhere
+[tv-dator]             ok 5 - partitions.leader_node_id names the leader
+[tv-dator]             ok 6 - the query executor's routing names the same leader
+[tv-dator]             ok 7 - the correct target peer-node-a/partition/services-p1-r1 leads
+[tv-dator]             1..7
+[tv-dator]         ok 3 - diagnosis routing: the owner RPC is never attempted although the published leader is reachable # time=0.819ms
+[tv-dator]         
+[tv-dator]         # Subtest: diagnosis guard decision: replica_inventory_unusable, no reason code, nothing created, the planner skips
+[tv-dator]             ok 1 - the request is refused
+[tv-dator]             ok 2 - the refusal code is replica_inventory_unusable
+[tv-dator]             ok 3 - should be equivalent
+[tv-dator]             ok 4 - should be equal
+[tv-dator]             ok 5 - the inventory read counts as unavailable
+[tv-dator]             ok 6 - with no reason code
+[tv-dator]             ok 7 - and no retry-after
+[tv-dator]             ok 8 - the SERVICES rows are unavailable
+[tv-dator]             ok 9 - while the operation ledger read is usable (empty): SERVICES alone refuses
+[tv-dator]             ok 10 - no typed skip reason
+[tv-dator]             ok 11 - no operation is returned
+[tv-dator]             ok 12 - no operation row exists
+[tv-dator]             ok 13 - nothing was created
+[tv-dator]             1..13
+[tv-dator]         ok 4 - diagnosis guard decision: replica_inventory_unusable, no reason code, nothing created, the planner skips # time=1.341ms
+[tv-dator]         
+[tv-dator]         # Subtest: diagnosis planner: the planner records the refusal as a skipped move
+[tv-dator]             ok 1 - the planner's move execution settles (undefined)
+[tv-dator]             ok 2 - the move is skipped
+[tv-dator]             ok 3 - under the admission decision type
+[tv-dator]             ok 4 - carrying the guard's refusal
+[tv-dator]             ok 5 - again without owner RPC
+[tv-dator]             1..5
+[tv-dator]         ok 5 - diagnosis planner: the planner records the refusal as a skipped move # time=0.583ms
+[tv-dator]         
+[tv-dator]         # Subtest: diagnosis retry: an identical request gives a byte-identical refusal with no owned wake
+[tv-dator]             ok 1 - both requests are refused
+[tv-dator]             ok 2 - the second refusal is byte-identical to the first
+[tv-dator]             ok 3 - from the same incomplete answer
+[tv-dator]             ok 4 - should be equal
+[tv-dator]             ok 5 - still no owner RPC
+[tv-dator]             ok 6 - the refusal carries no retry deadline or next action
+[tv-dator]             ok 7 - and nothing was created
+[tv-dator]             1..7
+[tv-dator]         ok 6 - diagnosis retry: an identical request gives a byte-identical refusal with no owned wake # time=0.938ms
+[tv-dator]         
+[tv-dator]         # Subtest: contract (red today): the guard decides from the leader's complete, witnessed SERVICES inventory
+[tv-dator]             not ok 1 - a complete SERVICES inventory witnessed by the services-p1 leader was read: [{"mode":{},"success":true,"rowSetComplete":false,"rows":[],"source":"local_partition_replica","localReadHit":true,"localReplicaFallbackHit":true,"outcome":"authoritative","strategyUsed":"authoritative","readAuthorityWitness":null,"readAuthorityWitnesses":[],"diagnostics":{"leaderNodeId":"peer-node-a","localReadHit":true,"localReplicaFallbackHit":true,"routedToNode":null}}]
+[tv-dator]               ---
+[tv-dator]               at:
+[tv-dator]                 fileName: test/rebalancer/topology-guard-inventory-authority.test.js
+[tv-dator]                 lineNumber: 289
+[tv-dator]                 columnNumber: 9
+[tv-dator]                 typeName: Test
+[tv-dator]               stack: >
+[tv-dator]                 Test.<anonymous>
+[tv-dator]                 (test/rebalancer/topology-guard-inventory-authority.test.js:289:9)
+[tv-dator]               
+[tv-dator]                 Test.<anonymous>
+[tv-dator]                 (test/rebalancer/topology-guard-inventory-authority.test.js:286:13)
+[tv-dator]               source: >2
+[tv-dator]                       'witnessed SERVICES inventory', async (t) => {
+[tv-dator]                       const reads = first.servicesReads.filter(isGuardServicesRead);
+[tv-dator]                       t.ok(reads.some((read) => isLeaderWitnessedComplete(read, NODE.PEER_A)),
+[tv-dator]                 --------^
+[tv-dator]                         'a complete SERVICES inventory witnessed by the services-p1 leader was read: ' +
+[tv-dator]                         JSON.stringify(reads.map(summarizeServicesRead)));
+[tv-dator]               ...
+[tv-dator]             
+[tv-dator]             1..1
+[tv-dator]         not ok 7 - contract (red today): the guard decides from the leader's complete, witnessed SERVICES inventory # time=19.062ms
+[tv-dator]           ---
+[tv-dator]           at:
+[tv-dator]             fileName: test/rebalancer/topology-guard-inventory-authority.test.js
+[tv-dator]             lineNumber: 286
+[tv-dator]             columnNumber: 13
+[tv-dator]             typeName: Test
+[tv-dator]           source: >2
+[tv-dator]                 });
+[tv-dator]           
+[tv-dator]                 await t.test('contract (red today): the guard decides from the leader\'s complete, ' +
+[tv-dator]             ------------^
+[tv-dator]                   'witnessed SERVICES inventory', async (t) => {
+[tv-dator]                   const reads = first.servicesReads.filter(isGuardServicesRead);
+[tv-dator]           ...
+[tv-dator]         
+[tv-dator]         # Subtest: contract (red today): with the leader reachable the ADD is admitted once and the identical retry reuses it
+[tv-dator]             not ok 1 - the request is admitted: {"message":"Topology guard blocked for ADD on planner-node: replica_inventory_unusable","reason":"replica_inventory_unusable","blockingReasons":["replica_inventory_unusable"],"decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"authoritativeRetryAfterMs":null,"inventoryProvenance":{"atomicityClaim":"not_claimed","committedRowsState":"unavailable","inFlightOperationsState":"empty","observedAtSkewMs":null,"consistency":"source_unavailable","topologyIncreaseUsable":false},"reconsideration":null}
+[tv-dator]               ---
+[tv-dator]               compare: ===
+[tv-dator]               at:
+[tv-dator]                 fileName: test/rebalancer/topology-guard-inventory-authority.test.js
+[tv-dator]                 lineNumber: 296
+[tv-dator]                 columnNumber: 9
+[tv-dator]                 typeName: Test
+[tv-dator]               stack: >
+[tv-dator]                 Test.<anonymous>
+[tv-dator]                 (test/rebalancer/topology-guard-inventory-authority.test.js:296:9)
+[tv-dator]               
+[tv-dator]                 Test.<anonymous>
+[tv-dator]                 (test/rebalancer/topology-guard-inventory-authority.test.js:294:13)
+[tv-dator]               source: >2
+[tv-dator]                     await t.test('contract (red today): with the leader reachable the ADD is admitted ' +
+[tv-dator]                       'once and the identical retry reuses it', async (t) => {
+[tv-dator]                       t.equal(first.error, null, `the request is admitted: ${JSON.stringify(refusalOf(first.error))}`);
+[tv-dator]                 --------^
+[tv-dator]                       t.type(first.operation?.operationId, 'string', 'an operation is returned');
+[tv-dator]                       t.same(ledgerShape(ledger), [{entity_type: RUNTIME_SERVICE, entity_id: RUNTIME_SERVICE_ID,
+[tv-dator]               diff: >
+[tv-dator]                 --- expected
+[tv-dator]               
+[tv-dator]                 +++ actual
+[tv-dator]               
+[tv-dator]                 @@ -1,1 +1,46 @@
+[tv-dator]               
+[tv-dator]                 -null
+[tv-dator]               
+[tv-dator]                 +Error: Topology guard blocked for ADD on planner-node:
+[tv-dator]                 replica_inventory_unusable {
+[tv-dator]               
+[tv-dator]                 +  "admissionResult": Object {
+[tv-dator]               
+[tv-dator]                 +    "allowed": false,
+[tv-dator]               
+[tv-dator]                 +    "decisionType": "blocked",
+[tv-dator]               
+[tv-dator]                 +    "blockingReasons": Array [
+[tv-dator]               
+[tv-dator]                 +      "replica_inventory_unusable",
+[tv-dator]               
+[tv-dator]                 +    ],
+[tv-dator]               
+[tv-dator]                 +    "eligibleNodeIds": Array [],
+[tv-dator]               
+[tv-dator]                 +    "ineligibleNodes": Array [],
+[tv-dator]               
+[tv-dator]                 +    "reason": "replica_inventory_unusable",
+[tv-dator]               
+[tv-dator]                 +    "topologySnapshot": Object {
+[tv-dator]               
+[tv-dator]                 +      "observedDistinctNodeIds": Array [],
+[tv-dator]               
+[tv-dator]                 +      "observedDistinctNodeCount": 0,
+[tv-dator]               
+[tv-dator]                 +      "observedServiceRowCount": 0,
+[tv-dator]               
+[tv-dator]                 +      "targetNodeId": "planner-node",
+[tv-dator]               
+[tv-dator]                 +      "targetReplicaCount": null,
+[tv-dator]               
+[tv-dator]                 +      "authoritativeAvailable": false,
+[tv-dator]               
+[tv-dator]                 +      "authoritativeReasonCode": null,
+[tv-dator]               
+[tv-dator]                 +      "authoritativeRetryAfterMs": null,
+[tv-dator]               
+[tv-dator]                 +      "inventoryProvenance": Object {
+[tv-dator]               
+[tv-dator]                 +        "atomicityClaim": "not_claimed",
+[tv-dator]               
+[tv-dator]                 +        "committedRowsState": "unavailable",
+[tv-dator]               
+[tv-dator]                 +        "inFlightOperationsState": "empty",
+[tv-dator]               
+[tv-dator]                 +        "observedAtSkewMs": null,
+[tv-dator]               
+[tv-dator]                 +        "consistency": "source_unavailable",
+[tv-dator]               
+[tv-dator]                 +        "topologyIncreaseUsable": false,
+[tv-dator]               
+[tv-dator]                 +      },
+[tv-dator]               
+[tv-dator]                 +      "inventorySourceRevisions": Object {
+[tv-dator]               
+[tv-dator]                 +        "committedRows": null,
+[tv-dator]               
+[tv-dator]                 +        "inFlightOperations": null,
+[tv-dator]               
+[tv-dator]                 +      },
+[tv-dator]               
+[tv-dator]                 +      "inventorySourceWatermarks": Object {
+[tv-dator]               
+[tv-dator]                 +        "committedRows": Object {
+[tv-dator]               
+[tv-dator]                 +          "before": 1795282332941,
+[tv-dator]               
+[tv-dator]                 +          "after": 1795282332941,
+[tv-dator]               
+[tv-dator]                 +          "causeId": null,
+[tv-dator]               
+[tv-dator]                 +        },
+[tv-dator]               
+[tv-dator]                 +        "inFlightOperations": Object {
+[tv-dator]               
+[tv-dator]                 +          "before": null,
+[tv-dator]               
+[tv-dator]                 +          "after": null,
+[tv-dator]               
+[tv-dator]                 +          "causeId": null,
+[tv-dator]               
+[tv-dator]                 +        },
+[tv-dator]               
+[tv-dator]                 +      },
+[tv-dator]               
+[tv-dator]                 +    },
+[tv-dator]               
+[tv-dator]                 +  },
+[tv-dator]               
+[tv-dator]                 +}
+[tv-dator]               ...
+[tv-dator]             
+[tv-dator]             not ok 2 - an operation is returned
+[tv-dator]               ---
+[tv-dator]               compare: ===
+[tv-dator]               at:
+[tv-dator]                 fileName: test/rebalancer/topology-guard-inventory-authority.test.js
+[tv-dator]                 lineNumber: 297
+[tv-dator]                 columnNumber: 9
+[tv-dator]                 typeName: Test
+[tv-dator]               stack: >
+[tv-dator]                 Test.<anonymous>
+[tv-dator]                 (test/rebalancer/topology-guard-inventory-authority.test.js:297:9)
+[tv-dator]               
+[tv-dator]                 Test.<anonymous>
+[tv-dator]                 (test/rebalancer/topology-guard-inventory-authority.test.js:294:13)
+[tv-dator]               source: >2
+[tv-dator]                       'once and the identical retry reuses it', async (t) => {
+[tv-dator]                       t.equal(first.error, null, `the request is admitted: ${JSON.stringify(refusalOf(first.error))}`);
+[tv-dator]                       t.type(first.operation?.operationId, 'string', 'an operation is returned');
+[tv-dator]                 --------^
+[tv-dator]                       t.same(ledgerShape(ledger), [{entity_type: RUNTIME_SERVICE, entity_id: RUNTIME_SERVICE_ID,
+[tv-dator]                         target_node_id: NODE.PLANNER}], 'exactly one operation row targets the planner node');
+[tv-dator]               diff: |
+[tv-dator]                 --- expected
+[tv-dator]                 +++ actual
+[tv-dator]                 @@ -1,1 +1,1 @@
+[tv-dator]                 -string
+[tv-dator]                 +undefined
+[tv-dator]               ...
+[tv-dator]             
+[tv-dator]             not ok 3 - exactly one operation row targets the planner node
+[tv-dator]               ---
+[tv-dator]               diff: |
+[tv-dator]                 --- expected
+[tv-dator]                 +++ actual
+[tv-dator]                 @@ -1,7 +1,1 @@
+[tv-dator]                 -Array [
+[tv-dator]                 -  Object {
+[tv-dator]                 -    "entity_type": "runtime_service",
+[tv-dator]                 -    "entity_id": "sys-postgres-wire",
+[tv-dator]                 -    "target_node_id": "planner-node",
+[tv-dator]                 -  },
+[tv-dator]                 -]
+[tv-dator]                 +Array []
+[tv-dator]               at:
+[tv-dator]                 fileName: test/rebalancer/topology-guard-inventory-authority.test.js
+[tv-dator]                 lineNumber: 298
+[tv-dator]                 columnNumber: 9
+[tv-dator]                 typeName: Test
+[tv-dator]               stack: >
+[tv-dator]                 Test.<anonymous>
+[tv-dator]                 (test/rebalancer/topology-guard-inventory-authority.test.js:298:9)
+[tv-dator]               
+[tv-dator]                 Test.<anonymous>
+[tv-dator]                 (test/rebalancer/topology-guard-inventory-authority.test.js:294:13)
+[tv-dator]               source: >2
+[tv-dator]                       t.equal(first.error, null, `the request is admitted: ${JSON.stringify(refusalOf(first.error))}`);
+[tv-dator]                       t.type(first.operation?.operationId, 'string', 'an operation is returned');
+[tv-dator]                       t.same(ledgerShape(ledger), [{entity_type: RUNTIME_SERVICE, entity_id: RUNTIME_SERVICE_ID,
+[tv-dator]                 --------^
+[tv-dator]                         target_node_id: NODE.PLANNER}], 'exactly one operation row targets the planner node');
+[tv-dator]                       t.equal(second.operation?.operationId, first.operation?.operationId,
+[tv-dator]               ...
+[tv-dator]             
+[tv-dator]             ok 4 - the identical retry reuses the admitted operation
+[tv-dator]             not ok 5 - the planner's move is scheduled
+[tv-dator]               ---
+[tv-dator]               compare: ===
+[tv-dator]               at:
+[tv-dator]                 fileName: test/rebalancer/topology-guard-inventory-authority.test.js
+[tv-dator]                 lineNumber: 302
+[tv-dator]                 columnNumber: 9
+[tv-dator]                 typeName: Test
+[tv-dator]               stack: >
+[tv-dator]                 Test.<anonymous>
+[tv-dator]                 (test/rebalancer/topology-guard-inventory-authority.test.js:302:9)
+[tv-dator]               
+[tv-dator]                 Test.<anonymous>
+[tv-dator]                 (test/rebalancer/topology-guard-inventory-authority.test.js:294:13)
+[tv-dator]               source: >2
+[tv-dator]                       t.equal(second.operation?.operationId, first.operation?.operationId,
+[tv-dator]                         'the identical retry reuses the admitted operation');
+[tv-dator]                       t.equal(planned.result?.success, true, 'the planner\'s move is scheduled');
+[tv-dator]                 --------^
+[tv-dator]                     });
+[tv-dator]                   });
+[tv-dator]               diff: |
+[tv-dator]                 --- expected
+[tv-dator]                 +++ actual
+[tv-dator]                 @@ -1,1 +1,1 @@
+[tv-dator]                 -true
+[tv-dator]                 +false
+[tv-dator]               ...
+[tv-dator]             
+[tv-dator]             1..5
+[tv-dator]         not ok 8 - contract (red today): with the leader reachable the ADD is admitted once and the identical retry reuses it # time=16.827ms
+[tv-dator]           ---
+[tv-dator]           at:
+[tv-dator]             fileName: test/rebalancer/topology-guard-inventory-authority.test.js
+[tv-dator]             lineNumber: 294
+[tv-dator]             columnNumber: 13
+[tv-dator]             typeName: Test
+[tv-dator]           source: >2
+[tv-dator]                 });
+[tv-dator]           
+[tv-dator]                 await t.test('contract (red today): with the leader reachable the ADD is admitted ' +
+[tv-dator]             ------------^
+[tv-dator]                   'once and the identical retry reuses it', async (t) => {
+[tv-dator]                   t.equal(first.error, null, `the request is admitted: ${JSON.stringify(refusalOf(first.error))}`);
+[tv-dator]           ...
+[tv-dator]         
+[tv-dator]         1..8
+[tv-dator]     not ok 6 - witness (red today): leader reachable, the guard refuses from the local follower's incomplete answer # time=86.178ms
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/topology-guard-inventory-authority.test.js
+[tv-dator]         lineNumber: 155
+[tv-dator]         columnNumber: 11
+[tv-dator]         typeName: Test
+[tv-dator]       source: >2
+[tv-dator]             'setup: the planner node hosts a services-p1 replica that follows');
+[tv-dator]       
+[tv-dator]           await t.test('witness (red today): leader reachable, the guard refuses from the ' +
+[tv-dator]         ----------^
+[tv-dator]             'local follower\'s incomplete answer', async (t) => {
+[tv-dator]             const host = openPlannerHost(t, world);
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     # Subtest: anchor (green): the services-p1 leader is reachable from the planner node through the owner-RPC path
+[tv-dator]         # OBSERVATION reachability {"observation":{"available":true,"rows":[],"rowSetComplete":true,"partial":false,"readAuthorityWitness":{"state":"observed","partitionId":"services-p1","servingNodeId":"peer-node-a","servingReplicaId":"services-p1-r1","term":1,"appliedIndex":3,"commitIndex":3,"electionLogApplied":true,"role":"leader","observedAtMs":1795282333035},"error":null,"reasonCode":null,"source":"owner_rpc_lane","retryAfterMs":0,"snapshotVersion":null,"observedAtMs":null},"ownerRpc":[{"sql":"SELECT * FROM services\n    WHERE service_type = ? AND service_id LIKE ?","params":["runtime_service","sys-postgres-wire-r%"],"preferLeader":true}],"hops":[{"address":"peer-node-a/partition/services-p1-r1","nodeId":"peer-node-a","refused":false,"remainingMs":1998,"answer":{"success":true,"rowSet":{"v":1,"columns":["service_id","service_type","node_id","partition_id","group_id","replica_id","raft_role","status","state_entered_at","previous_state","trigger_reason","error_message","cleanup_token","create_attempt_token","address","created_at","updated_at"],"rows":[]},"executionEnvelope":{"sqliteVersion":"3.49.2","sqliteSourceId":"2025-05-07 10:39:52 17144570b0d96ae63cd6f3edca39e27ebd74925252bbaf6723bcb2f6b4861fb1","compileOptionsDigest":"fdd54a75caac0923b9c70f0e0fc260cb651b8ae5f1c606d21e134ceca3bc0e2a","classifierListVersion":"tx1-leg-a-3"},"count":0,"partitionId":"services-p1","rowSetComplete":true,"readAuthorityWitness":{"state":"observed","partitionId":"services-p1","servingNodeId":"peer-node-a","servingReplicaId":"services-p1-r1","term":1,"appliedIndex":3,"commitIndex":3,"electionLogApplied":true,"role":"leader","observedAtMs":1795282333035}}}]}
+[tv-dator]         ok 1 - the strict read settles (undefined)
+[tv-dator]         ok 2 - the leader-required owner read is available
+[tv-dator]         ok 3 - with a complete row set
+[tv-dator]         ok 4 - answered on the owner-RPC lane
+[tv-dator]         ok 5 - witnessed by a leader
+[tv-dator]         ok 6 - served on the leader's node
+[tv-dator]         ok 7 - by the leader replica
+[tv-dator]         ok 8 - the owner RPC was issued
+[tv-dator]         ok 9 - and crossed to the leader's address
+[tv-dator]         1..9
+[tv-dator]     ok 7 - anchor (green): the services-p1 leader is reachable from the planner node through the owner-RPC path # time=10.878ms
+[tv-dator]     
+[tv-dator] {"level":50,"time":"2026-11-21T17:32:13.107Z","nodeId":"planner-node","pid":3184020,"subsystem":"query-executor","event":"wait_bound_spent","wait":"getReadRetryAttemptLimit","awaited":"successful partition read within the read attempt limit","boundMs":null,"elapsedMs":62,"lastObserved":{"attempts":4,"lastError":"No handler registered for address peer-node-a/partition/services-p1-r1","lastErrorCode":null,"lastParticipantNodeId":"peer-node-a","awaitedRoutingRepair":false,"maxAttempts":3},"scope":{"partitionId":"services-p1","forRead":true,"nodeId":"planner-node"},"repeats":0,"nodeId":"planner-node","msg":"Wait bound spent"}
+[tv-dator]     # Subtest: anchor (b): the leader genuinely unreachable (its hop refuses)
+[tv-dator]         # OBSERVATION unreachable-guard {"refusal":{"message":"Topology guard blocked for ADD on planner-node: replica_inventory_unusable","reason":"replica_inventory_unusable","blockingReasons":["replica_inventory_unusable"],"decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"authoritativeRetryAfterMs":null,"inventoryProvenance":{"atomicityClaim":"not_claimed","committedRowsState":"unavailable","inFlightOperationsState":"empty","observedAtSkewMs":null,"consistency":"source_unavailable","topologyIncreaseUsable":false},"reconsideration":null},"read":{"mode":{},"success":true,"rowSetComplete":false,"rows":[],"source":"local_partition_replica","localReadHit":true,"localReplicaFallbackHit":true,"outcome":"authoritative","strategyUsed":"authoritative","readAuthorityWitness":null,"readAuthorityWitnesses":[],"diagnostics":{"leaderNodeId":"peer-node-a","localReadHit":true,"localReplicaFallbackHit":true,"routedToNode":null}},"guardOwnerRpcCalls":0,"hops":[],"ledger":[]}
+[tv-dator]         # OBSERVATION unreachable-owner-read {"observation":{"available":false,"rows":[],"rowSetComplete":false,"partial":false,"readAuthorityWitness":null,"error":"No handler registered for address peer-node-a/partition/services-p1-r1","reasonCode":null,"source":"owner_rpc_lane","retryAfterMs":0,"snapshotVersion":null,"observedAtMs":null},"hops":[{"address":"peer-node-a/partition/services-p1-r1","nodeId":"peer-node-a","refused":true,"remainingMs":2000,"answer":null},{"address":"planner-node/partition/services-p1-r2","nodeId":"planner-node","refused":false,"remainingMs":1947,"answer":{"success":false,"error":"owner_fact_not_leader","failureCode":"owner_fact_not_leader","partitionId":"services-p1","readAuthorityWitness":{"state":"observed","partitionId":"services-p1","servingNodeId":"planner-node","servingReplicaId":"services-p1-r2","term":1,"appliedIndex":3,"commitIndex":3,"electionLogApplied":true,"role":"follower","observedAtMs":1795282333099},"redirect":"LEADER_REDIRECT","leaderAddress":"peer-node-a/partition/services-p1-r1"}},{"address":"peer-node-b/partition/services-p1-r3","nodeId":"peer-node-b","refused":false,"remainingMs":1942,"answer":{"success":false,"error":"owner_fact_not_leader","failureCode":"owner_fact_not_leader","partitionId":"services-p1","readAuthorityWitness":{"state":"observed","partitionId":"services-p1","servingNodeId":"peer-node-b","servingReplicaId":"services-p1-r3","term":1,"appliedIndex":3,"commitIndex":3,"electionLogApplied":true,"role":"follower","observedAtMs":1795282333103},"redirect":"LEADER_REDIRECT","leaderAddress":"peer-node-a/partition/services-p1-r1"}},{"address":"planner-node/partition/services-p1-r2","nodeId":"planner-node","refused":false,"remainingMs":1941,"answer":{"success":false,"error":"owner_fact_not_leader","failureCode":"owner_fact_not_leader","partitionId":"services-p1","readAuthorityWitness":{"state":"observed","partitionId":"services-p1","servingNodeId":"planner-node","servingReplicaId":"services-p1-r2","term":1,"appliedIndex":3,"commitIndex":3,"electionLogApplied":true,"role":"follower","observedAtMs":1795282333105},"redirect":"LEADER_REDIRECT","leaderAddress":"peer-node-a/partition/services-p1-r1"}},{"address":"peer-node-b/partition/services-p1-r3","nodeId":"peer-node-b","refused":false,"remainingMs":1938,"answer":{"success":false,"error":"owner_fact_not_leader","failureCode":"owner_fact_not_leader","partitionId":"services-p1","readAuthorityWitness":{"state":"observed","partitionId":"services-p1","servingNodeId":"peer-node-b","servingReplicaId":"services-p1-r3","term":1,"appliedIndex":3,"commitIndex":3,"electionLogApplied":true,"role":"follower","observedAtMs":1795282333106},"redirect":"LEADER_REDIRECT","leaderAddress":"peer-node-a/partition/services-p1-r1"}}]}
+[tv-dator]         # Subtest: diagnosis: the same untyped refusal from the local follower; the owner-RPC lane itself reports the leader unavailable
+[tv-dator]             ok 1 - should be equal
+[tv-dator]             ok 2 - should be equal
+[tv-dator]             ok 3 - should be equal
+[tv-dator]             ok 4 - the guard never reached the refused hop
+[tv-dator]             ok 5 - a leader-required owner read is unavailable
+[tv-dator]             ok 6 - every hop it made to the leader was refused
+[tv-dator]             1..6
+[tv-dator]         ok 1 - diagnosis: the same untyped refusal from the local follower; the owner-RPC lane itself reports the leader unavailable # time=0.702ms
+[tv-dator]         
+[tv-dator]         # Subtest: contract (red today): a typed unavailability with a named reason and an owned reconsideration
+[tv-dator]             ok 1 - the request is refused
+[tv-dator]             ok 2 - the authority is unavailable
+[tv-dator]             not ok 3 - the refusal names why: {"message":"Topology guard blocked for ADD on planner-node: replica_inventory_unusable","reason":"replica_inventory_unusable","blockingReasons":["replica_inventory_unusable"],"decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"authoritativeRetryAfterMs":null,"inventoryProvenance":{"atomicityClaim":"not_claimed","committedRowsState":"unavailable","inFlightOperationsState":"empty","observedAtSkewMs":null,"consistency":"source_unavailable","topologyIncreaseUsable":false},"reconsideration":null}
+[tv-dator]               ---
+[tv-dator]               at:
+[tv-dator]                 fileName: test/rebalancer/topology-guard-inventory-authority.test.js
+[tv-dator]                 lineNumber: 363
+[tv-dator]                 columnNumber: 11
+[tv-dator]                 typeName: Test
+[tv-dator]               stack: >
+[tv-dator]                 Test.<anonymous>
+[tv-dator]                 (test/rebalancer/topology-guard-inventory-authority.test.js:363:11)
+[tv-dator]               
+[tv-dator]                 Test.<anonymous>
+[tv-dator]                 (test/rebalancer/topology-guard-inventory-authority.test.js:358:15)
+[tv-dator]               source: >2
+[tv-dator]                         t.ok(first.error, 'the request is refused');
+[tv-dator]                         t.equal(refusal?.authoritativeAvailable, false, 'the authority is unavailable');
+[tv-dator]                         t.ok(typeof refusal?.authoritativeReasonCode === 'string' &&
+[tv-dator]                 ----------^
+[tv-dator]                           refusal.authoritativeReasonCode.length > 0,
+[tv-dator]                         `the refusal names why: ${JSON.stringify(refusal)}`);
+[tv-dator]               ...
+[tv-dator]             
+[tv-dator]             not ok 4 - the refusal carries its reconsideration (retry deadline or next action)
+[tv-dator]               ---
+[tv-dator]               at:
+[tv-dator]                 fileName: test/rebalancer/topology-guard-inventory-authority.test.js
+[tv-dator]                 lineNumber: 366
+[tv-dator]                 columnNumber: 11
+[tv-dator]                 typeName: Test
+[tv-dator]               stack: >
+[tv-dator]                 Test.<anonymous>
+[tv-dator]                 (test/rebalancer/topology-guard-inventory-authority.test.js:366:11)
+[tv-dator]               
+[tv-dator]                 Test.<anonymous>
+[tv-dator]                 (test/rebalancer/topology-guard-inventory-authority.test.js:358:15)
+[tv-dator]               source: >2
+[tv-dator]                           refusal.authoritativeReasonCode.length > 0,
+[tv-dator]                         `the refusal names why: ${JSON.stringify(refusal)}`);
+[tv-dator]                         t.ok(reconsiderationOf(first.error),
+[tv-dator]                 ----------^
+[tv-dator]                           'the refusal carries its reconsideration (retry deadline or next action)');
+[tv-dator]                         t.same(ledger, [], 'nothing is created');
+[tv-dator]               ...
+[tv-dator]             
+[tv-dator]             ok 5 - nothing is created
+[tv-dator]             1..5
+[tv-dator]         not ok 2 - contract (red today): a typed unavailability with a named reason and an owned reconsideration # time=5.636ms
+[tv-dator]           ---
+[tv-dator]           at:
+[tv-dator]             fileName: test/rebalancer/topology-guard-inventory-authority.test.js
+[tv-dator]             lineNumber: 358
+[tv-dator]             columnNumber: 15
+[tv-dator]             typeName: Test
+[tv-dator]           source: >2
+[tv-dator]                   });
+[tv-dator]           
+[tv-dator]                   await t.test('contract (red today): a typed unavailability with a named reason and ' +
+[tv-dator]             --------------^
+[tv-dator]                     'an owned reconsideration', async (t) => {
+[tv-dator]                     const refusal = refusalOf(first.error);
+[tv-dator]           ...
+[tv-dator]         
+[tv-dator]         1..2
+[tv-dator]     not ok 8 - anchor (b): the leader genuinely unreachable (its hop refuses) # time=80.26ms
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/topology-guard-inventory-authority.test.js
+[tv-dator]         lineNumber: 330
+[tv-dator]         columnNumber: 11
+[tv-dator]         typeName: Test
+[tv-dator]       source: >2
+[tv-dator]           });
+[tv-dator]       
+[tv-dator]           await t.test('anchor (b): the leader genuinely unreachable (its hop refuses)',
+[tv-dator]         ----------^
+[tv-dator]             async (t) => {
+[tv-dator]               const host = openPlannerHost(t, world, {unreachableNodeIds: [NODE.PEER_A]});
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     # Subtest: anchor (c): the leader holds an occupant on the target that the planner's follower and cache have not received
+[tv-dator]         ok 1 - setup: the leader's replica holds the occupant
+[tv-dator]         ok 2 - setup: the planner's follower replica does not yet
+[tv-dator]         ok 3 - setup: nor does the planner's cache
+[tv-dator]         # OBSERVATION leader-only-occupant {"refusal":{"message":"Topology guard blocked for ADD on planner-node: replica_inventory_unusable","reason":"replica_inventory_unusable","blockingReasons":["replica_inventory_unusable"],"decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"authoritativeRetryAfterMs":null,"inventoryProvenance":{"atomicityClaim":"not_claimed","committedRowsState":"unavailable","inFlightOperationsState":"empty","observedAtSkewMs":null,"consistency":"source_unavailable","topologyIncreaseUsable":false},"reconsideration":null},"read":{"mode":{},"success":true,"rowSetComplete":false,"rows":[],"source":"local_partition_replica","localReadHit":true,"localReplicaFallbackHit":true,"outcome":"authoritative","strategyUsed":"authoritative","readAuthorityWitness":null,"readAuthorityWitnesses":[],"diagnostics":{"leaderNodeId":"peer-node-a","localReadHit":true,"localReplicaFallbackHit":true,"routedToNode":null}},"ledger":[],"leaderRows":[{"service_id":"sys-postgres-wire-r1","service_type":"runtime_service","node_id":"planner-node","partition_id":null,"group_id":null,"replica_id":null,"raft_role":null,"status":"active","state_entered_at":null,"previous_state":null,"trigger_reason":null,"error_message":null,"cleanup_token":null,"create_attempt_token":null,"address":null,"created_at":1795282333122,"updated_at":1795282333122}]}
+[tv-dator]         # Subtest: anchor (green, must stay green): no operation is created while the leader holds an occupant on the target
+[tv-dator]             ok 1 - no operation is returned
+[tv-dator]             ok 2 - no operation row exists
+[tv-dator]             ok 3 - the leader-required owner read returns the occupant
+[tv-dator]             1..3
+[tv-dator]         ok 4 - anchor (green, must stay green): no operation is created while the leader holds an occupant on the target # time=0.802ms
+[tv-dator]         
+[tv-dator]         # Subtest: contract (red today): the guard refuses target_node_already_occupied, decided from the leader
+[tv-dator]             not ok 1 - refused on the leader's inventory: {"message":"Topology guard blocked for ADD on planner-node: replica_inventory_unusable","reason":"replica_inventory_unusable","blockingReasons":["replica_inventory_unusable"],"decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"authoritativeRetryAfterMs":null,"inventoryProvenance":{"atomicityClaim":"not_claimed","committedRowsState":"unavailable","inFlightOperationsState":"empty","observedAtSkewMs":null,"consistency":"source_unavailable","topologyIncreaseUsable":false},"reconsideration":null}
+[tv-dator]               ---
+[tv-dator]               compare: ===
+[tv-dator]               at:
+[tv-dator]                 fileName: test/rebalancer/topology-guard-inventory-authority.test.js
+[tv-dator]                 lineNumber: 401
+[tv-dator]                 columnNumber: 9
+[tv-dator]                 typeName: Test
+[tv-dator]               stack: >
+[tv-dator]                 Test.<anonymous>
+[tv-dator]                 (test/rebalancer/topology-guard-inventory-authority.test.js:401:9)
+[tv-dator]               
+[tv-dator]                 Test.<anonymous>
+[tv-dator]                 (test/rebalancer/topology-guard-inventory-authority.test.js:399:13)
+[tv-dator]               source: >2
+[tv-dator]                     await t.test('contract (red today): the guard refuses target_node_already_occupied, ' +
+[tv-dator]                       'decided from the leader', async (t) => {
+[tv-dator]                       t.equal(refusalOf(first.error)?.reason, TOPOLOGY_GUARD_REASON.TARGET_NODE_ALREADY_OCCUPIED,
+[tv-dator]                 --------^
+[tv-dator]                         `refused on the leader's inventory: ${JSON.stringify(refusalOf(first.error))}`);
+[tv-dator]                     });
+[tv-dator]               diff: |
+[tv-dator]                 --- expected
+[tv-dator]                 +++ actual
+[tv-dator]                 @@ -1,1 +1,1 @@
+[tv-dator]                 -target_node_already_occupied
+[tv-dator]                 +replica_inventory_unusable
+[tv-dator]               ...
+[tv-dator]             
+[tv-dator]             1..1
+[tv-dator]         not ok 5 - contract (red today): the guard refuses target_node_already_occupied, decided from the leader # time=2.84ms
+[tv-dator]           ---
+[tv-dator]           at:
+[tv-dator]             fileName: test/rebalancer/topology-guard-inventory-authority.test.js
+[tv-dator]             lineNumber: 399
+[tv-dator]             columnNumber: 13
+[tv-dator]             typeName: Test
+[tv-dator]           source: >2
+[tv-dator]                 });
+[tv-dator]           
+[tv-dator]                 await t.test('contract (red today): the guard refuses target_node_already_occupied, ' +
+[tv-dator]             ------------^
+[tv-dator]                   'decided from the leader', async (t) => {
+[tv-dator]                   t.equal(refusalOf(first.error)?.reason, TOPOLOGY_GUARD_REASON.TARGET_NODE_ALREADY_OCCUPIED,
+[tv-dator]           ...
+[tv-dator]         
+[tv-dator]         1..5
+[tv-dator]     not ok 9 - anchor (c): the leader holds an occupant on the target that the planner's follower and cache have not received # time=14.422ms
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/topology-guard-inventory-authority.test.js
+[tv-dator]         lineNumber: 372
+[tv-dator]         columnNumber: 11
+[tv-dator]         typeName: Test
+[tv-dator]       source: >2
+[tv-dator]             });
+[tv-dator]       
+[tv-dator]           await t.test('anchor (c): the leader holds an occupant on the target that the planner\'s ' +
+[tv-dator]         ----------^
+[tv-dator]             'follower and cache have not received', async (t) => {
+[tv-dator]             world.seedLeaderOnlyRow(buildRuntimeOccupantRow(NODE.PLANNER, Date.now()));
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..9
+[tv-dator] not ok 1 - services-p1 led by another node: the planner's topology guard and the SERVICES authority # time=658.375ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/topology-guard-inventory-authority.test.js
+[tv-dator]     lineNumber: 149
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     }
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('services-p1 led by another node: the planner\'s topology guard and the
+[tv-dator]     SERVICES ' +
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       'authority', {timeout: CASE_TIMEOUT_MS}, async (t) => {
+[tv-dator]       const world = await openWorld(t, NODE.PEER_A, PORTS);
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: anchor (a, green today): the planner node leading services-p1 admits the same request
+[tv-dator]     ok 1 - setup: the planner node's router is connected to peer-node-a
+[tv-dator]     ok 2 - setup: the planner node's router is connected to peer-node-b
+[tv-dator]     ok 3 - setup: planner-node leads services-p1 (its consensus core)
+[tv-dator]     ok 4 - setup: no partition SERVICES row is published with raft_role leader
+[tv-dator]     # OBSERVATION planner-led {"read":{"mode":{},"success":true,"rowSetComplete":true,"rows":[],"source":"local_partition_replica","localReadHit":true,"localReplicaFallbackHit":false,"outcome":"authoritative","strategyUsed":"authoritative","readAuthorityWitness":{"state":"observed","partitionId":"services-p1","servingNodeId":"planner-node","servingReplicaId":"services-p1-r2","term":1,"appliedIndex":3,"commitIndex":3,"electionLogApplied":true,"role":"leader","observedAtMs":1795282333444},"readAuthorityWitnesses":[{"state":"observed","partitionId":"services-p1","servingNodeId":"planner-node","servingReplicaId":"services-p1-r2","term":1,"appliedIndex":3,"commitIndex":3,"electionLogApplied":true,"role":"leader","observedAtMs":1795282333444}],"diagnostics":{"leaderNodeId":"planner-node","localReadHit":true,"localReplicaFallbackHit":false,"routedToNode":null}},"refusal":null,"operationId":"3d9acee6-81a6-4176-8ce0-87b0ab6df02e","guardOwnerRpcCalls":0,"ledger":[{"entity_type":"runtime_service","entity_id":"sys-postgres-wire","target_node_id":"planner-node"}]}
+[tv-dator]     # OBSERVATION planner-led-rejection []
+[tv-dator]     ok 5 - createOperation settles without a rejection; its full stack and cause chain are printed above
+[tv-dator]     ok 6 - the request is admitted: null
+[tv-dator]     ok 7 - an operation is returned
+[tv-dator]     ok 8 - exactly one operation row targets the planner node
+[tv-dator]     ok 9 - the guard read its own replica as the leader: complete and witnessed
+[tv-dator]     ok 10 - should be equal
+[tv-dator]     ok 11 - on the local-leader pass, not the any-replica fallback
+[tv-dator]     ok 12 - without owner RPC
+[tv-dator]     1..12
+[tv-dator] ok 2 - anchor (a, green today): the planner node leading services-p1 admits the same request # time=333.044ms
+[tv-dator] 
+[tv-dator] 1..2
+[tv-dator] # { total: 96, pass: 88, fail: 8 }
+[tv-dator] # time=1003.765ms
+[tv-dator] not ok test/rebalancer/topology-guard-owner-fact-inventory.test.js (25 assertions, 3114ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] # Subtest: the guard reads the SERVICES owner fact from the leader, never the planner's follower, and admits the ADD once
+[tv-dator]     ok 1 - setup: the planner node hosts a services-p1 replica that follows
+[tv-dator]     # OBSERVATION owner-fact-guard {"reads":[{"mode":{},"success":true,"rowSetComplete":false,"rows":[],"source":"local_partition_replica","localReadHit":true,"localReplicaFallbackHit":true,"outcome":"authoritative","strategyUsed":"authoritative","readAuthorityWitness":null,"readAuthorityWitnesses":[],"diagnostics":{"leaderNodeId":"peer-node-a","localReadHit":true,"localReplicaFallbackHit":true,"routedToNode":null}}],"refusal":{"message":"Topology guard blocked for ADD on planner-node: replica_inventory_unusable","reason":"replica_inventory_unusable","blockingReasons":["replica_inventory_unusable"],"decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"authoritativeRetryAfterMs":null,"inventoryProvenance":{"atomicityClaim":"not_claimed","committedRowsState":"unavailable","inFlightOperationsState":"empty","observedAtSkewMs":null,"consistency":"source_unavailable","topologyIncreaseUsable":false},"reconsideration":null},"plannerBefore":{"local":0,"receiver":0},"plannerAfter":{"local":1,"receiver":0},"hops":[],"ledger":[]}
+[tv-dator]     ok 2 - the guard issued its SERVICES inventory read
+[tv-dator]     not ok 3 - the planner's follower replica was never read locally
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/topology-guard-owner-fact-inventory.test.js
+[tv-dator]         lineNumber: 112
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/topology-guard-owner-fact-inventory.test.js:112:5)
+[tv-dator]       source: |2
+[tv-dator]       
+[tv-dator]           t.ok(reads.length > 0, 'the guard issued its SERVICES inventory read');
+[tv-dator]           t.equal(plannerAfter.local - plannerBefore.local, 0,
+[tv-dator]         ----^
+[tv-dator]             'the planner\'s follower replica was never read locally');
+[tv-dator]           t.equal(plannerAfter.receiver - plannerBefore.receiver, 0,
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -0
+[tv-dator]         +1
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     ok 4 - nor asked through its receiver
+[tv-dator]     not ok 5 - every hop went to the leader's node
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/topology-guard-owner-fact-inventory.test.js
+[tv-dator]         lineNumber: 116
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/topology-guard-owner-fact-inventory.test.js:116:5)
+[tv-dator]       source: >2
+[tv-dator]           t.equal(plannerAfter.receiver - plannerBefore.receiver, 0,
+[tv-dator]             'nor asked through its receiver');
+[tv-dator]           t.ok(first.hops.length > 0 && first.hops.every(({nodeId}) => nodeId === NODE.PEER_A),
+[tv-dator]         ----^
+[tv-dator]             'every hop went to the leader\'s node');
+[tv-dator]           t.equal(first.error, null, `the request is admitted: ${JSON.stringify(refusalOf(first.error))}`);
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 6 - the request is admitted: {"message":"Topology guard blocked for ADD on planner-node: replica_inventory_unusable","reason":"replica_inventory_unusable","blockingReasons":["replica_inventory_unusable"],"decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"authoritativeRetryAfterMs":null,"inventoryProvenance":{"atomicityClaim":"not_claimed","committedRowsState":"unavailable","inFlightOperationsState":"empty","observedAtSkewMs":null,"consistency":"source_unavailable","topologyIncreaseUsable":false},"reconsideration":null}
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/topology-guard-owner-fact-inventory.test.js
+[tv-dator]         lineNumber: 118
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/topology-guard-owner-fact-inventory.test.js:118:5)
+[tv-dator]       source: >2
+[tv-dator]           t.ok(first.hops.length > 0 && first.hops.every(({nodeId}) => nodeId ===
+[tv-dator]         NODE.PEER_A),
+[tv-dator]             'every hop went to the leader\'s node');
+[tv-dator]           t.equal(first.error, null, `the request is admitted: ${JSON.stringify(refusalOf(first.error))}`);
+[tv-dator]         ----^
+[tv-dator]           t.same(ledgerShape(ledger), [{entity_type: RUNTIME_SERVICE, entity_id: RUNTIME_SERVICE_ID,
+[tv-dator]             target_node_id: NODE.PLANNER}], 'exactly one operation row is proposed');
+[tv-dator]       diff: >
+[tv-dator]         --- expected
+[tv-dator]       
+[tv-dator]         +++ actual
+[tv-dator]       
+[tv-dator]         @@ -1,1 +1,46 @@
+[tv-dator]       
+[tv-dator]         -null
+[tv-dator]       
+[tv-dator]         +Error: Topology guard blocked for ADD on planner-node:
+[tv-dator]         replica_inventory_unusable {
+[tv-dator]       
+[tv-dator]         +  "admissionResult": Object {
+[tv-dator]       
+[tv-dator]         +    "allowed": false,
+[tv-dator]       
+[tv-dator]         +    "decisionType": "blocked",
+[tv-dator]       
+[tv-dator]         +    "blockingReasons": Array [
+[tv-dator]       
+[tv-dator]         +      "replica_inventory_unusable",
+[tv-dator]       
+[tv-dator]         +    ],
+[tv-dator]       
+[tv-dator]         +    "eligibleNodeIds": Array [],
+[tv-dator]       
+[tv-dator]         +    "ineligibleNodes": Array [],
+[tv-dator]       
+[tv-dator]         +    "reason": "replica_inventory_unusable",
+[tv-dator]       
+[tv-dator]         +    "topologySnapshot": Object {
+[tv-dator]       
+[tv-dator]         +      "observedDistinctNodeIds": Array [],
+[tv-dator]       
+[tv-dator]         +      "observedDistinctNodeCount": 0,
+[tv-dator]       
+[tv-dator]         +      "observedServiceRowCount": 0,
+[tv-dator]       
+[tv-dator]         +      "targetNodeId": "planner-node",
+[tv-dator]       
+[tv-dator]         +      "targetReplicaCount": null,
+[tv-dator]       
+[tv-dator]         +      "authoritativeAvailable": false,
+[tv-dator]       
+[tv-dator]         +      "authoritativeReasonCode": null,
+[tv-dator]       
+[tv-dator]         +      "authoritativeRetryAfterMs": null,
+[tv-dator]       
+[tv-dator]         +      "inventoryProvenance": Object {
+[tv-dator]       
+[tv-dator]         +        "atomicityClaim": "not_claimed",
+[tv-dator]       
+[tv-dator]         +        "committedRowsState": "unavailable",
+[tv-dator]       
+[tv-dator]         +        "inFlightOperationsState": "empty",
+[tv-dator]       
+[tv-dator]         +        "observedAtSkewMs": null,
+[tv-dator]       
+[tv-dator]         +        "consistency": "source_unavailable",
+[tv-dator]       
+[tv-dator]         +        "topologyIncreaseUsable": false,
+[tv-dator]       
+[tv-dator]         +      },
+[tv-dator]       
+[tv-dator]         +      "inventorySourceRevisions": Object {
+[tv-dator]       
+[tv-dator]         +        "committedRows": null,
+[tv-dator]       
+[tv-dator]         +        "inFlightOperations": null,
+[tv-dator]       
+[tv-dator]         +      },
+[tv-dator]       
+[tv-dator]         +      "inventorySourceWatermarks": Object {
+[tv-dator]       
+[tv-dator]         +        "committedRows": Object {
+[tv-dator]       
+[tv-dator]         +          "before": 1795282332737,
+[tv-dator]       
+[tv-dator]         +          "after": 1795282332737,
+[tv-dator]       
+[tv-dator]         +          "causeId": null,
+[tv-dator]       
+[tv-dator]         +        },
+[tv-dator]       
+[tv-dator]         +        "inFlightOperations": Object {
+[tv-dator]       
+[tv-dator]         +          "before": null,
+[tv-dator]       
+[tv-dator]         +          "after": null,
+[tv-dator]       
+[tv-dator]         +          "causeId": null,
+[tv-dator]       
+[tv-dator]         +        },
+[tv-dator]       
+[tv-dator]         +      },
+[tv-dator]       
+[tv-dator]         +    },
+[tv-dator]       
+[tv-dator]         +  },
+[tv-dator]       
+[tv-dator]         +}
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 7 - exactly one operation row is proposed
+[tv-dator]       ---
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,7 +1,1 @@
+[tv-dator]         -Array [
+[tv-dator]         -  Object {
+[tv-dator]         -    "entity_type": "runtime_service",
+[tv-dator]         -    "entity_id": "sys-postgres-wire",
+[tv-dator]         -    "target_node_id": "planner-node",
+[tv-dator]         -  },
+[tv-dator]         -]
+[tv-dator]         +Array []
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/topology-guard-owner-fact-inventory.test.js
+[tv-dator]         lineNumber: 119
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/topology-guard-owner-fact-inventory.test.js:119:5)
+[tv-dator]       source: >2
+[tv-dator]             'every hop went to the leader\'s node');
+[tv-dator]           t.equal(first.error, null, `the request is admitted: ${JSON.stringify(refusalOf(first.error))}`);
+[tv-dator]           t.same(ledgerShape(ledger), [{entity_type: RUNTIME_SERVICE, entity_id: RUNTIME_SERVICE_ID,
+[tv-dator]         ----^
+[tv-dator]             target_node_id: NODE.PLANNER}], 'exactly one operation row is proposed');
+[tv-dator]         });
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..7
+[tv-dator] not ok 1 - the guard reads the SERVICES owner fact from the leader, never the planner's follower, and admits the ADD once # time=405.469ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/topology-guard-owner-fact-inventory.test.js
+[tv-dator]     lineNumber: 97
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     }
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('the guard reads the SERVICES owner fact from the leader, never the
+[tv-dator]     planner\'s ' +
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       'follower, and admits the ADD once', {timeout: CASE_TIMEOUT_MS}, async (t) => {
+[tv-dator]       const world = await openWorld(t, NODE.PEER_A, PORTS);
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: the leader unreachable: no decision, typed deferral, zero proposals; the planner's own scheduled turn proposes exactly once after the owner answers
+[tv-dator]     ok 1 - setup: the planner node hosts a services-p1 replica that follows
+[tv-dator]     # Subtest: with the planner's scheduled retry
+[tv-dator]         # planner turn stopped with 0 virtual timers
+[tv-dator]         # OBSERVATION planner-turn-scheduled {"duringFault":{"proposals":0,"guardReads":5,"results":[{"skipped":true,"reason":"blocked","admission":"replica_inventory_unusable","authoritativeReasonCode":null},{"skipped":true,"reason":"blocked","admission":"replica_inventory_unusable","authoritativeReasonCode":null},{"skipped":true,"reason":"blocked","admission":"replica_inventory_unusable","authoritativeReasonCode":null},{"skipped":true,"reason":"blocked","admission":"replica_inventory_unusable","authoritativeReasonCode":null},{"skipped":true,"reason":"blocked","admission":"replica_inventory_unusable","authoritativeReasonCode":null}]},"afterRecovery":{"proposals":0,"ledger":[],"results":17}}
+[tv-dator]         ok 1 - nothing is proposed while the owner is unavailable
+[tv-dator]         ok 2 - the planner's own turn came back by itself (5 turns)
+[tv-dator]         ok 3 - each turn skipped its move
+[tv-dator]         not ok 4 - each refusal is a typed deferral naming the owner-fact reason: [{"decisionType":"blocked","reason":"replica_inventory_unusable","authoritativeReasonCode":null},{"decisionType":"blocked","reason":"replica_inventory_unusable","authoritativeReasonCode":null},{"decisionType":"blocked","reason":"replica_inventory_unusable","authoritativeReasonCode":null},{"decisionType":"blocked","reason":"replica_inventory_unusable","authoritativeReasonCode":null},{"decisionType":"blocked","reason":"replica_inventory_unusable","authoritativeReasonCode":null}]
+[tv-dator]           ---
+[tv-dator]           at:
+[tv-dator]             fileName: test/rebalancer/topology-guard-owner-fact-inventory.test.js
+[tv-dator]             lineNumber: 176
+[tv-dator]             columnNumber: 7
+[tv-dator]             typeName: Test
+[tv-dator]           stack: >
+[tv-dator]             Test.<anonymous>
+[tv-dator]             (test/rebalancer/topology-guard-owner-fact-inventory.test.js:176:7)
+[tv-dator]           source: |2
+[tv-dator]                 t.ok(duringFault.results.every((result) => result?.skipped === true),
+[tv-dator]                   'each turn skipped its move');
+[tv-dator]                 t.ok(faultRefusals(duringFault).every(isTypedUnavailableDeferral),
+[tv-dator]             ------^
+[tv-dator]                   `each refusal is a typed deferral naming the owner-fact reason: ${
+[tv-dator]                     JSON.stringify(faultRefusals(duringFault))}`);
+[tv-dator]           ...
+[tv-dator]         
+[tv-dator]         not ok 5 - exactly one proposal once the owner answers, from the planner's own turn
+[tv-dator]           ---
+[tv-dator]           compare: ===
+[tv-dator]           at:
+[tv-dator]             fileName: test/rebalancer/topology-guard-owner-fact-inventory.test.js
+[tv-dator]             lineNumber: 179
+[tv-dator]             columnNumber: 7
+[tv-dator]             typeName: Test
+[tv-dator]           stack: >
+[tv-dator]             Test.<anonymous>
+[tv-dator]             (test/rebalancer/topology-guard-owner-fact-inventory.test.js:179:7)
+[tv-dator]           source: >2
+[tv-dator]                   `each refusal is a typed deferral naming the owner-fact reason: ${
+[tv-dator]                     JSON.stringify(faultRefusals(duringFault))}`);
+[tv-dator]                 t.equal(afterRecovery.proposals, 1,
+[tv-dator]             ------^
+[tv-dator]                   'exactly one proposal once the owner answers, from the planner\'s own turn');
+[tv-dator]                 t.same(afterRecovery.ledger, [{entity_type: RUNTIME_SERVICE,
+[tv-dator]           diff: |
+[tv-dator]             --- expected
+[tv-dator]             +++ actual
+[tv-dator]             @@ -1,1 +1,1 @@
+[tv-dator]             -1
+[tv-dator]             +0
+[tv-dator]           ...
+[tv-dator]         
+[tv-dator]         not ok 6 - should be equivalent
+[tv-dator]           ---
+[tv-dator]           diff: |
+[tv-dator]             --- expected
+[tv-dator]             +++ actual
+[tv-dator]             @@ -1,7 +1,1 @@
+[tv-dator]             -Array [
+[tv-dator]             -  Object {
+[tv-dator]             -    "entity_type": "runtime_service",
+[tv-dator]             -    "entity_id": "sys-postgres-wire",
+[tv-dator]             -    "target_node_id": "planner-node",
+[tv-dator]             -  },
+[tv-dator]             -]
+[tv-dator]             +Array []
+[tv-dator]           at:
+[tv-dator]             fileName: test/rebalancer/topology-guard-owner-fact-inventory.test.js
+[tv-dator]             lineNumber: 181
+[tv-dator]             columnNumber: 7
+[tv-dator]             typeName: Test
+[tv-dator]           stack: >
+[tv-dator]             Test.<anonymous>
+[tv-dator]             (test/rebalancer/topology-guard-owner-fact-inventory.test.js:181:7)
+[tv-dator]           source: >2
+[tv-dator]                 t.equal(afterRecovery.proposals, 1,
+[tv-dator]                   'exactly one proposal once the owner answers, from the planner\'s own turn');
+[tv-dator]                 t.same(afterRecovery.ledger, [{entity_type: RUNTIME_SERVICE,
+[tv-dator]             ------^
+[tv-dator]                   entity_id: RUNTIME_SERVICE_ID, target_node_id: NODE.PLANNER}]);
+[tv-dator]               });
+[tv-dator]           ...
+[tv-dator]         
+[tv-dator]         1..6
+[tv-dator]     not ok 2 - with the planner's scheduled retry # time=68.307ms
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/topology-guard-owner-fact-inventory.test.js
+[tv-dator]         lineNumber: 165
+[tv-dator]         columnNumber: 11
+[tv-dator]         typeName: Test
+[tv-dator]       source: >2
+[tv-dator]           const world = await openWorld(t, NODE.PEER_A, PORTS);
+[tv-dator]       
+[tv-dator]           await t.test('with the planner\'s scheduled retry', async (t) => {
+[tv-dator]         ----------^
+[tv-dator]             const host = openPlannerHost(t, world);
+[tv-dator]             const {duringFault, afterRecovery} = await runPlannerTurnAcrossOutage(t, {world, host,
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     # Subtest: anti-vacuity: without the scheduled retry nothing proposes after the owner answers
+[tv-dator]         # planner turn stopped with 0 virtual timers
+[tv-dator]         # OBSERVATION planner-turn-no-retry {"duringFault":{"proposals":0,"guardReads":1,"results":[{"skipped":true,"reason":"blocked","admission":"replica_inventory_unusable","authoritativeReasonCode":null}]},"afterRecovery":{"proposals":0,"ledger":[],"results":1}}
+[tv-dator]         ok 1 - no other caller or event proposes: the scheduled turn is the only wake
+[tv-dator]         1..1
+[tv-dator]     ok 3 - anti-vacuity: without the scheduled retry nothing proposes after the owner answers # time=6.727ms
+[tv-dator]     
+[tv-dator]     1..3
+[tv-dator] not ok 2 - the leader unreachable: no decision, typed deferral, zero proposals; the planner's own scheduled turn proposes exactly once after the owner answers # time=338.58ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/topology-guard-owner-fact-inventory.test.js
+[tv-dator]     lineNumber: 160
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     }
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('the leader unreachable: no decision, typed deferral, zero proposals; the
+[tv-dator]     planner\'s ' +
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       'own scheduled turn proposes exactly once after the owner answers',
+[tv-dator]     {timeout: CASE_TIMEOUT_MS}, async (t) => {
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: a stale published leader whose successor is unreachable: no decision; the same turn proposes once the successor answers
+[tv-dator]     ok 1 - setup: the planner node hosts a services-p1 replica that follows
+[tv-dator]     ok 2 - setup: the planner still publishes the deposed leader
+[tv-dator]     # planner turn stopped with 0 virtual timers
+[tv-dator]     # OBSERVATION planner-turn-scheduled {"duringFault":{"proposals":0,"guardReads":5,"results":[{"skipped":true,"reason":"blocked","admission":"replica_inventory_unusable","authoritativeReasonCode":null},{"skipped":true,"reason":"blocked","admission":"replica_inventory_unusable","authoritativeReasonCode":null},{"skipped":true,"reason":"blocked","admission":"replica_inventory_unusable","authoritativeReasonCode":null},{"skipped":true,"reason":"blocked","admission":"replica_inventory_unusable","authoritativeReasonCode":null},{"skipped":true,"reason":"blocked","admission":"replica_inventory_unusable","authoritativeReasonCode":null}]},"afterRecovery":{"proposals":0,"ledger":[],"results":17}}
+[tv-dator]     ok 3 - nothing is proposed while the leader is unreachable
+[tv-dator]     not ok 4 - each refusal is a typed deferral: [{"decisionType":"blocked","reason":"replica_inventory_unusable","authoritativeReasonCode":null},{"decisionType":"blocked","reason":"replica_inventory_unusable","authoritativeReasonCode":null},{"decisionType":"blocked","reason":"replica_inventory_unusable","authoritativeReasonCode":null},{"decisionType":"blocked","reason":"replica_inventory_unusable","authoritativeReasonCode":null},{"decisionType":"blocked","reason":"replica_inventory_unusable","authoritativeReasonCode":null}]
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/topology-guard-owner-fact-inventory.test.js
+[tv-dator]         lineNumber: 211
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/topology-guard-owner-fact-inventory.test.js:211:5)
+[tv-dator]       source: >2
+[tv-dator]             scheduledRetry: true});
+[tv-dator]           t.equal(duringFault.proposals, 0, 'nothing is proposed while the leader is unreachable');
+[tv-dator]           t.ok(faultRefusals(duringFault).length > 0 &&
+[tv-dator]         ----^
+[tv-dator]             faultRefusals(duringFault).every(isTypedUnavailableDeferral),
+[tv-dator]           `each refusal is a typed deferral: ${JSON.stringify(faultRefusals(duringFault))}`);
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 5 - exactly one proposal after the successor answers
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/topology-guard-owner-fact-inventory.test.js
+[tv-dator]         lineNumber: 214
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/topology-guard-owner-fact-inventory.test.js:214:5)
+[tv-dator]       source: >2
+[tv-dator]             faultRefusals(duringFault).every(isTypedUnavailableDeferral),
+[tv-dator]           `each refusal is a typed deferral: ${JSON.stringify(faultRefusals(duringFault))}`);
+[tv-dator]           t.equal(afterRecovery.proposals, 1, 'exactly one proposal after the successor answers');
+[tv-dator]         ----^
+[tv-dator]       
+[tv-dator]         });
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -1
+[tv-dator]         +0
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..5
+[tv-dator] not ok 3 - a stale published leader whose successor is unreachable: no decision; the same turn proposes once the successor answers # time=538.129ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/topology-guard-owner-fact-inventory.test.js
+[tv-dator]     lineNumber: 197
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     });
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('a stale published leader whose successor is unreachable: no decision;
+[tv-dator]     the same ' +
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       'turn proposes once the successor answers', {timeout: CASE_TIMEOUT_MS}, async (t) => {
+[tv-dator]       const world = await openWorld(t, NODE.PEER_A, PORTS);
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] 1..3
+[tv-dator] # { total: 20, pass: 11, fail: 9 }
+[tv-dator] # time=1298.703ms
+[tv-dator] not ok test/rebalancer/services-inventory-owner-fact-siblings.test.js (21 assertions, 3678ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] # Subtest: allocateCanonicalReplicaId: the owner fact's rows name the used replica ids
+[tv-dator]     ok 1 - setup: in the reference world the planner node leads services-p1
+[tv-dator]     ok 2 - setup: in the subject world the planner node hosts a follower
+[tv-dator]     # OBSERVATION allocate {"reference":"sys-postgres-wire-r2","referenceError":null,"ready":"sys-postgres-wire-r1","readyError":null,"unavailable":"sys-postgres-wire-r1","unavailableError":null}
+[tv-dator]     ok 3 - reference: the complete leader read counts the leader's r1
+[tv-dator]     not ok 4 - READY allocates what the reference allocates
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/services-inventory-owner-fact-siblings.test.js
+[tv-dator]         lineNumber: 131
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/services-inventory-owner-fact-siblings.test.js:131:7)
+[tv-dator]       source: >2
+[tv-dator]             t.equal(reference.value, `${RUNTIME_SERVICE_ID}-r2`,
+[tv-dator]               'reference: the complete leader read counts the leader\'s r1');
+[tv-dator]             t.equal(ready.value, reference.value, 'READY allocates what the reference allocates');
+[tv-dator]         ------^
+[tv-dator]             t.equal(unavailable.value, null, 'UNAVAILABLE allocates no replica id');
+[tv-dator]             t.ok(isTypedUnavailable(unavailable),
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -sys-postgres-wire-r2
+[tv-dator]         +sys-postgres-wire-r1
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 5 - UNAVAILABLE allocates no replica id
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/services-inventory-owner-fact-siblings.test.js
+[tv-dator]         lineNumber: 132
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/services-inventory-owner-fact-siblings.test.js:132:7)
+[tv-dator]       source: >2
+[tv-dator]               'reference: the complete leader read counts the leader\'s r1');
+[tv-dator]             t.equal(ready.value, reference.value, 'READY allocates what the reference allocates');
+[tv-dator]             t.equal(unavailable.value, null, 'UNAVAILABLE allocates no replica id');
+[tv-dator]         ------^
+[tv-dator]             t.ok(isTypedUnavailable(unavailable),
+[tv-dator]               `UNAVAILABLE is a typed refusal: ${JSON.stringify(errorShape(unavailable.error))}`);
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -null
+[tv-dator]         +sys-postgres-wire-r1
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 6 - UNAVAILABLE is a typed refusal: null
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/services-inventory-owner-fact-siblings.test.js
+[tv-dator]         lineNumber: 133
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/services-inventory-owner-fact-siblings.test.js:133:7)
+[tv-dator]       source: >2
+[tv-dator]             t.equal(ready.value, reference.value, 'READY allocates what the reference allocates');
+[tv-dator]             t.equal(unavailable.value, null, 'UNAVAILABLE allocates no replica id');
+[tv-dator]             t.ok(isTypedUnavailable(unavailable),
+[tv-dator]         ------^
+[tv-dator]               `UNAVAILABLE is a typed refusal: ${JSON.stringify(errorShape(unavailable.error))}`);
+[tv-dator]           });
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..6
+[tv-dator] not ok 1 - allocateCanonicalReplicaId: the owner fact's rows name the used replica ids # time=732.641ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/services-inventory-owner-fact-siblings.test.js
+[tv-dator]     lineNumber: 118
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     }
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('allocateCanonicalReplicaId: the owner fact\'s rows name the used replica
+[tv-dator]     ids',
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       {timeout: CASE_TIMEOUT_MS}, async (t) => {
+[tv-dator]         const decide = (host) => host.coordinator.allocateCanonicalReplicaId({
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: readBootstrapServiceRows: the address book is the owner fact's rows
+[tv-dator]     ok 1 - setup: in the reference world the planner node leads services-p1
+[tv-dator]     ok 2 - setup: in the subject world the planner node hosts a follower
+[tv-dator]     # OBSERVATION bootstrap-rows {"reference":["services-p1-r1","services-p1-r2","services-p1-r3","services-p1-r4"],"ready":["services-p1-r1","services-p1-r2","services-p1-r3"],"readyError":null,"unavailable":["services-p1-r1","services-p1-r2","services-p1-r3"],"unavailableError":null}
+[tv-dator]     ok 3 - reference: the complete leader read includes the leader-only replica
+[tv-dator]     not ok 4 - READY yields the reference address book
+[tv-dator]       ---
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,6 +1,5 @@
+[tv-dator]          Array [
+[tv-dator]            "services-p1-r1",
+[tv-dator]            "services-p1-r2",
+[tv-dator]            "services-p1-r3",
+[tv-dator]         -  "services-p1-r4",
+[tv-dator]          ]
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/services-inventory-owner-fact-siblings.test.js
+[tv-dator]         lineNumber: 148
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/services-inventory-owner-fact-siblings.test.js:148:7)
+[tv-dator]       source: >2
+[tv-dator]             t.ok(reference.value?.includes(LEADER_ONLY_PARTITION_REPLICA_ID),
+[tv-dator]               'reference: the complete leader read includes the leader-only replica');
+[tv-dator]             t.same(ready.value, reference.value, 'READY yields the reference address book');
+[tv-dator]         ------^
+[tv-dator]             t.equal(unavailable.value, null, 'UNAVAILABLE yields no address book (no cache rows)');
+[tv-dator]             t.ok(isTypedUnavailable(unavailable),
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 5 - UNAVAILABLE yields no address book (no cache rows)
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/services-inventory-owner-fact-siblings.test.js
+[tv-dator]         lineNumber: 149
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/services-inventory-owner-fact-siblings.test.js:149:7)
+[tv-dator]       source: >2
+[tv-dator]               'reference: the complete leader read includes the leader-only replica');
+[tv-dator]             t.same(ready.value, reference.value, 'READY yields the reference address book');
+[tv-dator]             t.equal(unavailable.value, null, 'UNAVAILABLE yields no address book (no cache rows)');
+[tv-dator]         ------^
+[tv-dator]             t.ok(isTypedUnavailable(unavailable),
+[tv-dator]               `UNAVAILABLE is a typed refusal: ${JSON.stringify(errorShape(unavailable.error))}`);
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,5 @@
+[tv-dator]         -null
+[tv-dator]         +Array [
+[tv-dator]         +  "services-p1-r1",
+[tv-dator]         +  "services-p1-r2",
+[tv-dator]         +  "services-p1-r3",
+[tv-dator]         +]
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 6 - UNAVAILABLE is a typed refusal: null
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/services-inventory-owner-fact-siblings.test.js
+[tv-dator]         lineNumber: 150
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/services-inventory-owner-fact-siblings.test.js:150:7)
+[tv-dator]       source: >2
+[tv-dator]             t.same(ready.value, reference.value, 'READY yields the reference address book');
+[tv-dator]             t.equal(unavailable.value, null, 'UNAVAILABLE yields no address book (no cache rows)');
+[tv-dator]             t.ok(isTypedUnavailable(unavailable),
+[tv-dator]         ------^
+[tv-dator]               `UNAVAILABLE is a typed refusal: ${JSON.stringify(errorShape(unavailable.error))}`);
+[tv-dator]           });
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..6
+[tv-dator] not ok 2 - readBootstrapServiceRows: the address book is the owner fact's rows # time=582.965ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/services-inventory-owner-fact-siblings.test.js
+[tv-dator]     lineNumber: 137
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >2
+[tv-dator]       });
+[tv-dator]   
+[tv-dator]     test('readBootstrapServiceRows: the address book is the owner fact\'s rows',
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       {timeout: CASE_TIMEOUT_MS}, async (t) => {
+[tv-dator]         const decide = async (host) => (await host.coordinator.readBootstrapServiceRows(
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: holdCriticalPartitionCreateLaneIfOverTarget: the over-target hold is decided on the owner fact and never released by an unavailable one
+[tv-dator]     ok 1 - setup: in the reference world the planner node leads services-p1
+[tv-dator]     ok 2 - setup: in the subject world the planner node hosts a follower
+[tv-dator]     # OBSERVATION over-target-hold {"referenceError":{"message":"Critical partition services-p1 at 4 alive replicas over target 3; holding add-like create in flight","reasonCode":null,"rebalanceSkipReason":"budget_exceeded"},"readyError":null,"unavailableError":null}
+[tv-dator]     ok 3 - reference: four alive replicas over a target of three hold the lane
+[tv-dator]     ok 4 - READY is a decision, not an unavailability
+[tv-dator]     not ok 5 - READY holds the lane exactly as the reference does
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/services-inventory-owner-fact-siblings.test.js
+[tv-dator]         lineNumber: 169
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/services-inventory-owner-fact-siblings.test.js:169:5)
+[tv-dator]       source: |2
+[tv-dator]           t.notOk(isTypedUnavailable(ready),
+[tv-dator]             'READY is a decision, not an unavailability');
+[tv-dator]           t.equal(ready.error?.message, reference.error?.message,
+[tv-dator]         ----^
+[tv-dator]             'READY holds the lane exactly as the reference does');
+[tv-dator]           t.ok(isTypedUnavailable(unavailable),
+[tv-dator]       diff: >
+[tv-dator]         --- expected
+[tv-dator]       
+[tv-dator]         +++ actual
+[tv-dator]       
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]       
+[tv-dator]         -Critical partition services-p1 at 4 alive replicas over target 3; holding
+[tv-dator]         add-like create in flight
+[tv-dator]       
+[tv-dator]         +undefined
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 6 - UNAVAILABLE releases no hold: a typed refusal null
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/services-inventory-owner-fact-siblings.test.js
+[tv-dator]         lineNumber: 171
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/services-inventory-owner-fact-siblings.test.js:171:5)
+[tv-dator]       source: |2
+[tv-dator]           t.equal(ready.error?.message, reference.error?.message,
+[tv-dator]             'READY holds the lane exactly as the reference does');
+[tv-dator]           t.ok(isTypedUnavailable(unavailable),
+[tv-dator]         ----^
+[tv-dator]             `UNAVAILABLE releases no hold: a typed refusal ${
+[tv-dator]               JSON.stringify(errorShape(unavailable.error))}`);
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..6
+[tv-dator] not ok 3 - holdCriticalPartitionCreateLaneIfOverTarget: the over-target hold is decided on the owner fact and never released by an unavailable one # time=495.384ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/services-inventory-owner-fact-siblings.test.js
+[tv-dator]     lineNumber: 154
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >2
+[tv-dator]       });
+[tv-dator]   
+[tv-dator]     test('holdCriticalPartitionCreateLaneIfOverTarget: the over-target hold is
+[tv-dator]     decided on ' +
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       'the owner fact and never released by an unavailable one', {timeout: CASE_TIMEOUT_MS},
+[tv-dator]     async (t) => {
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] 1..3
+[tv-dator] # { total: 18, pass: 10, fail: 8 }
+[tv-dator] # time=1826.095ms
+[tv-dator] # test-files total=3 pass=0 fail=3 assertions=160
+lab test: tv-dator: # test-files total=3 pass=0 fail=3 assertions=160
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=3 pass=0 fail=3 assertions=160
+exit=1

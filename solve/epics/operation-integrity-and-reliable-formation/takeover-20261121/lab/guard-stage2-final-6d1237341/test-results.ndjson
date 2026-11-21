@@ -1,0 +1,15 @@
+{"file":"test/rebalancer/required-entity-operation-observation.test.js","attempt":1,"ok":true,"assertions":177,"durationMs":1849,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/topology-guard-inventory-authority.test.js","attempt":1,"ok":true,"assertions":57,"durationMs":2808,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/services-inventory-owner-fact-siblings.test.js","attempt":1,"ok":true,"assertions":34,"durationMs":4963,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cdc/cdc-owner-fact-receiver-read-point.test.js","attempt":1,"ok":true,"assertions":42,"durationMs":5418,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/readiness-snapshot-persistence.test.js","attempt":1,"ok":false,"assertions":49,"durationMs":1355,"retriedOnce":false,"firstFailureLine":"not ok 1 - SERVICES inventory of partition partition-1 unavailable: owner_fact_read_failed"}
+{"file":"test/rebalancer/topology-guard-owner-fact-inventory.test.js","attempt":1,"ok":true,"assertions":25,"durationMs":4730,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/coordinator-dedup-gap.test.js","attempt":1,"ok":true,"assertions":69,"durationMs":1967,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/rebalance-coordinator-topology-guard.test.js","attempt":1,"ok":false,"assertions":85,"durationMs":1818,"retriedOnce":false,"firstFailureLine":"not ok 1 - createOperation should fail closed when the target node already hosts the partition"}
+{"file":"test/rebalancer/topology-guard-owner-fact-read-point.test.js","attempt":1,"ok":true,"assertions":11,"durationMs":4817,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/rebalance-coordinator-operation-ownership.test.js","attempt":1,"ok":false,"assertions":229,"durationMs":1551,"retriedOnce":false,"firstFailureLine":"not ok 1 - SERVICES inventory of partition partition-1 unavailable: hint_read_failed"}
+{"file":"test/rebalancer/critical-spread-terminal-stall-repro.test.js","attempt":1,"ok":true,"assertions":23,"durationMs":1369,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/spread-cure-at-target-minting-gap.test.js","attempt":1,"ok":true,"assertions":28,"durationMs":1481,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/failed-authoritative-read-admission-verdict.test.js","attempt":1,"ok":true,"assertions":9,"durationMs":1421,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/recent-completed-replace-target-visibility.test.js","attempt":1,"ok":true,"assertions":28,"durationMs":1269,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/topology-guard-owner-fact-deposed-leader.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":11565,"retriedOnce":false,"firstFailureLine":null}

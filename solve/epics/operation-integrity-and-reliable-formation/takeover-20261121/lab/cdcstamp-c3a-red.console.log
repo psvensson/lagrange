@@ -1,0 +1,606 @@
+lab test: tv-dator: ordinary (1 files) cores=12 mem=15.4GiB speed x1.52
+[tv-dator] placement-shell=3248164
+[tv-dator] placement-head=ac0ed01932dca583e436f320de00a3798bccc219
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.6 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=3248616
+[tv-dator] # test-files planned=1
+[tv-dator] classified lane ordinary: 1 file(s), jobs=4
+[tv-dator] thermal: ok cpu 62C (coretemp/Package id 0) nvme 47C (nvme/Sensor 1)
+[tv-dator] not ok test/partition/partition-cdc-currentness-stamp-witness.test.js (75 assertions, 4713ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 13
+[tv-dator] # Subtest: one CDC delivery to 1 target group(s) with nothing changing rebuilds the propagation plan at most once
+[tv-dator] ok 1 - one CDC delivery to 1 target group(s) with nothing changing rebuilds the propagation plan at most once
+[tv-dator]   ---
+[tv-dator]   duration_ms: 1697.79224
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # measured: 1 plan rebuilds, 243 currentness selection evaluations (each one raft status read on a node whose local message-group replica leads), 1 delivery selection(s), for one delivery of one range to 1 target group(s)
+[tv-dator] # Subtest: one CDC delivery to 1 target group(s) with nothing changing reads raft status for currentness at most once
+[tv-dator] not ok 2 - one CDC delivery to 1 target group(s) with nothing changing reads raft status for currentness at most once
+[tv-dator]   ---
+[tv-dator]   duration_ms: 55.304937
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/ac0ed01932dc-mwqsk514-1931115/test/partition/partition-cdc-currentness-stamp-witness.test.js:358:3'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: 'currentness raft status reads must be at most 1; measured: 1 plan rebuilds, 243 currentness selection evaluations (each one raft status read on a node whose local message-group replica leads), 1 delivery selection(s), for one delivery of one range to 1 target group(s)'
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: true
+[tv-dator]   actual: false
+[tv-dator]   operator: '=='
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/ac0ed01932dc-mwqsk514-1931115/test/partition/partition-cdc-currentness-stamp-witness.test.js:361:12)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # measured: 1 plan rebuilds, 243 currentness selection evaluations (each one raft status read on a node whose local message-group replica leads), 1 delivery selection(s), for one delivery of one range to 1 target group(s)
+[tv-dator] # Subtest: one CDC delivery to 3 target group(s) with nothing changing rebuilds the propagation plan at most once
+[tv-dator] ok 3 - one CDC delivery to 3 target group(s) with nothing changing rebuilds the propagation plan at most once
+[tv-dator]   ---
+[tv-dator]   duration_ms: 41.124665
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # measured: 1 plan rebuilds, 685 currentness selection evaluations (each one raft status read on a node whose local message-group replica leads), 1 delivery selection(s), for one delivery of one range to 3 target group(s)
+[tv-dator] # Subtest: one CDC delivery to 3 target group(s) with nothing changing reads raft status for currentness at most once
+[tv-dator] not ok 4 - one CDC delivery to 3 target group(s) with nothing changing reads raft status for currentness at most once
+[tv-dator]   ---
+[tv-dator]   duration_ms: 39.107303
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/ac0ed01932dc-mwqsk514-1931115/test/partition/partition-cdc-currentness-stamp-witness.test.js:358:3'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: 'currentness raft status reads must be at most 1; measured: 1 plan rebuilds, 685 currentness selection evaluations (each one raft status read on a node whose local message-group replica leads), 1 delivery selection(s), for one delivery of one range to 3 target group(s)'
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: true
+[tv-dator]   actual: false
+[tv-dator]   operator: '=='
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/ac0ed01932dc-mwqsk514-1931115/test/partition/partition-cdc-currentness-stamp-witness.test.js:361:12)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # measured: 1 plan rebuilds, 685 currentness selection evaluations (each one raft status read on a node whose local message-group replica leads), 1 delivery selection(s), for one delivery of one range to 3 target group(s)
+[tv-dator] # Subtest: the currentness input list is one complete, well-formed enumeration
+[tv-dator] ok 5 - the currentness input list is one complete, well-formed enumeration
+[tv-dator]   ---
+[tv-dator]   duration_ms: 21.317863
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the next currentness check after partition.obligation-lane changes answers per the new fact (not-current)
+[tv-dator] ok 6 - the next currentness check after partition.obligation-lane changes answers per the new fact (not-current)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 41.759705
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the next currentness check after partition.current-obligation changes answers per the new fact (not-current)
+[tv-dator] ok 7 - the next currentness check after partition.current-obligation changes answers per the new fact (not-current)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 32.110206
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the next currentness check after partition.is-leader changes answers per the new fact (not-current)
+[tv-dator] ok 8 - the next currentness check after partition.is-leader changes answers per the new fact (not-current)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 41.999882
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the next currentness check after partition.is-shutdown changes answers per the new fact (not-current)
+[tv-dator] ok 9 - the next currentness check after partition.is-shutdown changes answers per the new fact (not-current)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 26.314475
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the next currentness check after partition.leadership-tenure changes answers per the new fact (not-current)
+[tv-dator] ok 10 - the next currentness check after partition.leadership-tenure changes answers per the new fact (not-current)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 30.407825
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the next currentness check after partition.subscriber-count changes answers per the new fact (not-current)
+[tv-dator] ok 11 - the next currentness check after partition.subscriber-count changes answers per the new fact (not-current)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 31.531789
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the next currentness check after partition.subscriber-membership changes answers per the new fact (not-current)
+[tv-dator] ok 12 - the next currentness check after partition.subscriber-membership changes answers per the new fact (not-current)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 28.844535
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the next currentness check after partition.subscriber-source changes answers per the new fact (not-current)
+[tv-dator] ok 13 - the next currentness check after partition.subscriber-source changes answers per the new fact (not-current)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 29.959381
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the next currentness check after partition.subscriber-state changes answers per the new fact (not-current)
+[tv-dator] ok 14 - the next currentness check after partition.subscriber-state changes answers per the new fact (not-current)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 27.258965
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the next currentness check after partition.subscriber-epoch changes answers per the new fact (not-current)
+[tv-dator] ok 15 - the next currentness check after partition.subscriber-epoch changes answers per the new fact (not-current)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 28.159397
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the next currentness check after invocation.active-slot changes answers per the new fact (not-current)
+[tv-dator] ok 16 - the next currentness check after invocation.active-slot changes answers per the new fact (not-current)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 27.01611
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the next currentness check after invocation.retired changes answers per the new fact (not-current)
+[tv-dator] ok 17 - the next currentness check after invocation.retired changes answers per the new fact (not-current)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 27.934539
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the next currentness check after topology.durable-lifetime changes answers per the new fact (not-current)
+[tv-dator] ok 18 - the next currentness check after topology.durable-lifetime changes answers per the new fact (not-current)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 36.156346
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the next currentness check after topology.stopped changes answers per the new fact (not-current)
+[tv-dator] ok 19 - the next currentness check after topology.stopped changes answers per the new fact (not-current)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 23.622823
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the next currentness check after topology.cache-identity changes answers per the new fact (not-current)
+[tv-dator] ok 20 - the next currentness check after topology.cache-identity changes answers per the new fact (not-current)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 25.368549
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the next currentness check after topology.tree-identity changes answers per the new fact (not-current)
+[tv-dator] ok 21 - the next currentness check after topology.tree-identity changes answers per the new fact (not-current)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 28.183714
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the next currentness check after topology.router-identity changes answers per the new fact (not-current)
+[tv-dator] ok 22 - the next currentness check after topology.router-identity changes answers per the new fact (not-current)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 25.444109
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T19:19:18.570Z","nodeId":"node-a","pid":3248631,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-renamed"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[tv-dator] # Subtest: the next currentness check after topology.node-id changes answers per the new fact (reobserved)
+[tv-dator] ok 23 - the next currentness check after topology.node-id changes answers per the new fact (reobserved)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 28.395669
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T19:19:18.599Z","nodeId":"node-a","pid":3248631,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[tv-dator] # Subtest: the next currentness check after topology.replica-suffix changes answers per the new fact (reobserved)
+[tv-dator] ok 24 - the next currentness check after topology.replica-suffix changes answers per the new fact (reobserved)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 28.522574
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the next currentness check after source.is-shutdown changes answers per the new fact (not-current)
+[tv-dator] ok 25 - the next currentness check after source.is-shutdown changes answers per the new fact (not-current)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 26.255162
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the next currentness check after source.initialized changes answers per the new fact (not-current)
+[tv-dator] ok 26 - the next currentness check after source.initialized changes answers per the new fact (not-current)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 26.256443
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the next currentness check after source.raft changes answers per the new fact (not-current)
+[tv-dator] ok 27 - the next currentness check after source.raft changes answers per the new fact (not-current)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 25.987635
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the next currentness check after source.commit-lifetime changes answers per the new fact (not-current)
+[tv-dator] ok 28 - the next currentness check after source.commit-lifetime changes answers per the new fact (not-current)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 26.778186
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the next currentness check after source.group-id changes answers per the new fact (not-current)
+[tv-dator] ok 29 - the next currentness check after source.group-id changes answers per the new fact (not-current)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 35.275876
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the next currentness check after selection.selected-service changes answers per the new fact (not-current)
+[tv-dator] ok 30 - the next currentness check after selection.selected-service changes answers per the new fact (not-current)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 23.245625
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the next currentness check after config.propagation-mode changes answers per the new fact (not-current)
+[tv-dator] ok 31 - the next currentness check after config.propagation-mode changes answers per the new fact (not-current)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 25.624404
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the next currentness check after tree.routing-order changes answers per the new fact (unchanged)
+[tv-dator] ok 32 - the next currentness check after tree.routing-order changes answers per the new fact (unchanged)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 28.698851
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the next currentness check after services.address changes answers per the new fact (reobserved)
+[tv-dator] ok 33 - the next currentness check after services.address changes answers per the new fact (reobserved)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 27.142716
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the next currentness check after services.node-id changes answers per the new fact (reobserved)
+[tv-dator] ok 34 - the next currentness check after services.node-id changes answers per the new fact (reobserved)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 26.096861
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the next currentness check after services.service-id changes answers per the new fact (reobserved)
+[tv-dator] ok 35 - the next currentness check after services.service-id changes answers per the new fact (reobserved)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 33.00135
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the next currentness check after services.created-at changes answers per the new fact (reobserved)
+[tv-dator] ok 36 - the next currentness check after services.created-at changes answers per the new fact (reobserved)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 27.428664
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the next currentness check after services.create-attempt-token changes answers per the new fact (reobserved)
+[tv-dator] ok 37 - the next currentness check after services.create-attempt-token changes answers per the new fact (reobserved)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 30.115598
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the next currentness check after services.replica-id changes answers per the new fact (reobserved)
+[tv-dator] ok 38 - the next currentness check after services.replica-id changes answers per the new fact (reobserved)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 27.798364
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the next currentness check after services.raft-role changes answers per the new fact (reobserved)
+[tv-dator] ok 39 - the next currentness check after services.raft-role changes answers per the new fact (reobserved)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 28.040516
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T19:19:19.046Z","nodeId":"node-a","pid":3248631,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[tv-dator] # Subtest: the next currentness check after services.status changes answers per the new fact (reobserved)
+[tv-dator] ok 40 - the next currentness check after services.status changes answers per the new fact (reobserved)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 28.463887
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T19:19:19.083Z","nodeId":"node-a","pid":3248631,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[tv-dator] # Subtest: the next currentness check after services.service-type changes answers per the new fact (reobserved)
+[tv-dator] ok 41 - the next currentness check after services.service-type changes answers per the new fact (reobserved)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 36.516731
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T19:19:19.107Z","nodeId":"node-a","pid":3248631,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[tv-dator] # Subtest: the next currentness check after services.group-id changes answers per the new fact (reobserved)
+[tv-dator] ok 42 - the next currentness check after services.group-id changes answers per the new fact (reobserved)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 26.214717
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the next currentness check after nodes.boot-incarnation changes answers per the new fact (reobserved)
+[tv-dator] ok 43 - the next currentness check after nodes.boot-incarnation changes answers per the new fact (reobserved)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 26.671408
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T19:19:19.160Z","nodeId":"node-a","pid":3248631,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[tv-dator] # Subtest: the next currentness check after nodes.latency-group-id changes answers per the new fact (reobserved)
+[tv-dator] ok 44 - the next currentness check after nodes.latency-group-id changes answers per the new fact (reobserved)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 26.175732
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T19:19:19.186Z","nodeId":"node-a","pid":3248631,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[tv-dator] # Subtest: the next currentness check after nodes.status changes answers per the new fact (reobserved)
+[tv-dator] ok 45 - the next currentness check after nodes.status changes answers per the new fact (reobserved)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 26.203027
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T19:19:19.212Z","nodeId":"node-a","pid":3248631,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[tv-dator] # Subtest: the next currentness check after nodes.local-latency-group-id changes answers per the new fact (reobserved)
+[tv-dator] ok 46 - the next currentness check after nodes.local-latency-group-id changes answers per the new fact (reobserved)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 26.116195
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T19:19:19.237Z","nodeId":"node-a","pid":3248631,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[tv-dator] # Subtest: the next currentness check after latency-groups.row changes answers per the new fact (reobserved)
+[tv-dator] ok 47 - the next currentness check after latency-groups.row changes answers per the new fact (reobserved)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 26.067841
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T19:19:19.265Z","nodeId":"node-a","pid":3248631,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[tv-dator] # Subtest: the next currentness check after latency-groups.state changes answers per the new fact (reobserved)
+[tv-dator] ok 48 - the next currentness check after latency-groups.state changes answers per the new fact (reobserved)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 26.096978
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T19:19:19.290Z","nodeId":"node-a","pid":3248631,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[tv-dator] # Subtest: the next currentness check after latency-groups.coordinator changes answers per the new fact (reobserved)
+[tv-dator] ok 49 - the next currentness check after latency-groups.coordinator changes answers per the new fact (reobserved)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 25.512114
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T19:19:19.316Z","nodeId":"node-a","pid":3248631,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[tv-dator] # Subtest: the next currentness check after latency-groups.representative changes answers per the new fact (reobserved)
+[tv-dator] ok 50 - the next currentness check after latency-groups.representative changes answers per the new fact (reobserved)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 25.728843
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T19:19:19.342Z","nodeId":"node-a","pid":3248631,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[tv-dator] # Subtest: the next currentness check after message-groups.row changes answers per the new fact (reobserved)
+[tv-dator] ok 51 - the next currentness check after message-groups.row changes answers per the new fact (reobserved)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 27.094876
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T19:19:19.369Z","nodeId":"node-a","pid":3248631,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[tv-dator] # Subtest: the next currentness check after message-groups.status changes answers per the new fact (reobserved)
+[tv-dator] ok 52 - the next currentness check after message-groups.status changes answers per the new fact (reobserved)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 26.283703
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T19:19:19.398Z","nodeId":"node-a","pid":3248631,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[tv-dator] # Subtest: the next currentness check after message-groups.state changes answers per the new fact (reobserved)
+[tv-dator] ok 53 - the next currentness check after message-groups.state changes answers per the new fact (reobserved)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 29.890158
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T19:19:19.442Z","nodeId":"node-a","pid":3248631,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[tv-dator] # Subtest: the next currentness check after message-groups.leader-node-id changes answers per the new fact (reobserved)
+[tv-dator] ok 54 - the next currentness check after message-groups.leader-node-id changes answers per the new fact (reobserved)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 40.583255
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the currentness check evaluates the response deadline on every read with nothing else changing
+[tv-dator] ok 55 - the currentness check evaluates the response deadline on every read with nothing else changing
+[tv-dator]   ---
+[tv-dator]   duration_ms: 23.291632
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: checks of one delivery with no plan input changed reuse the owner-held plan
+[tv-dator] ok 56 - checks of one delivery with no plan input changed reuse the owner-held plan
+[tv-dator]   ---
+[tv-dator]   duration_ms: 26.378037
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: an unrelated row change in a plan table re-observes the plan and leaves stable progress untouched
+[tv-dator] ok 57 - an unrelated row change in a plan table re-observes the plan and leaves stable progress untouched
+[tv-dator]   ---
+[tv-dator]   duration_ms: 27.020092
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T19:19:19.544Z","nodeId":"node-a","pid":3248631,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[tv-dator] # Subtest: a plan input changed between two drives (different turns) is seen by the next read
+[tv-dator] ok 58 - a plan input changed between two drives (different turns) is seen by the next read
+[tv-dator]   ---
+[tv-dator]   duration_ms: 28.111581
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: CDCGroupPropagationService refuses wiring a system table cache without table versions
+[tv-dator] ok 59 - CDCGroupPropagationService refuses wiring a system table cache without table versions
+[tv-dator]   ---
+[tv-dator]   duration_ms: 19.235561
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: CDCGroupPropagationService refuses wiring a latency tree without a routing generation
+[tv-dator] ok 60 - CDCGroupPropagationService refuses wiring a latency tree without a routing generation
+[tv-dator]   ---
+[tv-dator]   duration_ms: 18.271461
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: CDCGroupPropagationService refuses wiring a configuration without a revision
+[tv-dator] ok 61 - CDCGroupPropagationService refuses wiring a configuration without a revision
+[tv-dator]   ---
+[tv-dator]   duration_ms: 15.682009
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the production topology composition wires a known plan stamp: a second identical delivery reuses the plan
+[tv-dator] ok 62 - the production topology composition wires a known plan stamp: a second identical delivery reuses the plan
+[tv-dator]   ---
+[tv-dator]   duration_ms: 23.202903
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: a plan input moved during a plan observation is not held: the next read observes anew
+[tv-dator] ok 63 - a plan input moved during a plan observation is not held: the next read observes anew
+[tv-dator]   ---
+[tv-dator]   duration_ms: 23.574117
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: stamp component: the tree routing generation (a recompute alone reorders the plan)
+[tv-dator] ok 64 - stamp component: the tree routing generation (a recompute alone reorders the plan)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 34.041305
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: stamp component: the tree identity (a tree re-wired at an equal generation)
+[tv-dator] ok 65 - stamp component: the tree identity (a tree re-wired at an equal generation)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 36.567192
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: stamp component: the cache identity (a cache re-wired at equal table versions)
+[tv-dator] ok 66 - stamp component: the cache identity (a cache re-wired at equal table versions)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 30.649997
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-21T19:19:19.775Z","nodeId":"node-a","pid":3248631,"subsystem":"cdc-group-propagation","event":"wait_bound_spent","wait":"CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS","awaited":"complete canonical native/provisional coverage for the durable CDC propagation wave (foreground; unresolved debt returns to the source owner)","boundMs":null,"elapsedMs":"unmeasured","lastObserved":{"tableName":"latency_groups","operation":"INSERT","attempt":1,"maxAttempts":1,"failureCount":1,"eventCount":1,"stopReason":"attempts_exhausted","suppressed":0},"scope":{"nodeId":"node-a"},"repeats":0,"nodeId":"node-a","msg":"Wait bound spent"}
+[tv-dator] # Subtest: stamp component: the router identity (a router wired late makes grouped targets routable)
+[tv-dator] ok 67 - stamp component: the router identity (a router wired late makes grouped targets routable)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 30.894901
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: CDCGroupPropagationService refuses wiring a message router that cannot deliver
+[tv-dator] not ok 68 - CDCGroupPropagationService refuses wiring a message router that cannot deliver
+[tv-dator]   ---
+[tv-dator]   duration_ms: 22.47297
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/ac0ed01932dc-mwqsk514-1931115/test/partition/partition-cdc-currentness-stamp-witness.test.js:1088:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: 'Missing expected exception.'
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: [Function (anonymous)]
+[tv-dator]   operator: 'throws'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/ac0ed01932dc-mwqsk514-1931115/test/partition/partition-cdc-currentness-stamp-witness.test.js:1092:10)
+[tv-dator]     Test.runInAsyncScope (node:async_hooks:214:14)
+[tv-dator]     Test.run (node:internal/test_runner/test:1047:25)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: CDCGroupPropagationService refuses wiring a systemTableCache whose getTableMutationVersion() answers no version
+[tv-dator] not ok 69 - CDCGroupPropagationService refuses wiring a systemTableCache whose getTableMutationVersion() answers no version
+[tv-dator]   ---
+[tv-dator]   duration_ms: 25.276301
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/ac0ed01932dc-mwqsk514-1931115/test/partition/partition-cdc-currentness-stamp-witness.test.js:1110:3'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: 'Missing expected exception.'
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: [Function (anonymous)]
+[tv-dator]   operator: 'throws'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/ac0ed01932dc-mwqsk514-1931115/test/partition/partition-cdc-currentness-stamp-witness.test.js:1116:12)
+[tv-dator]     Test.runInAsyncScope (node:async_hooks:214:14)
+[tv-dator]     Test.run (node:internal/test_runner/test:1047:25)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: CDCGroupPropagationService refuses wiring a latencyTreeService whose getRoutingGeneration() answers no version
+[tv-dator] not ok 70 - CDCGroupPropagationService refuses wiring a latencyTreeService whose getRoutingGeneration() answers no version
+[tv-dator]   ---
+[tv-dator]   duration_ms: 22.845253
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/ac0ed01932dc-mwqsk514-1931115/test/partition/partition-cdc-currentness-stamp-witness.test.js:1110:3'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: 'Missing expected exception.'
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: [Function (anonymous)]
+[tv-dator]   operator: 'throws'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/ac0ed01932dc-mwqsk514-1931115/test/partition/partition-cdc-currentness-stamp-witness.test.js:1116:12)
+[tv-dator]     Test.runInAsyncScope (node:async_hooks:214:14)
+[tv-dator]     Test.run (node:internal/test_runner/test:1047:25)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: CDCGroupPropagationService refuses wiring a config whose getRevision() answers no version
+[tv-dator] not ok 71 - CDCGroupPropagationService refuses wiring a config whose getRevision() answers no version
+[tv-dator]   ---
+[tv-dator]   duration_ms: 17.622814
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/ac0ed01932dc-mwqsk514-1931115/test/partition/partition-cdc-currentness-stamp-witness.test.js:1110:3'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: 'Missing expected exception.'
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: [Function (anonymous)]
+[tv-dator]   operator: 'throws'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/ac0ed01932dc-mwqsk514-1931115/test/partition/partition-cdc-currentness-stamp-witness.test.js:1116:12)
+[tv-dator]     Test.runInAsyncScope (node:async_hooks:214:14)
+[tv-dator]     Test.run (node:internal/test_runner/test:1047:25)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: a version source answering no version at read time holds no plan: each read observes anew
+[tv-dator] not ok 72 - a version source answering no version at read time holds no plan: each read observes anew
+[tv-dator]   ---
+[tv-dator]   duration_ms: 20.729816
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/ac0ed01932dc-mwqsk514-1931115/test/partition/partition-cdc-currentness-stamp-witness.test.js:1120:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     an unanswered version is never equal to itself: every read observes anew
+[tv-dator]     
+[tv-dator]     2 !== 3
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 3
+[tv-dator]   actual: 2
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/ac0ed01932dc-mwqsk514-1931115/test/partition/partition-cdc-currentness-stamp-witness.test.js:1140:10)
+[tv-dator]     Test.runInAsyncScope (node:async_hooks:214:14)
+[tv-dator]     Test.run (node:internal/test_runner/test:1047:25)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: a never-initialized CDCGroupPropagationService cannot start or propagate, also after a stop: a typed refusal
+[tv-dator] not ok 73 - a never-initialized CDCGroupPropagationService cannot start or propagate, also after a stop: a typed refusal
+[tv-dator]   ---
+[tv-dator]   duration_ms: 15.520058
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/ac0ed01932dc-mwqsk514-1931115/test/partition/partition-cdc-currentness-stamp-witness.test.js:1145:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: 'Missing expected exception.'
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: [Function (anonymous)]
+[tv-dator]   operator: 'throws'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/ac0ed01932dc-mwqsk514-1931115/test/partition/partition-cdc-currentness-stamp-witness.test.js:1149:10)
+[tv-dator]     Test.runInAsyncScope (node:async_hooks:214:14)
+[tv-dator]     Test.run (node:internal/test_runner/test:1047:25)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: the plan reads system tables only through CDC_PROPAGATION_PLAN_TABLE, the list its stamp iterates
+[tv-dator] ok 74 - the plan reads system tables only through CDC_PROPAGATION_PLAN_TABLE, the list its stamp iterates
+[tv-dator]   ---
+[tv-dator]   duration_ms: 19.581379
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: production operational selection reads raft status once per evaluation through a local leader replica (the currentness accessor's raft read)
+[tv-dator] ok 75 - production operational selection reads raft status once per evaluation through a local leader replica (the currentness accessor's raft read)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 21.075674
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] 1..75
+[tv-dator] # tests 75
+[tv-dator] # suites 0
+[tv-dator] # pass 67
+[tv-dator] # fail 8
+[tv-dator] # cancelled 0
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 3778.213503
+[tv-dator] # time=4713ms
+[tv-dator] # test-files total=1 pass=0 fail=1 assertions=75
+lab test: tv-dator: # test-files total=1 pass=0 fail=1 assertions=75
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=1 pass=0 fail=1 assertions=75
+exit 1

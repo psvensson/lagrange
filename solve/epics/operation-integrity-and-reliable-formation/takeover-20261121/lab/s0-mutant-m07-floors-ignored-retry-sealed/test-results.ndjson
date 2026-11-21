@@ -1,0 +1,1 @@
+{"file":"test/cdc/cdc-owner-fact-non-leader-absence.test.js","attempt":1,"ok":false,"assertions":32,"durationMs":2242,"retriedOnce":false,"firstFailureLine":"not ok 12 - a leader that has not applied the caller's index is not an answer"}

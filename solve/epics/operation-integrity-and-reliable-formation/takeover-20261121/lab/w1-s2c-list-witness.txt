@@ -1,0 +1,13 @@
+test/rebalancer/rebalance-coordinator-outcome-routing.test.js
+test/rebalancer/coordinator-dedup-gap.test.js
+test/rebalancer/operation-workflow-delivered-create-progress-retention.test.js
+test/partition/placement-create-dispatch-execution-mirror.test.js
+test/partition/placement-retained-publication.test.js
+test/partition/placement-retained-continuation.test.js
+test/partition/placement-retained-leadership.test.js
+test/partition/placement-retained-row-repair.test.js
+test/partition/placement-retained-real-publication.test.js
+test/partition/placement-retained-post-copy.test.js
+test/partition/placement-growth-dispatch-identity.test.js
+test/rebalancer/replace-real-group-native-ledger-recovery.test.js
+test/rebalancer/replica-placement-owner-core.test.js

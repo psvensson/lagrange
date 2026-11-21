@@ -1,0 +1,39 @@
+{
+  "sha": "ec1b2f77c85c39940aa856bba0ad2a7548a75b98",
+  "host": "adams-gamla",
+  "checkBase": "0993265e53601cba4a6a41baa08158725cfcea7f",
+  "files": [
+    "test/rebalancer/replica-placement-owner-blocked-release.test.js",
+    "test/rebalancer/replica-placement-owner-clearing-triggers.test.js",
+    "test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js",
+    "test/rebalancer/replica-placement-owner-blocked-attempt.test.js",
+    "test/rebalancer/replica-placement-owner-core.test.js",
+    "test/partition/placement-admission-copy-occupancy.test.js",
+    "test/partition/placement-admission-apply.test.js",
+    "test/partition/placement-outcome-format.test.js",
+    "test/partition/committed-outcome-identity-boundary.test.js",
+    "test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js",
+    "test/partition/placement-admission-found.test.js",
+    "test/partition/placement-retained-row-repair.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/partition/committed-outcome-identity-boundary.test.js",
+        "test/partition/placement-outcome-format.test.js",
+        "test/partition/placement-retained-row-repair.test.js",
+        "test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js",
+        "test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js",
+        "test/rebalancer/replica-placement-owner-blocked-attempt.test.js",
+        "test/rebalancer/replica-placement-owner-blocked-release.test.js",
+        "test/rebalancer/replica-placement-owner-core.test.js",
+        "test/partition/placement-admission-apply.test.js",
+        "test/rebalancer/replica-placement-owner-clearing-triggers.test.js",
+        "test/partition/placement-admission-copy-occupancy.test.js",
+        "test/partition/placement-admission-found.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

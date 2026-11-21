@@ -1,0 +1,255 @@
+placement-shell=3256575
+placement-head=78c40b57bfa38e3aca59d634b6f7670451096e2a
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.6 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3257015
+# test-files planned=15
+classified lane ordinary: 14 file(s), jobs=4
+thermal: ok cpu 61C (coretemp/Package id 0) nvme 49C (nvme/Sensor 1)
+ok test/rebalancer/replace-named-handoff-attempt.test.js (52 assertions, 1959ms)
+ok test/rebalancer/application-write-formation-authority.test.js (84 assertions, 3225ms)
+ok test/node/group-retirement-redrive.test.js (117 assertions, 3425ms)
+ok test/rebalancer/spread-cure-transition-authorization-row.test.js (1 assertions, 1148ms)
+ok test/convergence/dt-ledger-completion-continuity-discriminator.test.js (64 assertions, 1690ms)
+not ok test/rebalancer/replica-operation-membership-epoch-binding.test.js (122 assertions, 1503ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: E1-null-round-trip: a durable SQL NULL epoch rehydrates as unbound, never as epoch 0, through the SQL and cache read routes
+    ok 1 - the unbound create persists membership_publication_epoch as SQL NULL
+    ok 2 - the SQL route rehydrates the operation
+    ok 3 - SQL NULL rehydrates with no bound epoch (field absent)
+    ok 4 - SQL NULL never rehydrates as epoch 0
+    ok 5 - the canonical decode of the rehydrated field is UNBOUND
+    ok 6 - the cache route rehydrates the operation
+    ok 7 - the cache route rehydrates NULL as unbound too
+    1..7
+ok 1 - E1-null-round-trip: a durable SQL NULL epoch rehydrates as unbound, never as epoch 0, through the SQL and cache read routes # time=124.709ms
+
+# Subtest: E2-epoch-zero-preserved: a durable epoch 0 rehydrates as bound epoch 0, not as an unbound sentinel
+    ok 1 - the bound-zero create persists integer 0
+    ok 2 - SQL 0 rehydrates as in-memory 0
+    ok 3 - the canonical decode is BOUND 0
+    1..3
+ok 2 - E2-epoch-zero-preserved: a durable epoch 0 rehydrates as bound epoch 0, not as an unbound sentinel # time=42.309ms
+
+# Subtest: E3-positive-epoch-preserved: a durable epoch 2 rehydrates as bound epoch 2
+    ok 1 - the bound create persists integer 2
+    ok 2 - SQL 2 rehydrates as in-memory 2
+    1..2
+ok 3 - E3-positive-epoch-preserved: a durable epoch 2 rehydrates as bound epoch 2 # time=40.322ms
+
+# Subtest: E4-unbound-dispatch-follows-unbound-rule: a rehydrated NULL-epoch ADD dispatches under the unbound rule when the current epoch is 2
+    ok 1 - the unbound operation is not failed as a stale epoch-0 dispatch
+    ok 2 - no stale-dispatch failure is recorded for an unbound operation
+    ok 3 - the unbound ADD reaches the executor (existing unbound rule)
+    ok 4 - the executor request carries no fabricated epoch
+    1..4
+ok 4 - E4-unbound-dispatch-follows-unbound-rule: a rehydrated NULL-epoch ADD dispatches under the unbound rule when the current epoch is 2 # time=36.55ms
+
+# Subtest: E5-stale-bound-still-rejected: a rehydrated epoch-1 ADD is rejected as stale when the current epoch is 2
+    ok 1 - the bound epoch rehydrates as 1
+    ok 2 - the stale bound ADD does not dispatch
+    ok 3 - the executor never receives the stale request
+    ok 4 - the stale operation is failed closed
+    ok 5 - the failure names the real bound epoch and the current epoch
+    1..5
+ok 5 - E5-stale-bound-still-rejected: a rehydrated epoch-1 ADD is rejected as stale when the current epoch is 2 # time=33.014ms
+
+# Subtest: E6-current-bound-accepted: a rehydrated epoch-2 ADD dispatches when the current epoch is 2 and carries its epoch to the executor
+    ok 1 - a current bound ADD is not failed
+    ok 2 - a current bound ADD dispatches
+    ok 3 - the executor request carries the bound epoch 2
+    1..3
+ok 6 - E6-current-bound-accepted: a rehydrated epoch-2 ADD dispatches when the current epoch is 2 and carries its epoch to the executor # time=33.557ms
+
+# Subtest: E7-malformed-durable-fails-closed: malformed durable epoch values throw a typed error instead of becoming a legitimate epoch
+    ok 1 - durable text: rehydration fails closed with the typed binding error
+    ok 2 - durable negative: rehydration fails closed with the typed binding error
+    ok 3 - durable fractional: rehydration fails closed with the typed binding error
+    ok 4 - durable empty text: rehydration fails closed with the typed binding error
+    ok 5 - numeric text is stored as integer 2 by SQLite column affinity
+    ok 6 - cache string epoch: rehydration fails closed with the typed binding error
+    ok 7 - decode(undefined:undefined) is unbound
+    ok 8 - decode(object:null) is unbound
+    ok 9 - decode(number:0) is bound
+    ok 10 - decode(number:2) is bound
+    ok 11 - decode(string:) is invalid
+    ok 12 - decode(string:0) is invalid
+    ok 13 - decode(string:2) is invalid
+    ok 14 - decode(number:NaN) is invalid
+    ok 15 - decode(number:Infinity) is invalid
+    ok 16 - decode(number:-1) is invalid
+    ok 17 - decode(number:1.5) is invalid
+    ok 18 - decode(boolean:true) is invalid
+    ok 19 - decode(object:[object Object]) is invalid
+    ok 20 - decode(object:2) is invalid
+    ok 21 - decode(object:2) is invalid
+    ok 22 - decode(bigint:2) is invalid
+    1..22
+ok 7 - E7-malformed-durable-fails-closed: malformed durable epoch values throw a typed error instead of becoming a legitimate epoch # time=27.748ms
+
+# Subtest: E8-single-decoder-inventory: every src reader of the membership epoch is classified and behaviour-changing readers consume the one decoder
+    ok 1 - src/bootstrap/system-table-runtime-schema-definitions.js: no local numeric reinterpretation of the field
+    ok 2 - src/bootstrap/system-table-runtime-schema-definitions.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+    ok 3 - src/partition/partition-placement-admission-decision.js: no local numeric reinterpretation of the field
+    ok 4 - src/partition/partition-placement-admission-decision.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+    ok 5 - src/partition/partition-placement-retained-repair.js: no local numeric reinterpretation of the field
+    not ok 6 - src/partition/partition-placement-retained-repair.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+      ---
+      at:
+        fileName: test/rebalancer/replica-operation-membership-epoch-binding.test.js
+        lineNumber: 713
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/replica-operation-membership-epoch-binding.test.js:713:7)
+      source: >2
+              continue;
+            }
+            t.ok(
+        ------^
+              passthrough.has(relative),
+              `${relative}: an unclassified reader of the membership epoch appeared; ` +
+      ...
+    
+    ok 7 - src/partition/partition-service-constants.js: no local numeric reinterpretation of the field
+    ok 8 - src/partition/partition-service-constants.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+    ok 9 - src/partition/partition-service-entry-apply-base.js: no local numeric reinterpretation of the field
+    ok 10 - src/partition/partition-service-entry-apply-base.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+    ok 11 - src/rebalancer/move-planner-move-calculation-methods.js: no local numeric reinterpretation of the field
+    ok 12 - src/rebalancer/move-planner-move-calculation-methods.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+    ok 13 - src/rebalancer/operation-workflow-dispatch-epoch-gate.js: no local numeric reinterpretation of the field
+    ok 14 - src/rebalancer/operation-workflow-dispatch-epoch-gate.js: behaviour-changing reader imports the decode owner
+    ok 15 - src/rebalancer/operation-workflow-dispatch-response-reconcile.js: no local numeric reinterpretation of the field
+    ok 16 - src/rebalancer/operation-workflow-dispatch-response-reconcile.js: behaviour-changing reader imports the decode owner
+    ok 17 - src/rebalancer/operation-workflow-reentry-authority.js: no local numeric reinterpretation of the field
+    ok 18 - src/rebalancer/operation-workflow-reentry-authority.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+    ok 19 - src/rebalancer/operation-workflow-replace-target-binding.js: no local numeric reinterpretation of the field
+    ok 20 - src/rebalancer/operation-workflow-replace-target-binding.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+    ok 21 - src/rebalancer/rebalance-coordinator-operation-creation-admission.js: no local numeric reinterpretation of the field
+    ok 22 - src/rebalancer/rebalance-coordinator-operation-creation-admission.js: behaviour-changing reader imports the decode owner
+    ok 23 - src/rebalancer/rebalance-coordinator-operation-creation-support.js: no local numeric reinterpretation of the field
+    ok 24 - src/rebalancer/rebalance-coordinator-operation-creation-support.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+    ok 25 - src/rebalancer/rebalance-coordinator-operation-creation.js: no local numeric reinterpretation of the field
+    ok 26 - src/rebalancer/rebalance-coordinator-operation-creation.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+    ok 27 - src/rebalancer/rebalance-coordinator-operation-intent-methods.js: no local numeric reinterpretation of the field
+    ok 28 - src/rebalancer/rebalance-coordinator-operation-intent-methods.js: behaviour-changing reader imports the decode owner
+    ok 29 - src/rebalancer/rebalance-coordinator-owner-delegation-methods.js: no local numeric reinterpretation of the field
+    ok 30 - src/rebalancer/rebalance-coordinator-owner-delegation-methods.js: behaviour-changing reader imports the decode owner
+    ok 31 - src/rebalancer/replica-operation-constants.js: no local numeric reinterpretation of the field
+    ok 32 - src/rebalancer/replica-operation-constants.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+    ok 33 - src/rebalancer/replica-operation-creation-request.js: no local numeric reinterpretation of the field
+    ok 34 - src/rebalancer/replica-operation-creation-request.js: behaviour-changing reader imports the decode owner
+    ok 35 - src/rebalancer/replica-operation-repository-mutation-row-methods.js: no local numeric reinterpretation of the field
+    ok 36 - src/rebalancer/replica-operation-repository-mutation-row-methods.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+    ok 37 - src/rebalancer/replica-operation-repository-row-methods.js: no local numeric reinterpretation of the field
+    ok 38 - src/rebalancer/replica-operation-repository-row-methods.js: behaviour-changing reader imports the decode owner
+    ok 39 - src/rebalancer/replica-placement-owner-admission-statement.js: no local numeric reinterpretation of the field
+    ok 40 - src/rebalancer/replica-placement-owner-admission-statement.js: behaviour-changing reader imports the decode owner
+    ok 41 - src/rebalancer/replica-placement-owner-retained-repair-statement.js: no local numeric reinterpretation of the field
+    not ok 42 - src/rebalancer/replica-placement-owner-retained-repair-statement.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+      ---
+      at:
+        fileName: test/rebalancer/replica-operation-membership-epoch-binding.test.js
+        lineNumber: 713
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/replica-operation-membership-epoch-binding.test.js:713:7)
+      source: >2
+              continue;
+            }
+            t.ok(
+        ------^
+              passthrough.has(relative),
+              `${relative}: an unclassified reader of the membership epoch appeared; ` +
+      ...
+    
+    ok 43 - src/rebalancer/replica-placement-owner.js: no local numeric reinterpretation of the field
+    ok 44 - src/rebalancer/replica-placement-owner.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+    ok 45 - src/rebalancer/replica-status.js: no local numeric reinterpretation of the field
+    ok 46 - src/rebalancer/replica-status.js: behaviour-changing reader imports the decode owner
+    ok 47 - src/rebalancer/storage-reservation-authority.js: no local numeric reinterpretation of the field
+    ok 48 - src/rebalancer/storage-reservation-authority.js: behaviour-changing reader imports the decode owner
+    ok 49 - src/rebalancer/unified-rebalancer-move-execution.js: no local numeric reinterpretation of the field
+    ok 50 - src/rebalancer/unified-rebalancer-move-execution.js: behaviour-changing reader imports the decode owner
+    ok 51 - src/rebalancer/unified-rebalancer-rebalance-loop.js: no local numeric reinterpretation of the field
+    ok 52 - src/rebalancer/unified-rebalancer-rebalance-loop.js: behaviour-changing reader imports the decode owner
+    ok 53 - src/rebalancer/replica-operation-repository-row-methods.js: still reads the field (vacuity)
+    ok 54 - src/rebalancer/operation-workflow-dispatch-epoch-gate.js: still reads the field (vacuity)
+    ok 55 - src/rebalancer/rebalance-coordinator-owner-delegation-methods.js: still reads the field (vacuity)
+    ok 56 - src/rebalancer/replica-status.js: still reads the field (vacuity)
+    ok 57 - src/rebalancer/unified-rebalancer-move-execution.js: still reads the field (vacuity)
+    ok 58 - src/rebalancer/operation-workflow-dispatch-response-reconcile.js: still reads the field (vacuity)
+    ok 59 - src/rebalancer/unified-rebalancer-rebalance-loop.js: still reads the field (vacuity)
+    ok 60 - src/rebalancer/rebalance-coordinator-operation-creation-admission.js: still reads the field (vacuity)
+    ok 61 - src/rebalancer/storage-reservation-authority.js: still reads the field (vacuity)
+    ok 62 - src/rebalancer/rebalance-coordinator-operation-intent-methods.js: still reads the field (vacuity)
+    ok 63 - src/rebalancer/replica-operation-creation-request.js: still reads the field (vacuity)
+    ok 64 - src/rebalancer/replica-placement-owner-admission-statement.js: still reads the field (vacuity)
+    ok 65 - the decode owner exists (vacuity)
+    ok 66 - zero local Number(...) reinterpretations
+    ok 67 - 12 behaviour-changing readers, one canonical decode
+    1..67
+not ok 8 - E8-single-decoder-inventory: every src reader of the membership epoch is classified and behaviour-changing readers consume the one decoder # time=101.967ms
+  ---
+  at:
+    fileName: test/rebalancer/replica-operation-membership-epoch-binding.test.js
+    lineNumber: 682
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    }
+  
+  
+    test('E8-single-decoder-inventory: every src reader of the membership epoch '
+    +
+  
+    ^
+      'is classified and behaviour-changing readers consume the one decoder',
+    async (t) => {
+  ...
+
+# Subtest: shutdown: release the shared durable replica_operations partition
+    1..0
+ok 9 - shutdown: release the shared durable replica_operations partition # time=6.977ms
+
+1..9
+# { total: 114, pass: 112, fail: 2 }
+# time=461.661ms
+ok test/rebalancer/surplus-drain-prefers-non-leader-source.test.js (33 assertions, 1500ms)
+ok test/rebalancer/operation-ownership-lease-fencing.test.js (231 assertions, 3282ms)
+ok test/rebalancer/remove-active-dispatch-redrive.test.js (181 assertions, 1617ms)
+ok test/scripts/check-runtime-grammar-contracts.test.js (70 assertions, 515ms)
+ok test/rebalancer/replica-operation-terminal-cas.test.js (61 assertions, 1180ms)
+ok test/partition/partition-service-row-owner.test.js (212 assertions, 595ms)
+ok test/query/replica-operation-structured-mutation-native.test.js (2 assertions, 18509ms)
+ok test/rebalancer/replica-operation-repository.test.js (466 assertions, 25520ms)
+# test-files total=14 pass=13 fail=1 assertions=1696
+classified lane bootstrap: 1 file(s), jobs=2
+thermal: ok cpu 52C (coretemp/Package id 0) nvme 46C (nvme/Sensor 1)
+ok test/bootstrap/bootstrap-topology-snapshot-owner.test.js (65 assertions, 537ms)
+# test-files total=1 pass=1 fail=0 assertions=65
+placement-results={"file":"test/rebalancer/replace-named-handoff-attempt.test.js","attempt":1,"ok":true,"assertions":52,"durationMs":1959,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/application-write-formation-authority.test.js","attempt":1,"ok":true,"assertions":84,"durationMs":3225,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/node/group-retirement-redrive.test.js","attempt":1,"ok":true,"assertions":117,"durationMs":3425,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/spread-cure-transition-authorization-row.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1148,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/convergence/dt-ledger-completion-continuity-discriminator.test.js","attempt":1,"ok":true,"assertions":64,"durationMs":1690,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/replica-operation-membership-epoch-binding.test.js","attempt":1,"ok":false,"assertions":122,"durationMs":1503,"retriedOnce":false,"firstFailureLine":"not ok 6 - src/partition/partition-placement-retained-repair.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough"}
+placement-results={"file":"test/rebalancer/surplus-drain-prefers-non-leader-source.test.js","attempt":1,"ok":true,"assertions":33,"durationMs":1500,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/operation-ownership-lease-fencing.test.js","attempt":1,"ok":true,"assertions":231,"durationMs":3282,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/remove-active-dispatch-redrive.test.js","attempt":1,"ok":true,"assertions":181,"durationMs":1617,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/scripts/check-runtime-grammar-contracts.test.js","attempt":1,"ok":true,"assertions":70,"durationMs":515,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/replica-operation-terminal-cas.test.js","attempt":1,"ok":true,"assertions":61,"durationMs":1180,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/partition-service-row-owner.test.js","attempt":1,"ok":true,"assertions":212,"durationMs":595,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/query/replica-operation-structured-mutation-native.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":18509,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/replica-operation-repository.test.js","attempt":1,"ok":true,"assertions":466,"durationMs":25520,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/bootstrap-topology-snapshot-owner.test.js","attempt":1,"ok":true,"assertions":65,"durationMs":537,"retriedOnce":false,"firstFailureLine":null}

@@ -1,0 +1,21 @@
+lab test: adam-laptop: ordinary, bootstrap (2 files) cores=8 mem=15.5GiB speed x1.99
+[adam-laptop] placement-shell=3671144
+[adam-laptop] placement-head=b18167d24a7e3b98b94bb1c6ab31ad004a49cc67
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3671714
+[adam-laptop] # test-files planned=2
+[adam-laptop] classified lane ordinary: 1 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 77C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 77C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 40C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] ok test/query/sql-query-engine-create-table-quorum.test.js (2 assertions, 1305ms)
+[adam-laptop] # test-files total=1 pass=1 fail=0 assertions=2
+[adam-laptop] classified lane bootstrap: 1 file(s), jobs=2
+[adam-laptop] thermal: ok cpu 57C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] ok test/bootstrap/bootstrap-api.test.js (185 assertions, 4933ms)
+[adam-laptop] # test-files total=1 pass=1 fail=0 assertions=185
+lab test: adam-laptop: # test-files total=2 pass=2 fail=0 assertions=187
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=2 pass=2 fail=0 assertions=187

@@ -1,0 +1,4 @@
+{"file":"test/control-plane/replica-dispatch-direct-wakeup-delivery-decision.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":1228,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/self-owned-coordinator-handoff-dispatches-in-process.test.js","attempt":1,"ok":true,"assertions":9,"durationMs":1301,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/reservation-expiry-operation-aware.test.js","attempt":1,"ok":true,"assertions":10,"durationMs":1380,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/message-group-operation-routing.integration.test.js","attempt":1,"ok":true,"assertions":21,"durationMs":1226,"retriedOnce":false,"firstFailureLine":null}

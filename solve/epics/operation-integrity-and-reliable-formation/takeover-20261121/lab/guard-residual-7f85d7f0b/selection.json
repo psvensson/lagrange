@@ -1,0 +1,17 @@
+{
+  "sha": "7f85d7f0bd6e8a66d173985767b72757d75bce39",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/rebalancer/topology-guard-owner-fact-deposed-leader.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/rebalancer/topology-guard-owner-fact-deposed-leader.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

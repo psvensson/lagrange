@@ -1,0 +1,637 @@
+lab test: adam-laptop: ordinary, bootstrap (4 files) cores=8 mem=15.5GiB speed x2.00
+[adam-laptop] placement-shell=3684143
+[adam-laptop] placement-head=b5b15271f97e92ddbf736b53b13f10474cddf2fa
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3685099
+[adam-laptop] # test-files planned=4
+[adam-laptop] classified lane ordinary: 3 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 83C (coretemp/Package id 0) nvme 21C (nvme/Composite) - CPU package 83C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 45C (coretemp/Package id 0) nvme 21C (nvme/Composite)
+[adam-laptop] ok test/partition/durable-voter-visibility-role-write.test.js (24 assertions, 2193ms)
+[adam-laptop] ok test/rebalancer/executor-bypasses-workflow-owner.test.js (7 assertions, 2223ms)
+[adam-laptop] ok test/rebalancer/replica-placement-owner-core.test.js (20 assertions, 5901ms)
+[adam-laptop] # test-files total=3 pass=3 fail=0 assertions=51
+[adam-laptop] classified lane bootstrap: 1 file(s), jobs=2
+[adam-laptop] thermal: ok cpu 59C (coretemp/Package id 0) nvme 21C (nvme/Composite)
+[adam-laptop] not ok test/bootstrap/register-node-in-cluster.test.js (85 assertions, 2868ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 14
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-123","nodeAddress":"ws://localhost:9000","level":"info","message":"Registering node in cluster"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-123","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+[adam-laptop] Creating NodeStorageBudgetService { nodeId: 'test-node-123' }
+[adam-laptop] Resolving node storage budget { nodeId: 'test-node-123' }
+[adam-laptop] Node storage budget resolved {
+[adam-laptop]   nodeId: 'test-node-123',
+[adam-laptop]   budgetBytes: 107374182400,
+[adam-laptop]   budgetSource: 'backfill',
+[adam-laptop]   diskBytes: 107374182400,
+[adam-laptop]   phase: 'startup'
+[adam-laptop] }
+[adam-laptop] Node storage budget resolved during startup {
+[adam-laptop]   nodeId: 'test-node-123',
+[adam-laptop]   budgetBytes: 107374182400,
+[adam-laptop]   budgetSource: 'backfill'
+[adam-laptop] }
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-123","nodeAddress":"ws://localhost:9000","cpuCores":8,"memoryMb":16606,"diskGb":100,"budgetBytes":107374182400,"budgetSource":"backfill","level":"info","message":"Node registered in cluster"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-123","nodeAddress":"ws://localhost:9000","level":"info","message":"Registering node endpoint in cluster"}
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-123","endpointId":"ep-test-node-123-ws","transportType":"ws","address":"ws://localhost:9000","level":"info","message":"Node endpoint registered in cluster"}
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: registerNodeInCluster() - should create the canonical nodes row and upsert endpoints
+[adam-laptop]     ok 1 - should create one canonical nodes row during registration
+[adam-laptop]     ok 2 - should use correct node_id
+[adam-laptop]     ok 3 - should use correct node_address
+[adam-laptop]     ok 4 - should have cpu_cores > 0
+[adam-laptop]     ok 5 - should have memory_mb > 0
+[adam-laptop]     ok 6 - should have disk_gb > 0
+[adam-laptop]     ok 7 - should persist JOINING status until ready signaling
+[adam-laptop]     ok 8 - should persist CONNECTED admission state in the canonical nodes row
+[adam-laptop]     ok 9 - join registration should not assign the ready lease before ready signaling
+[adam-laptop]     ok 10 - the row is born at this process's exact boot incarnation
+[adam-laptop]     ok 11 - should upsert node_endpoints table
+[adam-laptop]     ok 12 - should upsert node_endpoints table
+[adam-laptop]     ok 13 - should use correct endpoint_id
+[adam-laptop]     ok 14 - should use correct node_id
+[adam-laptop]     ok 15 - should use ws transport type
+[adam-laptop]     ok 16 - should use correct address
+[adam-laptop]     ok 17 - should use priority 0
+[adam-laptop]     ok 18 - should set status to active
+[adam-laptop]     1..18
+[adam-laptop] ok 1 - registerNodeInCluster() - should create the canonical nodes row and upsert endpoints # time=113.685ms
+[adam-laptop] 
+[adam-laptop] # Subtest: registerNodeInCluster() - a joiner without a startup-minted incarnation is refused at construction, so no row can be born
+[adam-laptop]     ok 1 - the joiner fails closed before any registration can run
+[adam-laptop]     1..1
+[adam-laptop] ok 2 - registerNodeInCluster() - a joiner without a startup-minted incarnation is refused at construction, so no row can be born # time=1.731ms
+[adam-laptop] 
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-canonical-endpoint","nodeAddress":"joiner-host:8080","level":"info","message":"Registering node in cluster"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-canonical-endpoint","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+[adam-laptop] Creating NodeStorageBudgetService { nodeId: 'test-node-canonical-endpoint' }
+[adam-laptop] Resolving node storage budget { nodeId: 'test-node-canonical-endpoint' }
+[adam-laptop] Node storage budget resolved {
+[adam-laptop]   nodeId: 'test-node-canonical-endpoint',
+[adam-laptop]   budgetBytes: 107374182400,
+[adam-laptop]   budgetSource: 'backfill',
+[adam-laptop]   diskBytes: 107374182400,
+[adam-laptop]   phase: 'startup'
+[adam-laptop] }
+[adam-laptop] Node storage budget resolved during startup {
+[adam-laptop]   nodeId: 'test-node-canonical-endpoint',
+[adam-laptop]   budgetBytes: 107374182400,
+[adam-laptop]   budgetSource: 'backfill'
+[adam-laptop] }
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-canonical-endpoint","nodeAddress":"joiner-host:8080","cpuCores":8,"memoryMb":16606,"diskGb":100,"budgetBytes":107374182400,"budgetSource":"backfill","level":"info","message":"Node registered in cluster"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-canonical-endpoint","nodeAddress":"joiner-host:8080","level":"info","message":"Registering node endpoint in cluster"}
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-canonical-endpoint","endpointId":"ep-test-node-canonical-endpoint-ws","transportType":"ws","address":"ws://joiner-host:8082","level":"info","message":"Node endpoint registered in cluster"}
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: registerNodeInCluster() - should canonicalize raw node address to websocket endpoint
+[adam-laptop]     ok 1 - should upsert node_endpoints table
+[adam-laptop]     ok 2 - join-time endpoint registration should publish canonical websocket address
+[adam-laptop]     1..2
+[adam-laptop] ok 3 - registerNodeInCluster() - should canonicalize raw node address to websocket endpoint # time=14.1ms
+[adam-laptop] 
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-explicit-endpoint","nodeAddress":"joiner-host:8080","level":"info","message":"Registering node in cluster"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-explicit-endpoint","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+[adam-laptop] Creating NodeStorageBudgetService { nodeId: 'test-node-explicit-endpoint' }
+[adam-laptop] Resolving node storage budget { nodeId: 'test-node-explicit-endpoint' }
+[adam-laptop] Node storage budget resolved {
+[adam-laptop]   nodeId: 'test-node-explicit-endpoint',
+[adam-laptop]   budgetBytes: 107374182400,
+[adam-laptop]   budgetSource: 'backfill',
+[adam-laptop]   diskBytes: 107374182400,
+[adam-laptop]   phase: 'startup'
+[adam-laptop] }
+[adam-laptop] Node storage budget resolved during startup {
+[adam-laptop]   nodeId: 'test-node-explicit-endpoint',
+[adam-laptop]   budgetBytes: 107374182400,
+[adam-laptop]   budgetSource: 'backfill'
+[adam-laptop] }
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-explicit-endpoint","nodeAddress":"joiner-host:8080","cpuCores":8,"memoryMb":16606,"diskGb":100,"budgetBytes":107374182400,"budgetSource":"backfill","level":"info","message":"Node registered in cluster"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-explicit-endpoint","nodeAddress":"joiner-host:8080","level":"info","message":"Registering node endpoint in cluster"}
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-explicit-endpoint","endpointId":"ep-test-node-explicit-endpoint-ws","transportType":"ws","address":"ws://172.20.0.42:8082","level":"info","message":"Node endpoint registered in cluster"}
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: registerNodeInCluster() - should publish explicit advertised websocket endpoint when configured
+[adam-laptop]     ok 1 - should upsert node_endpoints table
+[adam-laptop]     ok 2 - explicit advertised websocket address should be published canonically
+[adam-laptop]     1..2
+[adam-laptop] ok 4 - registerNodeInCluster() - should publish explicit advertised websocket endpoint when configured # time=16.223ms
+[adam-laptop] 
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-456","nodeAddress":"ws://localhost:9001","level":"info","message":"Registering node in cluster"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-456","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+[adam-laptop] Creating NodeStorageBudgetService { nodeId: 'test-node-456' }
+[adam-laptop] Resolving node storage budget { nodeId: 'test-node-456' }
+[adam-laptop] Node storage budget resolved {
+[adam-laptop]   nodeId: 'test-node-456',
+[adam-laptop]   budgetBytes: 107374182400,
+[adam-laptop]   budgetSource: 'backfill',
+[adam-laptop]   diskBytes: 107374182400,
+[adam-laptop]   phase: 'startup'
+[adam-laptop] }
+[adam-laptop] Node storage budget resolved during startup {
+[adam-laptop]   nodeId: 'test-node-456',
+[adam-laptop]   budgetBytes: 107374182400,
+[adam-laptop]   budgetSource: 'backfill'
+[adam-laptop] }
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-456","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","level":"error","message":"Failed to register node in cluster"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-456","attempt":1,"maxAttempts":2,"delayMs":200,"retryAfterMs":null,"error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","level":"warn","message":"Retrying join node registration after retryable admission failure"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-456","nodeAddress":"ws://localhost:9001","level":"info","message":"Registering node in cluster"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-456","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+[adam-laptop] Resolving node storage budget { nodeId: 'test-node-456' }
+[adam-laptop] Node storage budget resolved {
+[adam-laptop]   nodeId: 'test-node-456',
+[adam-laptop]   budgetBytes: 107374182400,
+[adam-laptop]   budgetSource: 'backfill',
+[adam-laptop]   diskBytes: 107374182400,
+[adam-laptop]   phase: 'startup'
+[adam-laptop] }
+[adam-laptop] Node storage budget resolved during startup {
+[adam-laptop]   nodeId: 'test-node-456',
+[adam-laptop]   budgetBytes: 107374182400,
+[adam-laptop]   budgetSource: 'backfill'
+[adam-laptop] }
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-456","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","level":"error","message":"Failed to register node in cluster"}
+[adam-laptop] # Subtest: registerNodeInCluster() - should throw error if query fails
+[adam-laptop]     ok 1 - should throw error with correct message
+[adam-laptop]     1..1
+[adam-laptop] ok 5 - registerNodeInCluster() - should throw error if query fails # time=209.122ms
+[adam-laptop] 
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-789","nodeAddress":"ws://localhost:9002","level":"info","message":"Registering node in cluster"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-789","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-789","error":"Failed to register node: NodeStorageBudgetSetup requires cdcIntegrationService","level":"error","message":"Failed to register node in cluster"}
+[adam-laptop] # Subtest: registerNodeInCluster() - should throw error if CDC service not available
+[adam-laptop]     ok 1 - should throw error
+[adam-laptop]     1..1
+[adam-laptop] ok 6 - registerNodeInCluster() - should throw error if CDC service not available # time=3.962ms
+[adam-laptop] 
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-join-cache-wait","nodeAddress":"ws://localhost:9003","level":"info","message":"Registering node in cluster"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-join-cache-wait","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+[adam-laptop] Resolving node storage budget { nodeId: 'test-node-join-cache-wait' }
+[adam-laptop] Node storage budget resolved {
+[adam-laptop]   nodeId: 'test-node-join-cache-wait',
+[adam-laptop]   budgetBytes: 1024,
+[adam-laptop]   budgetSource: 'test',
+[adam-laptop]   diskBytes: 1024,
+[adam-laptop]   phase: 'startup'
+[adam-laptop] }
+[adam-laptop] Node storage budget resolved during startup {
+[adam-laptop]   nodeId: 'test-node-join-cache-wait',
+[adam-laptop]   budgetBytes: 1024,
+[adam-laptop]   budgetSource: 'test'
+[adam-laptop] }
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-join-cache-wait","nodeAddress":"ws://localhost:9003","cpuCores":8,"memoryMb":16606,"diskGb":100,"budgetBytes":1024,"budgetSource":"test","level":"info","message":"Node registered in cluster"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-join-cache-wait","nodeAddress":"ws://localhost:9003","level":"info","message":"Registering node endpoint in cluster"}
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-join-cache-wait","endpointId":"ep-test-node-join-cache-wait-ws","transportType":"ws","address":"ws://localhost:9003","level":"info","message":"Node endpoint registered in cluster"}
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: registerNodeInCluster() - should skip cache waits before CDC subscriptions are active
+[adam-laptop]     ok 1 - should upsert endpoint rows during registration
+[adam-laptop]     ok 2 - join-time endpoint upserts carry no cache-wait opt-out (no cache-wait opt-out exists: writes answer at their commit)
+[adam-laptop]     ok 3 - join-time endpoint upserts should carry a bounded routed query timeout
+[adam-laptop]     ok 4 - join-time endpoint upserts should declare join phase scope explicitly
+[adam-laptop]     1..4
+[adam-laptop] ok 7 - registerNodeInCluster() - should skip cache waits before CDC subscriptions are active # time=23.479ms
+[adam-laptop] 
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-join-cache-wait-active","nodeAddress":"ws://localhost:9004","level":"info","message":"Registering node in cluster"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-join-cache-wait-active","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+[adam-laptop] Resolving node storage budget { nodeId: 'test-node-join-cache-wait-active' }
+[adam-laptop] Node storage budget resolved {
+[adam-laptop]   nodeId: 'test-node-join-cache-wait-active',
+[adam-laptop]   budgetBytes: 1024,
+[adam-laptop]   budgetSource: 'test',
+[adam-laptop]   diskBytes: 1024,
+[adam-laptop]   phase: 'startup'
+[adam-laptop] }
+[adam-laptop] Node storage budget resolved during startup {
+[adam-laptop]   nodeId: 'test-node-join-cache-wait-active',
+[adam-laptop]   budgetBytes: 1024,
+[adam-laptop]   budgetSource: 'test'
+[adam-laptop] }
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-join-cache-wait-active","nodeAddress":"ws://localhost:9004","cpuCores":8,"memoryMb":16606,"diskGb":100,"budgetBytes":1024,"budgetSource":"test","level":"info","message":"Node registered in cluster"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-join-cache-wait-active","nodeAddress":"ws://localhost:9004","level":"info","message":"Registering node endpoint in cluster"}
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-join-cache-wait-active","endpointId":"ep-test-node-join-cache-wait-active-ws","transportType":"ws","address":"ws://localhost:9004","level":"info","message":"Node endpoint registered in cluster"}
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: registerNodeInCluster() - should skip cache waits even after CDC subscriptions are marked active
+[adam-laptop]     ok 1 - should upsert join admission rows during registration
+[adam-laptop]     ok 2 - join admission writes carry no cache-wait opt-out (no cache-wait opt-out exists: writes answer at their commit)
+[adam-laptop]     ok 3 - join admission writes should carry a bounded routed query timeout even after CDC subscriptions become active
+[adam-laptop]     ok 4 - join admission writes should keep join phase scope while readiness still owns convergence
+[adam-laptop]     1..4
+[adam-laptop] ok 8 - registerNodeInCluster() - should skip cache waits even after CDC subscriptions are marked active # time=10.77ms
+[adam-laptop] 
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-join-sql-fallback","nodeAddress":"ws://localhost:9014","level":"info","message":"Registering node in cluster"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-join-sql-fallback","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+[adam-laptop] Resolving node storage budget { nodeId: 'test-node-join-sql-fallback' }
+[adam-laptop] Node storage budget resolved {
+[adam-laptop]   nodeId: 'test-node-join-sql-fallback',
+[adam-laptop]   budgetBytes: 1024,
+[adam-laptop]   budgetSource: 'test',
+[adam-laptop]   diskBytes: 1024,
+[adam-laptop]   phase: 'startup'
+[adam-laptop] }
+[adam-laptop] Node storage budget resolved during startup {
+[adam-laptop]   nodeId: 'test-node-join-sql-fallback',
+[adam-laptop]   budgetBytes: 1024,
+[adam-laptop]   budgetSource: 'test'
+[adam-laptop] }
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-join-sql-fallback","nodeAddress":"ws://localhost:9014","cpuCores":8,"memoryMb":16606,"diskGb":100,"budgetBytes":1024,"budgetSource":"test","level":"info","message":"Node registered in cluster"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-join-sql-fallback","nodeAddress":"ws://localhost:9014","level":"info","message":"Registering node endpoint in cluster"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-join-sql-fallback","endpointId":"ep-test-node-join-sql-fallback-ws","transportType":"ws","address":"ws://localhost:9014","level":"info","message":"Node endpoint registered in cluster"}
+[adam-laptop] # Subtest: registerNodeInCluster() - should use join phase SQL fallback when CDC mutation helpers are not ready
+[adam-laptop]     ok 1 - join admission should route through the startup SQL fallback when CDC mutation helpers are unavailable
+[adam-laptop]     not ok 2 - join-phase SQL fallback should carry explicit join phase scope (calls without it: [["INSERT INTO nodes (node_id, node_address, host_id, cpu_cores",null],["INSERT INTO node_endpoints (endpoint_id, node_id, transport_",null],["INSERT INTO service_endpoints (endpoint_id, service_id, node",null],["INSERT INTO service_endpoints (endpoint_id, service_id, node",null]])
+[adam-laptop]       ---
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/bootstrap/register-node-in-cluster.test.js
+[adam-laptop]         lineNumber: 448
+[adam-laptop]         columnNumber: 7
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: |
+[adam-laptop]         Test.<anonymous> (test/bootstrap/register-node-in-cluster.test.js:448:7)
+[adam-laptop]       source: >2
+[adam-laptop]             t.ok(queryCalls.length > 0,
+[adam-laptop]               'join admission should route through the startup SQL fallback when CDC mutation helpers are unavailable');
+[adam-laptop]             t.ok(
+[adam-laptop]         ------^
+[adam-laptop]               queryCalls.every((call) =>
+[adam-laptop]                 call.options?.phaseScope === CONTROL_PLANE_PHASE_SCOPE.JOIN,
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     ok 3 - the join-phase SQL path is gated by its phase scope alone (no cache-wait opt-out exists: writes answer at their commit)
+[adam-laptop]     ok 4 - join-phase SQL fallback should write the canonical nodes row first
+[adam-laptop]     1..4
+[adam-laptop] not ok 9 - registerNodeInCluster() - should use join phase SQL fallback when CDC mutation helpers are not ready # time=32.594ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/bootstrap/register-node-in-cluster.test.js
+[adam-laptop]     lineNumber: 402
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: >2
+[adam-laptop]       });
+[adam-laptop]   
+[adam-laptop]     test('registerNodeInCluster() - should use join phase SQL fallback when CDC
+[adam-laptop]     mutation helpers are not ready',
+[adam-laptop]   
+[adam-laptop]     ^
+[adam-laptop]       async (t) => {
+[adam-laptop]         const queryCalls = [];
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-owner-path","nodeAddress":"ws://localhost:9010","level":"info","message":"Registering node in cluster"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-owner-path","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+[adam-laptop] Creating NodeStorageBudgetService { nodeId: 'test-node-owner-path' }
+[adam-laptop] Resolving node storage budget { nodeId: 'test-node-owner-path' }
+[adam-laptop] Node storage budget resolved {
+[adam-laptop]   nodeId: 'test-node-owner-path',
+[adam-laptop]   budgetBytes: 107374182400,
+[adam-laptop]   budgetSource: 'backfill',
+[adam-laptop]   diskBytes: 107374182400,
+[adam-laptop]   phase: 'startup'
+[adam-laptop] }
+[adam-laptop] Node storage budget resolved during startup {
+[adam-laptop]   nodeId: 'test-node-owner-path',
+[adam-laptop]   budgetBytes: 107374182400,
+[adam-laptop]   budgetSource: 'backfill'
+[adam-laptop] }
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-owner-path","nodeAddress":"ws://localhost:9010","cpuCores":8,"memoryMb":16606,"diskGb":100,"budgetBytes":107374182400,"budgetSource":"backfill","level":"info","message":"Node registered in cluster"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-owner-path","nodeAddress":"ws://localhost:9010","level":"info","message":"Registering node endpoint in cluster"}
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-owner-path","endpointId":"ep-test-node-owner-path-ws","transportType":"ws","address":"ws://localhost:9010","level":"info","message":"Node endpoint registered in cluster"}
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: registerNodeInCluster() - should use the registration owner path for nodes row creation
+[adam-laptop]     ok 1 - should create exactly one canonical nodes row
+[adam-laptop]     ok 2 - registration should persist CONNECTED until ready signaling completes
+[adam-laptop]     ok 3 - registration should create the canonical node row directly
+[adam-laptop]     ok 4 - successful registration should expose join membership from the canonical nodes cache row
+[adam-laptop]     1..4
+[adam-laptop] ok 10 - registerNodeInCluster() - should use the registration owner path for nodes row creation # time=14.346ms
+[adam-laptop] 
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-admission-retry","nodeAddress":"ws://localhost:9012","level":"info","message":"Registering node in cluster"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-admission-retry","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+[adam-laptop] Resolving node storage budget { nodeId: 'test-node-admission-retry' }
+[adam-laptop] Node storage budget resolved {
+[adam-laptop]   nodeId: 'test-node-admission-retry',
+[adam-laptop]   budgetBytes: 1024,
+[adam-laptop]   budgetSource: 'test',
+[adam-laptop]   diskBytes: 1024,
+[adam-laptop]   phase: 'startup'
+[adam-laptop] }
+[adam-laptop] Node storage budget resolved during startup {
+[adam-laptop]   nodeId: 'test-node-admission-retry',
+[adam-laptop]   budgetBytes: 1024,
+[adam-laptop]   budgetSource: 'test'
+[adam-laptop] }
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-admission-retry","error":"Failed to register node: Distributed operation failed due to participant failures","level":"error","message":"Failed to register node in cluster"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-admission-retry","attempt":1,"maxAttempts":2,"delayMs":250,"retryAfterMs":250,"error":"Failed to register node: Distributed operation failed due to participant failures","level":"warn","message":"Retrying join node registration after retryable admission failure"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-admission-retry","nodeAddress":"ws://localhost:9012","level":"info","message":"Registering node in cluster"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-admission-retry","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+[adam-laptop] Resolving node storage budget { nodeId: 'test-node-admission-retry' }
+[adam-laptop] Node storage budget resolved {
+[adam-laptop]   nodeId: 'test-node-admission-retry',
+[adam-laptop]   budgetBytes: 1024,
+[adam-laptop]   budgetSource: 'test',
+[adam-laptop]   diskBytes: 1024,
+[adam-laptop]   phase: 'startup'
+[adam-laptop] }
+[adam-laptop] Node storage budget resolved during startup {
+[adam-laptop]   nodeId: 'test-node-admission-retry',
+[adam-laptop]   budgetBytes: 1024,
+[adam-laptop]   budgetSource: 'test'
+[adam-laptop] }
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-admission-retry","nodeAddress":"ws://localhost:9012","cpuCores":8,"memoryMb":16606,"diskGb":100,"budgetBytes":1024,"budgetSource":"test","level":"info","message":"Node registered in cluster"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-admission-retry","nodeAddress":"ws://localhost:9012","level":"info","message":"Registering node endpoint in cluster"}
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-admission-retry","endpointId":"ep-test-node-admission-retry-ws","transportType":"ws","address":"ws://localhost:9012","level":"info","message":"Node endpoint registered in cluster"}
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: registerNodeInCluster() - should retry transient participant failures during node admission
+[adam-laptop]     ok 1 - join admission should retry the canonical nodes write once after a retryable failure
+[adam-laptop]     ok 2 - membership should be visible from the canonical nodes cache row after the retried admission succeeds
+[adam-laptop]     ok 3 - endpoint publication should still complete after the retried admission succeeds
+[adam-laptop]     ok 4 - endpoint publication should continue after the nodes write retry succeeds
+[adam-laptop]     1..4
+[adam-laptop] ok 11 - registerNodeInCluster() - should retry transient participant failures during node admission # time=12.218ms
+[adam-laptop] 
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-phase-admission-retry","nodeAddress":"ws://localhost:9013","level":"info","message":"Registering node in cluster"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-phase-admission-retry","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+[adam-laptop] Resolving node storage budget { nodeId: 'test-node-phase-admission-retry' }
+[adam-laptop] Node storage budget resolved {
+[adam-laptop]   nodeId: 'test-node-phase-admission-retry',
+[adam-laptop]   budgetBytes: 1024,
+[adam-laptop]   budgetSource: 'test',
+[adam-laptop]   diskBytes: 1024,
+[adam-laptop]   phase: 'startup'
+[adam-laptop] }
+[adam-laptop] Node storage budget resolved during startup {
+[adam-laptop]   nodeId: 'test-node-phase-admission-retry',
+[adam-laptop]   budgetBytes: 1024,
+[adam-laptop]   budgetSource: 'test'
+[adam-laptop] }
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-phase-admission-retry","error":"Failed to register node: Distributed operation failed due to participant failures","level":"error","message":"Failed to register node in cluster"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-phase-admission-retry","attempt":1,"maxAttempts":2,"delayMs":200,"retryAfterMs":null,"error":"Failed to register node: Distributed operation failed due to participant failures","level":"warn","message":"Retrying join node registration after retryable admission failure"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-phase-admission-retry","nodeAddress":"ws://localhost:9013","level":"info","message":"Registering node in cluster"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-phase-admission-retry","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+[adam-laptop] Resolving node storage budget { nodeId: 'test-node-phase-admission-retry' }
+[adam-laptop] Node storage budget resolved {
+[adam-laptop]   nodeId: 'test-node-phase-admission-retry',
+[adam-laptop]   budgetBytes: 1024,
+[adam-laptop]   budgetSource: 'test',
+[adam-laptop]   diskBytes: 1024,
+[adam-laptop]   phase: 'startup'
+[adam-laptop] }
+[adam-laptop] Node storage budget resolved during startup {
+[adam-laptop]   nodeId: 'test-node-phase-admission-retry',
+[adam-laptop]   budgetBytes: 1024,
+[adam-laptop]   budgetSource: 'test'
+[adam-laptop] }
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-phase-admission-retry","nodeAddress":"ws://localhost:9013","cpuCores":8,"memoryMb":16606,"diskGb":100,"budgetBytes":1024,"budgetSource":"test","level":"info","message":"Node registered in cluster"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-phase-admission-retry","nodeAddress":"ws://localhost:9013","level":"info","message":"Registering node endpoint in cluster"}
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-phase-admission-retry","endpointId":"ep-test-node-phase-admission-retry-ws","transportType":"ws","address":"ws://localhost:9013","level":"info","message":"Node endpoint registered in cluster"}
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: registerNodeInCluster() - should retry admission at phase scope when the first routed attempt exhausts the inner retry budget
+[adam-laptop]     ok 1 - phase-scoped join admission should rerun node registration after the first routed attempt ages out the inner retry budget
+[adam-laptop]     ok 2 - phase-scoped retry should still complete canonical membership registration
+[adam-laptop]     ok 3 - phase-scoped retry should still complete endpoint publication
+[adam-laptop]     1..3
+[adam-laptop] ok 12 - registerNodeInCluster() - should retry admission at phase scope when the first routed attempt exhausts the inner retry budget # time=13.752ms
+[adam-laptop] 
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-seed-restart-failure","nodeAddress":"ws://localhost:9011","level":"info","message":"Registering node in cluster"}
+[adam-laptop] # Subtest: registerNodeInCluster() - should fail narrowly on seed participant failure before endpoint publication
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-seed-restart-failure","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+[adam-laptop] Resolving node storage budget { nodeId: 'test-node-seed-restart-failure' }
+[adam-laptop] Node storage budget resolved {
+[adam-laptop]   nodeId: 'test-node-seed-restart-failure',
+[adam-laptop]   budgetBytes: 1024,
+[adam-laptop]   budgetSource: 'test',
+[adam-laptop]   diskBytes: 1024,
+[adam-laptop]   phase: 'startup'
+[adam-laptop] }
+[adam-laptop] Node storage budget resolved during startup {
+[adam-laptop]   nodeId: 'test-node-seed-restart-failure',
+[adam-laptop]   budgetBytes: 1024,
+[adam-laptop]   budgetSource: 'test'
+[adam-laptop] }
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-seed-restart-failure","error":"Failed to register node: Distributed operation failed due to participant failures","level":"error","message":"Failed to register node in cluster"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-seed-restart-failure","attempt":1,"maxAttempts":2,"delayMs":250,"retryAfterMs":250,"error":"Failed to register node: Distributed operation failed due to participant failures","level":"warn","message":"Retrying join node registration after retryable admission failure"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-seed-restart-failure","nodeAddress":"ws://localhost:9011","level":"info","message":"Registering node in cluster"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-seed-restart-failure","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+[adam-laptop] Resolving node storage budget { nodeId: 'test-node-seed-restart-failure' }
+[adam-laptop] Node storage budget resolved {
+[adam-laptop]   nodeId: 'test-node-seed-restart-failure',
+[adam-laptop]   budgetBytes: 1024,
+[adam-laptop]   budgetSource: 'test',
+[adam-laptop]   diskBytes: 1024,
+[adam-laptop]   phase: 'startup'
+[adam-laptop] }
+[adam-laptop] Node storage budget resolved during startup {
+[adam-laptop]   nodeId: 'test-node-seed-restart-failure',
+[adam-laptop]   budgetBytes: 1024,
+[adam-laptop]   budgetSource: 'test'
+[adam-laptop] }
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-seed-restart-failure","error":"Failed to register node: Distributed operation failed due to participant failures","level":"error","message":"Failed to register node in cluster"}
+[adam-laptop]     ok 1 - seed restart-style admission failures should surface through registerNodeInCluster
+[adam-laptop]     ok 2 - join registration should preserve the participant-failure code
+[adam-laptop]     ok 3 - join registration should preserve retry-after hints from the owner path
+[adam-laptop]     not ok 4 - join registration should retain the original owner-path failure as cause
+[adam-laptop]       ---
+[adam-laptop]       diff: >
+[adam-laptop]         --- expected
+[adam-laptop]       
+[adam-laptop]         +++ actual
+[adam-laptop]       
+[adam-laptop]         @@ -1,2 +1,24 @@
+[adam-laptop]          Error: Distributed operation failed due to participant failures {
+[adam-laptop]         +  "cause": Error: Distributed operation failed due to participant failures {
+[adam-laptop]       
+[adam-laptop]         +    "cause": Error: Distributed operation failed due to participant failures
+[adam-laptop]         {
+[adam-laptop]       
+[adam-laptop]         +      "code": "DISTRIBUTED_PARTICIPANT_FAILURE",
+[adam-laptop]       
+[adam-laptop]         +      "retryAfterMs": 250,
+[adam-laptop]       
+[adam-laptop]         +    },
+[adam-laptop]       
+[adam-laptop]         +    "code": "DISTRIBUTED_PARTICIPANT_FAILURE",
+[adam-laptop]       
+[adam-laptop]         +    "retryAfterMs": 250,
+[adam-laptop]       
+[adam-laptop]         +    "pendingInstance": Object {
+[adam-laptop]       
+[adam-laptop]         +      "writeIdentity":
+[adam-laptop]         "[\"nodes\",\"test-node-seed-restart-failure\",1,\"birth\"]",
+[adam-laptop]       
+[adam-laptop]         +      "instance": "3270274d-0c93-49e5-994f-de25a8c180fd",
+[adam-laptop]       
+[adam-laptop]         +      "idempotencyKey": "cpw-8bddd8fd7d548cac1cf5a404c31adedd",
+[adam-laptop]       
+[adam-laptop]         +      "entryId": null,
+[adam-laptop]       
+[adam-laptop]         +      "outcome": "unknown",
+[adam-laptop]       
+[adam-laptop]         +    },
+[adam-laptop]       
+[adam-laptop]         +  },
+[adam-laptop]       
+[adam-laptop]         +  "pendingInstance": Object {
+[adam-laptop]       
+[adam-laptop]         +    "writeIdentity":
+[adam-laptop]         "[\"nodes\",\"test-node-seed-restart-failure\",1,\"birth\"]",
+[adam-laptop]       
+[adam-laptop]         +    "instance": "3270274d-0c93-49e5-994f-de25a8c180fd",
+[adam-laptop]       
+[adam-laptop]         +    "idempotencyKey": "cpw-8bddd8fd7d548cac1cf5a404c31adedd",
+[adam-laptop]       
+[adam-laptop]         +    "entryId": null,
+[adam-laptop]       
+[adam-laptop]         +    "outcome": "unknown",
+[adam-laptop]       
+[adam-laptop]         +  },
+[adam-laptop]          }
+[adam-laptop]       compare: ===
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/bootstrap/register-node-in-cluster.test.js
+[adam-laptop]         lineNumber: 720
+[adam-laptop]         columnNumber: 7
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: |
+[adam-laptop]         Test.<anonymous> (test/bootstrap/register-node-in-cluster.test.js:720:7)
+[adam-laptop]       source: >2
+[adam-laptop]               'join registration should preserve retry-after hints from the owner path',
+[adam-laptop]             );
+[adam-laptop]             t.equal(
+[adam-laptop]         ------^
+[adam-laptop]               error?.cause,
+[adam-laptop]               participantFailure,
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     ok 5 - membership should not appear in cache when admission fails
+[adam-laptop]     ok 6 - endpoint publication should not appear in cache when admission fails
+[adam-laptop]     ok 7 - join registration should stop before endpoint upserts when admission fails
+[adam-laptop]     1..7
+[adam-laptop] not ok 13 - registerNodeInCluster() - should fail narrowly on seed participant failure before endpoint publication # time=289.079ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/bootstrap/register-node-in-cluster.test.js
+[adam-laptop]     lineNumber: 658
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: >2
+[adam-laptop]       });
+[adam-laptop]   
+[adam-laptop]     test('registerNodeInCluster() - should fail narrowly on seed participant
+[adam-laptop]     failure before endpoint publication',
+[adam-laptop]   
+[adam-laptop]     ^
+[adam-laptop]       async (t) => {
+[adam-laptop]         const upsertCalls = [];
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-durable-rejoin","nodeAddress":"joiner-host:8080","level":"info","message":"Registering node in cluster"}
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-durable-rejoin","nodeAddress":"joiner-host:8080","reusedEndpointCount":2,"level":"info","message":"Reusing existing canonical membership for durable rejoin"}
+[adam-laptop] # Subtest: registerNodeInCluster() - should reuse canonical membership during durable rejoin while refreshing the canonical nodes row
+[adam-laptop]     ok 1 - durable rejoin never upserts over the canonical nodes row
+[adam-laptop]     ok 2 - the reused endpoint rows advance with the node by one CAS each on their observed (legacy) incarnation
+[adam-laptop]     ok 3 - durable rejoin refreshes the canonical nodes row with one incarnation-advance CAS so peers learn it is connected but not ready
+[adam-laptop]     ok 4 - the refresh is fenced by the observed (older) boot incarnation
+[adam-laptop]     ok 5 - the refresh stamps this boot incarnation and CONNECTED admission state
+[adam-laptop]     ok 6 - durable rejoin refresh should explicitly clear the ready lease until READY signaling completes
+[adam-laptop]     ok 7 - durable rejoin should report that it reused canonical membership
+[adam-laptop]     ok 8 - durable rejoin should explain why fresh admission writes were skipped
+[adam-laptop]     ok 9 - durable rejoin should satisfy join membership from canonical cache evidence
+[adam-laptop]     ok 10 - durable rejoin should satisfy endpoint publication from canonical cache evidence
+[adam-laptop]     ok 11 - durable rejoin should locally project the cached node row back to CONNECTED
+[adam-laptop]     1..11
+[adam-laptop] ok 14 - registerNodeInCluster() - should reuse canonical membership during durable rejoin while refreshing the canonical nodes row # time=21.711ms
+[adam-laptop] 
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-durable-rejoin-cache-only","nodeAddress":"joiner-cache-only:8080","level":"info","message":"Registering node in cluster"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-durable-rejoin-cache-only","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-durable-rejoin-cache-only","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+[adam-laptop] Creating NodeStorageBudgetService { nodeId: 'test-node-durable-rejoin-cache-only' }
+[adam-laptop] Resolving node storage budget { nodeId: 'test-node-durable-rejoin-cache-only' }
+[adam-laptop] Node storage budget resolved {
+[adam-laptop]   nodeId: 'test-node-durable-rejoin-cache-only',
+[adam-laptop]   budgetBytes: 107374182400,
+[adam-laptop]   budgetSource: 'backfill',
+[adam-laptop]   diskBytes: 107374182400,
+[adam-laptop]   phase: 'startup'
+[adam-laptop] }
+[adam-laptop] Node storage budget resolved during startup {
+[adam-laptop]   nodeId: 'test-node-durable-rejoin-cache-only',
+[adam-laptop]   budgetBytes: 107374182400,
+[adam-laptop]   budgetSource: 'backfill'
+[adam-laptop] }
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-durable-rejoin-cache-only","nodeAddress":"joiner-cache-only:8080","cpuCores":8,"memoryMb":16606,"diskGb":100,"budgetBytes":107374182400,"budgetSource":"backfill","level":"info","message":"Node registered in cluster"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-durable-rejoin-cache-only","nodeAddress":"joiner-cache-only:8080","level":"info","message":"Registering node endpoint in cluster"}
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-durable-rejoin-cache-only","endpointId":"ep-test-node-durable-rejoin-cache-only-ws","transportType":"ws","address":"ws://joiner-cache-only:8082","level":"info","message":"Node endpoint registered in cluster"}
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: registerNodeInCluster() - should not treat cache-only durable rejoin metadata as canonical proof
+[adam-laptop]     ok 1 - cache-only metadata must not be treated as canonical durable rejoin proof
+[adam-laptop]     ok 2 - registration should fall back to fresh admission writes when authoritative rejoin rows are absent
+[adam-laptop]     1..2
+[adam-laptop] ok 15 - registerNodeInCluster() - should not treat cache-only durable rejoin metadata as canonical proof # time=12.46ms
+[adam-laptop] 
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-durable-rejoin-drift","nodeAddress":"new-host:8080","level":"info","message":"Registering node in cluster"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-durable-rejoin-drift","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-durable-rejoin-drift","level":"warn","message":"Cluster incarnation fence unavailable; durable rejoin stays blocked"}
+[adam-laptop] Creating NodeStorageBudgetService { nodeId: 'test-node-durable-rejoin-drift' }
+[adam-laptop] Resolving node storage budget { nodeId: 'test-node-durable-rejoin-drift' }
+[adam-laptop] Node storage budget resolved {
+[adam-laptop]   nodeId: 'test-node-durable-rejoin-drift',
+[adam-laptop]   budgetBytes: 107374182400,
+[adam-laptop]   budgetSource: 'backfill',
+[adam-laptop]   diskBytes: 107374182400,
+[adam-laptop]   phase: 'startup'
+[adam-laptop] }
+[adam-laptop] Node storage budget resolved during startup {
+[adam-laptop]   nodeId: 'test-node-durable-rejoin-drift',
+[adam-laptop]   budgetBytes: 107374182400,
+[adam-laptop]   budgetSource: 'backfill'
+[adam-laptop] }
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-durable-rejoin-drift","nodeAddress":"new-host:8080","cpuCores":8,"memoryMb":16606,"diskGb":100,"budgetBytes":107374182400,"budgetSource":"backfill","level":"info","message":"Node registered in cluster"}
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-durable-rejoin-drift","nodeAddress":"new-host:8080","level":"info","message":"Registering node endpoint in cluster"}
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] {"subsystem":"node-joining","nodeId":"test-node-durable-rejoin-drift","endpointId":"ep-test-node-durable-rejoin-drift-ws","transportType":"ws","address":"ws://new-host:8082","level":"info","message":"Node endpoint registered in cluster"}
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] CDC integration service initialized { nodeId: 'committed-write-leader', hasSqlQueryEngine: true }
+[adam-laptop] # Subtest: registerNodeInCluster() - should fall back to fresh admission writes when durable rejoin node metadata drifted
+[adam-laptop]     ok 1 - durable rejoin should perform fresh admission writes when node address metadata drifted
+[adam-laptop]     1..1
+[adam-laptop] ok 16 - registerNodeInCluster() - should fall back to fresh admission writes when durable rejoin node metadata drifted # time=8.795ms
+[adam-laptop] 
+[adam-laptop] 1..16
+[adam-laptop] # { total: 69, pass: 67, fail: 2 }
+[adam-laptop] # time=820.117ms
+[adam-laptop] # test-files total=1 pass=0 fail=1 assertions=85
+lab test: adam-laptop: # test-files total=4 pass=3 fail=1 assertions=136
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=4 pass=3 fail=1 assertions=136

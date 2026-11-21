@@ -1,0 +1,13 @@
+placement-shell=3659781
+placement-head=c9d8896f9fd144e6f92b0d88fbe948b36710198f
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3660232
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: ok cpu 74C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+ok test/partition/partition-runtime-reconstruction-leadership.test.js (20 assertions, 29352ms)
+# test-files total=1 pass=1 fail=0 assertions=20
+placement-results={"file":"test/partition/partition-runtime-reconstruction-leadership.test.js","attempt":1,"ok":true,"assertions":20,"durationMs":29352,"retriedOnce":false,"firstFailureLine":null}

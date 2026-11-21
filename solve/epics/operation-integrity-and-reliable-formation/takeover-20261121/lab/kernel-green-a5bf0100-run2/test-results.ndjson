@@ -1,0 +1,28 @@
+{"file":"test/partition/partition-commit-deadline-wait-bound-spent.test.js","attempt":1,"ok":true,"assertions":12,"durationMs":2257,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-coordinator-settlement.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":2529,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-cdc-obligation.test.js","attempt":1,"ok":true,"assertions":23,"durationMs":10308,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-participant-transaction-staging.test.js","attempt":1,"ok":true,"assertions":19,"durationMs":8861,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-service-stale-topology-write-guard.test.js","attempt":1,"ok":true,"assertions":22,"durationMs":10053,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-service-write-commit.test.js","attempt":1,"ok":true,"assertions":100,"durationMs":12444,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-transaction-replay-cursor-v4.test.js","attempt":1,"ok":true,"assertions":11,"durationMs":9470,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/convergence/dt-placement-owner-formation-drain.test.js","attempt":1,"ok":false,"assertions":11,"durationMs":30137,"retriedOnce":false,"firstFailureLine":"not ok 4 - A4 quiescence in frozen time: the drain completes with no placement timer firing, no bound spent and mg-1 unchanged"}
+{"file":"test/partition/partition-write-kernel.test.js","attempt":1,"ok":true,"assertions":104,"durationMs":770,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-transaction-replicated-apply-v3.test.js","attempt":1,"ok":true,"assertions":37,"durationMs":10936,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-runtime-reconstruction-leadership.test.js","attempt":1,"ok":true,"assertions":20,"durationMs":33463,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-write-kernel-tenure-fence.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":9032,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-write-leadership-transfer-committed.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":13956,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-write-leadership-transfer.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":10366,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/proposal-queue.test.js","attempt":1,"ok":true,"assertions":71,"durationMs":907,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-write-typed-releases.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":11313,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-growth-dispatch-identity.test.js","attempt":1,"ok":true,"assertions":13,"durationMs":9373,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/queued-proposal-leadership-fence.test.js","attempt":1,"ok":false,"assertions":1,"durationMs":2554,"retriedOnce":false,"firstFailureLine":"not ok 1 - port: a proposal queued behind a busy turn does not enter consensus under the leadership that succeeded the one it was submitted under"}
+{"file":"test/partition/placement-owner-construction-orders.test.js","attempt":1,"ok":false,"assertions":5,"durationMs":11800,"retriedOnce":false,"firstFailureLine":"not ok 4 - P0 existing coordinator, user and priority partitions initialised before the ledger: a coordinator handed to leading partition services before ControlPlaneSetup.create binds its factory (the existing-rebalancer branch precedes the placement guar"}
+{"file":"test/rebalancer/placement-owner-authority-disruptions.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":14292,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/placement-owner-authority-await-points.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":16465,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/placement-owner-authority-barrier.test.js","attempt":1,"ok":false,"assertions":3,"durationMs":16600,"retriedOnce":false,"firstFailureLine":"not ok 2 - barrier and the production definition: a custody that begins while the last applied ledger entry is the leader's configuration change on a quiet ledger must still start its first planning pass"}
+{"file":"test/rebalancer/placement-owner-authority-five-nodes.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":11082,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/placement-owner-authority-negatives.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":13899,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/placement-owner-authority-write-kernel.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":11395,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-placement-owner-core.test.js","attempt":1,"ok":false,"assertions":20,"durationMs":7077,"retriedOnce":false,"firstFailureLine":"not ok 18 - Item 2 production witness: 1-voter PartitionService admits 2 learners via normal ADD with placementAdmissionEnabled, RebalanceCoordinator/OperationWorkflowOwner dispatches GROWTH_PROMOTE, recovers an interrupted attempt, observes 3 committed vo"}
+{"file":"test/rebalancer/placement-owner-authority-tenure.test.js","attempt":1,"ok":true,"assertions":14,"durationMs":27255,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/placement-owner-authority-wakes.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":76869,"retriedOnce":false,"firstFailureLine":null}

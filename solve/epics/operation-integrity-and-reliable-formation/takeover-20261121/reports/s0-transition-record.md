@@ -1051,3 +1051,143 @@ coordinator's instruction). No mutant has been executed: no kill is claimed.
    {tableName: SYSTEM_TABLE_NAME.SERVICES, sql, params, minimumIndex, minimumTerm})` (floors 0 = no prior
    knowledge, or its last committed write's index/term), branch on `state`, take rows only through
    `ownerFactRows`, and treat every UNAVAILABLE reason as "keep the turn scheduled", never as data.
+
+---
+
+## 17. Stage 2, proof completion (appended after the coordinator's rulings of 2026-11-21 evening)
+
+### 17.1 Q4 stays OPEN and does not block (ruling); smallest wiring that would give the receiver both halves [V]
+
+Unchanged facts (16.5): the receiver (`PartitionService`) holds neither the node boot incarnation nor its SERVICES
+`created_at`; `lifecycleIncarnation` is not forwarded under either name and no identity is coined.
+Smallest wiring through the two owners, for when a consumer demonstrably needs to pin a serving replica:
+- Node boot incarnation (owner: the boot-incarnation owner, carried by the replica lifecycle owner): pass it as
+  a required construction option of `PartitionService` from the two creation sites that already hold it —
+  the handler's CREATE (`src/node/replica-handler-create-methods.js:539-557`, `this.ownerIncarnation`,
+  defined `src/node/replica-handler-class.js:137`) and bootstrap's factory
+  (`src/bootstrap/bootstrap-service-replica-registration-methods.js:148`, `this.bootIncarnation`, which it
+  already hands the handler at `:289`); the snapshot catch-up recreation (`src/raft/snapshot-catchup.js:381`)
+  forwards the same option.
+- Replica `created_at` (owner: `PartitionServiceRowOwner`, minted at `src/partition/partition-service-row-owner.js:209-228`):
+  the registration evidence it already returns (`:335-338`) is consumed at activation
+  (`src/bootstrap/shared/partition-service-activation.js:285-304`,
+  `src/node/replica-state-machine-registered-activation.js:215-220`); one owner-defined call there,
+  `service.recordRegistrationBirth(evidence)`, would store the sealed birth on the service.
+- The witness would then carry `{nodeBootIncarnation, replicaCreatedAt}` from those fields, and a pinned read
+  would refuse until registration has recorded the birth (a replica serving before its registration has no
+  pair to attest).
+
+### 17.2 The `currentTermApplied` finding (beyond this slice) [V] + [X]
+
+- Definition in the runtime/binding owner: the binding exposes raft-rs's `pending_conf_index`
+  (`vendor/raft-rs-wasm/src/lib.rs:696, 720`); the runtime shapes
+  `currentTermApplied = role is leader && applied > pendingConfIndex`
+  (`src/raft/raft-rs-status-observation.js:106-113`, emitted at `:147`) and
+  `confChangePending = pendingConfIndex > applied` (`:145-146`).
+- raft-rs 0.7.0 (`~/.cargo/registry/src/*/raft-0.7.0/src/raft.rs`): `reset()` sets `pending_conf_index = 0` on
+  every term change (`:1000`); `become_leader` sets it to the last log index and appends the empty entry after
+  it (`:1227-1236`); proposing a configuration change raises it to that entry's index (`:2077`); applying the
+  entry of a joint configuration with auto-leave appends the leave entry and raises it again (`:964-980`).
+- Schedule that leaves it false on a quiet group: the leader of term T proposes a configuration change at
+  index P (pending = P); P commits and applies (applied = P): `applied > pending` is false. With a joint
+  change, the auto-leave entry at P+1 does the same once it applies. It stays false until an entry with an
+  index greater than the pending index is applied by that leader: the next ordinary proposal (any write), or
+  a new term (re-election resets it and the new leader's empty entry, once applied, makes it true).
+- How long: unbounded on a quiet group; no entry is proposed periodically. [X] `lab/s0-witnesses-fc37b8d1a-try2`:
+  after formation (whose last entries are the leader's admissions, i.e. configuration changes) every group
+  witness waited its full 10 s setup budget (`FORMATION_BUDGET_MS`) without seeing `currentTermApplied` true.
+- Consumers of the field at ee58d307f (read only; none edited): message-group removal
+  (`src/rebalancer/replica-operation-message-group-removal.js:149`), message-group promotion
+  (`src/rebalancer/replica-operation-message-group-promotion.js:223-229`), message-group membership
+  authorization (`src/rebalancer/replica-operation-message-group-membership-authorization.js:371, 397`), and
+  the committed-membership absence observation (`src/raft/raft-rs-committed-membership-read.js:278-287`).
+  The placement owner's term-start barrier named by the coordinator does not read the field on this branch
+  (no `partition-placement-*` match at ee58d307f); if it does on its writer's branch, it inherits the same
+  schedule: after a configuration change the leader applies, the barrier stays closed until the next ordinary
+  entry applies.
+- The raft owner's own precise test exists inside the runtime but is not exposed: `hasAppliedOwnTermEntry`
+  (`src/raft/raft-rs-conf-change-admission.js:236-248`) uses the applied entry's term (`group.appliedTerm`,
+  set at `src/raft/raft-rs-runtime-owner.js:1195`) and falls back to `applied >= pendingConfIndex`.
+  S0 uses that fallback (`!confChangePending`); exposing `appliedTerm` in the status is the raft owner's change.
+
+### 17.3 Expected frequency of `owner_fact_read_point_moved` under steady write load [V]
+
+- The window is not time-based. Between the receiver's observation and the statement there is no await
+  (`partition-service-remote-query-methods.js:297-317`; `executeQuery` READ branch
+  `partition-service-write-metrics-base.js:177-213`; `statement.iterate` in `query-result-budget.js:130-185`).
+  The only gap is the microtask tail between the synchronous statement and the receiver's resumption after
+  `await executeRemoteQuery(...)`; the re-check runs in the same microtask checkpoint as the read.
+- An apply lands in that gap only when a raft turn continuation is already queued in the same microtask
+  checkpoint: committed entries apply synchronously inside a Ready turn (`raft-rs-runtime-owner.js:1226-1270`),
+  continued either synchronously or after a peer delivery's promise resolves (`turnFromForeignAnswer`,
+  `src/raft/raft-rs-turn-answer.js:78-90`). Over a network transport that resolution follows an I/O
+  macrotask, so it shares the read's checkpoint only if the same macrotask also delivered the raft message.
+  The refusal rate therefore does not grow with read duration or proportionally with write rate; it depends
+  on the density of same-checkpoint raft continuations. No starvation schedule found: every retry starts in a
+  new macrotask.
+- What bounds the retries: `readOwnerFact` never retries (UNAVAILABLE `owner_fact_read_point_moved`, the
+  caller's continuation owns the next turn). The in-process arm returns the leader's typed refusal without
+  routing (`cdc-integration-service-owner-rpc-read-execution.js:550-604`). The routed arm's delivery loop
+  treats it as a read-candidate failure: at most `QUERY_DEFAULTS.READ_RETRY_ATTEMPTS` = 3 attempts
+  (`src/query/query-constants.js:471-472`, read at `query-executor-base.js:123-125`), each after
+  `LEADER_RETRY_DELAY_MS` = 50 ms, inside the caller's execution deadline
+  (`query-executor-partition-attempt-budget.js:368-411`).
+- No witness added: no schedule makes the refusal repeat deterministically. Recorded instead: a busy partition
+  can raise the refusal rate only through same-checkpoint applies; the precise tie (the statement owner
+  returning the applied index it read under, `partition-service-write-metrics-base.js:130-172`) would remove
+  the refusal altogether.
+
+## 18. Proof completion and the verification's corrective round (appended 2026-11-21, evening)
+
+### 18.1 Correction to section 15, run 3 (R21: appended, not rewritten)
+`s0-base-routing-b638284d1` holds 83 leaf assertions, not 76 (verification F-item 8); its first failure and
+attribution (pre-existing red of the first routing test) stand.
+
+### 18.2 All S0 files at ee58d307f [X] `lab/s0-witnesses-ee58d307f`
+8/9 files green: witnesses 1-4, read-point (42/42), hosted-replica, redirect/deadline, pinned lifetime test.
+Red: `cdc-leader-required-fresh-leader-absence.test.js` on its named assertion (the recorded finding; to be
+converted, item 6 below).
+
+### 18.3 Mutant table (Q6) [X] all mutants are commit-tree children of ee58d307f with a regenerated seal, never on a branch
+
+| Mutant (sha) | Mechanism removed | Result | Killing witness (file, case) | Lab directory |
+| --- | --- | --- | --- | --- |
+| m01 3de15e2c6 | role check in the shared predicate | SURVIVED witnesses 2+3 (the receiver's post-read role check refuses the follower anyway); KILLED by the caller-side case | read-point file case 5 "the caller verifies what it received", assertion "never READY with no rows" | `s0-mutant-m01-accept-follower-witness-sealed` (survived), `s0-mutant-r01-accept-follower-witness-caller-sealed` (killed) |
+| m02 59ef438d0 | unknown-field refusal; caller options spread over the token | killed | witness 4 case 2, "authoritativeReadMode=owner_local_only: typed refusal" | `s0-mutant-m02-spread-draft-over-token-sealed` |
+| m03 d48b1f596 | missing floor defaults to 0 | killed | witness 4 case 3, "no index floor: typed refusal" | `s0-mutant-m03-default-missing-floor-retry-sealed` (first attempt refused by placement) |
+| m04 717eb0dee | identity by shape | killed | witness 4 case 4, "a hint carries no owner-fact identity" | `s0-mutant-m04-identity-by-shape-sealed` |
+| m05 c7b4125da | pre-read not-leader refusal only | SURVIVED witness 2 (the post-read role check refuses the follower after executing; same typed answer) | none: equivalent at the protocol level, see m05b | `s0-mutant-m05-non-leader-answers-retry-sealed` |
+| m05b (sealed-3 list) | pre-read refusal AND post-read role re-check | killed | witness 2, "the strict read reaches the replica that leads" | `s0-mutant-m05b-non-leader-answers-both-checks-sealed` |
+| m06 6f4ba10d5 | witness built after the read | killed | read-point case 4, "afterRead: the witness names the applied position of the rows it carries" | `s0-mutant-m06-witness-after-read-sealed` |
+| m07 a4d3d4833 | floors ignored | killed | witness 3 case 2 (floor assertions of "the leader is reachable again") | `s0-mutant-m07-floors-ignored-retry-sealed` |
+| m08 8d24b209d | empty non-leader answer reported as absence | killed | read-point case 5, "never READY with no rows" | `s0-mutant-m08-empty-non-leader-is-absence-sealed` |
+| m09 20d885e08 | in-process arm reads the CDC provider map | killed | hosted-replica file, "found through the handler's registry" | `s0-mutant-m09-wrong-registry-sealed` |
+| m10 1b2584790 | election-log condition | killed | read-point case 1, "in process: never READY without the row" | `s0-mutant-m10-no-own-term-condition-sealed` |
+| m11 (sealed-2 list) | unmoved-applied-index re-check | killed | read-point case 4, "beforeRead: the witness names the applied position of the rows it carries" | `s0-mutant-m11-no-read-point-recheck-sealed` |
+
+What m01/m05 show (verification item 5): the role is checked twice at the receiver, before the read (shared
+predicate, also the caller's verification) and after it (`leaderReadRefusalAfter`). They are not two versions
+of one decision: the first decides whether to execute at all and is the predicate the caller re-applies to
+what it received (m01 is killed only through that caller path); the second detects leadership lost during
+the read. For a follower both refuse, so removing either alone is invisible to witness 2 (m05 equivalent);
+removing both is killed (m05b). Note F1: under a pending core turn both rest on the same cached status, so the
+second check's protection is limited to the fixture's settled transport until the raft owner's uncached
+observation exists. `commit === applied`: no mutant run and no witness; see 18.4 item 5.
+
+Mutant tooling (kept, not in the repo): `/mnt/data/peter/projects/lagrange/.git/worktrees/owner-fact-read-20261121/`
+`mutants.py`, `make-mutant.sh`, `s0-seal-mutants*.sh`, `s0-lab-queue.sh`, lists `s0-mutants-sealed*.txt`, `s0-mutants-batch2.txt`.
+
+### 18.4 Corrective round (verification report reports/verify-owner-fact-read.md): status per item
+
+| Item | Status |
+| --- | --- |
+| C2 + item 7: contract and comments say what the code decides on; check_quorum bound 1-2 election timeouts in own ticks (about 2 s at defaults) | DONE in the commit after ee58d307f (contract "Owner fact and hint", receiver comments) |
+| 8: base run 83 assertions | DONE (18.1) |
+| 1(b): refuse when the status is not a current core observation | STOPPED [V]: the cached return (`raft-rs-runtime-owner.js:1559-1578`, `settledTurn(SHAPED_STATUS.get(observation))`) is the same frozen shaped object type and field set as a fresh read (`:1512-1516`); no field says "cached", "turn pending" or the observation's turn. Raft-owner need: a non-driving, uncached core observation for receivers deciding authority (role, term, leader, commit, applied, pending-configuration/election-log fact, incarnations) or, failing that, a `turnPending` flag plus an observation sequence on every status. The RED witness (a leader whose core stepped its successor's message while its turn awaits a peer send answers READY) is NOT written yet: it needs a fixture hold that leaves the leader's own peer sends pending (not dropped) while the successor's message is queued. |
+| 1(a): applied position from the store in the statement's read transaction | NOT DONE. Plan: in `partition-service-write-metrics-base.js` (`executeAdmittedReadQuery`, ~:131-175), for an owner-fact read only, run the applied-state read and the statement in one `db.transaction(...)` (read-only, synchronous), reading raft's applied-state row through the durable store owner's reader (`raft-rs-durable-store.js:198-214`, `SELECT_APPLIED_STATE`; expose it through the port if no reader exists) and return it with the rows; the receiver's witness takes that value and `READ_POINT_MOVED` is deleted. Floors are then checked against the store position after the read. |
+| 2: single-flight key includes kind and floors; joiner never waits past its own deadline; answer echoes the decided request | NOT DONE. The key rule is `control-plane-system-table-gateway-query-execution.js:105-117, 139-156` (key = table, sql, params, frozen read-authority token, pressure contract); plan: the owner-fact floor and kind join the key through the token or an explicit key field; the receiver echoes `leaderRead` in the witness and `ownerFactAnswerOf` requires it. |
+| 3: floors typed `{partitionId, index, term}`, receiver refuses another group's floor | NOT DONE (changes the request shape of witnesses 3 and 4). |
+| 4: foreign transaction on the connection | NOT ESTABLISHED: reachability of a legacy session holding `BEGIN` on a system partition's connection not traced (`partition-statement-admission.js:278-283`, `partition-participant-transaction-connection.js`); a synchronous `service.db.inTransaction` refusal at the receiver is the candidate check. |
+| 5: duplicate role check; `commit === applied` | Analysed (18.3); `commit === applied` kept, unwitnessed: its only protection is a leader whose commit index is ahead of its applied index within its own term, which this runtime makes visible only inside a pending turn (where F1 applies); no witness schedule found, so per the ruling it is a candidate for removal pending the uncached observation. |
+| 6: red finding into a counted census with a one-way bound | NOT DONE. Plan: keep read-point case 1 as the green property; replace the red file by a census of leader-REQUIRED call sites not on `readOwnerFact` (37 per 16.7) in the form of the existing one-way ratchets (`scripts/checks/no-legacy-consensus-reference-ratchet.js`, which refuses an increase in its baseline's history). |
+| Deadline and routing class as required, declared parameters (coordinator addition) | NOT DONE. The coordinator's reads pass `CONTROL_PLANE_QUERY_OPTIONS` = `{timeoutMs, routingReadinessDimension: CONTROL_PLANE_RECOVERY_ELIGIBLE}` (`src/rebalancer/rebalance-coordinator-shared.js:168-172`); the gateway reads both (`control-plane-system-table-gateway-options.js:17-39`). Proposed signature: `readOwnerFact(readLeaderRows, {tableName, sql, params, floor: {partitionId, index, term}, deadline: {timeoutMs}, routingReadinessDimension, expectedReplica?})`, with `deadline` and `routingReadinessDimension` required (typed `OwnerFactRequestRefusal` otherwise) and both placed in the frozen read options. |

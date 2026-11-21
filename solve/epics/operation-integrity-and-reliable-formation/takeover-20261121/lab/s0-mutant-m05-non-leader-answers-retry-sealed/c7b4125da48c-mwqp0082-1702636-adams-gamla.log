@@ -1,0 +1,13 @@
+placement-shell=1935696
+placement-head=c7b4125da48c0d83a94a63472440f231e59c6a0e
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.2 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=1936152
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=3
+thermal: ok cpu 48C (coretemp/Package id 0) nvme unmeasured
+ok test/cdc/cdc-owner-fact-stale-published-leader.test.js (18 assertions, 2117ms)
+# test-files total=1 pass=1 fail=0 assertions=18
+placement-results={"file":"test/cdc/cdc-owner-fact-stale-published-leader.test.js","attempt":1,"ok":true,"assertions":18,"durationMs":2117,"retriedOnce":false,"firstFailureLine":null}

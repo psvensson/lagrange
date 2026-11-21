@@ -1,0 +1,12 @@
+{"file":"test/partition/placement-admission-copy-occupancy.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":6754,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/committed-outcome-identity-boundary.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":6998,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-admission-apply.test.js","attempt":1,"ok":true,"assertions":9,"durationMs":10489,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-admission-found.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":6712,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-outcome-format.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":6672,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":1856,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js","attempt":1,"ok":false,"assertions":177,"durationMs":6953,"retriedOnce":false,"firstFailureLine":"not ok 40 - should be equal"}
+{"file":"test/partition/placement-retained-row-repair.test.js","attempt":1,"ok":false,"assertions":49,"durationMs":10902,"retriedOnce":false,"firstFailureLine":"not ok 15 - remote paused repair progresses solely on actual owner WRITE_PATH_RELEASED"}
+{"file":"test/rebalancer/replica-placement-owner-blocked-attempt.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":6178,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-placement-owner-blocked-release.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":6783,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-placement-owner-clearing-triggers.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":6725,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-placement-owner-core.test.js","attempt":1,"ok":false,"assertions":20,"durationMs":7193,"retriedOnce":false,"firstFailureLine":"not ok 20 - Finding 2 & 3 production witness: 3->5 GROWTH_PROMOTE redirects to new leader on not_leader refusal while preserving operationId/promoteReplicaIds, and enforces step timeout budget on persistent refusal"}

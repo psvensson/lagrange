@@ -1,0 +1,31 @@
+{
+  "sha": "cf43a76ff1f3af507953d8d69f92358b27fc8de9",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/control-plane/gateway-sql-mutation-fallback-phase-scope.test.js",
+    "test/raft/snapshot-dispatcher-wiring.test.js",
+    "test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js",
+    "test/control-plane/membership-count-neutral-steady-trim.test.js",
+    "test/rebalancer/rebalancer-entity-interaction-contract.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/raft/snapshot-dispatcher-wiring.test.js",
+        "test/rebalancer/rebalancer-entity-interaction-contract.test.js",
+        "test/control-plane/membership-count-neutral-steady-trim.test.js",
+        "test/control-plane/gateway-sql-mutation-fallback-phase-scope.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js"
+      ],
+      "jobs": 1,
+      "resourceClass": "exclusive"
+    }
+  ]
+}

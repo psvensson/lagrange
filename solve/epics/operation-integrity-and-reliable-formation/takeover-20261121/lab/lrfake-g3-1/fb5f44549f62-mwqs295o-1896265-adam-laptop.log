@@ -1,0 +1,20 @@
+placement-shell=3651385
+placement-head=fb5f44549f629a1f9229471dc99edf6d70a03ef6
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.2 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3651844
+# test-files planned=4
+classified lane ordinary: 4 file(s), jobs=4
+thermal: hold cpu 81C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 81C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 40C (coretemp/Package id 0) nvme 17C (nvme/Composite)
+ok test/control-plane/heartbeat-storage-budget-preservation.test.js (41 assertions, 3199ms)
+ok test/control-plane/heartbeat-periodic-writes.property.test.js (41 assertions, 3445ms)
+ok test/control-plane/heartbeat-memory-trend-reporter-and-shutdown.test.js (53 assertions, 3625ms)
+ok test/control-plane/heartbeat-memory-trend.test.js (144 assertions, 5429ms)
+# test-files total=4 pass=4 fail=0 assertions=279
+placement-results={"file":"test/control-plane/heartbeat-storage-budget-preservation.test.js","attempt":1,"ok":true,"assertions":41,"durationMs":3199,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/heartbeat-periodic-writes.property.test.js","attempt":1,"ok":true,"assertions":41,"durationMs":3445,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/heartbeat-memory-trend-reporter-and-shutdown.test.js","attempt":1,"ok":true,"assertions":53,"durationMs":3625,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/heartbeat-memory-trend.test.js","attempt":1,"ok":true,"assertions":144,"durationMs":5429,"retriedOnce":false,"firstFailureLine":null}

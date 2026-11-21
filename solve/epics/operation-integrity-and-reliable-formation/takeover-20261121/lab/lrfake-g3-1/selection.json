@@ -1,0 +1,23 @@
+{
+  "sha": "fb5f44549f629a1f9229471dc99edf6d70a03ef6",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/control-plane/heartbeat-memory-trend.test.js",
+    "test/control-plane/heartbeat-periodic-writes.property.test.js",
+    "test/control-plane/heartbeat-storage-budget-preservation.test.js",
+    "test/control-plane/heartbeat-memory-trend-reporter-and-shutdown.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/control-plane/heartbeat-memory-trend.test.js",
+        "test/control-plane/heartbeat-memory-trend-reporter-and-shutdown.test.js",
+        "test/control-plane/heartbeat-periodic-writes.property.test.js",
+        "test/control-plane/heartbeat-storage-budget-preservation.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

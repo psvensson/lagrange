@@ -1,0 +1,1579 @@
+lab test: adam-laptop: ordinary, bootstrap (8 files) cores=8 mem=15.5GiB speed x2.26
+[adam-laptop] placement-shell=3644018
+[adam-laptop] placement-head=70dfcdba85a6f3aa74ddbc296d47abe730a1eb8e
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2.3 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3644475
+[adam-laptop] # test-files planned=8
+[adam-laptop] classified lane ordinary: 7 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 75C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 75C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 41C (coretemp/Package id 0) nvme 17C (nvme/Composite)
+[adam-laptop] not ok test/control-plane/named-write-outcome-total.test.js (3 assertions, 1231ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: judgeNamedWriteOutcome is total over answer shapes and never throws
+[adam-laptop] not ok 1 - judgeNamedWriteOutcome is total over answer shapes and never throws
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 17.023149
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/control-plane/named-write-outcome-total.test.js:189:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     Expected values to be strictly deep-equal:
+[adam-laptop]     + actual - expected
+[adam-laptop]     ... Skipped lines
+[adam-laptop]     
+[adam-laptop]       [
+[adam-laptop]         [
+[adam-laptop]           'partition answer with its bound witness',
+[adam-laptop]           'applied'
+[adam-laptop]         ],
+[adam-laptop]     ...
+[adam-laptop]           'zero participants: no partition was asked',
+[adam-laptop]     +     'applied'
+[adam-laptop]     -     'unknown'
+[adam-laptop]         ],
+[adam-laptop]         [
+[adam-laptop]           'zero participants, CDC-wrapped',
+[adam-laptop]     +     'applied'
+[adam-laptop]     -     'unknown'
+[adam-laptop]         ],
+[adam-laptop]         [
+[adam-laptop]           'a failure that carries a commit witness',
+[adam-laptop]           'unknown'
+[adam-laptop]         ],
+[adam-laptop]         [
+[adam-laptop]           'a refusal that carries a commit witness (contradictory evidence)',
+[adam-laptop]     +     'not_proposed'
+[adam-laptop]     -     'unknown'
+[adam-laptop]         ],
+[adam-laptop]         [
+[adam-laptop]           'a deferred answer that carries a commit witness',
+[adam-laptop]           'unknown'
+[adam-laptop]         ],
+[adam-laptop]     ...
+[adam-laptop]           'a CDC wrapper that wraps itself',
+[adam-laptop]     +     'THROWS RangeError: Maximum call stack size exceeded'
+[adam-laptop]     -     'unknown'
+[adam-laptop]         ]
+[adam-laptop]       ]
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected:
+[adam-laptop]     0:
+[adam-laptop]       0: 'partition answer with its bound witness'
+[adam-laptop]       1: 'applied'
+[adam-laptop]     1:
+[adam-laptop]       0: 'partition answer without a witness'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     2:
+[adam-laptop]       0: 'the exact shape that threw: success and a count, no witness, no partitionId'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     3:
+[adam-laptop]       0: 'the engine fake behind the real CDC service (threw)'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     4:
+[adam-laptop]       0: 'the heartbeat engine fake (threw)'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     5:
+[adam-laptop]       0: 'bare success'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     6:
+[adam-laptop]       0: 'witness without a top-level partitionId'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     7:
+[adam-laptop]       0: 'witness for another partition than declared'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     8:
+[adam-laptop]       0: 'answer partition differs from its witness'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     9:
+[adam-laptop]       0: 'witness bound to another entry'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     10:
+[adam-laptop]       0: 'witness that is not an object'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     11:
+[adam-laptop]       0: 'witness without logIndex'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     12:
+[adam-laptop]       0: 'CDC-wrapped bound partition answer'
+[adam-laptop]       1: 'applied'
+[adam-laptop]     13:
+[adam-laptop]       0: 'CDC-wrapped partition answer without witness'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     14:
+[adam-laptop]       0: 'CDC-wrapped non-object partition result'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     15:
+[adam-laptop]       0: 'complete distributed answer with bound participant'
+[adam-laptop]       1: 'applied'
+[adam-laptop]     16:
+[adam-laptop]       0: 'CDC-wrapped complete distributed answer'
+[adam-laptop]       1: 'applied'
+[adam-laptop]     17:
+[adam-laptop]       0: 'distributed participant without witness'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     18:
+[adam-laptop]       0: 'distributed participant that is not an object'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     19:
+[adam-laptop]       0: 'distributed answer for another key'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     20:
+[adam-laptop]       0: 'distributed answer and attempt both without a key'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     21:
+[adam-laptop]       0: 'attempt without a declared partition'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     22:
+[adam-laptop]       0: 'bound committed statement failure'
+[adam-laptop]       1: 'failed'
+[adam-laptop]     23:
+[adam-laptop]       0: 'pre-proposal refusal on the declared partition'
+[adam-laptop]       1: 'not_proposed'
+[adam-laptop]     24:
+[adam-laptop]       0: 'single nested failure without partition ids (double undefined)'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     25:
+[adam-laptop]       0: 'single nested failure that is not an object'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     26:
+[adam-laptop]       0: 'null answer'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     27:
+[adam-laptop]       0: 'undefined answer'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     28:
+[adam-laptop]       0: 'string answer'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     29:
+[adam-laptop]       0: 'numeric answer'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     30:
+[adam-laptop]       0: 'missing attempt'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     31:
+[adam-laptop]       0: 'zero participants: no partition was asked'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     32:
+[adam-laptop]       0: 'zero participants, CDC-wrapped'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     33:
+[adam-laptop]       0: 'a failure that carries a commit witness'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     34:
+[adam-laptop]       0: 'a refusal that carries a commit witness (contradictory evidence)'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     35:
+[adam-laptop]       0: 'a deferred answer that carries a commit witness'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     36:
+[adam-laptop]       0: 'witness for the right entry on the wrong partition'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     37:
+[adam-laptop]       0: 'answer and witness on the wrong partition, entry of the declared one'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     38:
+[adam-laptop]       0: 'the settled replay of an earlier attempt under the same key (same entry)'
+[adam-laptop]       1: 'applied'
+[adam-laptop]     39:
+[adam-laptop]       0: 'the settled replay of an earlier instance of the name (another key)'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     40:
+[adam-laptop]       0: 'participants partially witnessed: primary witnessed, mirror not'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     41:
+[adam-laptop]       0: 'participants partially witnessed: two primaries, one witnessed'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     42:
+[adam-laptop]       0: 'witness term absent'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     43:
+[adam-laptop]       0: 'witness term zero'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     44:
+[adam-laptop]       0: 'witness logIndex zero'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     45:
+[adam-laptop]       0: 'witness logIndex negative'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     46:
+[adam-laptop]       0: 'witness logIndex as text'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     47:
+[adam-laptop]       0: 'array answer'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     48:
+[adam-laptop]       0: 'array witness'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     49:
+[adam-laptop]       0: 'counts that disagree (affectedRows !== changes)'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     50:
+[adam-laptop]       0: 'a CDC wrapper that wraps itself'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]   actual:
+[adam-laptop]     0:
+[adam-laptop]       0: 'partition answer with its bound witness'
+[adam-laptop]       1: 'applied'
+[adam-laptop]     1:
+[adam-laptop]       0: 'partition answer without a witness'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     2:
+[adam-laptop]       0: 'the exact shape that threw: success and a count, no witness, no partitionId'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     3:
+[adam-laptop]       0: 'the engine fake behind the real CDC service (threw)'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     4:
+[adam-laptop]       0: 'the heartbeat engine fake (threw)'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     5:
+[adam-laptop]       0: 'bare success'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     6:
+[adam-laptop]       0: 'witness without a top-level partitionId'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     7:
+[adam-laptop]       0: 'witness for another partition than declared'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     8:
+[adam-laptop]       0: 'answer partition differs from its witness'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     9:
+[adam-laptop]       0: 'witness bound to another entry'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     10:
+[adam-laptop]       0: 'witness that is not an object'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     11:
+[adam-laptop]       0: 'witness without logIndex'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     12:
+[adam-laptop]       0: 'CDC-wrapped bound partition answer'
+[adam-laptop]       1: 'applied'
+[adam-laptop]     13:
+[adam-laptop]       0: 'CDC-wrapped partition answer without witness'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     14:
+[adam-laptop]       0: 'CDC-wrapped non-object partition result'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     15:
+[adam-laptop]       0: 'complete distributed answer with bound participant'
+[adam-laptop]       1: 'applied'
+[adam-laptop]     16:
+[adam-laptop]       0: 'CDC-wrapped complete distributed answer'
+[adam-laptop]       1: 'applied'
+[adam-laptop]     17:
+[adam-laptop]       0: 'distributed participant without witness'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     18:
+[adam-laptop]       0: 'distributed participant that is not an object'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     19:
+[adam-laptop]       0: 'distributed answer for another key'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     20:
+[adam-laptop]       0: 'distributed answer and attempt both without a key'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     21:
+[adam-laptop]       0: 'attempt without a declared partition'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     22:
+[adam-laptop]       0: 'bound committed statement failure'
+[adam-laptop]       1: 'failed'
+[adam-laptop]     23:
+[adam-laptop]       0: 'pre-proposal refusal on the declared partition'
+[adam-laptop]       1: 'not_proposed'
+[adam-laptop]     24:
+[adam-laptop]       0: 'single nested failure without partition ids (double undefined)'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     25:
+[adam-laptop]       0: 'single nested failure that is not an object'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     26:
+[adam-laptop]       0: 'null answer'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     27:
+[adam-laptop]       0: 'undefined answer'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     28:
+[adam-laptop]       0: 'string answer'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     29:
+[adam-laptop]       0: 'numeric answer'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     30:
+[adam-laptop]       0: 'missing attempt'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     31:
+[adam-laptop]       0: 'zero participants: no partition was asked'
+[adam-laptop]       1: 'applied'
+[adam-laptop]     32:
+[adam-laptop]       0: 'zero participants, CDC-wrapped'
+[adam-laptop]       1: 'applied'
+[adam-laptop]     33:
+[adam-laptop]       0: 'a failure that carries a commit witness'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     34:
+[adam-laptop]       0: 'a refusal that carries a commit witness (contradictory evidence)'
+[adam-laptop]       1: 'not_proposed'
+[adam-laptop]     35:
+[adam-laptop]       0: 'a deferred answer that carries a commit witness'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     36:
+[adam-laptop]       0: 'witness for the right entry on the wrong partition'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     37:
+[adam-laptop]       0: 'answer and witness on the wrong partition, entry of the declared one'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     38:
+[adam-laptop]       0: 'the settled replay of an earlier attempt under the same key (same entry)'
+[adam-laptop]       1: 'applied'
+[adam-laptop]     39:
+[adam-laptop]       0: 'the settled replay of an earlier instance of the name (another key)'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     40:
+[adam-laptop]       0: 'participants partially witnessed: primary witnessed, mirror not'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     41:
+[adam-laptop]       0: 'participants partially witnessed: two primaries, one witnessed'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     42:
+[adam-laptop]       0: 'witness term absent'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     43:
+[adam-laptop]       0: 'witness term zero'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     44:
+[adam-laptop]       0: 'witness logIndex zero'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     45:
+[adam-laptop]       0: 'witness logIndex negative'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     46:
+[adam-laptop]       0: 'witness logIndex as text'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     47:
+[adam-laptop]       0: 'array answer'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     48:
+[adam-laptop]       0: 'array witness'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     49:
+[adam-laptop]       0: 'counts that disagree (affectedRows !== changes)'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     50:
+[adam-laptop]       0: 'a CDC wrapper that wraps itself'
+[adam-laptop]       1: 'THROWS RangeError: Maximum call stack size exceeded'
+[adam-laptop]   operator: 'deepStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/control-plane/named-write-outcome-total.test.js:197:10)
+[adam-laptop]     Test.runInAsyncScope (node:async_hooks:214:14)
+[adam-laptop]     Test.run (node:internal/test_runner/test:1047:25)
+[adam-laptop]     Test.start (node:internal/test_runner/test:944:17)
+[adam-laptop]     startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: an unknown named write never says applied: the gateway-normalized success
+[adam-laptop] ok 2 - an unknown named write never says applied: the gateway-normalized success
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 3.646688
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: gateway and real CDC: a receipt-less engine answer is the typed unknown, twice
+[adam-laptop] ok 3 - gateway and real CDC: a receipt-less engine answer is the typed unknown, twice
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 166.496572
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] 1..3
+[adam-laptop] # tests 3
+[adam-laptop] # suites 0
+[adam-laptop] # pass 2
+[adam-laptop] # fail 1
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 216.120671
+[adam-laptop] # time=1231ms
+[adam-laptop] not ok test/control-plane/named-write-unknown-outcome-shape.test.js (4 assertions, 1359ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: the vocabulary names the unknown outcome
+[adam-laptop] not ok 1 - the vocabulary names the unknown outcome
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 2.60456
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/control-plane/named-write-unknown-outcome-shape.test.js:175:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     Expected values to be strictly equal:
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]     + undefined
+[adam-laptop]     - 'unknown'
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: 'unknown'
+[adam-laptop]   operator: 'strictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/control-plane/named-write-unknown-outcome-shape.test.js:176:10)
+[adam-laptop]     Test.runInAsyncScope (node:async_hooks:214:14)
+[adam-laptop]     Test.run (node:internal/test_runner/test:1047:25)
+[adam-laptop]     Test.start (node:internal/test_runner/test:944:17)
+[adam-laptop]     startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: every consumer sees the one named unknown outcome - returned: a success without the producer receipt
+[adam-laptop] not ok 2 - every consumer sees the one named unknown outcome - returned: a success without the producer receipt
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 165.07153
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/control-plane/named-write-unknown-outcome-shape.test.js:180:3'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     Expected values to be strictly deep-equal:
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]       {
+[adam-laptop]     +   adminMutationOutcome: null,
+[adam-laptop]     +   adminOutcome: 'owner_not_ready',
+[adam-laptop]     +   adminSaysNotReady: true,
+[adam-laptop]     -   adminMutationOutcome: 'unknown',
+[adam-laptop]     -   adminOutcome: 'unknown',
+[adam-laptop]     -   adminSaysNotReady: false,
+[adam-laptop]         callerDelivery: 'returned',
+[adam-laptop]     +   callerOutcome: null,
+[adam-laptop]     -   callerOutcome: 'unknown',
+[adam-laptop]         classifier: {
+[adam-laptop]           applied: false,
+[adam-laptop]     +     known: false,
+[adam-laptop]     +     outcome: '',
+[adam-laptop]     -     known: true,
+[adam-laptop]     -     outcome: 'unknown',
+[adam-laptop]           zeroAffectedRows: false
+[adam-laptop]         },
+[adam-laptop]         ledger: [
+[adam-laptop]     +     null
+[adam-laptop]     -     'unknown'
+[adam-laptop]         ],
+[adam-laptop]     +   ownerError: null,
+[adam-laptop]     +   snapshot: 'owner_not_ready',
+[adam-laptop]     -   ownerError: 'unknown',
+[adam-laptop]     -   snapshot: 'unknown',
+[adam-laptop]         telemetry: [
+[adam-laptop]     +     'owner_not_ready'
+[adam-laptop]     -     'unknown'
+[adam-laptop]         ]
+[adam-laptop]       }
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected:
+[adam-laptop]     callerDelivery: 'returned'
+[adam-laptop]     callerOutcome: 'unknown'
+[adam-laptop]     telemetry:
+[adam-laptop]       0: 'unknown'
+[adam-laptop]     ledger:
+[adam-laptop]       0: 'unknown'
+[adam-laptop]     snapshot: 'unknown'
+[adam-laptop]     classifier:
+[adam-laptop]       known: true
+[adam-laptop]       outcome: 'unknown'
+[adam-laptop]       applied: false
+[adam-laptop]       zeroAffectedRows: false
+[adam-laptop]     ownerError: 'unknown'
+[adam-laptop]     adminOutcome: 'unknown'
+[adam-laptop]     adminMutationOutcome: 'unknown'
+[adam-laptop]     adminSaysNotReady: false
+[adam-laptop]   actual:
+[adam-laptop]     callerDelivery: 'returned'
+[adam-laptop]     callerOutcome: ~
+[adam-laptop]     telemetry:
+[adam-laptop]       0: 'owner_not_ready'
+[adam-laptop]     ledger:
+[adam-laptop]       0: ~
+[adam-laptop]     snapshot: 'owner_not_ready'
+[adam-laptop]     classifier:
+[adam-laptop]       known: false
+[adam-laptop]       outcome: ''
+[adam-laptop]       applied: false
+[adam-laptop]       zeroAffectedRows: false
+[adam-laptop]     ownerError: ~
+[adam-laptop]     adminOutcome: 'owner_not_ready'
+[adam-laptop]     adminMutationOutcome: ~
+[adam-laptop]     adminSaysNotReady: true
+[adam-laptop]   operator: 'deepStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/control-plane/named-write-unknown-outcome-shape.test.js:183:12)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: every consumer sees the one named unknown outcome - thrown: a transport timeout after delivery
+[adam-laptop] not ok 3 - every consumer sees the one named unknown outcome - thrown: a transport timeout after delivery
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 95.351084
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/control-plane/named-write-unknown-outcome-shape.test.js:180:3'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     Expected values to be strictly deep-equal:
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]       {
+[adam-laptop]     +   adminMutationOutcome: null,
+[adam-laptop]     +   adminOutcome: 'failed',
+[adam-laptop]     -   adminMutationOutcome: 'unknown',
+[adam-laptop]     -   adminOutcome: 'unknown',
+[adam-laptop]         adminSaysNotReady: false,
+[adam-laptop]     +   callerDelivery: 'thrown',
+[adam-laptop]     +   callerOutcome: null,
+[adam-laptop]     -   callerDelivery: 'returned',
+[adam-laptop]     -   callerOutcome: 'unknown',
+[adam-laptop]         classifier: {
+[adam-laptop]           applied: false,
+[adam-laptop]     +     known: false,
+[adam-laptop]     +     outcome: '',
+[adam-laptop]     -     known: true,
+[adam-laptop]     -     outcome: 'unknown',
+[adam-laptop]           zeroAffectedRows: false
+[adam-laptop]         },
+[adam-laptop]         ledger: [
+[adam-laptop]     +     'owner_not_ready'
+[adam-laptop]     -     'unknown'
+[adam-laptop]         ],
+[adam-laptop]     +   ownerError: null,
+[adam-laptop]     +   snapshot: 'rejected',
+[adam-laptop]     -   ownerError: 'unknown',
+[adam-laptop]     -   snapshot: 'unknown',
+[adam-laptop]         telemetry: [
+[adam-laptop]     +     'owner_not_ready'
+[adam-laptop]     -     'unknown'
+[adam-laptop]         ]
+[adam-laptop]       }
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected:
+[adam-laptop]     callerDelivery: 'returned'
+[adam-laptop]     callerOutcome: 'unknown'
+[adam-laptop]     telemetry:
+[adam-laptop]       0: 'unknown'
+[adam-laptop]     ledger:
+[adam-laptop]       0: 'unknown'
+[adam-laptop]     snapshot: 'unknown'
+[adam-laptop]     classifier:
+[adam-laptop]       known: true
+[adam-laptop]       outcome: 'unknown'
+[adam-laptop]       applied: false
+[adam-laptop]       zeroAffectedRows: false
+[adam-laptop]     ownerError: 'unknown'
+[adam-laptop]     adminOutcome: 'unknown'
+[adam-laptop]     adminMutationOutcome: 'unknown'
+[adam-laptop]     adminSaysNotReady: false
+[adam-laptop]   actual:
+[adam-laptop]     callerDelivery: 'thrown'
+[adam-laptop]     callerOutcome: ~
+[adam-laptop]     telemetry:
+[adam-laptop]       0: 'owner_not_ready'
+[adam-laptop]     ledger:
+[adam-laptop]       0: 'owner_not_ready'
+[adam-laptop]     snapshot: 'rejected'
+[adam-laptop]     classifier:
+[adam-laptop]       known: false
+[adam-laptop]       outcome: ''
+[adam-laptop]       applied: false
+[adam-laptop]       zeroAffectedRows: false
+[adam-laptop]     ownerError: ~
+[adam-laptop]     adminOutcome: 'failed'
+[adam-laptop]     adminMutationOutcome: ~
+[adam-laptop]     adminSaysNotReady: false
+[adam-laptop]   operator: 'deepStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/control-plane/named-write-unknown-outcome-shape.test.js:183:12)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: a returned and a thrown unknown arrive as the same typed answer, cause carried
+[adam-laptop] not ok 4 - a returned and a thrown unknown arrive as the same typed answer, cause carried
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 65.706533
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/control-plane/named-write-unknown-outcome-shape.test.js:187:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     returned: a success without the producer receipt: the canonical unknown
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]       {
+[adam-laptop]     +   completionState: undefined,
+[adam-laptop]     -   completionState: 'unknown',
+[adam-laptop]         contractState: 'pending',
+[adam-laptop]     +   countFields: [
+[adam-laptop]     +     'affectedRows',
+[adam-laptop]     +     'partitionResult',
+[adam-laptop]     +     'committed'
+[adam-laptop]     +   ],
+[adam-laptop]     -   countFields: [],
+[adam-laptop]         deferRetry: true,
+[adam-laptop]         failureCode: 'partition_write_outcome_unknown',
+[adam-laptop]     +   hasCause: false,
+[adam-laptop]     -   hasCause: true,
+[adam-laptop]         nextAction: 'retry',
+[adam-laptop]     +   outcome: undefined,
+[adam-laptop]     -   outcome: 'unknown',
+[adam-laptop]         pendingEntry: true,
+[adam-laptop]         pendingOutcome: 'unknown',
+[adam-laptop]         success: false,
+[adam-laptop]         unknownByPredicate: true
+[adam-laptop]       }
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected:
+[adam-laptop]     success: false
+[adam-laptop]     outcome: 'unknown'
+[adam-laptop]     completionState: 'unknown'
+[adam-laptop]     deferRetry: true
+[adam-laptop]     failureCode: 'partition_write_outcome_unknown'
+[adam-laptop]     contractState: 'pending'
+[adam-laptop]     nextAction: 'retry'
+[adam-laptop]     pendingOutcome: 'unknown'
+[adam-laptop]     pendingEntry: true
+[adam-laptop]     unknownByPredicate: true
+[adam-laptop]     countFields:
+[adam-laptop]     hasCause: true
+[adam-laptop]   actual:
+[adam-laptop]     success: false
+[adam-laptop]     deferRetry: true
+[adam-laptop]     failureCode: 'partition_write_outcome_unknown'
+[adam-laptop]     contractState: 'pending'
+[adam-laptop]     nextAction: 'retry'
+[adam-laptop]     pendingOutcome: 'unknown'
+[adam-laptop]     pendingEntry: true
+[adam-laptop]     unknownByPredicate: true
+[adam-laptop]     countFields:
+[adam-laptop]       0: 'affectedRows'
+[adam-laptop]       1: 'partitionResult'
+[adam-laptop]       2: 'committed'
+[adam-laptop]     hasCause: false
+[adam-laptop]   operator: 'deepStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/control-plane/named-write-unknown-outcome-shape.test.js:195:12)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] 1..4
+[adam-laptop] # tests 4
+[adam-laptop] # suites 0
+[adam-laptop] # pass 0
+[adam-laptop] # fail 4
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 342.006932
+[adam-laptop] # time=1359ms
+[adam-laptop] not ok test/control-plane/control-plane-mutation-outcome-classifier.test.js (165 assertions, 1465ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 14
+[adam-laptop] # Subtest: control-plane mutation classification exhaustively owns every gateway outcome
+[adam-laptop]     not ok 1 - the apply-effect oracle must cover every gateway outcome
+[adam-laptop]       ---
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,8 +1,9 @@
+[adam-laptop]          Array [
+[adam-laptop]            "applied",
+[adam-laptop]            "deferred",
+[adam-laptop]            "no_op",
+[adam-laptop]            "observed_state_changed",
+[adam-laptop]            "owner_not_ready",
+[adam-laptop]            "rejected",
+[adam-laptop]         +  "undefined",
+[adam-laptop]          ]
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/control-plane/control-plane-mutation-outcome-classifier.test.js
+[adam-laptop]         lineNumber: 60
+[adam-laptop]         columnNumber: 7
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: >
+[adam-laptop]         Test.<anonymous>
+[adam-laptop]         (test/control-plane/control-plane-mutation-outcome-classifier.test.js:60:7)
+[adam-laptop]       
+[adam-laptop]         test/control-plane/control-plane-mutation-outcome-classifier.test.js:57:1
+[adam-laptop]       source: |2
+[adam-laptop]           (t) => {
+[adam-laptop]             const outcomes = Object.values(CONTROL_PLANE_MUTATION_OUTCOME).sort();
+[adam-laptop]             t.same(
+[adam-laptop]         ------^
+[adam-laptop]               Object.keys(EXPECTED_EFFECT_BY_OUTCOME).sort(),
+[adam-laptop]               outcomes,
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     ok 2 - applied should be recognized
+[adam-laptop]     ok 3 - applied classification should be immutable
+[adam-laptop]     ok 4 - applied should have one canonical effect tuple
+[adam-laptop]     ok 5 - deferred should be recognized
+[adam-laptop]     ok 6 - deferred classification should be immutable
+[adam-laptop]     ok 7 - deferred should have one canonical effect tuple
+[adam-laptop]     ok 8 - no_op should be recognized
+[adam-laptop]     ok 9 - no_op classification should be immutable
+[adam-laptop]     ok 10 - no_op should have one canonical effect tuple
+[adam-laptop]     ok 11 - observed_state_changed should be recognized
+[adam-laptop]     ok 12 - observed_state_changed classification should be immutable
+[adam-laptop]     ok 13 - observed_state_changed should have one canonical effect tuple
+[adam-laptop]     ok 14 - owner_not_ready should be recognized
+[adam-laptop]     ok 15 - owner_not_ready classification should be immutable
+[adam-laptop]     ok 16 - owner_not_ready should have one canonical effect tuple
+[adam-laptop]     ok 17 - rejected should be recognized
+[adam-laptop]     ok 18 - rejected classification should be immutable
+[adam-laptop]     ok 19 - rejected should have one canonical effect tuple
+[adam-laptop]     1..19
+[adam-laptop] not ok 1 - control-plane mutation classification exhaustively owns every gateway outcome # time=52.134ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/control-plane/control-plane-mutation-outcome-classifier.test.js
+[adam-laptop]     lineNumber: 57
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: >
+[adam-laptop]     )).href;
+[adam-laptop]   
+[adam-laptop]   
+[adam-laptop]     test('control-plane mutation classification exhaustively owns every gateway
+[adam-laptop]     outcome',
+[adam-laptop]   
+[adam-laptop]     ^
+[adam-laptop]       (t) => {
+[adam-laptop]         const outcomes = Object.values(CONTROL_PLANE_MUTATION_OUTCOME).sort();
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] # Subtest: an unknown outcome carries no count; a contradictory outcome fails closed
+[adam-laptop]     not ok 1 - the unknown outcome is named and carries no count
+[adam-laptop]       ---
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,6 +1,6 @@
+[adam-laptop]          Object {
+[adam-laptop]         -  "known": true,
+[adam-laptop]         -  "outcome": "unknown",
+[adam-laptop]         -  "failed": true,
+[adam-laptop]         -  "affectedRowsPresent": false,
+[adam-laptop]         +  "known": false,
+[adam-laptop]         +  "outcome": "",
+[adam-laptop]         +  "failed": false,
+[adam-laptop]         +  "affectedRowsPresent": true,
+[adam-laptop]          }
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/control-plane/control-plane-mutation-outcome-classifier.test.js
+[adam-laptop]         lineNumber: 94
+[adam-laptop]         columnNumber: 5
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: >
+[adam-laptop]         Test.<anonymous>
+[adam-laptop]         (test/control-plane/control-plane-mutation-outcome-classifier.test.js:94:5)
+[adam-laptop]       
+[adam-laptop]         test/control-plane/control-plane-mutation-outcome-classifier.test.js:89:1
+[adam-laptop]       source: >2
+[adam-laptop]             partitionResult: {affectedRows: 0},
+[adam-laptop]           });
+[adam-laptop]           t.same({known: unknown.known, outcome: unknown.outcome, applied: unknown.applied,
+[adam-laptop]         ----^
+[adam-laptop]             failed: unknown.failed, affectedRowsPresent: unknown.affectedRowsPresent,
+[adam-laptop]             zeroAffectedRows: unknown.zeroAffectedRows}, {known: true, outcome: 'unknown',
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     not ok 2 - applied outcome on a failed answer: fails closed
+[adam-laptop]       ---
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,5 +1,5 @@
+[adam-laptop]          Object {
+[adam-laptop]         -  "valid": false,
+[adam-laptop]         -  "known": false,
+[adam-laptop]         -  "accepted": false,
+[adam-laptop]         +  "valid": true,
+[adam-laptop]         +  "known": true,
+[adam-laptop]         +  "accepted": true,
+[adam-laptop]          }
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/control-plane/control-plane-mutation-outcome-classifier.test.js
+[adam-laptop]         lineNumber: 106
+[adam-laptop]         columnNumber: 7
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: >
+[adam-laptop]         Test.<anonymous>
+[adam-laptop]         (test/control-plane/control-plane-mutation-outcome-classifier.test.js:106:7)
+[adam-laptop]       
+[adam-laptop]         test/control-plane/control-plane-mutation-outcome-classifier.test.js:89:1
+[adam-laptop]       source: >2
+[adam-laptop]           ]) {
+[adam-laptop]             const view = classifyControlPlaneMutationResult(result);
+[adam-laptop]             t.same({valid: view.valid, known: view.known, accepted: view.accepted,
+[adam-laptop]         ------^
+[adam-laptop]               applied: view.applied}, {valid: false, known: false, accepted: false, applied: false},
+[adam-laptop]             `${label}: fails closed`);
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     ok 3 - unknown outcome on a successful answer: fails closed
+[adam-laptop]     1..3
+[adam-laptop] not ok 2 - an unknown outcome carries no count; a contradictory outcome fails closed # time=15.633ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/control-plane/control-plane-mutation-outcome-classifier.test.js
+[adam-laptop]     lineNumber: 89
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: >
+[adam-laptop]     // count (an unproven count is not an observation), and an outcome that
+[adam-laptop]   
+[adam-laptop]     // contradicts the answer's own success fails closed.
+[adam-laptop]   
+[adam-laptop]     test('an unknown outcome carries no count; a contradictory outcome fails
+[adam-laptop]     closed', (t) => {
+[adam-laptop]   
+[adam-laptop]     ^
+[adam-laptop]       const unknown = classifyControlPlaneMutationResult({
+[adam-laptop]         outcome: 'unknown', success: false, affectedRows: 0,
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] # Subtest: control-plane mutation apply classification rejects non-apply envelopes without relying on success:false
+[adam-laptop]     ok 1 - no_op is not a durable apply when success is absent
+[adam-laptop]     ok 2 - deferred is not a durable apply when success is absent
+[adam-laptop]     ok 3 - legacy zero-row envelopes remain non-applies
+[adam-laptop]     ok 4 - legacy successful envelopes without typed outcomes remain compatible
+[adam-laptop]     1..4
+[adam-laptop] ok 3 - control-plane mutation apply classification rejects non-apply envelopes without relying on success:false # time=0.871ms
+[adam-laptop] 
+[adam-laptop] # Subtest: control-plane mutation classification rejects inherited and unknown outcomes
+[adam-laptop]     ok 1 - should be equal
+[adam-laptop]     ok 2 - should be equal
+[adam-laptop]     ok 3 - should be equal
+[adam-laptop]     ok 4 - should be equal
+[adam-laptop]     ok 5 - should be equal
+[adam-laptop]     ok 6 - should be equal
+[adam-laptop]     ok 7 - should be equal
+[adam-laptop]     ok 8 - should be equal
+[adam-laptop]     1..8
+[adam-laptop] ok 4 - control-plane mutation classification rejects inherited and unknown outcomes # time=1.209ms
+[adam-laptop] 
+[adam-laptop] # Subtest: control-plane mutation classification rejects proxies without running traps
+[adam-laptop]     ok 1 - should be equal
+[adam-laptop]     ok 2 - should be equal
+[adam-laptop]     ok 3 - should be equal
+[adam-laptop]     ok 4 - should be equal
+[adam-laptop]     ok 5 - proxy rejection precedes property inspection
+[adam-laptop]     1..5
+[adam-laptop] ok 5 - control-plane mutation classification rejects proxies without running traps # time=0.894ms
+[adam-laptop] 
+[adam-laptop] # Subtest: control-plane mutation view reads every gateway field without accessors
+[adam-laptop]     ok 1 - outcome accessor must invalidate
+[adam-laptop]     ok 2 - outcome accessor must fail closed at the gateway
+[adam-laptop]     ok 3 - outcome accessor must never execute
+[adam-laptop]     ok 4 - success accessor must invalidate
+[adam-laptop]     ok 5 - success accessor must fail closed at the gateway
+[adam-laptop]     ok 6 - success accessor must never execute
+[adam-laptop]     ok 7 - partitionResult accessor must invalidate
+[adam-laptop]     ok 8 - partitionResult accessor must fail closed at the gateway
+[adam-laptop]     ok 9 - partitionResult accessor must never execute
+[adam-laptop]     ok 10 - affectedRows accessor must invalidate
+[adam-laptop]     ok 11 - affectedRows accessor must fail closed at the gateway
+[adam-laptop]     ok 12 - affectedRows accessor must never execute
+[adam-laptop]     ok 13 - completionState accessor must invalidate
+[adam-laptop]     ok 14 - completionState accessor must fail closed at the gateway
+[adam-laptop]     ok 15 - completionState accessor must never execute
+[adam-laptop]     ok 16 - pressureAction accessor must invalidate
+[adam-laptop]     ok 17 - pressureAction accessor must fail closed at the gateway
+[adam-laptop]     ok 18 - pressureAction accessor must never execute
+[adam-laptop]     ok 19 - should be equal
+[adam-laptop]     ok 20 - nested affectedRows accessor must never execute
+[adam-laptop]     1..20
+[adam-laptop] ok 6 - control-plane mutation view reads every gateway field without accessors # time=4.525ms
+[adam-laptop] 
+[adam-laptop] # Subtest: nullish partition containers preserve top-level row-count compatibility
+[adam-laptop]     ok 1 - nullish partition container remains a valid legacy shape
+[adam-laptop]     ok 2 - should be equal
+[adam-laptop]     ok 3 - should be equal
+[adam-laptop]     ok 4 - nullish partition container remains a valid legacy shape
+[adam-laptop]     ok 5 - should be equal
+[adam-laptop]     ok 6 - should be equal
+[adam-laptop]     ok 7 - nullish partition container remains a valid legacy shape
+[adam-laptop]     ok 8 - should be equal
+[adam-laptop]     ok 9 - should be equal
+[adam-laptop]     ok 10 - nullish partition container remains a valid legacy shape
+[adam-laptop]     ok 11 - should be equal
+[adam-laptop]     ok 12 - should be equal
+[adam-laptop]     ok 13 - an empty plain partition result falls back to the top-level count
+[adam-laptop]     ok 14 - a present nested count retains precedence
+[adam-laptop]     1..14
+[adam-laptop] ok 7 - nullish partition containers preserve top-level row-count compatibility # time=2.57ms
+[adam-laptop] 
+[adam-laptop] # Subtest: ordinary legacy envelopes ignore Object.prototype pollution
+[adam-laptop]     ok 1 - should be equal
+[adam-laptop]     ok 2 - should be equal
+[adam-laptop]     ok 3 - should be equivalent
+[adam-laptop]     ok 4 - custom-prototype envelopes remain invalid
+[adam-laptop]     1..4
+[adam-laptop] ok 8 - ordinary legacy envelopes ignore Object.prototype pollution # time=2.44ms
+[adam-laptop] 
+[adam-laptop] # Subtest: effect table construction resists pre-import prototype pollution
+[adam-laptop]     ok 1 - fresh module import should pass
+[adam-laptop]     ok 2 - should be equal
+[adam-laptop]     1..2
+[adam-laptop] ok 9 - effect table construction resists pre-import prototype pollution # time=101.542ms
+[adam-laptop] 
+[adam-laptop] # Subtest: mutation view reads each gateway data field exactly once
+[adam-laptop]     ok 1 - descriptor census should pass
+[adam-laptop]     ok 2 - should be equivalent
+[adam-laptop]     1..2
+[adam-laptop] ok 10 - mutation view reads each gateway data field exactly once # time=92.67ms
+[adam-laptop] 
+[adam-laptop] # Subtest: mutation view accepts null prototypes and ignores inherited accessors
+[adam-laptop]     ok 1 - null-prototype root and partition records are valid data records
+[adam-laptop]     ok 2 - inherited accessors never execute
+[adam-laptop]     ok 3 - should be equal
+[adam-laptop]     ok 4 - should be equal
+[adam-laptop]     1..4
+[adam-laptop] ok 11 - mutation view accepts null prototypes and ignores inherited accessors # time=0.99ms
+[adam-laptop] 
+[adam-laptop] # Subtest: mutation view rejects hostile scalar values without executing hooks
+[adam-laptop]     ok 1 - outcome rejects one hostile scalar
+[adam-laptop]     ok 2 - outcome rejects one hostile scalar
+[adam-laptop]     ok 3 - outcome rejects one hostile scalar
+[adam-laptop]     ok 4 - outcome rejects one hostile scalar
+[adam-laptop]     ok 5 - outcome rejects one hostile scalar
+[adam-laptop]     ok 6 - outcome rejects one hostile scalar
+[adam-laptop]     ok 7 - success rejects one hostile scalar
+[adam-laptop]     ok 8 - success rejects one hostile scalar
+[adam-laptop]     ok 9 - success rejects one hostile scalar
+[adam-laptop]     ok 10 - success rejects one hostile scalar
+[adam-laptop]     ok 11 - success rejects one hostile scalar
+[adam-laptop]     ok 12 - success rejects one hostile scalar
+[adam-laptop]     ok 13 - affectedRows rejects one hostile scalar
+[adam-laptop]     ok 14 - affectedRows rejects one hostile scalar
+[adam-laptop]     ok 15 - affectedRows rejects one hostile scalar
+[adam-laptop]     ok 16 - affectedRows rejects one hostile scalar
+[adam-laptop]     ok 17 - affectedRows rejects one hostile scalar
+[adam-laptop]     ok 18 - affectedRows rejects one hostile scalar
+[adam-laptop]     ok 19 - completionState rejects one hostile scalar
+[adam-laptop]     ok 20 - completionState rejects one hostile scalar
+[adam-laptop]     ok 21 - completionState rejects one hostile scalar
+[adam-laptop]     ok 22 - completionState rejects one hostile scalar
+[adam-laptop]     ok 23 - completionState rejects one hostile scalar
+[adam-laptop]     ok 24 - completionState rejects one hostile scalar
+[adam-laptop]     ok 25 - pressureAction rejects one hostile scalar
+[adam-laptop]     ok 26 - pressureAction rejects one hostile scalar
+[adam-laptop]     ok 27 - pressureAction rejects one hostile scalar
+[adam-laptop]     ok 28 - pressureAction rejects one hostile scalar
+[adam-laptop]     ok 29 - pressureAction rejects one hostile scalar
+[adam-laptop]     ok 30 - pressureAction rejects one hostile scalar
+[adam-laptop]     ok 31 - hostile scalar hooks and traps never execute
+[adam-laptop]     1..31
+[adam-laptop] ok 12 - mutation view rejects hostile scalar values without executing hooks # time=2.961ms
+[adam-laptop] 
+[adam-laptop] # Subtest: mutation view uses captured reflection and numeric intrinsics
+[adam-laptop]     ok 1 - should be equal
+[adam-laptop]     ok 2 - should be equal
+[adam-laptop]     ok 3 - should be equal
+[adam-laptop]     ok 4 - should be equal
+[adam-laptop]     1..4
+[adam-laptop] ok 13 - mutation view uses captured reflection and numeric intrinsics # time=0.71ms
+[adam-laptop] 
+[adam-laptop] # Subtest: normalized mutation view is detached from later source mutation
+[adam-laptop]     ok 1 - should match pattern
+[adam-laptop]     ok 2 - should be equivalent
+[adam-laptop]     ok 3 - the normalized view cannot be mutated
+[adam-laptop]     ok 4 - the derived outcome snapshot cannot be mutated
+[adam-laptop]     1..4
+[adam-laptop] ok 14 - normalized mutation view is detached from later source mutation # time=1.887ms
+[adam-laptop] 
+[adam-laptop] # Subtest: control-plane mutation classification rejects coercive row counts
+[adam-laptop]     ok 1 - invalid present row counts fail closed
+[adam-laptop]     ok 2 - invalid present row counts fail closed
+[adam-laptop]     ok 3 - invalid present row counts fail closed
+[adam-laptop]     ok 4 - invalid present row counts fail closed
+[adam-laptop]     ok 5 - invalid present row counts fail closed
+[adam-laptop]     ok 6 - invalid present row counts fail closed
+[adam-laptop]     ok 7 - invalid present row counts fail closed
+[adam-laptop]     ok 8 - invalid present row counts fail closed
+[adam-laptop]     ok 9 - invalid present row counts fail closed
+[adam-laptop]     ok 10 - invalid present row counts fail closed
+[adam-laptop]     ok 11 - invalid present row counts fail closed
+[adam-laptop]     ok 12 - invalid present row counts fail closed
+[adam-laptop]     ok 13 - invalid present row counts fail closed
+[adam-laptop]     ok 14 - row-count classification never coerces objects
+[adam-laptop]     ok 15 - should be equal
+[adam-laptop]     ok 16 - classification never invokes outcome accessors
+[adam-laptop]     ok 17 - captured safe-integer validation preserves a valid count when the mutable intrinsic gives the opposite answer
+[adam-laptop]     ok 18 - captured safe-integer validation still rejects a fractional count when the mutable intrinsic admits it
+[adam-laptop]     1..18
+[adam-laptop] ok 15 - control-plane mutation classification rejects coercive row counts # time=1.887ms
+[adam-laptop] 
+[adam-laptop] # Subtest: gateway normalization consumes the validated classifier effect
+[adam-laptop]     ok 1 - invalid present row counts fail closed at the production seam
+[adam-laptop]     ok 2 - zero-row behavior does not depend on the mutable global intrinsic
+[adam-laptop]     ok 3 - the gateway outcome snapshot is immutable
+[adam-laptop]     1..3
+[adam-laptop] ok 16 - gateway normalization consumes the validated classifier effect # time=0.647ms
+[adam-laptop] 
+[adam-laptop] # Subtest: gateway completion and outcome consume one normalized precedence view
+[adam-laptop]     ok 1 - known outcome and explicit completion retain independent precedence
+[adam-laptop]     ok 2 - pressure owns an untyped failed outcome and its completion
+[adam-laptop]     ok 3 - should be equivalent
+[adam-laptop]     1..3
+[adam-laptop] ok 17 - gateway completion and outcome consume one normalized precedence view # time=0.732ms
+[adam-laptop] 
+[adam-laptop] 1..17
+[adam-laptop] # { total: 148, pass: 145, fail: 3 }
+[adam-laptop] # time=323.74ms
+[adam-laptop] not ok test/raft/authoritative-row-mutation-outcome-classifier.test.js (127 assertions, 1490ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 14
+[adam-laptop] # Subtest: Raft authoritative-row completion has an explicit disposition for every canonical mutation outcome
+[adam-laptop]     not ok 1 - the Raft decision table must exhaust the frozen gateway enum
+[adam-laptop]       ---
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,8 +1,9 @@
+[adam-laptop]          Array [
+[adam-laptop]            "applied",
+[adam-laptop]            "deferred",
+[adam-laptop]            "no_op",
+[adam-laptop]            "observed_state_changed",
+[adam-laptop]            "owner_not_ready",
+[adam-laptop]            "rejected",
+[adam-laptop]         +  "undefined",
+[adam-laptop]          ]
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/raft/authoritative-row-mutation-outcome-classifier.test.js
+[adam-laptop]         lineNumber: 62
+[adam-laptop]         columnNumber: 5
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: >
+[adam-laptop]         Test.<anonymous>
+[adam-laptop]         (test/raft/authoritative-row-mutation-outcome-classifier.test.js:62:5)
+[adam-laptop]       
+[adam-laptop]         test/raft/authoritative-row-mutation-outcome-classifier.test.js:60:1
+[adam-laptop]       source: |
+[adam-laptop]         test('Raft authoritative-row completion has an explicit disposition for ' +
+[adam-laptop]           'every canonical mutation outcome', async (t) => {
+[adam-laptop]           t.same(
+[adam-laptop]         ----^
+[adam-laptop]             Object.keys(EXPECTED_REASON_BY_OUTCOME).sort(),
+[adam-laptop]             Object.values(CONTROL_PLANE_MUTATION_OUTCOME).sort(),
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     ok 2 - applied should retain its Raft disposition
+[adam-laptop]     ok 3 - applied should use the canonical apply effect
+[adam-laptop]     ok 4 - applied should clear pending state
+[adam-laptop]     ok 5 - applied should record persistence
+[adam-laptop]     ok 6 - applied should not arm a bounded retry
+[adam-laptop]     ok 7 - applied should refresh only for observed-state changes
+[adam-laptop]     ok 8 - no_op should retain its Raft disposition
+[adam-laptop]     ok 9 - no_op should use the canonical apply effect
+[adam-laptop]     ok 10 - no_op should preserve pending state
+[adam-laptop]     ok 11 - no_op should not record persistence
+[adam-laptop]     ok 12 - no_op should arm a bounded retry
+[adam-laptop]     ok 13 - no_op should refresh only for observed-state changes
+[adam-laptop]     ok 14 - deferred should retain its Raft disposition
+[adam-laptop]     ok 15 - deferred should use the canonical apply effect
+[adam-laptop]     ok 16 - deferred should preserve pending state
+[adam-laptop]     ok 17 - deferred should not record persistence
+[adam-laptop]     ok 18 - deferred should arm a bounded retry
+[adam-laptop]     ok 19 - deferred should refresh only for observed-state changes
+[adam-laptop]     ok 20 - rejected should retain its Raft disposition
+[adam-laptop]     ok 21 - rejected should use the canonical apply effect
+[adam-laptop]     ok 22 - rejected should preserve pending state
+[adam-laptop]     ok 23 - rejected should not record persistence
+[adam-laptop]     ok 24 - rejected should arm a bounded retry
+[adam-laptop]     ok 25 - rejected should refresh only for observed-state changes
+[adam-laptop]     ok 26 - owner_not_ready should retain its Raft disposition
+[adam-laptop]     ok 27 - owner_not_ready should use the canonical apply effect
+[adam-laptop]     ok 28 - owner_not_ready should preserve pending state
+[adam-laptop]     ok 29 - owner_not_ready should not record persistence
+[adam-laptop]     ok 30 - owner_not_ready should arm a bounded retry
+[adam-laptop]     ok 31 - owner_not_ready should refresh only for observed-state changes
+[adam-laptop]     ok 32 - observed_state_changed should retain its Raft disposition
+[adam-laptop]     ok 33 - observed_state_changed should use the canonical apply effect
+[adam-laptop]     ok 34 - observed_state_changed should preserve pending state
+[adam-laptop]     ok 35 - observed_state_changed should not record persistence
+[adam-laptop]     ok 36 - observed_state_changed should arm a bounded retry
+[adam-laptop]     ok 37 - observed_state_changed should refresh only for observed-state changes
+[adam-laptop]     1..37
+[adam-laptop] not ok 1 - Raft authoritative-row completion has an explicit disposition for every canonical mutation outcome # time=68.464ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/raft/authoritative-row-mutation-outcome-classifier.test.js
+[adam-laptop]     lineNumber: 60
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: |
+[adam-laptop]     }
+[adam-laptop]   
+[adam-laptop]     test('Raft authoritative-row completion has an explicit disposition for ' +
+[adam-laptop]     ^
+[adam-laptop]       'every canonical mutation outcome', async (t) => {
+[adam-laptop]       t.same(
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] # Subtest: Raft authoritative-row completion preserves valid legacy results and fails closed on contradictory or coercive envelopes
+[adam-laptop]     ok 1 - legacy success: apply effect
+[adam-laptop]     ok 2 - legacy success: typed Raft reason
+[adam-laptop]     ok 3 - legacy success: persisted state
+[adam-laptop]     ok 4 - legacy success: pending state
+[adam-laptop]     ok 5 - legacy success: retry ownership
+[adam-laptop]     ok 6 - legacy positive nested rows: apply effect
+[adam-laptop]     ok 7 - legacy positive nested rows: typed Raft reason
+[adam-laptop]     ok 8 - legacy positive nested rows: persisted state
+[adam-laptop]     ok 9 - legacy positive nested rows: pending state
+[adam-laptop]     ok 10 - legacy positive nested rows: retry ownership
+[adam-laptop]     ok 11 - legacy positive top-level rows: apply effect
+[adam-laptop]     ok 12 - legacy positive top-level rows: typed Raft reason
+[adam-laptop]     ok 13 - legacy positive top-level rows: persisted state
+[adam-laptop]     ok 14 - legacy positive top-level rows: pending state
+[adam-laptop]     ok 15 - legacy positive top-level rows: retry ownership
+[adam-laptop]     ok 16 - legacy zero rows: apply effect
+[adam-laptop]     ok 17 - legacy zero rows: typed Raft reason
+[adam-laptop]     ok 18 - legacy zero rows: persisted state
+[adam-laptop]     ok 19 - legacy zero rows: pending state
+[adam-laptop]     ok 20 - legacy zero rows: retry ownership
+[adam-laptop]     ok 21 - legacy failure: apply effect
+[adam-laptop]     ok 22 - legacy failure: typed Raft reason
+[adam-laptop]     ok 23 - legacy failure: persisted state
+[adam-laptop]     ok 24 - legacy failure: pending state
+[adam-laptop]     ok 25 - legacy failure: retry ownership
+[adam-laptop]     ok 26 - unknown typed success: apply effect
+[adam-laptop]     ok 27 - unknown typed success: typed Raft reason
+[adam-laptop]     ok 28 - unknown typed success: persisted state
+[adam-laptop]     ok 29 - unknown typed success: pending state
+[adam-laptop]     ok 30 - unknown typed success: retry ownership
+[adam-laptop]     ok 31 - contradictory applied failure: apply effect
+[adam-laptop]     ok 32 - contradictory applied failure: typed Raft reason
+[adam-laptop]     ok 33 - contradictory applied failure: persisted state
+[adam-laptop]     ok 34 - contradictory applied failure: pending state
+[adam-laptop]     ok 35 - contradictory applied failure: retry ownership
+[adam-laptop]     ok 36 - string row count: apply effect
+[adam-laptop]     ok 37 - string row count: typed Raft reason
+[adam-laptop]     ok 38 - string row count: persisted state
+[adam-laptop]     ok 39 - string row count: pending state
+[adam-laptop]     ok 40 - string row count: retry ownership
+[adam-laptop]     ok 41 - boxed row count: apply effect
+[adam-laptop]     ok 42 - boxed row count: typed Raft reason
+[adam-laptop]     ok 43 - boxed row count: persisted state
+[adam-laptop]     ok 44 - boxed row count: pending state
+[adam-laptop]     ok 45 - boxed row count: retry ownership
+[adam-laptop]     ok 46 - negative row count: apply effect
+[adam-laptop]     ok 47 - negative row count: typed Raft reason
+[adam-laptop]     ok 48 - negative row count: persisted state
+[adam-laptop]     ok 49 - negative row count: pending state
+[adam-laptop]     ok 50 - negative row count: retry ownership
+[adam-laptop]     ok 51 - negative zero row count: apply effect
+[adam-laptop]     ok 52 - negative zero row count: typed Raft reason
+[adam-laptop]     ok 53 - negative zero row count: persisted state
+[adam-laptop]     ok 54 - negative zero row count: pending state
+[adam-laptop]     ok 55 - negative zero row count: retry ownership
+[adam-laptop]     ok 56 - unsafe row count: apply effect
+[adam-laptop]     ok 57 - unsafe row count: typed Raft reason
+[adam-laptop]     ok 58 - unsafe row count: persisted state
+[adam-laptop]     ok 59 - unsafe row count: pending state
+[adam-laptop]     ok 60 - unsafe row count: retry ownership
+[adam-laptop]     1..60
+[adam-laptop] ok 2 - Raft authoritative-row completion preserves valid legacy results and fails closed on contradictory or coercive envelopes # time=14.41ms
+[adam-laptop] 
+[adam-laptop] # Subtest: Raft authoritative-row completion rejects inherited, accessor, and proxy envelopes without invoking hostile code
+[adam-laptop]     ok 1 - outcome accessor should fail closed
+[adam-laptop]     ok 2 - outcome accessor should not record persistence
+[adam-laptop]     ok 3 - outcome accessor should preserve pending state
+[adam-laptop]     ok 4 - outcome accessor should arm a retry
+[adam-laptop]     ok 5 - affectedRows accessor should fail closed
+[adam-laptop]     ok 6 - affectedRows accessor should not record persistence
+[adam-laptop]     ok 7 - affectedRows accessor should preserve pending state
+[adam-laptop]     ok 8 - affectedRows accessor should arm a retry
+[adam-laptop]     ok 9 - inherited fields should fail closed
+[adam-laptop]     ok 10 - inherited fields should not record persistence
+[adam-laptop]     ok 11 - inherited fields should preserve pending state
+[adam-laptop]     ok 12 - inherited fields should arm a retry
+[adam-laptop]     ok 13 - proxy should fail closed
+[adam-laptop]     ok 14 - proxy should not record persistence
+[adam-laptop]     ok 15 - proxy should preserve pending state
+[adam-laptop]     ok 16 - proxy should arm a retry
+[adam-laptop]     ok 17 - retry accessor does not invalidate the canonical mutation fields
+[adam-laptop]     ok 18 - retry accessor is ignored in favor of bounded backoff
+[adam-laptop]     ok 19 - mutation and retry accessors never execute
+[adam-laptop]     ok 20 - only async promise assimilation reads the proxy; classification does not
+[adam-laptop]     1..20
+[adam-laptop] ok 3 - Raft authoritative-row completion rejects inherited, accessor, and proxy envelopes without invoking hostile code # time=5.643ms
+[adam-laptop] 
+[adam-laptop] # Subtest: Raft authoritative-row completion accepts only an own finite retry hint
+[adam-laptop]     ok 1 - an own finite retry hint can widen the bounded delay
+[adam-laptop]     ok 2 - coercive or non-positive retry hints use bounded backoff
+[adam-laptop]     ok 3 - coercive or non-positive retry hints use bounded backoff
+[adam-laptop]     ok 4 - coercive or non-positive retry hints use bounded backoff
+[adam-laptop]     ok 5 - coercive or non-positive retry hints use bounded backoff
+[adam-laptop]     ok 6 - coercive or non-positive retry hints use bounded backoff
+[adam-laptop]     1..6
+[adam-laptop] ok 4 - Raft authoritative-row completion accepts only an own finite retry hint # time=4.413ms
+[adam-laptop] 
+[adam-laptop] 1..4
+[adam-laptop] # { total: 123, pass: 122, fail: 1 }
+[adam-laptop] # time=123.371ms
+[adam-laptop] not ok test/query/provisioning-deadline-error-message.test.js (4 assertions, 2210ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: the real assertProvisioningAttemptBudget answers a typed, non-empty error
+[adam-laptop] ok 1 - the real assertProvisioningAttemptBudget answers a typed, non-empty error
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 1.836968
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: CREATE TABLE provisioning past its deadline rejects with the typed, non-empty error
+[adam-laptop] ok 2 - CREATE TABLE provisioning past its deadline rejects with the typed, non-empty error
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 30.166639
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: a managed split child provisioning past its deadline answers the same typed error
+[adam-laptop] not ok 3 - a managed split child provisioning past its deadline answers the same typed error
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 1.415194
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/query/provisioning-deadline-error-message.test.js:91:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     the typed timeout code
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]     + undefined
+[adam-laptop]     - 'TIMEOUT'
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: 'TIMEOUT'
+[adam-laptop]   operator: 'strictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     Object.assertTypedNonEmptyTimeout (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/query/provisioning-deadline-error-message.test.js:36:10)
+[adam-laptop]     expectedException (node:assert:576:17)
+[adam-laptop]     expectsError (node:assert:701:21)
+[adam-laptop]     Function.throws (node:assert:757:3)
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/query/provisioning-deadline-error-message.test.js:92:10)
+[adam-laptop]     Test.runInAsyncScope (node:async_hooks:214:14)
+[adam-laptop]     Test.run (node:internal/test_runner/test:1047:25)
+[adam-laptop]     Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+[adam-laptop]     Test.postRun (node:internal/test_runner/test:1173:19)
+[adam-laptop]     Test.run (node:internal/test_runner/test:1101:12)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: every QUERY_ERROR_MSG member referenced under src is defined
+[adam-laptop] not ok 4 - every QUERY_ERROR_MSG member referenced under src is defined
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 52.533202
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/query/provisioning-deadline-error-message.test.js:104:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     references to undefined error messages answer empty errors
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]     + [
+[adam-laptop]     +   'src/partition/managed-split-workflow-state-methods.js:86 QUERY_ERROR_MSG.TABLE_PARTITION_TARGET_NODE_WAIT_TIMEOUT'
+[adam-laptop]     + ]
+[adam-laptop]     - []
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected:
+[adam-laptop]   actual:
+[adam-laptop]     0: 'src/partition/managed-split-workflow-state-methods.js:86 QUERY_ERROR_MSG.TABLE_PARTITION_TARGET_NODE_WAIT_TIMEOUT'
+[adam-laptop]   operator: 'deepStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/query/provisioning-deadline-error-message.test.js:115:10)
+[adam-laptop]     Test.runInAsyncScope (node:async_hooks:214:14)
+[adam-laptop]     Test.run (node:internal/test_runner/test:1047:25)
+[adam-laptop]     Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+[adam-laptop]     Test.postRun (node:internal/test_runner/test:1173:19)
+[adam-laptop]     Test.run (node:internal/test_runner/test:1101:12)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] 1..4
+[adam-laptop] # tests 4
+[adam-laptop] # suites 0
+[adam-laptop] # pass 2
+[adam-laptop] # fail 2
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 113.53875
+[adam-laptop] # time=2210ms
+[adam-laptop] not ok test/constants/message-table-census.test.js (1 assertions, 4323ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: every message-table member referenced under src is defined
+[adam-laptop] not ok 1 - every message-table member referenced under src is defined
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 4036.963861
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/constants/message-table-census.test.js:138:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     references to members no message table defines (3163 accesses checked; not checked: 3 computed, 66 on tables bound otherwise)
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]     + [
+[adam-laptop]     +   'src/bootstrap/owners/service-leader-readiness-owner.js:594 BOOTSTRAP_API_LOG_MSG.LEADERS_READY',
+[adam-laptop]     +   'src/bootstrap/shared/node-state-publication-outcome.js:115 JOINING_ERROR_MSG.CONTROL_PLANE_MESSAGE_WAS_NOT_ACKNOWLEDGED',
+[adam-laptop]     +   'src/partition/managed-split-workflow-state-methods.js:86 QUERY_ERROR_MSG.TABLE_PARTITION_TARGET_NODE_WAIT_TIMEOUT',
+[adam-laptop]     +   'src/transport/message-router-connection-close-reconnect.js:391 ROUTER_LOG_MSG.CONNECTION_PING_TIMEOUT_SKIPPED_ALIVE',
+[adam-laptop]     +   'src/transport/message-router-peer-liveness.js:95 ROUTER_LOG_MSG.PING_TIMEOUT_SATISFIED_BY_INBOUND',
+[adam-laptop]     +   'src/transport/router-server-manager.js:196 ROUTER_ERROR_MSG.addressInUse'
+[adam-laptop]     + ]
+[adam-laptop]     - []
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected:
+[adam-laptop]   actual:
+[adam-laptop]     0: 'src/bootstrap/owners/service-leader-readiness-owner.js:594 BOOTSTRAP_API_LOG_MSG.LEADERS_READY'
+[adam-laptop]     1: 'src/bootstrap/shared/node-state-publication-outcome.js:115 JOINING_ERROR_MSG.CONTROL_PLANE_MESSAGE_WAS_NOT_ACKNOWLEDGED'
+[adam-laptop]     2: 'src/partition/managed-split-workflow-state-methods.js:86 QUERY_ERROR_MSG.TABLE_PARTITION_TARGET_NODE_WAIT_TIMEOUT'
+[adam-laptop]     3: 'src/transport/message-router-connection-close-reconnect.js:391 ROUTER_LOG_MSG.CONNECTION_PING_TIMEOUT_SKIPPED_ALIVE'
+[adam-laptop]     4: 'src/transport/message-router-peer-liveness.js:95 ROUTER_LOG_MSG.PING_TIMEOUT_SATISFIED_BY_INBOUND'
+[adam-laptop]     5: 'src/transport/router-server-manager.js:196 ROUTER_ERROR_MSG.addressInUse'
+[adam-laptop]   operator: 'deepStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/constants/message-table-census.test.js:161:10)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adam-laptop]   ...
+[adam-laptop] 1..1
+[adam-laptop] # tests 1
+[adam-laptop] # suites 0
+[adam-laptop] # pass 0
+[adam-laptop] # fail 1
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 4046.232056
+[adam-laptop] # time=4323ms
+[adam-laptop] not ok test/query/named-write-real-producer-definite.test.js (7 assertions, 7613ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: item 2: a statement matching no row is a proven zero; only an empty plan has no participant, and it is not APPLIED
+[adam-laptop] not ok 1 - item 2: a statement matching no row is a proven zero; only an empty plan has no participant, and it is not APPLIED
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 3304.816918
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/query/named-write-real-producer-definite.test.js:147:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     Expected values to be strictly deep-equal:
+[adam-laptop]     + actual - expected
+[adam-laptop]     ... Skipped lines
+[adam-laptop]     
+[adam-laptop]       [
+[adam-laptop]         {
+[adam-laptop]           callerRows: 0,
+[adam-laptop]           callerSuccess: true,
+[adam-laptop]           label: 'UPDATE matching no row',
+[adam-laptop]     ...
+[adam-laptop]           verdicts: [
+[adam-laptop]     +       'applied'
+[adam-laptop]     -       'unknown'
+[adam-laptop]           ]
+[adam-laptop]         }
+[adam-laptop]       ]
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected:
+[adam-laptop]     0:
+[adam-laptop]       label: 'UPDATE matching no row'
+[adam-laptop]       participants:
+[adam-laptop]         0:
+[adam-laptop]           partitionId: 'storage_reservations-p1'
+[adam-laptop]           affectedRows: 0
+[adam-laptop]           witnessed: true
+[adam-laptop]       verdicts:
+[adam-laptop]         0: 'applied'
+[adam-laptop]       callerSuccess: true
+[adam-laptop]       callerRows: 0
+[adam-laptop]     1:
+[adam-laptop]       label: 'DELETE matching no row'
+[adam-laptop]       participants:
+[adam-laptop]         0:
+[adam-laptop]           partitionId: 'storage_reservations-p1'
+[adam-laptop]           affectedRows: 0
+[adam-laptop]           witnessed: true
+[adam-laptop]       verdicts:
+[adam-laptop]         0: 'applied'
+[adam-laptop]       callerSuccess: true
+[adam-laptop]       callerRows: 0
+[adam-laptop]     2:
+[adam-laptop]       label: 'empty plan'
+[adam-laptop]       participants:
+[adam-laptop]       verdicts:
+[adam-laptop]         0: 'unknown'
+[adam-laptop]       callerSuccess: true
+[adam-laptop]       callerRows: 0
+[adam-laptop]   actual:
+[adam-laptop]     0:
+[adam-laptop]       label: 'UPDATE matching no row'
+[adam-laptop]       participants:
+[adam-laptop]         0:
+[adam-laptop]           partitionId: 'storage_reservations-p1'
+[adam-laptop]           affectedRows: 0
+[adam-laptop]           witnessed: true
+[adam-laptop]       verdicts:
+[adam-laptop]         0: 'applied'
+[adam-laptop]       callerSuccess: true
+[adam-laptop]       callerRows: 0
+[adam-laptop]     1:
+[adam-laptop]       label: 'DELETE matching no row'
+[adam-laptop]       participants:
+[adam-laptop]         0:
+[adam-laptop]           partitionId: 'storage_reservations-p1'
+[adam-laptop]           affectedRows: 0
+[adam-laptop]           witnessed: true
+[adam-laptop]       verdicts:
+[adam-laptop]         0: 'applied'
+[adam-laptop]       callerSuccess: true
+[adam-laptop]       callerRows: 0
+[adam-laptop]     2:
+[adam-laptop]       label: 'empty plan'
+[adam-laptop]       participants:
+[adam-laptop]       verdicts:
+[adam-laptop]         0: 'applied'
+[adam-laptop]       callerSuccess: true
+[adam-laptop]       callerRows: 0
+[adam-laptop]   operator: 'deepStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/query/named-write-real-producer-definite.test.js:179:12
+[adam-laptop]     async withSurface (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/query/unknown-outcome-surface-fixture.js:328:5)
+[adam-laptop]     async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/query/named-write-real-producer-definite.test.js:149:3)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: item 3: a constraint violation is FAILED (definite) - SQL gateway
+[adam-laptop] ok 2 - item 3: a constraint violation is FAILED (definite) - SQL gateway
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 113.653422
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: item 3: a constraint violation is FAILED (definite) - CDC through the engine
+[adam-laptop] not ok 3 - item 3: a constraint violation is FAILED (definite) - CDC through the engine
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 82.138067
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/query/named-write-real-producer-definite.test.js:191:3'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     answer {"error":"Distributed operation failed due to participant failures","code":"DISTRIBUTED_PARTICIPANT_FAILURE","participants":[{"partitionId":"storage_reservations-p1","failureCode":"SQLITE_CONSTRAINT_PRIMARYKEY","committed":true,"outcome":"statement_failed"}]}; attempt {"error":"Distributed operation failed due to participant failures","code":"DISTRIBUTED_PARTICIPANT_FAILURE","participants":[{"partitionId":"storage_reservations-p1","failureCode":"SQLITE_CONSTRAINT_PRIMARYKEY","committed":true,"outcome":"statement_failed"}]}
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]       {
+[adam-laptop]     +   definite: false,
+[adam-laptop]     -   definite: true,
+[adam-laptop]         verdicts: [
+[adam-laptop]     +     'unknown'
+[adam-laptop]     -     'failed'
+[adam-laptop]         ]
+[adam-laptop]       }
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected:
+[adam-laptop]     verdicts:
+[adam-laptop]       0: 'failed'
+[adam-laptop]     definite: true
+[adam-laptop]   actual:
+[adam-laptop]     verdicts:
+[adam-laptop]       0: 'unknown'
+[adam-laptop]     definite: false
+[adam-laptop]   operator: 'deepStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     withSurface.cdc (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/query/named-write-real-producer-definite.test.js:204:18)
+[adam-laptop]     async withSurface (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/query/unknown-outcome-surface-fixture.js:328:5)
+[adam-laptop]     async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/query/named-write-real-producer-definite.test.js:193:7)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: item 3: a constraint violation is FAILED (definite) - CDC on the local leader
+[adam-laptop] ok 4 - item 3: a constraint violation is FAILED (definite) - CDC on the local leader
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 79.86362
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: item 3: CDC shut down refuses before routing - NOT_PROPOSED (definite)
+[adam-laptop] ok 5 - item 3: CDC shut down refuses before routing - NOT_PROPOSED (definite)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 55.388362
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: item 3: the partition's NOT_LEADER refusal is NOT_PROPOSED (definite) - SQL gateway
+[adam-laptop] ok 6 - item 3: the partition's NOT_LEADER refusal is NOT_PROPOSED (definite) - SQL gateway
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 667.217089
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: item 3: the partition's NOT_LEADER refusal is NOT_PROPOSED (definite) - CDC through the engine
+[adam-laptop] not ok 7 - item 3: the partition's NOT_LEADER refusal is NOT_PROPOSED (definite) - CDC through the engine
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 697.6771
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/query/named-write-real-producer-definite.test.js:249:3'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     answer {"error":"Distributed operation failed due to participant failures","code":"DISTRIBUTED_PARTICIPANT_FAILURE","participants":[{"partitionId":"storage_reservations-p1","failureCode":"partition_write_not_leader","committed":false,"outcome":null}]}; attempt {"error":"Distributed operation failed due to participant failures","code":"DISTRIBUTED_PARTICIPANT_FAILURE","participants":[{"partitionId":"storage_reservations-p1","failureCode":"partition_write_not_leader","committed":false,"outcome":null}]}
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]       {
+[adam-laptop]     +   definite: false,
+[adam-laptop]     -   definite: true,
+[adam-laptop]         verdicts: [
+[adam-laptop]     +     'unknown'
+[adam-laptop]     -     'not_proposed'
+[adam-laptop]         ]
+[adam-laptop]       }
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected:
+[adam-laptop]     verdicts:
+[adam-laptop]       0: 'not_proposed'
+[adam-laptop]     definite: true
+[adam-laptop]   actual:
+[adam-laptop]     verdicts:
+[adam-laptop]       0: 'unknown'
+[adam-laptop]     definite: false
+[adam-laptop]   operator: 'deepStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     withSurface.cdc (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/query/named-write-real-producer-definite.test.js:272:16)
+[adam-laptop]     async withSurface (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/query/unknown-outcome-surface-fixture.js:328:5)
+[adam-laptop]     async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/70dfcdba85a6-mwqrr68t-1874418/test/query/named-write-real-producer-definite.test.js:251:7)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] 1..7
+[adam-laptop] # tests 7
+[adam-laptop] # suites 0
+[adam-laptop] # pass 4
+[adam-laptop] # fail 3
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 5009.653525
+[adam-laptop] # time=7613ms
+[adam-laptop] # test-files total=7 pass=0 fail=7 assertions=311
+[adam-laptop] classified lane bootstrap: 1 file(s), jobs=2
+[adam-laptop] thermal: ok cpu 48C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] ok test/bootstrap/seed-bootstrap-direct-lane.integration.test.js (1 assertions, 26017ms)
+[adam-laptop] # test-files total=1 pass=1 fail=0 assertions=1
+lab test: adam-laptop: # test-files total=8 pass=1 fail=7 assertions=312
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=8 pass=1 fail=7 assertions=312

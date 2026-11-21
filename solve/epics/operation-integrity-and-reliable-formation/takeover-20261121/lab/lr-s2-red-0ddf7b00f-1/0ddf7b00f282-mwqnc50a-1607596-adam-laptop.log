@@ -1,0 +1,624 @@
+placement-shell=3568547
+placement-head=0ddf7b00f282145cedf64db14360b5c5120de926
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3569115
+# test-files planned=5
+classified lane ordinary: 4 file(s), jobs=4
+thermal: ok cpu 73C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+not ok test/control-plane/named-write-outcome-total.test.js (3 assertions, 1216ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: judgeNamedWriteOutcome is total over answer shapes and never throws
+not ok 1 - judgeNamedWriteOutcome is total over answer shapes and never throws
+  ---
+  duration_ms: 9.48796
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/control-plane/named-write-outcome-total.test.js:132:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    ... Skipped lines
+    
+      [
+        [
+          'partition answer with its bound witness',
+          'applied'
+        ],
+    ...
+          'the exact shape that threw: success and a count, no witness, no partitionId',
+    +     "THROWS TypeError: Cannot read properties of undefined (reading 'partitionId')"
+    -     'unknown'
+        ],
+        [
+          'the engine fake behind the real CDC service (threw)',
+    +     "THROWS TypeError: Cannot read properties of undefined (reading 'partitionId')"
+    -     'unknown'
+        ],
+        [
+          'the heartbeat engine fake (threw)',
+    +     "THROWS TypeError: Cannot read properties of undefined (reading 'partitionId')"
+    -     'unknown'
+        ],
+        [
+          'bare success',
+          'unknown'
+        ],
+    ...
+          'distributed answer and attempt both without a key',
+    +     'applied'
+    -     'unknown'
+        ],
+        [
+          'attempt without a declared partition',
+          'unknown'
+        ],
+    ...
+          'single nested failure that is not an object',
+    +     "THROWS TypeError: Cannot read properties of null (reading 'committed')"
+    -     'unknown'
+        ],
+        [
+          'null answer',
+          'unknown'
+        ],
+    ...
+          'missing attempt',
+    +     "THROWS TypeError: Cannot destructure property 'key' of 'undefined' as it is undefined."
+    -     'unknown'
+        ]
+      ]
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0:
+      0: 'partition answer with its bound witness'
+      1: 'applied'
+    1:
+      0: 'partition answer without a witness'
+      1: 'unknown'
+    2:
+      0: 'the exact shape that threw: success and a count, no witness, no partitionId'
+      1: 'unknown'
+    3:
+      0: 'the engine fake behind the real CDC service (threw)'
+      1: 'unknown'
+    4:
+      0: 'the heartbeat engine fake (threw)'
+      1: 'unknown'
+    5:
+      0: 'bare success'
+      1: 'unknown'
+    6:
+      0: 'witness without a top-level partitionId'
+      1: 'unknown'
+    7:
+      0: 'witness for another partition than declared'
+      1: 'unknown'
+    8:
+      0: 'answer partition differs from its witness'
+      1: 'unknown'
+    9:
+      0: 'witness bound to another entry'
+      1: 'unknown'
+    10:
+      0: 'witness that is not an object'
+      1: 'unknown'
+    11:
+      0: 'witness without logIndex'
+      1: 'unknown'
+    12:
+      0: 'CDC-wrapped bound partition answer'
+      1: 'applied'
+    13:
+      0: 'CDC-wrapped partition answer without witness'
+      1: 'unknown'
+    14:
+      0: 'CDC-wrapped non-object partition result'
+      1: 'unknown'
+    15:
+      0: 'complete distributed answer with bound participant'
+      1: 'applied'
+    16:
+      0: 'CDC-wrapped complete distributed answer'
+      1: 'applied'
+    17:
+      0: 'distributed participant without witness'
+      1: 'unknown'
+    18:
+      0: 'distributed participant that is not an object'
+      1: 'unknown'
+    19:
+      0: 'distributed answer for another key'
+      1: 'unknown'
+    20:
+      0: 'distributed answer and attempt both without a key'
+      1: 'unknown'
+    21:
+      0: 'attempt without a declared partition'
+      1: 'unknown'
+    22:
+      0: 'bound committed statement failure'
+      1: 'failed'
+    23:
+      0: 'pre-proposal refusal on the declared partition'
+      1: 'not_proposed'
+    24:
+      0: 'single nested failure without partition ids (double undefined)'
+      1: 'unknown'
+    25:
+      0: 'single nested failure that is not an object'
+      1: 'unknown'
+    26:
+      0: 'null answer'
+      1: 'unknown'
+    27:
+      0: 'undefined answer'
+      1: 'unknown'
+    28:
+      0: 'string answer'
+      1: 'unknown'
+    29:
+      0: 'numeric answer'
+      1: 'unknown'
+    30:
+      0: 'missing attempt'
+      1: 'unknown'
+  actual:
+    0:
+      0: 'partition answer with its bound witness'
+      1: 'applied'
+    1:
+      0: 'partition answer without a witness'
+      1: 'unknown'
+    2:
+      0: 'the exact shape that threw: success and a count, no witness, no partitionId'
+      1: "THROWS TypeError: Cannot read properties of undefined (reading 'partitionId')"
+    3:
+      0: 'the engine fake behind the real CDC service (threw)'
+      1: "THROWS TypeError: Cannot read properties of undefined (reading 'partitionId')"
+    4:
+      0: 'the heartbeat engine fake (threw)'
+      1: "THROWS TypeError: Cannot read properties of undefined (reading 'partitionId')"
+    5:
+      0: 'bare success'
+      1: 'unknown'
+    6:
+      0: 'witness without a top-level partitionId'
+      1: 'unknown'
+    7:
+      0: 'witness for another partition than declared'
+      1: 'unknown'
+    8:
+      0: 'answer partition differs from its witness'
+      1: 'unknown'
+    9:
+      0: 'witness bound to another entry'
+      1: 'unknown'
+    10:
+      0: 'witness that is not an object'
+      1: 'unknown'
+    11:
+      0: 'witness without logIndex'
+      1: 'unknown'
+    12:
+      0: 'CDC-wrapped bound partition answer'
+      1: 'applied'
+    13:
+      0: 'CDC-wrapped partition answer without witness'
+      1: 'unknown'
+    14:
+      0: 'CDC-wrapped non-object partition result'
+      1: 'unknown'
+    15:
+      0: 'complete distributed answer with bound participant'
+      1: 'applied'
+    16:
+      0: 'CDC-wrapped complete distributed answer'
+      1: 'applied'
+    17:
+      0: 'distributed participant without witness'
+      1: 'unknown'
+    18:
+      0: 'distributed participant that is not an object'
+      1: 'unknown'
+    19:
+      0: 'distributed answer for another key'
+      1: 'unknown'
+    20:
+      0: 'distributed answer and attempt both without a key'
+      1: 'applied'
+    21:
+      0: 'attempt without a declared partition'
+      1: 'unknown'
+    22:
+      0: 'bound committed statement failure'
+      1: 'failed'
+    23:
+      0: 'pre-proposal refusal on the declared partition'
+      1: 'not_proposed'
+    24:
+      0: 'single nested failure without partition ids (double undefined)'
+      1: 'unknown'
+    25:
+      0: 'single nested failure that is not an object'
+      1: "THROWS TypeError: Cannot read properties of null (reading 'committed')"
+    26:
+      0: 'null answer'
+      1: 'unknown'
+    27:
+      0: 'undefined answer'
+      1: 'unknown'
+    28:
+      0: 'string answer'
+      1: 'unknown'
+    29:
+      0: 'numeric answer'
+      1: 'unknown'
+    30:
+      0: 'missing attempt'
+      1: "THROWS TypeError: Cannot destructure property 'key' of 'undefined' as it is undefined."
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/control-plane/named-write-outcome-total.test.js:140:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  ...
+# Subtest: an unknown named write never says applied: the gateway-normalized success
+not ok 2 - an unknown named write never says applied: the gateway-normalized success
+  ---
+  duration_ms: 3.845588
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/control-plane/named-write-outcome-total.test.js:161:1'
+  failureType: 'testCodeFailure'
+  error: 'receipt-less normalized success: no outcome claims applied'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'applied'
+  actual: 'applied'
+  operator: 'notStrictEqual'
+  stack: |-
+    assertTypedUnknownWithoutApplied (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/control-plane/named-write-outcome-total.test.js:151:10)
+    TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/control-plane/named-write-outcome-total.test.js:172:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: gateway and real CDC: a receipt-less engine answer is the typed unknown, twice
+not ok 3 - gateway and real CDC: a receipt-less engine answer is the typed unknown, twice
+  ---
+  duration_ms: 163.427343
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/control-plane/named-write-outcome-total.test.js:189:1'
+  failureType: 'testCodeFailure'
+  error: "first: the write threw Error: Cannot read properties of undefined (reading 'partitionId'); cause TypeError: Cannot read properties of undefined (reading 'partitionId')"
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  operator: 'fail'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/control-plane/named-write-outcome-total.test.js:213:18)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 0
+# fail 3
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 208.321832
+# time=1216ms
+not ok test/query/provisioning-deadline-error-message.test.js (3 assertions, 1791ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: the real assertProvisioningAttemptBudget answers a typed, non-empty error
+not ok 1 - the real assertProvisioningAttemptBudget answers a typed, non-empty error
+  ---
+  duration_ms: 3.795691
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/query/provisioning-deadline-error-message.test.js:40:1'
+  failureType: 'testCodeFailure'
+  error: 'a non-empty message (got "")'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    Object.assertTypedNonEmptyTimeout (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/query/provisioning-deadline-error-message.test.js:34:10)
+    expectedException (node:assert:576:17)
+    expectsError (node:assert:701:21)
+    Function.throws (node:assert:757:3)
+    TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/query/provisioning-deadline-error-message.test.js:42:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  ...
+# Subtest: CREATE TABLE provisioning past its deadline rejects with the typed, non-empty error
+not ok 2 - CREATE TABLE provisioning past its deadline rejects with the typed, non-empty error
+  ---
+  duration_ms: 39.744232
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/query/provisioning-deadline-error-message.test.js:46:1'
+  failureType: 'testCodeFailure'
+  error: 'a non-empty message (got "")'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    Object.assertTypedNonEmptyTimeout (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/query/provisioning-deadline-error-message.test.js:34:10)
+    expectedException (node:assert:576:17)
+    expectsError (node:assert:701:21)
+    Function.rejects (node:assert:767:3)
+    async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/query/provisioning-deadline-error-message.test.js:77:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: every QUERY_ERROR_MSG member referenced under src/query is defined
+not ok 3 - every QUERY_ERROR_MSG member referenced under src/query is defined
+  ---
+  duration_ms: 9.48768
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/query/provisioning-deadline-error-message.test.js:95:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    references to undefined error messages answer empty errors
+    + actual - expected
+    
+    + [
+    +   'src/query/distributed/distributed-write-coordinator.js:505 QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED',
+    +   'src/query/sql-query-engine-provisioning-admission-methods.js:290 QUERY_ERROR_MSG.TABLE_PARTITION_TARGET_NODE_WAIT_TIMEOUT',
+    +   'src/query/sql-query-engine-write-failure-methods.js:284 QUERY_ERROR_MSG.QUERY_EXECUTION_FAILED'
+    + ]
+    - []
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0: 'src/query/distributed/distributed-write-coordinator.js:505 QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED'
+    1: 'src/query/sql-query-engine-provisioning-admission-methods.js:290 QUERY_ERROR_MSG.TABLE_PARTITION_TARGET_NODE_WAIT_TIMEOUT'
+    2: 'src/query/sql-query-engine-write-failure-methods.js:284 QUERY_ERROR_MSG.QUERY_EXECUTION_FAILED'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/query/provisioning-deadline-error-message.test.js:106:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 0
+# fail 3
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 84.218462
+# time=1791ms
+not ok test/rebalancer/placement-explicit-replica-refusal-code.test.js (2 assertions, 1906ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: ADD naming a replica identity: refused with its own typed code, not the corrupt-bytes code
+not ok 1 - ADD naming a replica identity: refused with its own typed code, not the corrupt-bytes code
+  ---
+  duration_ms: 2.088027
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/rebalancer/placement-explicit-replica-refusal-code.test.js:25:3'
+  failureType: 'testCodeFailure'
+  error: 'a request-shape refusal is not the committed-bytes refusal'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'placement_admission_bytes_invalid'
+  actual: 'placement_admission_bytes_invalid'
+  operator: 'notStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/rebalancer/placement-explicit-replica-refusal-code.test.js:39:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: REPLACE naming source and target replicas: refused with its own typed code, not the corrupt-bytes code
+not ok 2 - REPLACE naming source and target replicas: refused with its own typed code, not the corrupt-bytes code
+  ---
+  duration_ms: 0.271384
+  type: 'test'
+  location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/rebalancer/placement-explicit-replica-refusal-code.test.js:25:3'
+  failureType: 'testCodeFailure'
+  error: 'a request-shape refusal is not the committed-bytes refusal'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'placement_admission_bytes_invalid'
+  actual: 'placement_admission_bytes_invalid'
+  operator: 'notStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/rebalancer/placement-explicit-replica-refusal-code.test.js:39:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 0
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 28.694808
+# time=1906ms
+ok test/query/named-write-real-producer-applied.test.js (3 assertions, 5644ms)
+# test-files total=4 pass=1 fail=3 assertions=11
+classified lane bootstrap: 1 file(s), jobs=2
+thermal: ok cpu 56C (coretemp/Package id 0) nvme 21C (nvme/Composite)
+not ok test/bootstrap/register-service-retryable-refusal.test.js (7 assertions, 3272ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+{"level":50,"time":"2026-11-21T16:53:20.664Z","nodeId":"test-seed-node","pid":3569175,"subsystem":"bootstrap-api","event":"wait_bound_spent","wait":"registerServiceWriteRetryTimeoutMs","awaited":"register-service services-row control-plane write accepted","boundMs":2000,"elapsedMs":2004,"lastObserved":{"attempts":6,"lastErrorCode":null,"lastError":"ControlPlaneSystemTableGateway requires cdcIntegrationService","retryAfterMs":0},"scope":{"nodeId":"joiner-node-1","serviceId":"mg-retryable-r1","groupId":"mg-retryable"},"repeats":0,"nodeId":"test-seed-node","msg":"Wait bound spent"}
+# Subtest: register-service before CDC is wired answers the typed retryable refusal, not 500
+    not ok 1 - the typed retryable refusal keeps its retryable status ({"statusCode":500,"error":"Internal Server Error","message":"ControlPlaneSystemTableGateway requires cdcIntegrationService"})
+      ---
+      compare: ===
+      at:
+        fileName: test/bootstrap/register-service-retryable-refusal.test.js
+        lineNumber: 48
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/bootstrap/register-service-retryable-refusal.test.js:48:7)
+      source: >2
+              },
+            });
+            t.equal(response.statusCode, HTTP_STATUS.SERVICE_UNAVAILABLE,
+        ------^
+              `the typed retryable refusal keeps its retryable status (${response.body})`);
+            const body = JSON.parse(response.body);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -503
+        +500
+      ...
+    
+    not ok 2 - not registered
+      ---
+      compare: ===
+      at:
+        fileName: test/bootstrap/register-service-retryable-refusal.test.js
+        lineNumber: 51
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/bootstrap/register-service-retryable-refusal.test.js:51:7)
+      source: >2
+              `the typed retryable refusal keeps its retryable status (${response.body})`);
+            const body = JSON.parse(response.body);
+            t.equal(body.success, false, 'not registered');
+        ------^
+            t.type(body.code, 'string', 'a typed refusal code');
+            t.ok(Number.isFinite(body.retryAfterMs), 'a retry hint');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -false
+        +undefined
+      ...
+    
+    not ok 3 - a typed refusal code
+      ---
+      compare: ===
+      at:
+        fileName: test/bootstrap/register-service-retryable-refusal.test.js
+        lineNumber: 52
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/bootstrap/register-service-retryable-refusal.test.js:52:7)
+      source: >2
+            const body = JSON.parse(response.body);
+            t.equal(body.success, false, 'not registered');
+            t.type(body.code, 'string', 'a typed refusal code');
+        ------^
+            t.ok(Number.isFinite(body.retryAfterMs), 'a retry hint');
+            t.equal(body[SERVICE_REGISTRATION_HANDOFF_FIELD.CONTRACT]?.producerOwnerOutcome?.terminal,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -string
+        +undefined
+      ...
+    
+    not ok 4 - a retry hint
+      ---
+      at:
+        fileName: test/bootstrap/register-service-retryable-refusal.test.js
+        lineNumber: 53
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/bootstrap/register-service-retryable-refusal.test.js:53:7)
+      source: >2
+            t.equal(body.success, false, 'not registered');
+            t.type(body.code, 'string', 'a typed refusal code');
+            t.ok(Number.isFinite(body.retryAfterMs), 'a retry hint');
+        ------^
+            t.equal(body[SERVICE_REGISTRATION_HANDOFF_FIELD.CONTRACT]?.producerOwnerOutcome?.terminal,
+              false, 'the handoff contract is not terminal');
+      ...
+    
+    not ok 5 - the handoff contract is not terminal
+      ---
+      compare: ===
+      at:
+        fileName: test/bootstrap/register-service-retryable-refusal.test.js
+        lineNumber: 54
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/bootstrap/register-service-retryable-refusal.test.js:54:7)
+      source: >2
+            t.type(body.code, 'string', 'a typed refusal code');
+            t.ok(Number.isFinite(body.retryAfterMs), 'a retry hint');
+            t.equal(body[SERVICE_REGISTRATION_HANDOFF_FIELD.CONTRACT]?.producerOwnerOutcome?.terminal,
+        ------^
+              false, 'the handoff contract is not terminal');
+            t.same(sqlCalls, [], 'the removed pre-CDC SQL fallback stays removed');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -false
+        +undefined
+      ...
+    
+    ok 6 - the removed pre-CDC SQL fallback stays removed
+    1..6
+not ok 1 - register-service before CDC is wired answers the typed retryable refusal, not 500 # time=2173.719ms
+  ---
+  at:
+    fileName: test/bootstrap/register-service-retryable-refusal.test.js
+    lineNumber: 17
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    import {HTTP_STATUS, SERVICE_STATUS, SERVICE_TYPE} from
+    '../../src/constants/index.js';
+  
+  
+    test('register-service before CDC is wired answers the typed retryable
+    refusal, not 500',
+  
+    ^
+      async (t) => {
+        initializeTestEnvironment();
+  ...
+
+{"level":50,"time":"2026-11-21T16:53:20.666Z","nodeId":"test-seed-node","pid":3569175,"subsystem":"bootstrap-api","serviceId":"mg-retryable-r1","error":"ControlPlaneSystemTableGateway requires cdcIntegrationService","stack":"Error: ControlPlaneSystemTableGateway requires cdcIntegrationService\n    at BootstrapAPI.buildBootstrapControlPlaneQueryError (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/src/bootstrap/bootstrap-api-control-plane-methods.js:340:12)\n    at BootstrapAPI.buildBootstrapControlPlaneMutationError (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/src/bootstrap/bootstrap-api-control-plane-methods.js:356:17)\n    at Object.buildBootstrapControlPlaneMutationError (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/src/bootstrap/bootstrap-api.js:313:18)\n    at ServiceRegistrationHandoffOwner.handleRegisterServiceRequest (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/src/bootstrap/owners/service-registration-handoff-owner.js:639:30)","nodeId":"test-seed-node","msg":"Failed to register service"}
+1..1
+# { total: 6, pass: 1, fail: 5 }
+# time=2185.981ms
+# test-files total=1 pass=0 fail=1 assertions=7
+placement-results={"file":"test/control-plane/named-write-outcome-total.test.js","attempt":1,"ok":false,"assertions":3,"durationMs":1216,"retriedOnce":false,"firstFailureLine":"not ok 1 - judgeNamedWriteOutcome is total over answer shapes and never throws"}
+placement-results={"file":"test/query/provisioning-deadline-error-message.test.js","attempt":1,"ok":false,"assertions":3,"durationMs":1791,"retriedOnce":false,"firstFailureLine":"not ok 1 - the real assertProvisioningAttemptBudget answers a typed, non-empty error"}
+placement-results={"file":"test/rebalancer/placement-explicit-replica-refusal-code.test.js","attempt":1,"ok":false,"assertions":2,"durationMs":1906,"retriedOnce":false,"firstFailureLine":"not ok 1 - ADD naming a replica identity: refused with its own typed code, not the corrupt-bytes code"}
+placement-results={"file":"test/query/named-write-real-producer-applied.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":5644,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/register-service-retryable-refusal.test.js","attempt":1,"ok":false,"assertions":7,"durationMs":3272,"retriedOnce":false,"firstFailureLine":"not ok 1 - the typed retryable refusal keeps its retryable status ({\"statusCode\":500,\"error\":\"Internal Server Error\",\"message\":\"ControlPlaneSystemTableGateway requires cdcIntegrationService\"})"}

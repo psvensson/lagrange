@@ -1,0 +1,35 @@
+{
+  "sha": "582d197bc6aaf2187a33dc73375ad9c89e3cfcec",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/rebalancer/topology-guard-inventory-authority.test.js",
+    "test/rebalancer/topology-guard-owner-fact-inventory.test.js",
+    "test/rebalancer/topology-guard-owner-fact-read-point.test.js",
+    "test/rebalancer/services-inventory-owner-fact-siblings.test.js",
+    "test/cdc/cdc-owner-fact-receiver-read-point.test.js",
+    "test/cdc/cdc-owner-fact-stale-published-leader.test.js",
+    "test/cdc/cdc-owner-fact-non-leader-absence.test.js",
+    "test/cdc/cdc-owner-fact-hosted-replica.test.js",
+    "test/cdc/cdc-owner-fact-redirect-deadline.test.js",
+    "test/cdc/cdc-leader-required-fresh-leader-absence.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/cdc/cdc-leader-required-fresh-leader-absence.test.js",
+        "test/cdc/cdc-owner-fact-hosted-replica.test.js",
+        "test/cdc/cdc-owner-fact-non-leader-absence.test.js",
+        "test/cdc/cdc-owner-fact-receiver-read-point.test.js",
+        "test/cdc/cdc-owner-fact-redirect-deadline.test.js",
+        "test/cdc/cdc-owner-fact-stale-published-leader.test.js",
+        "test/rebalancer/services-inventory-owner-fact-siblings.test.js",
+        "test/rebalancer/topology-guard-inventory-authority.test.js",
+        "test/rebalancer/topology-guard-owner-fact-inventory.test.js",
+        "test/rebalancer/topology-guard-owner-fact-read-point.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

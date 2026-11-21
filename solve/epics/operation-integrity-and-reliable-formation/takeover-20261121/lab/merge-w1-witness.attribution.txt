@@ -1,0 +1,16 @@
+merge: 13 files, 10 pass, 3 fail
+- test/partition/placement-create-dispatch-execution-mirror.test.js
+    merge : not ok 8 - a CREATE dispatch withheld at the gate is dispatched exactly once after the retained owner confirms the row
+    ours  : ok  [w2-cone-23344cddc.log]
+    theirs: FAIL not ok 8 - a CREATE dispatch withheld at the gate is dispatched exactly once after the retained owner confirms the row [w1-s2c-run5-f42102c84/test-results.ndjson]
+    => IDENTICAL on theirs (f42102c84 src)
+- test/partition/placement-retained-continuation.test.js
+    merge : not ok 23 - a definite native refusal of the pinned entry retires the record, visibly, with nothing armed
+    ours  : no reference
+    theirs: FAIL not ok 23 - a definite native refusal of the pinned entry retires the record, visibly, with nothing armed [w1-s2c-run3-a10a9cae3/test-results.ndjson]
+    => IDENTICAL on theirs (f42102c84 src)
+- test/rebalancer/replica-placement-owner-core.test.js
+    merge : not ok 18 - Item 2 production witness: 1-voter PartitionService admits 2 learners via normal ADD with placementAdmissionEnabled, RebalanceCoordinator/OperationWorkflowOwner dispatches GROWTH_PROMOTE, recovers an interrupted attempt, observes 3 committed vo
+    ours  : FAIL not ok 18 - Item 2 production witness: 1-voter PartitionService admits 2 learners via normal ADD with placementAdmissionEnabled, RebalanceCoordinator/OperationWorkflowOwner dispatches GROWTH_PROMOTE, recovers an interrupted attempt, observes 3 committed voters + SERVICES.raft_role, and releases placement hold [w2-cone-23344cddc.log]
+    theirs: FAIL not ok 20 - Finding 2 & 3 production witness: 3->5 GROWTH_PROMOTE redirects to new leader on not_leader refusal while preserving operationId/promoteReplicaIds, and enforces step timeout budget on persistent refusal [w1-s2c-run3-a10a9cae3/test-results.ndjson]
+    => IDENTICAL on ours (23344cddc)

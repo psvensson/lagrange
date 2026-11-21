@@ -1,0 +1,23 @@
+{
+  "sha": "b455ca4a893b008067ee0ecf63af62c81465a012",
+  "host": "adams-gamla",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/control-plane/replica-dispatch-node-state-update-remote-direct-wakeup.test.js",
+    "test/control-plane/replica-dispatch-node-state-update-ready-node-retry-cache-priority.test.js",
+    "test/control-plane/replica-dispatch-node-state-update-ready-node-retry-dispatch.test.js",
+    "test/rebalancer/replica-operation-insert-retry-idempotency.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/control-plane/replica-dispatch-node-state-update-ready-node-retry-cache-priority.test.js",
+        "test/control-plane/replica-dispatch-node-state-update-ready-node-retry-dispatch.test.js",
+        "test/control-plane/replica-dispatch-node-state-update-remote-direct-wakeup.test.js",
+        "test/rebalancer/replica-operation-insert-retry-idempotency.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

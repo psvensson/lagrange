@@ -1,0 +1,121 @@
+merge: 97 files, 73 pass, 24 fail
+- test/control-plane/replica-dispatch-reservation-identity.test.js
+    merge : not ok 7 - the canonical owner dispatches after the strict identity gate
+    ours  : ok  [w2-cone-23344cddc.log]
+    theirs: FAIL not ok 7 - the canonical owner dispatches after the strict identity gate [w1-s2c-run4-cone97-a10a9cae3/test-results.ndjson]
+    => IDENTICAL on theirs (f42102c84 src)
+- test/integration/control-plane-rebalance.integration.test.js
+    merge : not ok 11 - Placement admission refused for replica_operations-p1: placement_admission_bytes_invalid
+    ours  : FAIL  [w2-cone-23344cddc.log]
+    theirs: FAIL not ok 11 - Placement admission refused for replica_operations-p1: placement_admission_bytes_invalid [w1-s2c-run4-cone97-a10a9cae3/test-results.ndjson]
+    => IDENTICAL on theirs (f42102c84 src)
+- test/query/sql-query-engine-create-table-quorum.test.js
+    merge : not ok 1 - provisioning below quorum is rejected without lowering the quorum minimum
+    ours  : FAIL  [w2-cone-23344cddc.log]
+    theirs: FAIL not ok 1 - provisioning below quorum is rejected without lowering the quorum minimum [w1-s2c-run4-cone97-a10a9cae3/test-results.ndjson]
+    => IDENTICAL on theirs (f42102c84 src)
+- test/rebalancer/admission-real-size-estimates.test.js
+    merge : not ok 1 - Authoritative operation visibility deferred for partition:p-real-size (entity_operation_observation_incomplete)
+    ours  : FAIL not ok 1 - Authoritative operation visibility deferred for partition:p-real-size (entity_operation_observation_incomplete) [w2-final-23344cddc-focused/test-results.ndjson]
+    theirs: FAIL not ok 1 - Authoritative operation visibility deferred for partition:p-real-size (entity_operation_observation_incomplete) [w1-s2c-run4-cone97-a10a9cae3/test-results.ndjson]
+    => IDENTICAL on both parents
+- test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js
+    merge : not ok 3 - a durable transition retry owner is retained until the ACTIVE persist lands (the CL-029 invariant under the new route)
+    ours  : FAIL not ok 3 - a durable transition retry owner is retained until the ACTIVE persist lands (the CL-029 invariant under the new route) [w2-final-23344cddc-focused/test-results.ndjson]
+    theirs: ok  [w1-s2c-run4-cone97-a10a9cae3/test-results.ndjson]
+    => IDENTICAL on ours (23344cddc)
+- test/rebalancer/coordinator-created-operation-progress.test.js
+    merge : not ok 5 - the resumed owner path should continue into dispatch after claiming the operation
+    ours  : FAIL not ok 5 - the resumed owner path should continue into dispatch after claiming the operation [w2-final-23344cddc-focused/test-results.ndjson]
+    theirs: FAIL not ok 5 - the resumed owner path should continue into dispatch after claiming the operation [w1-s2c-run4-cone97-a10a9cae3/test-results.ndjson]
+    => IDENTICAL on both parents
+- test/rebalancer/duplicate-operation-prevention.property.test.js
+    merge : not ok 1 - Authoritative operation visibility deferred for partition:partition-1 (entity_operation_observation_incomplete)
+    ours  : FAIL not ok 1 - Authoritative operation visibility deferred for partition:partition-1 (entity_operation_observation_incomplete) [w2-final-23344cddc-focused/test-results.ndjson]
+    theirs: FAIL not ok 1 - Authoritative operation visibility deferred for partition:partition-1 (entity_operation_observation_incomplete) [w1-s2c-run4-cone97-a10a9cae3/test-results.ndjson]
+    => IDENTICAL on both parents
+- test/rebalancer/formation-runtime-service-create-lane-budget-starvation.test.js
+    merge : not ok 20 - public coordinator dispatch accepts the runtime create
+    ours  : FAIL  [w2-cone-23344cddc.log]
+    theirs: FAIL not ok 20 - public coordinator dispatch accepts the runtime create [w1-s2c-run4-cone97-a10a9cae3/test-results.ndjson]
+    => IDENTICAL on theirs (f42102c84 src)
+- test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js
+    merge : not ok 40 - should be equal
+    ours  : FAIL  [w2-cone-23344cddc.log]
+    theirs: FAIL not ok 40 - should be equal [w1-s2c-run4-cone97-a10a9cae3/test-results.ndjson]
+    => IDENTICAL on theirs (f42102c84 src)
+- test/rebalancer/message-group-membership-operation-lane.test.js
+    merge : not ok 5 - canonical visibility treats omitted nullable membership fields as SQL NULL while preserving non-null owner stamps
+    ours  : FAIL not ok 5 - canonical visibility treats omitted nullable membership fields as SQL NULL while preserving non-null owner stamps [w2-final-23344cddc-focused/test-results.ndjson]
+    theirs: FAIL not ok 5 - canonical visibility treats omitted nullable membership fields as SQL NULL while preserving non-null owner stamps [w1-s2c-run4-cone97-a10a9cae3/test-results.ndjson]
+    => IDENTICAL on both parents
+- test/rebalancer/message-group-operation-routing.integration.test.js
+    merge : not ok 1 - Invalid replica operation persistence outcome: persisted operation history is not JSON text
+    ours  : FAIL not ok 1 - Invalid replica operation persistence outcome: persisted operation history is not JSON text [w2-final-23344cddc-focused/test-results.ndjson]
+    theirs: FAIL not ok 1 - Invalid replica operation persistence outcome: persisted operation history is not JSON text [w1-s2c-run4-cone97-a10a9cae3/test-results.ndjson]
+    => IDENTICAL on both parents
+- test/rebalancer/placement-admission-cross-coordinator-target-census.test.js
+    merge : not ok 1 - W-T: with B at capacity through A's copies, C's copy onto B is refused although C's cache has not received them
+    ours  : FAIL not ok 1 - W-T: with B at capacity through A's copies, C's copy onto B is refused although C's cache has not received them [w2-cone-23344cddc.log]
+    theirs: ok  [w1-s2c-run4-cone97-a10a9cae3/test-results.ndjson]
+    => IDENTICAL on ours (23344cddc)
+- test/rebalancer/quorum-conditioned-remove-safety.test.js
+    merge : not ok 9 - remove should dispatch once replacement becomes voter-ready
+    ours  : FAIL not ok 9 - remove should dispatch once replacement becomes voter-ready [w2-final-23344cddc-focused/test-results.ndjson]
+    theirs: FAIL not ok 1 - lower-case remove preflight should block unsafe critical remove [w1-s2c-run4-cone97-a10a9cae3/test-results.ndjson]
+    => IDENTICAL on ours (23344cddc)
+- test/rebalancer/rebalance-coordinator-topology-guard.test.js
+    merge : not ok 1 - createOperation should fail closed when the target node already hosts the partition
+    ours  : FAIL not ok 1 - createOperation should fail closed when the target node already hosts the partition [w2-final-23344cddc-focused/test-results.ndjson]
+    theirs: FAIL not ok 1 - createOperation should fail closed when the target node already hosts the partition [w1-s2c-run4-cone97-a10a9cae3/test-results.ndjson]
+    => IDENTICAL on both parents
+- test/rebalancer/rebalancer-entity-interaction-contract.test.js
+    merge : not ok 1 - context.buildDeferredRemoveSafetyEvaluation is not a function
+    ours  : FAIL  [w2-cone-23344cddc.log]
+    theirs: FAIL not ok 1 - context.buildDeferredRemoveSafetyEvaluation is not a function [w1-s2c-run4-cone97-a10a9cae3/test-results.ndjson]
+    => IDENTICAL on theirs (f42102c84 src)
+- test/rebalancer/rebalancer-own-create-memory-duplicate-replace.test.js
+    merge : not ok 2 - Storage reservation creation failed for operation replace-op-28ef8f4bf921b28d8d8bd3eccb05c2a9: reservation insert rejected
+    ours  : FAIL  [w2-cone-23344cddc.log]
+    theirs: ok  [w1-s2c-run4-cone97-a10a9cae3/test-results.ndjson]
+    => red on a parent, first assertion UNKNOWN (status-only reference)
+- test/rebalancer/replace-in-flight-blocks-planning.test.js
+    merge : not ok 45 - the STOPPING owner waits while the witness counts the source
+    ours  : FAIL  [w2-cone-23344cddc.log]
+    theirs: ok  [w1-s2c-run4-cone97-a10a9cae3/test-results.ndjson]
+    => red on a parent, first assertion UNKNOWN (status-only reference)
+- test/rebalancer/replace-owner-lease-verdict-property.test.js
+    merge : not ok 1 - Invalid replica operation persistence outcome: growth_promotion_cohort_unresolved
+    ours  : FAIL  [w2-cone-23344cddc.log]
+    theirs: FAIL not ok 1 - Invalid replica operation persistence outcome: growth_promotion_cohort_unresolved [w1-s2c-run4-cone97-a10a9cae3/test-results.ndjson]
+    => IDENTICAL on theirs (f42102c84 src)
+- test/rebalancer/replica-operation-membership-epoch-binding.test.js
+    merge : not ok 6 - src/partition/partition-placement-retained-repair.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+    ours  : FAIL not ok 8 - src/partition/partition-placement-retained-repair.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough [w2-final-23344cddc-focused/test-results.ndjson]
+    theirs: FAIL not ok 6 - src/partition/partition-placement-retained-repair.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough [w1-s2c-run4-cone97-a10a9cae3/test-results.ndjson]
+    => IDENTICAL on both parents
+- test/rebalancer/replica-status-completeness.property.test.js
+    merge : not ok 8 - Step 'SUPERSEDED' should map to valid status 'superseded'
+    ours  : FAIL  [w2-cone-23344cddc.log]
+    theirs: FAIL not ok 8 - Step 'SUPERSEDED' should map to valid status 'superseded' [w1-s2c-run4-cone97-a10a9cae3/test-results.ndjson]
+    => IDENTICAL on theirs (f42102c84 src)
+- test/rebalancer/reservation-fail-closed-dispatch-gate.test.js
+    merge : not ok 5 - restored authority dispatches exactly once through the existing gate
+    ours  : ok  [w2-cone-23344cddc.log]
+    theirs: FAIL not ok 5 - restored authority dispatches exactly once through the existing gate [w1-s2c-run4-cone97-a10a9cae3/test-results.ndjson]
+    => IDENTICAL on theirs (f42102c84 src)
+- test/rebalancer/reservation-file-backed-restart.test.js
+    merge : not ok 25 - the existing reservation gate dispatches exactly once
+    ours  : ok  [w2-cone-23344cddc.log]
+    theirs: FAIL not ok 25 - the existing reservation gate dispatches exactly once [w1-s2c-run4-cone97-a10a9cae3/test-results.ndjson]
+    => IDENTICAL on theirs (f42102c84 src)
+- test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js
+    merge : not ok 1 - Authoritative operation visibility deferred for partition:partition-lost-reservation-answer (entity_operation_observation_incomplete)
+    ours  : FAIL not ok 1 - Authoritative operation visibility deferred for partition:partition-lost-reservation-answer (entity_operation_observation_incomplete) [w2-final-23344cddc-focused/test-results.ndjson]
+    theirs: FAIL not ok 1 - Authoritative operation visibility deferred for partition:partition-lost-reservation-answer (entity_operation_observation_incomplete) [w1-s2c-run4-cone97-a10a9cae3/test-results.ndjson]
+    => IDENTICAL on both parents
+- test/rebalancer/strict-operation-outcomes.test.js
+    merge : not ok 7 - should be equal
+    ours  : FAIL  [w2-cone-23344cddc.log]
+    theirs: FAIL not ok 7 - should be equal [w1-s2c-run4-cone97-a10a9cae3/test-results.ndjson]
+    => IDENTICAL on theirs (f42102c84 src)

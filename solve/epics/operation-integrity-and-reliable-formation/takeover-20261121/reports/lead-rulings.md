@@ -1167,3 +1167,438 @@ error.code; declared format identity instead of the CREATE_TABLE text; cross-bui
 listed one by one because the placement-owner repair rewrites replica-placement-owner.js; LEADER_UNKNOWN belongs
 in the waiting map with PARTITIONS_CHANGED).
 Merge order stands: retained-repair, then this branch, then the placement-owner repair; no merged tree has run yet.
+
+## 2026-11-21 — independent verification of the owner-fact read (reports/verify-owner-fact-read.md)
+(i) merge ee58d307f: APPROVE-WITH-CONDITIONS (the slice only adds refusals; depends on the change cone).
+(ii) migrate the absence-dependent topology guard: REJECT as it stands.
+Findings (read at ee58d307f plus retained lab outputs):
+1. "Still leader" is decided on a cached status: readStatus returns the last announced observation whenever a core
+   turn is pending (raft-rs-runtime-owner.js:1560-1578; pending during every peer send and during persistence
+   admission). A deposed leader that already knows its successor answers READY.
+2. The witness is a lower bound, not the snapshot position: entries applied inside a pending turn are in SQLite but
+   not in the cached status; "unchanged applied index" compares an object with itself.
+3. The gateway single-flight key omits the owner-fact floor and the deadline: an owner fact can join a plain
+   leader-REQUIRED read whose receiver never made the owner-fact decision.
+4. Read point sound (inferred): applied >= pendingConfIndex is sufficient and is what closes the fresh-leader case;
+   commit === applied has no test and no mutant.
+5. Mutant m01 survived its declared killers (the receiver repeats the role check); m02, m04, m06 killed; the rest
+   not yet run.
+6. The red-by-design test is an ordinary corpus test (would turn the corpus red at merge).
+7. Contract overstates the step-down bound (one to two election timeouts, about 2 s at defaults).
+8. Unverified risk: a read inside a foreign open transaction would see uncommitted rows.
+9. Floors are bare integers: the guard reads SERVICES but writes the ledger, so "its last write" is a position in
+   the wrong raft group.
+Before (ii): receiver decides on a current core status or refuses; refuses inside a foreign transaction; answer
+echoes the decided request; floors typed by partition; executed kills; and the EFFECT fenced: the ledger admission
+conditional on "no other open operation, same last terminal operation", whose record supplies the SERVICES
+(index, term) used as the read floor; floors of 0 leave a stale but complete inventory able to authorize a
+placement.
+Rulings:
+- Owner-fact writer, corrective round: applied position read from the store in ONE read transaction with the
+  statement (scope extended to the statement owner; replaces the read-point-moved heuristic); role/term from a
+  current core observation (red witness now; typed refusal when the status is not current, or stop with the exact
+  raft-owner need); single-flight key includes kind and floors, answer echoes the decided request; floors typed
+  {partitionId, index, term}; foreign-transaction reachability and refusal; one role decision (m01); full mutant
+  table; the red-by-design test becomes a green property plus a one-way counted census of the 37 remaining
+  leader-REQUIRED consumers; contract text corrected.
+- Raft runtime writer, highest-priority item: ONE current, non-driving, uncached core observation for receivers
+  deciding authority, with per-field honesty about what is settled mid-turn; history of why the read is cached
+  during a pending turn first; readStatus itself NOT changed (its general meaning is a pending owner decision).
+- Guard writer: stage 1 only (merges, census, per-consumer table, red witnesses), plus the facts for the effect
+  fence: what the ledger admission checks at apply today, every SERVICES inventory writer not driven by a ledger
+  operation, whether a terminal operation record can carry the SERVICES commit position.
+Consequence: the PostgreSQL placement repair now depends on (a) the read's corrective round, (b) the raft owner's
+current observation, (c) an effect fence for the guard. An interim option exists (move the guard to the strict
+leader-qualified read as merged, which is strictly safer than today's fallback read but short of an owner fact for
+an absence-dependent consumer); NOT taken, because the owner's instruction gates that migration on the read
+refusing unsafe read points. To be put to the owner.
+This also amends the status-read recommendation: receivers deciding authority need a CURRENT core observation, not
+the last settled one; option (b) alone would have made finding 1 permanent.
+
+## 2026-11-21 — W1 stage 2c (work/retained-ledger-observation-repair-20261121, tip f9d847b1d)
+Executed (lab/w1-s2c-attr-95ee6ee4a, lab/w1-s2c-probe-bf8a1f022): all four CREATE-dispatch cone regressions have
+one first-bad commit, 95ee6ee4a, and one cause: retryRetainedRepairDecision owed ROUTE before reading whenever the
+binding was unavailable, and witnessRefusal refused a read served by any replica other than the binding even when
+the row was present; the dispatch reservation gate asks this owner about every ADD/REPLACE dispatch. Class: product
+regression of this branch (a coordinator whose cached ledger route is unpublished or names a previous leader
+withheld the CREATE dispatch of a present, exact row). Repair f9d847b1d: a present row (EXACT or CHANGED) is
+settled by any qualified ledger-leader read; absence and contention still judged only against the binding; with no
+binding the decision reads its own row once, anything else stays owed to the next route publication (no timer).
+Green-after NOT yet run (the writer stopped on the lead's status request).
+Rulings: run the green evidence and the 97-file cone; replace the getAll capability probes with a required port
+inside the owner (report those outside); justify, or restrict, the presence-from-any-leader rule against a
+deposed-unaware leader (negative witness: present on the deposed leader, retired on the current one); the withheld
+dispatch gets an owned re-drive through the workflow owner's existing per-operation retry entry (red witness first;
+stop if it needs a new mechanism); record section 17. Independent verification follows that report.
+
+## 2026-11-21 — fixture migration, first writer's end report (work/line-regression-fixtures-20261121, tip 50cc71c3c)
+Executed on the lab (lrfix-g5-1, lrfix-g6-1, lrfix-g4-2, lrfix-g7-1): 12 of 22 assigned files green with no
+assertion changed and no src change; records and rows now come from the production producers through
+buildCreatedOperationFixture / advanceOperationFixture. Stopped or not done: three files pin the wake-row shape
+from before 4f347ca3f (22 added null columns); insert-retry; duplicate-operation-prevention and storage-reservation
+(need the SQLite store); entity-interaction-contract cases 2, 3, 6; durable-voter; bootstrap-api (removed pre-CDC
+fallback); placement-create-bootstrap-binding (another writer's area). Finding beyond the fixture seam:
+initialization-shutdown case 6: createReplicaAsync resolves although the runtime's shutdown() rejects (candidate
+cause b0dd82398). The receipt-fake groups were not started (writer out of context; successor plan in its report).
+Rulings and successors (both Opus, own worktrees):
+- work/line-regression-fixtures-b-20261121: the remaining files. Wake-row pins: read 4f347ca3f; if the full
+  canonical row is the intended contract, the expected shape comes from the production row builder while every
+  field the test is about stays asserted literally; if intent is not shown, stop. The shutdown-rejection finding
+  is investigated only (a swallowed production error would be a defect). Removed fallback stays removed.
+- work/line-regression-receipt-fakes-20261121 (fixtures tip + true merge of the judge repair ab3e4b9af): the
+  receipt-fake groups G2, G18, G13, G1, G3 and the two G12 files through ONE shared helper that calls the
+  production answer builders, pinned by a test against the real judge; a file still red after its fake answers
+  like the real producer is a finding.
+
+## 2026-11-21 — line-regression causes, stage 2 product repairs (work/line-regression-causes-20261121, tip ab3e4b9af)
+Executed on adam-laptop (lab/lr-s2-red-0ddf7b00f-1, lab/lr-s2-guards-before-0ddf7b00f-1, lab/lr-s2-after-ab3e4b9af-1).
+1. Named-write judge is total: presence checked before every comparison; three sibling sites fixed (nested-failure
+   selection, the distributed key check that passed with both keys missing, non-object participants); witness table
+   of 31 answer shapes (before: 5 threw, 1 wrongly APPLIED); real paths still APPLIED.
+2. UNKNOWN no longer says applied: success false, outcome-unknown code, contractState pending, nextAction retry.
+   Stale-field readers found: join-admission withdrawal, authoritative-row helper (mapped to REJECTED), admin body,
+   gateway telemetry. Author: no consumer treated an unknown write as acknowledged.
+3. No named write runs in the seed's bootstrap window (by reading only); the key-dropping lane carries every write
+   in that window and loses idempotence for keyed retries (recommendation, not made).
+4. Empty CREATE TABLE deadline error fixed; two more missing message members found and defined.
+5. register-service answers a retryable refusal 503 with a typed body (deferRetry was dropped by the error
+   builder); the PG-wire scale 500 came from the judge's TypeError, now 503.
+6. Witness only (red) for the misleading replicaId refusal code; exact edit handed to the merger (new
+   REPLICA_IDENTITY_NOT_ADMITTED in PLACEMENT_ADMISSION_ERROR; used at
+   rebalance-coordinator-operation-creation-support.js:528). No production caller sends replicaId on an ADD.
+After-run: 13 of 23 green; the 10 red are unmigrated fakes, now SLOW (each unproven write re-sent under its key for
+30 s / 34 attempts before the typed unknown; files run to the 600 s limit).
+Open: write-exactly-once-property red before and after (not examined); mutation-outcome vocabulary has no UNKNOWN
+member; classifier flags not gated by failed.
+Lead: independent verification started (reports/verify-named-write-judge.md), including whether one witnessed
+participant can make a multi-participant write APPLIED, the REJECTED mapping of unknown outcomes, the retry cost per
+unknown outcome on a real cluster (the GCP runs logged 283 and 659 outcome-unknown lines on CPU-saturated nodes:
+candidate contributor to formation pace, to be established), and the attribution of write-exactly-once-property.
+
+## 2026-11-21 — W1 stage 2c interim (tip a10a9cae3)
+Executed on tv-dator at a10a9cae3: the four regressed files green; the 97-file cone 67 pass, all 30 reds failing
+identically on 0993265e5 (pre-existing); the mirror file has one red by design (the re-drive witness). The writer
+RESTRICTED the presence rule after the deposed-leader challenge: presence settles from a read by the bound
+replica, and from any qualified leader only when no route binding exists; a read from any other replica is
+refused. Still to come: red-before probe, one mutant, the re-drive, record section 17, final report.
+
+## 2026-11-21 — topology guard migration, stage 1 (work/topology-guard-owner-fact-20261121, 625381bd6; reports/topology-guard-owner-fact-record.md)
+Executed on tv-dator (lab/guard-stage1-red-625381bd6); both merges (owner-fact read, guard witness branch) clean.
+Red witnesses, each for the consumer's own reason: W1 the planner reads its own follower once, zero hops to the
+leader, untyped refusal, no proposal; W2 the production planner turn came back 5 times in 20 s, each refused
+blocked/replica_inventory_unusable with a null code, and still proposed nothing 60 s after the leader was
+reachable; W3 same with a deposed published leader. Siblings: the allocator on a follower host hands out
+sys-postgres-wire-r1, colliding with the leader's row (reference gives -r2); the bootstrap address book drops the
+leader-only row; the over-target hold is released on the follower host while the reference holds it.
+Census: five fallback-mode consumers (guard, retired-source check, allocator, over-target hold, bootstrap rows);
+once they move, getAuthoritativeEntityServiceRows and the fallback arm have no caller. Three strict readers stay.
+Fence facts (read only): the ledger admission already refuses another incomplete operation of the same entity
+(PARTITION_BUSY) but checks no last terminal operation, SERVICES position or epoch; its `positions` record is
+carried and never checked; SERVICES changes the ledger never sees: failure-detector FAILED marks, restart
+re-insertion, group retirement, bootstrap/admin handoffs, join upserts, runtime state projections; no SERVICES
+position on the terminal record today (the registration write's commit witness is dropped; the completion read
+drops its witness and does not require a leader).
+Findings for other owners: completion reads with leader ANY are absence-dependent; message-group source retirement
+treats an unavailable read as "no live row" behind a capability probe; the retired-source check releases its lease
+on a cache hint.
+Rulings (stage 2 = migrate now against the merged read, adapt when the read's corrective round lands; not merged
+until the read's re-verification approves): the guard's two cache-based "allowed" escapes are DELETED; the
+over-target hold DEFERS instead of failing open (documented fail-open to be quoted for a supersession record;
+flagged to the owner); partition bootstrap rows are an explicit HINT; allocator callers outside the planner use
+their existing attempt loop / the workflow's per-operation retry, else stop; typed refusal codes; fallback arm and
+helper deleted when callerless; coupled pair registered with the green commit. The ledger fence is NOT in this
+stage: a residual witness (deposed-unaware SERVICES leader + an operation completed through the new leader) is
+written and run after the migration to show whether anything remains once the read decides on a current core
+observation; the carrier design (completion read's witness recorded on the terminal transition, used as a typed
+floor) is recorded as a candidate only.
+Owner-fact writer: deadline becomes a required parameter; the routing dimension is carried explicitly.
+
+## 2026-11-21 — placement owner corrective round (work/placement-owner-repair-20261121, head 8e84e2801; record 18-25)
+Executed on tv-dator (lab/por-corrective-red-87a34cb4 -> lab/por-corrective-8e84e280): red-first and now green: the
+census-read checkpoint (construction after the tenure ended), the drain-start mark (two passes of one custody in
+flight), the poisoned candidate (another deficit starved). Re-staged with asserted premises and green: tenure 3,
+4, 5 at the admissibility read, 13 with a real suspension at all six transfers; P3(i) retention observable; the
+barrier wake and its negative; the REMOVE-path await witness. Source: check after readPassCensus; re-check after
+the barrier latch; drain marked before any foreign call; per-candidate isolation (typed CANDIDATE_FAILED, recorded
+under failedCandidates, triggers retained, pass continues; a failure outside the loop still aborts). Red on
+purpose: the barrier "production definition" witness (raft owner) and the write-kernel probe. Unchanged: construction
+4-5 red (stage 3); core [18] and drain [4, 10, 11] red as at base 974320ad3. Witness 13's bound restated: no
+obsolete pass remains after a role-edge transfer; no constant bound for a renewal without a role edge (kernel gap)
+or a suspended REMOVE read (inferred).
+Started: re-verification of the corrective round (reports/verify-placement-owner-corrective.md), with per-candidate
+isolation examined as new behaviour; stage 3 writer (construction invariant, stop before the removal of the
+per-partition scheduler) on the same worktree; a kernel writer on work/write-kernel-tenure-fence-20261121 (tenure
+captured at submission and compared at every hand-off to consensus; all six kernel callers censused; stop if a
+non-authority caller would lose work).
+
+## 2026-11-21 — verification of the named-write repairs (reports/verify-named-write-judge.md): APPROVE-WITH-CONDITIONS
+No safety defect introduced; the judge is strictly tighter than at base. Verified: one witnessed participant cannot
+make a multi-participant write APPLIED; no remaining comparison passes on two absent values; no non-retryable
+failure became retryable; write-exactly-once-property is an intended contract of d471620a9 (not a regression); lab
+claims confirmed. Retry cost in one GCP node log: 48 unknown lines, 38 named writes (all logs-p1 INSERTs), 2 of 36
+keys repeat about 8 s later, no 30 s bound spent: a plausible MINOR contributor to formation pace (inferred).
+Conditions: (1) managed-split-workflow-state-methods.js:86 still reads the undefined message member; (2) four
+unmigrated files went from 8.3 s to 1565 s: do not merge ahead of the fixture migration; (3) the item-6 hand-off is
+incomplete (the new code must join PLACEMENT_DEFINITE_ANSWER_CODES on the outcome-format branch); (4) UNKNOWN is
+still not a named outcome (consumers infer owner_not_ready / REJECTED from the missing field; thrown transport
+unknowns keep a different shape); (5) pre-existing: a zero-participant distributed success with affectedRows 0 is
+APPLIED without a witness. Not confirmed: FAILED / NOT_PROPOSED on real producers. New: the bootstrap-direct lane
+re-executes the same SQL outside raft when the raft lane fails (cdc-bootstrap-direct-sql.js:139-178): a fallback.
+Ruling: a successor writer on the same branch takes (1), (4), (5), the real-producer guard for definite failures,
+and a report-only necessity analysis of the bootstrap-direct fallback; (2) and (3) are merge notes.
+
+## 2026-11-21 — re-verification of the placement owner corrective round (reports/verify-placement-owner-corrective.md): APPROVE-WITH-CONDITIONS for 8e84e2801
+Closed: drain mark; AFTER_CENSUS checkpoint; re-staged witnesses 3/4/5/13. Confirmed: the await table (one
+omission: the CDC drive's synchronous prefix); the barrier latch belongs to the custody; no double drain and no
+stuck mark; red-first in commit and execution order; isolation is safe against duplicates (the applier refuses a
+busy partition, an unresolved ledger transition and copy capacity at commit). Open for other writers: the barrier
+fact (raft owner) and the kernel fence.
+New findings (by reading): (1) trigger retention after a candidate failure does nothing for planning and makes the
+retained set grow so resyncOnly is never true; (2) CANDIDATE_FAILED is classified by position and can name an
+admitted operation (local attempt delete throwing after a committed admission; pass continues on stale accounting);
+(3) isolation does not cover a bad PARTITIONS row or a failing capacity read outside the loop; (4) the A4' row has
+a schedule and its checkpoint discards its result; (5) two more cases without a constant bound; (6) no witness for
+the barrier re-check. Six files of the stage-2 selection were not re-run at head.
+Rulings (sent to the stage-3 writer, who holds the worktree, as a separate red-first round): retention only for an
+aborted pass, a failed candidate is re-derived by planning; classification by what is known about the proposal
+(not handed / definite refusal = CANDIDATE_FAILED and continue; admitted then local failure = admitted + abort;
+handed with no answer = uncertain attempt + abort); per-partition evaluation failures are typed per partition while
+a failed global-authority read still aborts the pass; A4' witnessed and its check made to decide; barrier re-check
+witnessed; record corrected; the six files re-run.
+Merge condition recorded: the barrier witness must be green (raft owner's field) before any "stage 1 complete"
+claim; the kernel probe stays open against the kernel's writer.
+
+## 2026-11-21 — fixture migration successor B (work/line-regression-fixtures-b-20261121, b2a4d8796)
+Executed on adams-gamla (lab/lrfixb-g1-1, lab/lrfixb-g2-1): green with assertion counts matching main:
+remote-direct-wakeup 38, ready-node-retry-cache-priority 37, ready-node-retry-dispatch 54, insert-retry 10,
+duplicate-operation-prevention 45, storage-reservation 100; entity-interaction-contract case 3 green (cases 2, 6
+open). Wake-row question answered: 4f347ca3f deliberately replaced the dispatch service's local 17-column wake row
+with the canonical row builder (e8f4bdb84 routed all three wake producers through it): the full row is the
+intended contract; the expected rows take their column set from the production builder with the 17 formerly pinned
+columns kept as literals. Shutdown finding investigated: production does NOT swallow the rejection
+(replica-runtime-cleanup-custody.js:73-95 rethrows and keeps the service in pendingRuntimeShutdowns); the test
+resolves because its factory never calls onPartitionConstructed (required since 7ccb67f35): fixture debt.
+Rulings: bootstrap-api and durable-voter reassigned to the receipt-fakes writer (restatement confirmed: exactly one
+services INSERT reaches the CDC owner, no raw SQL write); the shutdownCalls >= 2 assertion states a property (a
+failed shutdown is attempted again) and is not lowered: the test must drive the owner of the retained service's
+retry, and if none exists that is a product finding; the one placement-create-bootstrap-binding file may be
+migrated if the outcome-format branch does not change it; entity-interaction cases 2 and 6 continue; one
+consolidated run at the end.
+
+## 2026-11-21 — fixture successor B, end report (work/line-regression-fixtures-b-20261121, 8e1571c6a)
+Executed on tv-dator (lab/lrfixb-all-2): consolidated 20 files, 18 pass, 588 assertions; every file turned green by
+the two writers stays green. initialization-shutdown case 6 green: the retry of a retained runtime is owned by the
+node's shutdown (replica-runtime-cleanup-custody.js:140-157, rejects with an AggregateError and stays retained
+while it fails) and by a later CREATE of the same replica (settlePendingReplicaRuntimeCleanup); the test drives the
+node's shutdown and keeps shutdownCalls >= 2 unchanged: no product finding. Open: entity-interaction-contract cases
+2 and 6; placement-create-bootstrap-binding 11/14 (cases 12/13 fail later because the durable in-flight REMOVE
+correctly blocks the self-move gate; case 14 has three removals durable at once on one entity).
+Ruling for the last file: per case, decide which production caller it models: an existing operation (evaluate each
+subject alone and bring it terminal through the producer before a gate the case expects free) or a preflight (the
+production prospective evaluator); a case that can only pass by asserting something different is stopped and
+reported. Successor C started for these two files.
+
+## 2026-11-21 — CDC plan stamp corrective round (work/cdc-currentness-stamp-20261121, 873570c54; record section 20)
+Executed on adam-laptop (lab/cdcstamp-c1-red -> lab/cdcstamp-c2: 28 files, 26 pass; the two reds by ruling are the
+selection bounds, still 243 / 685 raft status reads; plus the foreground-boundary first-case timeout).
+1. Versions REQUIRED: new wiring validation (cdc-group-propagation-collaborators.js) refuses a collaborator without
+   its capability, typed, before anything is assigned; no optional read remains in the stamp; no "unknown stamp";
+   fixtures moved to the real cache/tree (cache and tree refusals red at C1).
+2. Production composition pinned: stamp known, second identical delivery adds no rebuild.
+3. Stamp components made load-bearing; FOUR REMOVED as not independently movable (configuration identity,
+   router.deliver, propagationMode, source.groupId); stamp is now cache/tree/router identities, nodeId, replica
+   suffix, configuration revision, tree generation, four table versions. Mutants killed on the lab: tree
+   generation, router identity (lab/cdcstamp-mutant-*).
+4. One declared table list used by the routing and iterated by the stamp; structural test records real reads in
+   both modes (its red mutant not yet run: runner failure).
+5. Stamp taken before and after the build; a plan built across a move is returned but not held (red at C1).
+6. Paired runs: the foreground-boundary first case times out at BOTH base (6454 ms) and head (6981 ms) against a
+   6 s budget: pre-existing, load-dependent.
+7. Record corrected.
+Lead: short independent re-check started (reports/verify-cdc-plan-stamp-corrective.md), centred on the four
+removed components (each removal is a safety claim). Closing items to the writer: run the third mutant; delete the
+now-dead optional cache calls in the routing file; diagnose the first-case timeout (virtual time if it is test
+waiting; a cost finding if it is product work; the budget is not raised).
+
+## 2026-11-21 — re-check of the CDC plan stamp corrective round (reports/verify-cdc-plan-stamp-corrective.md): APPROVE-WITH-CONDITIONS, none blocking
+No stale-positive hole. The four removed stamp components verified immovable at 873570c54 (config identity
+assigned only at construction and initialize accepts no other config; router.deliver only type-checked and never
+reassigned; propagationMode overwritten from config on entry to the build with the stamp taken before and compared
+after; source.groupId assigned only in the constructor). Wiring validation, the before/after comparison, the table
+list and all lab claims confirmed by sha, file and case.
+Conditions: K1 version methods are checked for presence, not value (a constant or undefined would compare equal
+for ever; production owners return integers); K2 the structural case has no red run yet (mutant not executed); K3
+the foreground-boundary timeout is pre-existing and a standing red needing an owner. Gap: stop() then start() on a
+never-initialized service ends in a TypeError.
+Ruling: K1 and the gap added to the writer's closing items (integer answers validated at wiring; a non-integer at
+read time means the plan is not held; unwired start is a typed refusal). The writer's final sha after the closing
+items is the merge candidate for this line; it is independent of the placement/retained merge order.
+
+## 2026-11-21 — W1 stage 2c final (work/retained-ledger-observation-repair-20261121, head f42102c84; record section 17)
+Executed (tv-dator, adam-laptop): the four regressed files green (lab/w1-s2c-run3-a10a9cae3); retained/placement
+set green except three known reds (the W1b-dependent continuation witness, S11 raw-bypass-negative,
+placement-owner-core test 20); the 97-file cone 67 pass and all 30 reds identical at 0993265e5; mirror 9/10, the
+one red being the re-drive witness by design. Rule in force: a read served by the bound replica decides; with no
+binding at all any qualified ledger read may settle a PRESENT row, never an absence; a read from a replica other
+than a resolvable binding settles nothing (UNQUALIFIED_BINDING), owed to the route publication. Mutants: presence
+from a non-binding replica killed; absence from a non-binding leader first SURVIVED, a witness was added
+(f42102c84) and it is now killed. Negative witness: a row present on a deposed leader and retired on the current
+one is not confirmed.
+Author's stated residual (pre-existing): with no binding, a deposed leader's presence can still become REINSERTED
+through the zero-row update arm (replica-operation-repository-mutation-update-methods.js:593-600), which has no
+downstream fence; the dispatch gate IS fenced by the target's create admission CAS.
+Capability probes outside the owner listed with exact edits (notably: a cache without onCacheChange silently loses
+the owner's ROUTE and own-row wakes; createMockCache has none).
+Re-drive stopped on a design question. RULING: the withheld dispatch is re-driven by a signal from the retained
+owner (an event per operation identity when a withheld row becomes confirmed or definitively absent) into the
+workflow owner's per-operation fenced retry entry (953d705f8), which this older branch does not have; so it is
+implemented on the INTEGRATION line after this branch is merged, not by polling and not on this branch. The
+zero-row-arm fence and the probe edits go to the same post-merge work list.
+Started: independent verification (reports/verify-w1-retained-repair-owner.md).
+
+## 2026-11-21 — independent verification of the retained-repair owner (reports/verify-w1-retained-repair-owner.md)
+APPROVE-WITH-CONDITIONS for the merge; NOT ready for the three-node acceptance run. Why merge: the integration
+line carries an older sibling draft of this owner (e9de22eb1) with the role-keyed notified-row wake and any-leader
+read acceptance; the branch removes both (verified).
+Defects, inferred by reading, no witness covers them: F1 a timer wake that owes only ROUTE with an unchanged
+binding returns before any read (route change -> one transient read failure -> record stuck); F2 the retry window
+is cleared by every qualified read, so a presentation that keeps failing retries every 100 ms for ever, never
+SPENT, never reported; F3 joinRetainedRepairDecision presents unfenced with no read (a delegated sender that
+becomes ledger leader proposes once with unchanged BUSY); F4 a stale open window gives a later transient failure
+zero retries; F5 with no binding INVALID_ROW and READ_FAILED are relabelled route_unavailable, unlogged, no timer
+(verified). Table: "timer fires while delegated: impossible" is possible (duplicate continuation on sender and
+receiver). Custody uses existing identities; the term is never compared at the sender (term-only tenure end leaves
+it DELEGATED until a caller arrives). Presence/absence: the dispatch gate is fenced (verified); the zero-row arm is
+unfenced, head narrower than base 0993265e5; UNQUALIFIED_BINDING neither bounded nor visible; no binding can
+persist indefinitely.
+Evidence: nine witnesses and eight mutants confirmed in lab outputs; five of six mechanism mutants not re-run at
+head; FIVE of the "30 pre-existing reds" are GREEN on the integration line (lab/w2-final-23344cddc-focused), so the
+attribution against the old draft tip was not sufficient.
+Rulings: a fresh corrective writer on the branch: each of F1-F5, the duplicate continuation, visibility of the
+route-owed wait, and the term-only tenure end gets an executed witness FIRST and a repair only if red (one window
+model for F2/F4; no timers added; visibility through the owner's existing state surface). Post-merge work on the
+integration line (not on this branch): the re-drive (one edge-triggered event at retireRetainedRepair with
+operation identity and CONFIRMED / UNCONFIRMED(reason), only for records that refused a caller), the zero-row-arm
+fence, the outside capability probes. The merger was given the resolution facts (owner files: branch logic;
+replica-operation-repository.js: integration file plus the branch's nine lines) and must attribute the five files
+explicitly on the merged head against the integration baseline.
+
+## 2026-11-21 — placement stage 3 census and corrective round 2, first writer's end report (head 3b182f42f; record 26-28)
+Executed on tv-dator (lab/por-s3-witnesses-500a9851, lab/por-cr2-item1-red-a5aacf97 -> lab/por-cr2-item1-3b182f42).
+Census: seven construction sites; the only production `new RebalanceCoordinator` is inside ControlPlaneSetup.create
+and binds the factory with no await in between, so an unbound coordinator arises only when tests or simulation
+build one outside setup. Hazards: the flag guard read after the existing-rebalancer branch; the attach silently
+returns null while the lazily created eligibility owner does not exist; the binding never attaches a ledger that
+met the coordinator before it; a capability probe and a skip when another leadership sink is set; the factory-less
+fallback arms no timer; seed-cleanup-handler quiesces without isShutdown (owner re-attachable during teardown; no
+witness). Witnesses: 1 seed, 2 join, 3 late ledger, 7 leadership lost/regained, 8 ledger replica restart, 9 join
+during formation green; 4, 5 and new 6 (late binding with no rebind: the ledger itself holds a UnifiedRebalancer
+and no owner is ever attached) red. 3a designed, not implemented. 3b: of 14 flag read sites only R1 and R2 select
+the retired mechanism; R3-R13 select placement-admission/learner-first behaviour and R4-R10 run their false branch
+in production before bindControlPlaneServices.
+Corrective item 1 done (only a pass that throws keeps its triggers); items 6, 7 done; items 2-5 not done; item 3:
+no cache row found that makes the evaluation throw.
+Rulings (successor started on the same worktree): implement 3a as designed plus a teardown witness; 3b deletes
+exactly R1, R2, the partition-side UnifiedRebalancer construction with its branches, the fallback constructor and
+what becomes unreachable; R3-R14 are NOT touched, each documented with what its false branch does pre-bind (a
+later decision); corrective items 2, 4, 5 red-first; item 3 gets a bounded search and is closed as not reproducible
+if no production-holdable input throws.
+
+## 2026-11-21 — write kernel tenure fence (work/write-kernel-tenure-fence-20261121, head a5bf01004; reports/write-kernel-tenure-fence-record.md)
+Executed on adam-laptop (lab/kernel-red-0bb5c473, lab/kernel-red-g-c9d8896f -> lab/kernel-green-a5bf0100).
+Caller census: SEVEN callers of the kernel (placement; ordinary SQL writes; CDC acknowledgements; coordinator
+settlement; participant PREPARE/DECISION; generation origin; formation latch/declare); the author judges each
+already handles the role-edge answer, so the rule applies to every write and no new retry is needed. Repair
+(candidate B): each write records its tenure at registration; proposeUnlessDeferred compares it by identity with
+the current tenure in the same synchronous step as the propose; a mismatch is released through the queue's existing
+release with LEADERSHIP_LOST; partitionWriteLeadershipRefusalOf refuses NOT_LEADER if the tenure changes during its
+own status read. Witnesses red -> green: deferred placement (a), parked write (b), ordinary deferred write (e),
+leak counts (f: queued/pending/timers 1 -> 0), renewal inside the kernel's read (g); inherited work (d) green
+before and after.
+STILL RED, executed on three real rs-raft ports (witness c): a proposal queued INSIDE the port on a deposed leader
+is FORWARDED by raft-rs to the successor (raft.rs ~:2312-2322; the binding has no switch for forwarding) and
+commits under the next term, after the successor's term-start entry. Exact edit handed to the raft owner (record
+the submitted term per proposal; at the propose step after drainInbound refuse when the core is not leader or the
+term differs, with the core's dropped-proposal refusal).
+Unattributed: partition-runtime-reconstruction-leadership test 5 failed once, passed five other runs.
+Rulings: the join gap is closed through the SAME release step (a current-tenure caller never joins an
+earlier-tenure pending write); the read check stays conservative; the participant staging-session asymmetry (role
+edge discards, renewal keeps) is recorded for the participant owner; the architecture doc gets the fence. The raft
+runtime writer received the forwarding item as its third raft-owner item (with the question whether anything
+relies on follower forwarding) and a status/budget check. Independent verification started
+(reports/verify-write-kernel-tenure-fence.md), centred on: is the comparison at every hand-over; per-caller loss or
+double apply; and whether a write answered "not proposed" can still be forwarded and committed from the port
+(double apply on retry).
+
+## 2026-11-21 — raft-owner items, status from the raft runtime writer (work/raft-frame-delivery-20261121)
+A (currentTermApplied = the leader applied an entry of its own term): DONE, executed: red 1d4125c7b
+(lab/raftframes-cta-red), fix bc949308f (lab/raftframes-cta-green, 12/12). B (one current, non-driving, uncached
+core observation for receivers deciding authority): implemented and pushed: red 90021de24 (lab/raftframes-cao-red,
+4/4 red), operation 97ba4431b; green lab run pending (host busy). C (refuse a proposal the core would forward
+after losing leadership): started. The writer has about half its budget left.
+Rulings: the raft-owner items are EXTRACTED onto their own branch work/raft-owner-authority-20261121 from
+23344cddc (cherry-pick through the hook, red-first order kept, lab run at head and base), so the owner-fact read
+and the placement owner depend on them without depending on the transport work, which still has owner decisions
+pending. The raft writer finishes C as two raft-only commits, writes a handover section, and stops; a successor
+takes the remaining frame steps. Independent verification of the extracted branch follows.
+
+## 2026-11-21 — fixture successor C (work/line-regression-fixtures-b-20261121, 92a441229)
+Executed on tv-dator (lab/lrfixc-entity-1, lab/lrfixc-all-1): 20 files, 18 pass, 590 assertions; entity case 2 and
+placement cases 12/13 green; no assertion changed. Basis: every partition and runtime-service operation is created
+through placement admission, which refuses a new admission on an entity with an incomplete operation
+(PARTITION_BUSY, partition-placement-admission-decision.js:202-229), so two in-flight operations on one partition
+cannot exist in production. Stopped: entity case 6 message-group half (production answers FAIL "group-safety would
+drop active replicas below minimum (2/3)", the test expected DEFER from a hand-built context; the deferral logic
+was the same when the case was added); placement case 14 round 2 (needs a durable removal beside an in-flight
+native placement: refused by admission in both orders).
+Rulings: cases 12/13 as preflight confirmed (the only production caller is getMoveSafetyError ->
+evaluateProspectiveRemoveSafety). Entity case 6: expected value restated DEFER -> FAIL with its reason, recorded as
+a changed expected value; contract as executed, to be put to the owner: a message-group REMOVE that would drop
+active replicas below the minimum FAILS the operation, it is not deferred and retried. Case 14 round 2: no
+fixture state production cannot produce; the REMOVE at PENDING as a preflight through the production evaluator,
+the REPLACE phases restated as the admission's PARTITION_BUSY refusal in both orders; count change recorded.
+
+## 2026-11-21 — FIRST MERGE into the integration candidate: retained-repair owner (work/integration-candidate-20261121, 78c40b57b; reports/integration-merge-record.md)
+True merge of f42102c84 into 23344cddc (merge base 812dd3a1b), committed through the hook. 43 files changed on both
+sides; 17 conflicted. The integration side's retained-owner files were an older sibling draft (e9de22eb1): every
+symbol it added exists in the branch, nothing there had changed for the mutation port or the dead-arm deletion, so
+those files equal the branch; replica-operation-repository.js = integration file + the branch's nine lines.
+Semantic resolutions: a stale arm in settleRetainedRepairDecision that git merged WITHOUT conflict (rewrote the
+clearing trigger on a failed read) removed; the real-group ledger fixture keeps integration's signature with the
+branch's ledgerRouteRows (the other row builder mints a new created_at, so the custody birth check could never
+match); the S11 recovery test translated field by field to the new named-state record (no assertion dropped).
+Preserved: required mutation port everywhere; no raft_role = leader reader or publication; named-handoff fix.
+Executed on the merge sha, no red new in the merge: (a) witness and retained/placement set 10 pass / 3 fail (two
+red by design on the branch, one identical on 23344cddc; three files red on 23344cddc now pass); (b) the 97-file
+cone 73 pass / 24 fail (the branch alone 67 / 30; the merge cures 10 files incl. the five the verifier named; 21 of
+24 are integration-line reds); (c) integration controls 14 pass / 1 fail (identical on both parents).
+FINDING: three files pass on 23344cddc and fail on the merge with the branch's first failure
+(replica-dispatch-reservation-identity case 7, reservation-fail-closed-dispatch-gate case 5,
+reservation-file-backed-restart case 25): the dispatch is held at the gate because the retained owner does not
+confirm the row and nothing re-drives it.
+Rulings: the merger probes the three files (classify: fixture debt / owner withholds wrongly / missing re-drive),
+then implements the re-drive on this line (one edge-triggered event at retireRetainedRepair through a required
+port into the workflow owner's per-operation fenced retry entry; no polling; negatives counted), then re-stages
+cl-029 case 3 and priority-recovery-dispatch-pending-timeout-reentry on virtual time.
+Next merges, in order: the retained branch's corrective commits; the outcome-format branch (three-way in
+partition-placement-admission.js; LEADER_UNKNOWN in the waiting map); the placement-owner repair (this merge
+changed replica-placement-owner.js: the retained-repair collaborator and both leadership edges in setLeader).
+
+## 2026-11-21 — verification of the write kernel tenure fence (reports/verify-write-kernel-tenure-fence.md): APPROVE-WITH-CONDITIONS for a5bf01004
+Central question answered NO (verified by reading): a write answered "not proposed" cannot still be forwarded and
+committed from the port: the fence answers NOT_LEADER only in state QUEUED; PROPOSED is marked synchronously before
+raft.propose and returns to QUEUED only after a typed port deferral where nothing reached the core; a port-held or
+forwarded write is always PROPOSED and is answered OUTCOME_UNKNOWN or its commit.
+Findings: (1) releasedOnEndedTenure releases by entryId with no state or ownership check: a stale hand-off can
+release a write re-registered under the same entryId in the new tenure (safe direction, OUTCOME_UNKNOWN; the lead's
+join closure would make it happen every time); (2) contract gap: the fence sits above the port queue and inbound
+drain; every readmitted parked write takes the unfenced port-queued path (witness c); (3) null === null passes:
+"parked and readmitted while not leading" is not closed; (4) PREPARE: no DECISION over unprepared state, but a kept
+sealed session re-proposes T1-sealed bytes under T2 (participant owner); (5) one author claim wrong but harmless;
+(6) no livelock; leak accounting confirmed; the join yields only a retryable NOT_LEADER.
+Evidence confirmed by sha and file for a, b, e, f, g, d, c. None of the participant-transaction, epoch-fencing,
+settled-replay, CDC delivery-progress, proposal-queue property, transfer-leadership suites ran after the repair.
+Rulings (to the kernel writer): bind the release to the owning registration (identity, not entryId) with a
+witness, together with the join closure; a null tenure never proposes (witness first); record the contract gap and
+the PREPARE finding; run the missing suites at head and at 8e84e2801 and the reconstruction suite five times. The
+owner's tenure contract is NOT reported closed while witness c (raft owner's forwarding refusal) is red.

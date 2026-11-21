@@ -1,0 +1,21 @@
+{
+  "sha": "b2a4d8796609bb2d3fa6f88d8027e305cf8f9915",
+  "host": "adams-gamla",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/rebalancer/duplicate-operation-prevention.property.test.js",
+    "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js",
+    "test/rebalancer/rebalancer-entity-interaction-contract.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/rebalancer/duplicate-operation-prevention.property.test.js",
+        "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js",
+        "test/rebalancer/rebalancer-entity-interaction-contract.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

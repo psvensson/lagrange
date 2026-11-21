@@ -1,0 +1,26 @@
+placement-shell=3166859
+placement-head=5880e9d350e6dcb675d4a83b59f0af88975fe16e
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3167319
+# test-files planned=4
+classified lane ordinary: 3 file(s), jobs=4
+thermal: ok cpu 61C (coretemp/Package id 0) nvme 46C (nvme/Sensor 1)
+ok test/control-plane/replica-dispatch-direct-wakeup-delivery-decision.test.js (6 assertions, 1228ms)
+ok test/rebalancer/self-owned-coordinator-handoff-dispatches-in-process.test.js (9 assertions, 1301ms)
+ok test/rebalancer/reservation-expiry-operation-aware.test.js (10 assertions, 1380ms)
+# test-files total=3 pass=3 fail=0 assertions=25
+classified lane exclusive: 1 file(s), jobs=1
+thermal: ok cpu 57C (coretemp/Package id 0) nvme 47C (nvme/Sensor 1)
+ok test/rebalancer/message-group-operation-routing.integration.test.js (21 assertions, 1226ms)
+# test-files total=1 pass=1 fail=0 assertions=21
+placement-results={"file":"test/control-plane/replica-dispatch-direct-wakeup-delivery-decision.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":1228,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/self-owned-coordinator-handoff-dispatches-in-process.test.js","attempt":1,"ok":true,"assertions":9,"durationMs":1301,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/reservation-expiry-operation-aware.test.js","attempt":1,"ok":true,"assertions":10,"durationMs":1380,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/message-group-operation-routing.integration.test.js","attempt":1,"ok":true,"assertions":21,"durationMs":1226,"retriedOnce":false,"firstFailureLine":null}

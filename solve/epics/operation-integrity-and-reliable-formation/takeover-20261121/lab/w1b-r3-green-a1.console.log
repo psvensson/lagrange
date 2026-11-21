@@ -1,0 +1,1126 @@
+lab test: adams-gamla: ordinary (12 files) cores=4 mem=15.6GiB speed x2.06
+[adams-gamla] placement-shell=1945596
+[adams-gamla] placement-head=ec1b2f77c85c39940aa856bba0ad2a7548a75b98
+[adams-gamla] placement-link=node_modules
+[adams-gamla] placement-link=data/examples
+[adams-gamla] placement-prepared=import-graph
+[adams-gamla] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:3 base:0993265e53601cba4a6a41baa08158725cfcea7f
+[adams-gamla] placement-pid=1946052
+[adams-gamla] # test-files planned=12
+[adams-gamla] classified lane ordinary: 12 file(s), jobs=3
+[adams-gamla] thermal: ok cpu 44C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] ok test/partition/placement-admission-copy-occupancy.test.js (5 assertions, 6754ms)
+[adams-gamla] ok test/partition/committed-outcome-identity-boundary.test.js (2 assertions, 6998ms)
+[adams-gamla] ok test/partition/placement-admission-apply.test.js (9 assertions, 10489ms)
+[adams-gamla] ok test/partition/placement-admission-found.test.js (6 assertions, 6712ms)
+[adams-gamla] ok test/partition/placement-outcome-format.test.js (5 assertions, 6672ms)
+[adams-gamla] ok test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js (3 assertions, 1856ms)
+[adams-gamla] not ok test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js (177 assertions, 6953ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 14
+[adams-gamla] RebalanceCoordinator initialized {
+[adams-gamla]   nodeId: 'node-leader-1',
+[adams-gamla]   config: {
+[adams-gamla]     pendingTimeoutMs: 30000,
+[adams-gamla]     creatingTimeoutMs: 60000,
+[adams-gamla]     syncingTimeoutMs: 300000,
+[adams-gamla]     removingTimeoutMs: 60000,
+[adams-gamla]     maxConcurrentAdds: 5,
+[adams-gamla]     reservedRuntimeServicePlacementSlots: 1,
+[adams-gamla]     maxConcurrentRemoves: 5,
+[adams-gamla]     periodicCheckIntervalMs: 60000,
+[adams-gamla]     reservationTtlMs: 300000
+[adams-gamla]   }
+[adams-gamla] }
+[adams-gamla] # Subtest: D4 & Counterexample 2a: GROWTH_PROMOTE completion requires authoritative non-joint committed membership with matching partition and promoted replica provenance, never projected SERVICES.raft_role
+[adams-gamla]     ok 1 - projected SERVICES follower rows must never complete an incomplete GROWTH_PROMOTE
+[adams-gamla]     ok 2 - provenance check rejects mismatched partitionId
+[adams-gamla]     ok 3 - should be equal
+[adams-gamla]     ok 4 - should be equal
+[adams-gamla]     ok 5 - provenance check rejects partial promotedReplicaIds
+[adams-gamla]     ok 6 - provenance check rejects voterReplicaIds missing a promoted learner
+[adams-gamla]     ok 7 - should be equal
+[adams-gamla]     ok 8 - should be equal
+[adams-gamla]     ok 9 - should be equal
+[adams-gamla]     ok 10 - should be equal
+[adams-gamla]     ok 11 - should be equal
+[adams-gamla]     ok 12 - should be equal
+[adams-gamla]     ok 13 - should be equal
+[adams-gamla]     ok 14 - durable terminal GROWTH_PROMOTE record reports COMPLETE_ACTIVE
+[adams-gamla] Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+[adams-gamla]     1..14
+[adams-gamla] ok 1 - D4 & Counterexample 2a: GROWTH_PROMOTE completion requires authoritative non-joint committed membership with matching partition and promoted replica provenance, never projected SERVICES.raft_role # time=92.091ms
+[adams-gamla] 
+[adams-gamla] RebalanceCoordinator initialized {
+[adams-gamla]   nodeId: 'node-leader-1',
+[adams-gamla]   config: {
+[adams-gamla]     pendingTimeoutMs: 30000,
+[adams-gamla]     creatingTimeoutMs: 60000,
+[adams-gamla]     syncingTimeoutMs: 300000,
+[adams-gamla]     removingTimeoutMs: 60000,
+[adams-gamla]     maxConcurrentAdds: 5,
+[adams-gamla]     reservedRuntimeServicePlacementSlots: 1,
+[adams-gamla]     maxConcurrentRemoves: 5,
+[adams-gamla]     periodicCheckIntervalMs: 60000,
+[adams-gamla]     reservationTtlMs: 300000
+[adams-gamla]   }
+[adams-gamla] }
+[adams-gamla] # Subtest: Finding 5: settleGrowthPromoteCompletion & reconcileGrowthPromoteLifecycle gate terminal completion on durable persistence disposition (deferred -> WAITING, refused -> REFUSED, committed -> COMPLETED)
+[adams-gamla]     ok 1 - should be equal
+[adams-gamla]     ok 2 - should be equal
+[adams-gamla]     ok 3 - should be equal
+[adams-gamla]     ok 4 - should be equal
+[adams-gamla]     ok 5 - should be equal
+[adams-gamla]     ok 6 - should be equal
+[adams-gamla]     ok 7 - should be equal
+[adams-gamla]     ok 8 - should be equal
+[adams-gamla]     ok 9 - expected to reject
+[adams-gamla]     ok 10 - should be equal
+[adams-gamla]     ok 11 - should be equal
+[adams-gamla]     ok 12 - should be equal
+[adams-gamla]     ok 13 - should be equal
+[adams-gamla] Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+[adams-gamla]     1..13
+[adams-gamla] ok 2 - Finding 5: settleGrowthPromoteCompletion & reconcileGrowthPromoteLifecycle gate terminal completion on durable persistence disposition (deferred -> WAITING, refused -> REFUSED, committed -> COMPLETED) # time=13.292ms
+[adams-gamla] 
+[adams-gamla] RebalanceCoordinator initialized {
+[adams-gamla]   nodeId: 'node-leader-1',
+[adams-gamla]   config: {
+[adams-gamla]     pendingTimeoutMs: 30000,
+[adams-gamla]     creatingTimeoutMs: 60000,
+[adams-gamla]     syncingTimeoutMs: 300000,
+[adams-gamla]     removingTimeoutMs: 60000,
+[adams-gamla]     maxConcurrentAdds: 5,
+[adams-gamla]     reservedRuntimeServicePlacementSlots: 1,
+[adams-gamla]     maxConcurrentRemoves: 5,
+[adams-gamla]     periodicCheckIntervalMs: 60000,
+[adams-gamla]     reservationTtlMs: 300000
+[adams-gamla]   }
+[adams-gamla] }
+[adams-gamla] # Subtest: D5 & Counterexample 2c: administration route tracking updates administrationRouteNodeId for GROWTH_PROMOTE without mutating durable placement intent or ADD/REMOVE/REPLACE targetNodeId
+[adams-gamla]     ok 1 - should be equal
+[adams-gamla]     ok 2 - should be equal
+[adams-gamla]     ok 3 - should be equal
+[adams-gamla]     ok 4 - should be equal
+[adams-gamla]     ok 5 - should be equal
+[adams-gamla]     ok 6 - should be equal
+[adams-gamla]     ok 7 - should be equal
+[adams-gamla]     ok 8 - should be equal
+[adams-gamla]     ok 9 - should be equal
+[adams-gamla]     ok 10 - should be equivalent
+[adams-gamla]     ok 11 - should be equal
+[adams-gamla]     ok 12 - should be equal
+[adams-gamla]     ok 13 - should be equal
+[adams-gamla]     ok 14 - should be equal
+[adams-gamla] Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+[adams-gamla]     1..14
+[adams-gamla] ok 3 - D5 & Counterexample 2c: administration route tracking updates administrationRouteNodeId for GROWTH_PROMOTE without mutating durable placement intent or ADD/REMOVE/REPLACE targetNodeId # time=5.894ms
+[adams-gamla] 
+[adams-gamla] RebalanceCoordinator initialized {
+[adams-gamla]   nodeId: 'node-leader-1',
+[adams-gamla]   config: {
+[adams-gamla]     pendingTimeoutMs: 30000,
+[adams-gamla]     creatingTimeoutMs: 60000,
+[adams-gamla]     syncingTimeoutMs: 300000,
+[adams-gamla]     removingTimeoutMs: 60000,
+[adams-gamla]     maxConcurrentAdds: 5,
+[adams-gamla]     reservedRuntimeServicePlacementSlots: 1,
+[adams-gamla]     maxConcurrentRemoves: 5,
+[adams-gamla]     periodicCheckIntervalMs: 60000,
+[adams-gamla]     reservationTtlMs: 300000
+[adams-gamla]   }
+[adams-gamla] }
+[adams-gamla] # Subtest: D6 & Counterexample 2b: reconcileGrowthPromoteLifecycle produces explicit OPERATION_RECONCILE_OUTCOME states (HELD, WAITING, ADVANCED, COMPLETED)
+[adams-gamla]     ok 1 - should be equal
+[adams-gamla]     ok 2 - should be equal
+[adams-gamla]     ok 3 - should be equal
+[adams-gamla]     ok 4 - should be equal
+[adams-gamla]     ok 5 - should be equal
+[adams-gamla]     ok 6 - should be equal
+[adams-gamla]     ok 7 - should be equal
+[adams-gamla]     ok 8 - should be equal
+[adams-gamla]     ok 9 - should be equal
+[adams-gamla]     ok 10 - should be equal
+[adams-gamla] Durable terminal release obligations registered {
+[adams-gamla]   operationId: 'op-growth-promote-1',
+[adams-gamla]   workflowStep: 'ACTIVE',
+[adams-gamla]   partitionId: 'user_orders-p1',
+[adams-gamla]   cause: 'terminal_release_pending',
+[adams-gamla]   attempt: 0,
+[adams-gamla]   delayMs: 500
+[adams-gamla] }
+[adams-gamla]     ok 11 - should be equal
+[adams-gamla] Durable terminal release obligations registered {
+[adams-gamla]   operationId: 'op-growth-promote-terminal-failed',
+[adams-gamla]   workflowStep: 'FAILED',
+[adams-gamla]   partitionId: 'user_orders-p1',
+[adams-gamla]   cause: 'terminal_release_pending',
+[adams-gamla]   attempt: 0,
+[adams-gamla]   delayMs: 500
+[adams-gamla] }
+[adams-gamla]     ok 12 - should be equal
+[adams-gamla]     ok 13 - should be equal
+[adams-gamla]     ok 14 - should be equal
+[adams-gamla]     ok 15 - should be equal
+[adams-gamla] Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+[adams-gamla]     1..15
+[adams-gamla] ok 4 - D6 & Counterexample 2b: reconcileGrowthPromoteLifecycle produces explicit OPERATION_RECONCILE_OUTCOME states (HELD, WAITING, ADVANCED, COMPLETED) # time=20.743ms
+[adams-gamla] 
+[adams-gamla] RebalanceCoordinator initialized {
+[adams-gamla]   nodeId: 'node-leader-1',
+[adams-gamla]   config: {
+[adams-gamla]     pendingTimeoutMs: 30000,
+[adams-gamla]     creatingTimeoutMs: 60000,
+[adams-gamla]     syncingTimeoutMs: 300000,
+[adams-gamla]     removingTimeoutMs: 60000,
+[adams-gamla]     maxConcurrentAdds: 5,
+[adams-gamla]     reservedRuntimeServicePlacementSlots: 1,
+[adams-gamla]     maxConcurrentRemoves: 5,
+[adams-gamla]     periodicCheckIntervalMs: 60000,
+[adams-gamla]     reservationTtlMs: 300000
+[adams-gamla]   }
+[adams-gamla] }
+[adams-gamla] # Subtest: D6 & Counterexamples 1a/1b/1c: WAITING reconcile outcomes from unconfirmed active handoff, unapplied replace active progress, re-armed dispatch, skipped active-replace resume, and non-advancing remove dispatch do not suppress step timeout in reconcileTimeoutOperation
+[adams-gamla]     ok 1 - unconfirmed active terminal handoff must report WAITING
+[adams-gamla]     ok 2 - unapplied REPLACE active progress must report WAITING
+[adams-gamla]     ok 3 - re-armed dispatch that does not advance workflowStep must report WAITING
+[adams-gamla]     ok 4 - skipped EXECUTE_ACTIVE_REPLACE must report WAITING
+[adams-gamla]     ok 5 - skipped EXECUTE_REMOVE_DISPATCH with active deferred retry must report WAITING
+[adams-gamla]     ok 6 - reconcileOperationLifecycle reports WAITING when dispatch is skipped
+[adams-gamla]     ok 7 - WAITING reconcile outcome from skipped dispatch must not suppress step timeout in reconcileTimeoutOperation
+[adams-gamla]     ok 8 - should be equal
+[adams-gamla]     ok 9 - should match pattern
+[adams-gamla] Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+[adams-gamla]     1..9
+[adams-gamla] ok 5 - D6 & Counterexamples 1a/1b/1c: WAITING reconcile outcomes from unconfirmed active handoff, unapplied replace active progress, re-armed dispatch, skipped active-replace resume, and non-advancing remove dispatch do not suppress step timeout in reconcileTimeoutOperation # time=9.647ms
+[adams-gamla] 
+[adams-gamla] RebalanceCoordinator initialized {
+[adams-gamla]   nodeId: 'node-leader-1',
+[adams-gamla]   config: {
+[adams-gamla]     pendingTimeoutMs: 30000,
+[adams-gamla]     creatingTimeoutMs: 60000,
+[adams-gamla]     syncingTimeoutMs: 300000,
+[adams-gamla]     removingTimeoutMs: 60000,
+[adams-gamla]     maxConcurrentAdds: 5,
+[adams-gamla]     reservedRuntimeServicePlacementSlots: 1,
+[adams-gamla]     maxConcurrentRemoves: 5,
+[adams-gamla]     periodicCheckIntervalMs: 60000,
+[adams-gamla]     reservationTtlMs: 300000
+[adams-gamla]   }
+[adams-gamla] }
+[adams-gamla] # Subtest: D4 & D6: placement-admitted ADD operation completes when target replica reaches status=active with raft_role=learner on reconstructed OperationWorkflowOwner
+[adams-gamla]     ok 1 - should be equal
+[adams-gamla]     ok 2 - should be equal
+[adams-gamla]     ok 3 - should be equal
+[adams-gamla]     ok 4 - should be equal
+[adams-gamla]     ok 5 - should be equal
+[adams-gamla]     ok 6 - should be equivalent
+[adams-gamla] Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+[adams-gamla]     1..6
+[adams-gamla] ok 6 - D4 & D6: placement-admitted ADD operation completes when target replica reaches status=active with raft_role=learner on reconstructed OperationWorkflowOwner # time=6.322ms
+[adams-gamla] 
+[adams-gamla] RebalanceCoordinator initialized {
+[adams-gamla]   nodeId: 'node-leader-1',
+[adams-gamla]   config: {
+[adams-gamla]     pendingTimeoutMs: 30000,
+[adams-gamla]     creatingTimeoutMs: 60000,
+[adams-gamla]     syncingTimeoutMs: 300000,
+[adams-gamla]     removingTimeoutMs: 60000,
+[adams-gamla]     maxConcurrentAdds: 5,
+[adams-gamla]     reservedRuntimeServicePlacementSlots: 1,
+[adams-gamla]     maxConcurrentRemoves: 5,
+[adams-gamla]     periodicCheckIntervalMs: 60000,
+[adams-gamla]     reservationTtlMs: 300000
+[adams-gamla]   }
+[adams-gamla] }
+[adams-gamla] # Subtest: Step 1 real-repository witnesses: 4-phase growth settlement model (RECONCILING -> PERSISTING -> RELEASING -> SETTLED) across UPDATED, IDEMPOTENT_REPLAY, TERMINAL_ADOPTED, REFUSED, REINSERTED, duplicate reconciliation, and interrupted terminal reply recovery
+[adams-gamla]     ok 1 - seed op-real-repo-updated into real SQLite repository
+[adams-gamla]     ok 2 - should be equal
+[adams-gamla]     ok 3 - should be equal
+[adams-gamla]     ok 4 - should be equal
+[adams-gamla]     ok 5 - should be equal
+[adams-gamla] Durable terminal release obligations registered {
+[adams-gamla]   operationId: 'op-real-repo-updated',
+[adams-gamla]   workflowStep: 'ACTIVE',
+[adams-gamla]   partitionId: 'user_orders-p1',
+[adams-gamla]   cause: 'terminal_release_pending',
+[adams-gamla]   attempt: 0,
+[adams-gamla]   delayMs: 500
+[adams-gamla] }
+[adams-gamla] Operation completed {
+[adams-gamla]   operationId: 'op-real-repo-updated',
+[adams-gamla]   type: 'GROWTH_PROMOTE',
+[adams-gamla]   partitionId: 'user_orders-p1',
+[adams-gamla]   targetNodeId: 'node-leader-1'
+[adams-gamla] }
+[adams-gamla]     ok 6 - should be equal
+[adams-gamla]     ok 7 - should be equal
+[adams-gamla]     ok 8 - should be equal
+[adams-gamla]     ok 9 - should be equal
+[adams-gamla]     ok 10 - should be equal
+[adams-gamla]     ok 11 - should be equal
+[adams-gamla]     ok 12 - should be equal
+[adams-gamla]     ok 13 - should be equal
+[adams-gamla] Durable terminal release obligations registered {
+[adams-gamla]   operationId: 'op-real-repo-updated',
+[adams-gamla]   workflowStep: 'ACTIVE',
+[adams-gamla]   partitionId: 'user_orders-p1',
+[adams-gamla]   cause: 'terminal_release_pending',
+[adams-gamla]   attempt: 0,
+[adams-gamla]   delayMs: 500
+[adams-gamla] }
+[adams-gamla]     ok 14 - should be equal
+[adams-gamla]     ok 15 - should be equal
+[adams-gamla]     ok 16 - should be equal
+[adams-gamla]     ok 17 - should be equal
+[adams-gamla]     ok 18 - should be equal
+[adams-gamla]     ok 19 - should be equal
+[adams-gamla] Durable terminal release obligations registered {
+[adams-gamla]   operationId: 'op-real-repo-updated',
+[adams-gamla]   workflowStep: 'ACTIVE',
+[adams-gamla]   partitionId: 'user_orders-p1',
+[adams-gamla]   cause: 'terminal_release_pending',
+[adams-gamla]   attempt: 0,
+[adams-gamla]   delayMs: 500
+[adams-gamla] }
+[adams-gamla]     ok 20 - should be equal
+[adams-gamla]     ok 21 - should be equal
+[adams-gamla]     ok 22 - should be equal
+[adams-gamla]     ok 23 - should be equal
+[adams-gamla]     ok 24 - seed op-real-repo-terminal-adopted into real SQLite repository
+[adams-gamla] Durable terminal release obligations registered {
+[adams-gamla]   operationId: 'op-real-repo-terminal-adopted',
+[adams-gamla]   workflowStep: 'FAILED',
+[adams-gamla]   partitionId: 'user_orders-p1',
+[adams-gamla]   cause: 'terminal_release_pending',
+[adams-gamla]   attempt: 0,
+[adams-gamla]   delayMs: 500
+[adams-gamla] }
+[adams-gamla]     ok 25 - should be equal
+[adams-gamla]     ok 26 - should be equal
+[adams-gamla]     ok 27 - should be equal
+[adams-gamla]     ok 28 - should be equal
+[adams-gamla]     ok 29 - should be equal
+[adams-gamla]     ok 30 - should be equal
+[adams-gamla]     ok 31 - should be equal
+[adams-gamla]     ok 32 - should be equal
+[adams-gamla]     ok 33 - should be equivalent
+[adams-gamla]     ok 34 - should be equivalent
+[adams-gamla]     ok 35 - should be equal
+[adams-gamla]     ok 36 - should be equal
+[adams-gamla]     ok 37 - should be equal
+[adams-gamla]     ok 38 - seed op-real-repo-reinserted into real SQLite repository
+[adams-gamla]     ok 39 - should be equal
+[adams-gamla]     not ok 40 - should be equal
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js
+[adams-gamla]         lineNumber: 904
+[adams-gamla]         columnNumber: 9
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js:904:9)
+[adams-gamla]       source: >2
+[adams-gamla]               );
+[adams-gamla]               t.equal(reinsertedSettlement.phase, GROWTH_SETTLEMENT_PHASE.PERSISTING);
+[adams-gamla]               t.equal(reinsertedSettlement.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.WAITING);
+[adams-gamla]         --------^
+[adams-gamla]               t.equal(reinsertedSettlement.committed, false);
+[adams-gamla]               t.equal(reinsertedSettlement.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.REINSERTED);
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -waiting
+[adams-gamla]         +refused
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     ok 41 - should be equal
+[adams-gamla]     not ok 42 - should be equal
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js
+[adams-gamla]         lineNumber: 906
+[adams-gamla]         columnNumber: 9
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js:906:9)
+[adams-gamla]       source: >2
+[adams-gamla]               t.equal(reinsertedSettlement.reconcileOutcome, OPERATION_RECONCILE_OUTCOME.WAITING);
+[adams-gamla]               t.equal(reinsertedSettlement.committed, false);
+[adams-gamla]               t.equal(reinsertedSettlement.disposition, REPLICA_OPERATION_UPDATE_DISPOSITION.REINSERTED);
+[adams-gamla]         --------^
+[adams-gamla]               t.same(releasedReservationIds, []);
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -reinserted
+[adams-gamla]         +refused
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     ok 43 - should be equivalent
+[adams-gamla]     ok 44 - seed op-real-repo-refused into real SQLite repository
+[adams-gamla]     ok 45 - should be equal
+[adams-gamla]     ok 46 - should be equal
+[adams-gamla]     ok 47 - should be equal
+[adams-gamla]     ok 48 - should be equal
+[adams-gamla]     ok 49 - should be equivalent
+[adams-gamla] Durable terminal release obligations registered {
+[adams-gamla]   operationId: 'op-real-repo-updated',
+[adams-gamla]   workflowStep: 'ACTIVE',
+[adams-gamla]   partitionId: 'user_orders-p1',
+[adams-gamla]   cause: 'terminal_release_pending',
+[adams-gamla]   attempt: 0,
+[adams-gamla]   delayMs: 500
+[adams-gamla] }
+[adams-gamla]     ok 50 - should be equal
+[adams-gamla]     ok 51 - should be equal
+[adams-gamla]     ok 52 - should be equal
+[adams-gamla] Durable terminal release obligations registered {
+[adams-gamla]   operationId: 'op-real-repo-terminal-adopted',
+[adams-gamla]   workflowStep: 'FAILED',
+[adams-gamla]   partitionId: 'user_orders-p1',
+[adams-gamla]   cause: 'terminal_release_pending',
+[adams-gamla]   attempt: 0,
+[adams-gamla]   delayMs: 500
+[adams-gamla] }
+[adams-gamla]     ok 53 - should be equal
+[adams-gamla]     ok 54 - should be equal
+[adams-gamla]     ok 55 - should be equal
+[adams-gamla]     ok 56 - seed op-real-repo-lost-reply into real SQLite repository
+[adams-gamla]     ok 57 - expected to reject
+[adams-gamla]     ok 58 - should be equal
+[adams-gamla]     ok 59 - should be equal
+[adams-gamla]     ok 60 - should be equal
+[adams-gamla]     ok 61 - should be equal
+[adams-gamla]     ok 62 - should be equal
+[adams-gamla] Shutting down RebalanceCoordinator { nodeId: 'node-leader-1', inFlightOperations: 0 }
+[adams-gamla]     1..62
+[adams-gamla] not ok 7 - Step 1 real-repository witnesses: 4-phase growth settlement model (RECONCILING -> PERSISTING -> RELEASING -> SETTLED) across UPDATED, IDEMPOTENT_REPLAY, TERMINAL_ADOPTED, REFUSED, REINSERTED, duplicate reconciliation, and interrupted terminal reply recovery # time=70.989ms
+[adams-gamla]   ---
+[adams-gamla]   at:
+[adams-gamla]     fileName: test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js
+[adams-gamla]     lineNumber: 737
+[adams-gamla]     columnNumber: 1
+[adams-gamla]     isToplevel: true
+[adams-gamla]   source: |
+[adams-gamla]     );
+[adams-gamla]   
+[adams-gamla]     test(
+[adams-gamla]     ^
+[adams-gamla]       'Step 1 real-repository witnesses: 4-phase growth settlement model ' +
+[adams-gamla]         '(RECONCILING -> PERSISTING -> RELEASING -> SETTLED) across UPDATED, ' +
+[adams-gamla]   ...
+[adams-gamla] 
+[adams-gamla] # Subtest: Step 2 learner-admission wait witnesses: real PartitionService prototype interface drives pending admission, detects memberRole=LEARNER, enforces DEADLINE_EXCEEDED and SERVICE_DISAPPEARED before releaseFreshCreate, and preserves remaining original CREATE budget
+[adams-gamla]     ok 1 - should be equal
+[adams-gamla]     ok 2 - should be equal
+[adams-gamla]     ok 3 - should be equal
+[adams-gamla]     ok 4 - should be equal
+[adams-gamla]     ok 5 - should be equal
+[adams-gamla]     ok 6 - should be equal
+[adams-gamla]     ok 7 - should be equal
+[adams-gamla]     ok 8 - should be equal
+[adams-gamla]     ok 9 - should be equal
+[adams-gamla]     ok 10 - should be equal
+[adams-gamla]     ok 11 - should be equal
+[adams-gamla]     ok 12 - should be equal
+[adams-gamla]     ok 13 - should be equal
+[adams-gamla]     ok 14 - should be equal
+[adams-gamla]     ok 15 - should be equal
+[adams-gamla]     ok 16 - should be equal
+[adams-gamla]     ok 17 - should be equal
+[adams-gamla]     ok 18 - should be equal
+[adams-gamla]     ok 19 - should be equal
+[adams-gamla]     ok 20 - should be equal
+[adams-gamla]     ok 21 - should be equal
+[adams-gamla]     ok 22 - should be equal
+[adams-gamla]     ok 23 - expected to reject
+[adams-gamla]     ok 24 - should be equal
+[adams-gamla]     ok 25 - should be equal
+[adams-gamla]     ok 26 - should be equal
+[adams-gamla]     ok 27 - should be equal
+[adams-gamla]     ok 28 - should be equal
+[adams-gamla]     1..28
+[adams-gamla] ok 8 - Step 2 learner-admission wait witnesses: real PartitionService prototype interface drives pending admission, detects memberRole=LEARNER, enforces DEADLINE_EXCEEDED and SERVICE_DISAPPEARED before releaseFreshCreate, and preserves remaining original CREATE budget # time=4611.269ms
+[adams-gamla] 
+[adams-gamla] # Subtest: Step 3 durable ledger reconciliation witness: completed GROWTH_PROMOTE row in replica_operations-p1 classifies promoted replicas as voters in ReplicaPlacementOwner while SERVICES cache rows still lag at learner
+[adams-gamla]     ok 1 - should be equal
+[adams-gamla]     ok 2 - should be equal
+[adams-gamla]     ok 3 - should be equal
+[adams-gamla]     ok 4 - should be equal
+[adams-gamla]     ok 5 - should be equivalent
+[adams-gamla]     ok 6 - ReplicaPlacementOwner must not admit a duplicate GROWTH_PROMOTE while SERVICES rows lag at learner after durable GROWTH_PROMOTE completion
+[adams-gamla]     ok 7 - should be equivalent
+[adams-gamla]     1..7
+[adams-gamla] ok 9 - Step 3 durable ledger reconciliation witness: completed GROWTH_PROMOTE row in replica_operations-p1 classifies promoted replicas as voters in ReplicaPlacementOwner while SERVICES cache rows still lag at learner # time=10.958ms
+[adams-gamla] 
+[adams-gamla] 1..9
+[adams-gamla] # { total: 168, pass: 166, fail: 2 }
+[adams-gamla] # time=4860.206ms
+[adams-gamla] Wait bound spent {
+[adams-gamla]   event: 'wait_bound_spent',
+[adams-gamla]   wait: 'REBALANCE_OPERATION_STEP_TIMEOUT',
+[adams-gamla]   awaited: 'replica operation progressed past its current workflow step',
+[adams-gamla]   boundMs: 30000,
+[adams-gamla]   elapsedMs: 120000,
+[adams-gamla]   lastObserved: {
+[adams-gamla]     type: 'REMOVE',
+[adams-gamla]     workflowStep: 'PENDING',
+[adams-gamla]     status: 'pending',
+[adams-gamla]     targetNodeId: 'node-leader-1',
+[adams-gamla]     stepExceeded: true,
+[adams-gamla]     budgetExhausted: false,
+[adams-gamla]     timeoutClassification: {
+[adams-gamla]       classification: 'rebalance_operation_timeout',
+[adams-gamla]       configuredBudgetMs: 300000,
+[adams-gamla]       remainingBudgetMs: 180000,
+[adams-gamla]       boundaryHit: false,
+[adams-gamla]       nestedOperation: 'rebalance:pending',
+[adams-gamla]       operationName: 'rebalance',
+[adams-gamla]       originalClassification: null
+[adams-gamla]     }
+[adams-gamla]   },
+[adams-gamla]   scope: {
+[adams-gamla]     nodeId: 'node-leader-1',
+[adams-gamla]     partitionId: 'user_orders-p1',
+[adams-gamla]     operationId: 'op-remove-stuck-dispatch'
+[adams-gamla]   },
+[adams-gamla]   repeats: 0
+[adams-gamla] }
+[adams-gamla] Operation row missing from authoritative partition after zero-row update; re-inserting owner copy {
+[adams-gamla]   operationId: 'op-real-repo-reinserted',
+[adams-gamla]   partitionId: 'user_orders-p1',
+[adams-gamla]   workflowStep: 'ACTIVE',
+[adams-gamla]   expectedWorkflowStep: null
+[adams-gamla] }
+[adams-gamla] Terminal transition persist not committed; retry ownership kept and repair armed {
+[adams-gamla]   operationId: 'op-real-repo-reinserted',
+[adams-gamla]   disposition: 'refused',
+[adams-gamla]   step: 'ACTIVE',
+[adams-gamla]   partitionId: 'user_orders-p1'
+[adams-gamla] }
+[adams-gamla] Committed terminal transition not authoritatively visible; repair scheduled {
+[adams-gamla]   operationId: 'op-real-repo-reinserted',
+[adams-gamla]   workflowStep: 'ACTIVE',
+[adams-gamla]   partitionId: 'user_orders-p1',
+[adams-gamla]   cause: 'persist_not_committed',
+[adams-gamla]   attempt: 0,
+[adams-gamla]   delayMs: 500
+[adams-gamla] }
+[adams-gamla] Operation row missing from authoritative partition after zero-row update; re-inserting owner copy {
+[adams-gamla]   operationId: 'op-real-repo-refused',
+[adams-gamla]   partitionId: 'user_orders-p1',
+[adams-gamla]   workflowStep: 'ACTIVE',
+[adams-gamla]   expectedWorkflowStep: null
+[adams-gamla] }
+[adams-gamla] Terminal transition persist not committed; retry ownership kept and repair armed {
+[adams-gamla]   operationId: 'op-real-repo-refused',
+[adams-gamla]   disposition: 'refused',
+[adams-gamla]   step: 'ACTIVE',
+[adams-gamla]   partitionId: 'user_orders-p1'
+[adams-gamla] }
+[adams-gamla] Committed terminal transition not authoritatively visible; repair scheduled {
+[adams-gamla]   operationId: 'op-real-repo-refused',
+[adams-gamla]   workflowStep: 'ACTIVE',
+[adams-gamla]   partitionId: 'user_orders-p1',
+[adams-gamla]   cause: 'persist_not_committed',
+[adams-gamla]   attempt: 0,
+[adams-gamla]   delayMs: 500
+[adams-gamla] }
+[adams-gamla] Committed terminal transition not authoritatively visible; repair scheduled {
+[adams-gamla]   operationId: 'op-real-repo-lost-reply',
+[adams-gamla]   workflowStep: 'ACTIVE',
+[adams-gamla]   partitionId: 'user_orders-p1',
+[adams-gamla]   cause: 'persist_not_committed',
+[adams-gamla]   attempt: 0,
+[adams-gamla]   delayMs: 500
+[adams-gamla] }
+[adams-gamla] not ok test/partition/placement-retained-row-repair.test.js (49 assertions, 10902ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 13
+[adams-gamla] {"level":50,"time":"2026-11-21T17:50:12.453Z","nodeId":"test-node","pid":1946127,"subsystem":"rebalance-coordinator","operationId":"historical-REMOVE","partitionId":"retained-repair-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+[adams-gamla] {"level":50,"time":"2026-11-21T17:50:12.585Z","nodeId":"test-node","pid":1946127,"subsystem":"rebalance-coordinator","operationId":"historical-REMOVE","partitionId":"retained-repair-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+[adams-gamla] # Subtest: native entity repair and ordinary admission serialize: normal first
+[adams-gamla] ok 1 - native entity repair and ordinary admission serialize: normal first
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 5260.505137
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: native entity repair and ordinary admission serialize: retained first
+[adams-gamla] ok 2 - native entity repair and ordinary admission serialize: retained first
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 108.793094
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] {"level":50,"time":"2026-11-21T17:50:12.759Z","nodeId":"test-node","pid":1946127,"subsystem":"rebalance-coordinator","operationId":"historical-REMOVE","partitionId":"retained-repair-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+[adams-gamla] {"level":50,"time":"2026-11-21T17:50:12.894Z","nodeId":"test-node","pid":1946127,"subsystem":"rebalance-coordinator","operationId":"historical-REMOVE","partitionId":"retained-repair-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+[adams-gamla] # Subtest: reservation gate consumes native repair refusal and retains the original reservation
+[adams-gamla] ok 3 - reservation gate consumes native repair refusal and retains the original reservation
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 102.268929
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: lost committed answer reuses pinned bytes and preserves the retained lease
+[adams-gamla] ok 4 - lost committed answer reuses pinned bytes and preserves the retained lease
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 69.750587
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: exact existing row succeeds; changed birth and history refuse without replacement
+[adams-gamla] ok 5 - exact existing row succeeds; changed birth and history refuse without replacement
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 66.388344
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] {"level":50,"time":"2026-11-21T17:50:13.009Z","nodeId":"test-node","pid":1946127,"subsystem":"rebalance-coordinator","operationId":"historical-ADD","partitionId":"retained-repair-p1","workflowStep":"FAILED","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+[adams-gamla] {"level":50,"time":"2026-11-21T17:50:13.080Z","nodeId":"test-node","pid":1946127,"subsystem":"rebalance-coordinator","operationId":"historical-ADD","partitionId":"retained-repair-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+[adams-gamla] # Subtest: a clearing holder commit during the old BUSY reply owns a successor attempt
+[adams-gamla] ok 6 - a clearing holder commit during the old BUSY reply owns a successor attempt
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 77.219126
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: terminal evidence restoration does not consume the live entity or copy lane
+[adams-gamla] ok 7 - terminal evidence restoration does not consume the live entity or copy lane
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 106.31828
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] {"level":50,"time":"2026-11-21T17:50:13.555Z","nodeId":"test-node","pid":1946127,"subsystem":"rebalance-coordinator","operationId":"historical-REMOVE","partitionId":"replica_operations-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+[adams-gamla] # Subtest: current actual deficit policy preserves same-ID copies and native capacity clearing
+[adams-gamla] ok 8 - current actual deficit policy preserves same-ID copies and native capacity clearing
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 101.197031
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: foreign and malformed native answers retain one exact unknown attempt
+[adams-gamla] ok 9 - foreign and malformed native answers retain one exact unknown attempt
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 252.160055
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: shutdown retires volatile custody and late committed replies cannot rearm it
+[adams-gamla] ok 10 - shutdown retires volatile custody and late committed replies cannot rearm it
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 59.718146
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: an intact ordinary ACTIVE reservation dispatch adds no repair proposal
+[adams-gamla] ok 11 - an intact ordinary ACTIVE reservation dispatch adds no repair proposal
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 61.534508
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] {"level":50,"time":"2026-11-21T17:50:13.640Z","nodeId":"test-node","pid":1946127,"subsystem":"rebalance-coordinator","operationId":"historical-REMOVE","partitionId":"replica_operations-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+[adams-gamla] # Subtest: retained ledger self-move global exclusion: normal first
+[adams-gamla] ok 12 - retained ledger self-move global exclusion: normal first
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 88.196469
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: retained ledger self-move global exclusion: ledger first
+[adams-gamla] ok 13 - retained ledger self-move global exclusion: ledger first
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 67.609689
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: remote-only current copy preparation succeeds and changed target boot stays debt
+[adams-gamla] ok 14 - remote-only current copy preparation succeeds and changed target boot stays debt
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 68.594059
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] {"level":50,"time":"2026-11-21T17:50:13.906Z","nodeId":"test-node","pid":1946127,"subsystem":"rebalance-coordinator","operationId":"historical-ADD","partitionId":"retained-repair-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+[adams-gamla] # Subtest: remote paused repair progresses solely on actual owner WRITE_PATH_RELEASED
+[adams-gamla] not ok 15 - remote paused repair progresses solely on actual owner WRITE_PATH_RELEASED
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 83.478789
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/ec1b2f77c85c-mwqpd2xl-1728307/test/partition/placement-retained-row-repair.test.js:413:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     Expected values to be strictly equal:
+[adams-gamla]     
+[adams-gamla]     false !== true
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected: true
+[adams-gamla]   actual: false
+[adams-gamla]   operator: 'strictEqual'
+[adams-gamla]   stack: |-
+[adams-gamla]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/ec1b2f77c85c-mwqpd2xl-1728307/test/partition/placement-retained-row-repair.test.js:434:14
+[adams-gamla]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/ec1b2f77c85c-mwqpd2xl-1728307/test/partition/placement-retained-row-repair-fixture.js:54:9)
+[adams-gamla]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/ec1b2f77c85c-mwqpd2xl-1728307/test/partition/placement-admission-fixture.js:40:12)
+[adams-gamla]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/ec1b2f77c85c-mwqpd2xl-1728307/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adams-gamla]   ...
+[adams-gamla] {"level":50,"time":"2026-11-21T17:50:13.983Z","nodeId":"test-node","pid":1946127,"subsystem":"rebalance-coordinator","operationId":"historical-ADD","partitionId":"retained-repair-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+[adams-gamla] # Subtest: a retained ordinary copy consumes source capacity and resumes on its actual release
+[adams-gamla] ok 16 - a retained ordinary copy consumes source capacity and resumes on its actual release
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 125.026811
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: retained-copy-first occupies the ordinary target lane until its own committed release
+[adams-gamla] ok 17 - retained-copy-first occupies the ordinary target lane until its own committed release
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 70.77559
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: different remote E2 never receives custody while owner retains unknown E1; real row CDC clears sender
+[adams-gamla] ok 18 - different remote E2 never receives custody while owner retains unknown E1; real row CDC clears sender
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 61.286155
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: remote E2 joins active E1 and retains renewed BUSY without spending its entry
+[adams-gamla] ok 19 - remote E2 joins active E1 and retains renewed BUSY without spending its entry
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 72.104075
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: remote E2 owns one authoritative own-row observation: CDC-before-answer
+[adams-gamla] ok 20 - remote E2 owns one authoritative own-row observation: CDC-before-answer
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 62.514738
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: remote E2 owns one authoritative own-row observation: answer-before-CDC
+[adams-gamla] ok 21 - remote E2 owns one authoritative own-row observation: answer-before-CDC
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 61.11865
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: an in-flight stale own-row observation reads absence once; genuine successor still confirms
+[adams-gamla] ok 22 - an in-flight stale own-row observation reads absence once; genuine successor still confirms
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 59.586173
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: remote BUSY reply retains an in-flight blocker observation: CDC-before-answer
+[adams-gamla] ok 23 - remote BUSY reply retains an in-flight blocker observation: CDC-before-answer
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 72.900965
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: remote BUSY reply retains an in-flight blocker observation: answer-before-CDC
+[adams-gamla] ok 24 - remote BUSY reply retains an in-flight blocker observation: answer-before-CDC
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 89.769654
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: still-live incumbent duplicates never mint a fresh BUSY turn: CDC-before-answer
+[adams-gamla] ok 25 - still-live incumbent duplicates never mint a fresh BUSY turn: CDC-before-answer
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 93.907186
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: still-live incumbent duplicates never mint a fresh BUSY turn: answer-before-CDC
+[adams-gamla] ok 26 - still-live incumbent duplicates never mint a fresh BUSY turn: answer-before-CDC
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 74.388118
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: remote ordinary source capacity release crosses entities: CDC-before-answer
+[adams-gamla] ok 27 - remote ordinary source capacity release crosses entities: CDC-before-answer
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 70.636766
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: remote ordinary source capacity release crosses entities: answer-before-CDC
+[adams-gamla] ok 28 - remote ordinary source capacity release crosses entities: answer-before-CDC
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 84.51591
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: remote ordinary target capacity release crosses entities: CDC-before-answer
+[adams-gamla] ok 29 - remote ordinary target capacity release crosses entities: CDC-before-answer
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 61.749237
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: remote ordinary target capacity release crosses entities: answer-before-CDC
+[adams-gamla] ok 30 - remote ordinary target capacity release crosses entities: answer-before-CDC
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 68.619064
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: impossible source capacity answer preserves original entry until genuine same-pin outcome
+[adams-gamla] ok 31 - impossible source capacity answer preserves original entry until genuine same-pin outcome
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 57.360715
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: impossible target capacity answer preserves original entry until genuine same-pin outcome
+[adams-gamla] ok 32 - impossible target capacity answer preserves original entry until genuine same-pin outcome
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 70.752283
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: partial capacity census cannot spend or retire remote repair debt
+[adams-gamla] not ok 33 - partial capacity census cannot spend or retire remote repair debt
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 64.05485
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/ec1b2f77c85c-mwqpd2xl-1728307/test/partition/placement-retained-row-repair.test.js:976:3'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     one bounded authoritative read for the whole release burst
+[adams-gamla]     
+[adams-gamla]     2 !== 1
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected: 1
+[adams-gamla]   actual: 2
+[adams-gamla]   operator: 'strictEqual'
+[adams-gamla]   stack: |-
+[adams-gamla]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/ec1b2f77c85c-mwqpd2xl-1728307/test/partition/placement-retained-row-repair.test.js:999:16
+[adams-gamla]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/ec1b2f77c85c-mwqpd2xl-1728307/test/partition/placement-retained-row-repair-fixture.js:54:9)
+[adams-gamla]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/ec1b2f77c85c-mwqpd2xl-1728307/test/partition/placement-admission-fixture.js:40:12)
+[adams-gamla]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/ec1b2f77c85c-mwqpd2xl-1728307/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adams-gamla]   ...
+[adams-gamla] # Subtest: failed capacity census cannot spend or retire remote repair debt
+[adams-gamla] not ok 34 - failed capacity census cannot spend or retire remote repair debt
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 82.939141
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/ec1b2f77c85c-mwqpd2xl-1728307/test/partition/placement-retained-row-repair.test.js:976:3'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     one bounded authoritative read for the whole release burst
+[adams-gamla]     
+[adams-gamla]     2 !== 1
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected: 1
+[adams-gamla]   actual: 2
+[adams-gamla]   operator: 'strictEqual'
+[adams-gamla]   stack: |-
+[adams-gamla]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/ec1b2f77c85c-mwqpd2xl-1728307/test/partition/placement-retained-row-repair.test.js:999:16
+[adams-gamla]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/ec1b2f77c85c-mwqpd2xl-1728307/test/partition/placement-retained-row-repair-fixture.js:54:9)
+[adams-gamla]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/ec1b2f77c85c-mwqpd2xl-1728307/test/partition/placement-admission-fixture.js:40:12)
+[adams-gamla]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/ec1b2f77c85c-mwqpd2xl-1728307/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adams-gamla]   ...
+[adams-gamla] # Subtest: stale capacity census cannot spend or retire remote repair debt
+[adams-gamla] not ok 35 - stale capacity census cannot spend or retire remote repair debt
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 55.613535
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/ec1b2f77c85c-mwqpd2xl-1728307/test/partition/placement-retained-row-repair.test.js:976:3'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     one bounded authoritative read for the whole release burst
+[adams-gamla]     
+[adams-gamla]     2 !== 1
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected: 1
+[adams-gamla]   actual: 2
+[adams-gamla]   operator: 'strictEqual'
+[adams-gamla]   stack: |-
+[adams-gamla]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/ec1b2f77c85c-mwqpd2xl-1728307/test/partition/placement-retained-row-repair.test.js:999:16
+[adams-gamla]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/ec1b2f77c85c-mwqpd2xl-1728307/test/partition/placement-retained-row-repair-fixture.js:54:9)
+[adams-gamla]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/ec1b2f77c85c-mwqpd2xl-1728307/test/partition/placement-admission-fixture.js:40:12)
+[adams-gamla]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/ec1b2f77c85c-mwqpd2xl-1728307/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adams-gamla]   ...
+[adams-gamla] # Subtest: wrong-partition capacity census cannot spend or retire remote repair debt
+[adams-gamla] not ok 36 - wrong-partition capacity census cannot spend or retire remote repair debt
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 64.036486
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/ec1b2f77c85c-mwqpd2xl-1728307/test/partition/placement-retained-row-repair.test.js:976:3'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     one bounded authoritative read for the whole release burst
+[adams-gamla]     
+[adams-gamla]     2 !== 1
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected: 1
+[adams-gamla]   actual: 2
+[adams-gamla]   operator: 'strictEqual'
+[adams-gamla]   stack: |-
+[adams-gamla]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/ec1b2f77c85c-mwqpd2xl-1728307/test/partition/placement-retained-row-repair.test.js:999:16
+[adams-gamla]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/ec1b2f77c85c-mwqpd2xl-1728307/test/partition/placement-retained-row-repair-fixture.js:54:9)
+[adams-gamla]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/ec1b2f77c85c-mwqpd2xl-1728307/test/partition/placement-admission-fixture.js:40:12)
+[adams-gamla]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/ec1b2f77c85c-mwqpd2xl-1728307/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adams-gamla]   ...
+[adams-gamla] {"level":50,"time":"2026-11-21T17:50:15.452Z","nodeId":"test-node","pid":1946127,"subsystem":"rebalance-coordinator","operationId":"historical-ADD","partitionId":"retained-repair-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+[adams-gamla] # Subtest: incoming durable E0 refusal replays before volatile E1 redrive and rejects changed bytes
+[adams-gamla] ok 37 - incoming durable E0 refusal replays before volatile E1 redrive and rejects changed bytes
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 72.220463
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] {"level":50,"time":"2026-11-21T17:50:15.521Z","nodeId":"test-node","pid":1946127,"subsystem":"rebalance-coordinator","operationId":"historical-ADD","partitionId":"retained-repair-p1","workflowStep":"PENDING","expectedWorkflowStep":"PENDING","nodeId":"test-node","msg":"Operation row missing from authoritative partition after zero-row update; re-inserting owner copy"}
+[adams-gamla] # Subtest: mutation shares serial repair decision when clearing is sender-first
+[adams-gamla] ok 38 - mutation shares serial repair decision when clearing is sender-first
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 73.815691
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: mutation shares serial repair decision when clearing is receiver-first
+[adams-gamla] ok 39 - mutation shares serial repair decision when clearing is receiver-first
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 69.810398
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: ACTIVE-reservation shares serial repair decision when clearing is sender-first
+[adams-gamla] ok 40 - ACTIVE-reservation shares serial repair decision when clearing is sender-first
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 63.784894
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: ACTIVE-reservation shares serial repair decision when clearing is receiver-first
+[adams-gamla] ok 41 - ACTIVE-reservation shares serial repair decision when clearing is receiver-first
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 71.346269
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: queued real E2 joins E1 winner and confirms exact authority without relabeling
+[adams-gamla] ok 42 - queued real E2 joins E1 winner and confirms exact authority without relabeling
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 71.644472
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: queued real E2 joins E1 winner and confirms changed authority without relabeling
+[adams-gamla] ok 43 - queued real E2 joins E1 winner and confirms changed authority without relabeling
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 92.441918
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: queued real E2 joins E1 winner and confirms unavailable authority without relabeling
+[adams-gamla] not ok 44 - queued real E2 joins E1 winner and confirms unavailable authority without relabeling
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 64.320136
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/ec1b2f77c85c-mwqpd2xl-1728307/test/partition/placement-retained-row-repair.test.js:1167:3'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: |-
+[adams-gamla]     Expected values to be strictly equal:
+[adams-gamla]     
+[adams-gamla]     1 !== 0
+[adams-gamla]     
+[adams-gamla]   code: 'ERR_ASSERTION'
+[adams-gamla]   name: 'AssertionError'
+[adams-gamla]   expected: 0
+[adams-gamla]   actual: 1
+[adams-gamla]   operator: 'strictEqual'
+[adams-gamla]   stack: |-
+[adams-gamla]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/ec1b2f77c85c-mwqpd2xl-1728307/test/partition/placement-retained-row-repair.test.js:1206:18
+[adams-gamla]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/ec1b2f77c85c-mwqpd2xl-1728307/test/partition/placement-retained-row-repair-fixture.js:54:9)
+[adams-gamla]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/ec1b2f77c85c-mwqpd2xl-1728307/test/partition/placement-admission-fixture.js:40:12)
+[adams-gamla]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/ec1b2f77c85c-mwqpd2xl-1728307/test/partition/placement-retained-row-repair-fixture.js:25:5)
+[adams-gamla]     async Test.run (node:internal/test_runner/test:1054:7)
+[adams-gamla]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adams-gamla]   ...
+[adams-gamla] # Subtest: real committed BUSY E0 lost reply replays across repositories without a fresh proposal
+[adams-gamla] ok 45 - real committed BUSY E0 lost reply replays across repositories without a fresh proposal
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 78.539776
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: unknown native BUSY retains its only clearing observation: clear-before-answer
+[adams-gamla] ok 46 - unknown native BUSY retains its only clearing observation: clear-before-answer
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 71.054872
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: unknown native BUSY retains its only clearing observation: answer-before-clear
+[adams-gamla] ok 47 - unknown native BUSY retains its only clearing observation: answer-before-clear
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 75.139664
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: registered owner read backoff recovers without a new caller or row/role event
+[adams-gamla] ok 48 - registered owner read backoff recovers without a new caller or row/role event
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 163.453983
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: shutdown cancels actual registered read-dependency wake and cannot rearm replaced debt
+[adams-gamla] ok 49 - shutdown cancels actual registered read-dependency wake and cannot rearm replaced debt
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 55.714607
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] 1..49
+[adams-gamla] # tests 49
+[adams-gamla] # suites 0
+[adams-gamla] # pass 43
+[adams-gamla] # fail 6
+[adams-gamla] # cancelled 0
+[adams-gamla] # skipped 0
+[adams-gamla] # todo 0
+[adams-gamla] # duration_ms 9132.880127
+[adams-gamla] # time=10902ms
+[adams-gamla] ok test/rebalancer/replica-placement-owner-blocked-attempt.test.js (1 assertions, 6178ms)
+[adams-gamla] ok test/rebalancer/replica-placement-owner-blocked-release.test.js (3 assertions, 6783ms)
+[adams-gamla] ok test/rebalancer/replica-placement-owner-clearing-triggers.test.js (4 assertions, 6725ms)
+[adams-gamla] not ok test/rebalancer/replica-placement-owner-core.test.js (20 assertions, 7193ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 13
+[adams-gamla] # Subtest: class order: the ledger, the priority control plane, nodes-p1, system, user
+[adams-gamla] ok 1 - class order: the ledger, the priority control plane, nodes-p1, system, user
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 3.169977
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: formation gate: classes 3-5 wait FORMATION_NOT_LATCHED until FORMED; 1-2 never
+[adams-gamla] ok 2 - formation gate: classes 3-5 wait FORMATION_NOT_LATCHED until FORMED; 1-2 never
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 0.342848
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: within a class: severity, then fewest distinct hosts, then fewest voters, then id; services, partitions and tables first among system partitions
+[adams-gamla] ok 3 - within a class: severity, then fewest distinct hosts, then fewest voters, then id; services, partitions and tables first among system partitions
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 0.479632
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: HOST_SPREAD on declared hosts: two nodes of one host are one host; the source leaves the over-represented host, never the leader while a co-located non-leader exists
+[adams-gamla] ok 4 - HOST_SPREAD on declared hosts: two nodes of one host are one host; the source leaves the over-represented host, never the leader while a co-located non-leader exists
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 3.66956
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: per-target eligibility: a lapsed READY lease or an undeclared host only drops the node as a target and conserves its incumbent membership
+[adams-gamla] ok 5 - per-target eligibility: a lapsed READY lease or an undeclared host only drops the node as a target and conserves its incumbent membership
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 1.855774
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: inactive voter rows reserve occupancy without adding to the REMOVE floor or sourcing copies
+[adams-gamla] ok 6 - inactive voter rows reserve occupancy without adding to the REMOVE floor or sourcing copies
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 1.201477
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: UNDER_REPLICATED adds; SURPLUS removes; no leader waits LEADER_UNKNOWN; no eligible target waits NO_ELIGIBLE_TARGET
+[adams-gamla] ok 7 - UNDER_REPLICATED adds; SURPLUS removes; no leader waits LEADER_UNKNOWN; no eligible target waits NO_ELIGIBLE_TARGET
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 1.105342
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: the repair reservation is level-triggered and travels in the statement as kSrcForClass
+[adams-gamla] ok 8 - the repair reservation is level-triggered and travels in the statement as kSrcForClass
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 1.994827
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: the canonical statement refuses what its kind cannot carry
+[adams-gamla] ok 9 - the canonical statement refuses what its kind cannot carry
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 2.029505
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: the node and formation inputs come from one committed answer of the injected node authority (answerCommittedNodes().formation, P4)
+[adams-gamla] ok 10 - the node and formation inputs come from one committed answer of the injected node authority (answerCommittedNodes().formation, P4)
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 0.807241
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: real ServeEligibilityOwner transitions through UNAVAILABLE -> UNDECLARED -> FORMING -> FORMED and drives ReplicaPlacementOwner over seeded partitions
+[adams-gamla] ok 11 - real ServeEligibilityOwner transitions through UNAVAILABLE -> UNDECLARED -> FORMING -> FORMED and drives ReplicaPlacementOwner over seeded partitions
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 45.971176
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: ReplicaPlacementOwner reuses entryId on OUTCOME_UNKNOWN retry, mints non-colliding entryIds across owner reconstruction, and consults storageAccountingService
+[adams-gamla] ok 12 - ReplicaPlacementOwner reuses entryId on OUTCOME_UNKNOWN retry, mints non-colliding entryIds across owner reconstruction, and consults storageAccountingService
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 7.838878
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: P3 & P5: createReplicaPlacementOwner validates required and optional collaborators before side effects, and statement builders deep-clone caller-owned inputs
+[adams-gamla] ok 13 - P3 & P5: createReplicaPlacementOwner validates required and optional collaborators before side effects, and statement builders deep-clone caller-owned inputs
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 2.424385
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] {"level":50,"time":"2026-11-21T17:50:23.503Z","nodeId":"test-node","pid":1946187,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[adams-gamla] {"level":50,"time":"2026-11-21T17:50:23.566Z","nodeId":"test-node","pid":1946187,"subsystem":"rebalance-coordinator","event":"wait_bound_spent","wait":"REBALANCE_OPERATION_STEP_TIMEOUT","awaited":"replica operation progressed past its current workflow step","boundMs":60000,"elapsedMs":120000,"lastObserved":{"type":"GROWTH_PROMOTE","workflowStep":"SYNCING","status":"syncing","targetNodeId":"n1","stepExceeded":true,"budgetExhausted":false,"timeoutClassification":{"classification":"rebalance_operation_timeout","configuredBudgetMs":300000,"remainingBudgetMs":180000,"boundaryHit":false,"nestedOperation":"rebalance:syncing","operationName":"rebalance","originalClassification":null}},"scope":{"nodeId":"n2","partitionId":"replica_operations-p1","operationId":"pl-promote-3to5-timeout"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[adams-gamla] # Subtest: control-plane attachment admits a scoped voter removal only with its workflow owner
+[adams-gamla] ok 14 - control-plane attachment admits a scoped voter removal only with its workflow owner
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 4271.686265
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: P3 & P4 (Findings 3a, 3b, 4): automatic production attachment via PartitionService.maybeInitializeRebalancer, late committed REFUSED recovery on LEADERSHIP_START, and reconstructed owner replay of unsettled attempts from durable state
+[adams-gamla] ok 15 - P3 & P4 (Findings 3a, 3b, 4): automatic production attachment via PartitionService.maybeInitializeRebalancer, late committed REFUSED recovery on LEADERSHIP_START, and reconstructed owner replay of unsettled attempts from durable state
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 79.139159
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: WP-F1 & WP-F2: resolveVoterTarget, 1-voter founding at H=1, 2-host learner window at H=2, 3-host odd-voter growth (LEARNER_DEFICIT -> GROWTH_PROMOTE) at H=3, and DEAD_LEARNER repair
+[adams-gamla] ok 16 - WP-F1 & WP-F2: resolveVoterTarget, 1-voter founding at H=1, 2-host learner window at H=2, 3-host odd-voter growth (LEARNER_DEFICIT -> GROWTH_PROMOTE) at H=3, and DEAD_LEARNER repair
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 1.494217
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: WP-F1 & WP-F2 end-to-end: ReplicaPlacementOwner drives 1-voter founding -> ADD learner n2 -> ADD learner n3 -> GROWTH_PROMOTE and executes PartitionService & ReplicaHandler membership administration
+[adams-gamla] ok 17 - WP-F1 & WP-F2 end-to-end: ReplicaPlacementOwner drives 1-voter founding -> ADD learner n2 -> ADD learner n3 -> GROWTH_PROMOTE and executes PartitionService & ReplicaHandler membership administration
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 54.575434
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: Item 2 production witness: 1-voter PartitionService admits 2 learners via normal ADD with placementAdmissionEnabled, RebalanceCoordinator/OperationWorkflowOwner dispatches GROWTH_PROMOTE, recovers an interrupted attempt, observes 3 committed voters + SERVICES.raft_role, and releases placement hold
+[adams-gamla] ok 18 - Item 2 production witness: 1-voter PartitionService admits 2 learners via normal ADD with placementAdmissionEnabled, RebalanceCoordinator/OperationWorkflowOwner dispatches GROWTH_PROMOTE, recovers an interrupted attempt, observes 3 committed voters + SERVICES.raft_role, and releases placement hold
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 107.26308
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: Correction B production-assembly witness: ControlPlaneSetup.create binds ReplicaPlacementOwner factory, attaches once on replica_operations-p1 only, enables placementAdmissionEnabled, drives leadership start/stop, and shuts down cleanly
+[adams-gamla] ok 19 - Correction B production-assembly witness: ControlPlaneSetup.create binds ReplicaPlacementOwner factory, attaches once on replica_operations-p1 only, enables placementAdmissionEnabled, drives leadership start/stop, and shuts down cleanly
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 78.719511
+[adams-gamla]   type: 'test'
+[adams-gamla]   ...
+[adams-gamla] # Subtest: Finding 2 & 3 production witness: 3->5 GROWTH_PROMOTE redirects to new leader on not_leader refusal while preserving operationId/promoteReplicaIds, and enforces step timeout budget on persistent refusal
+[adams-gamla] not ok 20 - Finding 2 & 3 production witness: 3->5 GROWTH_PROMOTE redirects to new leader on not_leader refusal while preserving operationId/promoteReplicaIds, and enforces step timeout budget on persistent refusal
+[adams-gamla]   ---
+[adams-gamla]   duration_ms: 63.685192
+[adams-gamla]   type: 'test'
+[adams-gamla]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/ec1b2f77c85c-mwqpd2xl-1728307/test/rebalancer/replica-placement-owner-core.test.js:1399:1'
+[adams-gamla]   failureType: 'testCodeFailure'
+[adams-gamla]   error: 'ReplicaOperationRepository requires a control-plane mutation ingress'
+[adams-gamla]   code: 'ERR_TEST_FAILURE'
+[adams-gamla]   stack: |-
+[adams-gamla]     ReplicaOperationRepository.buildOperationPersistError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/ec1b2f77c85c-mwqpd2xl-1728307/src/rebalancer/replica-operation-repository-mutation-gateway-methods.js:438:21)
+[adams-gamla]     ReplicaOperationRepository.resolveFailedOperationUpdateResult (file:///home/peter/projects/lagrange/test-output/placement-worktrees/ec1b2f77c85c-mwqpd2xl-1728307/src/rebalancer/replica-operation-repository-mutation-update-methods.js:504:35)
+[adams-gamla]     async OperationWorkflowOwner.runAtomicTransitionUnderLane (file:///home/peter/projects/lagrange/test-output/placement-worktrees/ec1b2f77c85c-mwqpd2xl-1728307/src/rebalancer/operation-workflow-transition-orchestration.js:113:29)
+[adams-gamla]   ...
+[adams-gamla] {"level":50,"time":"2026-11-21T17:50:23.570Z","nodeId":"test-node","pid":1946187,"subsystem":"rebalance-coordinator","operationId":"pl-promote-3to5-timeout","error":"ReplicaOperationRepository requires a control-plane mutation ingress","nodeId":"test-node","code":null,"retryAfterMs":0,"reasonCode":null,"participationKind":null,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n2","msg":"Failed to persist operation"}
+[adams-gamla] {"level":50,"time":"2026-11-21T17:50:23.816Z","nodeId":"test-node","pid":1946187,"subsystem":"rebalance-coordinator","operationId":"pl-promote-3to5-timeout","tableName":"services","cacheOperation":"UPSERT","error":"Cannot read properties of null (reading 'prepare')","nodeId":"test-node","msg":"Observed replica progress transition failed"}
+[adams-gamla] 1..20
+[adams-gamla] # tests 20
+[adams-gamla] # suites 0
+[adams-gamla] # pass 19
+[adams-gamla] # fail 1
+[adams-gamla] # cancelled 0
+[adams-gamla] # skipped 0
+[adams-gamla] # todo 0
+[adams-gamla] # duration_ms 4983.282185
+[adams-gamla] # time=7193ms
+[adams-gamla] # test-files total=12 pass=9 fail=3 assertions=284
+lab test: adams-gamla: # test-files total=12 pass=9 fail=3 assertions=284
+lab test: adams-gamla: results copied to test-output/reports/test-results-adams-gamla.ndjson
+# test-files total=12 pass=9 fail=3 assertions=284

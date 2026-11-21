@@ -1,0 +1,25 @@
+{
+  "sha": "b18167d24a7e3b98b94bb1c6ab31ad004a49cc67",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/bootstrap/bootstrap-api.test.js",
+    "test/query/sql-query-engine-create-table-quorum.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/query/sql-query-engine-create-table-quorum.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/bootstrap/bootstrap-api.test.js"
+      ],
+      "jobs": 2,
+      "resourceClass": "bootstrap"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+placement-shell=3671144
+placement-head=b18167d24a7e3b98b94bb1c6ab31ad004a49cc67
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3671714
+# test-files planned=2
+classified lane ordinary: 1 file(s), jobs=4
+thermal: hold cpu 77C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 77C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 40C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+ok test/query/sql-query-engine-create-table-quorum.test.js (2 assertions, 1305ms)
+# test-files total=1 pass=1 fail=0 assertions=2
+classified lane bootstrap: 1 file(s), jobs=2
+thermal: ok cpu 57C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+ok test/bootstrap/bootstrap-api.test.js (185 assertions, 4933ms)
+# test-files total=1 pass=1 fail=0 assertions=185
+placement-results={"file":"test/query/sql-query-engine-create-table-quorum.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":1305,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/bootstrap-api.test.js","attempt":1,"ok":true,"assertions":185,"durationMs":4933,"retriedOnce":false,"firstFailureLine":null}

@@ -1,0 +1,623 @@
+lab test: adam-laptop: ordinary, bootstrap (5 files) cores=8 mem=15.5GiB speed x2.03
+[adam-laptop] placement-shell=3568547
+[adam-laptop] placement-head=0ddf7b00f282145cedf64db14360b5c5120de926
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3569115
+[adam-laptop] # test-files planned=5
+[adam-laptop] classified lane ordinary: 4 file(s), jobs=4
+[adam-laptop] thermal: ok cpu 73C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] not ok test/control-plane/named-write-outcome-total.test.js (3 assertions, 1216ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: judgeNamedWriteOutcome is total over answer shapes and never throws
+[adam-laptop] not ok 1 - judgeNamedWriteOutcome is total over answer shapes and never throws
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 9.48796
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/control-plane/named-write-outcome-total.test.js:132:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     Expected values to be strictly deep-equal:
+[adam-laptop]     + actual - expected
+[adam-laptop]     ... Skipped lines
+[adam-laptop]     
+[adam-laptop]       [
+[adam-laptop]         [
+[adam-laptop]           'partition answer with its bound witness',
+[adam-laptop]           'applied'
+[adam-laptop]         ],
+[adam-laptop]     ...
+[adam-laptop]           'the exact shape that threw: success and a count, no witness, no partitionId',
+[adam-laptop]     +     "THROWS TypeError: Cannot read properties of undefined (reading 'partitionId')"
+[adam-laptop]     -     'unknown'
+[adam-laptop]         ],
+[adam-laptop]         [
+[adam-laptop]           'the engine fake behind the real CDC service (threw)',
+[adam-laptop]     +     "THROWS TypeError: Cannot read properties of undefined (reading 'partitionId')"
+[adam-laptop]     -     'unknown'
+[adam-laptop]         ],
+[adam-laptop]         [
+[adam-laptop]           'the heartbeat engine fake (threw)',
+[adam-laptop]     +     "THROWS TypeError: Cannot read properties of undefined (reading 'partitionId')"
+[adam-laptop]     -     'unknown'
+[adam-laptop]         ],
+[adam-laptop]         [
+[adam-laptop]           'bare success',
+[adam-laptop]           'unknown'
+[adam-laptop]         ],
+[adam-laptop]     ...
+[adam-laptop]           'distributed answer and attempt both without a key',
+[adam-laptop]     +     'applied'
+[adam-laptop]     -     'unknown'
+[adam-laptop]         ],
+[adam-laptop]         [
+[adam-laptop]           'attempt without a declared partition',
+[adam-laptop]           'unknown'
+[adam-laptop]         ],
+[adam-laptop]     ...
+[adam-laptop]           'single nested failure that is not an object',
+[adam-laptop]     +     "THROWS TypeError: Cannot read properties of null (reading 'committed')"
+[adam-laptop]     -     'unknown'
+[adam-laptop]         ],
+[adam-laptop]         [
+[adam-laptop]           'null answer',
+[adam-laptop]           'unknown'
+[adam-laptop]         ],
+[adam-laptop]     ...
+[adam-laptop]           'missing attempt',
+[adam-laptop]     +     "THROWS TypeError: Cannot destructure property 'key' of 'undefined' as it is undefined."
+[adam-laptop]     -     'unknown'
+[adam-laptop]         ]
+[adam-laptop]       ]
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected:
+[adam-laptop]     0:
+[adam-laptop]       0: 'partition answer with its bound witness'
+[adam-laptop]       1: 'applied'
+[adam-laptop]     1:
+[adam-laptop]       0: 'partition answer without a witness'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     2:
+[adam-laptop]       0: 'the exact shape that threw: success and a count, no witness, no partitionId'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     3:
+[adam-laptop]       0: 'the engine fake behind the real CDC service (threw)'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     4:
+[adam-laptop]       0: 'the heartbeat engine fake (threw)'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     5:
+[adam-laptop]       0: 'bare success'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     6:
+[adam-laptop]       0: 'witness without a top-level partitionId'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     7:
+[adam-laptop]       0: 'witness for another partition than declared'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     8:
+[adam-laptop]       0: 'answer partition differs from its witness'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     9:
+[adam-laptop]       0: 'witness bound to another entry'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     10:
+[adam-laptop]       0: 'witness that is not an object'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     11:
+[adam-laptop]       0: 'witness without logIndex'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     12:
+[adam-laptop]       0: 'CDC-wrapped bound partition answer'
+[adam-laptop]       1: 'applied'
+[adam-laptop]     13:
+[adam-laptop]       0: 'CDC-wrapped partition answer without witness'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     14:
+[adam-laptop]       0: 'CDC-wrapped non-object partition result'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     15:
+[adam-laptop]       0: 'complete distributed answer with bound participant'
+[adam-laptop]       1: 'applied'
+[adam-laptop]     16:
+[adam-laptop]       0: 'CDC-wrapped complete distributed answer'
+[adam-laptop]       1: 'applied'
+[adam-laptop]     17:
+[adam-laptop]       0: 'distributed participant without witness'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     18:
+[adam-laptop]       0: 'distributed participant that is not an object'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     19:
+[adam-laptop]       0: 'distributed answer for another key'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     20:
+[adam-laptop]       0: 'distributed answer and attempt both without a key'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     21:
+[adam-laptop]       0: 'attempt without a declared partition'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     22:
+[adam-laptop]       0: 'bound committed statement failure'
+[adam-laptop]       1: 'failed'
+[adam-laptop]     23:
+[adam-laptop]       0: 'pre-proposal refusal on the declared partition'
+[adam-laptop]       1: 'not_proposed'
+[adam-laptop]     24:
+[adam-laptop]       0: 'single nested failure without partition ids (double undefined)'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     25:
+[adam-laptop]       0: 'single nested failure that is not an object'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     26:
+[adam-laptop]       0: 'null answer'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     27:
+[adam-laptop]       0: 'undefined answer'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     28:
+[adam-laptop]       0: 'string answer'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     29:
+[adam-laptop]       0: 'numeric answer'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     30:
+[adam-laptop]       0: 'missing attempt'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]   actual:
+[adam-laptop]     0:
+[adam-laptop]       0: 'partition answer with its bound witness'
+[adam-laptop]       1: 'applied'
+[adam-laptop]     1:
+[adam-laptop]       0: 'partition answer without a witness'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     2:
+[adam-laptop]       0: 'the exact shape that threw: success and a count, no witness, no partitionId'
+[adam-laptop]       1: "THROWS TypeError: Cannot read properties of undefined (reading 'partitionId')"
+[adam-laptop]     3:
+[adam-laptop]       0: 'the engine fake behind the real CDC service (threw)'
+[adam-laptop]       1: "THROWS TypeError: Cannot read properties of undefined (reading 'partitionId')"
+[adam-laptop]     4:
+[adam-laptop]       0: 'the heartbeat engine fake (threw)'
+[adam-laptop]       1: "THROWS TypeError: Cannot read properties of undefined (reading 'partitionId')"
+[adam-laptop]     5:
+[adam-laptop]       0: 'bare success'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     6:
+[adam-laptop]       0: 'witness without a top-level partitionId'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     7:
+[adam-laptop]       0: 'witness for another partition than declared'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     8:
+[adam-laptop]       0: 'answer partition differs from its witness'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     9:
+[adam-laptop]       0: 'witness bound to another entry'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     10:
+[adam-laptop]       0: 'witness that is not an object'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     11:
+[adam-laptop]       0: 'witness without logIndex'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     12:
+[adam-laptop]       0: 'CDC-wrapped bound partition answer'
+[adam-laptop]       1: 'applied'
+[adam-laptop]     13:
+[adam-laptop]       0: 'CDC-wrapped partition answer without witness'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     14:
+[adam-laptop]       0: 'CDC-wrapped non-object partition result'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     15:
+[adam-laptop]       0: 'complete distributed answer with bound participant'
+[adam-laptop]       1: 'applied'
+[adam-laptop]     16:
+[adam-laptop]       0: 'CDC-wrapped complete distributed answer'
+[adam-laptop]       1: 'applied'
+[adam-laptop]     17:
+[adam-laptop]       0: 'distributed participant without witness'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     18:
+[adam-laptop]       0: 'distributed participant that is not an object'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     19:
+[adam-laptop]       0: 'distributed answer for another key'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     20:
+[adam-laptop]       0: 'distributed answer and attempt both without a key'
+[adam-laptop]       1: 'applied'
+[adam-laptop]     21:
+[adam-laptop]       0: 'attempt without a declared partition'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     22:
+[adam-laptop]       0: 'bound committed statement failure'
+[adam-laptop]       1: 'failed'
+[adam-laptop]     23:
+[adam-laptop]       0: 'pre-proposal refusal on the declared partition'
+[adam-laptop]       1: 'not_proposed'
+[adam-laptop]     24:
+[adam-laptop]       0: 'single nested failure without partition ids (double undefined)'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     25:
+[adam-laptop]       0: 'single nested failure that is not an object'
+[adam-laptop]       1: "THROWS TypeError: Cannot read properties of null (reading 'committed')"
+[adam-laptop]     26:
+[adam-laptop]       0: 'null answer'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     27:
+[adam-laptop]       0: 'undefined answer'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     28:
+[adam-laptop]       0: 'string answer'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     29:
+[adam-laptop]       0: 'numeric answer'
+[adam-laptop]       1: 'unknown'
+[adam-laptop]     30:
+[adam-laptop]       0: 'missing attempt'
+[adam-laptop]       1: "THROWS TypeError: Cannot destructure property 'key' of 'undefined' as it is undefined."
+[adam-laptop]   operator: 'deepStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/control-plane/named-write-outcome-total.test.js:140:10)
+[adam-laptop]     Test.runInAsyncScope (node:async_hooks:214:14)
+[adam-laptop]     Test.run (node:internal/test_runner/test:1047:25)
+[adam-laptop]     Test.start (node:internal/test_runner/test:944:17)
+[adam-laptop]     startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: an unknown named write never says applied: the gateway-normalized success
+[adam-laptop] not ok 2 - an unknown named write never says applied: the gateway-normalized success
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 3.845588
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/control-plane/named-write-outcome-total.test.js:161:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'receipt-less normalized success: no outcome claims applied'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: 'applied'
+[adam-laptop]   actual: 'applied'
+[adam-laptop]   operator: 'notStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     assertTypedUnknownWithoutApplied (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/control-plane/named-write-outcome-total.test.js:151:10)
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/control-plane/named-write-outcome-total.test.js:172:5)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: gateway and real CDC: a receipt-less engine answer is the typed unknown, twice
+[adam-laptop] not ok 3 - gateway and real CDC: a receipt-less engine answer is the typed unknown, twice
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 163.427343
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/control-plane/named-write-outcome-total.test.js:189:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: "first: the write threw Error: Cannot read properties of undefined (reading 'partitionId'); cause TypeError: Cannot read properties of undefined (reading 'partitionId')"
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   operator: 'fail'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/control-plane/named-write-outcome-total.test.js:213:18)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] 1..3
+[adam-laptop] # tests 3
+[adam-laptop] # suites 0
+[adam-laptop] # pass 0
+[adam-laptop] # fail 3
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 208.321832
+[adam-laptop] # time=1216ms
+[adam-laptop] not ok test/query/provisioning-deadline-error-message.test.js (3 assertions, 1791ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: the real assertProvisioningAttemptBudget answers a typed, non-empty error
+[adam-laptop] not ok 1 - the real assertProvisioningAttemptBudget answers a typed, non-empty error
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 3.795691
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/query/provisioning-deadline-error-message.test.js:40:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'a non-empty message (got "")'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: true
+[adam-laptop]   actual: false
+[adam-laptop]   operator: '=='
+[adam-laptop]   stack: |-
+[adam-laptop]     Object.assertTypedNonEmptyTimeout (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/query/provisioning-deadline-error-message.test.js:34:10)
+[adam-laptop]     expectedException (node:assert:576:17)
+[adam-laptop]     expectsError (node:assert:701:21)
+[adam-laptop]     Function.throws (node:assert:757:3)
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/query/provisioning-deadline-error-message.test.js:42:10)
+[adam-laptop]     Test.runInAsyncScope (node:async_hooks:214:14)
+[adam-laptop]     Test.run (node:internal/test_runner/test:1047:25)
+[adam-laptop]     Test.start (node:internal/test_runner/test:944:17)
+[adam-laptop]     startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: CREATE TABLE provisioning past its deadline rejects with the typed, non-empty error
+[adam-laptop] not ok 2 - CREATE TABLE provisioning past its deadline rejects with the typed, non-empty error
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 39.744232
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/query/provisioning-deadline-error-message.test.js:46:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'a non-empty message (got "")'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: true
+[adam-laptop]   actual: false
+[adam-laptop]   operator: '=='
+[adam-laptop]   stack: |-
+[adam-laptop]     Object.assertTypedNonEmptyTimeout (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/query/provisioning-deadline-error-message.test.js:34:10)
+[adam-laptop]     expectedException (node:assert:576:17)
+[adam-laptop]     expectsError (node:assert:701:21)
+[adam-laptop]     Function.rejects (node:assert:767:3)
+[adam-laptop]     async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/query/provisioning-deadline-error-message.test.js:77:5)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: every QUERY_ERROR_MSG member referenced under src/query is defined
+[adam-laptop] not ok 3 - every QUERY_ERROR_MSG member referenced under src/query is defined
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 9.48768
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/query/provisioning-deadline-error-message.test.js:95:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     references to undefined error messages answer empty errors
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]     + [
+[adam-laptop]     +   'src/query/distributed/distributed-write-coordinator.js:505 QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED',
+[adam-laptop]     +   'src/query/sql-query-engine-provisioning-admission-methods.js:290 QUERY_ERROR_MSG.TABLE_PARTITION_TARGET_NODE_WAIT_TIMEOUT',
+[adam-laptop]     +   'src/query/sql-query-engine-write-failure-methods.js:284 QUERY_ERROR_MSG.QUERY_EXECUTION_FAILED'
+[adam-laptop]     + ]
+[adam-laptop]     - []
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected:
+[adam-laptop]   actual:
+[adam-laptop]     0: 'src/query/distributed/distributed-write-coordinator.js:505 QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED'
+[adam-laptop]     1: 'src/query/sql-query-engine-provisioning-admission-methods.js:290 QUERY_ERROR_MSG.TABLE_PARTITION_TARGET_NODE_WAIT_TIMEOUT'
+[adam-laptop]     2: 'src/query/sql-query-engine-write-failure-methods.js:284 QUERY_ERROR_MSG.QUERY_EXECUTION_FAILED'
+[adam-laptop]   operator: 'deepStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/query/provisioning-deadline-error-message.test.js:106:10)
+[adam-laptop]     Test.runInAsyncScope (node:async_hooks:214:14)
+[adam-laptop]     Test.run (node:internal/test_runner/test:1047:25)
+[adam-laptop]     Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+[adam-laptop]     Test.postRun (node:internal/test_runner/test:1173:19)
+[adam-laptop]     Test.run (node:internal/test_runner/test:1101:12)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] 1..3
+[adam-laptop] # tests 3
+[adam-laptop] # suites 0
+[adam-laptop] # pass 0
+[adam-laptop] # fail 3
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 84.218462
+[adam-laptop] # time=1791ms
+[adam-laptop] not ok test/rebalancer/placement-explicit-replica-refusal-code.test.js (2 assertions, 1906ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: ADD naming a replica identity: refused with its own typed code, not the corrupt-bytes code
+[adam-laptop] not ok 1 - ADD naming a replica identity: refused with its own typed code, not the corrupt-bytes code
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 2.088027
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/rebalancer/placement-explicit-replica-refusal-code.test.js:25:3'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'a request-shape refusal is not the committed-bytes refusal'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: 'placement_admission_bytes_invalid'
+[adam-laptop]   actual: 'placement_admission_bytes_invalid'
+[adam-laptop]   operator: 'notStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/rebalancer/placement-explicit-replica-refusal-code.test.js:39:12)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: REPLACE naming source and target replicas: refused with its own typed code, not the corrupt-bytes code
+[adam-laptop] not ok 2 - REPLACE naming source and target replicas: refused with its own typed code, not the corrupt-bytes code
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 0.271384
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/rebalancer/placement-explicit-replica-refusal-code.test.js:25:3'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: 'a request-shape refusal is not the committed-bytes refusal'
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: 'placement_admission_bytes_invalid'
+[adam-laptop]   actual: 'placement_admission_bytes_invalid'
+[adam-laptop]   operator: 'notStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/test/rebalancer/placement-explicit-replica-refusal-code.test.js:39:12)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] 1..2
+[adam-laptop] # tests 2
+[adam-laptop] # suites 0
+[adam-laptop] # pass 0
+[adam-laptop] # fail 2
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 28.694808
+[adam-laptop] # time=1906ms
+[adam-laptop] ok test/query/named-write-real-producer-applied.test.js (3 assertions, 5644ms)
+[adam-laptop] # test-files total=4 pass=1 fail=3 assertions=11
+[adam-laptop] classified lane bootstrap: 1 file(s), jobs=2
+[adam-laptop] thermal: ok cpu 56C (coretemp/Package id 0) nvme 21C (nvme/Composite)
+[adam-laptop] not ok test/bootstrap/register-service-retryable-refusal.test.js (7 assertions, 3272ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 14
+[adam-laptop] {"level":50,"time":"2026-11-21T16:53:20.664Z","nodeId":"test-seed-node","pid":3569175,"subsystem":"bootstrap-api","event":"wait_bound_spent","wait":"registerServiceWriteRetryTimeoutMs","awaited":"register-service services-row control-plane write accepted","boundMs":2000,"elapsedMs":2004,"lastObserved":{"attempts":6,"lastErrorCode":null,"lastError":"ControlPlaneSystemTableGateway requires cdcIntegrationService","retryAfterMs":0},"scope":{"nodeId":"joiner-node-1","serviceId":"mg-retryable-r1","groupId":"mg-retryable"},"repeats":0,"nodeId":"test-seed-node","msg":"Wait bound spent"}
+[adam-laptop] # Subtest: register-service before CDC is wired answers the typed retryable refusal, not 500
+[adam-laptop]     not ok 1 - the typed retryable refusal keeps its retryable status ({"statusCode":500,"error":"Internal Server Error","message":"ControlPlaneSystemTableGateway requires cdcIntegrationService"})
+[adam-laptop]       ---
+[adam-laptop]       compare: ===
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/bootstrap/register-service-retryable-refusal.test.js
+[adam-laptop]         lineNumber: 48
+[adam-laptop]         columnNumber: 7
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: >
+[adam-laptop]         Test.<anonymous>
+[adam-laptop]         (test/bootstrap/register-service-retryable-refusal.test.js:48:7)
+[adam-laptop]       source: >2
+[adam-laptop]               },
+[adam-laptop]             });
+[adam-laptop]             t.equal(response.statusCode, HTTP_STATUS.SERVICE_UNAVAILABLE,
+[adam-laptop]         ------^
+[adam-laptop]               `the typed retryable refusal keeps its retryable status (${response.body})`);
+[adam-laptop]             const body = JSON.parse(response.body);
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,1 +1,1 @@
+[adam-laptop]         -503
+[adam-laptop]         +500
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     not ok 2 - not registered
+[adam-laptop]       ---
+[adam-laptop]       compare: ===
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/bootstrap/register-service-retryable-refusal.test.js
+[adam-laptop]         lineNumber: 51
+[adam-laptop]         columnNumber: 7
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: >
+[adam-laptop]         Test.<anonymous>
+[adam-laptop]         (test/bootstrap/register-service-retryable-refusal.test.js:51:7)
+[adam-laptop]       source: >2
+[adam-laptop]               `the typed retryable refusal keeps its retryable status (${response.body})`);
+[adam-laptop]             const body = JSON.parse(response.body);
+[adam-laptop]             t.equal(body.success, false, 'not registered');
+[adam-laptop]         ------^
+[adam-laptop]             t.type(body.code, 'string', 'a typed refusal code');
+[adam-laptop]             t.ok(Number.isFinite(body.retryAfterMs), 'a retry hint');
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,1 +1,1 @@
+[adam-laptop]         -false
+[adam-laptop]         +undefined
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     not ok 3 - a typed refusal code
+[adam-laptop]       ---
+[adam-laptop]       compare: ===
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/bootstrap/register-service-retryable-refusal.test.js
+[adam-laptop]         lineNumber: 52
+[adam-laptop]         columnNumber: 7
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: >
+[adam-laptop]         Test.<anonymous>
+[adam-laptop]         (test/bootstrap/register-service-retryable-refusal.test.js:52:7)
+[adam-laptop]       source: >2
+[adam-laptop]             const body = JSON.parse(response.body);
+[adam-laptop]             t.equal(body.success, false, 'not registered');
+[adam-laptop]             t.type(body.code, 'string', 'a typed refusal code');
+[adam-laptop]         ------^
+[adam-laptop]             t.ok(Number.isFinite(body.retryAfterMs), 'a retry hint');
+[adam-laptop]             t.equal(body[SERVICE_REGISTRATION_HANDOFF_FIELD.CONTRACT]?.producerOwnerOutcome?.terminal,
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,1 +1,1 @@
+[adam-laptop]         -string
+[adam-laptop]         +undefined
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     not ok 4 - a retry hint
+[adam-laptop]       ---
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/bootstrap/register-service-retryable-refusal.test.js
+[adam-laptop]         lineNumber: 53
+[adam-laptop]         columnNumber: 7
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: >
+[adam-laptop]         Test.<anonymous>
+[adam-laptop]         (test/bootstrap/register-service-retryable-refusal.test.js:53:7)
+[adam-laptop]       source: >2
+[adam-laptop]             t.equal(body.success, false, 'not registered');
+[adam-laptop]             t.type(body.code, 'string', 'a typed refusal code');
+[adam-laptop]             t.ok(Number.isFinite(body.retryAfterMs), 'a retry hint');
+[adam-laptop]         ------^
+[adam-laptop]             t.equal(body[SERVICE_REGISTRATION_HANDOFF_FIELD.CONTRACT]?.producerOwnerOutcome?.terminal,
+[adam-laptop]               false, 'the handoff contract is not terminal');
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     not ok 5 - the handoff contract is not terminal
+[adam-laptop]       ---
+[adam-laptop]       compare: ===
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/bootstrap/register-service-retryable-refusal.test.js
+[adam-laptop]         lineNumber: 54
+[adam-laptop]         columnNumber: 7
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: >
+[adam-laptop]         Test.<anonymous>
+[adam-laptop]         (test/bootstrap/register-service-retryable-refusal.test.js:54:7)
+[adam-laptop]       source: >2
+[adam-laptop]             t.type(body.code, 'string', 'a typed refusal code');
+[adam-laptop]             t.ok(Number.isFinite(body.retryAfterMs), 'a retry hint');
+[adam-laptop]             t.equal(body[SERVICE_REGISTRATION_HANDOFF_FIELD.CONTRACT]?.producerOwnerOutcome?.terminal,
+[adam-laptop]         ------^
+[adam-laptop]               false, 'the handoff contract is not terminal');
+[adam-laptop]             t.same(sqlCalls, [], 'the removed pre-CDC SQL fallback stays removed');
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,1 +1,1 @@
+[adam-laptop]         -false
+[adam-laptop]         +undefined
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     ok 6 - the removed pre-CDC SQL fallback stays removed
+[adam-laptop]     1..6
+[adam-laptop] not ok 1 - register-service before CDC is wired answers the typed retryable refusal, not 500 # time=2173.719ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/bootstrap/register-service-retryable-refusal.test.js
+[adam-laptop]     lineNumber: 17
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: >
+[adam-laptop]     import {HTTP_STATUS, SERVICE_STATUS, SERVICE_TYPE} from
+[adam-laptop]     '../../src/constants/index.js';
+[adam-laptop]   
+[adam-laptop]   
+[adam-laptop]     test('register-service before CDC is wired answers the typed retryable
+[adam-laptop]     refusal, not 500',
+[adam-laptop]   
+[adam-laptop]     ^
+[adam-laptop]       async (t) => {
+[adam-laptop]         initializeTestEnvironment();
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] {"level":50,"time":"2026-11-21T16:53:20.666Z","nodeId":"test-seed-node","pid":3569175,"subsystem":"bootstrap-api","serviceId":"mg-retryable-r1","error":"ControlPlaneSystemTableGateway requires cdcIntegrationService","stack":"Error: ControlPlaneSystemTableGateway requires cdcIntegrationService\n    at BootstrapAPI.buildBootstrapControlPlaneQueryError (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/src/bootstrap/bootstrap-api-control-plane-methods.js:340:12)\n    at BootstrapAPI.buildBootstrapControlPlaneMutationError (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/src/bootstrap/bootstrap-api-control-plane-methods.js:356:17)\n    at Object.buildBootstrapControlPlaneMutationError (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/src/bootstrap/bootstrap-api.js:313:18)\n    at ServiceRegistrationHandoffOwner.handleRegisterServiceRequest (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/0ddf7b00f282-mwqnc50a-1607596/src/bootstrap/owners/service-registration-handoff-owner.js:639:30)","nodeId":"test-seed-node","msg":"Failed to register service"}
+[adam-laptop] 1..1
+[adam-laptop] # { total: 6, pass: 1, fail: 5 }
+[adam-laptop] # time=2185.981ms
+[adam-laptop] # test-files total=1 pass=0 fail=1 assertions=7
+lab test: adam-laptop: # test-files total=5 pass=1 fail=4 assertions=18
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=5 pass=1 fail=4 assertions=18

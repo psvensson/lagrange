@@ -1,0 +1,322 @@
+Replica operation dispatch failed {
+  nodeId: 'node-local',
+  operationId: 'op-dispatch-blocked',
+  targetNodeId: 'node-dispatch-blocked',
+  workflowStep: 'PENDING',
+  skipped: true,
+  reason: 'target_node_not_ready',
+  error: 'Target node node-dispatch-blocked is not ready for dispatch',
+  readinessSnapshot: {
+    nodeId: 'node-dispatch-blocked',
+    dimensions: {
+      processAlive: true,
+      clusterMemberHealthy: true,
+      routingReady: true,
+      loadReady: true,
+      placementEligible: true,
+      provisioningEligible: true,
+      controlPlaneWritable: true,
+      metadataPublicationHealthy: true,
+      repairEligible: false,
+      serveEligible: true
+    },
+    reasonCodes: [],
+    lifecycleState: 'running',
+    observedAt: '2026-03-06T00:00:00.000Z',
+    decisionDimension: 'repairEligible',
+    runtimeAuthority: {
+      state: 'confirmed',
+      authorityAvailable: true,
+      ready: true,
+      processAlive: true,
+      clusterMemberHealthy: true,
+      routingReady: true,
+      writeEligible: true,
+      recoveryEligible: true,
+      repairEligible: true,
+      publication: [Object],
+      visibility: [Object],
+      repair: [Object],
+      provisioning: [Object],
+      failure: [Object],
+      reasonCodes: []
+    },
+    projectionReadinessContract: {
+      state: 'recovery_open',
+      ready: false,
+      recoveryOpen: true,
+      publication: [Object],
+      readiness: [Object],
+      priorityRecovery: [Object],
+      reasonCodes: []
+    }
+  }
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'op-step-test',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'op-step-test',
+    replica_id: 'partition-1-r1',
+    status: 'pending',
+    workflow_step: 'PENDING',
+    updated_at: 1795290284809,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795290284812
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'op-step-test',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'op-step-test',
+    replica_id: 'partition-1-r1',
+    status: 'pending',
+    workflow_step: 'SENDING',
+    updated_at: 1795290284814,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795290284817
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-local',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-local',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-local',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-local',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-local',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-local',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-local',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-local',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-local',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-local',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-local',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-local',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-local',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-local',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-local',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+Operation row missing from authoritative partition after zero-row update; re-inserting owner copy {
+  operationId: 'op-single-flight',
+  partitionId: 'partition-1',
+  workflowStep: 'SENDING',
+  expectedWorkflowStep: 'PENDING'
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-local',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-local',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-local',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-local',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'REBALANCE_OPERATION_STEP_TIMEOUT',
+  awaited: 'replica operation progressed past its current workflow step',
+  boundMs: 30000,
+  elapsedMs: 31000,
+  lastObserved: {
+    type: 'REPLACE',
+    workflowStep: 'PENDING',
+    status: 'pending',
+    targetNodeId: 'node-local',
+    stepExceeded: true,
+    budgetExhausted: false,
+    timeoutClassification: {
+      classification: 'rebalance_operation_timeout',
+      configuredBudgetMs: 300000,
+      remainingBudgetMs: 269000,
+      boundaryHit: false,
+      nestedOperation: 'rebalance:pending',
+      operationName: 'rebalance',
+      originalClassification: null
+    }
+  },
+  scope: {
+    nodeId: 'node-local',
+    partitionId: 'sql_transactions-p1',
+    operationId: 'op-critical-pending-timeout-rearm'
+  },
+  repeats: 0
+}
+Operation failed {
+  operationId: 'op-critical-pending-timeout-rearm',
+  type: 'REPLACE',
+  partitionId: 'sql_transactions-p1',
+  targetNodeId: 'node-local',
+  errorMessage: 'Timeout in PENDING step after 31000ms'
+}
+Operation blocked by safety policy {
+  operationId: 'op-priority-planning-superseded',
+  type: 'REPLACE',
+  partitionId: 'sql_write_operations-p1',
+  targetNodeId: 'node-local',
+  errorMessage: 'Priority recovery target node node-local is no longer in the current eligible cohort for sql_write_operations-p1 (node-a, node-b)'
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-local',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'REBALANCE_OPERATION_STEP_TIMEOUT',
+  awaited: 'replica operation progressed past its current workflow step',
+  boundMs: 30000,
+  elapsedMs: 30900,
+  lastObserved: {
+    type: 'REPLACE',
+    workflowStep: 'SENDING',
+    status: 'pending',
+    targetNodeId: 'node-remote',
+    stepExceeded: true,
+    budgetExhausted: false,
+    timeoutClassification: {
+      classification: 'rebalance_operation_timeout',
+      configuredBudgetMs: 300000,
+      remainingBudgetMs: 259000,
+      boundaryHit: false,
+      nestedOperation: 'rebalance:sending',
+      operationName: 'rebalance',
+      originalClassification: null
+    }
+  },
+  scope: {
+    nodeId: 'node-local',
+    partitionId: 'partition-1',
+    operationId: 'op-timeout-window-gap'
+  },
+  repeats: 0
+}
+Operation failed {
+  operationId: 'op-timeout-window-gap',
+  type: 'REPLACE',
+  partitionId: 'partition-1',
+  targetNodeId: 'node-remote',
+  errorMessage: 'Timeout in SENDING step after 30900ms'
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-local',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-local',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-local',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}
+Operation failed {
+  operationId: 'op-fail-durable',
+  type: 'ADD',
+  partitionId: 'partition-1',
+  targetNodeId: 'node-remote',
+  errorMessage: 'test failure reason'
+}
+ControlPlaneReadinessService missing CDC publication owner {
+  nodeId: 'node-local',
+  owner: 'CDCGroupPropagationService',
+  strictOwnerDependencies: false
+}

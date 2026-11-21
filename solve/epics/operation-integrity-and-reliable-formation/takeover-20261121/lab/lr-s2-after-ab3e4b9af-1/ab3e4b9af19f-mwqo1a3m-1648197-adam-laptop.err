@@ -1,0 +1,23 @@
+TypeError: The database connection is not open
+  ---
+  stack: |
+    Database.prepare (../../../node_modules/better-sqlite3/lib/methods/wrappers.js:5:21)
+    Test.<anonymous> (test/integration/control-plane-postgres-wire-scale.integration.test.js:119:24)
+  at:
+    fileName: ../../../node_modules/better-sqlite3/lib/methods/wrappers.js
+    lineNumber: 5
+    columnNumber: 21
+    typeName: Database
+    methodName: prepare
+    functionName: Database.prepare
+  type: TypeError
+  tapCaught: returnedPromiseRejection
+  test: operator PG-wire scale fences every built-in runtime identity field at mutation
+  source: |
+
+    exports.prepare = function prepare(sql) {
+    	return this[cppdb].prepare(sql, this, false);
+    --------------------^
+    };
+  ...
+

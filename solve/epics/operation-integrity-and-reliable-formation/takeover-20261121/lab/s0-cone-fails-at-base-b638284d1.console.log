@@ -1,0 +1,236 @@
+lab test: adams-gamla: ordinary, bootstrap, exclusive (113 files) cores=4 mem=15.6GiB speed x2.04
+[adams-gamla] placement-shell=2058607
+[adams-gamla] placement-head=b638284d110d2a6b7cd55ebf902a63cb262fa25a
+[adams-gamla] placement-link=node_modules
+[adams-gamla] placement-link=data/examples
+[adams-gamla] placement-prepared=import-graph
+[adams-gamla] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adams-gamla] placement-pid=2059552
+[adams-gamla] # test-files planned=113
+[adams-gamla] classified lane ordinary: 89 file(s), jobs=3
+[adams-gamla] thermal: ok cpu 50C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] not ok test/control-plane/heartbeat-liveness-at-commit.test.js (7 assertions, 1299ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 14
+[adams-gamla] # Subtest: heartbeat liveness: with the projection paused the NODES write answers at its commit and the next beat proceeds
+[adams-gamla]     ok 1 - beat 1 answers within 300 ms with the projection paused
+[adams-gamla]     not ok 2 - beat 1 does not fail (Cannot read properties of undefined (reading 'partitionId'))
+[adams-gamla]       ---
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/control-plane/heartbeat-liveness-at-commit.test.js
+[adams-gamla]         lineNumber: 103
+[adams-gamla]         columnNumber: 7
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: >
+[adams-gamla]         Test.<anonymous>
+[adams-gamla]         (test/control-plane/heartbeat-liveness-at-commit.test.js:103:7)
+[adams-gamla]       source: >2
+[adams-gamla]             t.not(outcome, PENDING,
+[adams-gamla]               `beat ${beat} answers within ${PROMPT_MS} ms with the projection paused`);
+[adams-gamla]             t.notOk(outcome?.error,
+[adams-gamla]         ------^
+[adams-gamla]               `beat ${beat} does not fail (${outcome?.error?.message ?? 'no error'})`);
+[adams-gamla]           }
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     ok 3 - beat 2 answers within 300 ms with the projection paused
+[adams-gamla]     not ok 4 - beat 2 does not fail (Cannot read properties of undefined (reading 'partitionId'))
+[adams-gamla]       ---
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/control-plane/heartbeat-liveness-at-commit.test.js
+[adams-gamla]         lineNumber: 103
+[adams-gamla]         columnNumber: 7
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: >
+[adams-gamla]         Test.<anonymous>
+[adams-gamla]         (test/control-plane/heartbeat-liveness-at-commit.test.js:103:7)
+[adams-gamla]       source: >2
+[adams-gamla]             t.not(outcome, PENDING,
+[adams-gamla]               `beat ${beat} answers within ${PROMPT_MS} ms with the projection paused`);
+[adams-gamla]             t.notOk(outcome?.error,
+[adams-gamla]         ------^
+[adams-gamla]               `beat ${beat} does not fail (${outcome?.error?.message ?? 'no error'})`);
+[adams-gamla]           }
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     ok 5 - each beat committed one NODES write
+[adams-gamla]     ok 6 - the projection never moved
+[adams-gamla]     1..6
+[adams-gamla] not ok 1 - heartbeat liveness: with the projection paused the NODES write answers at its commit and the next beat proceeds # time=69.131ms
+[adams-gamla]   ---
+[adams-gamla]   at:
+[adams-gamla]     fileName: test/control-plane/heartbeat-liveness-at-commit.test.js
+[adams-gamla]     lineNumber: 92
+[adams-gamla]     columnNumber: 1
+[adams-gamla]     isToplevel: true
+[adams-gamla]   source: |
+[adams-gamla]     }
+[adams-gamla]   
+[adams-gamla]     test('heartbeat liveness: with the projection paused the NODES write ' +
+[adams-gamla]     ^
+[adams-gamla]       'answers at its commit and the next beat proceeds', async (t) => {
+[adams-gamla]       const {cdc, cache, clock, engine, heartbeat, projectedRow} =
+[adams-gamla]   ...
+[adams-gamla] 
+[adams-gamla] 1..1
+[adams-gamla] # { total: 6, pass: 4, fail: 2 }
+[adams-gamla] # time=213.044ms
+[adams-gamla] not ok test/control-plane/gateway-sql-mutation-fallback-phase-scope.test.js (12 assertions, 1353ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 14
+[adams-gamla] # Subtest: without a phase scope a write with no CDC owner is refused CDC_REQUIRED and reaches no SQL
+[adams-gamla]     ok 1 - should be equal
+[adams-gamla]     ok 2 - no SQL was issued
+[adams-gamla]     1..2
+[adams-gamla] ok 1 - without a phase scope a write with no CDC owner is refused CDC_REQUIRED and reaches no SQL # time=10.613ms
+[adams-gamla] 
+[adams-gamla] # Subtest: the actual JOIN owner selects startup SQL when constructed for that phase
+[adams-gamla]     not ok 1 - NodeRegistrationOwner requires a getSystemTableCache delegate function
+[adams-gamla]       ---
+[adams-gamla]       stack: >
+[adams-gamla]         new NodeRegistrationOwner
+[adams-gamla]         (src/bootstrap/shared/node-registration-owner.js:130:13)
+[adams-gamla]       
+[adams-gamla]         gatewayWithoutCdc
+[adams-gamla]         (test/control-plane/gateway-sql-mutation-fallback-phase-scope.test.js:22:5)
+[adams-gamla]       
+[adams-gamla]         Test.<anonymous>
+[adams-gamla]         (test/control-plane/gateway-sql-mutation-fallback-phase-scope.test.js:44:26)
+[adams-gamla]       at:
+[adams-gamla]         fileName: src/bootstrap/shared/node-registration-owner.js
+[adams-gamla]         lineNumber: 130
+[adams-gamla]         columnNumber: 13
+[adams-gamla]         functionName: NodeRegistrationOwner
+[adams-gamla]         isConstructor: true
+[adams-gamla]       type: TypeError
+[adams-gamla]       tapCaught: returnedPromiseRejection
+[adams-gamla]       source: |2
+[adams-gamla]             const {getSystemTableCache} = this.delegates;
+[adams-gamla]             if (typeof getSystemTableCache !== 'function') {
+[adams-gamla]               throw new TypeError(
+[adams-gamla]         ------------^
+[adams-gamla]                 NODE_REGISTRATION_ERROR.SYSTEM_TABLE_CACHE_GETTER_REQUIRED,
+[adams-gamla]               );
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     1..1
+[adams-gamla] not ok 2 - the actual JOIN owner selects startup SQL when constructed for that phase # time=44.334ms
+[adams-gamla]   ---
+[adams-gamla]   at:
+[adams-gamla]     fileName: test/control-plane/gateway-sql-mutation-fallback-phase-scope.test.js
+[adams-gamla]     lineNumber: 42
+[adams-gamla]     columnNumber: 1
+[adams-gamla]     isToplevel: true
+[adams-gamla]   source: |
+[adams-gamla]     });
+[adams-gamla]   
+[adams-gamla]     test('the actual JOIN owner selects startup SQL when constructed for that ' +
+[adams-gamla]     ^
+[adams-gamla]       'phase', async (t) => {
+[adams-gamla]       const {gateway, sql} = gatewayWithoutCdc(true);
+[adams-gamla]   ...
+[adams-gamla] 
+[adams-gamla] # Subtest: a phase-scoped membership publication write stays fenced off the SQL path
+[adams-gamla]     not ok 1 - NodeRegistrationOwner requires a getSystemTableCache delegate function
+[adams-gamla]       ---
+[adams-gamla]       stack: >
+[adams-gamla]         new NodeRegistrationOwner
+[adams-gamla]         (src/bootstrap/shared/node-registration-owner.js:130:13)
+[adams-gamla]       
+[adams-gamla]         gatewayWithoutCdc
+[adams-gamla]         (test/control-plane/gateway-sql-mutation-fallback-phase-scope.test.js:22:5)
+[adams-gamla]       
+[adams-gamla]         Test.<anonymous>
+[adams-gamla]         (test/control-plane/gateway-sql-mutation-fallback-phase-scope.test.js:53:26)
+[adams-gamla]       at:
+[adams-gamla]         fileName: src/bootstrap/shared/node-registration-owner.js
+[adams-gamla]         lineNumber: 130
+[adams-gamla]         columnNumber: 13
+[adams-gamla]         functionName: NodeRegistrationOwner
+[adams-gamla]         isConstructor: true
+[adams-gamla]       type: TypeError
+[adams-gamla]       tapCaught: returnedPromiseRejection
+[adams-gamla]       source: |2
+[adams-gamla]             const {getSystemTableCache} = this.delegates;
+[adams-gamla]             if (typeof getSystemTableCache !== 'function') {
+[adams-gamla]               throw new TypeError(
+[adams-gamla]         ------------^
+[adams-gamla]                 NODE_REGISTRATION_ERROR.SYSTEM_TABLE_CACHE_GETTER_REQUIRED,
+[adams-gamla]               );
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     1..1
+[adams-gamla] not ok 3 - a phase-scoped membership publication write stays fenced off the SQL path # time=6.943ms
+[adams-gamla]   ---
+[adams-gamla]   at:
+[adams-gamla]     fileName: test/control-plane/gateway-sql-mutation-fallback-phase-scope.test.js
+[adams-gamla]     lineNumber: 51
+[adams-gamla]     columnNumber: 1
+[adams-gamla]     isToplevel: true
+[adams-gamla]   source: |
+[adams-gamla]     });
+[adams-gamla]   
+[adams-gamla]     test('a phase-scoped membership publication write stays fenced off the ' +
+[adams-gamla]     ^
+[adams-gamla]       'SQL path', async (t) => {
+[adams-gamla]       const {gateway, sql} = gatewayWithoutCdc(true);
+[adams-gamla]   ...
+[adams-gamla] 
+[adams-gamla] # Subtest: guarded mutations retain NULL and refuse unknown predicate fields before SQL
+[adams-gamla]     not ok 1 - NodeRegistrationOwner requires a getSystemTableCache delegate function
+[adams-gamla]       ---
+[adams-gamla]       stack: >
+[adams-gamla]         new NodeRegistrationOwner
+[adams-gamla]         (src/bootstrap/shared/node-registration-owner.js:130:13)
+[adams-gamla]       
+[adams-gamla]         gatewayWithoutCdc
+[adams-gamla]         (test/control-plane/gateway-sql-mutation-fallback-phase-scope.test.js:22:5)
+[adams-gamla]       
+[adams-gamla]         Test.<anonymous>
+[adams-gamla]         (test/control-plane/gateway-sql-mutation-fallback-phase-scope.test.js:64:26)
+[adams-gamla]       at:
+[adams-gamla]         fileName: src/bootstrap/shared/node-registration-owner.js
+[adams-gamla]         lineNumber: 130
+[adams-gamla]         columnNumber: 13
+[adams-gamla]         functionName: NodeRegistrationOwner
+[adams-gamla]         isConstructor: true
+[adams-gamla]       type: TypeError
+[adams-gamla]       tapCaught: returnedPromiseRejection
+[adams-gamla]       source: |2
+[adams-gamla]             const {getSystemTableCache} = this.delegates;
+[adams-gamla]             if (typeof getSystemTableCache !== 'function') {
+[adams-gamla]               throw new TypeError(
+[adams-gamla]         ------------^
+[adams-gamla]                 NODE_REGISTRATION_ERROR.SYSTEM_TABLE_CACHE_GETTER_REQUIRED,
+[adams-gamla]               );
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     1..1
+[adams-gamla] not ok 4 - guarded mutations retain NULL and refuse unknown predicate fields before SQL # time=4.439ms
+[adams-gamla]   ---
+[adams-gamla]   at:
+[adams-gamla]     fileName: test/control-plane/gateway-sql-mutation-fallback-phase-scope.test.js
+[adams-gamla]     lineNumber: 63
+[adams-gamla]     columnNumber: 1
+[adams-gamla]     isToplevel: true
+[adams-gamla]   source: >
+[adams-gamla]     });
+[adams-gamla]   
+[adams-gamla]   
+[adams-gamla]     test('guarded mutations retain NULL and refuse unknown predicate fields before
+[adams-gamla]     SQL', async (t) => {
+[adams-gamla]   
+[adams-gamla]     ^
+[adams-gamla]       const {gateway, sql} = gatewayWithoutCdc(true);
+[adams-gamla]       const options = {phaseScope: CONTROL_PLANE_PHASE_SCOPE.JOIN};
+[adams-gamla]   ...
+[adams-gamla] 
+[adams-gamla] # Subtest: a runtime phase label does not authorize a different writer when the CDC owner is absent
+[adams-gamla]     ok 1 - expected to reject
+[adams-gamla]     ok 2 - no SQL write
+[adams-gamla]     1..2
+[adams-gamla] ok 5 - a runtime phase label does not authorize a different writer when the CDC owner is absent # time=4.187ms
+[adams-gamla] 
+[adams-gamla] 1..5
+[adams-gamla] # { total: 7, pass: 4, fail: 3 }
+[adams-gamla] # time=89.487ms

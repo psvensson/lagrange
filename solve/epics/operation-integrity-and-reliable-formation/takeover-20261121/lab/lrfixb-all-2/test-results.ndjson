@@ -1,0 +1,20 @@
+{"file":"test/rebalancer/operation-record-step-shape.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":1012,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/gateway-sql-mutation-fallback-phase-scope.test.js","attempt":1,"ok":true,"assertions":16,"durationMs":1064,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/replica-dispatch-direct-wakeup-delivery-decision.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":1510,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/admission-real-size-estimates.test.js","attempt":1,"ok":true,"assertions":27,"durationMs":1767,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js","attempt":1,"ok":true,"assertions":100,"durationMs":2373,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-create-bootstrap-binding.test.js","attempt":1,"ok":false,"assertions":14,"durationMs":3922,"retriedOnce":false,"firstFailureLine":"not ok 12 - ledger self-move dispatch waits for unstamped native ADD in PENDING"}
+{"file":"test/control-plane/replica-dispatch-node-state-update-node-row-bootstrap-failures.test.js","attempt":1,"ok":true,"assertions":61,"durationMs":1369,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/duplicate-operation-prevention.property.test.js","attempt":1,"ok":true,"assertions":45,"durationMs":2900,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/replica-dispatch-node-state-update-ready-node-retry-cache-priority.test.js","attempt":1,"ok":true,"assertions":37,"durationMs":1508,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/replica-dispatch-node-state-update-ready-node-retry-dispatch.test.js","attempt":1,"ok":true,"assertions":54,"durationMs":1396,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/replica-dispatch-node-state-update-remote-direct-wakeup.test.js","attempt":1,"ok":true,"assertions":38,"durationMs":1540,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/replica-dispatch-routing.property.test.js","attempt":1,"ok":true,"assertions":41,"durationMs":1685,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/reservation-expiry-operation-aware.test.js","attempt":1,"ok":true,"assertions":10,"durationMs":1530,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/rebalancer-entity-interaction-contract.test.js","attempt":1,"ok":false,"assertions":32,"durationMs":1534,"retriedOnce":false,"firstFailureLine":"not ok 1 - context.buildDeferredRemoveSafetyEvaluation is not a function"}
+{"file":"test/raft/snapshot-dispatcher-wiring.test.js","attempt":1,"ok":true,"assertions":21,"durationMs":2882,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/membership-count-neutral-steady-trim.test.js","attempt":1,"ok":true,"assertions":35,"durationMs":1083,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/self-owned-coordinator-handoff-dispatches-in-process.test.js","attempt":1,"ok":true,"assertions":9,"durationMs":1353,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-operation-insert-retry-idempotency.test.js","attempt":1,"ok":true,"assertions":10,"durationMs":1152,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":1487,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/message-group-operation-routing.integration.test.js","attempt":1,"ok":true,"assertions":21,"durationMs":1141,"retriedOnce":false,"firstFailureLine":null}

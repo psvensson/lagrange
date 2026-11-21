@@ -1,0 +1,6 @@
+merge: 15 files, 14 pass, 1 fail
+- test/rebalancer/replica-operation-membership-epoch-binding.test.js
+    merge : not ok 6 - src/partition/partition-placement-retained-repair.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+    ours  : FAIL not ok 8 - src/partition/partition-placement-retained-repair.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough [w2-final-23344cddc-focused/test-results.ndjson]
+    theirs: FAIL not ok 6 - src/partition/partition-placement-retained-repair.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough [w1-s2c-run4-cone97-a10a9cae3/test-results.ndjson]
+    => IDENTICAL on both parents

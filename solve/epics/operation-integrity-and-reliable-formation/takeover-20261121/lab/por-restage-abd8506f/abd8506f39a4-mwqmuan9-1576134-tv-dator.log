@@ -1,0 +1,21 @@
+placement-shell=3164053
+placement-head=abd8506f39a404cafc6146a431d2e0c6ec323e28
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.6 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3164506
+# test-files planned=3
+classified lane ordinary: 3 file(s), jobs=4
+thermal: ok cpu 61C (coretemp/Package id 0) nvme 46C (nvme/Sensor 1)
+ok test/rebalancer/placement-owner-authority-await-points.test.js (3 assertions, 6353ms)
+ok test/rebalancer/placement-owner-authority-tenure.test.js (14 assertions, 16178ms)
+ok test/rebalancer/placement-owner-authority-wakes.test.js (6 assertions, 127296ms)
+# test-files total=3 pass=3 fail=0 assertions=23
+placement-results={"file":"test/rebalancer/placement-owner-authority-await-points.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":6353,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/placement-owner-authority-tenure.test.js","attempt":1,"ok":true,"assertions":14,"durationMs":16178,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/placement-owner-authority-wakes.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":127296,"retriedOnce":false,"firstFailureLine":null}

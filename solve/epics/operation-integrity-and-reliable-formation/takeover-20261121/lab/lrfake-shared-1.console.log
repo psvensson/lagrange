@@ -1,0 +1,301 @@
+lab test: adam-laptop: ordinary, bootstrap, exclusive (12 files) cores=8 mem=15.5GiB speed x2.01
+[adam-laptop] placement-shell=3604478
+[adam-laptop] placement-head=0950b16e284cf6a613999643e17b4d9896f93489
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3605026
+[adam-laptop] # test-files planned=12
+[adam-laptop] classified lane ordinary: 6 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 77C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 77C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 39C (coretemp/Package id 0) nvme 17C (nvme/Composite)
+[adam-laptop] ok test/distributed/harness/__tests__/sql-engine-seam-conformance.test.js (4 assertions, 2304ms)
+[adam-laptop] ok test/control-plane/service-instance-selection-admission.test.js (23 assertions, 2646ms)
+[adam-laptop] ok test/runtime/service-runtime-consensus-publication.test.js (16 assertions, 2834ms)
+[adam-laptop] ok test/control-plane/service-instance-creation-cas.test.js (31 assertions, 3265ms)
+[adam-laptop] ok test/test-helpers/committed-write-answer.test.js (4 assertions, 1769ms)
+[adam-laptop] ok test/wasm-service/wasm-creation-local-record.test.js (10 assertions, 1954ms)
+[adam-laptop] # test-files total=6 pass=6 fail=0 assertions=88
+[adam-laptop] classified lane bootstrap: 2 file(s), jobs=2
+[adam-laptop] thermal: ok cpu 57C (coretemp/Package id 0) nvme 21C (nvme/Composite)
+[adam-laptop] ok test/bootstrap/register-service-move-handoff-refused.test.js (16 assertions, 2011ms)
+[adam-laptop] not ok test/bootstrap/move-replica-assignment-token.test.js (27 assertions, 7120ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 14
+[adam-laptop] {"level":50,"time":"1970-01-01T00:01:50.000Z","nodeId":"seed-node-1","pid":3605099,"subsystem":"bootstrap-api","event":"wait_bound_spent","wait":"registerServiceWriteRetryTimeoutMs","awaited":"register-service services-row control-plane write accepted","boundMs":2000,"elapsedMs":70000,"lastObserved":{"attempts":1,"lastErrorCode":"TIMEOUT","lastError":"Named control-plane write wait expired","retryAfterMs":0},"scope":{"nodeId":"550e8400-e29b-41d4-a716-446655440324","serviceId":"mg-2-r1","groupId":"mg-2"},"repeats":0,"nodeId":"seed-node-1","msg":"Wait bound spent"}
+[adam-laptop] # Subtest: MOVE handoff registration (refused at register-service; driven directly) emits retryable cache visibility timeout response
+[adam-laptop]     not ok 1 - register-service cache visibility timeout should be retryable
+[adam-laptop]       ---
+[adam-laptop]       compare: ===
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/bootstrap/move-replica-assignment-token-cache-visibility-test-cases.js
+[adam-laptop]         lineNumber: 91
+[adam-laptop]         columnNumber: 7
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: |
+[adam-laptop]         Test.<anonymous> (test/bootstrap/move-replica-assignment-token-cache-visibility-test-cases.js:91:7)
+[adam-laptop]       source: |2
+[adam-laptop]             });
+[adam-laptop]       
+[adam-laptop]             t.equal(
+[adam-laptop]         ------^
+[adam-laptop]               response.statusCode,
+[adam-laptop]               503,
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,1 +1,1 @@
+[adam-laptop]         -503
+[adam-laptop]         +undefined
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     not ok 2 - response should expose stable retryable timeout code
+[adam-laptop]       ---
+[adam-laptop]       compare: ===
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/bootstrap/move-replica-assignment-token-cache-visibility-test-cases.js
+[adam-laptop]         lineNumber: 97
+[adam-laptop]         columnNumber: 7
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: |
+[adam-laptop]         Test.<anonymous> (test/bootstrap/move-replica-assignment-token-cache-visibility-test-cases.js:97:7)
+[adam-laptop]       source: |2
+[adam-laptop]             );
+[adam-laptop]             const responseBody = response.body;
+[adam-laptop]             t.equal(
+[adam-laptop]         ------^
+[adam-laptop]               responseBody.code,
+[adam-laptop]               'SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT',
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,1 +1,1 @@
+[adam-laptop]         -SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT
+[adam-laptop]         +TIMEOUT
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     not ok 3 - timeout diagnostics should report missing services row visibility state
+[adam-laptop]       ---
+[adam-laptop]       compare: ===
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/bootstrap/move-replica-assignment-token-cache-visibility-test-cases.js
+[adam-laptop]         lineNumber: 102
+[adam-laptop]         columnNumber: 7
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: |
+[adam-laptop]         Test.<anonymous> (test/bootstrap/move-replica-assignment-token-cache-visibility-test-cases.js:102:7)
+[adam-laptop]       source: |2
+[adam-laptop]               'response should expose stable retryable timeout code',
+[adam-laptop]             );
+[adam-laptop]             t.equal(
+[adam-laptop]         ------^
+[adam-laptop]               responseBody.details?.lastVisibilityCheck?.reason,
+[adam-laptop]               BOOTSTRAP_API_CACHE_VISIBILITY.REASON_SERVICE_ROW_MISSING,
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,1 +1,1 @@
+[adam-laptop]         -service_row_missing
+[adam-laptop]         +undefined
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     not ok 4 - timeout diagnostics should report no mismatches when row is absent
+[adam-laptop]       ---
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,1 +1,1 @@
+[adam-laptop]         -Array []
+[adam-laptop]         +undefined
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/bootstrap/move-replica-assignment-token-cache-visibility-test-cases.js
+[adam-laptop]         lineNumber: 107
+[adam-laptop]         columnNumber: 7
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: |
+[adam-laptop]         Test.<anonymous> (test/bootstrap/move-replica-assignment-token-cache-visibility-test-cases.js:107:7)
+[adam-laptop]       source: >2
+[adam-laptop]               'timeout diagnostics should report missing services row visibility state',
+[adam-laptop]             );
+[adam-laptop]             t.same(
+[adam-laptop]         ------^
+[adam-laptop]               responseBody.details?.lastVisibilityCheck?.mismatchFields,
+[adam-laptop]               [],
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     1..4
+[adam-laptop] not ok 1 - MOVE handoff registration (refused at register-service; driven directly) emits retryable cache visibility timeout response # time=158.534ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/bootstrap/move-replica-assignment-token-cache-visibility-test-cases.js
+[adam-laptop]     lineNumber: 18
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: >
+[adam-laptop]   
+[adam-laptop]   
+[adam-laptop]     test('MOVE handoff registration (refused at register-service; driven directly)
+[adam-laptop]     emits retryable cache visibility timeout response',
+[adam-laptop]   
+[adam-laptop]     ^
+[adam-laptop]       async (t) => {
+[adam-laptop]         initializeTestEnvironment();
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] {"level":50,"time":"2026-11-21T18:02:22.726Z","nodeId":"seed-node-1","pid":3605099,"subsystem":"bootstrap-api","event":"wait_bound_spent","wait":"SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT_MS","awaited":"registered service row visible in the services cache","boundMs":5000,"elapsedMs":5003,"lastObserved":{"timeoutKind":"absolute_deadline_exhausted","attempts":420,"serviceId":"mg-2-r1","nodeId":"550e8400-e29b-41d4-a716-446655440324","timeoutMs":5000,"elapsedMs":5003,"lastVisibilityCheck":{"reason":"storage_row_visible_cache_stale","serviceId":"mg-2-r1","expected":{"service_id":"mg-2-r1","node_id":"550e8400-e29b-41d4-a716-446655440324","service_type":"message_group","status":"active","group_id":"mg-2","replica_id":"mg-2-r1","address":"550e8400-e29b-41d4-a716-446655440324/message-group/mg-2-r1","created_at":null,"updated_at":null},"observed":null,"mismatchFields":[],"authoritative":{"reason":"visible","observed":{"service_id":"mg-2-r1","node_id":"550e8400-e29b-41d4-a716-446655440324","service_type":"message_group","status":"active","group_id":"mg-2","replica_id":"mg-2-r1","address":"550e8400-e29b-41d4-a716-446655440324/message-group/mg-2-r1","created_at":null,"updated_at":null},"mismatchFields":[]}}},"scope":{"serviceId":"mg-2-r1","nodeId":"550e8400-e29b-41d4-a716-446655440324"},"repeats":0,"nodeId":"seed-node-1","msg":"Wait bound spent"}
+[adam-laptop] # Subtest: MOVE handoff registration (refused at register-service; driven directly) remains retryable when storage is visible but cache is stale
+[adam-laptop]     ok 1 - register-service should remain retryable until the services cache reflects the row
+[adam-laptop]     ok 2 - should be equal
+[adam-laptop]     ok 3 - diagnostics should report storage-visible but cache-stale visibility
+[adam-laptop]     ok 4 - register-service should check authoritative storage visibility
+[adam-laptop]     1..4
+[adam-laptop] ok 2 - MOVE handoff registration (refused at register-service; driven directly) remains retryable when storage is visible but cache is stale # time=5088.54ms
+[adam-laptop] 
+[adam-laptop] # Subtest: MOVE handoff registration (refused at register-service; driven directly) repairs cache-visible hole from authoritative storage
+[adam-laptop]     ok 1 - repair should target the services table
+[adam-laptop]     ok 2 - repair should target the registered service
+[adam-laptop]     ok 3 - repair should expect the services row to exist
+[adam-laptop]     ok 4 - repair should only require the service visibility fields, not timestamp equality
+[adam-laptop]     ok 5 - register-service should succeed once authoritative repair closes the cache hole
+[adam-laptop]     ok 6 - register-service should still verify authoritative storage visibility
+[adam-laptop]     ok 7 - register-service should use the canonical authoritative repair helper
+[adam-laptop]     1..7
+[adam-laptop] ok 3 - MOVE handoff registration (refused at register-service; driven directly) repairs cache-visible hole from authoritative storage # time=88.954ms
+[adam-laptop] 
+[adam-laptop] # Subtest: MOVE handoff registration (refused at register-service; driven directly) timeout diagnostics include mismatch fields
+[adam-laptop]     not ok 1 - cache mismatch timeout should remain retryable
+[adam-laptop]       ---
+[adam-laptop]       compare: ===
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/bootstrap/move-replica-assignment-token-cache-visibility-test-cases.js
+[adam-laptop]         lineNumber: 444
+[adam-laptop]         columnNumber: 5
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: |
+[adam-laptop]         Test.<anonymous> (test/bootstrap/move-replica-assignment-token-cache-visibility-test-cases.js:444:5)
+[adam-laptop]       source: >2
+[adam-laptop]           });
+[adam-laptop]       
+[adam-laptop]           t.equal(response.statusCode, 503, 'cache mismatch timeout should remain retryable');
+[adam-laptop]         ----^
+[adam-laptop]           const responseBody = response.body;
+[adam-laptop]           t.equal(
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,1 +1,1 @@
+[adam-laptop]         -503
+[adam-laptop]         +undefined
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     not ok 2 - timeout diagnostics should distinguish durable visibility from the stale cache mismatch
+[adam-laptop]       ---
+[adam-laptop]       compare: ===
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/bootstrap/move-replica-assignment-token-cache-visibility-test-cases.js
+[adam-laptop]         lineNumber: 446
+[adam-laptop]         columnNumber: 5
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: |
+[adam-laptop]         Test.<anonymous> (test/bootstrap/move-replica-assignment-token-cache-visibility-test-cases.js:446:5)
+[adam-laptop]       source: >2
+[adam-laptop]           t.equal(response.statusCode, 503, 'cache mismatch timeout should remain
+[adam-laptop]         retryable');
+[adam-laptop]           const responseBody = response.body;
+[adam-laptop]           t.equal(
+[adam-laptop]         ----^
+[adam-laptop]             responseBody.details?.lastVisibilityCheck?.reason,
+[adam-laptop]             BOOTSTRAP_API_CACHE_VISIBILITY.REASON_STORAGE_ROW_VISIBLE_CACHE_STALE,
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,1 +1,1 @@
+[adam-laptop]         -storage_row_visible_cache_stale
+[adam-laptop]         +undefined
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     not ok 3 - timeout diagnostics should surface node_id mismatch
+[adam-laptop]       ---
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/bootstrap/move-replica-assignment-token-cache-visibility-test-cases.js
+[adam-laptop]         lineNumber: 451
+[adam-laptop]         columnNumber: 5
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: |
+[adam-laptop]         Test.<anonymous> (test/bootstrap/move-replica-assignment-token-cache-visibility-test-cases.js:451:5)
+[adam-laptop]       source: >2
+[adam-laptop]             'timeout diagnostics should distinguish durable visibility from the stale cache mismatch',
+[adam-laptop]           );
+[adam-laptop]           t.ok(
+[adam-laptop]         ----^
+[adam-laptop]             responseBody.details?.lastVisibilityCheck?.mismatchFields.includes('node_id'),
+[adam-laptop]             'timeout diagnostics should surface node_id mismatch',
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     not ok 4 - timeout diagnostics should include observed stale owner
+[adam-laptop]       ---
+[adam-laptop]       compare: ===
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/bootstrap/move-replica-assignment-token-cache-visibility-test-cases.js
+[adam-laptop]         lineNumber: 455
+[adam-laptop]         columnNumber: 5
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: |
+[adam-laptop]         Test.<anonymous> (test/bootstrap/move-replica-assignment-token-cache-visibility-test-cases.js:455:5)
+[adam-laptop]       source: |2
+[adam-laptop]             'timeout diagnostics should surface node_id mismatch',
+[adam-laptop]           );
+[adam-laptop]           t.equal(
+[adam-laptop]         ----^
+[adam-laptop]             responseBody.details?.lastVisibilityCheck?.observed?.node_id,
+[adam-laptop]             'seed-node-1',
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,1 +1,1 @@
+[adam-laptop]         -seed-node-1
+[adam-laptop]         +undefined
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     1..4
+[adam-laptop] not ok 4 - MOVE handoff registration (refused at register-service; driven directly) timeout diagnostics include mismatch fields # time=55.895ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/bootstrap/move-replica-assignment-token-cache-visibility-test-cases.js
+[adam-laptop]     lineNumber: 356
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: >2
+[adam-laptop]       });
+[adam-laptop]   
+[adam-laptop]     test('MOVE handoff registration (refused at register-service; driven directly)
+[adam-laptop]     timeout diagnostics include mismatch fields', async (t) => {
+[adam-laptop]   
+[adam-laptop]     ^
+[adam-laptop]       initializeTestEnvironment();
+[adam-laptop]       const rows = {
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] # Subtest: BootstrapAPI sweep defers expired remote-source MOVE_REPLICA invalidation to source owner
+[adam-laptop]     ok 1 - target-local sweep should not terminalize a remote-source assignment
+[adam-laptop]     ok 2 - remote-source assignment should remain source-owned after target sweep
+[adam-laptop]     ok 3 - target-local sweep should not persist a synthetic source-owner failure
+[adam-laptop]     1..3
+[adam-laptop] ok 5 - BootstrapAPI sweep defers expired remote-source MOVE_REPLICA invalidation to source owner # time=43.878ms
+[adam-laptop] 
+[adam-laptop] {"level":50,"time":"1970-01-01T00:01:50.000Z","nodeId":"seed-node-1","pid":3605099,"subsystem":"bootstrap-api","event":"wait_bound_spent","wait":"registerServiceWriteRetryTimeoutMs","awaited":"register-service services-row control-plane write accepted","boundMs":2000,"elapsedMs":70000,"lastObserved":{"attempts":1,"lastErrorCode":"TIMEOUT","lastError":"Named control-plane write wait expired","retryAfterMs":0},"scope":{"nodeId":"550e8400-e29b-41d4-a716-446655440324","serviceId":"mg-2-r1","groupId":"mg-2"},"repeats":0,"nodeId":"seed-node-1","msg":"Wait bound spent"}
+[adam-laptop] 1..5
+[adam-laptop] # { total: 22, pass: 14, fail: 8 }
+[adam-laptop] # time=5453.412ms
+[adam-laptop] # test-files total=2 pass=1 fail=1 assertions=43
+[adam-laptop] classified lane exclusive: 4 file(s), jobs=1
+[adam-laptop] thermal: ok cpu 55C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] ok test/wasm-service/bound-creation-handler-embedding.integration.test.js (3 assertions, 2499ms)
+[adam-laptop] ok test/wasm-service/bound-creation-physical-custody.integration.test.js (20 assertions, 5715ms)
+[adam-laptop] ok test/wasm-service/bound-creation-restart.integration.test.js (41 assertions, 13592ms)
+[adam-laptop] ok test/wasm-service/bound-remove-physical-operation.integration.test.js (2 assertions, 2783ms)
+[adam-laptop] # test-files total=4 pass=4 fail=0 assertions=66
+lab test: adam-laptop: # test-files total=12 pass=11 fail=1 assertions=197
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=12 pass=11 fail=1 assertions=197

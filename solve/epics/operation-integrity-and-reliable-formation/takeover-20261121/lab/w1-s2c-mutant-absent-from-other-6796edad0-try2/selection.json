@@ -1,0 +1,29 @@
+{
+  "sha": "6796edad078b856774f67825e271bf4312a18da1",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/partition/placement-retained-publication.test.js",
+    "test/partition/placement-retained-continuation.test.js",
+    "test/partition/placement-retained-leadership.test.js",
+    "test/partition/placement-retained-row-repair.test.js",
+    "test/partition/placement-retained-real-publication.test.js",
+    "test/partition/placement-retained-post-copy.test.js",
+    "test/partition/placement-create-dispatch-execution-mirror.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/partition/placement-create-dispatch-execution-mirror.test.js",
+        "test/partition/placement-retained-continuation.test.js",
+        "test/partition/placement-retained-leadership.test.js",
+        "test/partition/placement-retained-post-copy.test.js",
+        "test/partition/placement-retained-publication.test.js",
+        "test/partition/placement-retained-real-publication.test.js",
+        "test/partition/placement-retained-row-repair.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

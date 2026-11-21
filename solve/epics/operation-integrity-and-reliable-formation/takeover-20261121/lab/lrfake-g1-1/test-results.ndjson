@@ -1,0 +1,7 @@
+{"file":"test/rebalancer/node-storage-budget-service.test.js","attempt":1,"ok":false,"assertions":23,"durationMs":2380,"retriedOnce":false,"firstFailureLine":"not ok 1 - Expected values to be strictly deep-equal: + actual - expected    Comparison { +   message: 'The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent' -   message: 'wr"}
+{"file":"test/rebalancer/executor-bypasses-workflow-owner.test.js","attempt":1,"ok":false,"assertions":7,"durationMs":6898,"retriedOnce":false,"firstFailureLine":"not ok 1 - coordinator should advance to CREATING after dispatch"}
+{"file":"test/bootstrap/node-joining-lease-registration.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":2397,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/node-joining-service-message-group-activation.test.js","attempt":1,"ok":true,"assertions":54,"durationMs":3237,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/node-registration-idempotency.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":2445,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/register-node-in-cluster.test.js","attempt":1,"ok":false,"assertions":85,"durationMs":3100,"retriedOnce":false,"firstFailureLine":"not ok 2 - join-phase SQL fallback should carry explicit join phase scope"}
+{"file":"test/bootstrap/storage-budget-bootstrap.test.js","attempt":1,"ok":true,"assertions":21,"durationMs":2161,"retriedOnce":false,"firstFailureLine":null}

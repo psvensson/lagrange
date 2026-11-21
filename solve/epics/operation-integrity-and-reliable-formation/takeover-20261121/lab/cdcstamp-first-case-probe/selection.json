@@ -1,0 +1,17 @@
+{
+  "sha": "b04d1f84b183ee48cc1e2e028769b50f9ecc934a",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/topology/cdc-first-case-cost-probe.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/topology/cdc-first-case-cost-probe.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

@@ -130,8 +130,9 @@ the fix was placed (inside `assertCurrent`), not a requirement the findings set.
 (`cdc-group-propagation-durable-plan.js:14-31`). In safe mode that runs
 `buildSafeTargets` (`cdc-group-propagation-routing.js:580-617`); in grouped mode
 `buildGroupedContext` (:715-776). Both run `collectKnownMessageGroupDomain`
-(:242-296) at least twice per plan and clone cache rows on every `get`, `getAll`
-and `filter`.
+(:242-296) at least twice per plan. Cache reads: `get` and `find` clone the
+row; `getAll`, `filter` and `getShared` hand out the stored row itself, frozen
+in place (`readView` → `deepFreeze`; corrected in the corrective round, see 20.7).
 
 ### 4.2 Call sites during one obligation-lane delivery
 
@@ -223,8 +224,15 @@ existing per-table mutation version**: `SystemTableCache.getTableMutationVersion
 `recordTableMutation` (:157-163) on every accepted apply that changes a row
 (`system-table-cache.js:508-510`, including the stale-backfill and delete
 branches that set `recordForNotification`) and by the authoritative-absence
-sweep (`system-table-cache-authoritative-absence-sweep.js:152`). Readers get
-clones, so they cannot mutate rows in place. **Defect in the version for this
+sweep (`system-table-cache-authoritative-absence-sweep.js:152`). Readers cannot
+mutate rows in place, but **not because they get clones** (corrected in the
+corrective round, 20.7): only `get` and `find` clone
+(`system-table-cache-observation-methods.js:446-466`); `getAll`, `filter` and
+`getShared` return the stored row object itself, deep-frozen in place by
+`readView` (:468-489). A reader holding such a row holds the cache's own
+object; it cannot write through it (frozen), and the owner replaces rather than
+mutates a stored row on every write (`table.set`), so a held row is a snapshot
+of its version. **Defect in the version for this
 use:** `clear()` resets it to 0 (`system-table-cache.js:576`), so a version
 seen before `clear()` can recur with different content. Required owner-side
 change: never reset the counter (or bump a cache-reset epoch on `clear()`).
@@ -426,7 +434,13 @@ covers the mapping).
    only by `getCDCPropagationService` while the preferred service is ready,
    `partition-cdc-propagation-subscriber.js:302-309`). Bound: ≤ 1 each.
 2. **Negative family**: 49 cases generated from one list, plus a structural
-   case so that an input added without a case fails. Each case changes one
+   case over that list. *Corrected (corrective round, 20.4):* the structural
+   case checks only that the list is well formed (every id once, every case
+   names its kind, change, reads and observation); it cannot notice an input
+   the code starts reading without a case, so "an input added without a case
+   fails" did not hold. The corrective round adds a structural case at the
+   cache seam for the one mechanically checkable class: a plan read of a system
+   table outside the stamped list fails. Each case changes one
    input while the first target delivery is in flight (all scopes open), after
    a first check that answers current. The very next `assertCurrent()` must
    either throw the invocation's typed UNKNOWN, or answer current with the
@@ -654,16 +668,17 @@ Stamp components, all read on every check:
 - **Owner versions:** the config revision, the tree generation, and the
   versions of SERVICES, NODES, LATENCY_GROUPS and MESSAGE_GROUPS.
 
-Any versioned owner that does not expose its version, or any version that is
-not a safe integer ≥ 0, makes the stamp **unknown**: the plan is observed anew
-and not held. Versions are read by optional call (`getRevision?.()`,
-`getRoutingGeneration?.()`, `getTableMutationVersion?.(table)`), so a missing
-method reads as "no version". That is the repo's navigability rule
-(`owner_port_feature_detection` forbids `typeof` probes). Every production
-collaborator exposes all three; test doubles without them keep today's
-behaviour. The stricter alternative, a named collaborator that requires the
-versions and is validated once in the owner's constructor, would need every
-existing topology test double converted; that is left as a follow-up. There is no path on which an unknown stamp answers from a held
+*Superseded by the corrective round (section 20.1-20.3).* As committed in
+`82295c47e`: any versioned owner that did not expose its version, or any
+version that was not a safe integer ≥ 0, made the stamp **unknown** (observed
+anew, not held), and versions were read by optional call (`getRevision?.()`,
+`getRoutingGeneration?.()`, `getTableMutationVersion?.(table)`). Calling that
+"the repo's navigability rule" was a misreading: the detector forbids
+`typeof member === 'function'` probes, and an optional call is the same
+capability probe in another spelling. The rule the repo prescribes
+(`docs/development/code-style.md` ~:150-154) is a named collaborator validated
+at its owned wiring point; the corrective round does that and converts the test
+doubles. There was no path on which an unknown stamp answered from a held
 plan. The plan reuse never decides currentness; every identity and field
 check of sections 5.1 and 5.2 still runs on every read.
 
@@ -874,9 +889,240 @@ What each owner would have to add:
 - **The tree joined the stamp**, which the ruling did not list. That is
   required by the Q1 ruling: the shared plan's order seeds new progress leaf
   order, and the tree recomputes with no further cache version.
-- **Navigability.** Versions are read by optional call; the repo rule forbids
-  `typeof` probes. Making the topology's collaborators a named port that
-  requires the versions would need every existing topology test double
-  converted.
+- **Navigability.** *Superseded (section 20):* the optional-call reads were
+  capability probes in another spelling; the corrective round requires each
+  version source at wiring and converts the test doubles.
 - **Cache `clear()` fix:** monotonic per instance. No consumer relied on the
   reset. Consumers must also key on the cache's identity; the plan stamp does.
+
+# Corrective round (lead, after independent verification APPROVE-WITH-CONDITIONS)
+
+## 20. Corrective round: required versions, load-bearing components, one table list
+
+Commits (all on `work/cdc-currentness-stamp-20261121`, pushed):
+
+| Step | Commit | Content |
+| --- | --- | --- |
+| C1 red-first witnesses | `f150ae13fe4981d944105093e0f02ddf9608b2d5` | wiring refusals (cache, tree), production composition, moved-during-build, per-component cases |
+| C2 repair | `873570c54b7a32c779a061a50ca4f3fd52b853ff` | wiring validation, required reads, one table list, entry/after stamp comparison, fixture conversions, configuration refusal, structural seam case |
+
+### 20.1 Item 1: required versions, validated once at wiring
+
+- `src/topology/cdc-group-propagation-collaborators.js` (owner contract header,
+  the readiness-collaborators pattern): `assertPropagationCollaborators(wiring)`
+  requires of the cache `get`, `getAll`, `filter`, `getTableMutationVersion`;
+  of the tree `getRoutingOrder`, `getRoutingGeneration`; of the configuration
+  `get`, `getRevision`. A missing capability throws an `Error` with
+  `code: 'cdc_group_propagation_collaborator_invalid'`, `collaborator`,
+  `capability`, and a message naming both.
+- Called from `CDCGroupPropagationService.initialize` **before** any field is
+  taken: the wiring (current fields overridden by the options given) is
+  asserted (the existing nodeId/cache/tree criticals, then the capabilities),
+  and only then are the in-flight waves retired and the fields assigned. A
+  refused wiring leaves the service as it was. Every production wiring goes
+  through `initialize` (`LatencyTopologySetup.create`, the two bootstrap
+  owners); `config` is the `ConfigurationManager` singleton taken at
+  construction.
+- The router is **not** validated: it is not a version source. The stamp holds
+  its identity; an unwired router is the plan's own named
+  `MESSAGE_ROUTER_UNAVAILABLE` outcome (routing.js:687-692, unchanged).
+- `cdc-group-propagation-durable-plan.js` now reads every component directly:
+  `owner.config.getRevision()`, `tree.getRoutingGeneration()`,
+  `cache.getTableMutationVersion(table)`, `owner.propagationPlansAtStamp.get/set`.
+  No optional call remains in the stamp, and there is no "unknown stamp".
+- Converted fixtures (now supplying real versions):
+  - `test/topology/cdc-group-propagation-service-harness.js`:
+    `createTopologyCache` is the real `SystemTableCache` with INSERTs; one
+    `createStatedRoutingTree(order)` (generation constant 0, since a stated
+    order never changes) for tests whose subject is an order stated once;
+    `composeWaveTopology` uses it.
+  - `test/test-helpers/cdc-topology-progress-fixture.js`: the projection is the
+    real cache with owner-path helpers (`putService`, `updateService`,
+    `renameService` = DELETE + INSERT, `updateNode`, `putGroup`, `updateGroup`,
+    `renameGroup`), each write a newer `updated_at`; the tree is the real
+    `LatencyTreeService` over it (single and multi-lane).
+  - `test/partition/partition-cdc-topology-progress-currentness.test.js`: every
+    in-place mutation goes through those helpers; its last test's inline cache
+    is `createTopologyCache`, its stub tree the stated tree.
+  - `test/topology/cdc-recipient-domain-and-retained-debt.test.js`:
+    `createDualDomainTopologyCache` is the real cache (edges keyed
+    `latency_edge_id`); its two later rows are written through the owner.
+  - `test/topology/cdc-group-propagation-wave-lifecycle.test.js`: the mutable
+    inline cache and tree are a real cache written through the owner and a real
+    tree; the second inline stub tree is the stated tree.
+  - stub trees → stated tree: `cdc-group-propagation-service.test.js`,
+    `seed-teardown-pending-cdc-delivery.test.js`,
+    `cdc-group-propagation-proposal-cost.test.js`,
+    `cdc-group-propagation-stop-arms-nothing.test.js`,
+    `cdc-group-propagation-transport-outcome-failed-set.test.js`.
+  - the stage witness file: the `tree.routing-order` negative now runs on the
+    real tree (two latency groups; a latency edge, which is no plan table, plus
+    a `recompute` reverses their order, asserted as setup); the
+    `topology.tree-identity` case re-wires a real tree; the stub-tree fixture
+    option is gone.
+- Red-first: C1 run `lab/cdcstamp-c1-red/` (`.console.log`): 67 tests, 62 pass,
+  5 fail. The failures were the two selection bounds (by ruling) and three
+  red-first witnesses: the cache refusal and the tree refusal (both "Missing
+  expected exception": the service accepted a versionless collaborator) and
+  the moved-during-build case (20.5). Green after: C2 run `lab/cdcstamp-c2/`.
+  The configuration refusal was added with the repair (C2): the configuration
+  is the construction-time singleton, so its test replaces `service.config`
+  before `initialize`; it has no red-before run.
+
+### 20.2 Item 2: the production composition's stamp is known
+
+`the production topology composition wires a known plan stamp: a second
+identical delivery reuses the plan`: `LatencyTopologySetup.create` with a real
+`SystemTableCache`, the `ConfigurationManager`, the real tree it constructs and
+a real `MessageRouter` to an in-process peer. Two identical deliveries: the
+first observes the plan once, and the second observes it zero more times. It
+was green at C1 as well, because every production collaborator already exposed
+its version at 82295c47e. Its job is to pin that: a production collaborator
+without a version would now be refused at wiring, and before C2 it would have
+made this count 2.
+
+### 20.3 Item 3: every stamp component load-bearing
+
+The stamp (C2), and the components removed with the reason each could not be
+load-bearing:
+
+| Removed | Why no owner path moves it independently |
+| --- | --- |
+| configuration identity | `this.config` is taken once in the constructor; no writer reassigns it (searched `src/`). The configuration revision stays |
+| `router.deliver` identity | grouped mode reads only `typeof router.deliver === 'function'` (routing.js:689). `deliver` is a `MessageRouter` prototype method; no `src/` writer assigns `.deliver` on a router (the one `this.deliver =` is `wasm-writer-client.js`, not a router). A router with or without `deliver` is a different router identity, which stays |
+| `owner.propagationMode` | written only by `refreshConfig` (service.js:226,238), from the configuration, at the start of every observation; covered by the configuration revision |
+| `source.groupId` | plans are held per source object (`propagationPlansAtStamp` is keyed by the source), and a message group's `groupId` is fixed at construction. Renaming a held source is the `source.group-id` negative, which answers not current before the plan is read (progress.js:167-173) |
+
+Per component, the case that fails when that component is dropped (each
+changes exactly that input through its owner):
+
+| Component | Case that catches its removal | Change |
+| --- | --- | --- |
+| SERVICES version | `services.*` negatives (e.g. `services.address`) | cache write |
+| NODES version | `nodes.*` negatives (e.g. `nodes.boot-incarnation`) | cache write |
+| LATENCY_GROUPS version | `latency-groups.*` negatives | cache write |
+| MESSAGE_GROUPS version | `message-groups.*` negatives | cache write |
+| configuration revision | `config.propagation-mode` | `setByPath` |
+| tree routing generation | `stamp component: the tree routing generation (a recompute alone reorders the plan)` | latency edge (no plan table) + `recompute` |
+| tree identity | `stamp component: the tree identity (a tree re-wired at an equal generation)` | `initialize({latencyTreeService})`, equal generation |
+| cache identity | `stamp component: the cache identity (a cache re-wired at equal table versions)` | `initialize({systemTableCache})`, equal versions |
+| router identity | `stamp component: the router identity (a router wired late makes grouped targets routable)` | `initialize({messageRouter})` |
+| `owner.nodeId` | `topology.node-id` | field |
+| `owner.messageGroupReplicaSuffix` | `topology.replica-suffix` | field |
+
+The four component cases were added at C1 and were green there, because C1's
+stamp held these components. Their red evidence is the mutants below.
+
+### 20.4 Item 4: one declared table list, read by the routing and iterated by the stamp
+
+- `CDC_PROPAGATION_PLAN_TABLE` (`src/topology/cdc-group-propagation-constants.js`):
+  SERVICES, NODES, LATENCY_GROUPS, MESSAGE_GROUPS. The routing owner
+  (`cdc-group-propagation-routing.js`) no longer imports `TABLES`. All 22
+  table reads name `PLAN_TABLE.*`. The stamp iterates
+  `Object.values(CDC_PROPAGATION_PLAN_TABLE)`.
+- Structural case `the plan reads system tables only through
+  CDC_PROPAGATION_PLAN_TABLE, the list its stamp iterates`. A real cache wrapped
+  in a recording `Proxy` (every call whose first argument is a system-table
+  name is recorded with its method; internal calls run on the cache itself)
+  serves as the wired cache, beside a real tree. One real
+  `propagationPlanAtStamp` runs in safe mode and one in grouped mode. It
+  asserts three things:
+  - every row read (any method but `getTableMutationVersion`) names a listed
+    table;
+  - the stamp's version reads are exactly the list in each mode;
+  - the union of row reads over both modes equals the list (the list holds no
+    unread table).
+  It catches a routing read of a table outside the list whichever cache method
+  it uses. It is a guard added with the list (C2), so it has no red-before run
+  on the repair; its red evidence is the probe mutant below (a routing read of
+  `INTER_GROUP_LATENCIES`).
+- Not covered by it: a plan input that is not a cache table (a new owner
+  field, a new collaborator). Those stay the stamp's enumerated components and
+  the negative family's job; the enumeration's own structural case only checks
+  the list is well formed (12, corrected).
+
+### 20.5 Item 5: no plan is held across a move during its build
+
+`propagationPlanAtStamp` takes the stamp **before** the observation, observes,
+then takes it again. If the two differ, the plan is answered to this caller
+but **not held**, and the source's held entry is deleted. The next read then
+observes anew. If they are equal, the plan is held under the entry stamp.
+This replaces 15.3 (P1)'s "the stamp is taken after the observation", which
+would have held a plan read before a mid-build move under the stamp after it.
+
+What makes it self-enforcing: the comparison is in the one function that holds
+plans. Any input change reached through a call the observation makes moves a
+stamp component, so it is caught: a raft drive applying into the cache, a
+recompute, or a configuration write. Taking the stamp before the build
+captures the configuration revision before `refreshConfig`, which never bumps
+it (it only reads the configuration).
+
+Witness: `a plan input moved during a plan observation is not held: the next
+read observes anew`. During the first observation, a cache write is injected
+through the counted tree read. Three direct reads follow: the first and second
+both observe (count 2) and return different plan objects; the third (nothing
+moved) returns the second's object. Red at C1 (`lab/cdcstamp-c1-red/`; the
+stamp taken after the build held the first plan, count 1), green at C2.
+
+### 20.6 Item 6: the foreground-boundary timeout, paired
+
+The same selection was run at the pre-fix commit and at C2, back to back on
+adam-laptop (`lab/cdcstamp-pair-files.txt`). It has 24 files: the 26-file
+selection less `configuration-manager-revision` and
+`latency-tree-routing-generation`. Those two were added in `82295c47e`, so
+they do not exist at `8abec5e92` (the first attempt with 26 files was a runner
+failure: "unclassified or missing test file").
+
+| Run | Commit | Output | Files | `foreground consumer rechecks stop after actual ATTEMPTS_EXHAUSTED` |
+| --- | --- | --- | --- | --- |
+| base | `8abec5e92` (pre-fix) | `lab/cdcstamp-pair-base/` (finished 18:39:52) | 20 pass / 4 fail | **timeout**, 6454 ms (budget 6000) |
+| head | `873570c54` (C2) | `lab/cdcstamp-pair-head/` (finished 18:41:42) | 22 pass / 2 fail | **timeout**, 6981 ms |
+
+The C2 regression run (`lab/cdcstamp-c2/`, 28 files) also timed out at 6101 ms.
+
+**Classification: pre-existing, load-dependent; not introduced by the stamp.**
+The case times out at the pre-fix commit under the identical selection, on the
+same host, back to back. It is the file's first case, which carries the
+fixture setup. Every later case in the file runs in about 0.1 s, and the file
+passed alone at `82295c47e` (`lab/cdcstamp-2b-fix-fgb/`).
+
+Other failures in the pair:
+- base: the red-first witnesses at that commit (cache version across
+  `clear()`; the stamp file's plan bounds, selection bounds and plan reuse).
+- base: `message-group-native-provisional-route` "SERVICES scan releases
+  provisional relay to the real native leader" (17.6 s, `held_by_subscriber`
+  where `drained` was expected). It is green at C2 in the pair, in the C2 run
+  and in 2b-fix. It was observed once at the pre-fix commit and is not
+  investigated here.
+- head: only the two selection bounds (by ruling) and the timeout above.
+
+### 20.7 Item 7: record corrections
+
+- 4.1 and 5.3: readers do **not** all get clones. `get` and `find` clone;
+  `getAll`, `filter` and `getShared` return the stored row itself, frozen in
+  place (`readView` → `deepFreeze`,
+  `system-table-cache-observation-methods.js:446-489`). Rows still cannot be
+  written through a reader, and the owner replaces rather than mutates a stored
+  row (`mergeRecords` builds a new object, `system-table-cache-row-merge.js:491-511`).
+- 12: the enumeration's structural case does not catch an input added
+  without a case (corrected in place; 20.4 adds the cache-seam case).
+- 15.2 and 19: optional calls were a capability probe in another spelling, not
+  the navigability rule (corrected in place; superseded by 20.1).
+
+### 20.8 Probe mutants (detached at C2, local `probe/` refs, never pushed)
+
+Each mutant is one change on `873570c54`, committed through the hook. The
+stage witness file was run alone on adam-laptop.
+
+| Mutant | Ref / commit | Change | Lab output | Killed by |
+| --- | --- | --- | --- | --- |
+| tree generation dropped | `probe/cdc-mutant-tree-generation` `24e8185e5c5dcc7dcecaecaa625d81b3aa45dc6d` | `tree.getRoutingGeneration()` removed from `planStampOf` | `lab/cdcstamp-mutant-tree-generation/` | **only** `stamp component: the tree routing generation`: 69 tests, 66 pass, 3 fail (it plus the two ruled selection bounds). The new progress kept the held plan's order `[stamp-lg-a, stamp-lg-b]` after the recompute reversed it |
+| router identity dropped | `probe/cdc-mutant-router-identity` `1fddbf46bb7b247cf292845e6a62b1cd6b4fab0e` | `owner.messageRouter` removed from `planStampOf` | `lab/cdcstamp-mutant-router-identity/` | **only** `stamp component: the router identity`: 69 tests, 66 pass, 3 fail. With the late-wired router, the drive stayed `held_by_subscriber` (the held MESSAGE_ROUTER_UNAVAILABLE plan) instead of `drained` |
+
+The lead named `router.deliver` for the second mutant. That component no
+longer exists (20.3: no owner path moves `deliver` without moving the router
+identity), so the mutant drops the router identity instead.
+| routing reads a table outside the list | `probe/cdc-mutant-table-outside-list` `0dcbc4d361ff0f4acb1aec038b0b679494134be4` | `collectDrainingLatencyGroupIds` also calls `systemTableCache.getAll(TABLES.INTER_GROUP_LATENCIES)` | **not executed**: the one attempt was a runner failure (adam-laptop busy, held by another agent); handed back before a rerun | expected: the structural seam case only |
+
+(Table row above belongs to 20.8's table.) To finish: rerun
+`focused.mjs 0dcbc4d361ff0f4acb1aec038b0b679494134be4 adam-laptop … lab/cdcstamp-mutant-table-outside-list test/partition/partition-cdc-currentness-stamp-witness.test.js`.

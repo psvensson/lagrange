@@ -1,0 +1,119 @@
+{"file":"test/control-plane/control-plane-readiness-service-construction.test.js","attempt":1,"ok":true,"assertions":76,"durationMs":1571,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-create-bootstrap-binding.test.js","attempt":1,"ok":false,"assertions":14,"durationMs":3856,"retriedOnce":false,"firstFailureLine":"not ok 12 - ledger self-move dispatch waits for unstamped native ADD in PENDING"}
+{"file":"test/partition/placement-create-dispatch-execution-mirror.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":3900,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-growth-dispatch-identity.test.js","attempt":1,"ok":true,"assertions":13,"durationMs":4078,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/canonical-replica-completion-observation.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":1468,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-retained-row-repair.test.js","attempt":1,"ok":false,"assertions":45,"durationMs":5079,"retriedOnce":false,"firstFailureLine":"not ok 14 - remote-only current copy preparation succeeds and changed target boot stays debt"}
+{"file":"test/rebalancer/coordinator-created-operation-admission.test.js","attempt":1,"ok":true,"assertions":47,"durationMs":1373,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/application-write-formation-authority.test.js","attempt":1,"ok":true,"assertions":84,"durationMs":3212,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/formation-cure-reservation-progress-obligation.test.js","attempt":1,"ok":true,"assertions":12,"durationMs":1480,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/message-group-membership-operation-lane.test.js","attempt":1,"ok":false,"assertions":8,"durationMs":1459,"retriedOnce":false,"firstFailureLine":"not ok 5 - canonical visibility treats omitted nullable membership fields as SQL NULL while preserving non-null owner stamps"}
+{"file":"test/rebalancer/partition-policy-remove-retry.test.js","attempt":1,"ok":true,"assertions":20,"durationMs":1661,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/readiness-fixture-custody.test.js","attempt":1,"ok":true,"assertions":48,"durationMs":1593,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js","attempt":1,"ok":false,"assertions":177,"durationMs":3615,"retriedOnce":false,"firstFailureLine":"not ok 40 - should be equal"}
+{"file":"test/rebalancer/replace-drain-hand-back.test.js","attempt":1,"ok":true,"assertions":98,"durationMs":1383,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replace-in-flight-blocks-planning.test.js","attempt":1,"ok":false,"assertions":235,"durationMs":1750,"retriedOnce":false,"firstFailureLine":"not ok 45 - the STOPPING owner waits while the witness counts the source"}
+{"file":"test/rebalancer/replace-named-handoff-attempt.test.js","attempt":1,"ok":true,"assertions":52,"durationMs":1781,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replace-owner-lease-causal.test.js","attempt":1,"ok":true,"assertions":20,"durationMs":1289,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replace-owner-phase-staleness.test.js","attempt":1,"ok":true,"assertions":22,"durationMs":1439,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replace-owner-wake.test.js","attempt":1,"ok":true,"assertions":182,"durationMs":2395,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replace-source-removal-owner.test.js","attempt":1,"ok":true,"assertions":100,"durationMs":1976,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-removal-deferral-dispatch-reconcile.test.js","attempt":1,"ok":true,"assertions":35,"durationMs":1714,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/required-entity-operation-observation.test.js","attempt":1,"ok":true,"assertions":177,"durationMs":1756,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/services-inventory-owner-fact-siblings.test.js","attempt":1,"ok":false,"assertions":34,"durationMs":4365,"retriedOnce":false,"firstFailureLine":"not ok 4 - READY allocates what the reference allocates"}
+{"file":"test/rebalancer/replace-owner-lease-verdict-property.test.js","attempt":1,"ok":false,"assertions":25,"durationMs":14533,"retriedOnce":false,"firstFailureLine":"not ok 1 - Invalid replica operation persistence outcome: growth_promotion_cohort_unresolved"}
+{"file":"test/rebalancer/replace-owner-recovery-equivalence.test.js","attempt":1,"ok":true,"assertions":288,"durationMs":16085,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js","attempt":1,"ok":false,"assertions":87,"durationMs":2697,"retriedOnce":false,"firstFailureLine":"not ok 1 - Authoritative operation visibility deferred for partition:partition-lost-reservation-answer (entity_operation_observation_incomplete)"}
+{"file":"test/rebalancer/admission-real-size-estimates.test.js","attempt":1,"ok":false,"assertions":23,"durationMs":2256,"retriedOnce":false,"firstFailureLine":"not ok 1 - Authoritative operation visibility deferred for partition:p-real-size (entity_operation_observation_incomplete)"}
+{"file":"test/rebalancer/terminal-failed-add-target-cleanup.test.js","attempt":1,"ok":true,"assertions":109,"durationMs":3070,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/readiness-snapshot-persistence.test.js","attempt":1,"ok":true,"assertions":57,"durationMs":1900,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/formation-placement-native-retirement.test.js","attempt":1,"ok":true,"assertions":24,"durationMs":33335,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/dt6-ledger-spread-follow-up-dispatch-arming.test.js","attempt":1,"ok":false,"assertions":20,"durationMs":8482,"retriedOnce":false,"firstFailureLine":"not ok 2 - the deferred dispatch retry registered by the ACK-swallowed wake actually fires a re-wake, or the planner rearm is not suppressed (deliveries=1, rearmAction=skip_live_deferred_retry, retryStillLive=true)"}
+{"file":"test/rebalancer/rolling-restart-rebalancer-handoff-witness.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":4592,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/duplicate-operation-prevention.property.test.js","attempt":1,"ok":false,"assertions":40,"durationMs":1411,"retriedOnce":false,"firstFailureLine":"not ok 1 - Authoritative operation visibility deferred for partition:partition-1 (entity_operation_observation_incomplete)"}
+{"file":"test/control-plane/canonical-readiness-consumption.test.js","attempt":1,"ok":true,"assertions":79,"durationMs":1739,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/rebalance-coordinator-owner-path-convergence.test.js","attempt":1,"ok":true,"assertions":81,"durationMs":1251,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/partition-rebalancer-dependency-wiring-characterization.test.js","attempt":1,"ok":true,"assertions":159,"durationMs":2298,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/spread-cure-transition-authorization-row.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1069,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/spread-cure-transition-authorization-production-path.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":1171,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/storage-capacity-ownership.test.js","attempt":1,"ok":true,"assertions":140,"durationMs":1994,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/executor-bypasses-workflow-owner.test.js","attempt":1,"ok":false,"assertions":7,"durationMs":16635,"retriedOnce":false,"firstFailureLine":"not ok 1 - coordinator should advance to CREATING after dispatch"}
+{"file":"test/rebalancer/coordinator-dedup-gap.test.js","attempt":1,"ok":true,"assertions":69,"durationMs":2210,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/quorum-conditioned-remove-safety.test.js","attempt":1,"ok":false,"assertions":179,"durationMs":2851,"retriedOnce":false,"firstFailureLine":"not ok 9 - remove should dispatch once replacement becomes voter-ready"}
+{"file":"test/rebalancer/coordinator-reservation-lifecycle.test.js","attempt":1,"ok":true,"assertions":101,"durationMs":3246,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/rebalance-coordinator-topology-guard.test.js","attempt":1,"ok":false,"assertions":105,"durationMs":3104,"retriedOnce":false,"firstFailureLine":"not ok 1 - createOperation should fail closed when the target node already hosts the partition"}
+{"file":"test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js","attempt":1,"ok":true,"assertions":61,"durationMs":2728,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/rebalance-coordinator-stopping-reconcile-stale-priority.test.js","attempt":1,"ok":true,"assertions":245,"durationMs":3383,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/convergence/dt-ledger-completion-continuity-discriminator.test.js","attempt":1,"ok":true,"assertions":64,"durationMs":2586,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/recovery-handles-incomplete-operations.property.test.js","attempt":1,"ok":true,"assertions":49,"durationMs":2816,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/strict-operation-outcomes.test.js","attempt":1,"ok":false,"assertions":627,"durationMs":27022,"retriedOnce":false,"firstFailureLine":"not ok 7 - should be equal"}
+{"file":"test/rebalancer/rebalance-coordinator-operation-ownership.test.js","attempt":1,"ok":true,"assertions":233,"durationMs":2661,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replace-replica-workflow.test.js","attempt":1,"ok":true,"assertions":345,"durationMs":3243,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/distributed/harness/__tests__/boundary-transition-scenarios.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":3226,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-operation-confirmation-authority-read.test.js","attempt":1,"ok":true,"assertions":82,"durationMs":3368,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/rebalance-coordinator-metrics.test.js","attempt":1,"ok":true,"assertions":20,"durationMs":1992,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/operation-step-staleness-anchor.test.js","attempt":1,"ok":true,"assertions":12,"durationMs":2468,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/critical-spread-terminal-stall-repro.test.js","attempt":1,"ok":true,"assertions":19,"durationMs":2511,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/spread-cure-at-target-minting-gap.test.js","attempt":1,"ok":true,"assertions":28,"durationMs":2856,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/no-orphaned-replicas-after-recovery.property.test.js","attempt":1,"ok":true,"assertions":29,"durationMs":3255,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/operation-log-persistence.property.test.js","attempt":1,"ok":true,"assertions":27,"durationMs":3184,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/existing-group-add-topology-guard.test.js","attempt":1,"ok":true,"assertions":23,"durationMs":5968,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/operation-record-completeness.property.test.js","attempt":1,"ok":true,"assertions":29,"durationMs":3075,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/ledger-quorum-spread-hold-cure-drain-admission.test.js","attempt":1,"ok":true,"assertions":15,"durationMs":2539,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/formation-ledger-spread-voter-ready-readiness.test.js","attempt":1,"ok":true,"assertions":23,"durationMs":2767,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/coordinator-reused-operation-rearm-guard.test.js","attempt":1,"ok":true,"assertions":24,"durationMs":2752,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/convergence/dt6-priority-surplus-remove-authoritative-placement-fence.test.js","attempt":1,"ok":false,"assertions":94,"durationMs":2596,"retriedOnce":false,"firstFailureLine":"not ok 2 - should be equal"}
+{"file":"test/rebalancer/operation-ownership-lease-fencing.test.js","attempt":1,"ok":true,"assertions":231,"durationMs":5931,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/failed-authoritative-read-admission-verdict.test.js","attempt":1,"ok":true,"assertions":9,"durationMs":2572,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/workflow/monotonic-workflow-regression.test.js","attempt":1,"ok":true,"assertions":100,"durationMs":2710,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/replica-dispatch-add-creating-owner-rearm.test.js","attempt":1,"ok":false,"assertions":24,"durationMs":2743,"retriedOnce":false,"firstFailureLine":"not ok 6 - the deferred dispatch-service pass must traverse the canonical owner delivery sink instead of simulating a successful duplicate"}
+{"file":"test/rebalancer/rebalance-coordinator-atomic-transitions.test.js","attempt":1,"ok":true,"assertions":49,"durationMs":2437,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/query/sql-query-engine-provision-ledger-hold-transient-wait.test.js","attempt":1,"ok":true,"assertions":19,"durationMs":2472,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/remove-workflow-step-progression.property.test.js","attempt":1,"ok":true,"assertions":34,"durationMs":2904,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/operation-progress-store-persistence.test.js","attempt":1,"ok":true,"assertions":25,"durationMs":2605,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/operation-workflow-observed-progress-lane-held.test.js","attempt":1,"ok":true,"assertions":21,"durationMs":2433,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/recent-completed-replace-target-visibility.test.js","attempt":1,"ok":true,"assertions":28,"durationMs":2411,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/rebalance-coordinator-outcome-routing.test.js","attempt":1,"ok":true,"assertions":102,"durationMs":2668,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/convergence/dt6-operation-ledger-quorum-authoritative-release.test.js","attempt":1,"ok":true,"assertions":30,"durationMs":2305,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/add-workflow-step-progression.property.test.js","attempt":1,"ok":true,"assertions":39,"durationMs":3039,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/operation-workflow-active-cache-handoff.test.js","attempt":1,"ok":true,"assertions":171,"durationMs":2826,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/reservation-expiry-operation-aware.test.js","attempt":1,"ok":false,"assertions":8,"durationMs":2864,"retriedOnce":false,"firstFailureLine":"not ok 1 - Invalid replica operation persistence outcome: persisted operation history is not JSON text"}
+{"file":"test/rebalancer/orphaned-operation-reconcile-redrive.test.js","attempt":1,"ok":true,"assertions":14,"durationMs":2925,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/read-model-contract.test.js","attempt":1,"ok":true,"assertions":92,"durationMs":2711,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/rebalance-coordinator-partition-serialization-preservation.property.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":2674,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/reservation-reconcile-premature-orphan-release.test.js","attempt":1,"ok":true,"assertions":26,"durationMs":2643,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/coordinator-created-operation-progress.test.js","attempt":1,"ok":false,"assertions":41,"durationMs":2504,"retriedOnce":false,"firstFailureLine":"not ok 5 - the resumed owner path should continue into dispatch after claiming the operation"}
+{"file":"test/rebalancer/rebalance-coordinator-stopping-reconcile-source-handoff.test.js","attempt":1,"ok":true,"assertions":37,"durationMs":2530,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/coordinator-timeout-check-serialization.test.js","attempt":1,"ok":true,"assertions":9,"durationMs":2274,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/operation-workflow-target-sync-active-progress-contract.test.js","attempt":1,"ok":false,"assertions":20,"durationMs":2421,"retriedOnce":false,"firstFailureLine":"not ok 1 - target-sync active target progress should expose owner progress"}
+{"file":"test/rebalancer/planning-sweep-memoization.test.js","attempt":1,"ok":true,"assertions":52,"durationMs":2346,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/query/distributed-write-coordinator.test.js","attempt":1,"ok":true,"assertions":67,"durationMs":944,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-retirement-terminal-actuals-coherence.test.js","attempt":1,"ok":true,"assertions":10,"durationMs":1891,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js","attempt":1,"ok":true,"assertions":12,"durationMs":2036,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/rebalance-coordinator-stopping-reconcile-source-removal.test.js","attempt":1,"ok":true,"assertions":21,"durationMs":1956,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-operations-single-writer.test.js","attempt":1,"ok":true,"assertions":49,"durationMs":2083,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/rebalancer-entity-interaction-contract.test.js","attempt":1,"ok":false,"assertions":31,"durationMs":1930,"retriedOnce":false,"firstFailureLine":"not ok 1 - context.buildDeferredRemoveSafetyEvaluation is not a function"}
+{"file":"test/rebalancer/operation-workflow-delivered-create-progress-retention.test.js","attempt":1,"ok":true,"assertions":35,"durationMs":1858,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/rebalancer-own-create-memory-duplicate-replace.test.js","attempt":1,"ok":false,"assertions":52,"durationMs":2948,"retriedOnce":false,"firstFailureLine":"not ok 2 - Storage reservation creation failed for operation replace-op-28ef8f4bf921b28d8d8bd3eccb05c2a9: reservation insert rejected"}
+{"file":"test/rebalancer/runtime-service-target-claim.test.js","attempt":1,"ok":true,"assertions":12,"durationMs":1946,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/query/durable-provisioning-job-owner-directed.test.js","attempt":1,"ok":false,"assertions":49,"durationMs":54320,"retriedOnce":false,"firstFailureLine":"not ok 2 - timeout!"}
+{"file":"test/rebalancer/formation-runtime-service-create-lane-budget-starvation.test.js","attempt":1,"ok":false,"assertions":47,"durationMs":54389,"retriedOnce":false,"firstFailureLine":"not ok 20 - public coordinator dispatch accepts the runtime create"}
+{"file":"test/rebalancer/coordinator-created-user-partition-remote-outcome.test.js","attempt":1,"ok":true,"assertions":55,"durationMs":1527,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/rebalance-coordinator-stopping-reconcile-cache-visibility.test.js","attempt":1,"ok":true,"assertions":22,"durationMs":1584,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/coordinator-shared-readiness-policy.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":1660,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/remove-active-dispatch-redrive.test.js","attempt":1,"ok":true,"assertions":181,"durationMs":1668,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/priority-replace-exact-target-observation.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":1538,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/coordinator-reconcile-lane-ledger-write-head-of-line.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":1603,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/rebalance-coordinator-facade-compatibility.test.js","attempt":1,"ok":true,"assertions":26,"durationMs":1475,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/operation-workflow-target-progress-advance-reentry.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":1499,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/self-owned-coordinator-handoff-dispatches-in-process.test.js","attempt":1,"ok":false,"assertions":7,"durationMs":1442,"retriedOnce":false,"firstFailureLine":"not ok 1 - Unsupported rebalancer entity type: undefined"}
+{"file":"test/rebalancer/replica-operation-retained-owner-turn.test.js","attempt":1,"ok":false,"assertions":15,"durationMs":1519,"retriedOnce":false,"firstFailureLine":"not ok 2 - the exact command owns the next turn"}
+{"file":"test/rebalancer/formation-placement-target-evidence-absent.test.js","attempt":1,"ok":true,"assertions":9,"durationMs":1483,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-operation-terminal-cas.test.js","attempt":1,"ok":true,"assertions":61,"durationMs":1654,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/late-dispatch-honored-stops-redrive.test.js","attempt":1,"ok":true,"assertions":12,"durationMs":1153,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/operation-workflow-owner-adapter.test.js","attempt":1,"ok":true,"assertions":64,"durationMs":1122,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/create-timeout-admission-cas.integration.test.js","attempt":1,"ok":true,"assertions":23,"durationMs":6416,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/message-group-operation-routing.integration.test.js","attempt":1,"ok":false,"assertions":20,"durationMs":6268,"retriedOnce":false,"firstFailureLine":"not ok 1 - Invalid replica operation persistence outcome: persisted operation history is not JSON text"}
+{"file":"test/integration/node-joining-rebalance.integration.test.js","attempt":1,"ok":true,"assertions":38,"durationMs":13365,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/integration/multi-node-cluster.integration.test.js","attempt":1,"ok":true,"assertions":38,"durationMs":10477,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/integration/failure-scenarios.integration.test.js","attempt":1,"ok":true,"assertions":70,"durationMs":20841,"retriedOnce":false,"firstFailureLine":null}

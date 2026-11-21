@@ -34,3 +34,6 @@
 12:42:57 RESUME cpu=50C
 12:51:48 PAUSE cpu=78C pids=11
 12:51:58 RESUME cpu=66C
+18:12:01 PAUSE cpu=84C pids=4
+18:12:11 RESUME cpu=44C
+19:32:03 governor window ended

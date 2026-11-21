@@ -1,0 +1,37 @@
+{
+  "sha": "70dfcdba85a6f3aa74ddbc296d47abe730a1eb8e",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/constants/message-table-census.test.js",
+    "test/query/provisioning-deadline-error-message.test.js",
+    "test/control-plane/named-write-outcome-total.test.js",
+    "test/control-plane/named-write-unknown-outcome-shape.test.js",
+    "test/query/named-write-real-producer-definite.test.js",
+    "test/control-plane/control-plane-mutation-outcome-classifier.test.js",
+    "test/raft/authoritative-row-mutation-outcome-classifier.test.js",
+    "test/bootstrap/seed-bootstrap-direct-lane.integration.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/constants/message-table-census.test.js",
+        "test/control-plane/named-write-outcome-total.test.js",
+        "test/control-plane/named-write-unknown-outcome-shape.test.js",
+        "test/query/named-write-real-producer-definite.test.js",
+        "test/query/provisioning-deadline-error-message.test.js",
+        "test/control-plane/control-plane-mutation-outcome-classifier.test.js",
+        "test/raft/authoritative-row-mutation-outcome-classifier.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/bootstrap/seed-bootstrap-direct-lane.integration.test.js"
+      ],
+      "jobs": 2,
+      "resourceClass": "bootstrap"
+    }
+  ]
+}

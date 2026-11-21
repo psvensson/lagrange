@@ -1,0 +1,3 @@
+{"file":"test/rebalancer/placement-owner-authority-await-points.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":6353,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/placement-owner-authority-tenure.test.js","attempt":1,"ok":true,"assertions":14,"durationMs":16178,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/placement-owner-authority-wakes.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":127296,"retriedOnce":false,"firstFailureLine":null}

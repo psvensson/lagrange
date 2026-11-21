@@ -1,0 +1,4 @@
+{"file":"test/control-plane/replica-dispatch-node-state-update-remote-direct-wakeup.test.js","attempt":1,"ok":true,"assertions":38,"durationMs":2221,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/replica-dispatch-node-state-update-ready-node-retry-cache-priority.test.js","attempt":1,"ok":true,"assertions":37,"durationMs":2335,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/replica-dispatch-node-state-update-ready-node-retry-dispatch.test.js","attempt":1,"ok":true,"assertions":54,"durationMs":2361,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-operation-insert-retry-idempotency.test.js","attempt":1,"ok":true,"assertions":10,"durationMs":1526,"retriedOnce":false,"firstFailureLine":null}

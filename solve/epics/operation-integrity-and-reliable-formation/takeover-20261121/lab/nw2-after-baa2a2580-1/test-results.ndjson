@@ -1,0 +1,20 @@
+{"file":"test/control-plane/control-plane-error-classification.test.js","attempt":1,"ok":true,"assertions":53,"durationMs":883,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/control-plane-write-identity.test.js","attempt":1,"ok":true,"assertions":11,"durationMs":987,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/control-plane-mutation-outcome-classifier.test.js","attempt":1,"ok":true,"assertions":168,"durationMs":1276,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/named-write-outcome-total.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":1313,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/endpoint-incarnation-authority.test.js","attempt":1,"ok":true,"assertions":53,"durationMs":1725,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/named-write-unknown-outcome-shape.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":1376,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/constants/message-table-census.test.js","attempt":1,"ok":false,"assertions":1,"durationMs":4196,"retriedOnce":false,"firstFailureLine":"not ok 1 - every message-table member referenced under src is defined"}
+{"file":"test/query/provisioning-deadline-error-message.test.js","attempt":1,"ok":false,"assertions":4,"durationMs":2027,"retriedOnce":false,"firstFailureLine":"not ok 3 - a managed split child provisioning past its deadline answers the same typed error"}
+{"file":"test/query/named-write-real-producer-applied.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":9997,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/membership-publication-native-ack-order.test.js","attempt":1,"ok":true,"assertions":19,"durationMs":12177,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/authoritative-row-mutation-outcome-classifier.test.js","attempt":1,"ok":false,"assertions":133,"durationMs":1679,"retriedOnce":false,"firstFailureLine":"not ok 38 - unknown should retain its Raft disposition"}
+{"file":"test/query/named-write-real-producer-definite.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":11782,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/placement-explicit-replica-refusal-code.test.js","attempt":1,"ok":false,"assertions":2,"durationMs":2927,"retriedOnce":false,"firstFailureLine":"not ok 1 - ADD naming a replica identity: refused with its own typed code, not the corrupt-bytes code"}
+{"file":"test/rebalancer/coordinator-reservation-lifecycle.test.js","attempt":1,"ok":true,"assertions":101,"durationMs":4898,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/query/write-exactly-once-property.test.js","attempt":1,"ok":false,"assertions":3,"durationMs":146195,"retriedOnce":false,"firstFailureLine":"not ok 1 - exactly-once property, seed 20261005: 40 logical writes under random faults"}
+{"file":"test/query/write-identity-instance.test.js","attempt":1,"ok":true,"assertions":19,"durationMs":246839,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/node-registration-owner.test.js","attempt":1,"ok":true,"assertions":132,"durationMs":1204,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/durable-rejoin-incarnation-advance.test.js","attempt":1,"ok":true,"assertions":228,"durationMs":1455,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/register-service-retryable-refusal.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":3711,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/seed-bootstrap-direct-lane.integration.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":27801,"retriedOnce":false,"firstFailureLine":null}

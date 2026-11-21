@@ -1,0 +1,279 @@
+lab test: adams-gamla: ordinary (1 files) cores=4 mem=15.6GiB speed x2.16
+[adams-gamla] placement-shell=1939818
+[adams-gamla] placement-head=d6570215ff85a0c68e5d583fa5921043a1dc1766
+[adams-gamla] placement-link=node_modules
+[adams-gamla] placement-link=data/examples
+[adams-gamla] placement-prepared=import-graph
+[adams-gamla] placement-env=factor:2.2 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adams-gamla] placement-pid=1940274
+[adams-gamla] # test-files planned=1
+[adams-gamla] classified lane ordinary: 1 file(s), jobs=3
+[adams-gamla] thermal: ok cpu 51C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] not ok test/cdc/cdc-owner-fact-stale-published-leader.test.js (18 assertions, 2157ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 14
+[adams-gamla] # Subtest: gateway.readAuthoritativeRows leader-REQUIRED: a stale published leader refuses and the replica that leads answers
+[adams-gamla]     ok 1 - earlier witness: the published leader leads and answers
+[adams-gamla]     ok 2 - should be equal
+[adams-gamla]     ok 3 - should be equivalent
+[adams-gamla]     # {"observed":{"success":false,"error":"authoritative_query_failed","authorityFailureReason":"authoritative_owner_leader_witness_required","rows":[],"witness":{"state":"observed","partitionId":"replica_operations-p1","servingNodeId":"owner-fact-node-a","servingReplicaId":"replica_operations-p1-r1","term":2,"appliedIndex":3,"commitIndex":3,"electionLogApplied":true,"role":"follower","observedAtMs":1795282899318},"deposedServiceRole":"follower","deposedCoreRole":"follower","deposedKnownLeader":"replica_operations-p1-r2","asked":[{"targetNodeId":"owner-fact-node-a","reached":true,"success":true,"failureCode":null,"carriesRows":true,"witnessRole":"follower","witnessTerm":2}]}}
+[adams-gamla]     not ok 4 - the strict read reaches the replica that leads (today: unavailable behind the stale leader)
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-stale-published-leader.test.js
+[adams-gamla]         lineNumber: 72
+[adams-gamla]         columnNumber: 5
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/cdc/cdc-owner-fact-stale-published-leader.test.js:72:5)
+[adams-gamla]       source: >2
+[adams-gamla]           }));
+[adams-gamla]       
+[adams-gamla]           t.equal(after.success, true,
+[adams-gamla]         ----^
+[adams-gamla]             'the strict read reaches the replica that leads (today: unavailable behind the stale leader)');
+[adams-gamla]           t.equal(witness?.servingReplicaId, leader.replicaId, 'the answer is the leading replica\'s');
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -true
+[adams-gamla]         +false
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     not ok 5 - the answer is the leading replica's
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-stale-published-leader.test.js
+[adams-gamla]         lineNumber: 74
+[adams-gamla]         columnNumber: 5
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/cdc/cdc-owner-fact-stale-published-leader.test.js:74:5)
+[adams-gamla]       source: >2
+[adams-gamla]           t.equal(after.success, true,
+[adams-gamla]             'the strict read reaches the replica that leads (today: unavailable behind the stale leader)');
+[adams-gamla]           t.equal(witness?.servingReplicaId, leader.replicaId, 'the answer is the leading replica\'s');
+[adams-gamla]         ----^
+[adams-gamla]           t.equal(witness?.servingNodeId, leader.nodeId);
+[adams-gamla]           t.equal(witness?.partitionId, PARTITION);
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -replica_operations-p1-r2
+[adams-gamla]         +replica_operations-p1-r1
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     not ok 6 - should be equal
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-stale-published-leader.test.js
+[adams-gamla]         lineNumber: 75
+[adams-gamla]         columnNumber: 5
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/cdc/cdc-owner-fact-stale-published-leader.test.js:75:5)
+[adams-gamla]       source: >2
+[adams-gamla]             'the strict read reaches the replica that leads (today: unavailable behind the stale leader)');
+[adams-gamla]           t.equal(witness?.servingReplicaId, leader.replicaId, 'the answer is the leading replica\'s');
+[adams-gamla]           t.equal(witness?.servingNodeId, leader.nodeId);
+[adams-gamla]         ----^
+[adams-gamla]           t.equal(witness?.partitionId, PARTITION);
+[adams-gamla]           t.equal(witness?.role, 'leader');
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -owner-fact-node-b
+[adams-gamla]         +owner-fact-node-a
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     ok 7 - should be equal
+[adams-gamla]     not ok 8 - should be equal
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-stale-published-leader.test.js
+[adams-gamla]         lineNumber: 77
+[adams-gamla]         columnNumber: 5
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/cdc/cdc-owner-fact-stale-published-leader.test.js:77:5)
+[adams-gamla]       source: |2
+[adams-gamla]           t.equal(witness?.servingNodeId, leader.nodeId);
+[adams-gamla]           t.equal(witness?.partitionId, PARTITION);
+[adams-gamla]           t.equal(witness?.role, 'leader');
+[adams-gamla]         ----^
+[adams-gamla]           t.ok(Number.isSafeInteger(witness?.term) && witness.term > termBefore,
+[adams-gamla]             'the witness term is newer than the deposed leader\'s');
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -leader
+[adams-gamla]         +follower
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     ok 9 - the witness term is newer than the deposed leader's
+[adams-gamla]     ok 10 - the witness names an applied index equal to its commit index
+[adams-gamla]     not ok 11 - the rows are the leading replica's, never a follower's
+[adams-gamla]       ---
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,6 +1,1 @@
+[adams-gamla]         -Array [
+[adams-gamla]         -  Object {
+[adams-gamla]         -    "operation_id": "stale-published-leader-operation",
+[adams-gamla]         -    "workflow_step": "replica_operations-p1-r2",
+[adams-gamla]         -  },
+[adams-gamla]         -]
+[adams-gamla]         +Array []
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-stale-published-leader.test.js
+[adams-gamla]         lineNumber: 83
+[adams-gamla]         columnNumber: 5
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/cdc/cdc-owner-fact-stale-published-leader.test.js:83:5)
+[adams-gamla]       source: >2
+[adams-gamla]             witness.appliedIndex === witness?.commitIndex,
+[adams-gamla]           'the witness names an applied index equal to its commit index');
+[adams-gamla]           t.same(after.rows, [{operation_id: OPERATION, workflow_step: leader.replicaId}],
+[adams-gamla]         ----^
+[adams-gamla]             'the rows are the leading replica\'s, never a follower\'s');
+[adams-gamla]           t.equal(after.rowSetComplete, true);
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     not ok 12 - should be equal
+[adams-gamla]       ---
+[adams-gamla]       compare: ===
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-stale-published-leader.test.js
+[adams-gamla]         lineNumber: 85
+[adams-gamla]         columnNumber: 5
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/cdc/cdc-owner-fact-stale-published-leader.test.js:85:5)
+[adams-gamla]       source: >2
+[adams-gamla]           t.same(after.rows, [{operation_id: OPERATION, workflow_step:
+[adams-gamla]         leader.replicaId}],
+[adams-gamla]             'the rows are the leading replica\'s, never a follower\'s');
+[adams-gamla]           t.equal(after.rowSetComplete, true);
+[adams-gamla]         ----^
+[adams-gamla]       
+[adams-gamla]           const fromDeposed = asked.filter(({targetNodeId}) => targetNodeId === deposed.nodeId);
+[adams-gamla]       diff: |
+[adams-gamla]         --- expected
+[adams-gamla]         +++ actual
+[adams-gamla]         @@ -1,1 +1,1 @@
+[adams-gamla]         -true
+[adams-gamla]         +false
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     ok 13 - the published replica is asked
+[adams-gamla]     not ok 14 - no replica that does not lead answers the owner-fact read successfully
+[adams-gamla]       ---
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-stale-published-leader.test.js
+[adams-gamla]         lineNumber: 90
+[adams-gamla]         columnNumber: 5
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/cdc/cdc-owner-fact-stale-published-leader.test.js:90:5)
+[adams-gamla]       source: >2
+[adams-gamla]           const fromNonLeaders = asked.filter(({targetNodeId}) => targetNodeId !==
+[adams-gamla]         leader.nodeId);
+[adams-gamla]           t.ok(fromDeposed.length > 0, 'the published replica is asked');
+[adams-gamla]           t.ok(fromNonLeaders.every(({answer}) => answer?.success === false),
+[adams-gamla]         ----^
+[adams-gamla]             'no replica that does not lead answers the owner-fact read successfully');
+[adams-gamla]           t.ok(fromNonLeaders.every(({answer}) => !carriesRows(answer)),
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     not ok 15 - a refusing replica ships no rows
+[adams-gamla]       ---
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-stale-published-leader.test.js
+[adams-gamla]         lineNumber: 92
+[adams-gamla]         columnNumber: 5
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/cdc/cdc-owner-fact-stale-published-leader.test.js:92:5)
+[adams-gamla]       source: >2
+[adams-gamla]           t.ok(fromNonLeaders.every(({answer}) => answer?.success === false),
+[adams-gamla]             'no replica that does not lead answers the owner-fact read successfully');
+[adams-gamla]           t.ok(fromNonLeaders.every(({answer}) => !carriesRows(answer)),
+[adams-gamla]         ----^
+[adams-gamla]             'a refusing replica ships no rows');
+[adams-gamla]           t.ok(fromDeposed.every(({answer}) => answer?.failureCode === OWNER_FACT_NOT_LEADER),
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     not ok 16 - the deposed replica refuses with the typed owner-fact refusal
+[adams-gamla]       ---
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-stale-published-leader.test.js
+[adams-gamla]         lineNumber: 94
+[adams-gamla]         columnNumber: 5
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/cdc/cdc-owner-fact-stale-published-leader.test.js:94:5)
+[adams-gamla]       source: >2
+[adams-gamla]           t.ok(fromNonLeaders.every(({answer}) => !carriesRows(answer)),
+[adams-gamla]             'a refusing replica ships no rows');
+[adams-gamla]           t.ok(fromDeposed.every(({answer}) => answer?.failureCode === OWNER_FACT_NOT_LEADER),
+[adams-gamla]         ----^
+[adams-gamla]             'the deposed replica refuses with the typed owner-fact refusal');
+[adams-gamla]           t.ok(asked.some(({targetNodeId, answer}) =>
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     not ok 17 - the leading replica is asked and answers
+[adams-gamla]       ---
+[adams-gamla]       at:
+[adams-gamla]         fileName: test/cdc/cdc-owner-fact-stale-published-leader.test.js
+[adams-gamla]         lineNumber: 96
+[adams-gamla]         columnNumber: 5
+[adams-gamla]         typeName: Test
+[adams-gamla]       stack: |
+[adams-gamla]         Test.<anonymous> (test/cdc/cdc-owner-fact-stale-published-leader.test.js:96:5)
+[adams-gamla]       source: >2
+[adams-gamla]           t.ok(fromDeposed.every(({answer}) => answer?.failureCode ===
+[adams-gamla]         OWNER_FACT_NOT_LEADER),
+[adams-gamla]             'the deposed replica refuses with the typed owner-fact refusal');
+[adams-gamla]           t.ok(asked.some(({targetNodeId, answer}) =>
+[adams-gamla]         ----^
+[adams-gamla]             targetNodeId === leader.nodeId && answer?.success === true),
+[adams-gamla]           'the leading replica is asked and answers');
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     1..17
+[adams-gamla] not ok 1 - gateway.readAuthoritativeRows leader-REQUIRED: a stale published leader refuses and the replica that leads answers # time=442.98ms
+[adams-gamla]   ---
+[adams-gamla]   at:
+[adams-gamla]     fileName: test/cdc/cdc-owner-fact-stale-published-leader.test.js
+[adams-gamla]     lineNumber: 42
+[adams-gamla]     columnNumber: 1
+[adams-gamla]     isToplevel: true
+[adams-gamla]   source: >
+[adams-gamla]     }
+[adams-gamla]   
+[adams-gamla]   
+[adams-gamla]     test('gateway.readAuthoritativeRows leader-REQUIRED: a stale published leader
+[adams-gamla]     refuses and ' +
+[adams-gamla]   
+[adams-gamla]     ^
+[adams-gamla]       'the replica that leads answers', {timeout: TEST_TIMEOUT_MS}, async (t) => {
+[adams-gamla]       const group = await openLedgerGroupSurface(t, import.meta.url);
+[adams-gamla]   ...
+[adams-gamla] 
+[adams-gamla] 1..1
+[adams-gamla] # { total: 17, pass: 7, fail: 10 }
+[adams-gamla] # time=454.587ms
+[adams-gamla] # test-files total=1 pass=0 fail=1 assertions=18
+lab test: adams-gamla: # test-files total=1 pass=0 fail=1 assertions=18
+lab test: adams-gamla: results copied to test-output/reports/test-results-adams-gamla.ndjson
+# test-files total=1 pass=0 fail=1 assertions=18

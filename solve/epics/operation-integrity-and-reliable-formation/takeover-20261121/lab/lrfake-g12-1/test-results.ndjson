@@ -1,0 +1,2 @@
+{"file":"test/query/sql-query-engine-create-table-quorum.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":1305,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/bootstrap-api.test.js","attempt":1,"ok":true,"assertions":185,"durationMs":4933,"retriedOnce":false,"firstFailureLine":null}

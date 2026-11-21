@@ -1,0 +1,21 @@
+{
+  "sha": "50cc71c3c097cf50834907a131edd705cbd0daac",
+  "host": "adams-gamla",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/rebalancer/operation-record-step-shape.test.js",
+    "test/rebalancer/replica-operation-insert-retry-idempotency.test.js",
+    "test/rebalancer/admission-real-size-estimates.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/rebalancer/admission-real-size-estimates.test.js",
+        "test/rebalancer/operation-record-step-shape.test.js",
+        "test/rebalancer/replica-operation-insert-retry-idempotency.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

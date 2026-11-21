@@ -1,0 +1,4 @@
+{"file":"test/partition/durable-voter-visibility-role-write.test.js","attempt":1,"ok":true,"assertions":24,"durationMs":2193,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/executor-bypasses-workflow-owner.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":2223,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/replica-placement-owner-core.test.js","attempt":1,"ok":true,"assertions":20,"durationMs":5901,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/register-node-in-cluster.test.js","attempt":1,"ok":false,"assertions":85,"durationMs":2868,"retriedOnce":false,"firstFailureLine":"not ok 2 - join-phase SQL fallback should carry explicit join phase scope (calls without it: [[\"INSERT INTO nodes (node_id, node_address, host_id, cpu_cores\",null],[\"INSERT INTO node_endpoints (endpoint_id, node_id, transport_\",null],[\"INSERT INTO serv"}

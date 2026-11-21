@@ -1,0 +1,79 @@
+lab test: adams-gamla: ordinary (3 files) cores=4 mem=15.6GiB speed x2.09
+[adams-gamla] placement-shell=1930112
+[adams-gamla] placement-head=50cc71c3c097cf50834907a131edd705cbd0daac
+[adams-gamla] placement-link=node_modules
+[adams-gamla] placement-link=data/examples
+[adams-gamla] placement-prepared=import-graph
+[adams-gamla] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adams-gamla] placement-pid=1930568
+[adams-gamla] # test-files planned=3
+[adams-gamla] classified lane ordinary: 3 file(s), jobs=3
+[adams-gamla] thermal: ok cpu 42C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] ok test/rebalancer/operation-record-step-shape.test.js (5 assertions, 1577ms)
+[adams-gamla] not ok test/rebalancer/replica-operation-insert-retry-idempotency.test.js (8 assertions, 1988ms)
+[adams-gamla] # TAP assertions failed; test process exited 1
+[adams-gamla] TAP version 14
+[adams-gamla] # Subtest: lost-outcome insert retry converges to already-applied success
+[adams-gamla]     not ok 1 - Authoritative replica operation not confirmed: op-idem-1
+[adams-gamla]       ---
+[adams-gamla]       stack: |
+[adams-gamla]         resolveNewOperationInsertCollision (src/rebalancer/replica-operation-repository-mutation-persistence-methods.js:257:13)
+[adams-gamla]       at:
+[adams-gamla]         fileName: src/rebalancer/replica-operation-repository-mutation-persistence-methods.js
+[adams-gamla]         lineNumber: 257
+[adams-gamla]         columnNumber: 13
+[adams-gamla]         functionName: resolveNewOperationInsertCollision
+[adams-gamla]       tapCaught: returnedPromiseRejection
+[adams-gamla]       source: |2
+[adams-gamla]                 );
+[adams-gamla]               }
+[adams-gamla]               throw new Error(
+[adams-gamla]         ------------^
+[adams-gamla]                 REPLICA_OPERATION_REPOSITORY_LITERAL
+[adams-gamla]                   .AUTHORITATIVE_REPLICA_OPERATION_NOT_CONFIRMED +
+[adams-gamla]       ...
+[adams-gamla]     
+[adams-gamla]     1..1
+[adams-gamla] not ok 1 - lost-outcome insert retry converges to already-applied success # time=26.904ms
+[adams-gamla]   ---
+[adams-gamla]   at:
+[adams-gamla]     fileName: test/rebalancer/replica-operation-insert-retry-idempotency.test.js
+[adams-gamla]     lineNumber: 93
+[adams-gamla]     columnNumber: 1
+[adams-gamla]     isToplevel: true
+[adams-gamla]   source: >
+[adams-gamla]     }
+[adams-gamla]   
+[adams-gamla]   
+[adams-gamla]     test('lost-outcome insert retry converges to already-applied success', async
+[adams-gamla]     (t) => {
+[adams-gamla]   
+[adams-gamla]     ^
+[adams-gamla]       // The OR-IGNORE collision surface: the gateway reports success with zero
+[adams-gamla]       // affected rows because an identical-id row (this op's own earlier landed
+[adams-gamla]   ...
+[adams-gamla] 
+[adams-gamla] # Subtest: fresh insert keeps returning success unchanged
+[adams-gamla]     ok 1 - a fresh insert persists as before
+[adams-gamla]     1..1
+[adams-gamla] ok 2 - fresh insert keeps returning success unchanged # time=3.803ms
+[adams-gamla] 
+[adams-gamla] # Subtest: collision without an authoritative row stays a hard failure
+[adams-gamla]     ok 1 - an unobservable collision must not claim success (false or a thrown not-confirmed are both honest outcomes)
+[adams-gamla]     1..1
+[adams-gamla] ok 3 - collision without an authoritative row stays a hard failure # time=1.465ms
+[adams-gamla] 
+[adams-gamla] # Subtest: collision with content-mismatched authoritative row stays a hard failure
+[adams-gamla]     ok 1 - a mismatched same-id row must not be claimed as already-applied
+[adams-gamla]     1..1
+[adams-gamla] ok 4 - collision with content-mismatched authoritative row stays a hard failure # time=1.21ms
+[adams-gamla] 
+[adams-gamla] 1..4
+[adams-gamla] # { total: 4, pass: 3, fail: 1 }
+[adams-gamla] # time=51.144ms
+[adams-gamla] ok test/rebalancer/admission-real-size-estimates.test.js (27 assertions, 2328ms)
+[adams-gamla] # test-files total=3 pass=2 fail=1 assertions=40
+lab test: adams-gamla: # test-files total=3 pass=2 fail=1 assertions=40
+lab test: adams-gamla: results copied to test-output/reports/test-results-adams-gamla.ndjson
+# test-files total=3 pass=2 fail=1 assertions=40
+exit=1

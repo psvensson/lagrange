@@ -1102,3 +1102,272 @@ Focused classification on the head **[lab]** `w1-s2b-run5-1ede7a19d` (sha `1ede7
 Stopping point (2026-11-21, finishing writer out of context): head `1ede7a19d` pushed. Open: the
 four regressions above; the W1b witness (green only after merging 38708b6fa); the corpus selection
 of `9d241bd89` (lead). No local test was executed; every result above is from tv-dator.
+
+## 17. Stage 2c (CREATE-dispatch regressions, opus writer, 2026-11-21)
+
+Labels: **[lab]** executed on tv-dator (directory under `lab/`, console `<dir>.console.log`);
+**[read]** source only. Start: tip `1ede7a19d`. No local test was executed.
+
+### 17.1 Attribution **[lab]**
+
+| File (first failing case) | Green on | Red on (first-bad) | Red on head |
+| --- | --- | --- | --- |
+| `test/rebalancer/rebalance-coordinator-outcome-routing.test.js` (tests 2, 3: "create rearm should still issue one dispatch request" `0 !== 1`) | `0993265e5` `w1-s2b-cone-attr-0993265e5-try2` | `95ee6ee4a` `w1-s2c-attr-95ee6ee4a` | `1ede7a19d` `w1-s2b-run5-1ede7a19d` |
+| `test/rebalancer/coordinator-dedup-gap.test.js` (test 1, assertion 4: "Partition nodes-p1 already has a different create intent": the first operation never dispatched, so the third create conflicts) | same | same | same |
+| `test/rebalancer/operation-workflow-delivered-create-progress-retention.test.js` (test 8: "the completed response should succeed") | same | same | same |
+| `test/partition/placement-create-dispatch-execution-mirror.test.js` (test 2: `assertCreateDelivery` `0 !== 1`) | same | same | same |
+
+`95ee6ee4a^` (= `8eba5f745`) has `src/` identical to `0993265e5` and differs only in retained witness
+files these four do not import; `bc20bb929` and `9d241bd89` touch no `src/` and no helper of these
+files. So `95ee6ee4a` is the first bad commit for all four.
+
+Gate decision, captured by a diagnostic probe (`bf8a1f022`, local ref `probe/w1-s2c-gate-decision`,
+never pushed: it logs what the retained owner answered at
+`repairOperationRowForGateRepairedReservation`) **[lab]** `w1-s2c-probe-bf8a1f022`:
+- delivered-create (`completed-response-operation`), mirror (`pl-sql_transactions-p1-3-0`),
+  dedup-gap: `confirmed:false`; route port = the coordinator's own production binding
+  `() => resolveRetainedPlacementRepairBinding(this)` (none of the four uses
+  `test/test-helpers/retained-repair-ports.js`); record `binding:{unavailable}`,
+  `lastDecision:{unavailable, route_unavailable}`, `owed:6` (CLEARING|ROUTE), continuation idle,
+  entry unpinned. A qualified owner read issued by the probe at that moment returned the row
+  (1 row; witness observed/leader/term 1/applied=commit=1).
+- outcome-routing (`op-outcome-1`): the decision threw `cache.getAll is not a function` inside the
+  route port (its cache double had only `get`); the gate logged and answered false.
+
+Cause **[read]** (lines at `1ede7a19d`): `retryRetainedRepairDecision`
+(`src/rebalancer/replica-operation-repository-retained-placement-repair.js:146-149`) owed ROUTE
+before any read whenever the binding was unavailable, and `witnessRefusal`
+(`src/rebalancer/replica-operation-retained-repair-authority.js:81-82`) refused a read served by any
+replica other than the binding even when it showed the row. The dispatch gate
+(`src/rebalancer/operation-workflow-dispatch-reservation-gate.js:136`) asks this owner to confirm
+the row of every storage-increasing dispatch whose reservation is ACTIVE. On `0993265e5` the same
+read was judged with `expectedOwner === null` (any qualified leader) and confirmed EXACT.
+Classification: product regression for a coordinator whose cached ledger route is unpublished
+(the binding is UNAVAILABLE): the CREATE dispatch of a present, exact row was withheld and nothing
+re-drove it. Fixture part (outcome-routing only): a cache double without `getAll`.
+
+### 17.2 Repair and the presence/absence asymmetry
+
+Commits: `f9d847b1d` (first rule: a present row settles from ANY qualified ledger-leader read;
+superseded after the safety review below) and `a10a9cae3` (the restricted rule, now in force).
+
+Rule (`a10a9cae3`, `readRetainedRepairDecision` in
+`src/rebalancer/replica-operation-repository-retained-placement-repair.js`, read service in
+`replica-operation-retained-repair-authority.js` `REPAIR_READ_SERVICE` {BOUND, OTHER_REPLICA,
+NO_BINDING}):
+- a read served by the decision's binding decides as before;
+- with NO binding at all (route unpublished or ambiguous), a qualified read settles a present row
+  (EXACT or CHANGED) and never an absence; anything else stays owed to the route
+  (`confirmUnboundRetainedRepair`, SUBJECT scope, no timer);
+- a read served by a replica other than a resolvable binding settles nothing
+  (`UNQUALIFIED_BINDING`, owes ROUTE, no timer), whatever it shows.
+
+Why (the safety review **[read]**):
+- No read here is linearizable. A deposed leader that has not learned of its successor answers a
+  strict leader read with `role: leader` at its own term; the witness checks (role,
+  commit == applied, the record's floors) cannot exclude it, because the floors are raised only by
+  this record's own reads and answers (0 for a fresh caller record).
+- Presence (EXACT) proves that the row, in that exact form, was committed at some index
+  <= `witness.appliedIndex`. Committed entries are durable, but later committed entries may have
+  retired or changed the row on the current leader: presence is a historical fact, not a current
+  one. The binding does not make it current either (it comes from the coordinator's cache, which
+  can itself still name the deposed leader).
+- Absence (ABSENT/CONTENDED) leads to a proposal at the read's term to the binding
+  (`submitRetainedRepairAtTerm(attempt, decision.term, binding)`): the read and the proposal must
+  name the same replica, otherwise the term fence is another replica's term (W9). Absence therefore
+  needs the binding in every case.
+- What `true` (EXACT) does depends on the consumer:
+  1. Dispatch gate: the dispatch proceeds on the caller's own snapshot. Schedule: the current
+     leader retires or changes the row; the coordinator re-enters a stale SENDING row; a deposed
+     leader answers EXACT; the coordinator sends CREATE. Fence: the target's create admission is a
+     committed CAS on the ledger row keyed on (operation_id, workflow_step SENDING,
+     updated_at = the request's workflowUpdatedAt, completed_at NULL, no prior admission)
+     (`src/node/replica-create-admission-owner.js:547-575`), adopted only from a row that carries
+     that admission (`:579-592`); a retired or changed row applies zero rows and the CREATE is
+     refused before any replica exists. A deposed leader cannot commit it. The coordinator's own
+     claim PENDING -> SENDING (`src/rebalancer/operation-workflow-dispatch-execution.js:193-199`,
+     `updateStep`) and the response step update are committed CAS writes on the current leader.
+  2. Zero-row update arm (`src/rebalancer/replica-operation-repository-mutation-update-methods.js:593-600`):
+     `true` becomes `REINSERTED, persisted: true` with no further write. NOT fenced. Reached only by
+     operations without create admission or membership (`requiresExistingOperationRow`, same file
+     `:89-94`, refuses those before the arm).
+- Hence: OTHER_REPLICA is refused (the binding and the witness disagree on the leader, one view is
+  stale and the decision cannot tell which; accepting would trust a deposed leader exactly when the
+  cache already names its successor: negative witness, 17.5). NO_BINDING presence is accepted: the
+  decision has no evidence of the current leader at all; refusing withholds every dispatch on a
+  coordinator with an unpublished route (the four regressions) with no owned re-drive (17.4);
+  `0993265e5` accepted it; the gate's effects are fenced as in (1).
+- CHANGED: retire + `false` (withhold or refuse), no durable effect: justified from NO_BINDING;
+  from OTHER_REPLICA refused like EXACT (same ambiguity; cost is liveness only).
+- Residual (stated, not closed): with no binding, the zero-row arm can turn a deposed leader's
+  presence into REINSERTED, as on `0993265e5` (stage 2 had closed it by reading nothing; this
+  re-opens it for the unbound case only). Proposed fence for the owner of the update methods: the
+  arm passes the position of its own absence observation (the authoritative read's witness
+  term/index) into the record's floors, so an older presence fails `UNQUALIFIED_POSITION`.
+
+### 17.3 Capability-probe census (lines at `a10a9cae3`)
+
+Inside the retained-repair owner's files:
+- `replica-operation-repository-retained-placement-repair.js:51` (`instanceof Function`): the
+  construction validation itself (typed `retained_placement_repair_port_missing`). Conformant.
+- `replica-operation-retained-repair-wake.js:208` (`get(service)?.()`): an absent registration
+  means nothing to unbind; not a probe of a collaborator. Unchanged.
+- `replica-operation-retained-repair-answer.js:82-83`, `replica-operation-retained-repair-authority.js:105`:
+  validation of data shape, not probes.
+- `operation-workflow-gate-operation-row-repair.js:19` (`owner.logger?.warn?.(`): a missing logger
+  silently drops the gate's failure log. The port is the workflow owner's
+  (`operation-workflow-owner-retry-registry.js:61` assigns `options.logger` unvalidated). Exact
+  edit (outside): validate `logger.warn`/`logger.error` at OperationWorkflowOwner construction
+  (typed refusal), then `owner.logger.warn(...)` in the gate. Not changed here: changing the gate
+  alone would turn a silent drop into an untyped TypeError.
+Reached by the route binding (`resolveRetainedPlacementRepairBinding`,
+`replica-placement-owner-retained-repair-routing.js:64-73`), all outside these files:
+- `rebalance-coordinator-operation-creation-support.js:221`, `:612-613`, `:623`: `instanceof Set`
+  around `ledgerPartitionServices`, which `rebalance-coordinator-lifecycle.js:338` always
+  initializes. Edit: delete the three checks.
+- `replica-placement-owner-transport.js:29` (`if (!cache) return null`): no cache silently means no
+  route. Edit: the coordinator requires `systemTableCache` at construction; delete the guard.
+- `replica-status.js:305-314` (`resolveTargetNodeIncarnationSnapshot`): no cache -> null boot
+  incarnation (custody then matches null === null). Edit: same requirement; delete the branch
+  (shared: census its other callers first).
+- `replica-placement-owner-transport.js:48` (`typeof deliver !== FUNCTION_TYPE -> null`), used by
+  the repair send (`rebalance-coordinator-operation-creation-support.js:288-297`) and the remote
+  preparation (`replica-placement-owner-retained-repair-routing.js:19-23`): a router without
+  `deliver` silently means no route. Edit: require `messageRouter.deliver` at construction.
+- The retained owner's own wake channel: `rebalance-coordinator-lifecycle.js:534-539`
+  (`bindSystemTableCacheListener`): a cache without `onCacheChange` silently never forwards
+  PARTITIONS/SERVICES/REPLICA_OPERATIONS changes to `observeRetainedPlacementRepairCommit` (ROUTE
+  and own-row wakes lost); `:561-563` and `rebalance-coordinator.js:180-181` (`offCacheChange`).
+  Edit: require `onCacheChange`/`offCacheChange` at construction; delete the probes. Note:
+  `createMockCache` (`test/rebalancer/test-helpers.js:201`) has no `onCacheChange`, so every fixture
+  built on it runs without retained wakes.
+Repository cache probes that gave the outcome-routing stub its meaning (not on the binding path):
+- `replica-operation-repository-row-methods.js:482-489` (get, else getAll, else null),
+  `:496-508` (filter, else getAll, else null = "cache unavailable"), `:514-520` (a boundary exists
+  iff filter or getAll); `replica-operation-repository-observation-methods.js:325`, `:336-342`,
+  `:576`. Edit: the repository requires a SystemTableCache (get/getAll/filter) at construction
+  (`replica-operation-repository.js:514`, and `syncOwnerDependencies` `:573` `|| null`), delete the
+  branches; "cache unavailable" becomes a named state only where it is a real state.
+Fixture: outcome-routing hosts `new SystemTableCache()` (`a10a9cae3`) instead of the stub.
+
+### 17.4 Re-drive of a withheld dispatch: design question (stopped)
+
+Witness (mirror, `a10a9cae3`, "a CREATE dispatch withheld at the gate is dispatched exactly once
+after the retained owner confirms the row"): published route; the owner's first bound read fails
+(READ_FAILED) -> the gate withholds; the record's continuation is ARMED; with no other caller or
+event the continuation (repository virtual clock) re-reads, confirms EXACT and retires the record;
+the witness then requires exactly one CREATE delivery. RED BY DESIGN (17.5): nothing re-drives.
+Pre-existing on `0993265e5` (the base continuation retired the record the same way).
+
+Not implemented, because on this branch the workflow owner's per-operation retry entry is the
+pre-`953d705f8` form (`src/rebalancer/operation-workflow-observed-progress-retention.js:92-152`,
+`armObservedProgressRetry`): a single-shot timer (`OBSERVED_PROGRESS_RETRY_DELAY_MS`) re-running
+`reconcileObservedProgressOperation`, re-armed and deadline-bounded only for
+DELIVERED_CREATE_PROGRESS, with no operation-ownership fence (`953d705f8` is not an ancestor:
+section 9 item 4). Expressing the re-drive through it needs either
+(a) the gate arming that timer on every refusal: a polling re-drive, unbounded and unfenced here,
+    beside the retained owner's own continuation (two timers for one condition: Q9/R11), or
+(b) the retained owner signalling that entry when it settles EXACT a record that refused a caller:
+    a new owner interaction that does not exist.
+Question for the lead: does "a withheld dispatch is re-driven once its row is confirmed" belong to
+(a) the workflow owner's fenced entry after merging `953d705f8` (the gate arms it with the
+retained record's reason and window), or (b) a typed settlement signal from the retained owner
+into that entry? Both need the `953d705f8` form on this branch first.
+
+### 17.5 Lab evidence **[lab]** (tv-dator; lists `lab/w1-s2c-list-witness.txt`, `lab/w1-s2c-list-cone97.txt`)
+
+Commits pushed: `f9d847b1d` (first rule), `a10a9cae3` (restricted rule, witnesses, real
+SystemTableCache fixture), `f42102c84` (absence-served-elsewhere witness). Local refs only (never
+pushed): `probe/w1-s2c-gate-decision` `bf8a1f022`, `probe/w1-s2c-witnesses-on-f9d847b1d`
+`30619e5e7`, `probe/w1-s2c-mutant-absent-from-other` `6796edad0`,
+`probe/w1-s2c-mutant-absent-from-other-r2` `c79fb9f02`.
+
+The four regressions:
+
+| File | Red before | Green after |
+| --- | --- | --- |
+| outcome-routing | `w1-s2c-attr-95ee6ee4a`, `w1-s2b-run5-1ede7a19d`, probe `w1-s2c-probe-bf8a1f022` | `w1-s2c-run1-f9d847b1d` (stub `getAll`) 102/102; `w1-s2c-run3-a10a9cae3` (real SystemTableCache) 102/102 |
+| coordinator-dedup-gap | same | `w1-s2c-run1-f9d847b1d` 69/69; `w1-s2c-run3-a10a9cae3` 69/69 |
+| delivered-create-progress-retention | same | 35/35 in both |
+| create-dispatch-execution-mirror (original test 2) | same | green in both (`run1`, `run3`, `run5`) |
+
+New mirror witnesses (`f42102c84`):
+
+| Witness | Red before | Green on head |
+| --- | --- | --- |
+| present row dispatches once, route published | guard (green on `1ede7a19d` by construction) | `w1-s2c-run5-f42102c84` ok 3 |
+| present row dispatches once, route unpublished | same scenario as original test 2: red `w1-s2b-run5-1ede7a19d` | ok 4 |
+| read served by another replica than the cached route: withheld, owed to route | red on the any-leader rule: probe `w1-s2c-probe-p1-30619e5e7` (not ok 5, "the serving replica or the cache is stale: no dispatch") | ok 5 |
+| absence served by another replica: nothing prepared/proposed, owed to route | added for the surviving mutant (17.6) | ok 6 |
+| deposed leader has the row, current leader retired it: not confirmed (negative) | red on the any-leader rule: probe p1 (not ok 6, "…confirms nothing" `true !== false`) | ok 7 |
+| withheld dispatch re-driven exactly once after the retained owner confirms | RED BY DESIGN everywhere (17.4): `run3` and `run5` fail at the last assertion "re-driven exactly once" `0 !== 1`, after "withheld", "continuation ARMED" and "confirmed the row" pass | red (open) |
+| absent row, no route: withheld, owed to route, no timer | guard | ok 9 |
+
+Retained/placement set on `a10a9cae3` (`w1-s2c-run3-a10a9cae3`) and `f9d847b1d`
+(`w1-s2c-run1-f9d847b1d`): publication 6/6, leadership 5/5, row-repair 45/45, real-publication
+1/1, post-copy 2/2, growth-dispatch-identity 13/13; continuation 22/23 (only the W1b-dependent
+witness, 16.10); S11 2/3 (raw-bypass-negative `:68` `1 !== 0`, 16.4); placement-owner-core 19/20
+(test 20, "ReplicaOperationRepository requires a control-plane mutation ingress", 16.7). All three
+are the known reds with the same first assertions.
+
+Cone selection (97 files of the 1419-file cone: every cone test file that enters dispatch or the
+retained owner: `dispatchOperation(Internal)`, `handleObservedReplicaStateChange`,
+`persistOperationUpdate`, `createOperation(`, `ensureDispatchReservationOrSkip`,
+`ensureRetainedOperationRow`, `repairRetainedOperation`, `retainedPlacementRepair`,
+`advanceDispatchCandidateStep`, `runDispatch`, `dispatchPendingOperations`, minus the 12 already in
+the witness list): `w1-s2c-run2-cone97-f9d847b1d` 67 pass / 30 fail; `w1-s2c-run4-cone97-a10a9cae3`
+67 pass / 30 fail. Each of the 30 fails on `0993265e5` (`w1-s2b-cone-attr-0993265e5-try2`) with the
+identical first failing assertion: pre-existing, none introduced (attribution script output in the
+run console logs; list of the 30 in 17.7).
+
+### 17.7 The 30 pre-existing reds of the cone selection (identical first assertion on `0993265e5`)
+
+- `test/control-plane/replica-dispatch-reservation-identity.test.js`: not ok 7 - the canonical owner dispatches after the strict identity gate
+- `test/partition/placement-creation-terminal-replay.test.js`: not ok 1 - native create replay reads committed FAILED after the original reply is lost
+- `test/partition/placement-founding-and-runtime-service-admission.test.js`: not ok 1 - routes RUNTIME_SERVICE ADD, REPLACE, and REMOVE through PLACEMENT_ADMIT and enforces TARGET_CLAIM_TAKEN
+- `test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js`: not ok 40 - should be equal
+- `test/rebalancer/message-group-membership-operation-lane.test.js`: not ok 5 - canonical visibility treats omitted nullable membership fields as SQL NULL while preserving non-null owner stamps
+- `test/rebalancer/replace-named-handoff-attempt.test.js`: not ok 1 - one handoff was issued
+- `test/rebalancer/replace-owner-lease-verdict-property.test.js`: not ok 1 - Invalid replica operation persistence outcome: growth_promotion_cohort_unresolved
+- `test/rebalancer/reservation-file-backed-restart.test.js`: not ok 25 - the existing reservation gate dispatches exactly once
+- `test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js`: not ok 1 - Authoritative operation visibility deferred for partition:partition-lost-reservation-answer (entity_operation_observation_incomplete)
+- `test/rebalancer/replace-real-group-scheduling.test.js`: not ok 7 - the retained owner path commits the exact missing row after SAFE
+- `test/rebalancer/admission-real-size-estimates.test.js`: not ok 1 - Authoritative operation visibility deferred for partition:p-real-size (entity_operation_observation_incomplete)
+- `test/rebalancer/duplicate-operation-prevention.property.test.js`: not ok 1 - Authoritative operation visibility deferred for partition:partition-1 (entity_operation_observation_incomplete)
+- `test/rebalancer/quorum-conditioned-remove-safety.test.js`: not ok 1 - lower-case remove preflight should block unsafe critical remove
+- `test/rebalancer/replica-operation-repository.test.js`: not ok 1 - divergence path recovers by re-inserting instead of failing
+- `test/rebalancer/rebalance-coordinator-topology-guard.test.js`: not ok 1 - createOperation should fail closed when the target node already hosts the partition
+- `test/rebalancer/rebalance-coordinator-operation-ownership.test.js`: not ok 1 - timeout reconciliation must skip non-owner operations but keep target-owned system REPLACE reconciliation
+- `test/rebalancer/replace-replica-workflow.test.js`: not ok 8 - second REPLACE phase should issue REMOVE_REPLICA to source node
+- `test/rebalancer/replica-operation-membership-epoch-binding.test.js`: not ok 6 - src/partition/partition-placement-retained-repair.js: an unclassified reader of the membership epoch appeared; route it through the decode owner or classify it as passthrough
+- `test/rebalancer/strict-operation-outcomes.test.js`: not ok 7 - should be equal
+- `test/rebalancer/reservation-fail-closed-dispatch-gate.test.js`: not ok 5 - restored authority dispatches exactly once through the existing gate
+- `test/rebalancer/operation-workflow-remove-safety-concurrent-down-target.test.js`: not ok 1 - a concurrent op to a reachable target must still serialize-block
+- `test/rebalancer/coordinator-created-operation-progress.test.js`: not ok 5 - the resumed owner path should continue into dispatch after claiming the operation
+- `test/rebalancer/rebalance-coordinator-stopping-reconcile-source-handoff.test.js`: not ok 2 - the floor counts the partition's voter rows, not cluster nodes
+- `test/query/sql-query-engine-create-table-quorum.test.js`: not ok 1 - provisioning below quorum is rejected without lowering the quorum minimum
+- `test/rebalancer/operation-workflow-remove-safety-concurrent-stale-phantom.test.js`: not ok 1 - a genuinely in-flight concurrent op (within its step timeout) must still block
+- `test/rebalancer/rebalancer-entity-interaction-contract.test.js`: not ok 1 - context.buildDeferredRemoveSafetyEvaluation is not a function
+- `test/rebalancer/replica-status-completeness.property.test.js`: not ok 8 - Step 'SUPERSEDED' should map to valid status 'superseded'
+- `test/rebalancer/formation-runtime-service-create-lane-budget-starvation.test.js`: not ok 20 - public coordinator dispatch accepts the runtime create
+- `test/rebalancer/message-group-operation-routing.integration.test.js`: not ok 1 - Invalid replica operation persistence outcome: persisted operation history is not JSON text
+- `test/integration/control-plane-rebalance.integration.test.js`: not ok 11 - Placement admission refused for replica_operations-p1: placement_admission_bytes_invalid
+
+### 17.6 Mutation by mechanism for the presence/absence rule **[lab]**
+
+| Mechanism | Mutant | Commit (local ref) | Lab run | Killed by (first failure) |
+| --- | --- | --- | --- | --- |
+| presence accepted from a replica other than a resolvable binding | the `f9d847b1d` rule (any qualified leader) under the `a10a9cae3` witnesses | `30619e5e7` `probe/w1-s2c-witnesses-on-f9d847b1d` | `w1-s2c-probe-p1-30619e5e7` | KILLED: mirror 5 "the serving replica or the cache is stale: no dispatch"; mirror 6 (deposed negative) "presence answered by a replica other than the bound current leader confirms nothing" `true !== false` |
+| an ABSENT answer from a non-binding leader accepted | `readRetainedRepairDecision`: `unboundPresence = row === undefined \|\| service === NO_BINDING` (absence from OTHER_REPLICA or NO_BINDING decides) | first on `a10a9cae3`: `6796edad0` `probe/w1-s2c-mutant-absent-from-other` | `w1-s2c-mutant-absent-from-other-6796edad0-try2` (try1 = a mistyped sha, refused before any test; not a result) | **NOT KILLED** by the six retained files nor the mirror on `a10a9cae3` (only the two by-design reds). Finding: no witness showed an absence served elsewhere. Witness added in `f42102c84`. |
+| same, re-run on the new witness | same patch on `f42102c84` | `c79fb9f02` `probe/w1-s2c-mutant-absent-from-other-r2` | `w1-s2c-mutant-absent-from-other-r2-c79fb9f02-try3` on adam-laptop (try1 and try2: "tv-dator is not a ready lab machine", runner failures; tv-dator held by another agent) | KILLED: mirror 6 "an absence served by another replica than the cached ledger route settles nothing" at the owed-reason assertion: `'placement_repair_owner_unavailable'` vs `'unqualified_binding'` (the mutant went on to prepare against the stale binding). Publication 6/6 stays green under it. |
+
+### 17.8 State at the end of stage 2c
+
+Head `f42102c84` pushed; worktree clean. Open:
+- 17.4: the re-drive of a withheld dispatch (witness red by design; lead's design question).
+- 17.2 residual: with no binding, the zero-row update arm can turn a deposed leader's presence into
+  REINSERTED (proposed fence for the update-methods owner).
+- 17.3: the capability probes outside this owner (exact edits listed), including the coordinator's
+  cache-subscription probe that silently drops the retained owner's wakes.
+- Carried from 16: W1b-dependent continuation witness; S11 raw-bypass-negative; owner-core test 20.
+No local test was executed; every result in this section is from the lab.

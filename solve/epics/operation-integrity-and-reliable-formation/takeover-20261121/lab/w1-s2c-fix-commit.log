@@ -29,3 +29,6 @@ Matched 0 inherited navigability baseline violations
 Scoped complexity ratchet: 0 violation(s) in 2 target(s) (threshold: 12).
 Saved complexity report to test-output/analysis/complexity-scoped.json.
 pre-commit: import graph stale - refreshing inventories (~2 min; skip with LAGRANGE_SKIP_INVENTORY_REGEN=1)
+pre-commit: refreshing generated test metadata
+pre-commit: 1 staged check(s) failed - fix and re-commit
+pre-commit: (bypass for WIP: LAGRANGE_SKIP_PRECOMMIT=1 git commit)

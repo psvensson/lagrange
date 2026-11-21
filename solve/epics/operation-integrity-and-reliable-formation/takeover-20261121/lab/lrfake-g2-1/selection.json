@@ -1,0 +1,23 @@
+{
+  "sha": "aef41d9f001f6fca826def191d8021b283159d5c",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/control-plane/heartbeat-liveness-at-commit.test.js",
+    "test/control-plane/runtime-access-settled-replay-projection.test.js",
+    "test/rebalancer/placement-admission-cross-coordinator-target-census.test.js",
+    "test/rebalancer/replica-placement-owner-core.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/rebalancer/replica-placement-owner-core.test.js",
+        "test/rebalancer/placement-admission-cross-coordinator-target-census.test.js",
+        "test/control-plane/runtime-access-settled-replay-projection.test.js",
+        "test/control-plane/heartbeat-liveness-at-commit.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

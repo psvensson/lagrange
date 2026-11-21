@@ -1,0 +1,1 @@
+{"file":"test/partition/placement-create-dispatch-execution-mirror.test.js","attempt":1,"ok":false,"assertions":9,"durationMs":2896,"retriedOnce":false,"firstFailureLine":"not ok 5 - a read served by another replica than the cached ledger route settles nothing: the CREATE dispatch is withheld and owed to the route publication"}

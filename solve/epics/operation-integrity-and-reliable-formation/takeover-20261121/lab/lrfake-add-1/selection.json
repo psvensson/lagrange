@@ -1,0 +1,29 @@
+{
+  "sha": "b5b15271f97e92ddbf736b53b13f10474cddf2fa",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/partition/durable-voter-visibility-role-write.test.js",
+    "test/rebalancer/replica-placement-owner-core.test.js",
+    "test/rebalancer/executor-bypasses-workflow-owner.test.js",
+    "test/bootstrap/register-node-in-cluster.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/rebalancer/replica-placement-owner-core.test.js",
+        "test/rebalancer/executor-bypasses-workflow-owner.test.js",
+        "test/partition/durable-voter-visibility-role-write.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/bootstrap/register-node-in-cluster.test.js"
+      ],
+      "jobs": 2,
+      "resourceClass": "bootstrap"
+    }
+  ]
+}
