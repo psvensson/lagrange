@@ -28,7 +28,7 @@
   "censusSize": 2721,
   "digest": "fnv1a32-0ce7104a",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-2720041d",
+  "observationDigest": "fnv1a32-33985afe",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -23326,6 +23326,7 @@
     "test/scripts/repository-legacy-fallback-closure.test.js": {
       "files": [
         "data/fallback-census/census.json",
+        "scripts/checks/check-repository-legacy-fallback-closure.js",
         "scripts/checks/code-navigability-fallback-classification.json",
         "scripts/generate-source-owner-index.js",
         "scripts/quest-evidence/repository-legacy-fallback-closure.js",
