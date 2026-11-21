@@ -217,12 +217,22 @@ reported 3,100 assertions. The four failures cover the native point-read
 witness, growth-promotion mutation ingress, the self-move read-pressure
 probe, and interception of a refused ledger hold release. Exercise the
 production read and conditional mutation paths for each outstanding control.
-The registered 85-file strict selection on `95676fa6d` is split between
-managed requests `97415f58-e030-4f7f-a2f8-e611edeffdc6` on adams-gamla
-and `62a3377f-3334-42e9-b9af-264236e5b07f` on adam-laptop. The
-integration owner collects both originals, including failing and unmeasured
-files. The strict Quest's historical receipt remains at four of six
-obligations.
+The registered 85-file strict selection ran on `95676fa6d`.
+Requests 5519 and 5520 both stopped at the worker CPU thermal limit during
+the classified run. The ordinary managed runner subsequently completed the
+same disjoint selections. On adam-laptop 20 of 23 files passed, and on
+adams-gamla 54 of 62 passed (7,247 total assertions reported). A source
+trace through the failed files found recurring differences between test
+setup and production authority. Several tests changed only a cache after
+seeding SQLite or intercepted a positional SQL update after the producer had
+moved to conditional mutation ingress. Check both the real conditional
+write and the subsequent durable row when repairing these controls. On
+`52dd113bb`, five focused growth, self-move and replay files passed (406
+assertions). Review still requires the unchanged terminal precondition to
+be observed before the refusal in the hold witness. The strict Quest's
+historical receipt remains at four of six obligations.
+[Interrupted managed requests](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--strict-shard-9567-thermal-5519-5520-nov21.tar.gz)
+and [completed classified selections](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--strict85-9567-and-52dd-controls-nov21.tar.gz).
 [Release control and 65-file composition output](https://github.com/psvensson/lagrange/releases/download/solve-evidence/strict-operation-outcomes--strict-release-a516-and-complement-3b929-nov21.tar.gz).
 
 The bounded support-evidence correction is integrated on the WIP. The actual
