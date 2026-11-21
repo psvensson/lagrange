@@ -192,7 +192,9 @@ async function withExpiredStep(measure, {
             exactPointReadUnavailable = false;
           }
         },
-        sweepWithDeferredVisibility(interleave) {
+        async sweepWithDeferredVisibility(interleave) {
+          const emptyBackoffMs = owner.incompleteOperationQueryEmptyBackoffMs;
+          owner.incompleteOperationQueryEmptyBackoffMs = 0;
           const probe = owner.repository.getOperationByIdVisibilityObservation
             .bind(owner.repository);
           let armed = true;
@@ -212,24 +214,41 @@ async function withExpiredStep(measure, {
               exactPointReadUnavailable = false;
             }
           };
-          return coordinator.checkTimeouts();
+          try {
+            await coordinator.checkTimeouts();
+          } finally {
+            owner.repository.getOperationByIdVisibilityObservation = probe;
+            owner.incompleteOperationQueryEmptyBackoffMs = emptyBackoffMs;
+          }
         },
-        advancePending() {
+        advancePending(winningStep = WORKFLOW_STEP.SENDING) {
           const before = row();
           const updatedAt = Date.now();
           const steps = JSON.parse(before.steps_history);
-          steps.push({step: WORKFLOW_STEP.SENDING, timestamp: updatedAt,
+          steps.push({step: winningStep, timestamp: updatedAt,
             previousStep: WORKFLOW_STEP.PENDING});
           const result = commitMutation({operation: 'update',
             tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
             whereClause: {operation_id: OPERATION_ID, workflow_step: WORKFLOW_STEP.PENDING,
               updated_at: before.updated_at, completed_at: null},
-            data: {workflow_step: WORKFLOW_STEP.SENDING, updated_at: updatedAt,
+            data: {workflow_step: winningStep, updated_at: updatedAt,
               steps_history: JSON.stringify(steps)},
           });
           assert.equal(result.partitionResult.affectedRows, 1, 'the independent committed step wins');
           assert.equal(owner.isOperationStepTimedOut(operation(), Date.now()), false,
-            'the newer durable SENDING step is still within its own budget');
+            'the newer durable workflow state is still within its step budget');
+        },
+        materializeStoredReplaceSource() {
+          const decodedSource = operation().sourceReplicaId;
+          assert.ok(decodedSource);
+          const result = commitMutation({operation: 'update',
+            tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+            whereClause: {operation_id: OPERATION_ID, source_replica_id: null},
+            data: {source_replica_id: decodedSource},
+          });
+          assert.equal(result.partitionResult.affectedRows, 1);
+          assert.equal(operation().sourceReplicaId, decodedSource,
+            'the exact-row change leaves the decoded retiring source unchanged');
         },
         interceptFailureWrite: (intercept) => {
           nextFailureWrite = intercept;
@@ -422,28 +441,30 @@ test('an expired PENDING decision cannot fail a fresher SENDING row after deferr
     }, {step: WORKFLOW_STEP.PENDING});
   });
 
-test('the expired PENDING compare-and-set cannot cross a later durable SENDING step',
-  async () => {
-    await withExpiredStep(async (run) => {
-      const before = run.owner.stats.operationsTimedOut;
-      let winner;
-      run.interceptFailureWrite(async (commit) => {
-        run.advancePending();
-        winner = run.row();
-        return commit();
-      });
-      await run.expire();
-      assert.ok(winner, 'the mutation boundary saw the actual competing write');
-      assert.deepEqual(run.row(), winner);
-      assert.equal(run.reservation().released_at, null);
-      assert.deepEqual(run.failures, []);
-      assert.equal(run.owner.stats.operationsTimedOut, before,
-        'the guarded zero-row result earns no timeout credit');
-      await runTerminalTransitionRepairAttempt(run.owner, OPERATION_ID);
-      assert.deepEqual(run.row(), winner, 'repair retains the exact original timeout condition');
-      assert.equal(run.failWrites.length, 1, 'a stale repair does not issue a new terminal write');
-    }, {step: WORKFLOW_STEP.PENDING});
-  });
+for (const winningStep of [WORKFLOW_STEP.SENDING, WORKFLOW_STEP.PENDING]) {
+  test(`an expired PENDING CAS cannot overtake committed ${winningStep} progress`,
+    async () => {
+      await withExpiredStep(async (run) => {
+        const before = run.owner.stats.operationsTimedOut;
+        let winner;
+        run.interceptFailureWrite(async (commit) => {
+          run.advancePending(winningStep);
+          winner = run.row();
+          return commit();
+        });
+        await run.expire();
+        assert.ok(winner, 'the mutation boundary saw the actual competing write');
+        assert.deepEqual(run.row(), winner);
+        assert.equal(run.reservation().released_at, null);
+        assert.deepEqual(run.failures, []);
+        assert.equal(run.owner.stats.operationsTimedOut, before,
+          'the guarded zero-row result earns no timeout credit');
+        await runTerminalTransitionRepairAttempt(run.owner, OPERATION_ID);
+        assert.deepEqual(run.row(), winner, 'repair retains the exact original timeout condition');
+        assert.equal(run.failWrites.length, 1, 'a stale repair does not issue a new terminal write');
+      }, {step: WORKFLOW_STEP.PENDING});
+    });
+}
 
 test('a terminal winner settles before a previously captured timeout without timeout credit',
   async () => {
@@ -575,6 +596,29 @@ test('a pre-remove REPLACE sender timeout that wins before admission rejects the
         error: CREATE_ADMISSION_ERROR_CODE.REFUSED_TERMINAL});
       assert.equal((await run.execution).success, false);
       assert.equal(run.row().create_admission_state, null);
+    });
+  });
+
+test('the elapsed REPLACE CAS fences a same-source change to the stored source column',
+  async () => {
+    await withHeldReplaceCreate(async (run) => {
+      const before = run.owner.stats.operationsTimedOut;
+      let winner;
+      run.interceptFailureWrite((commit) => {
+        assert.equal(run.row().source_replica_id, null);
+        run.materializeStoredReplaceSource();
+        winner = run.row();
+        return commit();
+      });
+      await run.expire();
+      assert.ok(winner, 'the independent raw source write won before timeout apply');
+      assert.equal(run.failWrites[0].whereClause.source_replica_id, null);
+      assert.deepEqual(run.row(), winner);
+      assert.equal(run.reservation().released_at, null);
+      assert.deepEqual(run.failures, []);
+      assert.equal(run.owner.stats.operationsTimedOut, before);
+      run.reply({status: ReplicaOperationResponseStatus.INITIATED});
+      assert.equal((await run.execution).success, true);
     });
   });
 
