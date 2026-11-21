@@ -19,6 +19,13 @@ function hasText(value) {
   return typeof value === 'string' && value.length > 0;
 }
 
+// The judge answers for every input: a field is compared only after its
+// presence is proven, so two absent values never agree (an answer without a
+// witness and without a partitionId is UNKNOWN, never a TypeError).
+function isRecord(value) {
+  return value !== null && typeof value === 'object';
+}
+
 function hasAffectedRows(result) {
   const counts = [result.affectedRows, result.changes].filter((value) => value !== undefined);
   if (isAppliedWithUnknownCount(result)) return counts.length === 0;
@@ -26,22 +33,31 @@ function hasAffectedRows(result) {
     Number.isSafeInteger(value) && value >= 0 && value === counts[0]);
 }
 
-function belongsToNamedWrite(result, {key, partitionId}) {
-  return hasText(result.partitionId) &&
-    result.partitionId === partitionId &&
-    result.entryId === deriveParticipantEntryId(key, result.partitionId);
+function isDeclaredAttempt(attempt) {
+  return isRecord(attempt) && hasText(attempt.key) && hasText(attempt.partitionId);
 }
 
+function belongsToNamedWrite(result, attempt) {
+  return isRecord(result) && isDeclaredAttempt(attempt) &&
+    hasText(result.partitionId) &&
+    result.partitionId === attempt.partitionId &&
+    result.entryId === deriveParticipantEntryId(attempt.key, result.partitionId);
+}
+
+// APPLIED: a durable commit witness bound to the attempt's own declared
+// partition and entry, on an answer of that same partition.
 function isCommittedPartitionSuccess(result, attempt) {
+  if (!isRecord(result)) return false;
   const witness = result.durableCommitWitness;
   return result.success === true && result.deferRetry !== true && hasAffectedRows(result) &&
-    witness?.partitionId === result.partitionId && belongsToNamedWrite(witness, attempt) &&
+    isRecord(witness) && hasText(result.partitionId) &&
+    witness.partitionId === result.partitionId && belongsToNamedWrite(witness, attempt) &&
     Number.isSafeInteger(witness.logIndex) && witness.logIndex > 0 &&
     Number.isSafeInteger(witness.term) && witness.term > 0;
 }
 
 function isCommittedPartitionFailure(result, attempt) {
-  return result.committed === true &&
+  return isRecord(result) && result.committed === true &&
     result.outcome === PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED &&
     hasText(result.failureCode) && belongsToNamedWrite(result, attempt) &&
     Number.isSafeInteger(result.logIndex) && result.logIndex > 0;
@@ -54,19 +70,29 @@ const NON_REFUSAL_CODES = new Set([
 ]);
 
 function isPartitionPreProposalRefusal(result, attempt) {
-  return result.committed !== true && isPartitionWriteFailureCode(result.failureCode) &&
+  return isRecord(result) && isDeclaredAttempt(attempt) &&
+    result.committed !== true && isPartitionWriteFailureCode(result.failureCode) &&
     !NON_REFUSAL_CODES.has(result.failureCode) &&
     hasText(result.partitionId) &&
     result.partitionId === attempt.partitionId &&
     (result.entryId == null || belongsToNamedWrite(result, attempt));
 }
 
+// The one failure of a single-partition answer, when it names that same
+// partition; otherwise the answer itself is judged.
+function singlePartitionFailureOf(result) {
+  const failures = result.participantFailures;
+  if (!Array.isArray(failures) || failures.length !== 1) return result;
+  const [nested] = failures;
+  return isRecord(nested) && hasText(nested.partitionId) &&
+    nested.partitionId === result.partitionId ? nested : result;
+}
+
 function judgePartitionAnswer(result, attempt) {
+  if (!isRecord(result)) return NAMED_WRITE_ATTEMPT.UNKNOWN;
   if (isCommittedPartitionSuccess(result, attempt)) return NAMED_WRITE_ATTEMPT.APPLIED;
   if (result.success !== false && !(result instanceof Error)) return NAMED_WRITE_ATTEMPT.UNKNOWN;
-  const [nested] = Array.isArray(result.participantFailures) ? result.participantFailures : [];
-  const failure = result.participantFailures?.length === 1 &&
-    nested?.partitionId === result.partitionId ? nested : result;
+  const failure = singlePartitionFailureOf(result);
   if (isCommittedPartitionFailure(failure, attempt)) return NAMED_WRITE_ATTEMPT.FAILED;
   if (isPartitionPreProposalRefusal(failure, attempt)) return NAMED_WRITE_ATTEMPT.NOT_PROPOSED;
   return NAMED_WRITE_ATTEMPT.UNKNOWN;
@@ -75,9 +101,9 @@ function judgePartitionAnswer(result, attempt) {
 function hasCompleteDistributedParticipants(result) {
   const {partitions, mirrorPartitions, participantResults} = result;
   if (!Array.isArray(partitions) || !Array.isArray(mirrorPartitions) ||
-      !Array.isArray(participantResults)) return false;
+      !Array.isArray(participantResults) || !participantResults.every(isRecord)) return false;
   const participants = [...partitions, ...mirrorPartitions];
-  const actual = participantResults.map((entry) => entry?.partitionId);
+  const actual = participantResults.map((entry) => entry.partitionId);
   return new Set(participants).size === participants.length &&
     participants.length === actual.length &&
     participants.every((partition) => hasText(partition) && actual.includes(partition));
@@ -100,7 +126,8 @@ function distributedAffectedRowsAgree(result, attempt) {
 }
 
 function judgeDistributedAnswer(result, attempt) {
-  if (result.idempotencyKey !== attempt.key || !hasText(result.operationId) ||
+  if (!hasText(result.idempotencyKey) || result.idempotencyKey !== attempt.key ||
+      !hasText(result.operationId) ||
       !hasCompleteDistributedParticipants(result)) return NAMED_WRITE_ATTEMPT.UNKNOWN;
   const {participantResults} = result;
   if (result.success === true && result.deferRetry !== true &&
@@ -114,7 +141,7 @@ function judgeDistributedAnswer(result, attempt) {
 }
 
 function judgeNamedWriteOutcome(answer, attempt) {
-  if (!answer || typeof answer !== 'object') return NAMED_WRITE_ATTEMPT.UNKNOWN;
+  if (!isRecord(answer) || !isDeclaredAttempt(attempt)) return NAMED_WRITE_ATTEMPT.UNKNOWN;
   if (answer.code === CDC_ERROR_CODE.SHUT_DOWN &&
       answer.writeOutcome === CDC_SHUT_DOWN_WRITE_OUTCOME.NOT_ROUTED) {
     return NAMED_WRITE_ATTEMPT.NOT_PROPOSED;
