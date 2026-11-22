@@ -748,6 +748,7 @@ export class GlobalIndexLifecycleCoordinator {
       projectedColumns,
       executeScatterGatherRead,
       orderBy,
+      params = [],
     } = readContext;
 
     const effectiveWhere = whereClause || where;
@@ -756,13 +757,14 @@ export class GlobalIndexLifecycleCoordinator {
       tableName,
       whereClause: effectiveWhere,
       projectedColumns,
+      params,
       basePrimaryKeyColumns: schemaInfo?.basePrimaryKeyColumns,
     });
 
     let rows;
     if (plan.accessPath === GLOBAL_INDEX_ACCESS_PATH.GLOBAL_SECONDARY_INDEX) {
       rows = await this.readRouter.executeTwoStageIndexQuery(
-        {tableName, whereClause: effectiveWhere, projectedColumns},
+        {tableName, whereClause: effectiveWhere, projectedColumns, params},
         plan,
       );
     } else if (typeof executeScatterGatherRead === 'function') {
@@ -772,6 +774,7 @@ export class GlobalIndexLifecycleCoordinator {
         tableName,
         whereClause: effectiveWhere,
         projectedColumns,
+        params,
       });
     }
 

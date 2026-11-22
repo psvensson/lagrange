@@ -47,6 +47,7 @@ const NUMERIC_VALUE_REGEX = /^-?\d+(?:\.\d+)?$/u;
 const SQL_BEGIN_IMMEDIATE = 'BEGIN IMMEDIATE';
 const SQL_COMMIT = 'COMMIT';
 const SQL_ROLLBACK = 'ROLLBACK';
+const SQL_WHERE_PREFIX = 'WHERE ';
 
 function coerceCursorScalar(value, colType) {
   if (typeof value === 'number') return value;
@@ -374,6 +375,17 @@ function createBackfillCallbacks(resolveDb, resolveTableSchema) {
   };
 }
 
+function buildBaseFetchResidualClause(whereClause, params) {
+  if (!whereClause) return {clause: '', params: []};
+  const conditions = extractPredicateConditions(whereClause, params);
+  const residual = buildWhereClauseFromConditions(conditions);
+  if (!residual.whereSql) return {clause: '', params: []};
+  return {
+    clause: residual.whereSql.slice(SQL_WHERE_PREFIX.length),
+    params: residual.params,
+  };
+}
+
 function createReadRouterCallbacks(resolveDb, getBaseTablePartitions) {
   return {
     executeIndexScan: async ({
@@ -401,17 +413,26 @@ function createReadRouterCallbacks(resolveDb, getBaseTablePartitions) {
       }
       return rows;
     },
-    executeBaseFetch: async ({tableName, basePartitionId, pkList}) => {
+    executeBaseFetch: async ({
+      tableName,
+      basePartitionId,
+      pkList,
+      whereClause = null,
+      params = [],
+    }) => {
       const db = resolveDb(basePartitionId);
       if (!db) throw createParticipantUnavailableError(basePartitionId);
+      const residual = buildBaseFetchResidualClause(whereClause, params);
       const rows = [];
       for (const pk of pkList) {
         const entries = Object.entries(pk);
-        const whereSql = entries
-          .map(([col]) => `${quoteIdentifier(col)} = ?`)
-          .join(LOCAL_STR_AND);
-        const sql = `SELECT * FROM ${quoteIdentifier(tableName)} WHERE ${whereSql}`;
-        const row = db.prepare(sql).get(...entries.map(([, val]) => val));
+        const pkParts = entries.map(([col]) => `${quoteIdentifier(col)} = ?`);
+        if (residual.clause) pkParts.push(residual.clause);
+        const sql = `SELECT * FROM ${quoteIdentifier(tableName)} WHERE ${pkParts.join(LOCAL_STR_AND)}`;
+        const row = db.prepare(sql).get(
+          ...entries.map(([, val]) => val),
+          ...residual.params,
+        );
         if (row) rows.push(row);
       }
       return rows;

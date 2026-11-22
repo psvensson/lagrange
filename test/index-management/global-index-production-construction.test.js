@@ -69,8 +69,7 @@ afterEach(() => {
   LoggingService.resetInstance();
 });
 
-function createDurableSystemGateway(catalogDbPath, tables, partitions) {
-  const db = new Database(catalogDbPath);
+function initCatalogSchema(db) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS tables (
       table_id TEXT PRIMARY KEY,
@@ -105,20 +104,29 @@ function createDurableSystemGateway(catalogDbPath, tables, partitions) {
       updated_at INTEGER
     );
   `);
+}
 
+function seedCatalogTables(db, tables) {
   const insertTable = db.prepare(
     'INSERT OR REPLACE INTO tables (table_id, table_name, partition_key, primary_key, partition_key_type) VALUES (?, ?, ?, ?, ?)',
   );
   for (const t of tables) {
+    const pkCol = t.partition_key || 'id';
     insertTable.run(
       t.table_id || t.table_name,
       t.table_name,
-      t.partition_key || 'id',
-      JSON.stringify(t.primaryKey || [t.partition_key || 'id']),
+      pkCol,
+      JSON.stringify(t.primaryKey || [pkCol]),
       t.partition_key_type || 'INTEGER',
     );
   }
+}
 
+function serializeBoundaryValue(val) {
+  return val === null || val === undefined ? null : String(val);
+}
+
+function seedCatalogPartitions(db, partitions) {
   const insertPartition = db.prepare(
     'INSERT OR REPLACE INTO partitions (partition_id, table_id, table_name, partition_key, partition_key_start, partition_key_end) VALUES (?, ?, ?, ?, ?, ?)',
   );
@@ -128,14 +136,76 @@ function createDurableSystemGateway(catalogDbPath, tables, partitions) {
       p.table_id || p.table_name,
       p.table_name,
       p.partition_key || null,
-      p.partition_key_start === null || p.partition_key_start === undefined ?
-        null :
-        String(p.partition_key_start),
-      p.partition_key_end === null || p.partition_key_end === undefined ?
-        null :
-        String(p.partition_key_end),
+      serializeBoundaryValue(p.partition_key_start),
+      serializeBoundaryValue(p.partition_key_end),
     );
   }
+}
+
+function serializeIndexColumnsForTest(rawCols) {
+  return typeof rawCols === 'string' ? rawCols : JSON.stringify(rawCols || []);
+}
+
+function normalizeIndicesInsertParams(data) {
+  const createdAt = data.created_at || Date.now();
+  const isGlobal = data.is_global !== undefined ? Number(Boolean(data.is_global)) : 0;
+  return [
+    data.index_id,
+    data.table_id,
+    data.table_name || null,
+    data.index_name,
+    serializeIndexColumnsForTest(data.column_names),
+    data.index_type || 'btree',
+    isGlobal,
+    data.is_unique ? 1 : 0,
+    data.state || 'CREATING',
+    data.backfill_cursor_partition_id ?? null,
+    data.backfill_cursor_pk ?? null,
+    Number(data.backfill_total_rows || 0),
+    data.error_message ?? null,
+    createdAt,
+    data.updated_at || createdAt,
+  ];
+}
+
+function runIndicesInsert(db, data) {
+  const sql = `
+    INSERT OR REPLACE INTO indices (
+      index_id, table_id, table_name, index_name, column_names,
+      index_type, is_global, is_unique, state,
+      backfill_cursor_partition_id, backfill_cursor_pk, backfill_total_rows,
+      error_message, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+  db.prepare(sql).run(...normalizeIndicesInsertParams(data));
+}
+
+function runIndicesUpdate(db, whereClause, data) {
+  const setEntries = Object.entries(data);
+  const whereEntries = Object.entries(whereClause);
+  if (setEntries.length === 0 || whereEntries.length === 0) return;
+  const setParts = setEntries.map(([col]) => `${col} = ?`);
+  const whereParts = whereEntries.map(([col]) => `${col} = ?`);
+  const sql = `UPDATE indices SET ${setParts.join(', ')} WHERE ${whereParts.join(' AND ')}`;
+  db.prepare(sql).run(
+    ...setEntries.map(([, val]) => val),
+    ...whereEntries.map(([, val]) => val),
+  );
+}
+
+function runIndicesDelete(db, whereClause) {
+  if (whereClause.index_id) {
+    db.prepare('DELETE FROM indices WHERE index_id = ?').run(whereClause.index_id);
+  } else if (whereClause.index_name) {
+    db.prepare('DELETE FROM indices WHERE index_name = ?').run(whereClause.index_name);
+  }
+}
+
+function createDurableSystemGateway(catalogDbPath, tables, partitions) {
+  const db = new Database(catalogDbPath);
+  initCatalogSchema(db);
+  seedCatalogTables(db, tables);
+  seedCatalogPartitions(db, partitions);
 
   let cdcService = null;
   const gateway = {
@@ -144,70 +214,18 @@ function createDurableSystemGateway(catalogDbPath, tables, partitions) {
       return cdcService;
     },
     async readRows(_tableName, sql, params = []) {
-      const rows = db.prepare(sql).all(...params);
-      return {rows};
+      return {rows: db.prepare(sql).all(...params)};
     },
     async insertSystemTableRow(tableName, data) {
-      if (tableName === TABLES.INDICES) {
-        db.prepare(`
-          INSERT OR REPLACE INTO indices (
-            index_id, table_id, table_name, index_name, column_names,
-            index_type, is_global, is_unique, state,
-            backfill_cursor_partition_id, backfill_cursor_pk, backfill_total_rows,
-            error_message, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(
-          data.index_id,
-          data.table_id,
-          data.table_name || null,
-          data.index_name,
-          typeof data.column_names === 'string' ?
-            data.column_names :
-            JSON.stringify(data.column_names || []),
-          data.index_type || 'btree',
-          data.is_global !== undefined ? (data.is_global ? 1 : 0) : 0,
-          data.is_unique ? 1 : 0,
-          data.state || 'CREATING',
-          data.backfill_cursor_partition_id ?? null,
-          data.backfill_cursor_pk ?? null,
-          Number(data.backfill_total_rows || 0),
-          data.error_message ?? null,
-          data.created_at || Date.now(),
-          data.updated_at || data.created_at || Date.now(),
-        );
-      }
+      if (tableName === TABLES.INDICES) runIndicesInsert(db, data);
       return {success: true};
     },
     async updateSystemTableRow(tableName, whereClause, data) {
-      if (tableName === TABLES.INDICES) {
-        const setParts = [];
-        const setVals = [];
-        for (const [col, val] of Object.entries(data)) {
-          setParts.push(`${col} = ?`);
-          setVals.push(val);
-        }
-        const whereParts = [];
-        const whereVals = [];
-        for (const [col, val] of Object.entries(whereClause)) {
-          whereParts.push(`${col} = ?`);
-          whereVals.push(val);
-        }
-        if (setParts.length > 0 && whereParts.length > 0) {
-          db.prepare(
-            `UPDATE indices SET ${setParts.join(', ')} WHERE ${whereParts.join(' AND ')}`,
-          ).run(...setVals, ...whereVals);
-        }
-      }
+      if (tableName === TABLES.INDICES) runIndicesUpdate(db, whereClause, data);
       return {success: true};
     },
     async deleteSystemTableRow(tableName, whereClause) {
-      if (tableName === TABLES.INDICES) {
-        if (whereClause.index_id) {
-          db.prepare('DELETE FROM indices WHERE index_id = ?').run(whereClause.index_id);
-        } else if (whereClause.index_name) {
-          db.prepare('DELETE FROM indices WHERE index_name = ?').run(whereClause.index_name);
-        }
-      }
+      if (tableName === TABLES.INDICES) runIndicesDelete(db, whereClause);
       return {success: true};
     },
     close() {
@@ -230,36 +248,44 @@ function createDurableSystemGateway(catalogDbPath, tables, partitions) {
   return {gateway, cdcService};
 }
 
+function resolveTargetPartition(partitionServicesMap, address) {
+  const parts = address.split('/');
+  const targetId = parts[1] === 'partition' ? parts[2] : parts[1];
+  const direct = partitionServicesMap.get(targetId);
+  if (direct) return direct;
+  for (const svc of partitionServicesMap.values()) {
+    if (svc.partitionId === targetId || svc.replicaId === targetId) {
+      return svc;
+    }
+  }
+  return null;
+}
+
+function executePartitionQueryMessage(partition, message) {
+  const stmt = partition.db.prepare(message.sql);
+  const queryParams = message.params || [];
+  if (message.sql.trim().toUpperCase().startsWith('SELECT')) {
+    const rows = stmt.all(...queryParams);
+    return buildDeliveryEnvelope({acknowledged: true}, {
+      success: true,
+      rows,
+      rowCount: rows.length,
+    });
+  }
+  const info = stmt.run(...queryParams);
+  return buildDeliveryEnvelope({acknowledged: true}, {
+    success: true,
+    changes: info.changes,
+    lastInsertRowid: info.lastInsertRowid,
+  });
+}
+
 function createPartitionMessageRouter(partitionServicesMap) {
   return {
     async deliver(address, message) {
-      const parts = address.split('/');
-      const targetId = parts[1] === 'partition' ? parts[2] : parts[1];
-      let partition = partitionServicesMap.get(targetId);
-      if (!partition) {
-        for (const svc of partitionServicesMap.values()) {
-          if (svc.partitionId === targetId || svc.replicaId === targetId) {
-            partition = svc;
-            break;
-          }
-        }
-      }
+      const partition = resolveTargetPartition(partitionServicesMap, address);
       if (partition && message.type === 'QUERY' && partition.db?.prepare) {
-        const isSelect = message.sql.trim().toUpperCase().startsWith('SELECT');
-        if (isSelect) {
-          const rows = partition.db.prepare(message.sql).all(...(message.params || []));
-          return buildDeliveryEnvelope({acknowledged: true}, {
-            success: true,
-            rows,
-            rowCount: rows.length,
-          });
-        }
-        const info = partition.db.prepare(message.sql).run(...(message.params || []));
-        return buildDeliveryEnvelope({acknowledged: true}, {
-          success: true,
-          changes: info.changes,
-          lastInsertRowid: info.lastInsertRowid,
-        });
+        return executePartitionQueryMessage(partition, message);
       }
       return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: []});
     },
@@ -535,6 +561,55 @@ test('Production construction 1: durable TABLES.INDICES persistence, dataset pro
   ).all('alice@example.com');
 
   t.same(readRows, oracleRows, 'Restarted IndexService query returns exact oracle rows');
+
+  // 4. Mixed indexed + non-indexed residual predicate and params forwarding (Condition C1)
+  const mixedExplain = coordinator.readRouter.explainDistributed({
+    tableName: 'users',
+    whereClause: {email: 'alice@example.com', status: 'pending'},
+    projectedColumns: ['id', 'email'],
+    basePartitionKey: 'id',
+    basePrimaryKeyColumns: ['id'],
+  });
+  t.equal(mixedExplain.accessPath, GLOBAL_INDEX_ACCESS_PATH.GLOBAL_SECONDARY_INDEX);
+  t.equal(mixedExplain.covering, false, 'Residual non-indexed predicate prevents covering skip');
+
+  const mixedRows = await coordinator.planAndExecuteRead({
+    tableName: 'users',
+    where: {email: 'alice@example.com', status: 'pending'},
+    orderBy: 'id ASC',
+  });
+  const oracleMixed = env.oracleDb.prepare(
+    'SELECT * FROM users WHERE email = ? AND status = ? ORDER BY id ASC',
+  ).all('alice@example.com', 'pending');
+  t.same(mixedRows, oracleMixed, 'GSI read enforces residual non-indexed predicate');
+
+  const mixedProjectedRows = await coordinator.planAndExecuteRead({
+    tableName: 'users',
+    where: {email: 'alice@example.com', status: 'pending'},
+    projectedColumns: ['id', 'email'],
+    orderBy: 'id ASC',
+  });
+  const oracleMixedProjected = env.oracleDb.prepare(
+    'SELECT id, email FROM users WHERE email = ? AND status = ? ORDER BY id ASC',
+  ).all('alice@example.com', 'pending');
+  t.same(
+    mixedProjectedRows,
+    oracleMixedProjected,
+    'Projected GSI read enforces residual predicate and projects requested columns',
+  );
+
+  const paramAstRows = await coordinator.planAndExecuteRead({
+    tableName: 'users',
+    whereClause: {
+      type: 'AND',
+      left: {type: '=', left: {type: 'column', name: 'email'}, right: {type: 'param', index: 0}},
+      right: {type: '=', left: {type: 'column', name: 'status'}, right: {type: 'param', index: 1}},
+    },
+    params: ['alice@example.com', 'pending'],
+    orderBy: 'id ASC',
+  });
+  t.same(paramAstRows, oracleMixed, 'planAndExecuteRead forwards params through GSI Stage 1/2');
+
   await freshIndexService.shutdown();
 });
 
