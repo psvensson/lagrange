@@ -64,6 +64,19 @@ const RAFT_AUTHORITY_OBSERVATION = Object.freeze({
   NOT_SETTLED: 'not-settled',
 });
 
+// The port's one answer to a proposal whose submitting leadership does not
+// hold at its propose step (raft-rs-proposal-term.js): it was submitted while
+// this replica did not lead, or the replica no longer leads, or it leads
+// another term. CORE_REFUSED, never a host failure or a deferral; nothing was
+// proposed or forwarded (proposed: false - a definite outcome). The
+// submission's authority is gone: the submitter decides again under the
+// leadership it observes now (routes to the leader, or proposes anew while it
+// leads) and never re-sends the same proposal on this answer (retryable:
+// false).
+const RAFT_PROPOSAL_REFUSAL = Object.freeze({
+  SUBMITTING_LEADERSHIP_ENDED: 'proposal-submitting-leadership-ended',
+});
+
 const RAFT_MEMBERSHIP_TRANSITION_STAGE = Object.freeze({
   ADD_LEARNER: 'add-learner',
   PROMOTE: 'promote',
@@ -292,4 +305,5 @@ export {
   RAFT_OPERATION,
   RAFT_OPERATION_OUTCOME,
   RAFT_PEER_PROGRESS_PROBE_REASON,
+  RAFT_PROPOSAL_REFUSAL,
 };

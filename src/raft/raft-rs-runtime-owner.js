@@ -1702,7 +1702,8 @@ function transferLeadership(group, expectedGeneration, command) {
 
 // A proposal the core refused: dropped by a running leadership transfer (read
 // from the core in the same turn) it is the retryable transfer-in-progress
-// answer; any other refusal is answered as the core gave it.
+// answer; any other refusal - the port's named submitting-leadership refusal
+// is none of the core's - is answered as given.
 function answerRefusedProposal(group, expectedGeneration, refused) {
   if (refused.outcome !== CORE_REFUSED) {
     return refused;
@@ -1789,8 +1790,7 @@ function settlePrimitiveInvocation(group, command, expectedGeneration, invoked) 
 function invokePrimitive(group, expectedGeneration, command, [operation, args]) {
   const core = (name, ...values) => invokeCoreAt(group, expectedGeneration, name, ...values);
   if (command.type !== PROPOSE_COMMAND) return core(operation, ...args);
-  return proposeUnderSubmittedTerm(core,
-    (error) => coreCallFailure(group, operation, args, error), command);
+  return proposeUnderSubmittedTerm(core, command);
 }
 
 function performCommand(group, command, expectedGeneration) {
