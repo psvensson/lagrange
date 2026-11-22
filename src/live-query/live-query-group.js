@@ -106,6 +106,7 @@ class QueryGroup extends EventEmitter {
 
     this.clients = new Map();
     this.subscribedPartitions = new Set();
+    this.pendingSubscriptions = new Set();
     this.cdcHandlers = new Map();
     this.partitionFrontiers = new Map();
     this.isHydrating = false;
@@ -759,6 +760,7 @@ class QueryGroup extends EventEmitter {
       partitionKeyValue: this.partitionKeyValue,
       clientCount: this.clients.size,
       subscribedPartitions: Array.from(this.subscribedPartitions),
+      pendingSubscriptions: Array.from(this.pendingSubscriptions),
       createdAt: this.createdAt,
       lastActivityAt: this.lastActivityAt,
       active: this.active,
@@ -778,6 +780,7 @@ class QueryGroup extends EventEmitter {
     this.partitionFrontiers.clear();
     this.clients.clear();
     this.subscribedPartitions.clear();
+    this.pendingSubscriptions.clear();
     this.cdcHandlers.clear();
     this.resultSet.clear();
     this.predicate?.close?.();

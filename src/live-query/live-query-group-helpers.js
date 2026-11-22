@@ -683,16 +683,29 @@ function fanOutToClients(clients, payload, options = {}) {
   }
 }
 
+function isSubscriptionAccepted(answer) {
+  return !(answer && (
+    answer.success === false ||
+    answer.acknowledged === false ||
+    answer.subscribed === false
+  ));
+}
+
 /**
  * Unsubscribe retired partitions no longer relevant for query.
  */
 async function unsubscribeStalePartitions(group, relevantPartitions, unsubscribeFromPartition) {
-  for (const partitionId of Array.from(group.subscribedPartitions)) {
+  const trackedPartitions = new Set([
+    ...group.subscribedPartitions,
+    ...(group.pendingSubscriptions || []),
+  ]);
+  for (const partitionId of trackedPartitions) {
     if (!relevantPartitions.has(partitionId)) {
       if (unsubscribeFromPartition) {
         await unsubscribeFromPartition(partitionId, group.queryId);
       }
       group.subscribedPartitions.delete(partitionId);
+      group.pendingSubscriptions?.delete(partitionId);
       group.cdcHandlers.delete(partitionId);
       group.partitionFrontiers.delete(partitionId);
       group.logger.debug(LIVE_QUERY_LOG_MSG.UNSUBSCRIBED_PARTITION, {
@@ -707,15 +720,26 @@ async function unsubscribeStalePartitions(group, relevantPartitions, unsubscribe
  * Subscribe group to one new partition.
  */
 async function subscribeToSinglePartition(group, partitionId, subscribeToPartition, options) {
+  let subscribed = true;
   if (subscribeToPartition) {
     const handler = (change) => group.onCDCEvent(change, partitionId);
     group.cdcHandlers.set(partitionId, handler);
     const answer = await subscribeToPartition(partitionId, group.queryId, handler, options);
-    const frontier = extractSubscriptionFrontier(answer, options, partitionId);
-    if (frontier !== undefined && !group.partitionFrontiers.has(partitionId)) {
-      group.partitionFrontiers.set(partitionId, frontier);
+    if (!isSubscriptionAccepted(answer)) {
+      subscribed = false;
+    } else {
+      const frontier = extractSubscriptionFrontier(answer, options, partitionId);
+      if (frontier !== undefined && !group.partitionFrontiers.has(partitionId)) {
+        group.partitionFrontiers.set(partitionId, frontier);
+      }
     }
   }
+  if (!subscribed) {
+    group.subscribedPartitions.delete(partitionId);
+    group.pendingSubscriptions?.add(partitionId);
+    return;
+  }
+  group.pendingSubscriptions?.delete(partitionId);
   group.subscribedPartitions.add(partitionId);
   group.logger.debug(LIVE_QUERY_LOG_MSG.SUBSCRIBED_PARTITION, {
     queryId: group.queryId,
