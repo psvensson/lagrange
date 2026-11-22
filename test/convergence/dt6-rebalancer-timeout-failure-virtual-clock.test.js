@@ -1,6 +1,7 @@
 import t from 'tap';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {TIMEOUT_BUDGET_DEFAULT} from '../../src/control-plane/timeout-budget.js';
 import {createPlacementBoundTimeoutTestCoordinator} from
   '../rebalancer/placement-bound-coordinator-fixture.js';
 
@@ -26,6 +27,11 @@ import {createPlacementBoundTimeoutTestCoordinator} from
 
 const START_MS = 1_000_000;
 const PENDING_TIMEOUT_MS = 10;
+// The ADD is admitted by placement admission: at PENDING it awaits its
+// bootstrap authority, and its deadline is the operation budget from its
+// creation (isPlacementBootstrapAwaitingAuthority), not the PENDING step
+// timeout; the drive advances past that budget.
+const EXPIRED_ADVANCE_MS = TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS + 100;
 
 async function runVirtualTimeout({advanceMs}) {
   const timeSource = new VirtualTimeSource({startMs: START_MS});
@@ -58,7 +64,7 @@ async function runVirtualTimeout({advanceMs}) {
 
 t.test('the real timeout->FAILED transition fires only once VIRTUAL time passes the step timeout',
   async (t) => {
-    const m = await runVirtualTimeout({advanceMs: 100});
+    const m = await runVirtualTimeout({advanceMs: EXPIRED_ADVANCE_MS});
     t.equal(m.afterFirstCheck.status, ReplicaStatus.PENDING,
       'at virtual now == updated_at (elapsed 0) the real reconcile left the operation PENDING');
     t.equal(m.afterFirstCheck.workflow_step, 'PENDING', 'workflow step still PENDING before timeout');
@@ -82,8 +88,8 @@ t.test('within the timeout the real reconcile does NOT fail the operation (virtu
   });
 
 t.test('the real terminal-mutation drive is deterministic across runs', async (t) => {
-  const a = await runVirtualTimeout({advanceMs: 100});
-  const b = await runVirtualTimeout({advanceMs: 100});
+  const a = await runVirtualTimeout({advanceMs: EXPIRED_ADVANCE_MS});
+  const b = await runVirtualTimeout({advanceMs: EXPIRED_ADVANCE_MS});
   t.same(
     {status: a.afterAdvance.status, step: a.afterAdvance.workflow_step,
       error: a.afterAdvance.error_message},

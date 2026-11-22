@@ -208,6 +208,16 @@ function createTimeoutTestCoordinator(options = {}) {
     }
   };
 
+  // Backdate an operation's creation (created_at): the anchor of an admitted
+  // placement create's operation budget while it awaits its bootstrap
+  // authority at PENDING/SENDING (isPlacementBootstrapAwaitingAuthority).
+  const backdateOperationCreation = (operationId, msAgo) => {
+    const op = trackedOperations.get(operationId);
+    if (op) {
+      op.created_at = Date.now() - msAgo;
+    }
+  };
+
   // Set an operation's updated_at to an ABSOLUTE value (DT6 virtual-clock fixtures).
   // CL-044 (955fc84c) made the real timeout/staleness math prefer the time-in-current-step
   // anchor (the steps_history entry for the current workflow_step) over updated_at, so the
@@ -252,6 +262,7 @@ function createTimeoutTestCoordinator(options = {}) {
   return {
     coordinator,
     backdateOperation,
+    backdateOperationCreation,
     setOperationUpdatedAt,
     getTrackedOperation,
     trackedOperations,
