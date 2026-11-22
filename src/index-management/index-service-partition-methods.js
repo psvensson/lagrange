@@ -73,7 +73,7 @@ function hasHandleExecutor(partition) {
   return Boolean(
     partition?.handleRemoteQuery ||
     (partition?.db?.prepare && !partition?.raft) ||
-    partition?.storage?.getDatabase ||
+    (!partition?.raft && typeof partition?.storage?.getDatabase === 'function') ||
     partition?.executeQuery,
   );
 }
@@ -136,7 +136,9 @@ function executeOnLocalPartitionDb(partition, sql) {
   if (partition?.db?.prepare && !partition?.raft) {
     return partition.db.prepare(sql).run();
   }
-  const storageDb = partition?.storage?.getDatabase?.();
+  const storageDb = !partition?.raft && typeof partition?.storage?.getDatabase === 'function' ?
+    partition.storage.getDatabase() :
+    null;
   if (storageDb?.prepare) {
     return storageDb.prepare(sql).run();
   }

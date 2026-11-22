@@ -27,6 +27,29 @@ function sortObject(value) {
   );
 }
 
+function projectComparableSchema(service, schema) {
+  const cols = Array.isArray(schema?.columns) ? schema.columns : [];
+  const derived = service.buildSchemaDefinition({
+    columns: cols,
+    primaryKey: schema?.primaryKey,
+    tableConstraints: schema?.tableConstraints,
+  });
+  return sortObject({
+    columns: derived.columns.map((col, idx) => ({
+      name: col.name,
+      type: col.type,
+      notNull: col.notNull,
+      collation: col.collation,
+      unique: col.unique,
+      checkSql: col.checkSql,
+      defaultValue: col.defaultValue ?? cols[idx]?.defaultValue ?? null,
+    })),
+    primaryKey: (Array.isArray(derived.primaryKey) ? derived.primaryKey : [])
+      .map((name) => String(name || '').toLowerCase()),
+    tableConstraints: derived.tableConstraints || [],
+  });
+}
+
 function assertDurableMetadataIdentity(service, existingTable, ast, options) {
   if (!options.schemaJobId) return;
   const existingTableId = existingTable.table_id || existingTable.tableId;
@@ -42,9 +65,17 @@ function assertDurableMetadataIdentity(service, existingTable, ast, options) {
   } catch {
     existingSchema = {};
   }
-  if (existingTableId === options.tableId &&
-      JSON.stringify(existingSchema) === JSON.stringify(expectedSchema)) {
-    return;
+  if (existingTableId === options.tableId) {
+    if (JSON.stringify(existingSchema) === JSON.stringify(expectedSchema)) {
+      return;
+    }
+    if (
+      options.globalIndex &&
+      JSON.stringify(projectComparableSchema(service, existingSchema)) ===
+        JSON.stringify(projectComparableSchema(service, ast))
+    ) {
+      return;
+    }
   }
   const error = new Error(
     `Existing table metadata conflicts with schema job ${options.schemaJobId}`,
@@ -81,6 +112,9 @@ function buildExistingReconciliationOptions(options) {
   return {
     timeoutBudget: options?.timeoutBudget,
     cancellationToken: options?.cancellationToken || null,
+    partitionId: options?.partitionId || null,
+    partitions: options?.partitions || null,
+    globalIndex: options?.globalIndex || null,
     schemaJobId: options.schemaJobId || null,
     schemaOwnerFenceToken: options.schemaOwnerFenceToken ?? null,
     assertProvisioningOwnership:
@@ -167,17 +201,38 @@ async function reconcileExistingCreateTable(
 }
 
 function buildCreateTableMetadataContext(service, ast, options) {
-  const partitionKey = service.derivePartitionKey(ast.primaryKey);
+  const firstPartition = Array.isArray(options.partitions) &&
+      options.partitions.length > 0 ?
+    options.partitions[0] :
+    null;
+  const globalIndex = options.globalIndex || ast?.options?.globalIndex || null;
+  const partitionKey = globalIndex?.columnNames?.[0] ||
+    service.derivePartitionKey(ast.primaryKey);
   const tableId = options.tableId || `tbl-${uuidv4()}`;
-  const partitionId = options.partitionId || `${tableId}-p1`;
-  const schemaDefinition = service.buildSchemaDefinition(ast.columns, ast);
+  const partitionId = options.partitionId ||
+    firstPartition?.partitionId ||
+    `${tableId}-p1`;
+  const baseSchemaDefinition = service.buildSchemaDefinition(ast.columns, ast);
+  const schemaDefinition = globalIndex ?
+    {
+      ...baseSchemaDefinition,
+      tableName: ast.tableName,
+      baseTableName: globalIndex.tableName,
+      indexName: globalIndex.indexName,
+      columnNames: [...(globalIndex.columnNames || [])],
+      basePrimaryKeyColumns: [...(globalIndex.basePrimaryKeyColumns || [])],
+      partitionKey,
+    } :
+    baseSchemaDefinition;
   const tableMetadata = {
     table_id: tableId,
     table_name: ast.tableName,
     schema_definition: JSON.stringify(schemaDefinition),
     partition_key: partitionKey,
     table_policies: JSON.stringify(ast.options?.tablePolicy ?? {}),
-    partition_count: 1,
+    partition_count: Array.isArray(options.partitions) && options.partitions.length > 0 ?
+      options.partitions.length :
+      1,
     active_partition_version: 1,
     pending_partition_version: null,
     partition_transition_state: null,
@@ -185,16 +240,17 @@ function buildCreateTableMetadataContext(service, ast, options) {
     created_at: Date.now(),
     updated_at: Date.now(),
   };
-  const partitionKeyType = resolveDeclaredPartitionKeyType(tableMetadata);
+  const partitionKeyType = firstPartition?.partitionKeyType ||
+    resolveDeclaredPartitionKeyType(tableMetadata);
   const partitionMetadata = {
     partition_id: partitionId,
     table_id: tableId,
     table_name: ast.tableName,
-    partition_key_start: null,
-    partition_key_end: null,
+    partition_key_start: firstPartition?.partitionKeyStart ?? null,
+    partition_key_end: firstPartition?.partitionKeyEnd ?? null,
     partition_key_type: partitionKeyType,
     partition_version: 1,
-    replica_count: service.defaultReplicaCount,
+    replica_count: firstPartition?.replicaCount || service.defaultReplicaCount,
     size_bytes: 0,
     leader_node_id: null,
     state: STATE.NORMAL,
@@ -206,6 +262,7 @@ function buildCreateTableMetadataContext(service, ast, options) {
     partitionId,
     partitionKey,
     partitionMetadata,
+    schemaDefinition,
     tableId,
     tableMetadata,
     tableName: ast.tableName,
@@ -220,6 +277,13 @@ function buildBaseProvisioningInput(context, options) {
     partitionId: context.partitionId,
     partitionMetadata: context.partitionMetadata,
     replicaCount: context.partitionMetadata.replica_count,
+    ...(options?.globalIndex || options?.partitions ? {
+      schema: context.schemaDefinition,
+      keyRange: {
+        start: context.partitionMetadata.partition_key_start ?? null,
+        end: context.partitionMetadata.partition_key_end ?? null,
+      },
+    } : {}),
     timeoutBudget: options?.timeoutBudget,
     cancellationToken: options?.cancellationToken || null,
   };

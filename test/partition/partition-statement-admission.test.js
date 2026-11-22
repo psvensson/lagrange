@@ -825,7 +825,7 @@ test('TX1 admission A14: DROP TABLE IF EXISTS and CREATE TABLE IF NOT EXISTS adm
     createOwn: 'proposed',
     dropOther: refusedAs(LAYER.STATEMENT_KIND),
     createTemp: refusedAs(LAYER.STATEMENT_KIND),
-    createUnsafeExpr: refusedAs(LAYER.STATEMENT_FUNCTION),
+    createUnsafeExpr: refusedAs(RULE.FUNCTION),
     proposed: 2,
   });
 
@@ -838,7 +838,7 @@ test('TX1 admission A14: DROP TABLE IF EXISTS and CREATE TABLE IF NOT EXISTS adm
     try {
       applyCommitted(replica, committedQueryOf('a14-drop', dropOwnSql));
       const droppedExists = replica.db.prepare(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+        'SELECT name FROM sqlite_master WHERE type = \'table\' AND name = ?',
       ).get(gsiTable);
       applyCommitted(replica, committedQueryOf('a14-create', createOwnSql));
       const cols = replica.db.prepare(`PRAGMA table_info("${gsiTable}")`).all().map((c) => c.name);

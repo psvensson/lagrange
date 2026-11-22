@@ -825,7 +825,7 @@ test('DROP INDEX + CREATE GLOBAL INDEX with changed column replaces physical dat
     t.ok(indexReplicasAfterDrop.length >= 1, 'Index partition service exists');
     for (const ps of indexReplicasAfterDrop) {
       const existsAfterDrop = ps.db.prepare(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+        'SELECT name FROM sqlite_master WHERE type = \'table\' AND name = ?',
       ).get('__idx_users_idx');
       t.equal(
         existsAfterDrop,
@@ -894,7 +894,10 @@ test('DROP INDEX + CREATE GLOBAL INDEX on empty base table reconciles physical s
     const selectSql = 'SELECT * FROM users WHERE name = ? ORDER BY id ASC';
     const selectAlicia = await engine.executeQuery(selectSql, ['Alicia']);
     t.equal(selectAlicia.success, true);
-    t.equal(selectAlicia.globalIndexPlan?.accessPath, GLOBAL_INDEX_ACCESS_PATH.GLOBAL_SECONDARY_INDEX);
+    t.equal(
+      selectAlicia.globalIndexPlan?.accessPath,
+      GLOBAL_INDEX_ACCESS_PATH.GLOBAL_SECONDARY_INDEX,
+    );
     t.same(selectAlicia.rows, env.oracleDb.prepare(selectSql).all('Alicia'));
 
     const selectOld = await engine.executeQuery(selectSql, ['Alice']);

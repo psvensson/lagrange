@@ -19,6 +19,46 @@ import {
 } from './table-creation-service-completion.js';
 
 
+function parseExistingTableSchemaDefinition(existingTableRecord) {
+  const raw = existingTableRecord?.schema_definition ||
+    existingTableRecord?.schemaDefinition ||
+    null;
+  if (typeof raw === 'string' && raw.length > 0) {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  return raw && typeof raw === 'object' ? raw : null;
+}
+
+function buildRestoredPartitionMetadata(
+  service,
+  tableId,
+  tableName,
+  existingTableRecord,
+  partitionId,
+  explicitPartition,
+) {
+  const baseMeta = service.buildInitialPartitionMetadataFromTableRecord(
+    tableId,
+    tableName,
+    existingTableRecord,
+  );
+  if (!explicitPartition && partitionId === baseMeta.partition_id) {
+    return baseMeta;
+  }
+  return {
+    ...baseMeta,
+    partition_id: partitionId,
+    partition_key_start: explicitPartition?.partitionKeyStart ?? null,
+    partition_key_end: explicitPartition?.partitionKeyEnd ?? null,
+    partition_key_type: explicitPartition?.partitionKeyType || baseMeta.partition_key_type,
+    replica_count: explicitPartition?.replicaCount || baseMeta.replica_count,
+  };
+}
+
 const EXISTING_TABLE_RECONCILIATION_METHODS = Object.freeze({
   /**
    * Re-run initial partition provisioning for existing CREATE TABLE IF NOT
@@ -46,7 +86,13 @@ const EXISTING_TABLE_RECONCILIATION_METHODS = Object.freeze({
         partitionMetadataCreated: false,
       };
     }
-    const partitionId = `${tableId}-p1`;
+    const explicitPartition = Array.isArray(options.partitions) &&
+        options.partitions.length > 0 ?
+      options.partitions[0] :
+      null;
+    const partitionId = options.partitionId ||
+      explicitPartition?.partitionId ||
+      `${tableId}-p1`;
     let existingPartition =
       await this.findExistingPartitionRecord(partitionId);
     let partitionMetadataCreated = false;
@@ -62,10 +108,13 @@ const EXISTING_TABLE_RECONCILIATION_METHODS = Object.freeze({
             String(tableName || tableId),
         );
       }
-      existingPartition = this.buildInitialPartitionMetadataFromTableRecord(
+      existingPartition = buildRestoredPartitionMetadata(
+        this,
         tableId,
         tableName,
         existingTableRecord,
+        partitionId,
+        explicitPartition,
       );
       await options.assertProvisioningOwnership?.();
       // Answers at its commit; a failed commit throws.
@@ -93,6 +142,9 @@ const EXISTING_TABLE_RECONCILIATION_METHODS = Object.freeze({
       );
     }
     await options.assertProvisioningOwnership?.();
+    const parsedSchema = (options.globalIndex || options.partitions) ?
+      parseExistingTableSchemaDefinition(existingTableRecord) :
+      null;
     const provisioningSummary = await this.provisionInitialPartition({
       tableId,
       tableName,
@@ -100,6 +152,13 @@ const EXISTING_TABLE_RECONCILIATION_METHODS = Object.freeze({
       partitionId,
       partitionMetadata: existingPartition,
       replicaCount: desiredTarget.replicationFactor,
+      ...(parsedSchema ? {schema: parsedSchema} : {}),
+      ...(options.globalIndex || options.partitions ? {
+        keyRange: {
+          start: existingPartition.partition_key_start ?? null,
+          end: existingPartition.partition_key_end ?? null,
+        },
+      } : {}),
       timeoutBudget: options?.timeoutBudget,
       cancellationToken: options?.cancellationToken || null,
       schemaJobId: options.schemaJobId || null,

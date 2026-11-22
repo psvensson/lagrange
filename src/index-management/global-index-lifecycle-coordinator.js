@@ -10,9 +10,9 @@
 import {
   GLOBAL_INDEX_STATE,
   assertSupportedGlobalIndexDefinition,
-  checkIndexExistence,
   createGlobalIndexRecord,
   findCatalogTarget,
+  isSameGlobalIndexDefinition,
   normalizeGlobalIndexRecord,
   parseGlobalIndexDdl,
   resolveBackfillOutcome,
@@ -157,12 +157,14 @@ function assignCoordinatorOptions(coordinator, options) {
     ['resolvePartitionDatabase', 'resolvePartitionDatabase'],
     ['resolveTableSchema', 'resolveTableSchema'],
     ['hasDistributedPartitionRoute', 'hasDistributedPartitionRoute'],
+    ['hasHostedPartitionReplica', 'hasHostedPartitionReplica'],
     ['provisionIndexPartitions', 'provisionIndexPartitions'],
     ['refreshCatalogPartitions', 'refreshCatalogPartitions'],
     ['onCatalogInsert', 'onCatalogInsert'],
     ['onCatalogUpdate', 'onCatalogUpdate'],
     ['onCatalogDelete', 'onCatalogDelete'],
     ['onDropIndexDataset', 'onDropIndexDataset'],
+    ['onReconcileIndexDataset', 'onReconcileIndexDataset'],
   ];
   for (const [target, source] of fields) {
     coordinator[target] = options[source] || null;
@@ -182,6 +184,7 @@ export class GlobalIndexLifecycleCoordinator {
     this.basePartitionsByTable = new Map();
     this.indexPartitionsByName = new Map();
     this.partitionDatabases = new Map();
+    this.inFlightCompletionsByIndexId = new Map();
     this.logger = options.logger || console;
     assignCoordinatorOptions(this, options);
 
@@ -354,11 +357,41 @@ export class GlobalIndexLifecycleCoordinator {
     }
   }
 
-  _provisionSingleIndexDataset(partition, meta) {
+  _isPartitionReady(partition) {
+    const pId = resolveDescriptorPartitionId(partition);
+    if (partition._provisionedWithSchema || this._getPartitionDb(pId)) {
+      return true;
+    }
+    if (!this.hasDistributedPartitionRoute?.(pId)) {
+      return false;
+    }
+    if (this.hasHostedPartitionReplica) {
+      return Boolean(
+        partition.leader_node_id ||
+        partition.leaderNodeId ||
+        this.hasHostedPartitionReplica(pId),
+      );
+    }
+    return true;
+  }
+
+  async _provisionSingleIndexDataset(partition, meta, options = {}) {
     const pId = resolveDescriptorPartitionId(partition);
     const db = this._getPartitionDb(pId);
     if (db) {
+      if (options.reconcileExisting === true) {
+        this.datasetManager.dropIndexDataset(db, meta.tableName, meta.indexName);
+      }
       this.datasetManager.createIndexDataset(db, meta);
+      return;
+    }
+    if (
+      options.reconcileExisting === true &&
+      !options.justProvisioned &&
+      this.onReconcileIndexDataset &&
+      this.hasDistributedPartitionRoute?.(pId)
+    ) {
+      await this.onReconcileIndexDataset({...meta, partitionId: pId, partition});
       return;
     }
     const remoteReady = partition._provisionedWithSchema ||
@@ -378,11 +411,21 @@ export class GlobalIndexLifecycleCoordinator {
     options,
   ) {
     let partitions = this.getIndexPartitions(indexName);
-    if (partitions.length === 0 && this.provisionIndexPartitions) {
-      partitions = await this.provisionIndexPartitions({
+    const allReady = partitions.length > 0 &&
+      partitions.every((p) => this._isPartitionReady(p));
+    let reconcileExisting = allReady;
+    let justProvisioned = false;
+    if (!allReady && this.provisionIndexPartitions) {
+      const provResult = await this.provisionIndexPartitions({
         tableName, indexName, columnNames, basePrimaryKeyColumns,
         columnTypes: options.columnTypes || {}, options,
       });
+      if (provResult && !Array.isArray(provResult) && provResult.deferred === true) {
+        return provResult;
+      }
+      partitions = Array.isArray(provResult) ? provResult : [];
+      reconcileExisting = false;
+      justProvisioned = true;
     }
     const requiresNonEmpty = Boolean(
       this.resolvePartitionDatabase || this.hasDistributedPartitionRoute,
@@ -395,8 +438,9 @@ export class GlobalIndexLifecycleCoordinator {
       columnTypes: options.columnTypes || {},
     };
     for (const p of partitions) {
-      this._provisionSingleIndexDataset(p, meta);
+      await this._provisionSingleIndexDataset(p, meta, {reconcileExisting, justProvisioned});
     }
+    return {deferred: false};
   }
 
   async _dropIndexDatasets(tableName, indexName) {
@@ -476,6 +520,178 @@ export class GlobalIndexLifecycleCoordinator {
     }
   }
 
+  async _advanceProvisionedIndexToReady(record, currentGen, options = {}) {
+    const indexId = record.indexId || record.index_id;
+    const indexName = record.indexName || record.index_name;
+    if (this.inFlightCompletionsByIndexId.has(indexId)) {
+      return this.inFlightCompletionsByIndexId.get(indexId);
+    }
+    const runCompletion = (async () => {
+      if (!this._isGenerationCurrent(indexName, currentGen, indexId)) {
+        return {indexId, indexName, generation: currentGen, fenced: true};
+      }
+      const currentRecord = this.catalog.get(indexName) || record;
+      if (currentRecord.state === GLOBAL_INDEX_STATE.READ_WRITE) {
+        return this.getCatalogRecord(indexName);
+      }
+      if (currentRecord.state === GLOBAL_INDEX_STATE.CREATING) {
+        await this._updateCatalogRecord({indexId, state: GLOBAL_INDEX_STATE.WRITE_ONLY});
+      }
+      const updatedState = (this.catalog.get(indexName) || currentRecord).state;
+      if (updatedState === GLOBAL_INDEX_STATE.CREATING ||
+          updatedState === GLOBAL_INDEX_STATE.WRITE_ONLY) {
+        await this._updateCatalogRecord({indexId, state: GLOBAL_INDEX_STATE.BACKFILLING});
+      }
+      if (options.deferBackfill === true) {
+        return {
+          indexId,
+          indexName,
+          generation: currentGen,
+          state: GLOBAL_INDEX_STATE.BACKFILLING,
+          deferred: true,
+        };
+      }
+      return this._runBackfillToCompletion(
+        this.catalog.get(indexName) || record,
+        currentGen,
+        options,
+      );
+    })();
+    this.inFlightCompletionsByIndexId.set(indexId, runCompletion);
+    try {
+      return await runCompletion;
+    } finally {
+      if (this.inFlightCompletionsByIndexId.get(indexId) === runCompletion) {
+        this.inFlightCompletionsByIndexId.delete(indexId);
+      }
+    }
+  }
+
+  async _driveGlobalIndexProvisioning(record, def, options = {}) {
+    const {indexName, tableName, columnNames} = def;
+    const currentGen = record.index_generation || this.generations.get(indexName) || 1;
+    const indexId = record.index_id || record.indexId;
+    const schemaInfo = this.resolveTableSchema ? this.resolveTableSchema(tableName) : null;
+    const schemaCtx = resolveGlobalCreateSchemaContext(def, options, schemaInfo);
+    const basePrimaryKeyColumns = record.basePrimaryKeyColumns?.length > 0 ?
+      record.basePrimaryKeyColumns :
+      (schemaCtx.basePrimaryKeyColumns.length > 0 ?
+        schemaCtx.basePrimaryKeyColumns :
+        [LOCAL_STR_ID]);
+    record.basePrimaryKeyColumns = basePrimaryKeyColumns;
+
+    let provOutcome;
+    try {
+      provOutcome = await this._provisionIndexDatasets(
+        tableName,
+        indexName,
+        columnNames,
+        basePrimaryKeyColumns,
+        {...options, columnTypes: schemaCtx.columnTypes, generation: currentGen, indexId},
+      );
+    } catch (err) {
+      await this._updateCatalogRecord({
+        indexId,
+        state: GLOBAL_INDEX_STATE.FAILED,
+        errorMessage: err.message,
+      });
+      throw err;
+    }
+
+    if (provOutcome?.deferred === true) {
+      return {
+        indexId,
+        indexName,
+        tableName,
+        generation: currentGen,
+        state: GLOBAL_INDEX_STATE.CREATING,
+        deferred: true,
+        contractState: provOutcome.contractState,
+        failureCode: provOutcome.failureCode || null,
+        nextAction: provOutcome.nextAction || 'retry',
+        jobId: provOutcome.jobId || null,
+        retryAfterMs: provOutcome.retryAfterMs || 0,
+      };
+    }
+
+    return this._advanceProvisionedIndexToReady(record, currentGen, options);
+  }
+
+  async completeRecoveredProvisioning({indexName, indexId = null, generation = null} = {}) {
+    if (this.refreshCatalogPartitions) {
+      await this.refreshCatalogPartitions();
+    }
+    const record = this.catalog.get(indexName);
+    if (!record) {
+      return {indexName, indexId, fenced: true};
+    }
+    const activeIndexId = record.index_id || record.indexId;
+    if (indexId && activeIndexId !== indexId) {
+      return {indexName, indexId, fenced: true};
+    }
+    const targetGen = generation || record.index_generation || 1;
+    if (!this._isGenerationCurrent(indexName, targetGen, activeIndexId)) {
+      return {indexName, indexId: activeIndexId, fenced: true};
+    }
+    const norm = normalizeGlobalIndexRecord(record);
+    const schemaInfo = this.resolveTableSchema ?
+      this.resolveTableSchema(norm.tableName) :
+      null;
+    const basePrimaryKeyColumns = record.basePrimaryKeyColumns?.length > 0 ?
+      record.basePrimaryKeyColumns :
+      (schemaInfo?.basePrimaryKeyColumns?.length > 0 ?
+        schemaInfo.basePrimaryKeyColumns :
+        [LOCAL_STR_ID]);
+    record.basePrimaryKeyColumns = basePrimaryKeyColumns;
+    const meta = {
+      tableName: norm.tableName,
+      indexName,
+      columnNames: norm.columnNames,
+      basePrimaryKeyColumns,
+      columnTypes: schemaInfo?.columnTypes || {},
+    };
+    for (const p of this.getIndexPartitions(indexName)) {
+      const db = this._getPartitionDb(resolveDescriptorPartitionId(p));
+      if (db) {
+        this.datasetManager.createIndexDataset(db, meta);
+      }
+    }
+    return this._advanceProvisionedIndexToReady(record, targetGen, {});
+  }
+
+  _resolveExistingCreateAction(def, options) {
+    const existing = this.catalog.get(def.indexName);
+    if (!existing) return null;
+    const activeStates = new Set([
+      GLOBAL_INDEX_STATE.CREATING,
+      GLOBAL_INDEX_STATE.WRITE_ONLY,
+      GLOBAL_INDEX_STATE.BACKFILLING,
+    ]);
+    if (activeStates.has(existing.state) && isSameGlobalIndexDefinition(existing, def)) {
+      const existingIndexId = existing.index_id || existing.indexId;
+      if (this.inFlightCompletionsByIndexId.has(existingIndexId)) {
+        return {awaitCompletion: this.inFlightCompletionsByIndexId.get(existingIndexId)};
+      }
+      if (existing.state === GLOBAL_INDEX_STATE.CREATING) {
+        return {redrive: existing};
+      }
+      return {
+        immediateResult: {
+          indexId: existingIndexId,
+          indexName: def.indexName,
+          tableName: def.tableName,
+          generation: existing.index_generation || 1,
+          state: existing.state,
+          deferred: true,
+        },
+      };
+    }
+    if (def.ifNotExists || options.ifNotExists) {
+      return {immediateResult: this.getCatalogRecord(def.indexName)};
+    }
+    throw new Error(`Index '${def.indexName}' already exists`);
+  }
+
   /**
    * Create a global secondary index from DDL or AST object.
    * @param {string|Object} ddlOrAst
@@ -487,8 +703,13 @@ export class GlobalIndexLifecycleCoordinator {
     const def = normalizeGlobalIndexDefinition(ddlOrAst, options);
     assertSupportedGlobalIndexDefinition(def);
 
-    if (checkIndexExistence(this.catalog, def, options)) {
-      return this.getCatalogRecord(def.indexName);
+    const existingAction = this._resolveExistingCreateAction(def, options);
+    if (existingAction) {
+      if (existingAction.awaitCompletion) return existingAction.awaitCompletion;
+      if (existingAction.redrive) {
+        return this._driveGlobalIndexProvisioning(existingAction.redrive, def, options);
+      }
+      return existingAction.immediateResult;
     }
 
     const {indexName, tableName, columnNames} = def;
@@ -500,7 +721,6 @@ export class GlobalIndexLifecycleCoordinator {
     const basePrimaryKeyColumns = schemaCtx.basePrimaryKeyColumns.length > 0 ?
       schemaCtx.basePrimaryKeyColumns :
       [LOCAL_STR_ID];
-    const columnTypes = schemaCtx.columnTypes;
     const indexId = options.indexId || `${indexName}-gen${currentGen}`;
 
     const record = createGlobalIndexRecord({
@@ -515,37 +735,7 @@ export class GlobalIndexLifecycleCoordinator {
     record.basePrimaryKeyColumns = basePrimaryKeyColumns;
     await this._saveCatalogRecord(record);
 
-    try {
-      await this._provisionIndexDatasets(
-        tableName,
-        indexName,
-        columnNames,
-        basePrimaryKeyColumns,
-        {...options, columnTypes, generation: currentGen, indexId},
-      );
-    } catch (err) {
-      await this._updateCatalogRecord({
-        indexId,
-        state: GLOBAL_INDEX_STATE.FAILED,
-        errorMessage: err.message,
-      });
-      throw err;
-    }
-
-    await this._updateCatalogRecord({indexId, state: GLOBAL_INDEX_STATE.WRITE_ONLY});
-    await this._updateCatalogRecord({indexId, state: GLOBAL_INDEX_STATE.BACKFILLING});
-
-    if (options.deferBackfill === true) {
-      return {
-        indexId,
-        indexName,
-        generation: currentGen,
-        state: GLOBAL_INDEX_STATE.BACKFILLING,
-        deferred: true,
-      };
-    }
-
-    return this._runBackfillToCompletion(record, currentGen, options);
+    return this._driveGlobalIndexProvisioning(record, def, options);
   }
 
   /**

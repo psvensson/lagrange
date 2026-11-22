@@ -1277,10 +1277,18 @@ test('Production construction 9 (3D): temporary FORMATION_NOT_LATCHED preserves 
     t.equal(joinedRes.deferred, true);
 
     // Re-invoking with a conflicting definition while in-flight is rejected
-    await t.rejects(
-      engine.executeQuery('CREATE GLOBAL INDEX idx_users_email ON users (name)'),
-      /already exists/i,
+    const conflictRes = await engine.executeQuery(
+      'CREATE GLOBAL INDEX idx_users_email ON users (name)',
+    );
+    t.equal(
+      conflictRes.success,
+      false,
       'Conflicting CREATE with same index name rejects while durable workflow is in flight',
+    );
+    t.match(
+      conflictRes.error || '',
+      /already exists/i,
+      'Conflicting CREATE surfaces already exists error',
     );
 
     // Restore formation authority while otherwise idle (no additional user DDL calls)

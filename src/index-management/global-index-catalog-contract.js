@@ -267,10 +267,10 @@ export function normalizeGlobalIndexRecord(row) {
 
   return {
     ...extractIdentifiers(row),
-    columnNames: parseColumnNames(row.column_names),
+    columnNames: parseColumnNames(row.column_names ?? row.columnNames),
     indexType: row.index_type || row.indexType || INDEX_TYPE.BTREE,
     isGlobal: row.is_global !== undefined ? Boolean(row.is_global) : true,
-    isUnique: Boolean(row.is_unique),
+    isUnique: Boolean(row.is_unique ?? row.isUnique ?? row.unique),
     state: row.state || GLOBAL_INDEX_STATE.CREATING,
     ...extractBackfillCursors(row),
     ...extractTimestampsAndErrors(row),
@@ -364,6 +364,16 @@ export function resolveGlobalCreateSchemaContext(def, options, schemaInfo) {
     columnTypes = schemaInfo.columnTypes;
   }
   return {basePrimaryKeyColumns, columnTypes};
+}
+
+export function isSameGlobalIndexDefinition(existing, def) {
+  if (!existing || !def) return false;
+  const norm = normalizeGlobalIndexRecord(existing);
+  const sameTable = (norm.tableName || '') === (def.tableName || '');
+  const defCols = Array.isArray(def.columnNames) ? def.columnNames : [];
+  const sameCols = norm.columnNames.length === defCols.length &&
+    norm.columnNames.every((col, idx) => col === defCols[idx]);
+  return sameTable && sameCols && Boolean(norm.isUnique) === Boolean(def.unique);
 }
 
 export function checkIndexExistence(catalog, def, options) {

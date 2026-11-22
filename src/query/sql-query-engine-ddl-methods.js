@@ -19,7 +19,7 @@ const sqlQueryEngineDdlMethods = {
     }
     const metadata = await this.indexService.createIndex(ast);
     invalidateParsedStatements(this);
-    return {
+    const result = {
       success: true,
       operation: QUERY_OPERATION.CREATE_INDEX,
       statementType: QUERY_AST_TYPE.CREATE_INDEX,
@@ -28,6 +28,17 @@ const sqlQueryEngineDdlMethods = {
       rows: [],
       rowCount: 0,
     };
+    if (metadata?.indexId) result.indexId = metadata.indexId;
+    if (metadata?.state) result.state = metadata.state;
+    if (metadata?.deferred) {
+      result.deferred = true;
+      if (metadata.contractState !== undefined) result.contractState = metadata.contractState;
+      if (metadata.failureCode !== undefined) result.failureCode = metadata.failureCode;
+      if (metadata.nextAction !== undefined) result.nextAction = metadata.nextAction;
+      if (metadata.jobId !== undefined) result.jobId = metadata.jobId;
+      if (metadata.retryAfterMs !== undefined) result.retryAfterMs = metadata.retryAfterMs;
+    }
+    return result;
   },
 
   async executeDropIndex(ast, _sessionId, _options = {}) {

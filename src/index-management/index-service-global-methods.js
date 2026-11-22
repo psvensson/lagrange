@@ -87,6 +87,21 @@ function buildGlobalIndexMetadata(result, cat, tableId, fields) {
   }
   if (result.deferred) {
     metadata.deferred = true;
+    if (result.contractState !== undefined) {
+      metadata.contractState = result.contractState;
+    }
+    if (result.failureCode !== undefined && result.failureCode !== null) {
+      metadata.failureCode = result.failureCode;
+    }
+    if (result.nextAction !== undefined) {
+      metadata.nextAction = result.nextAction;
+    }
+    if (result.jobId !== undefined && result.jobId !== null) {
+      metadata.jobId = result.jobId;
+    }
+    if (result.retryAfterMs !== undefined) {
+      metadata.retryAfterMs = result.retryAfterMs;
+    }
   }
   return metadata;
 }
@@ -279,6 +294,31 @@ const indexServiceGlobalMethods = {
    */
   async resumeGlobalIndexBackfill(indexName, options = {}) {
     return this.getGlobalIndexCoordinator().resumeBackfill(indexName, options);
+  },
+
+  /**
+   * Complete recovered or retried GSI creation after durable schema job SUCCEEDED.
+   * @param {Object} intent - Schema provisioning intent carrying globalIndex metadata.
+   * @return {Promise<Object|null>}
+   */
+  async completeRecoveredGlobalIndexProvisioning(intent) {
+    const globalIndex = intent?.globalIndex || intent?.ast?.options?.globalIndex;
+    if (!globalIndex?.indexName) {
+      return null;
+    }
+    if (!this.initialized && this.initialize) {
+      await this.initialize();
+    }
+    const coordinator = this.getGlobalIndexCoordinator();
+    const outcome = await coordinator.completeRecoveredProvisioning({
+      ...globalIndex,
+      tableId: intent.tableId,
+      partitionId: intent.partitionId,
+    });
+    if (this.sqlQueryEngine?.parseCache?.clear) {
+      this.sqlQueryEngine.parseCache.clear();
+    }
+    return outcome;
   },
 
   /**

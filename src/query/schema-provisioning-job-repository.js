@@ -79,6 +79,7 @@ function rowToWorkflow(row = {}) {
   return {
     workflowId: row.workflow_id,
     ownerKey: row.owner_key,
+    tableId: row.table_id ?? null,
     step: row.current_step,
     status: row.status,
     fenceToken: normalizeNumber(row.workflow_fence_token),
