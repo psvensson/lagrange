@@ -167,15 +167,15 @@ test('MessageRouter carries the semantic raft-rs envelope as one consensus frame
       },
     };
 
-    const result = router.deliverConsensusEnvelope(
+    const result = await router.deliverConsensusEnvelope(
       'node-r2/partition/transport-p1-r2', payload);
 
     t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), true,
       'semantic raft-rs traffic is written as the consensus delivery class');
     t.equal(transmitted?.type, ROUTER_MESSAGE_TYPE.CONSENSUS_ENVELOPE,
       'the sending router declares the class on the frame');
-    t.same(transmitted?.payload, payload,
+    t.same(transmitted?.envelopes?.[0]?.payload, payload,
       'MessageRouter preserves the semantic envelope unchanged');
-    t.equal(transmitted?.payload?.type, undefined,
+    t.equal(transmitted?.envelopes?.[0]?.payload?.type, undefined,
       'MessageRouter does not fabricate a native packet type');
   });

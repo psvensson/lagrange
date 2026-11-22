@@ -266,7 +266,18 @@ class MessageRouter extends EventEmitter {
     this.lastUnmatchedServiceResponseWarnAtMs = null;
     this.unmatchedServiceResponseWarnSuppressedCount = TRANSPORT_NUM.ZERO;
     this.serviceResponseDispositionCounts = /* @__PURE__ */ new Map();
-    // The consensus delivery class's own counts (sent and refused).
+    // The consensus delivery class's own counts (sent and refused) and
+    // declared buffer bounds (per-peer and cross-peer).
+    this.consensusMaxPeerBufferedBytes =
+      Number.isFinite(options.consensusMaxPeerBufferedBytes) &&
+      options.consensusMaxPeerBufferedBytes > TRANSPORT_NUM.ZERO ?
+        Math.floor(options.consensusMaxPeerBufferedBytes) :
+        TRANSPORT_DEFAULT.CONSENSUS_MAX_PEER_BUFFERED_BYTES;
+    this.consensusMaxTotalBufferedBytes =
+      Number.isFinite(options.consensusMaxTotalBufferedBytes) &&
+      options.consensusMaxTotalBufferedBytes > TRANSPORT_NUM.ZERO ?
+        Math.floor(options.consensusMaxTotalBufferedBytes) :
+        TRANSPORT_DEFAULT.CONSENSUS_MAX_TOTAL_BUFFERED_BYTES;
     this.consensusDelivery = createConsensusDeliveryRecord();
     this.initialized = false;
     this.server = null;

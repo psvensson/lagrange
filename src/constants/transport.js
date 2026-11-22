@@ -307,6 +307,8 @@ const ROUTER_LOG_MSG = Object.freeze({
   JOIN_COMPLETE_FAILED: 'Failed to process join complete message',
   CONSENSUS_ENVELOPE_REFUSED:
     'Consensus envelope refused by the receiving router',
+  CONSENSUS_SEND_REFUSED:
+    'Consensus envelope refused by the sending router',
   BULK_CHANNEL_ADOPTED: 'Adopted identified bulk-channel socket',
   BULK_CHANNEL_NO_REGISTRY:
     'Closing bulk-channel socket: no bulk channel registry attached',
@@ -349,6 +351,14 @@ const ROUTER_ERROR_MSG = Object.freeze({
   outboundQueueBackpressured: (nodeId, maxPending) =>
     `Outbound queue for node ${nodeId} is saturated ` +
     `(maxPending=${maxPending})`,
+  consensusPeerBufferExceeded: (nodeId, bufferedBytes, maxBytes) =>
+    `Consensus buffer for node ${nodeId} exceeded ` +
+    `(bufferedBytes=${bufferedBytes}, maxBytes=${maxBytes})`,
+  consensusTotalBufferExceeded: (nodeId, totalBytes, maxBytes) =>
+    `Total consensus buffer exceeded for node ${nodeId} ` +
+    `(totalBytes=${totalBytes}, maxBytes=${maxBytes})`,
+  consensusConnectionReplaced: (nodeId) =>
+    `Connection incarnation to node ${nodeId} was replaced before batch flush`,
 });
 
 const RPC_LOG_MSG = Object.freeze({

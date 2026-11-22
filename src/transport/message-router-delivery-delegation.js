@@ -15,6 +15,9 @@ import {
 import {
   consensusDeliveryStats,
   deliverConsensusEnvelope,
+  dropAllPendingConsensusBatches,
+  dropPendingConsensusBatchForClosedNode,
+  dropPendingConsensusBatchForConnection,
   receiveConsensusEnvelope,
 } from './message-router-consensus-delivery.js';
 import {pingNode} from './message-router-peer-liveness.js';
@@ -81,6 +84,18 @@ class MessageRouterDeliveryDelegation {
 
   getConsensusDeliveryStats() {
     return consensusDeliveryStats(this);
+  }
+
+  dropPendingConsensusBatchForConnection(connection) {
+    return dropPendingConsensusBatchForConnection(this, connection);
+  }
+
+  dropPendingConsensusBatchForClosedNode(nodeId, connection = null) {
+    return dropPendingConsensusBatchForClosedNode(this, nodeId, connection);
+  }
+
+  dropAllPendingConsensusBatches() {
+    return dropAllPendingConsensusBatches(this);
   }
 
   async deliverRemote(

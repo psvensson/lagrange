@@ -892,8 +892,13 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
       t.equal(sentMessages.length, 1, 'one frame is written');
       t.equal(sentMessages[0].type, RouterMessageType.CONSENSUS_ENVELOPE,
         'the sender declares the consensus delivery class on the frame');
-      t.same(sentMessages[0].payload, {
-        ...buildMessageGroupRaftRsEnvelope(), messageId: 'msg-raft-direct'},
+      t.same(sentMessages[0].envelopes, [{
+        targetAddress: 'remote-node/message-group/mg-1-r1',
+        payload: {
+          ...buildMessageGroupRaftRsEnvelope(),
+          messageId: 'msg-raft-direct',
+        },
+      }],
       'the raft-rs envelope travels unchanged');
 
       await router.shutdown();

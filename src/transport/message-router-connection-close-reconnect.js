@@ -144,6 +144,7 @@ class MessageRouterConnectionCloseReconnect {
       connection.ws = null;
       connection.bootIncarnation = TRANSPORT_NUM.ZERO;
       this.clearPingInterval(connection);
+      this.dropPendingConsensusBatchForClosedNode(nodeId, connection);
       const disconnectError = Object.assign(
         new Error(ROUTER_ERROR_MSG.connectionClosed(nodeId)),
         {code: ROUTER_CONNECTION_CLOSED_ERROR_CODE},

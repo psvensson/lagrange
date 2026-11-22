@@ -236,6 +236,7 @@ class MessageRouterConnectionLifecycleMethods {
     connectionInfo.retired = true;
     this.clearReconnectTimeout(connectionInfo);
     this.clearPingInterval(connectionInfo);
+    this.dropPendingConsensusBatchForConnection(connectionInfo);
   }
   /**
    * Return whether a connection object is still the active entry for its peer.

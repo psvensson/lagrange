@@ -167,6 +167,7 @@ class MessageRouterStatsShutdown {
     });
     this.isShuttingDown = true;
     this.connectionAuthorityOwner.invalidateDeliveries();
+    this.dropAllPendingConsensusBatches();
     // Close the bulk transfer channel lane with the router (S6): adopted and
     // dialed bulk sockets plus the token-bucket drain timer.
     this.bulkChannelRegistry?.closeAll();

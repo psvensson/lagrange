@@ -96,10 +96,14 @@ function describeFrame(data) {
     return {type: 'unreadable', messageId: null, raft: false};
   }
   const frame = JSON.parse(text);
+  const batchEnvelopes = Array.isArray(frame?.envelopes) ? frame.envelopes : null;
   return {
     type: frame?.type ?? 'untyped',
     messageId: frame?.messageId ?? null,
-    raft: isRaftRsTransportEnvelope(frame?.payload),
+    raft: batchEnvelopes !== null ?
+      batchEnvelopes.length > 0 && batchEnvelopes.every(
+        (item) => isRaftRsTransportEnvelope(item?.payload)) :
+      isRaftRsTransportEnvelope(frame?.payload),
   };
 }
 
