@@ -223,6 +223,15 @@ class RebalanceCoordinatorTopologyGuardMethods {
       });
     }
 
+    const targetReplicaCount =
+      await this.resolveTopologyGuardTargetReplicaCount({
+        partitionId,
+        entityType,
+      });
+    if (entityType === SERVICE_TYPE.PARTITION && targetReplicaCount === null) {
+      return this.buildTopologyGuardTargetUnavailableDecision(targetNodeId);
+    }
+
     const cacheStateBefore = captureInventoryCacheState(
       this.systemTableCache,
       this.nowFn(),
@@ -326,17 +335,7 @@ class RebalanceCoordinatorTopologyGuardMethods {
             )),
         ),
     );
-    const targetReplicaCount =
-      await this.resolveTopologyGuardTargetReplicaCount({
-        partitionId,
-        entityType,
-      });
     const topologyGuardDecisionTable = Object.freeze([
-      Object.freeze({
-        matches: entityType === SERVICE_TYPE.PARTITION && targetReplicaCount === null,
-        state: TOPOLOGY_GUARD_STATE.TARGET_UNAVAILABLE,
-        blockingReason: TOPOLOGY_GUARD_REASON.PARTITION_TARGET_UNAVAILABLE,
-      }),
       Object.freeze({
         matches: !inventory.provenance.topologyIncreaseUsable,
         state: TOPOLOGY_GUARD_STATE.INVENTORY_UNUSABLE,
@@ -391,6 +390,33 @@ class RebalanceCoordinatorTopologyGuardMethods {
           inventoryProvenance: inventory.provenance,
           inventorySourceRevisions: inventory.sourceRevisions,
           inventorySourceWatermarks: inventory.sourceWatermarks,
+        }),
+      }),
+    });
+  }
+
+  /**
+   * Fail closed when a partition's target replica count policy is unavailable:
+   * target policy precedes the SERVICES inventory read (row 1 of the guard's
+   * decision order).
+   * @param {string} targetNodeId
+   * @return {Object} The guard's blocked target-unavailable decision.
+   * @private
+   */
+  buildTopologyGuardTargetUnavailableDecision(targetNodeId) {
+    const blockingReason = TOPOLOGY_GUARD_REASON.PARTITION_TARGET_UNAVAILABLE;
+    return Object.freeze({
+      state: TOPOLOGY_GUARD_STATE.TARGET_UNAVAILABLE,
+      admissionResult: Object.freeze({
+        allowed: false,
+        decisionType: STORAGE_ADMISSION_DECISION_TYPE.BLOCKED,
+        blockingReasons: Object.freeze([blockingReason]),
+        eligibleNodeIds: Object.freeze([]),
+        ineligibleNodes: Object.freeze([]),
+        reason: blockingReason,
+        topologySnapshot: Object.freeze({
+          targetNodeId,
+          targetReplicaCount: null,
         }),
       }),
     });

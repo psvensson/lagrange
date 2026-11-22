@@ -179,7 +179,11 @@ function openCurePlanner(t, host, partitionId, readiness, storage) {
     entityType: EntityType.PARTITION, nodeId: NODE.PLANNER, systemTableCache: host.cache,
     rebalanceCoordinator: host.coordinator, controlPlaneReadinessService: readiness,
     storageAdmissionService: storage, storageAccountingService: {estimateReplicaBytes: () => 1}});
-  rebalancer.setLeader(true);
+  // Each evaluation cycle in this suite is an explicit rebalance() call;
+  // setting isLeader without setLeader(true)'s autonomous checkRebalance()
+  // enqueue prevents a background cycle from racing scenario outage setup
+  // (e.g., E4(c)'s holdServicesLeaderless while PEER_A is stepping down).
+  rebalancer.isLeader = true;
   rebalancer.clusterReadinessConfirmed = true;
   rebalancer.isStabilized = () => true;
   rebalancer.getConfiguredRebalanceBudget = async () => REBALANCE_BUDGET;
@@ -488,9 +492,16 @@ test('E6 the planner cannot reach the services-p1 leader while services-p1 is he
     'setup: services-p1 commits a SERVICES write through that leader while the route is down');
   t.ok(routeDown.every((cycle) => cycle.admitted === 0),
     'no cycle admits an add-like move while the planner cannot reach the leader');
+  t.ok(routeDown.every((cycle) => cycle.moves.filter(isAddLike).every((move) =>
+    move.skipped === true &&
+    move.admissionReason === 'replica_inventory_unavailable' &&
+    move.decisionType === 'deferred' &&
+    move.authoritativeReasonCode === 'owner_fact_read_failed')),
+  'each cycle while the route is down is a typed deferral replica_inventory_unavailable with reason owner_fact_read_failed');
   t.same(ledgerWhileDown, [], 'no operation exists while the route is down');
   t.equal(afterRoute.length, 1, 'the first cycle after the route returns ends the wait');
   t.equal(afterRoute[0]?.admitted, 1, 'and admits the spread cure');
+  t.equal(spreadRestoringRows(scene).length, 1, 'exactly one spread-restoring operation');
 });
 
 test('E4(c) the operation ledger concentrated [A,A,B] (the July-11 schedule): what each ' +
@@ -514,7 +525,18 @@ test('E4(c) the operation ledger concentrated [A,A,B] (the July-11 schedule): wh
 
   t.ok(withoutLeader.every((cycle) => cycle.admitted === 0),
     'nothing is admitted for the ledger while services-p1 has no leader');
+  t.ok(withoutLeader.every((cycle) => cycle.moves.filter(isAddLike).every((move) =>
+    move.skipped === true &&
+    move.admissionReason === 'replica_inventory_unavailable' &&
+    move.decisionType === 'deferred')),
+  'each leaderless cycle defers the ledger cure with replica_inventory_unavailable');
   t.same(ledgerWithoutLeader, [], 'no ledger operation is written meanwhile');
+  t.equal(afterLeader.length, 1,
+    'the first cycle after the services-p1 leader appears admits the ledger cure');
+  t.equal(afterLeader[0]?.admitted, 1,
+    'that first cycle after the leader appears admits the ledger spread-restoring move');
+  t.equal(spreadRestoringRows(scene).length, 1,
+    'exactly one spread-restoring operation is written for the ledger');
 });
 
 test('E4(a) services-p1 loses two of its three replicas: no leader is ever elected, and ' +
