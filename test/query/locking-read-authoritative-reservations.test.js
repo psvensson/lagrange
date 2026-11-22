@@ -47,6 +47,7 @@ import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {
   RAFT_LEADERSHIP_TRANSFER_SUCCESSOR,
+  RAFT_OPERATION_OUTCOME,
 } from '../../src/raft/raft-operation-port-constants.js';
 import {PostgresWireRuntimeModule} from '../../src/runtime/pgwire-runtime-module.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
@@ -743,7 +744,11 @@ test('Receipt 3: participant restart on disk and Raft leader change preserve and
         replicaIdentity: r2.replicaId,
       }),
     );
-    assert.equal(transfer.outcome, 'core_ok', JSON.stringify(transfer));
+    assert.equal(
+      transfer.outcome,
+      RAFT_OPERATION_OUTCOME.CORE_OK,
+      JSON.stringify(transfer),
+    );
     const elected = await cluster.group.waitFor(
       () => r2.raft?.readStatus?.().role === RAFT_ROLE.LEADER,
     );
@@ -887,13 +892,20 @@ test('Receipt 5: all write consumers enforce durable SQLite reservations even wh
       [],
       LOCK_NOT_AVAILABLE_SQLSTATE,
     );
-    // 2. Unscoped INSERT OR REPLACE
+    // 2. Unscoped INSERT (omitted PK via PgWire & INSERT OR REPLACE via SQLite dialect)
     await expectSqlState(
       clientB,
-      'INSERT OR REPLACE INTO accounts (id, balance, tier) VALUES (99, 10, \'gold\')',
+      'INSERT INTO accounts (balance, tier) VALUES (10, \'gold\')',
       [],
       LOCK_NOT_AVAILABLE_SQLSTATE,
     );
+    const replaceRes = await cluster.node2.engine.executeQuery(
+      'INSERT OR REPLACE INTO accounts (id, balance, tier) VALUES (99, 10, \'gold\')',
+      [],
+      {dialect: 'sqlite'},
+    );
+    assert.equal(replaceRes.success, false);
+    assert.equal(replaceRes.sqlState, LOCK_NOT_AVAILABLE_SQLSTATE);
     // 3. Equality UPDATE
     await expectSqlState(
       clientB,
