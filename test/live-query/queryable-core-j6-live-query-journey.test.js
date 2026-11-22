@@ -1275,13 +1275,17 @@ describe('Unit J6: Multi-node remote producer CDC delivery and leader failover',
     let notifyRegistered = null;
     let releaseSubscribeResponse = null;
     const armHoldGate = () => {
-      const registered = new Promise((resolve) => {
-        notifyRegistered = resolve;
+      const gate = {isRegistered: false, registered: null, responseGate: null};
+      gate.registered = new Promise((resolve) => {
+        notifyRegistered = () => {
+          gate.isRegistered = true;
+          resolve();
+        };
       });
-      const responseGate = new Promise((resolve) => {
+      gate.responseGate = new Promise((resolve) => {
         releaseSubscribeResponse = resolve;
       });
-      return {registered, responseGate};
+      return gate;
     };
     let activeGate = armHoldGate();
 
@@ -1344,7 +1348,8 @@ describe('Unit J6: Multi-node remote producer CDC delivery and leader failover',
     activeGate = armHoldGate();
     const client2 = createMockClient('cancel-retry-handshake-client');
     const reg2 = await wiringA.liveQueryManager.registerLiveQuery(sql, client2);
-    await activeGate.registered;
+    const retryReachedRemote = await waitForMessageMatch(() => activeGate.isRegistered);
+    assert.ok(retryReachedRemote, 'retry subscribe handshake reached remote partition');
     assert.equal(leaderB.cdcSubscribers.size, 1, 'remote partition registered retry subscriber');
 
     wiringA.liveQueryManager.unregisterLiveQuery(reg2.queryId, client2.id);
