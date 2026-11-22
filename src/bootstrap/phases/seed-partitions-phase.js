@@ -20,7 +20,8 @@ import {StartupRecoveryCoordinator} from '../startup-recovery-coordinator.js';
 import {resolveCanonicalLeaderService} from '../../cache/leader-readiness-gate.js';
 import {
   BOOTSTRAP_DEFAULT, BOOTSTRAP_ERROR, BOOTSTRAP_LOG_MSG,
-  BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT, BOOTSTRAP_UNIFIED_RECONCILE,
+  BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT, BOOTSTRAP_PIPELINE_ERROR_CODE,
+  BOOTSTRAP_UNIFIED_RECONCILE,
 } from '../bootstrap-constants.js';
 import {
   SYSTEM_TABLE_NAME, SYSTEM_TABLE_SCHEMAS, INITIAL_PARTITION_IDS,
@@ -558,6 +559,7 @@ class SeedPartitionsPhase {
         missing, timeoutMs,
       ),
     );
+    error.code = BOOTSTRAP_PIPELINE_ERROR_CODE.PARTITION_LEADERSHIP_TIMEOUT;
     error.missingLeaders = missing;
     error.timeoutMs = timeoutMs;
     throw error;
