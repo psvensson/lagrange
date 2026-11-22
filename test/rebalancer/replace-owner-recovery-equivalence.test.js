@@ -62,6 +62,11 @@ import {
   createTestCoordinator,
 } from './test-helpers.js';
 import {
+  COMMITTED_FORMATION,
+  bindPlacementAdmission,
+  startPlacementLedger,
+} from './placement-bound-coordinator-fixture.js';
+import {
   createReplaceWitness,
   deliveredReplaceWitnessResponse,
 } from './replace-witness-fixture.js';
@@ -302,6 +307,7 @@ function startCoordinator(world) {
     nodeId: TARGET_NODE_ID,
     enableTimeouts: false,
     replaceWitness: false,
+    openLedgerDatabase: world.ledger?.openDatabase,
     systemTableCache: world.cache,
     messageRouter: {
       deliver: (target, payload) => deliver(world, target, payload),
@@ -310,6 +316,7 @@ function startCoordinator(world) {
       isOutboundQueueAvailable: () => true,
     },
     readinessFixture: {
+      formation: COMMITTED_FORMATION,
       callbacks: world.readiness,
       now: () => Date.now() + world.clockOffsetMs,
       readNodeRows: () => NODE_IDS.map((id) => readyNode(id, Date.now() + world.clockOffsetMs)),
@@ -335,6 +342,9 @@ function startCoordinator(world) {
     now: () => Date.now() + world.clockOffsetMs,
   };
   coordinator.initialize();
+  if (world.ledger) {
+    bindPlacementAdmission(coordinator, world.ledger, false);
+  }
   coordinator.attachReplicaConsensusEvents(world.relay);
   world.coordinator = coordinator;
   return coordinator;
@@ -530,6 +540,7 @@ async function runCell({phase, recover, clockJumpMs = 0, backstops,
   ConfigurationManager.getInstance().initialize({});
   LoggingService.getInstance().initialize({level: 'error'});
   const world = createWorld();
+  world.ledger = await startPlacementLedger({nodeId: TARGET_NODE_ID});
   startCoordinator(world);
   try {
     const operation = await createReplace(world);
@@ -547,6 +558,7 @@ async function runCell({phase, recover, clockJumpMs = 0, backstops,
     return {reachedPhase, outcome, removeEffects: world.removeEffects.length};
   } finally {
     await world.coordinator.shutdown();
+    await world.ledger.stop();
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();
   }
@@ -665,6 +677,7 @@ async function withDrivenWorld(phase, body) {
   ConfigurationManager.getInstance().initialize({});
   LoggingService.getInstance().initialize({level: 'error'});
   const world = createWorld();
+  world.ledger = await startPlacementLedger({nodeId: TARGET_NODE_ID});
   startCoordinator(world);
   try {
     const operation = await createReplace(world);
@@ -672,6 +685,7 @@ async function withDrivenWorld(phase, body) {
     await body(world, operation);
   } finally {
     await world.coordinator.shutdown();
+    await world.ledger.stop();
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();
   }

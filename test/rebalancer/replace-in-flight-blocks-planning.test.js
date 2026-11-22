@@ -85,6 +85,7 @@ import {
 } from '../../src/rebalancer/effective-placement-serial-priority-planner.js';
 import {WAIT_BOUND_SPENT_EVENT} from '../../src/logging/wait-bound-spent.js';
 import {createTestCoordinator, createTestRebalancer} from './test-helpers.js';
+import {createPlacementBoundTestCoordinator} from './placement-bound-coordinator-fixture.js';
 import {
   createReplaceWitness,
   deliveredReplaceWitnessResponse,
@@ -201,7 +202,7 @@ async function createWorld({seed}) {
   const witness = createReplaceWitness({addressedLeads: true});
   const heldTimers = [];
   const deliveries = [];
-  const coordinator = createTestCoordinator({
+  const coordinator = await createPlacementBoundTestCoordinator({
     nodeId: NODE_B,
     enableTimeouts: false,
     replaceWitness: false,

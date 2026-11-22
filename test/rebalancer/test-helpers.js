@@ -1098,6 +1098,10 @@ function createCoordinatorSqlStore(cache, {onCommittedOperationWrite, openDataba
   // The fixture's committed rows enter through the owner's insert; a row the
   // owner's schema refuses is a fixture defect, never a row to repair here.
   for (const row of cache.getAll?.(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) ?? []) {
+    if (openDatabase && run('SELECT 1 FROM replica_operations WHERE operation_id = ?',
+      [row.operation_id]).rows?.length > 0) {
+      continue;
+    }
     const {sql, params} = MUTATION_SQL_PLANNER.buildSqlMutationPlan({
       operation: 'insert', tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, row,
     });

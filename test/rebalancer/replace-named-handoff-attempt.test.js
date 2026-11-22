@@ -63,8 +63,8 @@ import {
 } from '../../src/node/replica-handler-leader-handoff-methods.js';
 import {
   createMockPolicyService,
-  createTestCoordinator,
 } from './test-helpers.js';
+import {createPlacementBoundTestCoordinator} from './placement-bound-coordinator-fixture.js';
 import {
   readReplaceOwnerDiagnostic,
   recordReplaceOwnerWait,
@@ -132,7 +132,7 @@ async function createHarness({stepDownResponse, sqlQueryResults} = {}) {
   // The witness sees the SOURCE leading; the rows (lagging) are irrelevant.
   const witness = createReplaceWitness({leaderReplicaId: SOURCE_REPLICA_ID});
   const deliveries = [];
-  const coordinator = createTestCoordinator({
+  const coordinator = await createPlacementBoundTestCoordinator({
     nodeId: TARGET_NODE_ID,
     enableTimeouts: false,
     replaceWitness: false,

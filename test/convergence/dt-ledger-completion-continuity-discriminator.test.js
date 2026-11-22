@@ -49,7 +49,11 @@ import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.j
 import {
   OperationType,
   ReplicaStatus,
+  createOperationAt,
 } from '../../src/rebalancer/replica-status.js';
+import {
+  buildCanonicalReplicaOperationRow,
+} from '../../src/rebalancer/replica-operation-repository-mutation-row-methods.js';
 import {
   isReplicaOperationInFlight,
   normalizeReplicaOperationRecord,
@@ -67,8 +71,8 @@ import {
   createTestCoordinator,
 } from '../rebalancer/test-helpers.js';
 import {
-  createTimeoutTestCoordinator,
-} from '../rebalancer/timeout-test-coordinator.js';
+  createPlacementBoundTimeoutTestCoordinator,
+} from '../rebalancer/placement-bound-coordinator-fixture.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
@@ -834,7 +838,7 @@ t.test(
   'negative matrix: failed authoritative terminal persistence cannot ' +
     'release the serialized ledger hold',
   async (t) => {
-    const fixture = createTimeoutTestCoordinator({nodeId: 'node-1'});
+    const fixture = await createPlacementBoundTimeoutTestCoordinator({nodeId: 'node-1'});
     const {coordinator, trackedOperations} = fixture;
     const ledgerPartitionId = `${SYSTEM_TABLE_NAME.REPLICA_OPERATIONS}-p1`;
     const dependentPartitionId =
@@ -953,6 +957,20 @@ function createCriticalPartitionServiceRow({
   };
 }
 
+function buildPendingRemoveRow(operationId) {
+  const operation = createOperationAt({
+    operationId,
+    type: OperationType.REMOVE,
+    partitionId: 'nodes-p1',
+    sourceNodeId: 'seed-node',
+    targetNodeId: 'node-d',
+    replicaId: 'nodes-p1-r1',
+  });
+  operation.entityType = 'partition';
+  operation.entityId = 'nodes-p1';
+  return buildCanonicalReplicaOperationRow(operation, null);
+}
+
 t.test(
   'negative matrix: absent quorum cannot authorize a critical remove',
   async (t) => {
@@ -1002,16 +1020,12 @@ t.test(
             raftRole: 'follower',
           }),
         ],
+        replicaOperations: [buildPendingRemoveRow('op-remove-nodes-p1-quorum')],
       },
     });
     coordinator.initialize();
     try {
-      const operation = await coordinator.createOperation({
-        type: OperationType.REMOVE,
-        partitionId: 'nodes-p1',
-        nodeId: 'node-d',
-        replicaId: 'nodes-p1-r1',
-      });
+      const operation = await coordinator.getOperation('op-remove-nodes-p1-quorum');
       const result = await coordinator.executeOperation(operation);
       t.equal(result.success, false, 'the quorum-dropping remove is refused');
       t.match(
@@ -1062,16 +1076,12 @@ t.test(
           createReadyNode('node-c'),
         ],
         services: [],
+        replicaOperations: [buildPendingRemoveRow('op-remove-nodes-p1-unhydrated')],
       },
     });
     coordinator.initialize();
     try {
-      const operation = await coordinator.createOperation({
-        type: OperationType.REMOVE,
-        partitionId: 'nodes-p1',
-        nodeId: 'node-d',
-        replicaId: 'nodes-p1-r1',
-      });
+      const operation = await coordinator.getOperation('op-remove-nodes-p1-unhydrated');
       const result = await coordinator.executeOperation(operation);
       t.equal(
         result.success,
