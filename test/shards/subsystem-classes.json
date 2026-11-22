@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 256,
     "storage-raft": 170,
-    "test-infrastructure": 168,
+    "test-infrastructure": 169,
     "transactions": 17,
     "transport-messaging": 123,
     "wasm-toolchain": 74
   },
-  "censusSize": 2805,
-  "digest": "fnv1a32-13a69760",
+  "censusSize": 2806,
+  "digest": "fnv1a32-950cb979",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-726a0b16",
+  "observationDigest": "fnv1a32-150c560b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2487,6 +2487,7 @@
     "test/scripts/install-git-hooks-stdout-purity.test.js": "test-infrastructure",
     "test/scripts/inventory-ordinal-segments.test.js": "test-infrastructure",
     "test/scripts/lab-census-benchmark-evidence-custody.test.js": "test-infrastructure",
+    "test/scripts/lab-evidence-report.test.js": "test-infrastructure",
     "test/scripts/lab-fleet-discovery.test.js": "test-infrastructure",
     "test/scripts/lab-test-base.test.js": "test-infrastructure",
     "test/scripts/lab-worker-provisioning.test.js": "test-infrastructure",
@@ -27148,6 +27149,28 @@
         "APPDATA",
         "LAGRANGE_LAB_HOME",
         "XDG_CONFIG_HOME"
+      ]
+    },
+    "test/scripts/lab-evidence-report.test.js": {
+      "files": [
+        "Dockerfile",
+        "scripts/checks/lab-evidence-report.js",
+        "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
+        "src/admin/static/playback-viewer.html",
+        "src/topology/node-host-identity.js",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/convergence-sealed-bars.json",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
+        "test/distributed/harness/container-memory-working-set.js"
+      ],
+      "directories": [
+        "scripts/checks",
+        "solve/epics",
+        "solve/epics/raft-rs-full-cutover",
+        "solve/quests"
       ]
     },
     "test/scripts/lab-fleet-discovery.test.js": {
