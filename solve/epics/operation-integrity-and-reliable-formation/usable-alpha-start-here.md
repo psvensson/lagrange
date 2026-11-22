@@ -5,8 +5,11 @@ documentClass: planning
 
 # Starting the approved usable-alpha plan during the current takeover
 
-Continue the current withheld-dispatch Task I through its existing bounded
-red-to-green and independent-review checkpoint. The
+Continue the current withheld-dispatch Task I at its existing verification and
+composition checkpoint. The inspected candidate e9e85853d already contains its
+production correction. Before another change or run, inspect the writer's actual
+tree, original results, pending jobs and reviewer findings; complete only the
+remaining bounded work. The
 [approved twelve-package plan](usable-alpha-completion.md) supplies the completion
 map while preserving the integration owner, active writers and work already
 integrated. Before taking the next unit, reconcile actual refs, local unpushed
@@ -27,7 +30,7 @@ current worktree and pending jobs; use their actual identities when resuming.
 | Surface inspected | Ref / source | Meaning |
 | --- | --- | --- |
 | Main | [1c66f6df4](https://github.com/psvensson/lagrange/commit/1c66f6df4d37a79d31ef321b54c6865ee7a8a87a) | Base for this isolated documentation change, not the runtime candidate. |
-| Runtime integration | work/integration-candidate-20261121 at [b3985c9e7](https://github.com/psvensson/lagrange/commit/b3985c9e721636173b79771d29b2e951c688b816) | Withheld-dispatch additional red witnesses directly above 9aa1aed42; no production correction in that commit. |
+| Runtime integration | work/integration-candidate-20261121 at [e9e85853d](https://github.com/psvensson/lagrange/commit/e9e85853d9950132aa57cf90e2a180c7f402b805) | Task I production correction above the b3985c9e7 red witnesses, plus Ruling #5 entity REMOVE evidence deferral and composition-fixture corrections. Source presence does not establish executed proof, independent approval or wider acceptance. |
 | Coordination snapshot | wip/takeover-coordination-20261122-0817 at [9bff1ac1b5](https://github.com/psvensson/lagrange/commit/9bff1ac1b5b6ec8ce9738b62c005519e67a554a0) | Original assignments/reviews; its stated candidate is older 4b12b9844. It does not establish proof for newer branch commits. |
 
 The branch ending 2324 was still at older 4df13728 when inspected. Do not choose
@@ -40,20 +43,36 @@ newer summary, preserve that summary and add only the new routing links; do not
 replace it with the older main copy. The linked documents introduce no new
 registered epic or doneWhen predicate.
 
-## 2. Finish the current Task I
+## 2. Finish the current Task I checkpoint
 
 The [existing Task I ruling](https://github.com/psvensson/lagrange/blob/9bff1ac1b5b6ec8ce9738b62c005519e67a554a0/solve/epics/operation-integrity-and-reliable-formation/takeover-20261121/reports/lead-rulings.md#L2169-L2190)
-matches the b3985c9e7 witnesses. Continue that assignment through its current
-owner and original evidence:
+matches the b3985c9e7 red witnesses. Its production correction is now committed
+in e9e85853d. Continue through the current owner and original evidence; verify
+these properties in the existing correction instead of implementing them again:
 
-1. Use the existing re-arm mechanism while the execution lane is held.
-2. Register the wait before asking; clear it when the gate passes.
-3. Preserve the shared verdict path, re-evaluate row_changed once and send
-   definite refusals through the existing workflow handling.
-4. Preserve operation, generation, tenure, budget and retained-obligation custody
+1. The existing re-arm mechanism obtains its serialized turn after the held
+   execution lane releases.
+2. The wait is registered before asking and cleared when the gate passes.
+3. The shared verdict path re-evaluates row_changed once and sends definite
+   refusals through the existing workflow handling, including a verdict received
+   before the original caller settles.
+4. Operation, generation, tenure, budget and retained-obligation custody remain
+   valid
    across suspension and successor activity.
-5. Run the discriminating re-arm/pre-registration/verdict/fence witnesses and
-   actual-head mirror/gate selection; obtain independent review before integrating.
+5. Original results and independent review cover the discriminating
+   re-arm/pre-registration/verdict/fence witnesses and actual-head mirror/gate
+   selection. Establish applicability through the existing proof owner, then
+   complete only outstanding execution, review or composition work.
+
+The same commit contains Ruling #5's entity REMOVE correction: temporarily
+unavailable replica or policy evidence defers under the owned continuation;
+a proven minimum-floor breach remains a terminal failure. Preserve that
+distinction and its affected proof when reconciling the commit.
+
+This commit adds no execution receipt or independent-review record, and the
+parent epic's current summary was unchanged. That does not show that tests or
+review have not happened: the writer may hold newer local results or work.
+Establish their actual status before rerunning anything or declaring closure.
 
 Keep the original red result. This is package 3 of the approved plan, not a
 reason to expand Task I until every alpha feature passes. If newer local work
@@ -63,7 +82,7 @@ composition findings or gates remain open.
 
 ## 3. Preserve integrated work and reconcile owner branches
 
-Already present in b3985c9e7's ancestry: placement outcome/W1b (95dc6b255), the
+Already present in e9e85853d's ancestry: placement outcome/W1b (95dc6b255), the
 executor one-clock repair (e35fc5a3d / 504e2c989), placement stages 1-2
 (4b12b9844 / 8e84e2801), and the kernel tenure fence (9aa1aed42 / 0a88745f6).
 Earlier retained-owner, dispatch-gate, fixture and CDC-currentness work is also
@@ -104,7 +123,7 @@ Keep one interaction writer. Integrate only reviewed changes with their actual
 dependencies and affected proof, accounting for local unpushed work before
 merging. Do not bulk-merge the checkpoint table or overwrite another worktree.
 
-The [current candidate's existing programme](https://github.com/psvensson/lagrange/blob/b3985c9e721636173b79771d29b2e951c688b816/solve/epics/operation-integrity-and-reliable-formation.md#programme-adoption-and-dependency-order)
+The [current candidate's existing programme](https://github.com/psvensson/lagrange/blob/e9e85853d9950132aa57cf90e2a180c7f402b805/solve/epics/operation-integrity-and-reliable-formation.md#programme-adoption-and-dependency-order)
 already routes the work. Use the new twelve-package view to make its completion
 path explicit. Keep 0.4.1 formation/corrective acceptance and inherited 0.5
 feature completion separate, with no waiver of other 0.5 obligations.
