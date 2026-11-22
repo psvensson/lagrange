@@ -28,15 +28,13 @@ import {
 import {extractStatementWriteFootprint} from
   '../partition/partition-write-footprint-contract.js';
 import {
-  LOCKING_READ_AST_TYPE, LOCKING_READ_CLAUSE, LOCKING_READ_ERROR_MSG,
-  LOCKING_READ_RESERVATION_OUTCOME, LOCKING_READ_STRENGTH,
+  LOCKING_READ_AST_TYPE, LOCKING_READ_CLAUSE, LOCKING_READ_STRENGTH,
   LOCKING_READ_TX_OWNERSHIP, LOCKING_READ_UNKNOWN_PARTITION,
 } from './sql-locking-read-constants.js';
 import {
-  acquireAuthoritativePartitionReservation,
+  acquireAllRowReservations,
   listCandidatePartitionDbs,
   resolvePartitionDb,
-  rollbackAcquiredReservations,
 } from './sql-locking-read-remote.js';
 import {EXPR_TYPE} from './parser-constants.js';
 import {QUERY_AST_NODE, QUERY_ERROR_CODE} from './query-constants.js';
@@ -227,51 +225,6 @@ async function rollbackConflictingSession(engine, sessionId, transactionId) {
   }
 }
 
-async function acquireAllRowReservations(ctx) {
-  const {
-    engine, tableName, canonicalTuples, candidatePartitions,
-    transactionId, sessionId, holdTimeoutMs, readGenerationsByPartition = {},
-  } = ctx;
-  const acquiredEntries = [];
-  for (const pkValues of canonicalTuples) {
-    const partitionId = resolveRowPartitionId(engine, tableName, pkValues, candidatePartitions);
-    const {mode, result: acq} = await acquireAuthoritativePartitionReservation(engine, {
-      tableName,
-      partitionId,
-      pkValues,
-      transactionId,
-      sessionId,
-      holdTimeoutMs,
-      readGeneration: readGenerationsByPartition[partitionId],
-    });
-    if (acq?.conflict) {
-      await rollbackAcquiredReservations(engine, acquiredEntries, transactionId, sessionId);
-      await rollbackConflictingSession(engine, sessionId, transactionId);
-      return createLockConflictResult({
-        rowKey: acq.rowKey,
-        transactionId,
-        conflictingTransactionId: acq.conflictingTransactionId,
-        message: acq.error,
-      });
-    }
-    if (!acq || acq.success !== true || acq.unavailable === true) {
-      await rollbackAcquiredReservations(engine, acquiredEntries, transactionId, sessionId);
-      const hasAcqMsg = typeof acq?.error === 'string' && acq.error.length > 0;
-      return createReservationUnavailableResult({
-        rowKey: acq?.rowKey,
-        partitionId,
-        tableName,
-        transactionId,
-        message: hasAcqMsg ? acq.error : LOCKING_READ_ERROR_MSG.RESERVATION_STORE_UNAVAILABLE,
-      });
-    }
-    if (acq.outcome === LOCKING_READ_RESERVATION_OUTCOME.ACQUIRED) {
-      acquiredEntries.push({mode, partitionId, tableName, rowKey: acq.rowKey, transactionId});
-    }
-  }
-  return null;
-}
-
 async function tryResolveCanonicalPkTuples(engine, ctx) {
   try {
     const tuples = await resolveCanonicalPkTuples(engine, ctx);
@@ -308,9 +261,13 @@ export async function executeLockingReadReservations(options) {
 
   const failure = await acquireAllRowReservations({
     engine, tableName: target.tableName, canonicalTuples: resolution.tuples,
-    candidatePartitions, transactionId: transactionRead.identity.transactionId,
+    resolvePartitionId: (pkValues) =>
+      resolveRowPartitionId(engine, target.tableName, pkValues, candidatePartitions),
+    transactionId: transactionRead.identity.transactionId,
     sessionId, holdTimeoutMs: options.holdTimeoutMs,
     readGenerationsByPartition: selectResult.readGenerationsByPartition || {},
+    onConflict: () =>
+      rollbackConflictingSession(engine, sessionId, transactionRead.identity.transactionId),
   });
   return failure || selectResult;
 }

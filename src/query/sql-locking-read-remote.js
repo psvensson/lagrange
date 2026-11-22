@@ -11,6 +11,7 @@
 import {randomUUID} from 'node:crypto';
 import {
   acquireRowReservation,
+  createLockConflictResult,
   createReservationUnavailableResult,
   deriveRowLockKey,
   releaseSpecificRowReservations,
@@ -32,6 +33,7 @@ import {
   LOCKING_READ_ERROR_MSG,
   LOCKING_READ_PARTITION_OP,
   LOCKING_READ_RESERVATION_KIND,
+  LOCKING_READ_RESERVATION_OUTCOME,
   LOCKING_READ_RESERVATION_TYPE,
 } from './sql-locking-read-constants.js';
 
@@ -362,4 +364,71 @@ export async function rollbackAcquiredReservations(
   for (const partitionId of remotePartitions) {
     await releaseTransactionOnPartition(engine, partitionId, transactionId, sessionId);
   }
+}
+
+const ACQUISITION_CLEARED = Object.freeze({cleared: true});
+
+function buildUnavailableFromAcquisition(acq, partitionId, tableName, transactionId) {
+  const hasAcqMsg = typeof acq?.error === 'string' && acq.error.length > 0;
+  return createReservationUnavailableResult({
+    rowKey: acq?.rowKey,
+    partitionId,
+    tableName,
+    transactionId,
+    message: hasAcqMsg ? acq.error : LOCKING_READ_ERROR_MSG.RESERVATION_STORE_UNAVAILABLE,
+  });
+}
+
+async function acquireSingleRowForStatement(ctx, pkValues, acquiredEntries) {
+  const {
+    engine, tableName, resolvePartitionId, transactionId,
+    sessionId, holdTimeoutMs, readGenerationsByPartition, onConflict,
+  } = ctx;
+  const partitionId = resolvePartitionId(pkValues);
+  const {mode, result: acq} = await acquireAuthoritativePartitionReservation(engine, {
+    tableName, partitionId, pkValues, transactionId,
+    sessionId, holdTimeoutMs, readGeneration: readGenerationsByPartition[partitionId],
+  });
+  if (acq?.conflict) {
+    await rollbackAcquiredReservations(engine, acquiredEntries, transactionId, sessionId);
+    if (onConflict) {
+      await onConflict();
+    }
+    return createLockConflictResult({
+      rowKey: acq.rowKey, transactionId,
+      conflictingTransactionId: acq.conflictingTransactionId, message: acq.error,
+    });
+  }
+  if (!acq || acq.success !== true || acq.unavailable === true) {
+    await rollbackAcquiredReservations(engine, acquiredEntries, transactionId, sessionId);
+    return buildUnavailableFromAcquisition(acq, partitionId, tableName, transactionId);
+  }
+  if (acq.outcome === LOCKING_READ_RESERVATION_OUTCOME.ACQUIRED) {
+    acquiredEntries.push({mode, partitionId, tableName, rowKey: acq.rowKey, transactionId});
+  }
+  return ACQUISITION_CLEARED;
+}
+
+/**
+ * Acquire FOR_UPDATE reservations sequentially across all selected rows, rolling back
+ * any partial acquisitions on conflict or store unavailability.
+ *
+ * @param {Object} ctx - Acquisition context.
+ * @return {Promise<Object|null>} Failure/conflict result or null on full success.
+ */
+export async function acquireAllRowReservations(ctx) {
+  const normalizedCtx = {
+    ...ctx,
+    readGenerationsByPartition: ctx.readGenerationsByPartition || {},
+  };
+  const acquiredEntries = [];
+  for (const pkValues of normalizedCtx.canonicalTuples) {
+    const outcome = await acquireSingleRowForStatement(
+      normalizedCtx,
+      pkValues,
+      acquiredEntries,
+    );
+    if (outcome !== ACQUISITION_CLEARED) return outcome;
+  }
+  return null;
 }

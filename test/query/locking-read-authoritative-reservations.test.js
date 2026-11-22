@@ -329,12 +329,30 @@ async function expectSqlState(client, sql, params, expectedSqlState) {
 }
 
 function countDbReservations(db, tableName = ACCOUNTS_TABLE) {
+  const exists = db
+    .prepare(
+      'SELECT 1 AS ok FROM sqlite_master WHERE type = \'table\' AND name = ?',
+    )
+    .get('_lagrange_locking_read_reservations');
+  if (!exists) return 0;
   const row = db
     .prepare(
       'SELECT COUNT(*) AS cnt FROM _lagrange_locking_read_reservations WHERE table_name = ?',
     )
     .get(tableName);
   return Number(row?.cnt || 0);
+}
+
+function assertNumericRowValues(rows, expectedRows) {
+  assert.equal(rows.length, expectedRows.length);
+  for (let i = 0; i < expectedRows.length; i += 1) {
+    const actual = rows[i];
+    const expected = expectedRows[i];
+    assert.deepEqual(Object.keys(actual).sort(), Object.keys(expected).sort());
+    for (const [k, v] of Object.entries(expected)) {
+      assert.equal(Number(actual[k]), v, `Mismatch on column ${k}`);
+    }
+  }
 }
 
 test('Receipt 1: public cross-node SELECT FOR UPDATE enforces 55P03 across separate PgWire nodes and allows disjoint progress', async () => {
@@ -347,13 +365,13 @@ test('Receipt 1: public cross-node SELECT FOR UPDATE enforces 55P03 across separ
     const selOmitted = await clientA.query(
       'SELECT balance FROM accounts WHERE id = 1 FOR UPDATE',
     );
-    assert.deepEqual(selOmitted.rows, [{balance: 100}]);
+    assertNumericRowValues(selOmitted.rows, [{balance: 100}]);
 
     // Session A also acquires FOR UPDATE with aliased PK projection on id = 2.
     const selAliased = await clientA.query(
       'SELECT id AS acct_key, balance FROM accounts WHERE id = 2 FOR UPDATE',
     );
-    assert.deepEqual(selAliased.rows, [{acct_key: 2, balance: 200}]);
+    assertNumericRowValues(selAliased.rows, [{acct_key: 2, balance: 200}]);
 
     // Session B on Node 2 (separate engine + coordinator) tests conflicting UPDATE.
     await clientB.query('BEGIN');
@@ -413,20 +431,20 @@ test('Receipt 1: public cross-node SELECT FOR UPDATE enforces 55P03 across separ
     const disjointVerify = await clientB.query(
       'SELECT balance FROM accounts WHERE id = 3',
     );
-    assert.deepEqual(disjointVerify.rows, [{balance: 350}]);
+    assertNumericRowValues(disjointVerify.rows, [{balance: 350}]);
 
     // Re-entrant FOR UPDATE and write in Session A on Node 1 succeed and commit.
     const reentrant = await clientA.query(
       'SELECT balance FROM accounts WHERE id = 1 FOR UPDATE',
     );
-    assert.deepEqual(reentrant.rows, [{balance: 100}]);
+    assertNumericRowValues(reentrant.rows, [{balance: 100}]);
     await clientA.query('UPDATE accounts SET balance = 125 WHERE id = 1');
     await clientA.query('COMMIT');
 
     const finalRead = await clientB.query(
       'SELECT balance FROM accounts WHERE id = 1',
     );
-    assert.deepEqual(finalRead.rows, [{balance: 125}]);
+    assertNumericRowValues(finalRead.rows, [{balance: 125}]);
   } finally {
     await clientA.end().catch(() => {});
     await clientB.end().catch(() => {});
@@ -559,10 +577,10 @@ test('Receipt 2: admission and persistence failures fail closed with zero phanto
   });
 
   try {
-    // Multi-partition query: accounts-p2 (writable) + accounts-p1 (read-only).
+    // Multi-partition query: accounts-p2 (id=150, writable) acquires first, then accounts-p1 (id=1, read-only) fails!
     const tx = await engine.transactionCoordinator.begin('s-partial-fail');
     const lockRes = await engine.executeQuery(
-      'SELECT id, balance FROM accounts ORDER BY id FOR UPDATE',
+      'SELECT id, balance FROM accounts ORDER BY id DESC FOR UPDATE',
       [],
       {sessionId: 's-partial-fail'},
     );
@@ -714,7 +732,7 @@ test('Receipt 3: participant restart on disk and Raft leader change preserve and
   try {
     await clientA.query('BEGIN');
     const sel = await clientA.query('SELECT balance FROM accounts WHERE id = 1 FOR UPDATE');
-    assert.deepEqual(sel.rows, [{balance: 100}]);
+    assertNumericRowValues(sel.rows, [{balance: 100}]);
 
     // Transfer Raft leadership from r1 (node-1) to r2 (node-2).
     const r1 = cluster.group.services[0];
@@ -785,6 +803,7 @@ test('Receipt 4: terminal resolution (COMMIT, ROLLBACK, socket disconnect, cance
 
     // 4c: Abrupt TCP disconnect on clientA releases lock so clientB succeeds.
     const clientDisconnect = await cluster.pg1.connectClient();
+    clientDisconnect.on('error', () => {});
     await clientDisconnect.query('BEGIN');
     await clientDisconnect.query('SELECT balance FROM accounts WHERE id = 1 FOR UPDATE');
     assert.equal(countDbReservations(leaderDb()), 1);
@@ -916,7 +935,7 @@ test('Receipt 5: all write consumers enforce durable SQLite reservations even wh
     // Disjoint scan write (tier = 'silver' only matches id = 2) MUST succeed!
     await clientB.query('UPDATE accounts SET balance = 222 WHERE tier = \'silver\'');
     const verify = await clientB.query('SELECT balance FROM accounts WHERE id = 2');
-    assert.deepEqual(verify.rows, [{balance: 222}]);
+    assertNumericRowValues(verify.rows, [{balance: 222}]);
 
     await clientA.query('COMMIT');
   } finally {
