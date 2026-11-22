@@ -23,8 +23,18 @@ import {LEDGER_PARTITION_ID} from '../../src/partition/partition-placement-admis
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {REPAIR_AUTHORITY_REFUSAL} from '../../src/rebalancer/replica-operation-retained-repair-authority.js';
 import {REPAIR_OBSERVATION} from '../../src/rebalancer/replica-operation-retained-repair-observation.js';
-import {RETAINED_REPAIR_CONTINUATION, RETAINED_REPAIR_ENTRY, RETAINED_REPAIR_VERDICT} from
-  '../../src/rebalancer/replica-operation-retained-repair-record.js';
+import {
+  RETAINED_REPAIR_PORT_REFUSAL, createRetainedPlacementRepairPorts,
+} from '../../src/rebalancer/replica-operation-repository-retained-placement-repair.js';
+import {
+  RETAINED_REPAIR_CONTINUATION, RETAINED_REPAIR_ENTRY, RETAINED_REPAIR_ORIGIN,
+  RETAINED_REPAIR_RETIREMENT, RETAINED_REPAIR_VERDICT, retainedRepairRecord, unconfirmedVerdict,
+} from '../../src/rebalancer/replica-operation-retained-repair-record.js';
+import {OPERATION_WORKFLOW_OWNER_SHARED} from
+  '../../src/rebalancer/operation-workflow-owner-shared.js';
+import {PLACEMENT_ADMISSION_ERROR} from
+  '../../src/partition/partition-placement-admission-constants.js';
+import {unavailableRetainedRepairPorts} from '../test-helpers/retained-repair-ports.js';
 import {committedStampFor} from '../node/replica-handler-bootstrap-stamps.js';
 import {installCommittedOperationMutationFixture} from '../rebalancer/operation-outcome-fixture.js';
 import {
@@ -400,10 +410,216 @@ test('a retained confirmation after the operation became terminal, or after shut
     await claimAndReenter(owner, leader, initial);
     assert.equal(deliveries.length, 0, 'withheld while the owner read failed');
     await coordinator.shutdown();
+    assert.equal(owner.withheldDispatchByOperationId.size, 0,
+      'shutdown clears withheld dispatch waits');
     owner.repository.reportRetainedRepairVerdict(
       verdictFor(initial, {state: RETAINED_REPAIR_VERDICT.CONFIRMED}));
     assert.equal(verdicts.length, 1);
+    assert.equal(verdicts[0].answer.state, 'not_withheld');
     assert.equal(deliveries.length, 0, 'a shut-down owner dispatches nothing');
+  }, {ledgerRoute: LEDGER_ROUTE.PUBLISHED});
+});
+
+test('a retained confirmation that arrives while the withheld dispatch turn still holds the ' +
+  'operation lane re-drives in its own retained turn after the holder releases', async () => {
+  await withPlacementExecution(async ({owner, leader, initial, deliveries}) => {
+    const repository = owner.repository;
+    const clock = installVirtualClock(repository);
+    failFirstRetainedRead(repository);
+    const verdicts = observeRetainedVerdicts(owner);
+    const advance = owner.advanceDispatchCandidateStep;
+    let firedWhileHeld = false;
+    owner.advanceDispatchCandidateStep = async function(...args) {
+      const result = await advance.apply(this, args);
+      if (!firedWhileHeld && repository.retainedPlacementRepairs.has(initial.operation_id)) {
+        firedWhileHeld = true;
+        assert.equal(this.isOperationOwnerLaneHeld(initial.operation_id), true,
+          'the withheld turn still holds the operation lane when the verdict arrives');
+        await advanceContinuation(clock, [repository],
+          () => repository.retainedPlacementRepairs.size === 0);
+      }
+      return result;
+    };
+    await claimAndReenter(owner, leader, initial);
+    assert.equal(firedWhileHeld, true);
+    assert.equal(verdicts.length, 1);
+    await verdicts[0].answer.dispatch;
+    await settleOperationLane(owner, initial);
+    assert.equal(deliveries.length, 1,
+      'the retained re-drive takes its own turn after the held lane releases');
+  }, {ledgerRoute: LEDGER_ROUTE.PUBLISHED});
+});
+
+test('the gate registers the withheld wait before asking and clears it when the gate passes',
+  async () => {
+    await withPlacementExecution(async ({owner, leader, initial, deliveries}) => {
+      const repository = owner.repository;
+      const verdicts = observeRetainedVerdicts(owner);
+      const ensure = repository.ensureRetainedOperationRow;
+      let intercepted = false;
+      repository.ensureRetainedOperationRow = async function(operation) {
+        if (!intercepted) {
+          intercepted = true;
+          assert.equal(owner.withheldDispatchByOperationId.has(initial.operation_id), true,
+            'the wait is registered before asking the retained owner');
+          repository.reportRetainedRepairVerdict(
+            verdictFor(initial, {state: RETAINED_REPAIR_VERDICT.CONFIRMED}));
+          return false;
+        }
+        return ensure.call(this, operation);
+      };
+      await claimAndReenter(owner, leader, initial);
+      assert.equal(verdicts.length, 1);
+      await verdicts[0].answer.dispatch;
+      await settleOperationLane(owner, initial);
+      assert.equal(deliveries.length, 1, 'a verdict during the ask is caught and re-driven once');
+      assert.equal(owner.withheldDispatchByOperationId.has(initial.operation_id), false,
+        'the wait is cleared when the re-driven gate check passes');
+    }, {ledgerRoute: LEDGER_ROUTE.PUBLISHED});
+    await withPlacementExecution(async ({owner, leader, initial, deliveries}) => {
+      const repository = owner.repository;
+      failFirstRetainedRead(repository);
+      const verdicts = observeRetainedVerdicts(owner);
+      await claimAndReenter(owner, leader, initial);
+      assert.equal(owner.withheldDispatchByOperationId.has(initial.operation_id), true);
+      const direct = await owner.dispatchOperation(initial.operation_id);
+      assert.equal(direct.success, true);
+      assert.equal(deliveries.length, 1, 'the second ask confirms the row directly');
+      assert.equal(verdicts.length, 0,
+        'awaitingCallers === 0: retiring for an awaiting caller emits no verdict');
+      assert.equal(owner.withheldDispatchByOperationId.has(initial.operation_id), false,
+        'passing the gate clears any previously registered wait');
+    }, {ledgerRoute: LEDGER_ROUTE.PUBLISHED});
+  });
+
+test('row_changed re-evaluates the gate once; a definite refusal ends the wait with the typed ' +
+  'non-dispatchable outcome', async () => {
+  await withPlacementExecution(async ({owner, leader, initial, deliveries}) => {
+    const repository = owner.repository;
+    const clock = installVirtualClock(repository);
+    failFirstRetainedRead(repository);
+    const verdicts = observeRetainedVerdicts(owner);
+    const sending = await claimAndReenter(owner, leader, initial);
+    assert.equal(deliveries.length, 0);
+    assert.equal(committedUpdate(leader, 'execution-mirror:row-changed',
+      'UPDATE replica_operations SET updated_at = ? WHERE operation_id = ?',
+      [sending.updated_at + 1, initial.operation_id]), 1);
+    await advanceContinuation(clock, [repository],
+      () => repository.retainedPlacementRepairs.size === 0);
+    assert.equal(verdicts.length, 1);
+    assert.equal(verdicts[0].event.verdict.reason, RETAINED_REPAIR_RETIREMENT.CHANGED);
+    assert.equal(verdicts[0].answer.state, 'redriven',
+      'row_changed re-enters the dispatch gate once');
+    await verdicts[0].answer.dispatch;
+    await settleOperationLane(owner, initial);
+    assert.equal(deliveries.length, 1, 'the re-evaluated row dispatches once');
+    assert.equal(owner.withheldDispatchByOperationId.size, 0);
+  }, {ledgerRoute: LEDGER_ROUTE.PUBLISHED});
+  await withPlacementExecution(async ({owner, leader, initial, deliveries}) => {
+    const repository = owner.repository;
+    failFirstRetainedRead(repository);
+    const verdicts = observeRetainedVerdicts(owner);
+    await claimAndReenter(owner, leader, initial);
+    repository.reportRetainedRepairVerdict(verdictFor(initial,
+      unconfirmedVerdict(RETAINED_REPAIR_RETIREMENT.CHANGED)));
+    assert.equal(verdicts.length, 1);
+    assert.equal(verdicts[0].answer.state, 'redriven');
+    // Before the re-drive turn runs, if the re-evaluation itself also yields
+    // row_changed, the second row_changed ends the wait without looping.
+    owner.withheldDispatchByOperationId.set(initial.operation_id, {
+      createdAt: initial.created_at, fenceEpoch: owner.getOperationOwnershipFenceEpoch(),
+      deadlineMs: initial.created_at +
+        OPERATION_WORKFLOW_OWNER_SHARED.TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS,
+      awaitingVerdict: true, changedRedriven: true,
+    });
+    repository.reportRetainedRepairVerdict(verdictFor(initial,
+      unconfirmedVerdict(RETAINED_REPAIR_RETIREMENT.CHANGED)));
+    assert.equal(verdicts.length, 2);
+    assert.equal(verdicts[1].answer.state, 'unconfirmed');
+    assert.equal(verdicts[1].answer.outcome?.reason,
+      OPERATION_WORKFLOW_OWNER_SHARED.OPERATION_WORKFLOW_OWNER_REASON.OPERATION_NOT_DISPATCHABLE);
+    assert.equal(verdicts[1].answer.outcome?.error, RETAINED_REPAIR_RETIREMENT.CHANGED);
+    await verdicts[0].answer.dispatch;
+    await settleOperationLane(owner, initial);
+    assert.equal(deliveries.length, 1);
+  }, {ledgerRoute: LEDGER_ROUTE.PUBLISHED});
+  await withPlacementExecution(async ({owner, leader, initial, deliveries}) => {
+    const repository = owner.repository;
+    const verdicts = observeRetainedVerdicts(owner);
+    assert.equal(committedUpdate(leader, 'execution-mirror:definite-refusal-delete',
+      'DELETE FROM replica_operations WHERE operation_id = ?', [initial.operation_id]), 1);
+    repository.repairRetainedPlacement = async () => ({
+      success: false, committed: false,
+      failureCode: PLACEMENT_ADMISSION_ERROR.BYTES,
+    });
+    const operation = repository.rowToOperation(initial);
+    const result = await owner.dispatchOperation(operation);
+    assert.equal(result.skipped, true);
+    assert.equal(result.reason,
+      OPERATION_WORKFLOW_OWNER_SHARED.OPERATION_WORKFLOW_OWNER_REASON.OPERATION_NOT_DISPATCHABLE);
+    assert.equal(result.error, PLACEMENT_ADMISSION_ERROR.BYTES,
+      'same-step definite refusal hands the typed refusal outcome to the workflow');
+    assert.equal(verdicts.length, 1);
+    assert.equal(verdicts[0].answer.state, 'unconfirmed');
+    assert.equal(owner.withheldDispatchByOperationId.size, 0,
+      'definite refusal ends the wait with no leaked entry');
+    assert.equal(deliveries.length, 0);
+  }, {ledgerRoute: LEDGER_ROUTE.PUBLISHED});
+});
+
+test('withheld dispatch fences createdAt, ownership fenceEpoch, budget deadline, ingress ' +
+  'retirement, and missing-port construction', async () => {
+  assert.throws(() => createRetainedPlacementRepairPorts({
+    ...unavailableRetainedRepairPorts(), reportRetainedRepairVerdict: null,
+  }), (error) => error instanceof TypeError && error.code === RETAINED_REPAIR_PORT_REFUSAL);
+  await withPlacementExecution(async ({owner, leader, initial, deliveries}) => {
+    const repository = owner.repository;
+    failFirstRetainedRead(repository);
+    const verdicts = observeRetainedVerdicts(owner);
+    await claimAndReenter(owner, leader, initial);
+    // Ingress-origin record (callerAnswer === NONE, awaitingCallers === 0) emits nothing.
+    const ingressOp = {...repository.rowToOperation(initial), operationId: 'ingress-only-op'};
+    const ingressRecord = retainedRepairRecord(ingressOp, RETAINED_REPAIR_ORIGIN.INGRESS);
+    repository.retainedPlacementRepairs.set(ingressOp.operationId, ingressRecord);
+    repository.retireRetainedRepair(ingressRecord,
+      unconfirmedVerdict(RETAINED_REPAIR_RETIREMENT.TENURE_ENDED));
+    assert.equal(verdicts.length, 0,
+      'callerAnswer === WITHHELD: an ingress record that never refused a caller emits nothing');
+    // createdAt fence: a verdict for another incarnation keeps the current wait.
+    repository.reportRetainedRepairVerdict({
+      operationId: initial.operation_id, createdAt: initial.created_at + 1,
+      verdict: {state: RETAINED_REPAIR_VERDICT.CONFIRMED},
+    });
+    assert.equal(verdicts.length, 1);
+    assert.equal(verdicts[0].answer.state, 'not_withheld');
+    assert.equal(owner.withheldDispatchByOperationId.has(initial.operation_id), true);
+    assert.equal(deliveries.length, 0);
+    // deadlineMs fence: at the budget deadline boundary the wait is not current.
+    const originalNow = owner.resolveTimeoutCheckNowMs;
+    const deadlineMs = initial.created_at +
+      OPERATION_WORKFLOW_OWNER_SHARED.TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS;
+    owner.resolveTimeoutCheckNowMs = () => deadlineMs;
+    try {
+      repository.reportRetainedRepairVerdict(
+        verdictFor(initial, {state: RETAINED_REPAIR_VERDICT.CONFIRMED}));
+    } finally {
+      owner.resolveTimeoutCheckNowMs = originalNow;
+    }
+    assert.equal(verdicts.length, 2);
+    assert.equal(verdicts[1].answer.state, 'not_current');
+    assert.equal(owner.withheldDispatchByOperationId.has(initial.operation_id), false);
+    assert.equal(deliveries.length, 0);
+    // fenceEpoch comparison: bumping the ownership fence epoch invalidates a wait.
+    failFirstRetainedRead(repository);
+    await owner.dispatchOperation(initial.operation_id);
+    assert.equal(owner.withheldDispatchByOperationId.has(initial.operation_id), true);
+    owner.bumpOperationOwnershipFenceEpoch();
+    repository.reportRetainedRepairVerdict(
+      verdictFor(initial, {state: RETAINED_REPAIR_VERDICT.CONFIRMED}));
+    assert.equal(verdicts.length, 3);
+    assert.equal(verdicts[2].answer.state, 'not_current');
+    assert.equal(owner.withheldDispatchByOperationId.has(initial.operation_id), false);
+    assert.equal(deliveries.length, 0);
   }, {ledgerRoute: LEDGER_ROUTE.PUBLISHED});
 });
 

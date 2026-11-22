@@ -216,7 +216,7 @@ documentClass: generated
 - [replica-operation-repository-mutation-update-methods.js](replica-operation-repository-mutation-update-methods.js) - Resolve existing durable truth before a workflow prepares a new effect. (importers: one)
 - [replica-operation-repository-observation-methods.js](replica-operation-repository-observation-methods.js) - Normalize one observed services row into workflow replica lifecycle. (importers: many)
 - [replica-operation-repository-read-methods.js](replica-operation-repository-read-methods.js) - The authoritative read retry window is spent with the read still failing retryably: one wait_bound_spent ERROR; the... (importers: one)
-- [replica-operation-repository-retained-placement-repair.js](replica-operation-repository-retained-placement-repair.js) - No leading comment; first export: RETAINED_REPAIR_PORT_REFUSAL. (importers: one)
+- [replica-operation-repository-retained-placement-repair.js](replica-operation-repository-retained-placement-repair.js) - No leading comment; first export: RETAINED_REPAIR_PORT_REFUSAL. (importers: few)
 - [replica-operation-repository-row-methods.js](replica-operation-repository-row-methods.js) - Translate a raw SQL/cache row into a normalized operation object. (importers: few)
 - [replica-operation-repository-visibility-methods.js](replica-operation-repository-visibility-methods.js) - Bound retryable SQL backoff for replica_operations owner reads. (importers: one)
 - [replica-operation-repository.js](replica-operation-repository.js) - ReplicaOperationRepository - SQL/cache reads and writes, row <-> operation translation for replica_operations. (importers: hub)

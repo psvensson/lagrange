@@ -28,7 +28,7 @@
   "censusSize": 2751,
   "digest": "fnv1a32-f77112e0",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-7441b03d",
+  "observationDigest": "fnv1a32-b65f0d2c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -14837,7 +14837,9 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-placement-admission-constants.js",
         "src/partition/partition-placement-admission.js",
+        "src/partition/partition-placement-repair-preparation-result.js",
         "src/partition/partition-service-constants.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
@@ -14849,11 +14851,11 @@
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/operation-workflow-owner-shared.js",
         "src/rebalancer/operation-workflow-replace-target-binding.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/rebalancer/replica-operation-progress.js",
         "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
-        "src/rebalancer/replica-operation-retained-repair-record.js",
         "src/rebalancer/replica-placement-owner-admission-statement.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/participant-transaction-fixture.js",
@@ -20138,7 +20140,8 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js",
         "src/rebalancer/priority-publication-safety-rows.js",
-        "src/rebalancer/replica-operation-repository-mutation-row-methods.js"
+        "src/rebalancer/replica-operation-repository-mutation-row-methods.js",
+        "src/transport/transport-semantic-outcome.js"
       ]
     },
     "test/rebalancer/rebalancer-gating.property.test.js": {

@@ -47,10 +47,15 @@ import {
   buildCommittedOperationFixture,
   workflowFixtureHistory,
 } from './operation-outcome-fixture.js';
+import {buildDeliveryEnvelope} from
+  '../../src/transport/transport-semantic-outcome.js';
 
 const {
   OPERATION_HANDLER,
+  REBALANCE_COORDINATOR_DEFER_REASON,
+  REBALANCER_SKIP_REASON,
   REMOVE_SAFETY_EVALUATION_CLASSIFICATION,
+  ReplicaOperationResponseStatus,
   resolveOperationHandlerType,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
@@ -104,6 +109,11 @@ function buildEvaluationContext({rows, minReplicaCount = 1, operations = []}) {
     }),
     buildFailedRemoveSafetyEvaluation: (error) => ({
       classification: REMOVE_SAFETY_EVALUATION_CLASSIFICATION.FAIL,
+      error,
+    }),
+    buildDeferredRemoveSafetyEvaluation: (error, deferReason) => ({
+      classification: REMOVE_SAFETY_EVALUATION_CLASSIFICATION.DEFER,
+      deferReason,
       error,
     }),
     buildDeferredRemoveSafetyEvaluationForOperation: (_operation, error) => ({
@@ -426,6 +436,179 @@ test('message-group and runtime-service floors remain entity-owned',
         'runtime-service removal uses its availability floor, not Raft quorum');
     } finally {
       await runtime.coordinator.shutdown();
+    }
+  });
+
+test('message-group REMOVE withholds on unavailable evidence and decides after evidence recovers',
+  async (t) => {
+    const runPairedWitness = async ({groupId, operationId, replicaIds}) => {
+      const subject = buildCommittedOperationFixture({
+        operationId,
+        type: OperationType.REMOVE,
+        partitionId: groupId,
+        entityType: SERVICE_TYPE.MESSAGE_GROUP,
+        entityId: groupId,
+        replicaId: replicaIds[0],
+        sourceNodeId: OWNER_NODE,
+        targetNodeId: 'node-a',
+      }, WORKFLOW_STEP.SENDING, Date.now());
+      const nodeIds = replicaIds.map((_, index) =>
+        `node-${String.fromCodePoint(97 + index)}`);
+      const services = replicaIds.map((replicaId, index) =>
+        serviceRow(SERVICE_TYPE.MESSAGE_GROUP, groupId, replicaId, nodeIds[index]));
+      const {coordinator, owner} = createRemovalSafetyOwner({
+        subject,
+        services,
+        nodes: nodeIds.map(readyNodeRow),
+        tablePolicyService: createMockPolicyService({
+          getMessageGroupPolicy: () => ({
+            ...REBALANCER_DEFAULT_POLICY.MESSAGE_GROUP,
+            minReplicaCount: 3,
+          }),
+        }),
+      });
+      const deliveries = [];
+      owner.messageRouter = {
+        getConnectionState: () => 'connected',
+        pingNode: async () => true,
+        async deliver(address, request) {
+          deliveries.push({address, request});
+          return buildDeliveryEnvelope({acknowledged: true}, {
+            status: ReplicaOperationResponseStatus.INITIATED,
+          });
+        },
+      };
+      const gateway = owner.repository.controlPlaneSystemTableGateway;
+      const readAuthoritativeRows = gateway.readAuthoritativeRows.bind(gateway);
+      let servicesUnavailable = true;
+      gateway.readAuthoritativeRows = async (tableName, sql, params, options) => {
+        if (servicesUnavailable && tableName === 'services') {
+          return {success: false, rowSetComplete: false, rows: []};
+        }
+        return readAuthoritativeRows(tableName, sql, params, options);
+      };
+      return {
+        coordinator,
+        owner,
+        subject,
+        deliveries,
+        setServicesUnavailable: (value) => {
+          servicesUnavailable = value;
+        },
+      };
+    };
+
+    const aboveFloor = await runPairedWitness({
+      groupId: 'group-recover-proceed',
+      operationId: 'group-remove-recover-proceed',
+      replicaIds: ['group-r1', 'group-r2', 'group-r3', 'group-r4'],
+    });
+    try {
+      const deferredEval = await aboveFloor.owner.evaluateRemoveSafety(aboveFloor.subject);
+      t.equal(deferredEval.classification,
+        REMOVE_SAFETY_EVALUATION_CLASSIFICATION.DEFER,
+        'temporarily unavailable replica observation defers message-group REMOVE');
+      t.equal(deferredEval.deferReason,
+        REBALANCE_COORDINATOR_DEFER_REASON.REMOVE_SAFETY_BLOCKED);
+      t.equal(deferredEval.error,
+        'message_group group-recover-proceed safety check unavailable');
+
+      const deferredDispatch =
+        await aboveFloor.owner.executeOperationInternal(aboveFloor.subject);
+      t.equal(deferredDispatch.skipped, true,
+        'unavailable replica observation withholds REMOVE instead of failing');
+      t.equal(deferredDispatch.reason, REBALANCER_SKIP_REASON.SAFETY_BLOCKED);
+      t.equal(deferredDispatch.deferReason,
+        REBALANCE_COORDINATOR_DEFER_REASON.REMOVE_SAFETY_BLOCKED);
+      t.equal(aboveFloor.deliveries.length, 0);
+      t.equal(
+        aboveFloor.owner.safetyDeferredRetryTimerByOperationId.has(
+          aboveFloor.subject.operationId,
+        ),
+        true,
+        'withheld message-group REMOVE arms the owned deferred-safety continuation',
+      );
+      const afterDefer = await aboveFloor.owner.repository.queryOperationById(
+        aboveFloor.subject.operationId,
+      );
+      t.equal(afterDefer.workflowStep, WORKFLOW_STEP.SENDING);
+      t.equal(afterDefer.completedAt, null);
+
+      aboveFloor.setServicesUnavailable(false);
+      const getMin = aboveFloor.owner.getEntityRemoveSafetyMinReplicaCount;
+      aboveFloor.owner.getEntityRemoveSafetyMinReplicaCount = async () => null;
+      try {
+        const policyDeferred =
+          await aboveFloor.owner.evaluateRemoveSafety(aboveFloor.subject);
+        t.equal(policyDeferred.classification,
+          REMOVE_SAFETY_EVALUATION_CLASSIFICATION.DEFER,
+          'unreadable policy minimum defers message-group REMOVE instead of failing');
+        t.equal(policyDeferred.deferReason,
+          REBALANCE_COORDINATOR_DEFER_REASON.REMOVE_SAFETY_BLOCKED);
+        t.equal(policyDeferred.error,
+          'message_group group-recover-proceed safety policy unavailable');
+      } finally {
+        aboveFloor.owner.getEntityRemoveSafetyMinReplicaCount = getMin;
+      }
+
+      const recoveredEval = await aboveFloor.owner.evaluateRemoveSafety(aboveFloor.subject);
+      t.equal(recoveredEval.classification,
+        REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE,
+        'recovered evidence above floor allows the message-group REMOVE');
+      const recoveredDispatch =
+        await aboveFloor.owner.executeOperationInternal(aboveFloor.subject);
+      t.equal(recoveredDispatch.success, true);
+      t.equal(aboveFloor.deliveries.length, 1,
+        'recovered evidence above floor dispatches REMOVE_REPLICA');
+      t.equal(
+        aboveFloor.owner.safetyDeferredRetryTimerByOperationId.has(
+          aboveFloor.subject.operationId,
+        ),
+        false,
+      );
+    } finally {
+      await aboveFloor.coordinator.shutdown();
+    }
+
+    const belowFloor = await runPairedWitness({
+      groupId: 'group-recover-fail',
+      operationId: 'group-remove-recover-fail',
+      replicaIds: ['group-r1', 'group-r2', 'group-r3'],
+    });
+    try {
+      const deferredDispatch =
+        await belowFloor.owner.executeOperationInternal(belowFloor.subject);
+      t.equal(deferredDispatch.skipped, true,
+        'below-floor candidate still withholds while replica observation is unavailable');
+      t.equal(deferredDispatch.reason, REBALANCER_SKIP_REASON.SAFETY_BLOCKED);
+      t.equal(belowFloor.deliveries.length, 0);
+      t.equal(
+        belowFloor.owner.safetyDeferredRetryTimerByOperationId.has(
+          belowFloor.subject.operationId,
+        ),
+        true,
+      );
+
+      belowFloor.setServicesUnavailable(false);
+      const provenEval = await belowFloor.owner.evaluateRemoveSafety(belowFloor.subject);
+      t.equal(provenEval.classification,
+        REMOVE_SAFETY_EVALUATION_CLASSIFICATION.FAIL,
+        'recovered evidence proving a minimum-floor breach fails terminally');
+      t.equal(provenEval.error,
+        'message_group group-recover-fail would drop active replicas below minimum (2/3)');
+      const failedDispatch =
+        await belowFloor.owner.executeOperationInternal(belowFloor.subject);
+      t.equal(failedDispatch.success, false);
+      t.equal(failedDispatch.terminal, true);
+      t.equal(failedDispatch.error,
+        'message_group group-recover-fail would drop active replicas below minimum (2/3)');
+      t.equal(belowFloor.deliveries.length, 0);
+      const afterFail = await belowFloor.owner.repository.queryOperationById(
+        belowFloor.subject.operationId,
+      );
+      t.equal(afterFail.workflowStep, WORKFLOW_STEP.FAILED);
+    } finally {
+      await belowFloor.coordinator.shutdown();
     }
   });
 
