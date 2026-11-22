@@ -57,6 +57,10 @@ const LITERAL_STORAGE_NULL = 'NULL';
 const INT32_MIN_VALUE = -2147483648;
 const INT32_MAX_VALUE = 2147483647;
 const UNSPECIFIED_OID = 0;
+const UNARY_NOT_OP = 'NOT';
+const UNARY_MINUS_OP = '-';
+const UNARY_PLUS_OP = '+';
+const UNARY_BITNOT_OP = '~';
 
 const BOOLEAN_OPERATORS = new Set([
   '=', '!=', '<>', '<', '<=', '>', '>=', 'IS', 'IS NOT', 'IS NULL', 'IS NOT NULL',
@@ -67,8 +71,17 @@ const TEXT_FUNCTION_NAMES = new Set([
   'REPLACE', 'CONCAT', 'GROUP_CONCAT', 'STRING_AGG', 'TYPEOF',
 ]);
 const NUMERIC_OPERATORS = new Set(['+', '-', '*', '/', '%']);
+const NUMERIC_UNARY_OPERATORS = new Set([UNARY_MINUS_OP, UNARY_PLUS_OP, UNARY_BITNOT_OP]);
+const SIGNED_UNARY_OPERATORS = new Set([UNARY_MINUS_OP, UNARY_PLUS_OP]);
+const NUMERIC_OIDS = new Set([
+  PG_OID.INT2,
+  PG_OID.INT4,
+  PG_OID.INT8,
+  PG_OID.FLOAT4,
+  PG_OID.FLOAT8,
+  PG_OID.NUMERIC,
+]);
 const BOOLEAN_EXPR_TYPES = new Set([
-  EXPR_TYPE.UNARY,
   EXPR_TYPE.IN,
   EXPR_TYPE.BETWEEN,
   EXPR_TYPE.LIKE,
@@ -248,17 +261,16 @@ function lookupColumnDescriptor(scope, tableRef, columnName) {
   return null;
 }
 
+function integerRangeOid(num) {
+  const isInt4 = Number.isSafeInteger(num) &&
+    num >= INT32_MIN_VALUE && num <= INT32_MAX_VALUE;
+  return isInt4 ? PG_OID.INT4 : PG_OID.INT8;
+}
+
 function inferLiteralOid(expr) {
   if (expr.sqlType === LITERAL_STORAGE_NULL) return PG_OID.TEXT;
   if (typeof expr.value === BOOL_LITERAL_VALUE) return PG_OID.BOOL;
-  if (expr.sqlType === LITERAL_STORAGE_INTEGER) {
-    const num = Number(expr.value);
-    if (Number.isSafeInteger(num) &&
-        num >= INT32_MIN_VALUE && num <= INT32_MAX_VALUE) {
-      return PG_OID.INT4;
-    }
-    return PG_OID.INT8;
-  }
+  if (expr.sqlType === LITERAL_STORAGE_INTEGER) return integerRangeOid(Number(expr.value));
   if (expr.sqlType === LITERAL_STORAGE_REAL) return PG_OID.FLOAT8;
   if (expr.sqlType === LITERAL_STORAGE_BLOB) return PG_OID.BYTEA;
   return PG_OID.TEXT;
@@ -325,6 +337,21 @@ function inferBinaryOid(expr, scope, inferredParams, paramMapping) {
   return inferNumericBinaryOid(left, right);
 }
 
+function inferUnaryOid(expr, scope, inferredParams, paramMapping) {
+  const op = String(expr.operator || '').toUpperCase();
+  if (op === UNARY_NOT_OP || BOOLEAN_OPERATORS.has(op)) return PG_OID.BOOL;
+  const operand = expr.operand;
+  if (op === UNARY_MINUS_OP &&
+      operand?.type === EXPR_TYPE.LITERAL &&
+      operand.sqlType === LITERAL_STORAGE_INTEGER) {
+    return integerRangeOid(-Number(operand.value));
+  }
+  if (!NUMERIC_UNARY_OPERATORS.has(op)) return PG_OID.TEXT;
+  const inner = inferExpressionOid(operand, scope, inferredParams, paramMapping);
+  if (operand?.sqlType === LITERAL_STORAGE_NULL || NUMERIC_OIDS.has(inner)) return inner;
+  return PG_OID.TEXT;
+}
+
 const EXPR_OID_INFERERS = Object.freeze({
   [EXPR_TYPE.COLUMN_REF]: (expr, scope) => {
     const col = lookupColumnDescriptor(scope, expr.table, expr.column);
@@ -339,6 +366,7 @@ const EXPR_OID_INFERERS = Object.freeze({
   [PG_EXPR_TYPE.FUNCTION_CALL]: inferFunctionCallOid,
   [PG_EXPR_TYPE.CASE]: inferCaseOid,
   [EXPR_TYPE.BINARY]: inferBinaryOid,
+  [EXPR_TYPE.UNARY]: inferUnaryOid,
   [EXPR_TYPE.COLLATE]: (expr, scope, inferredParams, paramMapping) =>
     inferExpressionOid(expr.expression, scope, inferredParams, paramMapping),
 });
@@ -358,10 +386,18 @@ function recordInferredParam(inferredParams, paramNode, oid, paramMapping) {
   }
 }
 
-function tryInferColumnParam(colExpr, paramExpr, scope, inferredParams, paramMapping) {
-  if (colExpr?.type !== EXPR_TYPE.COLUMN_REF || paramExpr?.type !== EXPR_TYPE.PARAMETER) {
-    return false;
+function unwrapSignedUnaryExpression(expr) {
+  let cur = expr;
+  while (cur?.type === EXPR_TYPE.UNARY && SIGNED_UNARY_OPERATORS.has(cur.operator)) {
+    cur = cur.operand;
   }
+  return cur;
+}
+
+function tryInferColumnParam(colExpr, candidateExpr, scope, inferredParams, paramMapping) {
+  if (colExpr?.type !== EXPR_TYPE.COLUMN_REF) return false;
+  const paramExpr = unwrapSignedUnaryExpression(candidateExpr);
+  if (paramExpr?.type !== EXPR_TYPE.PARAMETER) return false;
   const col = lookupColumnDescriptor(scope, colExpr.table, colExpr.column);
   if (col) recordInferredParam(inferredParams, paramExpr, col.oid, paramMapping);
   return true;
@@ -377,8 +413,9 @@ function inferInListParameters(expr, scope, inferredParams, paramMapping) {
   const col = lookupColumnDescriptor(scope, expr.expression.table, expr.expression.column);
   if (!col) return;
   for (const val of expr.values) {
-    if (val?.type === EXPR_TYPE.PARAMETER) {
-      recordInferredParam(inferredParams, val, col.oid, paramMapping);
+    const paramExpr = unwrapSignedUnaryExpression(val);
+    if (paramExpr?.type === EXPR_TYPE.PARAMETER) {
+      recordInferredParam(inferredParams, paramExpr, col.oid, paramMapping);
     }
   }
 }
@@ -497,8 +534,9 @@ function inferInsertParameters(ast, cols, scope, inferredParams, paramMapping) {
   for (const row of ast.values || []) {
     for (let i = 0; i < row.length; i += 1) {
       const value = row[i];
-      if (value?.type === EXPR_TYPE.PARAMETER && targetCols[i]) {
-        recordInferredParam(inferredParams, value, targetCols[i].oid, paramMapping);
+      const paramExpr = unwrapSignedUnaryExpression(value);
+      if (paramExpr?.type === EXPR_TYPE.PARAMETER && targetCols[i]) {
+        recordInferredParam(inferredParams, paramExpr, targetCols[i].oid, paramMapping);
       } else {
         inferParametersInExpression(value, scope, inferredParams, paramMapping);
       }
@@ -509,8 +547,9 @@ function inferInsertParameters(ast, cols, scope, inferredParams, paramMapping) {
 function inferUpdateParameters(ast, cols, scope, inferredParams, paramMapping) {
   for (const assign of ast.assignments || []) {
     const target = cols.find((c) => c.name === assign.column);
-    if (target && assign.value?.type === EXPR_TYPE.PARAMETER) {
-      recordInferredParam(inferredParams, assign.value, target.oid, paramMapping);
+    const paramExpr = unwrapSignedUnaryExpression(assign.value);
+    if (target && paramExpr?.type === EXPR_TYPE.PARAMETER) {
+      recordInferredParam(inferredParams, paramExpr, target.oid, paramMapping);
     } else {
       inferParametersInExpression(assign.value, scope, inferredParams, paramMapping);
     }
