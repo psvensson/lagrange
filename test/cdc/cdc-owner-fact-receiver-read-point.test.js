@@ -401,6 +401,11 @@ test('readOwnerFact: a leader whose commit index has advanced past its applied p
   t.equal((await written)?.success, true, 'setup: the write completes once the turn resumes');
   const after = await leader.handleRemoteQuery(ownerFactRequestTo(leader, [operationId]));
   t.equal(after?.success, true, 'READY once the leader applied what it committed');
+  const verified = await readOwnerFact(async () => after, ownerFactDraft([operationId]));
+  t.equal(verified.state, STATE.READY);
+  t.same(verified.state === STATE.READY ? ownerFactRows(verified) : null,
+    [{operation_id: operationId, workflow_step: leader.replicaId}],
+    'the withheld committed row itself is returned once applied');
 });
 
 test('readOwnerFact: a published leader with no usable service is a named unavailable, and ' +
