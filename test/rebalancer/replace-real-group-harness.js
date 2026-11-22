@@ -898,6 +898,10 @@ async function deliver(world, target, payload) {
 // The fixture store calls this once per changed ledger row in a committed
 // SQLite statement, before publishing CDC. Raft membership is a distinct oracle.
 function captureTerminalWrite(world, row) {
+  world.sourceHandler?.lifecycleStore.durable.replica_operations.set(
+    row.operation_id,
+    {...row},
+  );
   if (row.operation_id !== world.operation?.operationId ||
       !TERMINAL_STEPS.has(row.workflow_step) || row.completed_at === null) return;
   world.terminalWrites.push(Object.freeze({

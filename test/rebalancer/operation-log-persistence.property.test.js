@@ -28,9 +28,10 @@ async function createTestCoordinatorWithPersistence(cacheData = {}) {
     enableTimeouts: false,
     cacheData,
   });
+  const [ledgerPartition] = coordinator.ledgerPartitionServices;
   const persistedOperations = {
     get: (operationId) =>
-      coordinator._ledgerFixture.leader.db
+      ledgerPartition.db
         .prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
         .get(operationId),
   };

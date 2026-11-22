@@ -100,6 +100,7 @@ function createCriticalReplaceCreateReplay({
     },
   });
   coordinator.initialize();
+  coordinator.isPlacementAdmissionManagedEntityType = () => false;
   installActualReplicaObservationResolver(coordinator, observedTargetStatus);
 
   const create = () => coordinator.createOperation({

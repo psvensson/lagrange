@@ -323,6 +323,7 @@ test('createOperation - fails fast when accounting service is absent',
       enableTimeouts: false,
     });
     coordinator.initialize();
+    coordinator.isPlacementAdmissionManagedEntityType = () => false;
 
     const move = {
       type: OperationType.ADD,
@@ -738,6 +739,7 @@ test('reconcileReservations - works without accounting service',
       enableTimeouts: false,
     });
     coordinator.initialize();
+    coordinator.isPlacementAdmissionManagedEntityType = () => false;
 
     const result = await coordinator.reconcileReservations();
     t.equal(result.expired, 0);
