@@ -18,6 +18,7 @@ import {createLiveQueryStartupWiring} from '../../src/live-query/live-query-star
 import {QueryGroup} from '../../src/live-query/live-query-group.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {TABLES} from '../../src/constants/index.js';
 import {
   compilePredicate,
@@ -664,5 +665,232 @@ describe('Unit J6: Multi-node remote producer CDC delivery and leader failover',
     wiringA.liveQueryManager.unregisterLiveQuery(reg.queryId, client.id);
     const unsubscribed = await waitForMessageMatch(() => leaderC.cdcSubscribers.size === 0);
     assert.ok(unsubscribed, 'Node A sent LIVE_QUERY_CDC_UNSUBSCRIBE to Node C on unregister');
+  });
+
+  it('Schedule A: recovers Row 1 after canonical DEFERRED (noHandler: false) without manual refresh', async () => {
+    const capturedCdcDeliveries = [];
+    routers = await createBridgedRouters(['node-a', 'node-b'], capturedCdcDeliveries);
+    const routerA = routers.get('node-a');
+    const routerB = routers.get('node-b');
+
+    let deferEventDelivery = true;
+    const origDeliverB = routerB.deliver.bind(routerB);
+    routerB.deliver = async (targetAddress, message, opts = {}) => {
+      if (deferEventDelivery && message?.type === 'LIVE_QUERY_CDC_EVENT') {
+        return buildDeliveryEnvelope({
+          acknowledged: false,
+          deferRetry: true,
+          noHandler: false,
+          retryAfterMs: 25,
+          error: 'temporary transport disconnect',
+        });
+      }
+      return origDeliverB(targetAddress, message, opts);
+    };
+
+    ({leader: leaderB} = await startLeader({
+      tableName: 'live_orders',
+      schema: TABLE_SCHEMA,
+      nodeId: 'node-b',
+      replicaId: 'p1',
+      transport: routerB,
+    }, 'p1'));
+
+    const currentPartitions = [{
+      partition_id: 'p1',
+      table_name: 'live_orders',
+      partition_key_start: null,
+      partition_key_end: null,
+      partition_key_type: 'INTEGER',
+      leader_node_id: 'node-b',
+    }];
+    const systemCache = createRemoteTopologyCache(
+      TABLES_METADATA,
+      () => currentPartitions,
+      () => [{partition_id: 'p1', node_id: 'node-b'}],
+    );
+    const parserEngine = new SQLQueryEngine();
+    const sqlEngine = {
+      callCount: 0,
+      parse: (sql) => parserEngine.parse(sql),
+      executeQuery: async (sql, params = []) => {
+        sqlEngine.callCount += 1;
+        const rows = oracleDb.prepare(sql).all(...params);
+        return {rows, results: rows, count: rows.length};
+      },
+    };
+
+    wiringA = createLiveQueryStartupWiring({
+      nodeId: 'node-a',
+      systemTableCache: systemCache,
+      sqlQueryEngine: sqlEngine,
+      partitionServicesProvider: () => new Map(),
+      messageRouter: routerA,
+    });
+
+    const client = createMockClient('deferred-recovery-client');
+    const observedRows = new Map();
+    const origSend = client.send;
+    client.send = (msg) => {
+      origSend(msg);
+      applyClientMessageToView(observedRows, client.messages[client.messages.length - 1]);
+    };
+
+    const sql = 'SELECT id, customer, total FROM live_orders WHERE status = \'OPEN\'';
+    const reg = await wiringA.liveQueryManager.registerLiveQuery(sql, client);
+
+    // Commit Row 1 while delivery returns canonical DEFERRED (noHandler: false).
+    const insertSql =
+      'INSERT INTO live_orders (id, customer, status, total, secret_note) VALUES (?, ?, ?, ?, ?)';
+    oracleDb.prepare(insertSql).run(1, 'Alice', 'OPEN', 100, 's1');
+    applyCommitted(leaderB, {...committedQueryOf('def-1', insertSql), params: [1, 'Alice', 'OPEN', 100, 's1']});
+    await new Promise((r) => setTimeout(r, 40));
+
+    const diag = leaderB.getCDCSubscriptionDiagnostics();
+    assert.equal(diag.subscriptions[0].lastDeliveredSequenceNumber, null,
+      'producer must NOT advance lastDeliveredSequenceNumber past DEFERRED event');
+    assert.equal(observedRows.size, 0, 'Row 1 not yet delivered while DEFERRED');
+
+    // Restore delivery and commit Row 2; both Row 1 and Row 2 must arrive.
+    deferEventDelivery = false;
+    oracleDb.prepare(insertSql).run(2, 'Bob', 'OPEN', 200, 's2');
+    applyCommitted(leaderB, {...committedQueryOf('def-2', insertSql), params: [2, 'Bob', 'OPEN', 200, 's2']});
+
+    const recovered = await waitForMessageMatch(() => observedRows.size === 2);
+    assert.ok(recovered, 'live query must recover Row 1 and deliver Row 2');
+    const sortedObserved = Array.from(observedRows.values()).sort((a, b) => a.id - b.id);
+    assert.deepEqual(sortedObserved, oracleDb.prepare(`${sql} ORDER BY id`).all());
+
+    wiringA.liveQueryManager.unregisterLiveQuery(reg.queryId, client.id);
+  });
+
+  it('Schedule B: failed initial subscribe and failed failover rebind stay pending and recover', async () => {
+    const capturedCdcDeliveries = [];
+    routers = await createBridgedRouters(['node-a', 'node-b', 'node-c'], capturedCdcDeliveries);
+    const routerA = routers.get('node-a');
+    const routerB = routers.get('node-b');
+    const routerC = routers.get('node-c');
+
+    let failSubscribeForNode = 'node-b';
+    const origDeliverA = routerA.deliver.bind(routerA);
+    routerA.deliver = async (targetAddress, message, opts = {}) => {
+      if (message?.type === 'LIVE_QUERY_CDC_SUBSCRIBE' &&
+          failSubscribeForNode &&
+          targetAddress.startsWith(`${failSubscribeForNode}/`)) {
+        return buildDeliveryEnvelope({
+          acknowledged: false,
+          deferRetry: true,
+          noHandler: false,
+          retryAfterMs: 25,
+          error: 'subscribe deferred',
+        });
+      }
+      return origDeliverA(targetAddress, message, opts);
+    };
+
+    ({leader: leaderB} = await startLeader({
+      tableName: 'live_orders',
+      schema: TABLE_SCHEMA,
+      nodeId: 'node-b',
+      replicaId: 'p1',
+      transport: routerB,
+    }, 'p1'));
+    ({leader: leaderC} = await startLeader({
+      tableName: 'live_orders',
+      schema: TABLE_SCHEMA,
+      nodeId: 'node-c',
+      replicaId: 'p1',
+      transport: routerC,
+    }, 'p1'));
+
+    let currentPartitions = [{
+      partition_id: 'p1',
+      table_name: 'live_orders',
+      partition_key_start: null,
+      partition_key_end: null,
+      partition_key_type: 'INTEGER',
+      leader_node_id: 'node-b',
+    }];
+    let currentReplicas = [{partition_id: 'p1', node_id: 'node-b'}];
+    const systemCache = createRemoteTopologyCache(
+      TABLES_METADATA,
+      () => currentPartitions,
+      () => currentReplicas,
+    );
+    const parserEngine = new SQLQueryEngine();
+    const sqlEngine = {
+      callCount: 0,
+      parse: (sql) => parserEngine.parse(sql),
+      executeQuery: async (sql, params = []) => {
+        sqlEngine.callCount += 1;
+        const rows = oracleDb.prepare(sql).all(...params);
+        return {rows, results: rows, count: rows.length};
+      },
+    };
+
+    wiringA = createLiveQueryStartupWiring({
+      nodeId: 'node-a',
+      systemTableCache: systemCache,
+      sqlQueryEngine: sqlEngine,
+      partitionServicesProvider: () => new Map(),
+      messageRouter: routerA,
+    });
+
+    const client = createMockClient('handshake-retry-client');
+    const observedRows = new Map();
+    const origSend = client.send;
+    client.send = (msg) => {
+      origSend(msg);
+      applyClientMessageToView(observedRows, client.messages[client.messages.length - 1]);
+    };
+
+    const sql = 'SELECT id, customer, total FROM live_orders WHERE status = \'OPEN\'';
+    const reg = await wiringA.liveQueryManager.registerLiveQuery(sql, client);
+    const group = wiringA.liveQueryManager.findGroupByQueryId(reg.queryId);
+
+    assert.equal(client.messages[0].type, 'snapshot', 'initial SQL snapshot succeeds');
+    assert.equal(group.subscribedPartitions.has('p1'), false,
+      'failed initial handshake must NOT mark partition subscribed');
+
+    // Commit Row 1 while initial handshake is still failing, then clear fault.
+    const insertSql =
+      'INSERT INTO live_orders (id, customer, status, total, secret_note) VALUES (?, ?, ?, ?, ?)';
+    oracleDb.prepare(insertSql).run(1, 'Alice', 'OPEN', 100, 's1');
+    applyCommitted(leaderB, {...committedQueryOf('hb-1', insertSql), params: [1, 'Alice', 'OPEN', 100, 's1']});
+
+    failSubscribeForNode = null;
+    const initialRecovered = await waitForMessageMatch(
+      () => group.subscribedPartitions.has('p1') && observedRows.size === 1,
+    );
+    assert.ok(initialRecovered, 'retained retry completes subscription and recovers Row 1');
+
+    // Now failover to node-c while replacement subscribe handshake fails.
+    failSubscribeForNode = 'node-c';
+    currentPartitions = [{...currentPartitions[0], leader_node_id: 'node-c'}];
+    currentReplicas = [{partition_id: 'p1', node_id: 'node-c'}];
+    systemCache.emitCacheChange(TABLES.PARTITIONS, 'UPDATE', currentPartitions[0]);
+
+    const failedRebindObserved = await waitForMessageMatch(
+      () => leaderB.cdcSubscribers.size === 0 && !group.subscribedPartitions.has('p1'),
+    );
+    assert.ok(failedRebindObserved,
+      'failed failover rebind unsubscribes node-b and leaves p1 unsubscribed');
+
+    // Commit Row 2 on leaderC while replacement handshake is pending, then clear fault.
+    oracleDb.prepare(insertSql).run(2, 'Bob', 'OPEN', 200, 's2');
+    applyCommitted(leaderC, {...committedQueryOf('hb-2', insertSql), params: [2, 'Bob', 'OPEN', 200, 's2']});
+
+    failSubscribeForNode = null;
+    const failoverRecovered = await waitForMessageMatch(
+      () => group.subscribedPartitions.has('p1') &&
+        leaderC.cdcSubscribers.size === 1 &&
+        observedRows.size === 2,
+    );
+    assert.ok(failoverRecovered,
+      'retained failover entry completes replacement subscribe and recovers Row 2');
+    const sortedObserved = Array.from(observedRows.values()).sort((a, b) => a.id - b.id);
+    assert.deepEqual(sortedObserved, oracleDb.prepare(`${sql} ORDER BY id`).all());
+
+    wiringA.liveQueryManager.unregisterLiveQuery(reg.queryId, client.id);
   });
 });
