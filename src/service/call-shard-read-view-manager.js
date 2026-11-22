@@ -74,10 +74,22 @@ function createShardReadViewManager(options = {}) {
   }
 
   function maybeStopReaper() {
-    if (reaperTimer && activeViews.size === 0 && unclosedViews.size === 0) {
+    if (reaperTimer && activeViews.size === 0 &&
+        unclosedViews.size === 0 && openingViews.size === 0) {
       clearInterval(reaperTimer);
       reaperTimer = null;
     }
+  }
+
+  function ensureReaperRunning() {
+    if (isShutdown || reaperTimer || !Number.isFinite(limits.reapIntervalMs) ||
+        limits.reapIntervalMs <= 0) {
+      return;
+    }
+    reaperTimer = setInterval(() => {
+      reapExpiredViews(limits.nowProvider());
+    }, limits.reapIntervalMs);
+    reaperTimer.unref?.();
   }
 
   function recordCloseFailure(view, closeResult, reason) {
@@ -103,6 +115,9 @@ function createShardReadViewManager(options = {}) {
       });
     }
     refreshTotals();
+    if (unclosedViews.size > 0 && !isShutdown) {
+      ensureReaperRunning();
+    }
     return false;
   }
 
@@ -202,17 +217,6 @@ function createShardReadViewManager(options = {}) {
     reapActiveViews(nowMs, closedIds, failedIds);
     refreshTotals();
     return Object.freeze({closedIds, failedIds});
-  }
-
-  function ensureReaperRunning() {
-    if (reaperTimer || !Number.isFinite(limits.reapIntervalMs) ||
-        limits.reapIntervalMs <= 0) {
-      return;
-    }
-    reaperTimer = setInterval(() => {
-      reapExpiredViews(limits.nowProvider());
-    }, limits.reapIntervalMs);
-    reaperTimer.unref?.();
   }
 
   function releaseAttemptReadViews(invocationId, attemptId = null) {
