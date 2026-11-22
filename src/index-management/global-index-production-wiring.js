@@ -123,24 +123,26 @@ function buildWhereClauseFromConditions(conditions, allowedColumns = null) {
 const DEFAULT_INDEX_TYPE = INDEX_TYPE.BTREE;
 const DEFAULT_GLOBAL_STATE = GLOBAL_INDEX_STATE.CREATING;
 
+function serializeIndexColumnNames(record) {
+  if (Array.isArray(record.column_names)) return JSON.stringify(record.column_names);
+  if (typeof record.column_names === 'string') return record.column_names;
+  return JSON.stringify(record.columnNames || []);
+}
+
 function toIndicesTableRow(record) {
-  const colNames = Array.isArray(record.column_names) ?
-    JSON.stringify(record.column_names) :
-    (typeof record.column_names === 'string' ?
-      record.column_names :
-      JSON.stringify(record.columnNames || []));
   const createdAt = record.created_at !== undefined ? record.created_at : Date.now();
   const updatedAt = record.updated_at !== undefined ? record.updated_at : createdAt;
   const indexType = record.index_type !== undefined ? record.index_type : DEFAULT_INDEX_TYPE;
   const state = record.state !== undefined ? record.state : DEFAULT_GLOBAL_STATE;
+  const isGlobal = record.is_global !== undefined ? Number(Boolean(record.is_global)) : 1;
   return {
     index_id: record.index_id,
     table_id: record.table_id,
     table_name: record.table_name || null,
     index_name: record.index_name,
-    column_names: colNames,
+    column_names: serializeIndexColumnNames(record),
     index_type: indexType,
-    is_global: record.is_global !== undefined ? (record.is_global ? 1 : 0) : 1,
+    is_global: isGlobal,
     is_unique: record.is_unique ? 1 : 0,
     state,
     backfill_cursor_partition_id: record.backfill_cursor_partition_id ?? null,

@@ -314,6 +314,31 @@ export function findCatalogTarget(catalog, update) {
  * @param {Object} options
  * @return {boolean}
  */
+/**
+ * Resolve primary key columns and column types for global index creation.
+ * @param {Object} def
+ * @param {Object} options
+ * @param {Object|null} schemaInfo
+ * @return {{basePrimaryKeyColumns: string[], columnTypes: Object}}
+ */
+export function resolveGlobalCreateSchemaContext(def, options, schemaInfo) {
+  let basePrimaryKeyColumns = [];
+  if (def.basePrimaryKeyColumns) {
+    basePrimaryKeyColumns = def.basePrimaryKeyColumns;
+  } else if (options.basePrimaryKeyColumns) {
+    basePrimaryKeyColumns = options.basePrimaryKeyColumns;
+  } else if (schemaInfo?.basePrimaryKeyColumns?.length > 0) {
+    basePrimaryKeyColumns = schemaInfo.basePrimaryKeyColumns;
+  }
+  let columnTypes = {};
+  if (options.columnTypes !== undefined) {
+    columnTypes = options.columnTypes;
+  } else if (schemaInfo?.columnTypes !== undefined) {
+    columnTypes = schemaInfo.columnTypes;
+  }
+  return {basePrimaryKeyColumns, columnTypes};
+}
+
 export function checkIndexExistence(catalog, def, options) {
   const indexName = def.indexName;
   if (catalog.has(indexName)) {

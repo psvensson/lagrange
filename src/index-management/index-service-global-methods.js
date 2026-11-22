@@ -51,23 +51,22 @@ function resolveGlobalIndexColumns(cat, input, options) {
     input?.columnNames || input?.columns || options?.columnNames || [];
 }
 
+function resolveMetadataIndexId(result, cat, indexName) {
+  if (result.indexId) return result.indexId;
+  if (cat?.indexId) return cat.indexId;
+  if (cat?.index_id) return cat.index_id;
+  return `idx-${indexName}`;
+}
+
+function resolveMetadataCreatedAt(cat) {
+  if (cat?.createdAt !== undefined) return cat.createdAt;
+  if (cat?.created_at !== undefined) return cat.created_at;
+  return Date.now();
+}
+
 function buildGlobalIndexMetadata(result, cat, tableId, fields) {
-  let indexId = `idx-${fields.indexName}`;
-  if (result.indexId) {
-    indexId = result.indexId;
-  } else if (cat?.indexId) {
-    indexId = cat.indexId;
-  } else if (cat?.index_id) {
-    indexId = cat.index_id;
-  }
-  let createdAt = Date.now();
-  if (cat?.createdAt !== undefined) {
-    createdAt = cat.createdAt;
-  } else if (cat?.created_at !== undefined) {
-    createdAt = cat.created_at;
-  }
   const metadata = {
-    indexId,
+    indexId: resolveMetadataIndexId(result, cat, fields.indexName),
     tableId,
     tableName: fields.tableName,
     indexName: fields.indexName,
@@ -77,7 +76,7 @@ function buildGlobalIndexMetadata(result, cat, tableId, fields) {
     isGlobal: true,
     global: true,
     state: result.state || cat?.state || GLOBAL_INDEX_STATE.READ_WRITE,
-    createdAt,
+    createdAt: resolveMetadataCreatedAt(cat),
     generation: result.generation || cat?.index_generation || 1,
   };
   if (result.interrupted) {
@@ -90,6 +89,27 @@ function buildGlobalIndexMetadata(result, cat, tableId, fields) {
     metadata.deferred = true;
   }
   return metadata;
+}
+
+function resolveCatalogTableId(cat, tableName) {
+  if (cat.tableId !== undefined) return cat.tableId;
+  if (cat.table_id !== undefined) return cat.table_id;
+  return tableName;
+}
+
+function resolveCatalogColumnNames(cat) {
+  if (Array.isArray(cat.columnNames)) return cat.columnNames;
+  if (Array.isArray(cat.column_names)) return cat.column_names;
+  if (typeof cat.column_names === 'string') {
+    const raw = cat.column_names ? cat.column_names : STRING.EMPTY_JSON_ARRAY;
+    return JSON.parse(raw);
+  }
+  return [];
+}
+
+function resolveCatalogUniqueFlag(cat) {
+  if (cat.isUnique !== undefined) return Boolean(cat.isUnique);
+  return Boolean(cat.unique || cat.is_unique);
 }
 
 function isGlobalIndexName(metadata, coordinator, indexName) {
@@ -300,30 +320,14 @@ const indexServiceGlobalMethods = {
   _catalogToMetadata(cat) {
     const indexName = cat.index_name || cat.indexName;
     const tableName = cat.table_name || cat.tableName || null;
-    let tableId = tableName;
-    if (cat.tableId !== undefined) {
-      tableId = cat.tableId;
-    } else if (cat.table_id !== undefined) {
-      tableId = cat.table_id;
-    }
-    let columnNames = [];
-    if (Array.isArray(cat.columnNames)) {
-      columnNames = cat.columnNames;
-    } else if (Array.isArray(cat.column_names)) {
-      columnNames = cat.column_names;
-    } else if (typeof cat.column_names === 'string') {
-      columnNames = JSON.parse(cat.column_names || STRING.EMPTY_JSON_ARRAY);
-    }
     return {
       indexId: cat.index_id || cat.indexId,
-      tableId,
+      tableId: resolveCatalogTableId(cat, tableName),
       tableName,
       indexName,
-      columnNames,
+      columnNames: resolveCatalogColumnNames(cat),
       indexType: cat.index_type !== undefined ? cat.index_type : DEFAULT_INDEX_TYPE,
-      unique: cat.isUnique !== undefined ?
-        Boolean(cat.isUnique) :
-        Boolean(cat.unique || cat.is_unique),
+      unique: resolveCatalogUniqueFlag(cat),
       isGlobal: true,
       global: true,
       state: cat.state !== undefined ? cat.state : DEFAULT_READABLE_STATE,

@@ -15,6 +15,7 @@ import {
   findCatalogTarget,
   normalizeGlobalIndexRecord,
   resolveBackfillOutcome,
+  resolveGlobalCreateSchemaContext,
 } from './global-index-catalog-contract.js';
 import {GlobalIndexDatasetManager} from './global-index-dataset-manager.js';
 import {GlobalIndexBackfillCoordinator} from './global-index-backfill-coordinator.js';
@@ -493,17 +494,11 @@ export class GlobalIndexLifecycleCoordinator {
     this.generations.set(indexName, currentGen);
 
     const schemaInfo = this.resolveTableSchema ? this.resolveTableSchema(tableName) : null;
-    const basePrimaryKeyColumns = def.basePrimaryKeyColumns ||
-      options.basePrimaryKeyColumns ||
-      (schemaInfo?.basePrimaryKeyColumns?.length > 0 ?
-        schemaInfo.basePrimaryKeyColumns :
-        [LOCAL_STR_ID]);
-    let columnTypes = {};
-    if (options.columnTypes !== undefined) {
-      columnTypes = options.columnTypes;
-    } else if (schemaInfo?.columnTypes !== undefined) {
-      columnTypes = schemaInfo.columnTypes;
-    }
+    const schemaCtx = resolveGlobalCreateSchemaContext(def, options, schemaInfo);
+    const basePrimaryKeyColumns = schemaCtx.basePrimaryKeyColumns.length > 0 ?
+      schemaCtx.basePrimaryKeyColumns :
+      [LOCAL_STR_ID];
+    const columnTypes = schemaCtx.columnTypes;
     const indexId = options.indexId || `${indexName}-gen${currentGen}`;
 
     const record = createGlobalIndexRecord({

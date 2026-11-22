@@ -52,23 +52,30 @@ function extractTableIdFromRow(row) {
   return null;
 }
 
+function isOpenDb(db) {
+  return Boolean(db && db.prepare && db.open !== false);
+}
+
+function readDatabaseViaGetter(handle) {
+  if (handle.storage && handle.storage.getDatabase) {
+    return handle.storage.getDatabase();
+  }
+  if (handle.getDatabase) {
+    return handle.getDatabase();
+  }
+  return null;
+}
+
 function extractSqliteDb(handle) {
   if (!handle || typeof handle !== 'object') return null;
   if (handle.prepare && handle.exec) {
     return handle.open === false ? null : handle;
   }
-  if (handle.db && handle.db.prepare) {
-    return handle.db.open === false ? null : handle.db;
+  if (isOpenDb(handle.db)) {
+    return handle.db;
   }
-  if (handle.storage && handle.storage.getDatabase) {
-    const db = handle.storage.getDatabase();
-    return db && db.prepare && db.open !== false ? db : null;
-  }
-  if (handle.getDatabase) {
-    const db = handle.getDatabase();
-    return db && db.prepare && db.open !== false ? db : null;
-  }
-  return null;
+  const resolved = readDatabaseViaGetter(handle);
+  return isOpenDb(resolved) ? resolved : null;
 }
 
 function selectPreferredService(candidates) {
@@ -82,8 +89,7 @@ function selectPreferredService(candidates) {
   return firstWithOpenDb || candidates[0] || null;
 }
 
-function findPartitionInContainer(container, partitionId) {
-  if (!container) return null;
+function findPartitionInCollection(container, partitionId) {
   if (container instanceof Map) {
     if (container.has(partitionId)) return container.get(partitionId);
     const matches = [];
@@ -97,24 +103,41 @@ function findPartitionInContainer(container, partitionId) {
       container.filter((svc) => extractPartitionIdFromRow(svc) === partitionId),
     );
   }
-  if (container.getPartition) {
-    const found = container.getPartition(partitionId);
-    if (found) return found;
+  return null;
+}
+
+function findPartitionViaAccessors(container, partitionId) {
+  const accessorNames = [
+    'getPartition',
+    'getPartitionService',
+    'getPartitionDatabase',
+    'getDatabase',
+  ];
+  for (const name of accessorNames) {
+    if (container[name]) {
+      const found = container[name](partitionId);
+      if (found) return found;
+    }
   }
-  if (container.getPartitionService) {
-    const found = container.getPartitionService(partitionId);
-    if (found) return found;
+  return extractPartitionIdFromRow(container) === partitionId ? container : null;
+}
+
+function findPartitionInContainer(container, partitionId) {
+  if (!container) return null;
+  const fromCollection = findPartitionInCollection(container, partitionId);
+  if (fromCollection) return fromCollection;
+  return findPartitionViaAccessors(container, partitionId);
+}
+
+function resolveFromEngine(engine, partitionId) {
+  if (!engine) return null;
+  if (engine.partitionServicesProvider) {
+    const provided = engine.partitionServicesProvider(partitionId);
+    const db = extractSqliteDb(findPartitionInContainer(provided, partitionId));
+    if (db) return db;
   }
-  if (container.getPartitionDatabase) {
-    const found = container.getPartitionDatabase(partitionId);
-    if (found) return found;
-  }
-  if (container.getDatabase) {
-    const found = container.getDatabase(partitionId);
-    if (found) return found;
-  }
-  if (extractPartitionIdFromRow(container) === partitionId) {
-    return container;
+  if (engine.getPartitionService) {
+    return extractSqliteDb(engine.getPartitionService(partitionId));
   }
   return null;
 }
@@ -141,19 +164,7 @@ function resolvePartitionDatabase(indexService, coordinator, partitionId) {
     const db = extractSqliteDb(findPartitionInContainer(provided, partitionId));
     if (db) return db;
   }
-  const engine = indexService.sqlQueryEngine;
-  if (engine) {
-    if (engine.partitionServicesProvider) {
-      const provided = engine.partitionServicesProvider(partitionId);
-      const db = extractSqliteDb(findPartitionInContainer(provided, partitionId));
-      if (db) return db;
-    }
-    if (engine.getPartitionService) {
-      const db = extractSqliteDb(engine.getPartitionService(partitionId));
-      if (db) return db;
-    }
-  }
-  return null;
+  return resolveFromEngine(indexService.sqlQueryEngine, partitionId);
 }
 
 function collectServicesFromContainer(container, result) {
