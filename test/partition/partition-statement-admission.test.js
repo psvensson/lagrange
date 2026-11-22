@@ -753,3 +753,39 @@ test('TX1 admission A12: date/time, version, compile-option, random, connection-
     },
   }, 'every nondeterministic write or ALTER expression is refused before consensus');
 });
+
+test('TX1 admission A13: CREATE [UNIQUE] INDEX on own table admits and replicates while unsafe DDL remains refused', async () => {
+  const uniqueSql = `CREATE UNIQUE INDEX IF NOT EXISTS uq_${TABLE}_val ON ${TABLE}(value)`;
+  const {leader, proposed} = await startLeader();
+  let leaderFacts;
+  try {
+    leaderFacts = {
+      unique: await leaderAnswer(leader, ['a13-uq', uniqueSql, []]),
+      wrongTable: await leaderAnswer(leader, ['a13-other', 'CREATE UNIQUE INDEX IF NOT EXISTS uq_other ON other_table(value)', []]),
+      schemaQualified: await leaderAnswer(leader, ['a13-temp', `CREATE UNIQUE INDEX temp.uq_${TABLE}_val ON ${TABLE}(value)`, []]),
+      dropUnique: await leaderAnswer(leader, ['a13-drop', `DROP UNIQUE INDEX uq_${TABLE}_val`, []]),
+      proposed: proposed.length,
+    };
+  } finally {
+    await shutdownAll(leader);
+  }
+  assert.deepEqual(leaderFacts, {
+    unique: 'proposed',
+    wrongTable: refusedAs(LAYER.STATEMENT_KIND),
+    schemaQualified: refusedAs(LAYER.STATEMENT_KIND),
+    dropUnique: refusedAs(LAYER.STATEMENT_KIND),
+    proposed: 1,
+  });
+
+  const replicaFacts = await onTwoReplicas((replica) => {
+    applyCommitted(replica, committedQueryOf('a13-uq', uniqueSql));
+    const idx = replica.db.prepare(
+      'SELECT name, sql FROM sqlite_master WHERE type = ? AND name = ?',
+    ).get('index', `uq_${TABLE}_val`);
+    return {name: idx?.name ?? null, isUnique: /UNIQUE/i.test(idx?.sql || '')};
+  });
+  assert.deepEqual(replicaFacts, [
+    {name: `uq_${TABLE}_val`, isUnique: true},
+    {name: `uq_${TABLE}_val`, isUnique: true},
+  ]);
+});
