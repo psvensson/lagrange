@@ -45,6 +45,12 @@ import {
 import {
   createMockSystemCache,
 } from '../query/sql-query-engine-test-support.js';
+import {
+  createTransactionPersistenceGateway,
+} from '../test-helpers/transaction-persistence-gateway.js';
+import {
+  answerParticipantTransactionRequest,
+} from '../test-helpers/participant-protocol-double.js';
 
 const USERS_SCHEMA = {
   columns: [
@@ -206,12 +212,28 @@ function createDurableSystemGateway(catalogDbPath, tables, partitions) {
   initCatalogSchema(db);
   seedCatalogTables(db, tables);
   seedCatalogPartitions(db, partitions);
+  const txGateway = createTransactionPersistenceGateway();
+  const txTables = new Set([
+    TABLES.SQL_TRANSACTIONS,
+    TABLES.SQL_TRANSACTION_PARTICIPANTS,
+    TABLES.SQL_WRITE_OPERATIONS,
+  ]);
 
   let cdcService = null;
   const gateway = {
     db,
     resolveCdcIntegrationService() {
       return cdcService;
+    },
+    supportsMutationSubmission: () => true,
+    async submitMutation(mutation, mutationOptions = {}) {
+      return txGateway.submitMutation(mutation, mutationOptions);
+    },
+    async readAuthoritativeRows(tableName, sql, params = []) {
+      if (txTables.has(tableName)) {
+        return txGateway.readAuthoritativeRows(tableName, sql, params);
+      }
+      return {success: true, rows: db.prepare(sql).all(...params)};
     },
     async readRows(_tableName, sql, params = []) {
       return {rows: db.prepare(sql).all(...params)};
@@ -229,6 +251,7 @@ function createDurableSystemGateway(catalogDbPath, tables, partitions) {
       return {success: true};
     },
     close() {
+      txGateway.db.close();
       db.close();
     },
   };
@@ -284,6 +307,12 @@ function createPartitionMessageRouter(partitionServicesMap) {
   return {
     async deliver(address, message) {
       const partition = resolveTargetPartition(partitionServicesMap, address);
+      if (partition && message.type === 'TRANSACTION') {
+        return buildDeliveryEnvelope(
+          {acknowledged: true},
+          answerParticipantTransactionRequest(message, partition.partitionId),
+        );
+      }
       if (partition && message.type === 'QUERY' && partition.db?.prepare) {
         return executePartitionQueryMessage(partition, message);
       }
@@ -908,4 +937,136 @@ test('Production construction 4: unwired backfill and read-router fail closed (n
   }
   t.ok(scanErr, 'Unwired GlobalIndexReadRouter rejects executeQuery');
   t.equal(scanErr?.code, GLOBAL_INDEX_ERROR_CODE.DEPENDENCY_UNAVAILABLE);
+});
+
+test('Production construction 5: SQLQueryEngine public DML and SELECT engage global indexes end-to-end', async (t) => {
+  const env = await setupProductionEnvironment(t);
+  seedUsers(env, [
+    {id: 10, email: 'alice@example.com', name: 'Alice', status: 'active'},
+    {id: 110, email: 'bob@example.com', name: 'Bob', status: 'pending'},
+  ]);
+
+  const {engine, indexService} = await env.createEngineAndService();
+
+  // 1. CREATE GLOBAL INDEX through ordinary SQLQueryEngine.executeQuery
+  const createRes = await engine.executeQuery(
+    'CREATE GLOBAL INDEX idx_users_email ON users (email)',
+  );
+  t.equal(createRes.success, true, 'CREATE GLOBAL INDEX via engine.executeQuery succeeds');
+
+  // 2. Public INSERT via engine.executeQuery synchronously updates index partition p0 (< m)
+  const insertSql = 'INSERT INTO users (id, email, name, status) VALUES (?, ?, ?, ?)';
+  const insertParams = [25, 'diana@example.com', 'Diana', 'active'];
+  env.oracleDb.prepare(insertSql).run(...insertParams);
+  const insertRes = await engine.executeQuery(insertSql, insertParams);
+  t.equal(insertRes.success, true, 'Public INSERT via engine.executeQuery succeeds');
+
+  const insertedIdxRow = env.idxP0.db.prepare(
+    'SELECT * FROM __idx_users_idx_users_email WHERE __base_pk_id = ?',
+  ).get(25);
+  t.ok(insertedIdxRow, 'Public INSERT maintained global index partition p0');
+  t.equal(insertedIdxRow.email, 'diana@example.com');
+
+  // 3. Public UPDATE of indexed column across index partitions (diana < m -> zora >= m)
+  const updateIndexedSql = 'UPDATE users SET email = ? WHERE id = ?';
+  env.oracleDb.prepare(updateIndexedSql).run('zora@example.com', 25);
+  const updateRes = await engine.executeQuery(updateIndexedSql, ['zora@example.com', 25]);
+  t.equal(updateRes.success, true, 'Public UPDATE via engine.executeQuery succeeds');
+
+  t.notOk(
+    env.idxP0.db.prepare('SELECT * FROM __idx_users_idx_users_email WHERE __base_pk_id = ?').get(25),
+    'Public UPDATE removed old index entry from p0',
+  );
+  const movedIdxRow = env.idxP1.db.prepare(
+    'SELECT * FROM __idx_users_idx_users_email WHERE __base_pk_id = ?',
+  ).get(25);
+  t.ok(movedIdxRow, 'Public UPDATE inserted new index entry into p1');
+  t.equal(movedIdxRow.email, 'zora@example.com');
+
+  // 4. Public UPDATE of non-indexed column by WHERE email = ? updates base across partitions
+  const updateNonIndexedSql = 'UPDATE users SET status = ? WHERE email = ?';
+  env.oracleDb.prepare(updateNonIndexedSql).run('vip', 'alice@example.com');
+  const updateNonIdxRes = await engine.executeQuery(
+    updateNonIndexedSql,
+    ['vip', 'alice@example.com'],
+  );
+  t.equal(updateNonIdxRes.success, true, 'Non-indexed column UPDATE succeeds');
+
+  // 5. Public SELECT via engine.executeQuery engages GLOBAL_SECONDARY_INDEX and matches oracle
+  const selectSql = 'SELECT * FROM users WHERE email = ? ORDER BY id ASC';
+  const selectRes = await engine.executeQuery(selectSql, ['zora@example.com']);
+  t.equal(selectRes.success, true, 'Public SELECT via engine.executeQuery succeeds');
+  t.equal(
+    selectRes.globalIndexPlan?.accessPath,
+    GLOBAL_INDEX_ACCESS_PATH.GLOBAL_SECONDARY_INDEX,
+    'Public SELECT engaged GLOBAL_SECONDARY_INDEX',
+  );
+  t.same(
+    selectRes.rows,
+    env.oracleDb.prepare(selectSql).all('zora@example.com'),
+    'Public SELECT via GSI matches oracle',
+  );
+
+  // Mixed indexed + non-indexed predicate through engine.executeQuery
+  const mixedSql = 'SELECT id, email FROM users WHERE email = ? AND status = ? ORDER BY id ASC';
+  const mixedRes = await engine.executeQuery(mixedSql, ['alice@example.com', 'vip']);
+  t.equal(mixedRes.success, true);
+  t.equal(
+    mixedRes.globalIndexPlan?.accessPath,
+    GLOBAL_INDEX_ACCESS_PATH.GLOBAL_SECONDARY_INDEX,
+  );
+  t.equal(mixedRes.globalIndexPlan?.covering, false);
+  t.same(
+    mixedRes.rows,
+    env.oracleDb.prepare(mixedSql).all('alice@example.com', 'vip'),
+    'Public SELECT with residual predicate matches oracle',
+  );
+
+  // 6. Public DELETE removes both base row and index entry
+  const deleteSql = 'DELETE FROM users WHERE id = ?';
+  env.oracleDb.prepare(deleteSql).run(25);
+  const deleteRes = await engine.executeQuery(deleteSql, [25]);
+  t.equal(deleteRes.success, true, 'Public DELETE via engine.executeQuery succeeds');
+  t.notOk(
+    env.usersP0.db.prepare('SELECT * FROM users WHERE id = ?').get(25),
+    'Public DELETE removed base row',
+  );
+  t.notOk(
+    env.idxP1.db.prepare('SELECT * FROM __idx_users_idx_users_email WHERE __base_pk_id = ?').get(25),
+    'Public DELETE removed index entry',
+  );
+
+  // 7. Fail closed on unavailable index participant via engine.executeQuery
+  env.partitionServices.delete('__gsi_users_idx_users_email_p1-r1');
+  const blockedRes = await engine.executeQuery(insertSql, [130, 'xavier@example.com', 'Xavier', 'active']);
+  t.equal(blockedRes.success, false, 'Public INSERT fails closed when index participant is unavailable');
+  t.notOk(
+    env.usersP1.db.prepare('SELECT * FROM users WHERE id = ?').get(130),
+    'Base partition rolled back / untouched when index participant is unavailable',
+  );
+  env.partitionServices.set('__gsi_users_idx_users_email_p1-r1', env.idxP1);
+
+  // 8. Unreadable BACKFILLING index falls back to canonical scatter-gather without claiming index coverage
+  await engine.executeQuery('DROP INDEX idx_users_email');
+  await indexService.createIndex(
+    'CREATE GLOBAL INDEX idx_users_email ON users (email)',
+    {
+      batchSize: 1,
+      backfillOptions: {shouldYield: () => true},
+    },
+  );
+  const backfillingSelect = await engine.executeQuery(selectSql, ['alice@example.com']);
+  t.equal(backfillingSelect.success, true, 'SELECT during BACKFILLING succeeds');
+  t.equal(
+    backfillingSelect.globalIndexPlan?.accessPath,
+    GLOBAL_INDEX_ACCESS_PATH.SCATTER_GATHER,
+    'SELECT during BACKFILLING uses SCATTER_GATHER without implying index coverage',
+  );
+  t.same(
+    backfillingSelect.rows,
+    env.oracleDb.prepare(selectSql).all('alice@example.com'),
+    'SELECT during BACKFILLING returns complete scatter-gather oracle rows',
+  );
+
+  await engine.shutdown();
 });
