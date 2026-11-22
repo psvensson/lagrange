@@ -125,6 +125,15 @@ its dated source checkpoint. Continue the current bounded unit and preserve its
 writer; this adoption does not replace the integration owner's current summary,
 start a runtime task or lab run, change a sealed predicate, or establish a pass.
 
+## Implementation safety proposal (22 November 2026)
+
+The [implementation-safety epic proposal](operation-integrity-and-reliable-formation/implementation-safety-proposal.md)
+and [agent start note](operation-integrity-and-reliable-formation/implementation-safety-start-here.md)
+translate the source review at 6a292acfd into bounded prevention work for existing
+owners. They remain proposed, preserve the approved ES6 and alpha constraints,
+and add no runtime assignment or acceptance claim. The current integration
+summary and actual owner records continue to govern sequencing and proof.
+
 ## Current integration summary (12 November 2026)
 
 - **Governing rules and source:** rule-set revision 5, inspected at
