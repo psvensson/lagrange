@@ -12,7 +12,7 @@
     "distributed-harness": 223,
     "examples-e2e": 8,
     "pgwire-compat": 23,
-    "placement-rebalance": 297,
+    "placement-rebalance": 299,
     "query-sql": 209,
     "release-packaging": 15,
     "runtime-primitives": 23,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2736,
-  "digest": "fnv1a32-a29c675d",
+  "censusSize": 2738,
+  "digest": "fnv1a32-c3dd751e",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-8e4a9bdb",
+  "observationDigest": "fnv1a32-bb1c6f1f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2014,6 +2014,7 @@
     "test/rebalancer/move-planner-placement-owner-kernel.test.js": "placement-rebalance",
     "test/rebalancer/move-planner-runtime-service.test.js": "placement-rebalance",
     "test/rebalancer/move-planner-spread-vs-count-reconciliation.test.js": "placement-rebalance",
+    "test/rebalancer/move-skip-log-typed-refusal-reason.test.js": "placement-rebalance",
     "test/rebalancer/no-duplicate-add-moves.property.test.js": "placement-rebalance",
     "test/rebalancer/no-duplicate-remove-moves.property.test.js": "placement-rebalance",
     "test/rebalancer/no-orphaned-replicas-after-recovery.property.test.js": "placement-rebalance",
@@ -2170,6 +2171,7 @@
     "test/rebalancer/self-source-removal-dispatches-in-process.test.js": "placement-rebalance",
     "test/rebalancer/services-inventory-owner-fact-siblings.test.js": "placement-rebalance",
     "test/rebalancer/spread-cure-at-target-minting-gap.test.js": "placement-rebalance",
+    "test/rebalancer/spread-cure-escape-schedules.test.js": "placement-rebalance",
     "test/rebalancer/spread-cure-transition-authorization-production-path.test.js": "placement-rebalance",
     "test/rebalancer/spread-cure-transition-authorization-row.test.js": "placement-rebalance",
     "test/rebalancer/spread-cure-transition-authorization.test.js": "placement-rebalance",
@@ -19213,6 +19215,13 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js"
       ]
     },
+    "test/rebalancer/move-skip-log-typed-refusal-reason.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/rebalancer/failed-create-cleanup-token.js"
+      ]
+    },
     "test/rebalancer/no-duplicate-add-moves.property.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
@@ -20521,6 +20530,36 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/rebalancer/failed-create-cleanup-token.js"
+      ]
+    },
+    "test/rebalancer/spread-cure-escape-schedules.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-row-owner.js",
+        "src/query/distributed/distributed-write-coordinator.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/rebalancer/entity-service-row-read.js",
+        "src/rebalancer/failed-create-cleanup-token.js",
+        "src/rebalancer/replica-placement-cure-policy.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/control-plane/serve-eligibility-test-support.js",
+        "test/partition/committed-operation-gateway-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/rebalancer/spread-cure-transition-authorization-production-path.test.js": {

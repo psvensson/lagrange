@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2710,
+    "ordinary": 2712,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2736,
-  "digest": "fnv1a32-e467643f",
+  "censusSize": 2738,
+  "digest": "fnv1a32-23b9f432",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1994,6 +1994,7 @@
     "test/rebalancer/move-planner-placement-owner-kernel.test.js": "ordinary",
     "test/rebalancer/move-planner-runtime-service.test.js": "ordinary",
     "test/rebalancer/move-planner-spread-vs-count-reconciliation.test.js": "ordinary",
+    "test/rebalancer/move-skip-log-typed-refusal-reason.test.js": "ordinary",
     "test/rebalancer/no-duplicate-add-moves.property.test.js": "ordinary",
     "test/rebalancer/no-duplicate-remove-moves.property.test.js": "ordinary",
     "test/rebalancer/no-orphaned-replicas-after-recovery.property.test.js": "ordinary",
@@ -2150,6 +2151,7 @@
     "test/rebalancer/self-source-removal-dispatches-in-process.test.js": "ordinary",
     "test/rebalancer/services-inventory-owner-fact-siblings.test.js": "ordinary",
     "test/rebalancer/spread-cure-at-target-minting-gap.test.js": "ordinary",
+    "test/rebalancer/spread-cure-escape-schedules.test.js": "ordinary",
     "test/rebalancer/spread-cure-transition-authorization-production-path.test.js": "ordinary",
     "test/rebalancer/spread-cure-transition-authorization-row.test.js": "ordinary",
     "test/rebalancer/spread-cure-transition-authorization.test.js": "ordinary",

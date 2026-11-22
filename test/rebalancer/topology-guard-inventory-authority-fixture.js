@@ -79,6 +79,7 @@ import {MOVE_REASON} from '../../src/rebalancer/rebalancer-constants.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {EntityType, MoveType} from '../../src/rebalancer/unified-rebalancer.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
+import {ROUTER_NO_CONNECTION_ERROR_CODE} from '../../src/transport/transport-error-codes.js';
 import {buildDeliveryEnvelope, deliveryAnswerOf} from
   '../../src/transport/transport-semantic-outcome.js';
 import {createPostgresWireDefinition} from '../../src/wasm-service/meta-service-factory.js';
@@ -153,6 +154,7 @@ const STRICT_OWNER_READ_OPTIONS = Object.freeze({
   timeoutMs: STRICT_READ_TIMEOUT_MS,
 });
 const CROSS_NODE_HOP_MESSAGE_ID = 'topology-guard-inventory-hop';
+const NO_CONNECTION_TEXT = 'fixture: no connection to ';
 const ADDRESS_SEPARATOR = '/';
 const PARTITION_NOT_SERVED = 'fixture serves no partition ';
 const ENGINE_STATEMENT_NOT_SERVED =
@@ -464,19 +466,29 @@ function answerLedgerPartitionStatement(store, partitionId, sql, params) {
 // As on the wire, only the remaining duration and the caller's abort cross to
 // the target router; that router's delivery lifetime is its own
 // (message-router-delivery-lifetime.js refuses another router's lifetime).
+// A node whose connection is down (transportCut) fails the hop at the
+// transport, as the router answers when it holds no connection to the node:
+// no handler is involved, so the query executor quarantines nothing.
 async function crossNodeHop(context, address, message, options) {
   const nodeId = String(address).split(ADDRESS_SEPARATOR)[0];
   const target = context.world.routerOf(nodeId);
   const refused = target === null || context.unreachable.has(nodeId);
+  const transportCut = context.transportCut.has(nodeId);
   const {deliveryLifetime, signal} = options.transportDeliveryOptions;
   const remainingMs = deliveryLifetime.remainingMs();
-  const delivery = refused ?
-    buildDeliveryEnvelope({acknowledged: false, noHandler: true}) :
-    await target.deliverLocal(address, CROSS_NODE_HOP_MESSAGE_ID, message, null,
+  let delivery;
+  if (transportCut) {
+    delivery = buildDeliveryEnvelope({acknowledged: false,
+      errorCode: ROUTER_NO_CONNECTION_ERROR_CODE, error: `${NO_CONNECTION_TEXT}${nodeId}`});
+  } else if (refused) {
+    delivery = buildDeliveryEnvelope({acknowledged: false, noHandler: true});
+  } else {
+    delivery = await target.deliverLocal(address, CROSS_NODE_HOP_MESSAGE_ID, message, null,
       {timeoutMs: remainingMs, signal}).then(({result, answer}) =>
       buildDeliveryEnvelope(result, answer));
-  context.observed.hops.push(Object.freeze({address, nodeId, refused, remainingMs,
-    answer: deliveryAnswerOf(delivery)}));
+  }
+  context.observed.hops.push(Object.freeze({address, nodeId, refused, transportCut,
+    remainingMs, answer: deliveryAnswerOf(delivery)}));
   return {delivery};
 }
 
@@ -582,15 +594,18 @@ function openPlannerTurn(t, host, {clock, scheduledRetry = true}, rebalancers) {
  * @param {Object} t - The case's tap test (owns the teardown).
  * @param {Object} world - openServicesWorld().
  * @param {Object} [options] - {unreachableNodeIds, readyNodes,
- *   publishedLeaderNodeId, publishedRows, ledgerRows}: nodes whose hop
- *   refuses (setReachable changes it later); whether the host's cache
- *   publishes the three nodes as ready; the services-p1 leader its cache
- *   publishes (default the world's); further SERVICES rows its cache holds;
- *   replica_operations rows its ledger and cache start with.
+ *   publishedLeaderNodeId, publishedRows, ledgerRows, coordinatorOptionsOf}:
+ *   nodes whose hop refuses (setReachable changes it later); whether the
+ *   host's cache publishes the three nodes as ready; the services-p1 leader
+ *   its cache publishes (default the world's); further SERVICES rows its cache
+ *   holds; replica_operations rows its ledger and cache start with; the
+ *   coordinator's non-subject collaborators a case supplies itself (readiness,
+ *   storage admission), built over the host's cache.
  * @return {Object} The host.
  */
 function openPlannerHost(t, world, {unreachableNodeIds = [], readyNodes = false,
-  publishedLeaderNodeId = world.leaderNodeId, publishedRows = [], ledgerRows = []} = {}) {
+  publishedLeaderNodeId = world.leaderNodeId, publishedRows = [], ledgerRows = [],
+  coordinatorOptionsOf = () => ({})} = {}) {
   const observed = {servicesReads: [], ownerRpc: [], hops: [], engineRefusals: []};
   const cache = new SystemTableCache();
   seedPlannerCache(cache, world, {publishedLeaderNodeId, publishedRows, ledgerRows});
@@ -605,7 +620,8 @@ function openPlannerHost(t, world, {unreachableNodeIds = [], readyNodes = false,
   const queryExecutor = new QueryExecutor({nodeId: NODE.PLANNER, messageRouter: router,
     systemCache: cache, controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     noHandlerAddressQuarantineMs: ADDRESS_QUARANTINE_MS});
-  const hopContext = {world, observed, unreachable: new Set(unreachableNodeIds)};
+  const hopContext = {world, observed, unreachable: new Set(unreachableNodeIds),
+    transportCut: new Set()};
   router.setQueryMessageGroupServiceResolver(() => ({
     sendMessage: (address, message, options) =>
       crossNodeHop(hopContext, address, message, options),
@@ -653,7 +669,8 @@ function openPlannerHost(t, world, {unreachableNodeIds = [], readyNodes = false,
   const gateway = new ControlPlaneSystemTableGateway({nodeId: NODE.PLANNER,
     cdcIntegrationService: cdc, systemTableCache: cache, sqlQueryEngine});
   tapServicesReads(gateway, observed);
-  const coordinator = createTestCoordinator({nodeId: NODE.PLANNER, systemTableCache: cache,
+  const coordinator = createTestCoordinator({...coordinatorOptionsOf(cache),
+    nodeId: NODE.PLANNER, systemTableCache: cache,
     controlPlaneSystemTableGateway: gateway, sqlQueryEngine, cdcIntegrationService: cdc,
     enableTimeouts: false});
   const rebalancers = [];
@@ -680,6 +697,12 @@ function openPlannerHost(t, world, {unreachableNodeIds = [], readyNodes = false,
     setReachable(nodeId, reachable) {
       if (reachable) hopContext.unreachable.delete(nodeId);
       else hopContext.unreachable.add(nodeId);
+    },
+    // The planner's connection to a node goes down or comes back: a hop
+    // fails at the transport (no "no handler" answer); nothing is told.
+    setConnected(nodeId, connected) {
+      if (connected) hopContext.transportCut.delete(nodeId);
+      else hopContext.transportCut.add(nodeId);
     },
     openPlannerTurn: (turnOptions) => openPlannerTurn(t, {cache, coordinator,
       ledgerRows: () => store.execute(LEDGER_ROW_SQL, [RUNTIME_SERVICE_ID]).rows},
