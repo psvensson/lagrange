@@ -39,8 +39,16 @@ import {
   buildScaleAndFailureCertificationEvidence,
   run as runScaleAndFailureCertificationScenario,
 } from '../../scenarios/public-path-scale-and-failure-certification.js';
+import {
+  DATASET_GENERATOR,
+  expectedAccountSummary,
+  generateDatasetRows,
+} from '../../scenarios/public-path-baseline-helpers.js';
+import {SPREAD_UNIT} from '../scenario-host-topology.js';
 
+const arrayFlatMap = Function.call.bind(Array.prototype.flatMap);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const arrayMap = Function.call.bind(Array.prototype.map);
 const arraySome = Function.call.bind(Array.prototype.some);
 
 const CANONICAL_WIT_DIRECTORY = new URL('../../../../wit', import.meta.url);
@@ -565,53 +573,317 @@ test('Q11 RT2: pre-retention worker byte bounds and aggregate runtime pressure c
   }
 });
 
-test('Q11: full certification scenario executes all 7 representativeness axes and passes', async () => {
-  const registered = listPilotCertificationScenarioEntries();
-  assert.equal(
-    arraySome(
-      PILOT_CERTIFICATION_SCENARIO_MATRIX,
-      (entry) => entry.name === SCENARIO_NAME,
-    ),
-    true,
-  );
-  assert.equal(
-    arraySome(registered, (entry) => entry.name === SCENARIO_NAME),
-    true,
-  );
-
-  const clusterStub = {
-    getNodes() {
-      return [
-        {id: 'node-1', role: 'seed'},
-        {id: 'node-2', role: 'member'},
-        {id: 'node-3', role: 'member'},
-        {id: 'node-4', role: 'member'},
-        {id: 'node-5', role: 'member'},
-      ];
-    },
+function createLiveCertificationClusterHarness(overrides = {}) {
+  const nodes = [
+    {id: 'node-1', role: 'seed'},
+    {id: 'node-2', role: 'member'},
+    {id: 'node-3', role: 'member'},
+    {id: 'node-4', role: 'member'},
+    {id: 'node-5', role: 'member'},
+  ];
+  const rows = generateDatasetRows();
+  const trace = {
+    drillExecuted: false,
+    snapshotsAfterCollected: false,
+    snapshotsBeforeCollected: false,
+    workloadExecuted: false,
   };
-  const report = await runScaleAndFailureCertificationScenario(clusterStub);
-  assert.equal(report.schemaVersion, 2);
-  assert.equal(
-    report.certification.schemaVersion,
-    PUBLIC_PATH_CERTIFICATION_SCHEMA_VERSION,
-  );
-  assert.equal(
-    report.certification.overallVerdict,
-    CERTIFICATION_VERDICT.PASS,
-  );
-  assert.equal(report.certification.nonTerminalReasons.length, 0);
-  assert.equal(report.certification.failedDimensions.length, 0);
-  assert.equal(report.certification.representativeness.valid, true);
-  assert.equal(report.certification.failureDrill.executed, true);
-  assert.equal(report.certification.failureDrill.nonSeedNodeKilled, true);
-  assert.equal(report.certification.failureDrill.lostAcknowledgedWrites, 0);
-  assert.equal(
-    report.certification.rt2PressureProof.busyWithinDeadlineHealthSurvival,
-    true,
-  );
-  assert.equal(
-    report.certification.rt2PressureProof.aggregateEmitBufferCapEnforced,
-    true,
-  );
-});
+  const partitions = [
+    {leaderNodeId: 'node-1', partitionId: 'p1'},
+    {leaderNodeId: 'node-2', partitionId: 'p2'},
+  ];
+  const cluster = {
+    getNodes: () => nodes,
+    collectNodeResourceSnapshots: async ({phase}) => {
+      if (phase === 'before') {
+        trace.snapshotsBeforeCollected = true;
+        return new Map(arrayMap(nodes, (node) => [node.id, {
+          cpuPercent: 18,
+          memoryUsageBytes: 60_000_000,
+          rxBytes: 2048,
+          txBytes: 2048,
+        }]));
+      }
+      trace.snapshotsAfterCollected = true;
+      return new Map(arrayMap(nodes, (node) => [node.id, {
+        cpuPercent: 24,
+        memoryUsageBytes: 64_000_000,
+        rxBytes: 12_288,
+        txBytes: 10_240,
+      }]));
+    },
+    executePublicPathWorkload: async () => {
+      trace.workloadExecuted = true;
+      const invocations = arrayMap(
+        DATASET_GENERATOR.accountIds,
+        (accountId, idx) => ({
+          accountId,
+          body: expectedAccountSummary(rows, accountId, partitions.length),
+          bytes: 256,
+          durationMs: 14 + idx,
+          status: 200,
+        }),
+      );
+      const logEntries = arrayFlatMap(invocations, () => [
+        {
+          message: 'metrics.partition.sqlite',
+          metadata: JSON.stringify({
+            operation: 'SELECT',
+            partitionId: 'p1',
+            rowCount: 40,
+          }),
+          nodeId: 'node-1',
+        },
+        {
+          message: 'metrics.partition.sqlite',
+          metadata: JSON.stringify({
+            operation: 'SELECT',
+            partitionId: 'p2',
+            rowCount: 40,
+          }),
+          nodeId: 'node-2',
+        },
+      ]);
+      return {
+        fidelity: {
+          buildDigest: 'sha256:live-certified-account-summary',
+          manifestDigest: 'sha256:live-certified-account-summary',
+          mediaType: 'application/wasm',
+          runtimeKind: 'wasm_component',
+        },
+        invocations,
+        logEntries,
+        mode: 'live',
+        partialBytes: 512 * invocations.length,
+        representativeness: buildDefaultRepresentativeness(),
+        rows,
+        sentinelRowCount: 4,
+        topology: {
+          distinctPartitionHosts: 2,
+          partitions,
+          spreadUnit: SPREAD_UNIT.HOST,
+        },
+      };
+    },
+    executeNonSeedFailureDrill: async ({nonSeedNode}) => {
+      trace.drillExecuted = true;
+      return {
+        availabilityRatio: 1,
+        executed: true,
+        killedNodeId: nonSeedNode.id,
+        lostAcknowledgedWrites: 0,
+        nonSeedNodeKilled: true,
+        probesSucceeded: 20,
+        probesTotal: 20,
+        recoveryTimeMs: 950,
+      };
+    },
+    ...overrides,
+  };
+  return {cluster, trace};
+}
+
+test('Q11: run(cluster) rejects null or stub without live execution hooks as NON_TERMINAL',
+  async () => {
+    await assert.rejects(
+      () => runScaleAndFailureCertificationScenario(null),
+      (error) => {
+        assert.equal(
+          error.certification.overallVerdict,
+          CERTIFICATION_VERDICT.NON_TERMINAL,
+        );
+        assert.equal(
+          arrayIncludes(
+            error.certification.nonTerminalReasons,
+            CERTIFICATION_NON_TERMINAL_REASON.SYNTHETIC_OR_NON_LIVE_METRICS,
+          ),
+          true,
+        );
+        assert.equal(
+          arrayIncludes(
+            error.certification.nonTerminalReasons,
+            CERTIFICATION_NON_TERMINAL_REASON.MISSING_FAILURE_DRILL,
+          ),
+          true,
+        );
+        return true;
+      },
+    );
+
+    const stubOnlyGetNodes = {
+      getNodes() {
+        return [
+          {id: 'node-1', role: 'seed'},
+          {id: 'node-2', role: 'member'},
+          {id: 'node-3', role: 'member'},
+          {id: 'node-4', role: 'member'},
+          {id: 'node-5', role: 'member'},
+        ];
+      },
+    };
+    await assert.rejects(
+      () => runScaleAndFailureCertificationScenario(stubOnlyGetNodes),
+      (error) => {
+        assert.equal(
+          error.certification.overallVerdict,
+          CERTIFICATION_VERDICT.NON_TERMINAL,
+        );
+        assert.equal(
+          arrayIncludes(
+            error.certification.nonTerminalReasons,
+            CERTIFICATION_NON_TERMINAL_REASON.SYNTHETIC_OR_NON_LIVE_METRICS,
+          ),
+          true,
+        );
+        assert.equal(
+          arrayIncludes(
+            error.certification.nonTerminalReasons,
+            CERTIFICATION_NON_TERMINAL_REASON.MISSING_FAILURE_DRILL,
+          ),
+          true,
+        );
+        return true;
+      },
+    );
+  },
+);
+
+test('Q11: run(cluster) rejects when failure drill or telemetry is missing or synthetic',
+  async () => {
+    const missingDrill = createLiveCertificationClusterHarness();
+    delete missingDrill.cluster.executeNonSeedFailureDrill;
+    await assert.rejects(
+      () => runScaleAndFailureCertificationScenario(missingDrill.cluster),
+      (error) => {
+        assert.equal(
+          error.certification.overallVerdict,
+          CERTIFICATION_VERDICT.NON_TERMINAL,
+        );
+        assert.equal(
+          arrayIncludes(
+            error.certification.nonTerminalReasons,
+            CERTIFICATION_NON_TERMINAL_REASON.MISSING_FAILURE_DRILL,
+          ),
+          true,
+        );
+        return true;
+      },
+    );
+
+    const missingTelemetry = createLiveCertificationClusterHarness();
+    delete missingTelemetry.cluster.collectNodeResourceSnapshots;
+    await assert.rejects(
+      () => runScaleAndFailureCertificationScenario(missingTelemetry.cluster),
+      (error) => {
+        assert.equal(
+          error.certification.overallVerdict,
+          CERTIFICATION_VERDICT.NON_TERMINAL,
+        );
+        assert.equal(
+          arrayIncludes(
+            error.certification.nonTerminalReasons,
+            CERTIFICATION_NON_TERMINAL_REASON.SYNTHETIC_OR_NON_LIVE_METRICS,
+          ),
+          true,
+        );
+        return true;
+      },
+    );
+
+    const syntheticWorkload = createLiveCertificationClusterHarness({
+      executePublicPathWorkload: async () => {
+        const base = await createLiveCertificationClusterHarness()
+          .cluster.executePublicPathWorkload();
+        return {...base, mode: 'synthetic'};
+      },
+    });
+    await assert.rejects(
+      () => runScaleAndFailureCertificationScenario(syntheticWorkload.cluster),
+      (error) => {
+        assert.equal(
+          error.certification.overallVerdict,
+          CERTIFICATION_VERDICT.NON_TERMINAL,
+        );
+        assert.equal(
+          arrayIncludes(
+            error.certification.nonTerminalReasons,
+            CERTIFICATION_NON_TERMINAL_REASON.SYNTHETIC_OR_NON_LIVE_METRICS,
+          ),
+          true,
+        );
+        return true;
+      },
+    );
+
+    const unexecutedDrill = createLiveCertificationClusterHarness({
+      executeNonSeedFailureDrill: async () => ({
+        executed: false,
+        nonSeedNodeKilled: false,
+      }),
+    });
+    await assert.rejects(
+      () => runScaleAndFailureCertificationScenario(unexecutedDrill.cluster),
+      (error) => {
+        assert.equal(
+          error.certification.overallVerdict,
+          CERTIFICATION_VERDICT.NON_TERMINAL,
+        );
+        assert.equal(
+          arrayIncludes(
+            error.certification.nonTerminalReasons,
+            CERTIFICATION_NON_TERMINAL_REASON.MISSING_FAILURE_DRILL,
+          ),
+          true,
+        );
+        return true;
+      },
+    );
+  },
+);
+
+test('Q11: full certification scenario executes all 7 representativeness axes and passes',
+  async () => {
+    const registered = listPilotCertificationScenarioEntries();
+    assert.equal(
+      arraySome(
+        PILOT_CERTIFICATION_SCENARIO_MATRIX,
+        (entry) => entry.name === SCENARIO_NAME,
+      ),
+      true,
+    );
+    assert.equal(
+      arraySome(registered, (entry) => entry.name === SCENARIO_NAME),
+      true,
+    );
+
+    const {cluster, trace} = createLiveCertificationClusterHarness();
+    const report = await runScaleAndFailureCertificationScenario(cluster);
+    assert.equal(trace.workloadExecuted, true);
+    assert.equal(trace.drillExecuted, true);
+    assert.equal(trace.snapshotsBeforeCollected, true);
+    assert.equal(trace.snapshotsAfterCollected, true);
+    assert.equal(report.schemaVersion, 2);
+    assert.equal(
+      report.certification.schemaVersion,
+      PUBLIC_PATH_CERTIFICATION_SCHEMA_VERSION,
+    );
+    assert.equal(
+      report.certification.overallVerdict,
+      CERTIFICATION_VERDICT.PASS,
+    );
+    assert.equal(report.certification.nonTerminalReasons.length, 0);
+    assert.equal(report.certification.failedDimensions.length, 0);
+    assert.equal(report.certification.representativeness.valid, true);
+    assert.equal(report.certification.failureDrill.executed, true);
+    assert.equal(report.certification.failureDrill.nonSeedNodeKilled, true);
+    assert.equal(report.certification.failureDrill.lostAcknowledgedWrites, 0);
+    assert.equal(
+      report.certification.rt2PressureProof.busyWithinDeadlineHealthSurvival,
+      true,
+    );
+    assert.equal(
+      report.certification.rt2PressureProof.aggregateEmitBufferCapEnforced,
+      true,
+    );
+  },
+);
