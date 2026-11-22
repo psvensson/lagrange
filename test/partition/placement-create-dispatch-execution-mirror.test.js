@@ -548,13 +548,14 @@ test('row_changed re-evaluates the gate once; a definite refusal ends the wait w
   await withPlacementExecution(async ({owner, leader, initial, deliveries}) => {
     const repository = owner.repository;
     const verdicts = observeRetainedVerdicts(owner);
+    const operation = repository.rowToOperation(initial);
+    await owner.ensureReservationForOperation(operation);
     assert.equal(committedUpdate(leader, 'execution-mirror:definite-refusal-delete',
       'DELETE FROM replica_operations WHERE operation_id = ?', [initial.operation_id]), 1);
     repository.repairRetainedPlacement = async () => ({
       success: false, committed: false,
       failureCode: PLACEMENT_ADMISSION_ERROR.BYTES,
     });
-    const operation = repository.rowToOperation(initial);
     const result = await owner.dispatchOperation(operation);
     assert.equal(result.skipped, true);
     assert.equal(result.reason,

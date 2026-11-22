@@ -43,8 +43,11 @@ test('a kept attempt blocked on an entry-key collision is typed blocked work in 
     let collidingEntryId = null;
     const owner = createReplicaPlacementOwner({
       nodeId: 'blocked-attempt-node', ledgerPartitionService: leader,
-      nodeAuthority: {answerCommittedNodes: () => null, scheduleRefresh() {},
-        subscribe: () => () => {}},
+      nodeAuthority: {
+        answerCommittedNodes: () => ({state: 'unavailable', reason: 'not_read', nodeRows: []}),
+        scheduleRefresh() {},
+        subscribe: () => () => {},
+      },
       systemTableCache: {getAll: () => [], onCacheApplyChange() {}, offCacheApplyChange() {}},
       now: () => 0, logger,
       admitPlacement: async (payload) => {
