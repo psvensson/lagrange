@@ -41,6 +41,8 @@ const TABLE_CREATION_DURABLE_JOB_METHODS = Object.freeze({
       onMetadataCommitted,
       tableId: job.tableId,
       partitionId: job.partitionId,
+      partitions: job.partitions || null,
+      globalIndex: job.globalIndex || null,
       schemaJobId: job.jobId,
       schemaOwnerFenceToken: job.ownerFenceToken,
       assertProvisioningOwnership: job.assertOwnership,

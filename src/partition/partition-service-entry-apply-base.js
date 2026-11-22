@@ -21,6 +21,8 @@ import {
   settleRecordedCommittedStatement,
 } from './partition-committed-statement-outcome.js';
 import {runCommittedPartitionStatement} from './partition-statement-admission.js';
+import {invalidateParticipantDeterminismSelfCheck} from
+  './partition-participant-transaction-self-check.js';
 import {
   advancePartitionWriteGeneration, isPartitionReserved,
   readPartitionWriteGeneration, readPartitionWriteOrigin,
@@ -753,6 +755,10 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, () =>
         resetParticipantRowKeyHistory(this));
       recordCommittedWriteTraffic(this, afterCommit, 1);
+      if (command.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE ||
+          /^\s*(?:CREATE|DROP)\s+TABLE\b/iu.test(String(command.sql || ''))) {
+        afterCommit(() => invalidateParticipantDeterminismSelfCheck(this.db));
+      }
       if (command.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE) {
         afterCommit(() => this.registerMigrationDefaultFromAlterSql(command.sql));
       }

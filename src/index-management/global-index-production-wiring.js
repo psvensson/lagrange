@@ -13,13 +13,20 @@ import {
   GLOBAL_INDEX_STATE,
   normalizeGlobalIndexRecord,
 } from './global-index-catalog-contract.js';
-import {getGlobalIndexDatasetName} from './global-index-dataset-manager.js';
+import {
+  generateDropIndexDatasetSql,
+  getGlobalIndexDatasetName,
+} from './global-index-dataset-manager.js';
 import {
   ensureIndexDatasetTableInGateway,
+  hasHostedPartitionReplica,
+} from './global-index-dataset-reconciliation.js';
+import {
   executePartitionReadSql,
   executePartitionWriteSql,
   hasDistributedPartitionRoute,
   provisionIndexPartitionsWithRuntime,
+  reconcileDistributedIndexDatasetSchema,
   syncGlobalIndexesFromSystemCache,
 } from './global-index-distributed-execution.js';
 import {
@@ -554,7 +561,7 @@ async function dropIndexDatasetPartition(indexService, {tableName, indexName, pa
   await executePartitionWriteSql(
     indexService,
     partitionId,
-    `DELETE FROM ${quoteIdentifier(datasetName)}`,
+    generateDropIndexDatasetSql(tableName, indexName),
     [],
     datasetName,
   );
@@ -577,6 +584,8 @@ function buildCatalogPersistenceHooks(indexService) {
     },
     onCatalogDelete: (record) => removeIndexCatalogMetadata(indexService, record),
     onDropIndexDataset: (params) => dropIndexDatasetPartition(indexService, params),
+    onReconcileIndexDataset: (params) =>
+      reconcileDistributedIndexDatasetSchema(indexService, params),
   };
 }
 
@@ -627,6 +636,8 @@ function buildProductionCoordinatorOptions(indexService) {
     resolveTableSchema,
     hasDistributedPartitionRoute: (partitionId) =>
       hasDistributedPartitionRoute(indexService, partitionId),
+    hasHostedPartitionReplica: (partitionId) =>
+      hasHostedPartitionReplica(indexService, partitionId),
     provisionIndexPartitions: (context) =>
       provisionIndexPartitionsWithRuntime(indexService, getCoordinator, runtimeState, context),
     ...buildCatalogPersistenceHooks(indexService),

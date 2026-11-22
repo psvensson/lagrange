@@ -366,6 +366,16 @@ export function resolveGlobalCreateSchemaContext(def, options, schemaInfo) {
   return {basePrimaryKeyColumns, columnTypes};
 }
 
+export function isSameGlobalIndexDefinition(existing, def) {
+  if (!existing || !def) return false;
+  const norm = normalizeGlobalIndexRecord(existing);
+  const sameTable = (norm.tableName || '') === (def.tableName || '');
+  const defCols = Array.isArray(def.columnNames) ? def.columnNames : [];
+  const sameCols = norm.columnNames.length === defCols.length &&
+    norm.columnNames.every((col, idx) => col === defCols[idx]);
+  return sameTable && sameCols && Boolean(norm.isUnique) === Boolean(def.unique);
+}
+
 export function checkIndexExistence(catalog, def, options) {
   const indexName = def.indexName;
   if (catalog.has(indexName)) {

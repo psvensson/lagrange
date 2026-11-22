@@ -41,6 +41,7 @@ import {
   refusesKeyAllocation,
 } from './partition-statement-admission-rowid-rules.js';
 import {
+  PARTITION_GLOBAL_INDEX_DATASET_PREFIX as INDEX_DATASET_PREFIX,
   PARTITION_STATEMENT_ADMISSION_MESSAGE as MESSAGE,
   PARTITION_STATEMENT_CHAR as CHAR,
   PARTITION_STATEMENT_HEAD_KIND as HEAD_KIND,
@@ -246,6 +247,58 @@ function matchIndexDdl(lexed) {
     matchDropIndex(lexed.tokens) : null;
 }
 
+const QUALIFIED_TARGET_ADVANCE = 3;
+
+function matchDatasetTableTarget(tokens, at) {
+  if (tokens[at + 1]?.text === CHAR.DOT) {
+    const schema = tokens[at]?.identifier;
+    const tableName = tokens[at + 2]?.identifier ?? null;
+    return schema === asciiLower(KEYWORD.MAIN) && tableName !== null ?
+      {tableName, next: at + QUALIFIED_TARGET_ADVANCE} : null;
+  }
+  const tableName = nameAt(tokens, at);
+  return tableName !== null ? {tableName, next: at + 1} : null;
+}
+
+function findBalancedParenEnd(tokens, openIndex) {
+  if (tokens[openIndex]?.text !== CHAR.OPEN_PAREN) {
+    return -1;
+  }
+  let balance = 0;
+  for (let index = openIndex; index < tokens.length; index += 1) {
+    if (tokens[index].text === CHAR.OPEN_PAREN) balance += 1;
+    else if (tokens[index].text === CHAR.CLOSE_PAREN) {
+      balance -= 1;
+      if (balance === 0) return index;
+    }
+  }
+  return -1;
+}
+
+function matchDropDatasetTable(tokens) {
+  if (tokens[1]?.upper !== KEYWORD.TABLE) return null;
+  const at = skipKeywords(tokens, 2, [KEYWORD.IF, KEYWORD.EXISTS]);
+  const target = matchDatasetTableTarget(tokens, at);
+  return target !== null && endsAt(tokens, target.next) ?
+    {tableName: target.tableName} : null;
+}
+
+function matchCreateDatasetTable(tokens) {
+  if (tokens[1]?.upper !== KEYWORD.TABLE) return null;
+  const at = skipKeywords(tokens, 2, [KEYWORD.IF, KEYWORD.NOT, KEYWORD.EXISTS]);
+  const target = matchDatasetTableTarget(tokens, at);
+  if (target === null) return null;
+  const close = findBalancedParenEnd(tokens, target.next);
+  return close >= 0 && endsAt(tokens, close + 1) ?
+    {tableName: target.tableName} : null;
+}
+
+function matchDatasetTableDdl(lexed) {
+  return lexed.head === KEYWORD.CREATE ?
+    matchCreateDatasetTable(lexed.tokens) :
+    matchDropDatasetTable(lexed.tokens);
+}
+
 // The indexes the partition's schema declares (created at initialization on
 // every replica, so a drop would come back on a restarted replica only).
 function declaredIndexNames(service, tableName) {
@@ -264,15 +317,25 @@ function refusesIndexDrop(service, indexName, tableName) {
 }
 
 function admitIndexDdl(service, lexed, sql) {
-  const ddl = matchIndexDdl(lexed);
   const tableName = ownTableName(service);
-  if (ddl === null || tableName === null) {
+  if (tableName === null) {
     return refusal(LAYER.STATEMENT_KIND);
   }
-  const refused = ddl.create ? ddl.tableName !== asciiLower(tableName) :
-    refusesIndexDrop(service, ddl.indexName, tableName);
-  return refused ? refusal(LAYER.STATEMENT_KIND) :
-    {admitted: true, kind: KIND.INDEX_DDL, statement: service.db.prepare(sql)};
+  const ddl = matchIndexDdl(lexed);
+  if (ddl !== null) {
+    const refused = ddl.create ? ddl.tableName !== asciiLower(tableName) :
+      refusesIndexDrop(service, ddl.indexName, tableName);
+    return refused ? refusal(LAYER.STATEMENT_KIND) :
+      {admitted: true, kind: KIND.INDEX_DDL, statement: service.db.prepare(sql)};
+  }
+  const ownLower = asciiLower(tableName);
+  if (ownLower.startsWith(INDEX_DATASET_PREFIX)) {
+    const datasetDdl = matchDatasetTableDdl(lexed);
+    if (datasetDdl !== null && datasetDdl.tableName === ownLower) {
+      return {admitted: true, kind: KIND.INDEX_DDL, statement: service.db.prepare(sql)};
+    }
+  }
+  return refusal(LAYER.STATEMENT_KIND);
 }
 
 // --- writes: R1, R2 and the R3 pre-check ---

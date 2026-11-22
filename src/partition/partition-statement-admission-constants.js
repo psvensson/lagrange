@@ -197,8 +197,10 @@ const PARTITION_STATEMENT_KEYWORD = Object.freeze({
   WHERE: 'WHERE',
   WITH: 'WITH',
   AS: 'AS',
+  DROP: 'DROP',
   MAIN: 'MAIN',
 });
+const PARTITION_GLOBAL_INDEX_DATASET_PREFIX = '__idx_';
 
 // The token classes of the SQLite-lexed text (sqlite3GetToken, 3.49.2).
 const PARTITION_STATEMENT_TOKEN = Object.freeze({
@@ -391,6 +393,7 @@ function refusalLayerFieldOf(code, message) {
 
 export {
   refusalLayerFieldOf,
+  PARTITION_GLOBAL_INDEX_DATASET_PREFIX,
   PARTITION_ROWID_ALIASES,
   PARTITION_ROWID_LIMIT,
   PARTITION_STATEMENT_ADMISSION_MESSAGE,

@@ -27,6 +27,35 @@ function sortObject(value) {
   );
 }
 
+function resolveComparableDefaultValue(derivedCol, rawCol) {
+  if (derivedCol.defaultValue !== undefined) return derivedCol.defaultValue;
+  if (rawCol?.defaultValue !== undefined) return rawCol.defaultValue;
+  return null;
+}
+
+function projectComparableSchema(service, schema) {
+  const cols = Array.isArray(schema?.columns) ? schema.columns : [];
+  const derived = service.buildSchemaDefinition({
+    columns: cols,
+    primaryKey: schema?.primaryKey,
+    tableConstraints: schema?.tableConstraints,
+  });
+  return sortObject({
+    columns: derived.columns.map((col, idx) => ({
+      name: col.name,
+      type: col.type,
+      notNull: col.notNull,
+      collation: col.collation,
+      unique: col.unique,
+      checkSql: col.checkSql,
+      defaultValue: resolveComparableDefaultValue(col, cols[idx]),
+    })),
+    primaryKey: (Array.isArray(derived.primaryKey) ? derived.primaryKey : [])
+      .map((name) => String(name || '').toLowerCase()),
+    tableConstraints: derived.tableConstraints || [],
+  });
+}
+
 function assertDurableMetadataIdentity(service, existingTable, ast, options) {
   if (!options.schemaJobId) return;
   const existingTableId = existingTable.table_id || existingTable.tableId;
@@ -42,9 +71,17 @@ function assertDurableMetadataIdentity(service, existingTable, ast, options) {
   } catch {
     existingSchema = {};
   }
-  if (existingTableId === options.tableId &&
-      JSON.stringify(existingSchema) === JSON.stringify(expectedSchema)) {
-    return;
+  if (existingTableId === options.tableId) {
+    if (JSON.stringify(existingSchema) === JSON.stringify(expectedSchema)) {
+      return;
+    }
+    if (
+      options.globalIndex &&
+      JSON.stringify(projectComparableSchema(service, existingSchema)) ===
+        JSON.stringify(projectComparableSchema(service, ast))
+    ) {
+      return;
+    }
   }
   const error = new Error(
     `Existing table metadata conflicts with schema job ${options.schemaJobId}`,
@@ -78,13 +115,16 @@ function createTableExistsError(tableName) {
 }
 
 function buildExistingReconciliationOptions(options) {
+  const src = options || {};
   return {
-    timeoutBudget: options?.timeoutBudget,
-    cancellationToken: options?.cancellationToken || null,
-    schemaJobId: options.schemaJobId || null,
-    schemaOwnerFenceToken: options.schemaOwnerFenceToken ?? null,
-    assertProvisioningOwnership:
-      options.assertProvisioningOwnership || null,
+    timeoutBudget: src.timeoutBudget,
+    cancellationToken: src.cancellationToken ?? null,
+    partitionId: src.partitionId ?? null,
+    partitions: src.partitions ?? null,
+    globalIndex: src.globalIndex ?? null,
+    schemaJobId: src.schemaJobId ?? null,
+    schemaOwnerFenceToken: src.schemaOwnerFenceToken ?? null,
+    assertProvisioningOwnership: src.assertProvisioningOwnership ?? null,
   };
 }
 
@@ -166,46 +206,115 @@ async function reconcileExistingCreateTable(
   return buildExistingTableResult(ast, existingTable, reconciliation);
 }
 
+function buildContextSchemaDefinition(service, ast, globalIndex, partitionKey) {
+  const baseSchema = service.buildSchemaDefinition(ast.columns, ast);
+  if (!globalIndex) {
+    return baseSchema;
+  }
+  return {
+    ...baseSchema,
+    tableName: ast.tableName,
+    baseTableName: globalIndex.tableName,
+    indexName: globalIndex.indexName,
+    columnNames: [...(globalIndex.columnNames || [])],
+    basePrimaryKeyColumns: [...(globalIndex.basePrimaryKeyColumns || [])],
+    partitionKey,
+  };
+}
+
+function resolveFirstPartitionSpec(options) {
+  const parts = options.partitions;
+  return Array.isArray(parts) && parts.length > 0 ? parts[0] : null;
+}
+
+function resolvePartitionKeyTypeForContext(firstPartition, tableMetadata) {
+  if (firstPartition?.partitionKeyType) {
+    return firstPartition.partitionKeyType;
+  }
+  return resolveDeclaredPartitionKeyType(tableMetadata);
+}
+
+function resolveReplicaCountForContext(service, firstPartition) {
+  if (firstPartition?.replicaCount) {
+    return firstPartition.replicaCount;
+  }
+  return service.defaultReplicaCount;
+}
+
+function buildContextPartitionMetadata(
+  service,
+  {tableId, tableName, partitionId, firstPartition, tableMetadata},
+) {
+  const now = Date.now();
+  return {
+    partition_id: partitionId,
+    table_id: tableId,
+    table_name: tableName,
+    partition_key_start: firstPartition?.partitionKeyStart ?? null,
+    partition_key_end: firstPartition?.partitionKeyEnd ?? null,
+    partition_key_type: resolvePartitionKeyTypeForContext(firstPartition, tableMetadata),
+    partition_version: 1,
+    replica_count: resolveReplicaCountForContext(service, firstPartition),
+    size_bytes: 0,
+    leader_node_id: null,
+    state: STATE.NORMAL,
+    created_at: now,
+    updated_at: now,
+  };
+}
+
+function resolveContextPartitionKey(service, ast, globalIndex) {
+  if (globalIndex?.columnNames?.[0]) {
+    return globalIndex.columnNames[0];
+  }
+  return service.derivePartitionKey(ast.primaryKey);
+}
+
+function resolveContextPartitionId(tableId, options, firstPartition) {
+  if (options.partitionId) return options.partitionId;
+  if (firstPartition?.partitionId) return firstPartition.partitionId;
+  return `${tableId}-p1`;
+}
+
+function resolveContextPartitionCount(options) {
+  return Array.isArray(options.partitions) && options.partitions.length > 0 ?
+    options.partitions.length :
+    1;
+}
+
 function buildCreateTableMetadataContext(service, ast, options) {
-  const partitionKey = service.derivePartitionKey(ast.primaryKey);
+  const firstPartition = resolveFirstPartitionSpec(options);
+  const globalIndex = options.globalIndex ?? null;
+  const partitionKey = resolveContextPartitionKey(service, ast, globalIndex);
   const tableId = options.tableId || `tbl-${uuidv4()}`;
-  const partitionId = options.partitionId || `${tableId}-p1`;
-  const schemaDefinition = service.buildSchemaDefinition(ast.columns, ast);
+  const partitionId = resolveContextPartitionId(tableId, options, firstPartition);
+  const schemaDefinition = buildContextSchemaDefinition(
+    service, ast, globalIndex, partitionKey,
+  );
+  const now = Date.now();
   const tableMetadata = {
     table_id: tableId,
     table_name: ast.tableName,
     schema_definition: JSON.stringify(schemaDefinition),
     partition_key: partitionKey,
     table_policies: JSON.stringify(ast.options?.tablePolicy ?? {}),
-    partition_count: 1,
+    partition_count: resolveContextPartitionCount(options),
     active_partition_version: 1,
     pending_partition_version: null,
     partition_transition_state: null,
     partition_transition_metadata: null,
-    created_at: Date.now(),
-    updated_at: Date.now(),
+    created_at: now,
+    updated_at: now,
   };
-  const partitionKeyType = resolveDeclaredPartitionKeyType(tableMetadata);
-  const partitionMetadata = {
-    partition_id: partitionId,
-    table_id: tableId,
-    table_name: ast.tableName,
-    partition_key_start: null,
-    partition_key_end: null,
-    partition_key_type: partitionKeyType,
-    partition_version: 1,
-    replica_count: service.defaultReplicaCount,
-    size_bytes: 0,
-    leader_node_id: null,
-    state: STATE.NORMAL,
-    created_at: Date.now(),
-    updated_at: Date.now(),
-  };
+  const partitionMetadata = buildContextPartitionMetadata(service, {
+    tableId, tableName: ast.tableName, partitionId, firstPartition, tableMetadata,
+  });
   return {
     columns: ast.columns,
     partitionId,
     partitionKey,
     partitionMetadata,
+    schemaDefinition,
     tableId,
     tableMetadata,
     tableName: ast.tableName,
@@ -220,6 +329,13 @@ function buildBaseProvisioningInput(context, options) {
     partitionId: context.partitionId,
     partitionMetadata: context.partitionMetadata,
     replicaCount: context.partitionMetadata.replica_count,
+    ...(options?.globalIndex || options?.partitions ? {
+      schema: context.schemaDefinition,
+      keyRange: {
+        start: context.partitionMetadata.partition_key_start ?? null,
+        end: context.partitionMetadata.partition_key_end ?? null,
+      },
+    } : {}),
     timeoutBudget: options?.timeoutBudget,
     cancellationToken: options?.cancellationToken || null,
   };

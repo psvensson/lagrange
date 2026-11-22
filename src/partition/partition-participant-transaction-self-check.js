@@ -78,8 +78,15 @@ function runLeaderDeterminismSelfCheck(service) {
   }
 }
 
+function invalidateParticipantDeterminismSelfCheck(db) {
+  if (db) {
+    RESULTS.delete(db);
+  }
+}
+
 export {
   configureParticipantDeterminismSelfCheck,
+  invalidateParticipantDeterminismSelfCheck,
   participantDeterminismSelfCheckOf,
   runLeaderDeterminismSelfCheck,
 };

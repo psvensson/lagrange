@@ -275,10 +275,10 @@ const NON_FUNCTION_PAREN_KEYWORDS = new Set([
   'ALL', 'AND', 'AS', 'BETWEEN', 'BY', 'CASE', 'CAST', 'CHECK', 'COLLATE',
   'CONFLICT', 'DEFAULT', 'DISTINCT', 'ELSE', 'ESCAPE', 'EXCEPT', 'EXISTS',
   'FILTER', 'FROM', 'GROUPS', 'HAVING', 'IN', 'INDEXED', 'INTERSECT', 'INTO',
-  'IS', 'JOIN', 'LIMIT', 'MATERIALIZED', 'NOT', 'OFFSET', 'ON', 'OR', 'OVER',
-  'PARTITION', 'RANGE', 'RECURSIVE', 'RETURNING', 'ROWS', 'SELECT', 'SET',
-  'TABLE', 'THEN', 'UNION', 'USING', 'VALUES', 'WHEN', 'WHERE', 'WINDOW',
-  'WITH',
+  'IS', 'JOIN', 'KEY', 'LIMIT', 'MATERIALIZED', 'NOT', 'OFFSET', 'ON', 'OR',
+  'OVER', 'PARTITION', 'PRIMARY', 'RANGE', 'RECURSIVE', 'RETURNING', 'ROWS',
+  'SELECT', 'SET', 'TABLE', 'THEN', 'UNION', 'UNIQUE', 'USING', 'VALUES',
+  'WHEN', 'WHERE', 'WINDOW', 'WITH',
 ]);
 
 function isRefusedFunctionToken(token) {
@@ -314,10 +314,32 @@ function isTableOrTypeBeforeParen(tokens, index) {
   return isAlterColumnTypeBeforeParen(tokens, index);
 }
 
+function isCreateTableStatement(lexed) {
+  return lexed.head === KEYWORD.CREATE &&
+    lexed.tokens[1]?.upper === KEYWORD.TABLE;
+}
+
+function isCreateTableSyntaxBeforeParen(tokens, index) {
+  if (tokens[index].depth === 0) {
+    return true;
+  }
+  if (tokens[index].depth !== 1) {
+    return false;
+  }
+  const prev = tokens[index - 1];
+  const prevPrev = tokens[index - 2];
+  return prev?.type === TOKEN.WORD &&
+    (prevPrev?.text === CHAR.OPEN_PAREN || prevPrev?.text === CHAR.COMMA);
+}
+
 function isSyntaxIdentifierBeforeParen(lexed, index) {
   const {tokens} = lexed;
   if (lexed.head === KEYWORD.WITH && tokens[index].depth === 0 &&
       index < dmlVerbIndex(lexed)) {
+    return true;
+  }
+  if (isCreateTableStatement(lexed) &&
+      isCreateTableSyntaxBeforeParen(tokens, index)) {
     return true;
   }
   return isTableOrTypeBeforeParen(tokens, index);
@@ -361,7 +383,8 @@ function isRefusedWriteValueKeyword(token) {
 function namesRefusedFunction(lexed, {classifyWriteFunctions = true} = {}) {
   const {tokens} = lexed;
   const isWrite = classifyWriteFunctions !== false &&
-    (dmlVerbIndex(lexed) >= 0 || lexed.head === KEYWORD.ALTER);
+    (dmlVerbIndex(lexed) >= 0 || lexed.head === KEYWORD.ALTER ||
+      isCreateTableStatement(lexed));
   return tokens.some((token, index) => isRefusedFunctionToken(token) ||
     (isWrite && (isRefusedWriteValueKeyword(token) ||
       isRefusedWriteCall(lexed, index))));

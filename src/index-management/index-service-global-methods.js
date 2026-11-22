@@ -64,6 +64,31 @@ function resolveMetadataCreatedAt(cat) {
   return Date.now();
 }
 
+function applyInterruptedMetadataFields(result, metadata) {
+  if (!result.interrupted) return;
+  metadata.interrupted = true;
+  metadata.cursorPartitionId = result.cursorPartitionId;
+  metadata.cursorPk = result.cursorPk;
+  metadata.totalRows = result.totalRows;
+}
+
+function applyDeferredMetadataFields(result, metadata) {
+  if (!result.deferred) return;
+  metadata.deferred = true;
+  const deferredKeys = [
+    'contractState',
+    'failureCode',
+    'nextAction',
+    'jobId',
+    'retryAfterMs',
+  ];
+  for (const key of deferredKeys) {
+    if (result[key] !== undefined && result[key] !== null) {
+      metadata[key] = result[key];
+    }
+  }
+}
+
 function buildGlobalIndexMetadata(result, cat, tableId, fields) {
   const metadata = {
     indexId: resolveMetadataIndexId(result, cat, fields.indexName),
@@ -79,15 +104,8 @@ function buildGlobalIndexMetadata(result, cat, tableId, fields) {
     createdAt: resolveMetadataCreatedAt(cat),
     generation: result.generation || cat?.index_generation || 1,
   };
-  if (result.interrupted) {
-    metadata.interrupted = true;
-    metadata.cursorPartitionId = result.cursorPartitionId;
-    metadata.cursorPk = result.cursorPk;
-    metadata.totalRows = result.totalRows;
-  }
-  if (result.deferred) {
-    metadata.deferred = true;
-  }
+  applyInterruptedMetadataFields(result, metadata);
+  applyDeferredMetadataFields(result, metadata);
   return metadata;
 }
 
@@ -279,6 +297,29 @@ const indexServiceGlobalMethods = {
    */
   async resumeGlobalIndexBackfill(indexName, options = {}) {
     return this.getGlobalIndexCoordinator().resumeBackfill(indexName, options);
+  },
+
+  /**
+   * Complete recovered or retried GSI creation after durable schema job SUCCEEDED.
+   * @param {Object} intent - Schema provisioning intent carrying globalIndex metadata.
+   * @return {Promise<Object|null>}
+   */
+  async completeRecoveredGlobalIndexProvisioning(intent) {
+    const globalIndex = intent?.globalIndex;
+    if (!globalIndex?.indexName) {
+      return null;
+    }
+    if (!this.initialized && this.initialize) {
+      await this.initialize();
+    }
+    const coordinator = this.getGlobalIndexCoordinator();
+    const outcome = await coordinator.completeRecoveredProvisioning({
+      ...globalIndex,
+      tableId: intent.tableId,
+      partitionId: intent.partitionId,
+    });
+    this.sqlQueryEngine?.resetPreparedStatements?.();
+    return outcome;
   },
 
   /**

@@ -789,3 +789,83 @@ test('TX1 admission A13: CREATE [UNIQUE] INDEX on own table admits and replicate
     {name: `uq_${TABLE}_val`, isUnique: true},
   ]);
 });
+
+test('TX1 admission A14: DROP TABLE IF EXISTS and CREATE TABLE IF NOT EXISTS admit strictly for __idx_* own dataset while user tables stay refused', async () => {
+  const gsiTable = '__idx_users_idx_users_email';
+  const gsiSchema = {
+    columns: [
+      {name: 'email', type: 'TEXT'},
+      {name: 'id', type: 'INTEGER'},
+      {name: '__base_partition_id', type: 'TEXT'},
+    ],
+    primaryKey: ['email', 'id'],
+  };
+  const dropOwnSql = `DROP TABLE IF EXISTS "${gsiTable}"`;
+  const createOwnSql = `CREATE TABLE IF NOT EXISTS "${gsiTable}" ("name" TEXT, "id" INTEGER, "__base_partition_id" TEXT, PRIMARY KEY ("name", "id"))`;
+
+  const {leader: gsiLeader, proposed: gsiProposed} = await startLeader({
+    tableName: gsiTable,
+    schema: gsiSchema,
+  });
+  let gsiFacts;
+  try {
+    gsiFacts = {
+      dropOwn: await leaderAnswer(gsiLeader, ['a14-drop', dropOwnSql, []]),
+      createOwn: await leaderAnswer(gsiLeader, ['a14-create', createOwnSql, []]),
+      dropOther: await leaderAnswer(gsiLeader, ['a14-other-drop', 'DROP TABLE IF EXISTS other_table', []]),
+      createTemp: await leaderAnswer(gsiLeader, ['a14-temp-create', `CREATE TABLE temp."${gsiTable}" (a TEXT)`, []]),
+      createUnsafeExpr: await leaderAnswer(gsiLeader, ['a14-expr', `CREATE TABLE IF NOT EXISTS "${gsiTable}" (a TEXT DEFAULT (random()))`, []]),
+      proposed: gsiProposed.length,
+    };
+  } finally {
+    await shutdownAll(gsiLeader);
+  }
+  assert.deepEqual(gsiFacts, {
+    dropOwn: 'proposed',
+    createOwn: 'proposed',
+    dropOther: refusedAs(LAYER.STATEMENT_KIND),
+    createTemp: refusedAs(LAYER.STATEMENT_KIND),
+    createUnsafeExpr: refusedAs(RULE.FUNCTION),
+    proposed: 2,
+  });
+
+  const gsiReplicaFacts = [];
+  for (const replicaId of [REPLICAS[1], REPLICAS[2]]) {
+    const replica = await startReplica(replicaId, {
+      tableName: gsiTable,
+      schema: gsiSchema,
+    });
+    try {
+      applyCommitted(replica, committedQueryOf('a14-drop', dropOwnSql));
+      const droppedExists = replica.db.prepare(
+        'SELECT name FROM sqlite_master WHERE type = \'table\' AND name = ?',
+      ).get(gsiTable);
+      applyCommitted(replica, committedQueryOf('a14-create', createOwnSql));
+      const cols = replica.db.prepare(`PRAGMA table_info("${gsiTable}")`).all().map((c) => c.name);
+      gsiReplicaFacts.push({dropped: droppedExists === undefined, cols});
+    } finally {
+      await shutdownAll(replica);
+    }
+  }
+  assert.deepEqual(gsiReplicaFacts, [
+    {dropped: true, cols: ['name', 'id', '__base_partition_id']},
+    {dropped: true, cols: ['name', 'id', '__base_partition_id']},
+  ]);
+
+  const {leader: userLeader, proposed: userProposed} = await startLeader();
+  let userFacts;
+  try {
+    userFacts = {
+      dropUser: await leaderAnswer(userLeader, ['a14-user-drop', `DROP TABLE IF EXISTS ${TABLE}`, []]),
+      createUser: await leaderAnswer(userLeader, ['a14-user-create', `CREATE TABLE IF NOT EXISTS ${TABLE} (id INTEGER PRIMARY KEY)`, []]),
+      proposed: userProposed.length,
+    };
+  } finally {
+    await shutdownAll(userLeader);
+  }
+  assert.deepEqual(userFacts, {
+    dropUser: refusedAs(LAYER.STATEMENT_KIND),
+    createUser: refusedAs(LAYER.STATEMENT_KIND),
+    proposed: 0,
+  });
+});
