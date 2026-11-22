@@ -279,7 +279,9 @@ async function createRealPartition(dir, {
     schema,
   }));
   await ps.initialize();
-  await resumeFixtureParticipantAdmission(ps);
+  if (schema) {
+    await resumeFixtureParticipantAdmission(ps);
+  }
   return ps;
 }
 
