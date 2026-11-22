@@ -461,13 +461,18 @@ async function handleRemoteLiveQueryCdcSubscribe(service, payload) {
  */
 function handleRemoteLiveQueryCdcUnsubscribe(service, payload) {
   if (!isNonEmptyString(payload?.subscriberId)) {
-    return {success: false, error: REMOTE_CDC_ERROR.INVALID_UNSUBSCRIBE};
+    return {
+      success: false,
+      unsubscribed: false,
+      error: REMOTE_CDC_ERROR.INVALID_UNSUBSCRIBE,
+    };
   }
   const entry = service.remoteLiveQueryCdcSubscribers?.get(payload.subscriberId);
   if (entry) {
     retireRemoteSubscriber(service, entry);
+    return {success: true, unsubscribed: true};
   }
-  return {success: true};
+  return {success: true, unsubscribed: true, alreadyAbsent: true};
 }
 
 /**

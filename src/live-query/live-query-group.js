@@ -90,6 +90,7 @@ class QueryGroup extends EventEmitter {
     this.refreshInFlight = false;
     this.refreshPending = false;
     this.refreshGeneration = 0;
+    this.cdcEventEpoch = 0;
 
     const {tables, table} = resolveTableInfo(this.parsedQuery);
     this.tables = tables;
@@ -454,6 +455,7 @@ class QueryGroup extends EventEmitter {
     )) {
       return null;
     }
+    this.cdcEventEpoch += 1;
 
     // Tier 2: Queries with JOIN, GROUP BY, aggregates, ORDER BY, LIMIT re-execute
     if (this.isComplex) {
@@ -569,13 +571,23 @@ class QueryGroup extends EventEmitter {
   }
 
   /**
+   * Read the current committed CDC frontier recorded for a partition.
+   * @param {string} partitionId - Partition ID.
+   * @return {*|null} Recorded partition frontier or null if absent.
+   */
+  getPartitionFrontier(partitionId) {
+    return this.partitionFrontiers.get(partitionId) ?? null;
+  }
+
+  /**
    * Re-execute query against sqlQueryEngine and return an explicit refresh
    * outcome distinguishing completion from failure, staleness, coalescing, or
    * closure.
+   * @param {Object} [options] - Refresh execution options.
    * @return {Promise<Object>} Named refresh outcome record.
    */
-  async refreshQueryResultWithOutcome() {
-    return executeGroupRefreshOutcome(this);
+  async refreshQueryResultWithOutcome(options = {}) {
+    return executeGroupRefreshOutcome(this, options);
   }
 
   /**
@@ -583,7 +595,9 @@ class QueryGroup extends EventEmitter {
    * @return {Promise<Object|null>} Reset snapshot notification on completion, else null.
    */
   async refreshQueryResult() {
-    const outcome = await this.refreshQueryResultWithOutcome();
+    const outcome = await this.refreshQueryResultWithOutcome({
+      scheduleFollowupOnCdcSupersede: true,
+    });
     return outcome.status === LIVE_QUERY_REFRESH_STATUS.COMPLETED ? outcome.notification : null;
   }
 
