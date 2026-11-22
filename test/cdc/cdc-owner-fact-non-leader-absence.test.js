@@ -56,7 +56,9 @@ test('readOwnerFact: an empty answer from a replica that does not lead is never 
       const answer = await read(requestFor(OPERATION));
       const asked = group.transit.slice(sentBefore);
       t.equal(answer.state, STATE.UNAVAILABLE, 'unavailable, never READY with no rows');
-      t.ok([REASON.READ_FAILED, REASON.NOT_LEADER].includes(answer.reason),
+      // The published leader is the only replica asked (the publication
+      // carries no term): it is unusable, or the read fails reaching it.
+      t.ok([REASON.READ_FAILED, REASON.PUBLISHED_LEADER_UNUSABLE].includes(answer.reason),
         `a named reason (${answer.reason})`);
       t.equal(Object.hasOwn(answer, 'rows'), false, 'unavailability has no rows field');
       t.equal(isOwnerFactAnswer(answer), true);
