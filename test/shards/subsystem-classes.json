@@ -4,8 +4,8 @@
   "counts": {
     "admin-diagnostics": 122,
     "architecture-governance": 21,
-    "bootstrap-membership": 353,
-    "cdc-metadata": 72,
+    "bootstrap-membership": 355,
+    "cdc-metadata": 73,
     "cli-tooling": 99,
     "control-plane": 237,
     "convergence-topology": 87,
@@ -25,10 +25,10 @@
     "transport-messaging": 116,
     "wasm-toolchain": 74
   },
-  "censusSize": 2735,
-  "digest": "fnv1a32-e83755f9",
+  "censusSize": 2738,
+  "digest": "fnv1a32-e5fb0768",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-41b61016",
+  "observationDigest": "fnv1a32-a899d384",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -290,6 +290,7 @@
     "test/bootstrap/seed-bootstrap-direct-lane.integration.test.js": "bootstrap-membership",
     "test/bootstrap/seed-bootstrap-lane-refusal.integration.test.js": "bootstrap-membership",
     "test/bootstrap/seed-cache-hydration-handoff.test.js": "bootstrap-membership",
+    "test/bootstrap/seed-config-seeding-count.integration.test.js": "bootstrap-membership",
     "test/bootstrap/seed-delegate-bundles.test.js": "bootstrap-membership",
     "test/bootstrap/seed-infrastructure-phase.test.js": "bootstrap-membership",
     "test/bootstrap/seed-infrastructure-runtime-identity.test.js": "bootstrap-membership",
@@ -308,6 +309,7 @@
     "test/bootstrap/seed-startup-listener-failure.integration.test.js": "bootstrap-membership",
     "test/bootstrap/seed-startup-session-store.test.js": "bootstrap-membership",
     "test/bootstrap/seed-teardown-pending-cdc-delivery.test.js": "bootstrap-membership",
+    "test/bootstrap/seed-window-leadership-wait.integration.test.js": "bootstrap-membership",
     "test/bootstrap/service-instance-table-schema.test.js": "bootstrap-membership",
     "test/bootstrap/shared/cdc-integration-setup.test.js": "bootstrap-membership",
     "test/bootstrap/shared/control-plane-setup.test.js": "bootstrap-membership",
@@ -365,6 +367,7 @@
     "test/cdc/bootstrap-mode-routing.property.test.js": "cdc-metadata",
     "test/cdc/cdc-authoritative-catchup-hydration.test.js": "cdc-metadata",
     "test/cdc/cdc-authoritative-catchup-terminal.test.js": "cdc-metadata",
+    "test/cdc/cdc-bootstrap-lane-write-count.test.js": "cdc-metadata",
     "test/cdc/cdc-cache-visibility-wait-bound-spent.test.js": "cdc-metadata",
     "test/cdc/cdc-confirmation-tracker.property.test.js": "cdc-metadata",
     "test/cdc/cdc-confirmation-tracker.test.js": "cdc-metadata",
@@ -3966,6 +3969,13 @@
         "src/partition/partition-service-hydration-image-methods.js"
       ]
     },
+    "test/bootstrap/seed-config-seeding-count.integration.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-write-kernel.js",
+        "test/test-helpers/fresh-seed-activation-public-child.js"
+      ]
+    },
     "test/bootstrap/seed-infrastructure-phase.test.js": {
       "files": [
         "src/bootstrap/rejoin-hints.js",
@@ -4165,6 +4175,14 @@
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
+    "test/bootstrap/seed-window-leadership-wait.integration.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-write-kernel.js",
+        "test/test-helpers/fresh-seed-activation-public-child.js",
+        "test/test-helpers/seed-bootstrap-lane-observer.js"
+      ]
+    },
     "test/bootstrap/service-instance-table-schema.test.js": {
       "files": [
         "src/cache/system-cache-key-descriptor.js",
@@ -4299,6 +4317,15 @@
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/logging/wait-bound-spent.js"
+      ]
+    },
+    "test/cdc/cdc-bootstrap-lane-write-count.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/config/dynamic-config-service.js",
+        "src/control-plane/control-plane-mutation-outcome-classifier.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js"
       ]
     },
     "test/cdc/cdc-cache-visibility-wait-bound-spent.test.js": {

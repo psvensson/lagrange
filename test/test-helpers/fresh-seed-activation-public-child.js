@@ -290,6 +290,8 @@ if (runtime !== null) {
       service.write = await db.query(SQL.INSERT, ['row-1', 'written-before-restart']);
     }
     service.read = await db.query(SQL.SELECT, ['row-1']);
+    // An observation mode may act once more on the running seed.
+    if (bootstrapLane !== null) service.afterStart = await bootstrapLane.afterStart();
   } catch (error) {
     service = {...service, error: errorRecord(error)};
   }
