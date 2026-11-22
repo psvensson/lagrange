@@ -224,6 +224,12 @@ async function openCureScene(t, {cureNodeIds, partitionId = CURE_PARTITION_ID,
       return {controlPlaneReadinessService: readiness, storageAdmissionService: storage};
     }});
   seedFreeNodesAndPartition(host.cache, partitionId, tableId);
+  // Drain the SystemTableCache setImmediate notifications queued by setup
+  // seeding before constructing the planner, so setup inserts do not fire
+  // priorityRecoveryVisibilityCacheListener during outage setup.
+  await new Promise((resolve) => {
+    setImmediate(resolve);
+  });
   const rebalancer = openCurePlanner(t, host, partitionId, readiness, storage);
   t.equal(world.replicaOn(NODE.PLANNER).getRole(), RAFT_ROLE.FOLLOWER,
     'setup: the planner node hosts a services-p1 replica that follows');
