@@ -136,18 +136,8 @@ function recordPartitionDescriptorLocally(coordinator, runtimeState, partitionMe
   }
 }
 
-async function provisionIndexPartitionsWithRuntime(
-  indexService,
-  getCoordinator,
-  runtimeState,
-  context,
-) {
+function buildProvisionedIndexMetadata(indexService, context) {
   const {tableName, indexName, columnNames, basePrimaryKeyColumns, columnTypes} = context;
-  const provisioner = resolveProvisionerCallback(indexService);
-  if (!provisioner) {
-    throw new Error(`No index partitions available for global index '${indexName}'`);
-  }
-
   const datasetName = getGlobalIndexDatasetName(tableName, indexName);
   const datasetSchema = buildIndexDatasetSchema({
     tableName,
@@ -175,6 +165,7 @@ async function provisionIndexPartitionsWithRuntime(
     created_at: now,
     updated_at: now,
   };
+  const baseTable = indexService?.sqlQueryEngine?.getTableInfo?.(tableName) || null;
   const tableMetadata = {
     table_id: datasetName,
     table_name: datasetName,
@@ -183,8 +174,32 @@ async function provisionIndexPartitionsWithRuntime(
     primaryKey: datasetSchema.primaryKey,
     partition_key_type: partitionKeyType,
     schema: datasetSchema,
-    active_partition_version: 1,
+    ...(Number.isSafeInteger(baseTable?.active_partition_version) ?
+      {active_partition_version: baseTable.active_partition_version} :
+      {}),
   };
+  return {datasetName, datasetSchema, partitionId, partitionMetadata, tableMetadata};
+}
+
+async function provisionIndexPartitionsWithRuntime(
+  indexService,
+  getCoordinator,
+  runtimeState,
+  context,
+) {
+  const {indexName} = context;
+  const provisioner = resolveProvisionerCallback(indexService);
+  if (!provisioner) {
+    throw new Error(`No index partitions available for global index '${indexName}'`);
+  }
+
+  const {
+    datasetName,
+    datasetSchema,
+    partitionId,
+    partitionMetadata,
+    tableMetadata,
+  } = buildProvisionedIndexMetadata(indexService, context);
 
   await provisioner({
     tableId: datasetName,
@@ -209,11 +224,11 @@ async function provisionIndexPartitionsWithRuntime(
     CACHE_CDC_OPERATIONS.UPSERT,
     partitionMetadata,
   );
-  if (indexService?.canWriteSystemTable?.()) {
-    const gateway = indexService.getControlPlaneSystemTableGateway();
-    if (gateway?.insertSystemTableRow) {
-      await gateway.insertSystemTableRow(TABLES.PARTITIONS, partitionMetadata);
-    }
+  const gateway = indexService?.canWriteSystemTable?.() ?
+    indexService.getControlPlaneSystemTableGateway() :
+    null;
+  if (gateway?.insertSystemTableRow) {
+    await gateway.insertSystemTableRow(TABLES.PARTITIONS, partitionMetadata);
   }
 
   const descriptor = {...partitionMetadata, _provisionedWithSchema: true, _indexName: indexName};

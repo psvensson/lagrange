@@ -15,6 +15,8 @@ import {TABLES} from '../../src/constants/index.js';
 import {CACHE_CDC_OPERATIONS} from '../../src/cache/cache-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
+import {waitForCondition} from '../partition/partition-service-test-support.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 import {
   resumeFixtureParticipantAdmission,
@@ -313,7 +315,7 @@ function createStrictRealMessageRouter(partitionServicesMap) {
   };
 }
 
-async function createRealPartition(dir, {partitionId, tableName, keyRange, schema}) {
+async function createRealPartition(dir, {partitionId, tableName, keyRange, schema, systemCache}) {
   const dbPath = path.join(dir, `${partitionId}.db`);
   const ps = new PartitionService(withFoundingStamp({
     partitionId,
@@ -322,13 +324,15 @@ async function createRealPartition(dir, {partitionId, tableName, keyRange, schem
     replicaId: `${partitionId}-r1`,
     replicaIds: [`${partitionId}-r1`],
     nodeId: 'test-node',
-    systemTableCache: {getAll: () => [], get: () => null, filter: () => []},
+    systemTableCache: systemCache || {getAll: () => [], get: () => null, filter: () => []},
     dbPath,
     keyRange,
     schema,
   }));
   await ps.initialize();
   ps.startElection();
+  await turnChainValue(ps.raft.campaign());
+  await waitForCondition(() => ps.role === 'leader', 2000, 5);
   if (schema) {
     await resumeFixtureParticipantAdmission(ps);
   }
@@ -451,18 +455,24 @@ async function setupStrictCluster(t, options = {}) {
   const includeIndexPartitions = options.includeIndexPartitions !== false;
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lagrange-gsi-strict-'));
   const {tables, partitions} = buildStrictUsersAndIndexDefs(includeIndexPartitions);
+  const oracleDb = createOracleUsersDb();
+  const catalogDbPath = path.join(tmpDir, 'catalog.db');
+  const {gateway, cdcService} = createDurableSystemGateway(catalogDbPath, tables, partitions);
+  const systemCache = seedRealSystemTableCache(tables, partitions);
 
   const usersP0 = await createRealPartition(tmpDir, {
     partitionId: 'users_p0',
     tableName: 'users',
     keyRange: {start: null, end: 100},
     schema: USERS_SCHEMA,
+    systemCache,
   });
   const usersP1 = await createRealPartition(tmpDir, {
     partitionId: 'users_p1',
     tableName: 'users',
     keyRange: {start: 100, end: null},
     schema: USERS_SCHEMA,
+    systemCache,
   });
   const partitionServices = new Map([
     ['users_p0-r1', usersP0],
@@ -484,21 +494,19 @@ async function setupStrictCluster(t, options = {}) {
       tableName: '__idx_users_idx_users_email',
       keyRange: {start: null, end: 'm'},
       schema: idxSchema,
+      systemCache,
     });
     idxP1 = await createRealPartition(tmpDir, {
       partitionId: '__gsi_users_idx_users_email_p1',
       tableName: '__idx_users_idx_users_email',
       keyRange: {start: 'm', end: null},
       schema: idxSchema,
+      systemCache,
     });
     partitionServices.set('__gsi_users_idx_users_email_p0-r1', idxP0);
     partitionServices.set('__gsi_users_idx_users_email_p1-r1', idxP1);
   }
 
-  const oracleDb = createOracleUsersDb();
-  const catalogDbPath = path.join(tmpDir, 'catalog.db');
-  const {gateway, cdcService} = createDurableSystemGateway(catalogDbPath, tables, partitions);
-  const systemCache = seedRealSystemTableCache(tables, partitions);
   const messageRouter = createStrictRealMessageRouter(partitionServices);
 
   const provisioner = async (ctx) => {
@@ -507,6 +515,7 @@ async function setupStrictCluster(t, options = {}) {
       tableName: ctx.tableName,
       keyRange: ctx.keyRange || {start: null, end: null},
       schema: ctx.schema,
+      systemCache,
     });
     partitionServices.set(ps.replicaId, ps);
     const partRow = ctx.partitionMetadata || {
