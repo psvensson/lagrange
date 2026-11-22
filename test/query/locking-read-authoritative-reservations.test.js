@@ -238,6 +238,17 @@ async function setupTwoNodeCluster(options = {}) {
     directory: path.dirname(group.dbFileOf(members[0])),
     budgetMs: GROUP_BUDGET_MS,
   });
+  for (const sysTable of [TABLES.PARTITIONS, TABLES.SERVICES]) {
+    const rows = group.services[0].systemTableCache.getAll(sysTable) || [];
+    for (const row of rows) {
+      if (row.partition_id === releaseOwners.control.partitionId ||
+          row.service_id === releaseOwners.control.replicaId) {
+        for (const svc of group.services.slice(1)) {
+          svc.systemTableCache.applySystemTableChange(sysTable, CDC_OPERATION.INSERT, row);
+        }
+      }
+    }
+  }
   await releaseOwners.release(ACCOUNTS_PARTITION_ID);
 
   for (const svc of group.services) {
