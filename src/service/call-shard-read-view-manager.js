@@ -52,12 +52,14 @@ const MANAGER_SHUTDOWN_REASON = 'manager_shutdown';
 const CLOSE_MODE_RELEASE = 'release';
 const CLOSE_MODE_INVALIDATE = 'invalidate';
 const DEFAULT_CLOSE_FAILED_REASON = 'close_failed';
+const MAX_TRACKED_EXPIRED_VIEW_IDS = 1024;
 
 function createShardReadViewManager(options = {}) {
   const limits = resolveManagerLimits(options);
   const customCloseReader = options.closeReader ?? null;
   const activeViews = new Map();
   const unclosedViews = new Map();
+  const expiredReapedViewIds = new Set();
   let viewCounter = 0;
   let reapedViewCount = 0;
   let closeFailureCount = 0;
@@ -137,6 +139,19 @@ function createShardReadViewManager(options = {}) {
     }
   }
 
+  function trackExpiredViewId(readViewId) {
+    if (expiredReapedViewIds.has(readViewId)) {
+      return;
+    }
+    if (expiredReapedViewIds.size >= MAX_TRACKED_EXPIRED_VIEW_IDS) {
+      const earliestEntry = expiredReapedViewIds.values().next().value;
+      if (earliestEntry !== undefined) {
+        expiredReapedViewIds.delete(earliestEntry);
+      }
+    }
+    expiredReapedViewIds.add(readViewId);
+  }
+
   function reapExpiredViews(nowMs = limits.nowProvider()) {
     const closedIds = [];
     const failedIds = [];
@@ -150,6 +165,9 @@ function createShardReadViewManager(options = {}) {
         const reason = incarnationGone ?
           STORAGE_INCARNATION_CHANGED_REASON :
           VIEW_EXPIRED_REASON;
+        if (!incarnationGone) {
+          trackExpiredViewId(view.readViewId);
+        }
         reapedViewCount += 1;
         if (closeAndSettleView(view, CLOSE_MODE_INVALIDATE, reason)) {
           closedIds.push(view.readViewId);
@@ -247,6 +265,7 @@ function createShardReadViewManager(options = {}) {
     const nowMs = limits.nowProvider();
     if (nowMs >= resolveEffectiveDeadline(request, view) ||
         isViewTimedOut(view, nowMs, limits)) {
+      trackExpiredViewId(view.readViewId);
       releaseReadView(view.readViewId);
       throw createPagedRoutingError(
         PAGED_EXECUTION_ERROR_CODE.READ_VIEW_EXPIRED,
@@ -275,7 +294,6 @@ function createShardReadViewManager(options = {}) {
   }
 
   function readPage(request) {
-    reapExpiredViews(limits.nowProvider());
     const {
       readViewId, statement, keyColumns,
       boundParameters = [], pageCursor = null, pageIndex = 0,
@@ -283,7 +301,15 @@ function createShardReadViewManager(options = {}) {
       pageByteBound = DEFAULT_PAGE_BYTE_BOUND,
     } = request;
     const view = activeViews.get(readViewId);
+    if (!view && expiredReapedViewIds.has(readViewId)) {
+      reapExpiredViews(limits.nowProvider());
+      throw createPagedRoutingError(
+        PAGED_EXECUTION_ERROR_CODE.READ_VIEW_EXPIRED,
+        VIEW_ERROR_MSG.VIEW_EXPIRED,
+      );
+    }
     assertHealthyReadView(view, request);
+    reapExpiredViews(limits.nowProvider());
     view.lastReadAtMs = limits.nowProvider();
     refreshTotals();
     const resolvedKeys = Array.isArray(keyColumns) && keyColumns.length > 0 ?

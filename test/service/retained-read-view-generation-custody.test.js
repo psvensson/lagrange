@@ -58,6 +58,14 @@ const SHARED_WAL_LIMIT_BYTES = 1048576;
 const REAP_AGE_MS = 180;
 const REAP_INTERVAL_MS = 30;
 const REAP_WAIT_MS = 380;
+const VIRTUAL_NOW_START_MS = 1000000;
+const VIRTUAL_DEADLINE_OFFSET_MS = 500;
+const VIRTUAL_AGE_LIMIT_MS = 400;
+const VIRTUAL_IDLE_LIMIT_MS = 200;
+const VIRTUAL_STEP_REFRESH_MS = 150;
+const VIRTUAL_STEP_EXPIRE_IDLE_MS = 100;
+const VIRTUAL_STEP_EXPIRE_AGE_MS = 200;
+const VIRTUAL_LARGE_BOUND_MS = 5000;
 const DEADLINE_WINDOW_MS = 30000;
 const PAGE_ROW_BOUND_SMALL = 2;
 const PAGE_ROW_BOUND_MED = 10;
@@ -747,6 +755,169 @@ describe(`Retained read-view generation custody (${QUEST_ID})`, () => {
       assert.equal(afterReapStats.totalObservedWalBytes, 0);
       assert.ok(afterReapStats.reapedViewCount >= 1);
       assert.equal(idleView.readerDb, null);
+
+      assert.throws(
+        () =>
+          manager.readPage({
+            boundParameters: [],
+            deadlineMs: Date.now() + DEADLINE_WINDOW_MS,
+            keyColumns: KEY_COLUMNS,
+            pageByteBound: PAGE_BYTE_BOUND,
+            pageIndex: 0,
+            pageRowBound: PAGE_ROW_BOUND_SMALL,
+            partitionService,
+            partitionVersion: 1,
+            readViewId: idleView.readViewId,
+            statement: SELECTOR_SQL,
+          }),
+        (err) => err.pagedCode === PAGED_EXECUTION_ERROR_CODE.READ_VIEW_EXPIRED,
+        'late readPage on an already-reaped expired view must throw READ_VIEW_EXPIRED',
+      );
+
+      // Verify READ_VIEW_EXPIRED is preserved across deadlineMs, maxViewAgeMs,
+      // and maxIdleMs both before and after reapExpiredViews() runs.
+      let virtualNowMs = VIRTUAL_NOW_START_MS;
+      const expiryManager = createShardReadViewManager({
+        maxIdleMs: VIRTUAL_IDLE_LIMIT_MS,
+        maxViewAgeMs: VIRTUAL_AGE_LIMIT_MS,
+        nowProvider: () => virtualNowMs,
+        reapIntervalMs: 0,
+      });
+      const deadlineOnlyManager = createShardReadViewManager({
+        maxIdleMs: VIRTUAL_LARGE_BOUND_MS,
+        maxViewAgeMs: VIRTUAL_LARGE_BOUND_MS,
+        nowProvider: () => virtualNowMs,
+        reapIntervalMs: 0,
+      });
+      try {
+        const deadlineView = await deadlineOnlyManager.acquireReadView({
+          attemptId: 'attempt-c1-deadline',
+          boundParameters: [],
+          deadlineMs: virtualNowMs + VIRTUAL_DEADLINE_OFFSET_MS,
+          invocationId: 'inv-c1-deadline',
+          keyColumns: KEY_COLUMNS,
+          partitionId: PARTITION_ID,
+          partitionService,
+          partitionVersion: 1,
+          statement: SELECTOR_SQL,
+        });
+        const idleLimitView = await expiryManager.acquireReadView({
+          attemptId: 'attempt-c1-idle',
+          boundParameters: [],
+          deadlineMs: virtualNowMs + DEADLINE_WINDOW_MS,
+          invocationId: 'inv-c1-idle',
+          keyColumns: KEY_COLUMNS,
+          partitionId: PARTITION_ID,
+          partitionService,
+          partitionVersion: 1,
+          statement: SELECTOR_SQL,
+        });
+        const ageLimitView = await expiryManager.acquireReadView({
+          attemptId: 'attempt-c1-age',
+          boundParameters: [],
+          deadlineMs: virtualNowMs + DEADLINE_WINDOW_MS,
+          invocationId: 'inv-c1-age',
+          keyColumns: KEY_COLUMNS,
+          partitionId: PARTITION_ID,
+          partitionService,
+          partitionVersion: 1,
+          statement: SELECTOR_SQL,
+        });
+
+        // At +150ms, refresh ageLimitView before maxIdleMs (200ms) elapses.
+        virtualNowMs += VIRTUAL_STEP_REFRESH_MS;
+        expiryManager.readPage({
+          boundParameters: [],
+          deadlineMs: virtualNowMs + DEADLINE_WINDOW_MS,
+          keyColumns: KEY_COLUMNS,
+          pageByteBound: PAGE_BYTE_BOUND,
+          pageIndex: 0,
+          pageRowBound: PAGE_ROW_BOUND_SMALL,
+          partitionService,
+          partitionVersion: 1,
+          readViewId: ageLimitView.readViewId,
+          statement: SELECTOR_SQL,
+        });
+
+        // At +250ms, idleLimitView is past maxIdleMs (200ms); readPage before reap throws READ_VIEW_EXPIRED.
+        virtualNowMs += VIRTUAL_STEP_EXPIRE_IDLE_MS;
+        assert.throws(
+          () =>
+            expiryManager.readPage({
+              boundParameters: [],
+              deadlineMs: virtualNowMs + DEADLINE_WINDOW_MS,
+              keyColumns: KEY_COLUMNS,
+              pageByteBound: PAGE_BYTE_BOUND,
+              pageIndex: 0,
+              pageRowBound: PAGE_ROW_BOUND_SMALL,
+              partitionService,
+              partitionVersion: 1,
+              readViewId: idleLimitView.readViewId,
+              statement: SELECTOR_SQL,
+            }),
+          (err) => err.pagedCode === PAGED_EXECUTION_ERROR_CODE.READ_VIEW_EXPIRED,
+          'readPage past maxIdleMs before reap must throw READ_VIEW_EXPIRED',
+        );
+
+        // Keep ageLimitView active wrt idle (150ms since last read) while crossing maxViewAgeMs (400ms)
+        // and crossing deadlineView's deadlineMs (500ms) at +550ms.
+        virtualNowMs += VIRTUAL_STEP_REFRESH_MS;
+        expiryManager.readPage({
+          boundParameters: [],
+          deadlineMs: virtualNowMs + DEADLINE_WINDOW_MS,
+          keyColumns: KEY_COLUMNS,
+          pageByteBound: PAGE_BYTE_BOUND,
+          pageIndex: 0,
+          pageRowBound: PAGE_ROW_BOUND_SMALL,
+          partitionService,
+          partitionVersion: 1,
+          readViewId: ageLimitView.readViewId,
+          statement: SELECTOR_SQL,
+        });
+        virtualNowMs += VIRTUAL_STEP_EXPIRE_AGE_MS;
+
+        assert.throws(
+          () =>
+            deadlineOnlyManager.readPage({
+              boundParameters: [],
+              deadlineMs: virtualNowMs + DEADLINE_WINDOW_MS,
+              keyColumns: KEY_COLUMNS,
+              pageByteBound: PAGE_BYTE_BOUND,
+              pageIndex: 0,
+              pageRowBound: PAGE_ROW_BOUND_SMALL,
+              partitionService,
+              partitionVersion: 1,
+              readViewId: deadlineView.readViewId,
+              statement: SELECTOR_SQL,
+            }),
+          (err) => err.pagedCode === PAGED_EXECUTION_ERROR_CODE.READ_VIEW_EXPIRED,
+          'readPage past deadlineMs before reap must throw READ_VIEW_EXPIRED',
+        );
+
+        // Explicitly run reapExpiredViews() on ageLimitView before calling readPage.
+        const reapOutcome = expiryManager.reapExpiredViews(virtualNowMs);
+        assert.equal(reapOutcome.closedIds.includes(ageLimitView.readViewId), true);
+        assert.throws(
+          () =>
+            expiryManager.readPage({
+              boundParameters: [],
+              deadlineMs: virtualNowMs + DEADLINE_WINDOW_MS,
+              keyColumns: KEY_COLUMNS,
+              pageByteBound: PAGE_BYTE_BOUND,
+              pageIndex: 0,
+              pageRowBound: PAGE_ROW_BOUND_SMALL,
+              partitionService,
+              partitionVersion: 1,
+              readViewId: ageLimitView.readViewId,
+              statement: SELECTOR_SQL,
+            }),
+          (err) => err.pagedCode === PAGED_EXECUTION_ERROR_CODE.READ_VIEW_EXPIRED,
+          'readPage past maxViewAgeMs after reapExpiredViews must still throw READ_VIEW_EXPIRED',
+        );
+      } finally {
+        deadlineOnlyManager.shutdown();
+        expiryManager.shutdown();
+      }
 
       mainDb.pragma(WAL_TRUNCATE_PRAGMA);
       assert.equal(readActualWalBytes(dbPath), 0);
