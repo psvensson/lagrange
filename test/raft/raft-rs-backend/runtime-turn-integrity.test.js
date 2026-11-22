@@ -39,6 +39,12 @@ import {
 } from '../../../src/raft/raft-operation-port-constants.js';
 import {RAFT_RS_CORE_PRIMITIVES} from
   '../../../src/raft/raft-rs-core-constants.js';
+import {RAFT_RS_INGRESS_REFUSAL} from
+  '../../../src/raft/raft-rs-ingress-constants.js';
+import {encodeProposal} from '../../../src/raft/raft-rs-proposal-codec.js';
+import {RAFT_RS_ENTRY_TYPE} from
+  '../../../src/raft/raft-rs-ready-loop-constants.js';
+import {envelopeTo} from './identity-reuse-harness.js';
 import {PartitionNodeCluster} from './partition-node-cluster.js';
 import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
@@ -221,15 +227,20 @@ async () => {
       }));
       assert.equal(accepted.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
         'setup: A runs a transfer to the cut-off C');
-      const forwarded = await turnChainValue(cluster.node(B).propose({forwardedBy: B}));
-      assert.equal(forwarded.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
-        'setup: B forwards its proposal to its leader');
-      bSenderIds.push(cluster.raftPeerIdOf(B));
-      const envelopes = takeInbox(cluster, A);
-      assert.deepEqual(envelopes.map((envelope) =>
-        envelope.message.msgType), [MESSAGE_TYPE.MsgPropose],
-      'setup: B\'s forwarded proposal is pending at A');
-      return envelopes;
+      // Restaged after C-4: a follower no longer forwards a proposal and the
+      // ingress refuses a peer's synthesized MsgPropose before the core.
+      const b = String(cluster.raftPeerIdOf(B));
+      const a = String(cluster.raftPeerIdOf(A));
+      bSenderIds.push(b);
+      const forwarded = await turnChainValue(cluster.node(A).step(envelopeTo(
+        cluster.partitionId, a, {msgType: MESSAGE_TYPE.MsgPropose,
+          from: b, entries: [{entryType: RAFT_RS_ENTRY_TYPE.NORMAL,
+            data: Buffer.from(encodeProposal({forwardedBy: B}))
+              .toString('base64')}]})));
+      assert.equal(forwarded.outcome, RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+        'setup: ingress refuses B\'s synthesized forwarded proposal');
+      assert.equal(forwarded.reason, RAFT_RS_INGRESS_REFUSAL.FORWARDED_PROPOSAL);
+      return [];
     },
     decide: (cluster) => turnChainValue(cluster.node(A).propose({own: A})),
     anchor: (answer) => assert.equal(
@@ -249,6 +260,7 @@ async () => {
   const refusal = refusalFrom(results[PENDING].status, bSenderIds[0]);
   assert.equal(refusal?.msgType, MESSAGE_TYPE.MsgPropose,
     'the dropped forwarded proposal is recorded against B');
+  assert.equal(refusal?.reason, RAFT_RS_INGRESS_REFUSAL.FORWARDED_PROPOSAL);
 });
 
 test('CA1 / M9: the envelopes after a refused one are stepped in the same ' +

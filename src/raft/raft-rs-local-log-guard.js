@@ -103,9 +103,6 @@ function commitBeyondLocalLog(message, local) {
 
 const POSITION_CHECKS = Object.freeze({
   [RAFT_RS_MESSAGE_TYPE.HEARTBEAT]: commitBeyondLocalLog,
-  [RAFT_RS_MESSAGE_TYPE.PROPOSE]: (message) =>
-    !Array.isArray(message.entries) || message.entries.length === 0 ?
-      refusal(RAFT_RS_LOCAL_LOG_REFUSAL.EMPTY_FORWARDED_PROPOSAL) : null,
   // A peer forwards a transfer request to its leader with its term set; a
   // follower that knows a leader at that same term re-forwards it, and
   // raft.rs send() is fatal on a set term. No correct peer reaches such a

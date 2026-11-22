@@ -5,8 +5,10 @@
 // follower (a replica that does not lead now refuses a proposal).
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {RAFT_OPERATION_OUTCOME} from
-  '../../../src/raft/raft-operation-port-constants.js';
+import {
+  RAFT_LEADERSHIP_TRANSFER_SUCCESSOR,
+  RAFT_OPERATION_OUTCOME,
+} from '../../../src/raft/raft-operation-port-constants.js';
 import {RAFT_RS_MESSAGE_TYPE} from '../../../src/raft/raft-rs-ingress-constants.js';
 import {RAFT_RS_SQL} from '../../../src/raft/raft-rs-durable-store-constants.js';
 import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
@@ -171,15 +173,28 @@ function holdReconstructionPersistence(f) {
   return state;
 }
 
+function transferEntries(f) {
+  return f.events.filter((event) => event.kind === 'core-step' &&
+    event.message.msgType === RAFT_RS_MESSAGE_TYPE.TRANSFER_LEADER);
+}
+
 async function reconstructedCapture(f, marker) {
   prepareFailedApplication(f, marker);
   const waiting = holdReconstructionPersistence(f);
   f.control.capture = true;
-  const selected = {w07Companion: 'capture-after-ensure-execution-completes'};
-  const queued = own(f, turnChainValue(f.cluster.node(B).propose(selected)));
+  // Restaged after item C: a reconstructed follower never forwards a proposal
+  // (raft-rs-proposal-term.js); a named leadership transfer requested at a
+  // follower requires leader contact (established by the captured heartbeat)
+  // and forwards MsgTransferLeader to the reconstructed leader.
+  const selected = {
+    successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
+    replicaIdentity: B,
+  };
+  const queued = own(f, turnChainValue(
+    f.cluster.node(B).transferLeadership(selected)));
   await observe(() => waiting.held, 'native reconstruction reached real persistence wait');
   assert.equal(f.cluster.replica(B).db.inTransaction, true);
-  assert.equal(proposalEntries(f, selected).length, 0);
+  assert.equal(transferEntries(f).length, 0);
   assert.equal(appliedMarkerCount(f, marker), 0);
   f.events.push({kind: 'ensure-execution-still-awaiting-persistence'});
   deliverHeartbeat(f, 1);
@@ -193,13 +208,13 @@ async function reconstructedCapture(f, marker) {
   assert.equal(progress.applied, progress.committed);
   assert.equal(result.outcome, CORE_OK);
   assertNativeDelivery(f, 1);
-  assert.equal(proposalEntries(f, selected).length, 1);
-  const [entry] = proposalEntries(f, selected);
+  assert.equal(transferEntries(f).length, 1);
+  const [entry] = transferEntries(f);
   assert.ok(heartbeatSteps(f)[0].sequence < entry.sequence,
     'input accepted during ensureExecution belongs to the admitted capture');
   assert.ok(f.events.indexOf(replies(f)[0]) < f.events.indexOf(entry));
   assert.equal(f.events.filter((event) => event.kind === 'native-send' &&
-    event.message.msgType === RAFT_RS_MESSAGE_TYPE.PROPOSE).length, 1,
+    event.message.msgType === RAFT_RS_MESSAGE_TYPE.TRANSFER_LEADER).length, 1,
   'the selected command really forwards after reconstructed leader contact');
 }
 

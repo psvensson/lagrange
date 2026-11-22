@@ -7,7 +7,7 @@ import {armOwnedInboundDrainTimer, cancelOwnedInboundDrainTimer} from
 import {RAFT_RS_RECORD_COMPATIBILITY, RAFT_RS_COMMIT_DURABILITY} from './raft-rs-durable-store-constants.js';
 import {admitRaftRsMessage} from './raft-rs-ingress.js';
 import {RAFT_RS_OPENING_HISTORY} from './raft-rs-opening-history-constants.js';
-import {RAFT_RS_MESSAGE_TYPE} from './raft-rs-ingress-constants.js';
+import {RAFT_RS_INGRESS_REFUSAL, RAFT_RS_MESSAGE_TYPE} from './raft-rs-ingress-constants.js';
 import {recordInboundStepRefusal, sendMessages} from './raft-rs-peer-delivery.js';
 import {openedLastIndex, persistedLastIndexAfter} from './raft-rs-local-log-guard.js';
 import {
@@ -1823,13 +1823,15 @@ function performCommand(group, command, expectedGeneration) {
       command.typedOperation !== undefined) {
     return executeTypedConfChangeOperation({
       group, expectedGeneration, operation: command.typedOperation,
-      invokeCoreAt, leaderReplicaIdOf: semanticLeaderIdentity,
+      submittedTerm: command.submittedTerm, invokeCoreAt,
+      leaderReplicaIdOf: semanticLeaderIdentity,
       answerGroupConfChangeRefusal, answerRefusedProposal, drainReady,
     });
   }
   const refused = command.type === PROPOSE_CONF_CHANGE ?
     refusedConfChange({group, expectedGeneration, change: command.change,
-      invokeCoreAt, leaderReplicaIdOf: semanticLeaderIdentity}) : null;
+      submittedTerm: command.submittedTerm, invokeCoreAt,
+      leaderReplicaIdOf: semanticLeaderIdentity}) : null;
   if (refused !== null) {
     return answerGroupConfChangeRefusal(group, expectedGeneration, refused);
   }
@@ -2280,17 +2282,15 @@ function createRuntimeDispatcher(request) {
         return runtimeRecoveryOutcome(group);
       }
       const admission = admitRaftRsMessage({
-        envelope,
-        localGroupId: group.groupId,
-        localPeerId: group.peerId,
-      });
+        envelope, localGroupId: group.groupId, localPeerId: group.peerId});
       if (!admission.admitted) {
-        return outcome(CORE_REFUSED, {
-          reason: admission.outcome,
-          phase: RUNTIME_PHASE.ADMISSION,
-          retryable: false,
-          recoveryRequired: false,
-        });
+        const refused = outcome(CORE_REFUSED, {reason: admission.outcome,
+          phase: RUNTIME_PHASE.ADMISSION, retryable: false, recoveryRequired: false});
+        if (admission.outcome === RAFT_RS_INGRESS_REFUSAL.FORWARDED_PROPOSAL) {
+          recordInboundStepRefusal(group, envelope, refused);
+          SHAPED_STATUS.delete(group.statusObservation);
+        }
+        return refused;
       }
       // Inside a failed group's retry window a delivery is dropped (raft
       // re-sends what a peer did not receive), so nothing accumulates while

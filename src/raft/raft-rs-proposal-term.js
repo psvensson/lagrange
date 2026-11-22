@@ -19,8 +19,13 @@ import {
 } from './raft-operation-port-constants.js';
 import {ROLE, ROLE_LEADER} from './raft-rs-runtime-owner-constants.js';
 
-// The runtime command, and the core primitive, that proposes an entry.
+// The runtime commands, and the core primitive, that propose an entry.
 const PROPOSE_COMMAND = 'propose';
+const PROPOSE_CONF_CHANGE_COMMAND = 'propose-conf-change';
+const PROPOSAL_COMMANDS = new Set([
+  PROPOSE_COMMAND,
+  PROPOSE_CONF_CHANGE_COMMAND,
+]);
 const CORE_STATUS = 'status';
 const NO_SUBMITTED_TERM = null;
 
@@ -52,17 +57,33 @@ function submittingLeadershipEnded(proposal, status) {
 }
 
 /**
- * A command as the port submits it: a proposal carries the term of the
- * leadership it is submitted under (none before the group's first
- * announcement); any other command is unchanged.
+ * A command as the port submits it: a proposal (ordinary or configuration
+ * change) carries the term of the announced leadership it is submitted under
+ * (none when the replica is not an announced leader); any other command is
+ * unchanged.
  * @param {Object} group - The runtime group.
  * @param {Object} command - The runtime command.
  * @return {Object} The command to queue or perform.
  */
 function withSubmittedTerm(group, command) {
-  if (command.type !== PROPOSE_COMMAND) return command;
-  return {...command, submittedTerm: group.lastStatus === null ?
-    NO_SUBMITTED_TERM : group.lastStatus.term};
+  if (!PROPOSAL_COMMANDS.has(command.type)) return command;
+  const status = group.lastStatus;
+  return {...command, submittedTerm: status !== null &&
+    ROLE[status.raftState] === ROLE_LEADER ? status.term : NO_SUBMITTED_TERM};
+}
+
+/**
+ * Whether a configuration-change proposal's submitting leadership ended
+ * before a leading core's step (a non-leading core is answered NOT_LEADER by
+ * the conf-change admission).
+ * @param {Object} status - The core's status read at the step.
+ * @param {string|null} submittedTerm - The term recorded at submission.
+ * @return {Object|null} The named refusal, or null.
+ */
+function confChangeTermRefusal(status, submittedTerm) {
+  return ROLE[status.raftState] === ROLE_LEADER &&
+      status.term !== submittedTerm ?
+    submittingLeadershipEnded({submittedTerm}, status).result : null;
 }
 
 /**
@@ -83,4 +104,9 @@ function proposeUnderSubmittedTerm(core, proposal) {
   return core(PROPOSE_COMMAND, proposal.bytes);
 }
 
-export {PROPOSE_COMMAND, proposeUnderSubmittedTerm, withSubmittedTerm};
+export {
+  PROPOSE_COMMAND,
+  confChangeTermRefusal,
+  proposeUnderSubmittedTerm,
+  withSubmittedTerm,
+};
