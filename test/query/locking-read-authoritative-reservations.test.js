@@ -236,7 +236,7 @@ async function setupTwoNodeCluster(options = {}) {
     directory: path.dirname(group.dbFileOf(members[0])),
     budgetMs: GROUP_BUDGET_MS,
   });
-  await releaseOwners.releaseOnce();
+  await releaseOwners.release(ACCOUNTS_PARTITION_ID);
 
   for (const svc of group.services) {
     svc.db.exec('CREATE INDEX IF NOT EXISTS idx_accounts_tier ON accounts(tier)');
