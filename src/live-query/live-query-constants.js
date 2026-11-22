@@ -71,6 +71,15 @@ const LIVE_QUERY_GROUP_STATE = Object.freeze({
   LIVE: 'LIVE',
 });
 
+const LIVE_QUERY_REFRESH_STATUS = Object.freeze({
+  COMPLETED: 'completed',
+  FAILED: 'failed',
+  STALE: 'stale',
+  COALESCED: 'coalesced',
+  CLOSED: 'closed',
+  NO_ENGINE: 'no_engine',
+});
+
 const LIVE_QUERY_LOG_MSG = Object.freeze({
   RENEWED: 'Live query renewed',
   CLEANED_UP: 'Live query cleaned up',
@@ -160,6 +169,7 @@ export {
   LIVE_QUERY_LOG_MSG,
   LIVE_QUERY_OPERATION,
   LIVE_QUERY_OPERATOR,
+  LIVE_QUERY_REFRESH_STATUS,
   LIVE_QUERY_SQL,
   LIVE_QUERY_SUBSYSTEM,
 };

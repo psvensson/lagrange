@@ -16,11 +16,13 @@ import {
   LIVE_QUERY_EMIT,
   LIVE_QUERY_ERROR_MSG,
   LIVE_QUERY_EVENT,
+  LIVE_QUERY_GROUP_STATE,
   LIVE_QUERY_LOG_MSG,
   LIVE_QUERY_SUBSYSTEM,
 } from './live-query-constants.js';
 import {QueryGroup} from './live-query-group.js';
 import {
+  executeSnapshotQuery,
   renderLiveQuerySelectSql,
   resolveExecutionSQL,
 } from './live-query-group-helpers.js';
@@ -78,7 +80,9 @@ async function initializeNewGroup(manager, group, client, options) {
     manager.unsubscribeFromPartition,
     options,
   );
+  if (group.lifecycleState === LIVE_QUERY_GROUP_STATE.CLOSED) return;
   await manager.sendSnapshotToClient(group, client, options);
+  if (group.lifecycleState === LIVE_QUERY_GROUP_STATE.CLOSED) return;
   group.drainBufferedEvents();
   group.active = true;
   manager.logger.info(LIVE_QUERY_LOG_MSG.GROUP_CREATED, {
@@ -306,6 +310,9 @@ class LiveQueryManager extends EventEmitter {
       });
       group.addClient(client);
       await initializeNewGroup(this, group, client, options);
+      if (group.lifecycleState === LIVE_QUERY_GROUP_STATE.CLOSED) {
+        return {queryId: group.queryId, cancelled: true, partitions: []};
+      }
     }
 
     if (!this.clientSubscriptions.has(clientId)) {
@@ -352,7 +359,9 @@ class LiveQueryManager extends EventEmitter {
 
     try {
       const sql = resolveSnapshotExecutionSql(this, group);
-      const result = await this.sqlQueryEngine.executeQuery(sql, group.params || options.params);
+      const result = await executeSnapshotQuery(
+        this.sqlQueryEngine, sql, group.params || options.params,
+      );
       const rows = populateSnapshotRows(group, result);
       recordSnapshotFrontiers(group, options, result);
 
@@ -562,6 +571,7 @@ class LiveQueryManager extends EventEmitter {
       const trackedPartitions = new Set([
         ...group.subscribedPartitions,
         ...(group.pendingSubscriptions || []),
+        ...group.cdcHandlers.keys(),
       ]);
       for (const partitionId of trackedPartitions) {
         try {

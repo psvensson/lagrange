@@ -2,8 +2,9 @@
  * Remote live-query CDC subscription handlers for PartitionService.
  *
  * Bridges remote MessageRouter subscribers to the partition's canonical
- * subscribeToCDCWithHandshake / unsubscribeFromCDC path without altering
- * durable CDC obligation ownership.
+ * subscribeToCDCWithHandshake / unsubscribeFromCDC path through a single
+ * per-subscriber ordered delivery lane with exact batch/overflow coverage
+ * and transport retry-after not-before enforcement.
  */
 
 import {
@@ -11,6 +12,7 @@ import {
   deliveryTransportOf,
   forwardedDeliveryAnswer,
   isDeliveredTransportDeliveryOutcome,
+  normalizePositiveRetryAfterMs,
 } from '../transport/transport-semantic-outcome.js';
 import {PARTITION_SERVICE_MESSAGE_TYPE} from './partition-service-constants.js';
 
@@ -26,6 +28,15 @@ const REMOTE_CDC_ERROR = Object.freeze({
 });
 const REMOTE_CDC_DELIVERY_FAILED_LOG =
   'Remote live query CDC event delivery failed';
+const INACTIVE_SUBSCRIBER_ANSWER = Object.freeze({
+  acknowledged: false,
+  success: false,
+  retryable: false,
+});
+const DELIVERED_OK_ANSWER = Object.freeze({
+  acknowledged: true,
+  success: true,
+});
 
 function isNonEmptyString(value) {
   return typeof value === 'string' && value.length > 0;
@@ -40,6 +51,7 @@ function clearEntryFlushTimer(service, entry) {
   if (entry.flushTimer) {
     service.timeSource.clearTimeout(entry.flushTimer);
     entry.flushTimer = null;
+    entry.flushTimerTargetMs = 0;
   }
 }
 
@@ -48,10 +60,61 @@ function isSubscriberActive(service, entry) {
   return !entry.unsubscribed;
 }
 
-function retireRemoteSubscriber(service, entry) {
+function hasPendingDeliveryWork(entry) {
+  return entry.pendingEvents.length > 0 || entry.overflowResyncRequired;
+}
+
+function remainingBackoffMs(service, entry) {
+  if (entry.retryNotBeforeMs <= 0) return 0;
+  return Math.max(0, entry.retryNotBeforeMs - service.timeSource.now());
+}
+
+function buildBackoffDeferredAnswer(remainingMs) {
+  return {
+    acknowledged: false,
+    success: false,
+    retryable: true,
+    deferRetry: true,
+    retryAfterMs: remainingMs,
+  };
+}
+
+function recordRetryBackoff(service, entry, answer) {
+  const now = service.timeSource.now();
+  const advisedMs = normalizePositiveRetryAfterMs(answer?.retryAfterMs, null);
+  const delayMs = advisedMs !== null ? advisedMs : REMOTE_CDC_RETRY_DELAY_MS;
+  entry.retryNotBeforeMs = Math.max(entry.retryNotBeforeMs, now + delayMs);
+}
+
+function resolveWaitersUpTo(entry, maxToken, answer) {
+  if (entry.waiters.length === 0) return;
+  const remaining = [];
+  for (const waiter of entry.waiters) {
+    if (waiter.token <= maxToken) {
+      waiter.resolve(answer);
+    } else {
+      remaining.push(waiter);
+    }
+  }
+  entry.waiters = remaining;
+}
+
+function resolveAllWaiters(entry, answer) {
+  if (entry.waiters.length === 0) return;
+  const waiters = entry.waiters;
+  entry.waiters = [];
+  for (const waiter of waiters) {
+    waiter.resolve(answer);
+  }
+}
+
+function retireRemoteSubscriber(service, entry, reasonAnswer = INACTIVE_SUBSCRIBER_ANSWER) {
   entry.unsubscribed = true;
   clearEntryFlushTimer(service, entry);
   entry.pendingEvents = [];
+  entry.overflowResyncRequired = false;
+  entry.retryNotBeforeMs = 0;
+  resolveAllWaiters(entry, reasonAnswer);
   service.unsubscribeFromCDC?.(entry.forwarder);
   if (service.remoteLiveQueryCdcSubscribers?.get(entry.subscriberId) === entry) {
     service.remoteLiveQueryCdcSubscribers.delete(entry.subscriberId);
@@ -80,11 +143,13 @@ function logRemoteDeliveryFailure(service, entry, errorMessage) {
 }
 
 function normalizeFailureAnswer(raw, defaultRetryable) {
+  const retryAfterMs = normalizePositiveRetryAfterMs(raw?.retryAfterMs, null);
   return {
     ...raw,
     acknowledged: false,
     success: false,
     retryable: raw?.deferRetry === true || raw?.retryable === true || defaultRetryable,
+    ...(retryAfterMs !== null ? {retryAfterMs} : {}),
   };
 }
 
@@ -104,7 +169,7 @@ function normalizeRemoteDeliveryOutcome(service, entry, delivery) {
     return buildAcceptedOrRefusedAnswer(service, entry, null);
   }
   const raw = delivery.transport ?
-    (forwardedDeliveryAnswer(delivery) ?? {acknowledged: true, success: true}) :
+    (forwardedDeliveryAnswer(delivery) ?? DELIVERED_OK_ANSWER) :
     delivery;
   return buildAcceptedOrRefusedAnswer(service, entry, raw);
 }
@@ -112,6 +177,7 @@ function normalizeRemoteDeliveryOutcome(service, entry, delivery) {
 function handleRemoteDeliveryError(service, entry, error) {
   const isNoHandler = error?.noHandler === true;
   const message = error?.message || String(error);
+  const retryAfterMs = normalizePositiveRetryAfterMs(error?.retryAfterMs, null);
   if (!isNoHandler && !service.isShutdown) {
     logRemoteDeliveryFailure(service, entry, message);
   }
@@ -120,6 +186,7 @@ function handleRemoteDeliveryError(service, entry, error) {
     success: false,
     noHandler: isNoHandler,
     retryable: !isNoHandler && !service.isShutdown,
+    ...(retryAfterMs !== null ? {retryAfterMs} : {}),
     ...(isNoHandler || service.isShutdown ? {} : {error: message}),
   };
 }
@@ -137,20 +204,44 @@ function updateSubscriberDeliveredSeq(service, entry, lastSeq) {
   }
 }
 
-function enqueuePendingEvents(entry, events) {
-  const combined = [...entry.pendingEvents, ...events];
+function enqueuePendingEvents(entry, events, token) {
+  const wrapped = events.map((event) => ({event, token}));
+  const combined = [...entry.pendingEvents, ...wrapped];
   if (combined.length > MAX_PENDING_REMOTE_EVENTS) {
     entry.overflowResyncRequired = true;
+    entry.overflowEpoch += 1;
     entry.pendingEvents = combined.slice(combined.length - MAX_PENDING_REMOTE_EVENTS);
     return;
   }
   entry.pendingEvents = combined;
 }
 
+function retireCoveredBatch(
+  service, entry, batchEvents, coveredMaxToken, sentResyncRequired, coveredOverflowEpoch,
+) {
+  if (coveredMaxToken !== null) {
+    const firstUncovered = entry.pendingEvents.findIndex(
+      (item) => item.token > coveredMaxToken,
+    );
+    entry.pendingEvents = firstUncovered === -1 ?
+      [] :
+      entry.pendingEvents.slice(firstUncovered);
+  }
+  if (sentResyncRequired && entry.overflowEpoch === coveredOverflowEpoch) {
+    entry.overflowResyncRequired = false;
+  }
+  entry.retryNotBeforeMs = 0;
+  const lastSeq = batchEvents.at(-1)?.sequenceNumber;
+  if (Number.isFinite(lastSeq)) {
+    entry.lastDeliveredSeq = lastSeq;
+    updateSubscriberDeliveredSeq(service, entry, lastSeq);
+  }
+}
+
 async function sendBatchToRemote(service, entry, events, resyncRequired) {
   const router = resolvePartitionRouter(service);
   if (!isSubscriberActive(service, entry) || !router) {
-    return {acknowledged: false, success: false, retryable: false};
+    return INACTIVE_SUBSCRIBER_ANSWER;
   }
   try {
     const delivery = await router.deliver(entry.subscriberAddress, {
@@ -169,90 +260,123 @@ async function sendBatchToRemote(service, entry, events, resyncRequired) {
 }
 
 function schedulePendingFlush(service, entry) {
-  if (entry.flushTimer || !isSubscriberActive(service, entry)) return;
-  if (entry.pendingEvents.length === 0) return;
+  if (!isSubscriberActive(service, entry) || !hasPendingDeliveryWork(entry)) return;
+  const now = service.timeSource.now();
+  const targetMs = Math.max(entry.retryNotBeforeMs, now + 1);
+  if (entry.flushTimer) {
+    if (entry.flushTimerTargetMs === targetMs) return;
+    clearEntryFlushTimer(service, entry);
+  }
+  const delayMs = Math.max(1, targetMs - now);
+  entry.flushTimerTargetMs = targetMs;
   const handle = service.timeSource.setTimeout(() => {
     entry.flushTimer = null;
+    entry.flushTimerTargetMs = 0;
     if (!isSubscriberActive(service, entry)) return;
+    if (remainingBackoffMs(service, entry) > 0) {
+      schedulePendingFlush(service, entry);
+      return;
+    }
     drainPendingEvents(service, entry).catch((error) => {
       logRemoteDeliveryFailure(service, entry, error?.message || String(error));
     });
-  }, REMOTE_CDC_RETRY_DELAY_MS);
+  }, delayMs);
   handle?.unref?.();
   entry.flushTimer = handle;
 }
 
-function recordDeliveredBatch(service, entry, batch, updateOwnerState) {
-  entry.overflowResyncRequired = false;
-  const lastSeq = batch.at(-1)?.sequenceNumber;
-  if (Number.isFinite(lastSeq)) {
-    entry.lastDeliveredSeq = lastSeq;
-    if (updateOwnerState) {
-      updateSubscriberDeliveredSeq(service, entry, lastSeq);
-    }
+async function runSingleDrainStep(service, entry) {
+  const remainingMs = remainingBackoffMs(service, entry);
+  if (remainingMs > 0) {
+    const deferred = buildBackoffDeferredAnswer(remainingMs);
+    schedulePendingFlush(service, entry);
+    resolveAllWaiters(entry, deferred);
+    return {done: true, answer: deferred};
   }
+  const batchItems = entry.pendingEvents.slice();
+  const batchEvents = batchItems.map((item) => item.event);
+  const coveredMaxToken = batchItems.length > 0 ? batchItems.at(-1).token : null;
+  const sentResyncRequired = entry.overflowResyncRequired;
+  const coveredOverflowEpoch = entry.overflowEpoch;
+  const answer = await sendBatchToRemote(service, entry, batchEvents, sentResyncRequired);
+  if (answer.noHandler === true) {
+    retireRemoteSubscriber(service, entry, answer);
+    return {done: true, answer};
+  }
+  if (!isSubscriberActive(service, entry)) {
+    resolveAllWaiters(entry, INACTIVE_SUBSCRIBER_ANSWER);
+    return {done: true, answer: INACTIVE_SUBSCRIBER_ANSWER};
+  }
+  if (answer.success === false || answer.acknowledged === false) {
+    recordRetryBackoff(service, entry, answer);
+    schedulePendingFlush(service, entry);
+    resolveAllWaiters(entry, answer);
+    return {done: true, answer};
+  }
+  retireCoveredBatch(
+    service, entry, batchEvents, coveredMaxToken, sentResyncRequired, coveredOverflowEpoch,
+  );
+  if (coveredMaxToken !== null) {
+    resolveWaitersUpTo(entry, coveredMaxToken, answer);
+  }
+  return {done: false, answer};
 }
 
 async function runPendingDrainLoop(service, entry) {
-  while (entry.pendingEvents.length > 0 && isSubscriberActive(service, entry)) {
-    const batch = entry.pendingEvents.slice();
-    const answer = await sendBatchToRemote(
-      service, entry, batch, entry.overflowResyncRequired,
-    );
-    if (answer.noHandler === true) {
-      retireRemoteSubscriber(service, entry);
-      return answer;
+  try {
+    while (hasPendingDeliveryWork(entry) && isSubscriberActive(service, entry)) {
+      const step = await runSingleDrainStep(service, entry);
+      if (step.done) return step.answer;
     }
-    if (answer.success === false || answer.acknowledged === false) {
-      schedulePendingFlush(service, entry);
-      return answer;
+    clearEntryFlushTimer(service, entry);
+    resolveAllWaiters(entry, DELIVERED_OK_ANSWER);
+    return DELIVERED_OK_ANSWER;
+  } finally {
+    entry.drainPromise = null;
+    if (!isSubscriberActive(service, entry)) {
+      resolveAllWaiters(entry, INACTIVE_SUBSCRIBER_ANSWER);
     }
-    entry.pendingEvents.splice(0, batch.length);
-    recordDeliveredBatch(service, entry, batch, true);
   }
-  clearEntryFlushTimer(service, entry);
-  return {acknowledged: true, success: true};
 }
 
 async function drainPendingEvents(service, entry) {
-  if (entry.drainPromise) {
-    return entry.drainPromise;
+  while (entry.drainPromise) {
+    await entry.drainPromise;
   }
-  entry.drainPromise = runPendingDrainLoop(service, entry).finally(() => {
-    entry.drainPromise = null;
-  });
+  if (!isSubscriberActive(service, entry)) {
+    resolveAllWaiters(entry, INACTIVE_SUBSCRIBER_ANSWER);
+    return INACTIVE_SUBSCRIBER_ANSWER;
+  }
+  if (!hasPendingDeliveryWork(entry)) {
+    resolveAllWaiters(entry, DELIVERED_OK_ANSWER);
+    return DELIVERED_OK_ANSWER;
+  }
+  entry.drainPromise = runPendingDrainLoop(service, entry);
   return entry.drainPromise;
-}
-
-function handleFailedLiveDelivery(service, entry, events, answer) {
-  if (answer.noHandler === true) {
-    retireRemoteSubscriber(service, entry);
-    return answer;
-  }
-  enqueuePendingEvents(entry, events);
-  schedulePendingFlush(service, entry);
-  return answer;
 }
 
 function buildRemoteCdcForwarder(service, entry) {
   return async (events) => {
     if (!isSubscriberActive(service, entry) || !resolvePartitionRouter(service)) {
-      return {acknowledged: false, success: false, retryable: false};
+      return INACTIVE_SUBSCRIBER_ANSWER;
     }
-    if (entry.drainPromise || entry.pendingEvents.length > 0) {
-      const drainResult = await drainPendingEvents(service, entry);
-      if (drainResult.success === false || drainResult.acknowledged === false) {
-        return handleFailedLiveDelivery(service, entry, events, drainResult);
-      }
+    if (!Array.isArray(events) || events.length === 0) {
+      return DELIVERED_OK_ANSWER;
     }
-    const answer = await sendBatchToRemote(
-      service, entry, events, entry.overflowResyncRequired,
-    );
-    if (answer.success === false || answer.acknowledged === false) {
-      return handleFailedLiveDelivery(service, entry, events, answer);
+    const token = ++entry.nextDeliveryToken;
+    enqueuePendingEvents(entry, events, token);
+    const remainingMs = remainingBackoffMs(service, entry);
+    if (remainingMs > 0) {
+      schedulePendingFlush(service, entry);
+      return buildBackoffDeferredAnswer(remainingMs);
     }
-    recordDeliveredBatch(service, entry, events, false);
-    return answer;
+    const waiterPromise = new Promise((resolve) => {
+      entry.waiters.push({token, resolve});
+    });
+    drainPendingEvents(service, entry).catch((error) => {
+      logRemoteDeliveryFailure(service, entry, error?.message || String(error));
+    });
+    return waiterPromise;
   };
 }
 
@@ -282,9 +406,14 @@ function getOrCreateRemoteSubscriberEntry(service, payload) {
       queryId: payload.queryId || null,
       forwarder: null,
       pendingEvents: [],
+      waiters: [],
+      nextDeliveryToken: 0,
       overflowResyncRequired: false,
+      overflowEpoch: 0,
       lastDeliveredSeq: null,
+      retryNotBeforeMs: 0,
       flushTimer: null,
+      flushTimerTargetMs: 0,
       drainPromise: null,
       unsubscribed: false,
     };
@@ -313,6 +442,10 @@ async function handleRemoteLiveQueryCdcSubscribe(service, payload) {
   const handshake = await service.subscribeToCDCWithHandshake(entry.forwarder, {
     subscriberId: payload.subscriberId,
   });
+  if (!isSubscriberActive(service, entry)) {
+    retireRemoteSubscriber(service, entry);
+    return {success: false, error: REMOTE_CDC_ERROR.SHUTDOWN};
+  }
   return {
     success: true,
     ...handshake,
@@ -347,6 +480,9 @@ function clearRemoteLiveQueryCdcSubscribers(service) {
     entry.unsubscribed = true;
     clearEntryFlushTimer(service, entry);
     entry.pendingEvents = [];
+    entry.overflowResyncRequired = false;
+    entry.retryNotBeforeMs = 0;
+    resolveAllWaiters(entry, INACTIVE_SUBSCRIBER_ANSWER);
   }
   service.remoteLiveQueryCdcSubscribers.clear();
 }

@@ -20,6 +20,7 @@ import {renderSelect} from '../query/sql-statement-renderer.js';
 import {
   LIVE_QUERY_AST_TYPE,
   LIVE_QUERY_EVENT,
+  LIVE_QUERY_GROUP_STATE,
   LIVE_QUERY_LOG_MSG,
   LIVE_QUERY_OPERATION,
 } from './live-query-constants.js';
@@ -443,19 +444,11 @@ function checkAndAdvanceFrontier(frontiers, partitionId, eventVersion, compareFn
   return true;
 }
 
-/**
- * Extract subscription frontier version from subscription answer or options.
- */
 function extractSubscriptionFrontier(answer, options, partitionId) {
-  return answer?.versionContext?.streamVersion ??
-    answer?.streamVersion ??
-    options?.attachAfterVersion ??
-    options?.partitionFrontiers?.get?.(partitionId);
+  return answer?.versionContext?.streamVersion ?? answer?.streamVersion ??
+    options?.attachAfterVersion ?? options?.partitionFrontiers?.get?.(partitionId);
 }
 
-/**
- * Extract column names from a column AST node.
- */
 function extractColumnNames(col) {
   const colName = col.expression?.column || col.expression?.name || col.column || col.name;
   return {colName, targetKey: col.alias || colName};
@@ -513,23 +506,25 @@ function resolveEffectiveRows(storedRow, oldRow, newRow) {
   };
 }
 
-/**
- * Update row presence in result set store based on predicate match.
- */
 function updateStoredRowState(resultSet, pk, newMatched, effectiveNew) {
   if (pk == null) return;
-  if (newMatched) {
-    resultSet.set(pk, effectiveNew);
-  } else {
-    resultSet.delete(pk);
-  }
+  if (newMatched) resultSet.set(pk, effectiveNew);
+  else resultSet.delete(pk);
 }
 
-/**
- * Execute snapshot SQL query against SQL query engine.
- */
 async function executeSnapshotQuery(sqlQueryEngine, sql, params) {
-  return sqlQueryEngine.executeQuery(sql, params);
+  const result = await sqlQueryEngine.executeQuery(sql, params);
+  if (!result || result.success === false ||
+      (!Array.isArray(result.rows) && !Array.isArray(result.results))) {
+    const errorMessage = typeof result?.error === 'string' && result.error.length > 0 ?
+      result.error : LIVE_QUERY_LOG_MSG.SNAPSHOT_FAILED;
+    const error = new Error(errorMessage);
+    if (Number.isFinite(result?.retryAfterMs) && result.retryAfterMs > 0) {
+      error.retryAfterMs = Math.floor(result.retryAfterMs);
+    }
+    throw error;
+  }
+  return result;
 }
 
 /**
@@ -684,11 +679,8 @@ function fanOutToClients(clients, payload, options = {}) {
 }
 
 function isSubscriptionAccepted(answer) {
-  return !(answer && (
-    answer.success === false ||
-    answer.acknowledged === false ||
-    answer.subscribed === false
-  ));
+  return !(answer &&
+    (answer.success === false || answer.acknowledged === false || answer.subscribed === false));
 }
 
 /**
@@ -698,6 +690,7 @@ async function unsubscribeStalePartitions(group, relevantPartitions, unsubscribe
   const trackedPartitions = new Set([
     ...group.subscribedPartitions,
     ...(group.pendingSubscriptions || []),
+    ...group.cdcHandlers.keys(),
   ]);
   for (const partitionId of trackedPartitions) {
     if (!relevantPartitions.has(partitionId)) {
@@ -709,8 +702,7 @@ async function unsubscribeStalePartitions(group, relevantPartitions, unsubscribe
       group.cdcHandlers.delete(partitionId);
       group.partitionFrontiers.delete(partitionId);
       group.logger.debug(LIVE_QUERY_LOG_MSG.UNSUBSCRIBED_PARTITION, {
-        queryId: group.queryId,
-        partitionId,
+        queryId: group.queryId, partitionId,
       });
     }
   }
@@ -720,11 +712,20 @@ async function unsubscribeStalePartitions(group, relevantPartitions, unsubscribe
  * Subscribe group to one new partition.
  */
 async function subscribeToSinglePartition(group, partitionId, subscribeToPartition, options) {
+  if (group.lifecycleState === LIVE_QUERY_GROUP_STATE.CLOSED) return;
   let subscribed = true;
   if (subscribeToPartition) {
     const handler = (change) => group.onCDCEvent(change, partitionId);
     group.cdcHandlers.set(partitionId, handler);
+    group.pendingSubscriptions?.add(partitionId);
     const answer = await subscribeToPartition(partitionId, group.queryId, handler, options);
+    if (group.lifecycleState === LIVE_QUERY_GROUP_STATE.CLOSED) {
+      group.cdcHandlers.delete(partitionId);
+      group.pendingSubscriptions?.delete(partitionId);
+      group.subscribedPartitions.delete(partitionId);
+      return;
+    }
+    if (answer?.cancelled === true) return;
     if (!isSubscriptionAccepted(answer)) {
       subscribed = false;
     } else {
@@ -742,8 +743,7 @@ async function subscribeToSinglePartition(group, partitionId, subscribeToPartiti
   group.pendingSubscriptions?.delete(partitionId);
   group.subscribedPartitions.add(partitionId);
   group.logger.debug(LIVE_QUERY_LOG_MSG.SUBSCRIBED_PARTITION, {
-    queryId: group.queryId,
-    partitionId,
+    queryId: group.queryId, partitionId,
   });
 }
 

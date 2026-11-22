@@ -13,7 +13,7 @@
     "examples-e2e": 8,
     "pgwire-compat": 23,
     "placement-rebalance": 312,
-    "query-sql": 214,
+    "query-sql": 215,
     "release-packaging": 15,
     "runtime-primitives": 24,
     "services-runtime": 160,
@@ -25,10 +25,10 @@
     "transport-messaging": 123,
     "wasm-toolchain": 74
   },
-  "censusSize": 2799,
-  "digest": "fnv1a32-039c01f9",
+  "censusSize": 2800,
+  "digest": "fnv1a32-3bc4aa50",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-c6a7571d",
+  "observationDigest": "fnv1a32-21400870",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1227,6 +1227,7 @@
     "test/live-query/live-query-generic-push-data-plane.test.js": "query-sql",
     "test/live-query/live-query-group.test.js": "query-sql",
     "test/live-query/live-query-manager.test.js": "query-sql",
+    "test/live-query/live-query-remote-cdc-lifecycle.test.js": "query-sql",
     "test/live-query/live-query-service.test.js": "query-sql",
     "test/live-query/live-query-startup-wiring.test.js": "query-sql",
     "test/live-query/partition-aware-subscription.property.test.js": "query-sql",
@@ -11955,6 +11956,27 @@
         "src/admin/static/playback-viewer.html",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js"
+      ]
+    },
+    "test/live-query/live-query-remote-cdc-lifecycle.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/live-query/live-query-startup-wiring.test.js": {

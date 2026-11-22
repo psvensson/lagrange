@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2430,
+    "unit": 2431,
     "integration": 131,
     "bootstrap": 231,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2799,
-  "digest": "fnv1a32-54b1bbdf",
+  "censusSize": 2800,
+  "digest": "fnv1a32-3819c3fb",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1208,6 +1208,7 @@
     "test/live-query/live-query-generic-push-data-plane.test.js": "unit",
     "test/live-query/live-query-group.test.js": "unit",
     "test/live-query/live-query-manager.test.js": "unit",
+    "test/live-query/live-query-remote-cdc-lifecycle.test.js": "unit",
     "test/live-query/live-query-service.test.js": "unit",
     "test/live-query/live-query-startup-wiring.test.js": "unit",
     "test/live-query/partition-aware-subscription.property.test.js": "unit",

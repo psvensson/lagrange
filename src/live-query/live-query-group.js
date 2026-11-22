@@ -17,8 +17,10 @@ import {
   LIVE_QUERY_GROUP_STATE,
   LIVE_QUERY_LOG_MSG,
   LIVE_QUERY_OPERATION,
+  LIVE_QUERY_REFRESH_STATUS,
   LIVE_QUERY_SUBSYSTEM,
 } from './live-query-constants.js';
+import {executeGroupRefreshOutcome} from './live-query-refresh-outcome.js';
 import {
   canonicalizePredicate,
   extractPartitionKeyValue,
@@ -27,7 +29,6 @@ import {
 import {
   buildDeleteEvent,
   buildInsertEvent,
-  buildResetNotification,
   buildUpdateEvent,
   checkAndAdvanceFrontier,
   collectExpiredClientIds,
@@ -568,53 +569,22 @@ class QueryGroup extends EventEmitter {
   }
 
   /**
-   * Re-execute complex query against sqlQueryEngine and emit reset snapshot.
-   * Serialized and coalesced so stale completions cannot overwrite newer state.
-   * @return {Promise<Object|null>} Reset snapshot notification or null.
+   * Re-execute query against sqlQueryEngine and return an explicit refresh
+   * outcome distinguishing completion from failure, staleness, coalescing, or
+   * closure.
+   * @return {Promise<Object>} Named refresh outcome record.
+   */
+  async refreshQueryResultWithOutcome() {
+    return executeGroupRefreshOutcome(this);
+  }
+
+  /**
+   * Re-execute query against sqlQueryEngine and emit reset snapshot.
+   * @return {Promise<Object|null>} Reset snapshot notification on completion, else null.
    */
   async refreshQueryResult() {
-    if (!this.sqlQueryEngine) {
-      return null;
-    }
-    if (this.refreshInFlight) {
-      this.refreshPending = true;
-      return null;
-    }
-    this.refreshInFlight = true;
-    const currentGeneration = ++this.refreshGeneration;
-
-    try {
-      const sql = this._resolveExecutionSQL();
-      const result = await executeSnapshotQuery(this.sqlQueryEngine, sql, this.params);
-      if (currentGeneration < this.refreshGeneration) {
-        return null;
-      }
-      const rawRows = result.rows ?? result.results ?? [];
-      const newRows = rawRows.map((r) => this.projectRow(r));
-      this.lastResultSet = newRows;
-      storeSnapshotRows(this.resultSet, (r) => this.getRowPrimaryKey(r), rawRows);
-
-      const resetNotification = buildResetNotification({
-        queryId: this.queryId,
-        newRows,
-        count: result.count ?? newRows.length,
-        generation: currentGeneration,
-      });
-      this._broadcastReset(resetNotification);
-      return resetNotification;
-    } catch (error) {
-      this.logger.error(LIVE_QUERY_LOG_MSG.REEXECUTION_FAILED, {
-        queryId: this.queryId,
-        error: error.message,
-      });
-      return null;
-    } finally {
-      this.refreshInFlight = false;
-      if (this.refreshPending) {
-        this.refreshPending = false;
-        queueMicrotask(() => this.refreshQueryResult());
-      }
-    }
+    const outcome = await this.refreshQueryResultWithOutcome();
+    return outcome.status === LIVE_QUERY_REFRESH_STATUS.COMPLETED ? outcome.notification : null;
   }
 
   async reexecuteQuery() {

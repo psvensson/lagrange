@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2773,
+    "ordinary": 2774,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2799,
-  "digest": "fnv1a32-c27fb5d4",
+  "censusSize": 2800,
+  "digest": "fnv1a32-e95a1f52",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1207,6 +1207,7 @@
     "test/live-query/live-query-generic-push-data-plane.test.js": "ordinary",
     "test/live-query/live-query-group.test.js": "ordinary",
     "test/live-query/live-query-manager.test.js": "ordinary",
+    "test/live-query/live-query-remote-cdc-lifecycle.test.js": "ordinary",
     "test/live-query/live-query-service.test.js": "ordinary",
     "test/live-query/live-query-startup-wiring.test.js": "ordinary",
     "test/live-query/partition-aware-subscription.property.test.js": "ordinary",
