@@ -12,6 +12,7 @@ import {
   buildReleasedPendingWriteAnswer,
 } from './partition-write-kernel.js';
 import {PROPOSAL_QUEUE_PROPOSAL_STATE} from './proposal-queue-constants.js';
+import {releaseJoinedWriteOfEndedTenure} from './partition-service-raft-write-commit.js';
 import {committedStatementEntryKey} from './partition-committed-statement-outcome.js';
 import {isTableCdcObligationRecorded} from '../cache/cdc-table-policy.js';
 
@@ -358,8 +359,26 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
       result && typeof result === 'object' ? {...result} : null;
     return true;
   }
+  // The answer a caller joins for a write pending under entryId. A join is a
+  // hand-over of that write (the write kernel's tenure fence): one registered
+  // under a tenure that has ended and not yet handed to consensus is released
+  // first, and the caller registers its own write.
   getPendingCommittedWriteOutcome(entryId) {
+    if (releaseJoinedWriteOfEndedTenure(this, entryId)) {
+      // Released: its answer is its own caller's, no longer joinable.
+      this.pendingWriteOutcomes.delete(entryId);
+    }
     return this.pendingWriteOutcomes.get(entryId) || null;
+  }
+  // The pending registration under entryId (compared by identity: a write
+  // registered again under the same entryId is another one), or null.
+  pendingCommittedWriteOf(entryId) {
+    return this.proposalQueue.get(entryId) ?? null;
+  }
+  // Where the write pending under entryId stands with consensus (a
+  // PROPOSAL_QUEUE_PROPOSAL_STATE), or null once released or answered.
+  committedWriteProposalOf(entryId) {
+    return this.proposalQueue.proposalStateOf(entryId);
   }
   setPendingCommittedWriteOutcome(entryId, outcomePromise) {
     if (
@@ -408,6 +427,12 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
   // knew of it.
   releasePendingCommittedWrites(answerOf) {
     this.proposalQueue.release(answerOf);
+  }
+  // The release of one pending write whose leadership tenure ended before it
+  // was handed to consensus (the write kernel's tenure fence), answered as
+  // each write of the release above; false when it was no longer pending.
+  releasePendingCommittedWrite(entryId, answerOf) {
+    return this.proposalQueue.releaseEntry(entryId, answerOf);
   }
   // Where a pending write stands with consensus (a
   // PROPOSAL_QUEUE_PROPOSAL_STATE); false once it was released or answered.

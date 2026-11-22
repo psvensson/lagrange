@@ -24,8 +24,8 @@ import {PLACEMENT_ADMIT_TYPE} from '../../src/partition/partition-placement-admi
 import {RAFT_LEADERSHIP_TRANSFER_REASON, RAFT_OPERATION_OUTCOME} from
   '../../src/raft/raft-operation-port-constants.js';
 import {
-  LEDGER, THREE_NODES, attemptOutcomeOf, deferred, startThreeNodeLedger, transferReport,
-  waitUntil, withPlacementWorld,
+  LEDGER, THREE_NODES, attemptOutcomeOf, deferred, holdNextAdmission, startThreeNodeLedger,
+  transferReport, waitUntil, withPlacementWorld,
 } from './placement-owner-authority-fixture.js';
 import {
   clearFixtureSingletons, resetFixtureSingletons,
@@ -99,3 +99,63 @@ test('kernel: a placement write the port deferred is not proposed under a tenure
   'the write decided under the previous tenure is not proposed under the renewed one ' +
     `(it was deferred at term ${first.portTerm}); ${report}`);
 }));
+
+// The status read between the owner's fence and the propose (record
+// write-kernel-tenure-fence-record.md section 8): the owner's fence passes under
+// the tenure that decided; the kernel's leadership check then reads the ledger
+// port's status, and that read runs a consensus turn which announces a renewed
+// term (TERM_CHANGE, no role edge). The kernel registers and proposes after the
+// read, so a tenure taken at registration is already the renewed one.
+// Schedule: the deciding pass is held between its last planning check and the
+// admission boundary; the deficit is satisfied (the renewed tenure plans nothing
+// for it); the renewal is armed for the kernel's leadership read of that
+// admission; the admission is released.
+// Executed before the kernel repair (lab kernel-red-0bb5c473): green, and not
+// by the kernel. The placement admission checks the participant cutover pause
+// AFTER the leadership read (partition-placement-admission.js proposePlacementCommand),
+// and that pause's admission proof carries the term
+// (partition-participant-transaction-pause.js admissionProofMatchesStatus), so it
+// refuses CUTOVER_PAUSED. The kernel's own fence is witnessed where nothing
+// else stands after the read: the ordinary write path checks the pause first
+// (partition-write-kernel-tenure-fence.test.js, witness g).
+test('kernel: a placement write is not proposed under a tenure renewed inside the kernel\'s ' +
+  'own leadership read, between the owner\'s fence and the propose (refused, nothing proposed)',
+(t) => withPlacementWorld(SPEC, async (world) => {
+  const nodes = await startThreeNodeLedger(world);
+  const [a] = nodes;
+  const held = holdNextAdmission(a);
+  await world.electLedger(a);
+  const attempt = await held.reached.promise;
+  const decidedUnder = a.ledger.leadershipTenure;
+  world.publishRow(TABLES.PARTITIONS, {[COLUMN.PARTITION_ID]: DEFICIT, replica_count: 2});
+  const renewal = {term: null};
+  a.renewInsideKernelLeadershipRead = () => {
+    world.announceTermWithoutRoleEdge(a);
+    renewal.term = a.ledger.leadershipTenure?.term ?? null;
+  };
+  held.release.resolve();
+  try {
+    await waitUntil(() => attempt.answer !== undefined, 'the held admission is answered',
+      RETRY_WINDOW_MS);
+  } catch {
+    // Still pending after the window: reported below with the proposals.
+  }
+  await world.idle();
+  const proposals = world.log.proposals.filter((proposal) =>
+    proposal.entryId === attempt.entryId);
+  const report = JSON.stringify({decidedUnderTerm: decidedUnder?.term ?? null,
+    renewedTerm: renewal.term, attemptOutcome: attemptOutcomeOf(attempt),
+    proposals: proposals.map((proposal) => ({portTerm: proposal.portTerm,
+      disposition: proposal.stale ? 'stale' : `log[${proposal.logIndex}]`})),
+    transfer: transferReport(world, DEFICIT)});
+  t.diagnostic(report);
+  assert.notEqual(renewal.term, null,
+    `premise: the renewal ran inside the kernel's leadership read of the admission; ${report}`);
+  assert.notEqual(a.ledger.leadershipTenure, decidedUnder, `premise: the tenure was renewed; ${report}`);
+  assert.equal(a.ledger.isLeader, true, `premise: no role edge, the replica still leads; ${report}`);
+  assert.deepEqual(proposals.filter((proposal) => proposal.portTerm === renewal.term)
+    .map((proposal) => proposal.entryId), [],
+  `the admission decided under term ${decidedUnder?.term} is not proposed under the term ` +
+    `renewed inside the kernel's leadership read; ${report}`);
+}));
+

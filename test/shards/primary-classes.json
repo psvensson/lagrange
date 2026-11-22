@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2390,
+    "unit": 2392,
     "integration": 126,
     "bootstrap": 226,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2749,
-  "digest": "fnv1a32-a7cd15fe",
+  "censusSize": 2751,
+  "digest": "fnv1a32-59edfd9e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1505,6 +1505,7 @@
     "test/partition/partition-transition-projection.test.js": "unit",
     "test/partition/partition-tx1-single-path-alpha.test.js": "unit",
     "test/partition/partition-unreadable-durable-record.test.js": "unit",
+    "test/partition/partition-write-kernel-tenure-fence.test.js": "unit",
     "test/partition/partition-write-kernel.test.js": "unit",
     "test/partition/partition-write-leadership-transfer-committed.test.js": "unit",
     "test/partition/partition-write-leadership-transfer.test.js": "unit",
@@ -1850,6 +1851,7 @@
     "test/raft/raft-rs-backend/partition-snapshot-compaction-catchup.test.js": "unit",
     "test/raft/raft-rs-backend/peer-identity.test.js": "unit",
     "test/raft/raft-rs-backend/persistence-admission.test.js": "unit",
+    "test/raft/raft-rs-backend/queued-proposal-leadership-fence.test.js": "unit",
     "test/raft/raft-rs-backend/raft-rs-ingress-fuzz.test.js": "unit",
     "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js": "unit",
     "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js": "unit",
