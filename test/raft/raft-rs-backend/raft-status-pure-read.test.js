@@ -34,10 +34,14 @@ import {
 import {
   HEALTHY,
   RECOVERY_REQUIRED,
+  RUNTIME_PHASE,
   UNHEALTHY,
   USABLE,
 } from '../../../src/raft/raft-rs-runtime-owner-constants.js';
-import {deriveRaftRsPeerId} from '../../../src/raft/raft-rs-peer-identity.js';
+import {
+  RaftRsPeerIdentityRegistry,
+  deriveRaftRsPeerId,
+} from '../../../src/raft/raft-rs-peer-identity.js';
 import {RaftRsDurableStore} from '../../../src/raft/raft-rs-durable-store.js';
 import {
   setActualCoreEntryObserver,
@@ -671,6 +675,127 @@ test('readCommittedMembership BOOTSTRAP/WITNESS are pure settled reads while ' +
     assert.equal(port[OBSERVE]().inboundQueued, 0,
       'LEARNER_ACTION explicitly drained pending inbound');
   } finally {
+    setActualCoreEntryObserver(null);
+    cluster.dispose();
+  }
+});
+
+test('Directive 5: exceptional identity-registry failure during lazy status ' +
+  'shaping leaves readStatus() pure and transitions only on owner turn', async () => {
+  const replicaIds = ['id-fault-a', 'id-fault-b', 'id-fault-c'];
+  const {cluster, clocks, leader} = await formThreeReplicaCluster({
+    partitionId: 'pure-read-identity-fault',
+    replicaIds,
+  });
+  const port = cluster.node(leader);
+  const targetDb = cluster.replica(leader).db;
+  const leaderClock = clocks.get(leader);
+  const events = [];
+  const unsubscribe = subscribeAllEvents(port, events);
+  let timersScheduled = 0;
+  const originalSetTimeout = leaderClock.setTimeout.bind(leaderClock);
+  leaderClock.setTimeout = (...args) => {
+    timersScheduled += 1;
+    return originalSetTimeout(...args);
+  };
+  const originalResolve = RaftRsPeerIdentityRegistry.prototype.resolveReplicaIdentity;
+  let mode = 'off';
+  let callsInRead = 0;
+  RaftRsPeerIdentityRegistry.prototype.resolveReplicaIdentity = function resolveSpy(peerId) {
+    if (this.db === targetDb && mode !== 'off') {
+      callsInRead += 1;
+      if (mode === 'progress' && callsInRead >= 4) {
+        throw new Error('injected progress identity failure');
+      }
+      if (mode === 'always') {
+        throw new Error('injected identity-registry failure');
+      }
+    }
+    return originalResolve.call(this, peerId);
+  };
+  try {
+    const proposed = await turnChainValue(port.propose({idFault: 1}));
+    assert.equal(proposed.outcome, CORE_OK);
+    quiesceWithClocks(cluster, clocks, replicaIds);
+    assert.equal(port[OBSERVE]().role, 'leader');
+    assert.equal(port[OBSERVE]().groupHealth, USABLE);
+
+    // 10a: followerProgressSnapshot throws during lazy readStatus().
+    mode = 'progress';
+    callsInRead = 0;
+    events.length = 0;
+    const timerBeforeA = timersScheduled;
+    const coreBeforeA = cluster.coreEntries.length;
+    const statusA = port.readStatus();
+    assert.equal(statusA.outcome, HOST_FAILURE);
+    assert.equal(statusA.phase, RUNTIME_PHASE.ADDRESS_RESOLUTION);
+    assert.equal(statusA.recoveryRequired, true);
+    assert.equal(statusA.reason, 'injected progress identity failure');
+    assert.equal(cluster.coreEntries.length, coreBeforeA,
+      'lazy readStatus() progress identity failure makes 0 core entries');
+    assert.deepEqual(events, [],
+      'lazy readStatus() progress identity failure emits 0 events');
+    assert.equal(timersScheduled, timerBeforeA,
+      'lazy readStatus() progress identity failure schedules 0 timers');
+    assert.equal(port[OBSERVE]().groupHealth, USABLE,
+      'lazy readStatus() progress identity failure does not mutate groupHealth');
+
+    // 10b: leaderObservation throws during lazy readStatus().
+    mode = 'always';
+    callsInRead = 0;
+    events.length = 0;
+    const timerBeforeB = timersScheduled;
+    const coreBeforeB = cluster.coreEntries.length;
+    const statusB = port.readStatus();
+    assert.equal(statusB.outcome, HOST_FAILURE);
+    assert.equal(statusB.phase, RUNTIME_PHASE.ADDRESS_RESOLUTION);
+    assert.equal(statusB.recoveryRequired, true);
+    assert.equal(statusB.reason, 'injected identity-registry failure');
+    assert.equal(cluster.coreEntries.length, coreBeforeB,
+      'lazy readStatus() leader identity failure makes 0 core entries');
+    assert.deepEqual(events, [],
+      'lazy readStatus() leader identity failure emits 0 events');
+    assert.equal(timersScheduled, timerBeforeB,
+      'lazy readStatus() leader identity failure schedules 0 timers');
+    assert.equal(port[OBSERVE]().groupHealth, USABLE,
+      'lazy readStatus() leader identity failure does not mutate groupHealth');
+
+    // 10c: Owner turn catches identity-registry failure in readGroupObservation
+    // and performs the state transition cleanly on the owner turn.
+    events.length = 0;
+    const timerBeforeC = timersScheduled;
+    const tickResult = await turnChainValue(port.tick());
+    assert.equal(tickResult.outcome, HOST_FAILURE);
+    assert.equal(tickResult.phase, RUNTIME_PHASE.ADDRESS_RESOLUTION);
+    assert.equal(tickResult.recoveryRequired, true);
+    assert.equal(port[OBSERVE]().groupHealth, RECOVERY_REQUIRED,
+      'owner turn transitions groupHealth to RECOVERY_REQUIRED on identity failure');
+    assert.ok(timersScheduled > timerBeforeC,
+      'owner turn schedules group recovery timer');
+    assert.ok(events.some(({eventName}) => eventName === RAFT_EVENT.FOLLOWER),
+      'owner turn announces role loss via announceNoRole');
+
+    events.length = 0;
+    const timerBeforeHoldRead = timersScheduled;
+    const coreBeforeHoldRead = cluster.coreEntries.length;
+    const heldStatus = port.readStatus();
+    assert.equal(heldStatus.outcome, HOST_FAILURE);
+    assert.equal(heldStatus.phase, RUNTIME_PHASE.ADDRESS_RESOLUTION);
+    assert.equal(heldStatus.recoveryRequired, true);
+    assert.equal(heldStatus.groupHealth, RECOVERY_REQUIRED);
+    assert.equal(cluster.coreEntries.length, coreBeforeHoldRead);
+    assert.deepEqual(events, []);
+    assert.equal(timersScheduled, timerBeforeHoldRead);
+
+    mode = 'off';
+    leaderClock.advance(1000);
+    const recovered = await turnChainValue(port.tick());
+    assert.equal(recovered.outcome, CORE_OK);
+    assert.equal(port[OBSERVE]().groupHealth, USABLE);
+    assert.equal(port.readStatus().outcome, CORE_OK);
+  } finally {
+    RaftRsPeerIdentityRegistry.prototype.resolveReplicaIdentity = originalResolve;
+    unsubscribe();
     setActualCoreEntryObserver(null);
     cluster.dispose();
   }
