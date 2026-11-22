@@ -599,9 +599,9 @@ describe('Unit J6: Multi-node remote producer CDC delivery and leader failover',
     assert.equal(leaderB.cdcSubscribers.size, 1, 'Node B partition has remote subscriber');
     assert.equal(leaderC.cdcSubscribers.size, 0, 'Node C partition has no subscriber yet');
 
-    const commitOnLeader = async (leader, entryId, statementSql, expectedMsgCount) => {
-      oracleDb.prepare(statementSql).run();
-      applyCommitted(leader, committedQueryOf(entryId, statementSql));
+    const commitOnLeader = async (leader, entryId, statementSql, params, expectedMsgCount) => {
+      oracleDb.prepare(statementSql).run(...params);
+      applyCommitted(leader, {...committedQueryOf(entryId, statementSql), params});
       const delivered = await waitForMessageMatch(() => client.messages.length >= expectedMsgCount);
       assert.ok(delivered, `expected client message ${expectedMsgCount} for ${entryId}`);
       const sortedObserved = Array.from(observedRows.values()).sort((a, b) => a.id - b.id);
@@ -609,13 +609,25 @@ describe('Unit J6: Multi-node remote producer CDC delivery and leader failover',
     };
 
     await commitOnLeader(
-      leaderB, 'rw1', 'INSERT INTO live_orders VALUES (1, \'Alice\', \'OPEN\', 100, \'s1\')', 2,
+      leaderB,
+      'rw1',
+      'INSERT INTO live_orders (id, customer, status, total, secret_note) VALUES (?, ?, ?, ?, ?)',
+      [1, 'Alice', 'OPEN', 100, 's1'],
+      2,
     );
-    await commitOnLeader(leaderB, 'rw2', 'UPDATE live_orders SET total = 250 WHERE id = 1', 3);
     await commitOnLeader(
-      leaderB, 'rw3', 'INSERT INTO live_orders VALUES (2, \'Bob\', \'OPEN\', 300, \'s2\')', 4,
+      leaderB, 'rw2', 'UPDATE live_orders SET total = ? WHERE id = ?', [250, 1], 3,
     );
-    await commitOnLeader(leaderB, 'rw4', 'DELETE FROM live_orders WHERE id = 2', 5);
+    await commitOnLeader(
+      leaderB,
+      'rw3',
+      'INSERT INTO live_orders (id, customer, status, total, secret_note) VALUES (?, ?, ?, ?, ?)',
+      [2, 'Bob', 'OPEN', 300, 's2'],
+      4,
+    );
+    await commitOnLeader(
+      leaderB, 'rw4', 'DELETE FROM live_orders WHERE id = ?', [2], 5,
+    );
 
     assert.equal(sqlEngine.callCount, 1, 'incremental remote CDC updates perform zero polling reads');
     assert.equal(capturedCdcDeliveries.length, 4, 'all 4 mutations pushed over MessageRouter');
@@ -644,7 +656,8 @@ describe('Unit J6: Multi-node remote producer CDC delivery and leader failover',
     await commitOnLeader(
       leaderC,
       'rw5',
-      'INSERT INTO live_orders VALUES (3, \'Carol\', \'OPEN\', 400, \'s3\')',
+      'INSERT INTO live_orders (id, customer, status, total, secret_note) VALUES (?, ?, ?, ?, ?)',
+      [3, 'Carol', 'OPEN', 400, 's3'],
       msgCountBeforeFailoverWrite + 1,
     );
 
