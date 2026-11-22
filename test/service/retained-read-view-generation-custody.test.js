@@ -30,6 +30,12 @@ import {
   executePagedShardSlot,
 } from '../../src/service/call-shard-paged-execution.js';
 import {
+  CUSTODY_ERROR_CODE,
+  assertStorageArtifactsUnlinkSafe,
+  endStorageIncarnationCustody,
+  inspectDbPathCustody,
+} from '../../src/storage/retained-read-view-custody.js';
+import {
   createControllablePartitionService,
   createLoopbackTransport,
 } from '../partition/partition-service-test-support.js';
@@ -1006,6 +1012,201 @@ describe(`Retained read-view generation custody (${QUEST_ID})`, () => {
     } finally {
       manager.shutdown?.();
       await service.shutdown();
+    }
+  });
+
+  it('opening-window-retirement-and-post-open-failure-custody: closes or preserves custody for native readers opened before failure or retirement', async () => {
+    // Case 1: Retirement between native reader opening and custody registration (close succeeds).
+    const dbPath1 = path.join(tempDir, 'opening-retire-ok.sqlite');
+    const mainDb1 = seedWalPartitionDb(dbPath1, INITIAL_ROW_COUNT);
+    let openedReader1 = null;
+    const service1 = {
+      db: mainDb1,
+      dbPath: dbPath1,
+      partitionId: PARTITION_ID,
+      store: {db: mainDb1, dbPath: dbPath1, storageIncarnationId: 'inc-open-1'},
+    };
+    const mgr1 = createShardReadViewManager({
+      onSnapshotStage: (stage, ctx) => {
+        if (stage === 'after_open') {
+          openedReader1 = ctx.readerDb;
+          endStorageIncarnationCustody(service1, 'concurrent_retirement');
+        }
+      },
+    });
+    try {
+      await assert.rejects(
+        () =>
+          mgr1.acquireReadView({
+            attemptId: 'attempt-open-1',
+            boundParameters: [],
+            deadlineMs: Date.now() + DEADLINE_WINDOW_MS,
+            invocationId: 'inv-open-1',
+            keyColumns: KEY_COLUMNS,
+            partitionId: PARTITION_ID,
+            partitionService: service1,
+            partitionVersion: 1,
+            statement: SELECTOR_SQL,
+          }),
+        (err) =>
+          err.pagedCode === PAGED_EXECUTION_ERROR_CODE.READ_VIEW_UNAVAILABLE ||
+          err.code === CUSTODY_ERROR_CODE.INCARNATION_ENDED,
+        'concurrent retirement during opening must fail acquireReadView',
+      );
+      assert.ok(openedReader1, 'native readerDb must have been opened');
+      assert.equal(openedReader1.open, false, 'opening readerDb must be closed on retirement');
+      assert.equal(mgr1.stats().activeViewCount, 0);
+      assert.equal(mgr1.stats().unclosedViewCount, 0);
+      assert.equal(inspectDbPathCustody(dbPath1).hasLiveOrUnclosedReaders, false);
+    } finally {
+      mgr1.shutdown();
+      if (mainDb1.open) mainDb1.close();
+    }
+
+    // Case 2: Retirement between native reader opening and custody registration when closeReader FAILS.
+    const dbPath2 = path.join(tempDir, 'opening-retire-close-fail.sqlite');
+    const mainDb2 = seedWalPartitionDb(dbPath2, INITIAL_ROW_COUNT);
+    let openedReader2 = null;
+    let allowClose2 = false;
+    const service2 = {
+      db: mainDb2,
+      dbPath: dbPath2,
+      partitionId: PARTITION_ID,
+      store: {db: mainDb2, dbPath: dbPath2, storageIncarnationId: 'inc-open-2'},
+    };
+    const mgr2 = createShardReadViewManager({
+      closeReader: (readerDb) => {
+        if (!allowClose2) return false;
+        if (readerDb.open) {
+          if (readerDb.inTransaction) readerDb.exec('ROLLBACK');
+          readerDb.close();
+        }
+        return !readerDb.open;
+      },
+      nativeHandleOverheadBytes: NATIVE_HANDLE_OVERHEAD_BYTES,
+      onSnapshotStage: (stage, ctx) => {
+        if (stage === 'after_watermark') {
+          openedReader2 = ctx.readerDb;
+          endStorageIncarnationCustody(service2, 'concurrent_retirement');
+        }
+      },
+    });
+    try {
+      await assert.rejects(
+        () =>
+          mgr2.acquireReadView({
+            attemptId: 'attempt-open-2',
+            boundParameters: [],
+            deadlineMs: Date.now() + DEADLINE_WINDOW_MS,
+            invocationId: 'inv-open-2',
+            keyColumns: KEY_COLUMNS,
+            partitionId: PARTITION_ID,
+            partitionService: service2,
+            partitionVersion: 1,
+            statement: SELECTOR_SQL,
+          }),
+        (err) =>
+          err.pagedCode === PAGED_EXECUTION_ERROR_CODE.READ_VIEW_UNAVAILABLE ||
+          err.code === CUSTODY_ERROR_CODE.INCARNATION_ENDED,
+      );
+      assert.ok(openedReader2);
+      assert.equal(openedReader2.open, true, 'native readerDb remains open on close failure');
+      const stats2 = mgr2.stats();
+      assert.equal(stats2.activeViewCount, 0);
+      assert.equal(stats2.unclosedViewCount, 1);
+      assert.equal(stats2.closeFailureCount, 1);
+      assert.ok(stats2.totalPinnedBytes >= NATIVE_HANDLE_OVERHEAD_BYTES);
+      const custody2 = inspectDbPathCustody(dbPath2);
+      assert.equal(custody2.hasLiveOrUnclosedReaders, true);
+      assert.equal(custody2.unclosedViewIds.length, 1);
+      assert.throws(
+        () => assertStorageArtifactsUnlinkSafe(dbPath2),
+        (err) => err.code === CUSTODY_ERROR_CODE.CUSTODY_BLOCKED,
+      );
+
+      allowClose2 = true;
+      const reap2 = mgr2.reapExpiredViews();
+      assert.equal(reap2.closedIds.length, 1);
+      assert.equal(openedReader2.open, false);
+      assert.equal(mgr2.stats().unclosedViewCount, 0);
+      assert.equal(mgr2.stats().totalPinnedBytes, 0);
+      assert.equal(inspectDbPathCustody(dbPath2).hasLiveOrUnclosedReaders, false);
+    } finally {
+      allowClose2 = true;
+      mgr2.shutdown();
+      if (mainDb2.open) mainDb2.close();
+    }
+
+    // Case 3: Post-open failure during openPinnedWalReader when closeReader FAILS.
+    const dbPath3 = path.join(tempDir, 'post-open-error-close-fail.sqlite');
+    const mainDb3 = seedWalPartitionDb(dbPath3, INITIAL_ROW_COUNT);
+    let openedReader3 = null;
+    let allowClose3 = false;
+    const service3 = {
+      db: mainDb3,
+      dbPath: dbPath3,
+      partitionId: PARTITION_ID,
+      store: {db: mainDb3, dbPath: dbPath3, storageIncarnationId: 'inc-open-3'},
+    };
+    const mgr3 = createShardReadViewManager({
+      closeReader: (readerDb) => {
+        if (!allowClose3) return false;
+        if (readerDb.open) {
+          if (readerDb.inTransaction) readerDb.exec('ROLLBACK');
+          readerDb.close();
+        }
+        return !readerDb.open;
+      },
+      nativeHandleOverheadBytes: NATIVE_HANDLE_OVERHEAD_BYTES,
+      onSnapshotStage: (stage, ctx) => {
+        if (stage === 'after_pin') {
+          openedReader3 = ctx.readerDb;
+          throw new Error('injected_after_pin_failure');
+        }
+      },
+    });
+    try {
+      await assert.rejects(
+        () =>
+          mgr3.acquireReadView({
+            attemptId: 'attempt-open-3',
+            boundParameters: [],
+            deadlineMs: Date.now() + DEADLINE_WINDOW_MS,
+            invocationId: 'inv-open-3',
+            keyColumns: KEY_COLUMNS,
+            partitionId: PARTITION_ID,
+            partitionService: service3,
+            partitionVersion: 1,
+            statement: SELECTOR_SQL,
+          }),
+        (err) => err.message === 'injected_after_pin_failure',
+      );
+      assert.ok(openedReader3);
+      assert.equal(openedReader3.open, true);
+      const stats3 = mgr3.stats();
+      assert.equal(stats3.activeViewCount, 0);
+      assert.equal(stats3.unclosedViewCount, 1);
+      assert.equal(stats3.closeFailureCount, 1);
+      assert.ok(stats3.totalPinnedBytes >= NATIVE_HANDLE_OVERHEAD_BYTES);
+      const custody3 = inspectDbPathCustody(dbPath3);
+      assert.equal(custody3.hasLiveOrUnclosedReaders, true);
+      assert.equal(custody3.unclosedViewIds.length, 1);
+      assert.throws(
+        () => assertStorageArtifactsUnlinkSafe(dbPath3),
+        (err) => err.code === CUSTODY_ERROR_CODE.CUSTODY_BLOCKED,
+      );
+
+      allowClose3 = true;
+      const reap3 = mgr3.reapExpiredViews();
+      assert.equal(reap3.closedIds.length, 1);
+      assert.equal(openedReader3.open, false);
+      assert.equal(mgr3.stats().unclosedViewCount, 0);
+      assert.equal(mgr3.stats().totalPinnedBytes, 0);
+      assert.equal(inspectDbPathCustody(dbPath3).hasLiveOrUnclosedReaders, false);
+    } finally {
+      allowClose3 = true;
+      mgr3.shutdown();
+      if (mainDb3.open) mainDb3.close();
     }
   });
 });
