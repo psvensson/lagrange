@@ -17,6 +17,9 @@ import {SERVICE_LIFECYCLE_EXECUTION_DISPOSITION} from
 import {classifyTransactionControlStatement} from
   './sql-transaction-control-grammar.js';
 import {
+  enforceApplicationDatabaseExplainPolicy,
+} from './application-database-statement-policy.js';
+import {
   CLIENT_STATEMENT_INGRESS,
   resolveClientStatementRefusal,
 } from './sql-statement-ingress.js';
@@ -39,6 +42,7 @@ const {
   CancellationToken,
   DEFAULT_SNAPSHOT_MODE,
   EXECUTION_MODE,
+  EXPLAIN_DISTRIBUTED_PREFIX_REGEX,
   ExecutionContext,
   LineageTracker,
   METRICS_LOG_TAG,
@@ -386,8 +390,28 @@ class SQLQueryEngineRequestDispatch extends
       sqlRequest,
       executionOptions,
     );
+    const isExplainDistributed = EXPLAIN_DISTRIBUTED_PREFIX_REGEX.test(
+      sqlRequest.statement,
+    );
+    if (isExplainDistributed) {
+      const explainDecision = enforceApplicationDatabaseExplainPolicy(
+        queryOptions,
+      );
+      if (explainDecision.allowed !== true) {
+        return explainDecision.failure;
+      }
+    }
+    const checkRequest = isExplainDistributed ?
+      {
+        ...sqlRequest,
+        statement: sqlRequest.statement.replace(
+          EXPLAIN_DISTRIBUTED_PREFIX_REGEX,
+          '',
+        ),
+      } :
+      sqlRequest;
     const statementCheck = await this.checkPlanRequestStatement(
-      sqlRequest,
+      checkRequest,
       queryOptions,
     );
     if (!statementCheck.allowed) {

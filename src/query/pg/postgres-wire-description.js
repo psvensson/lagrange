@@ -254,16 +254,17 @@ function inferExpressionOid(expr, scope, inferredParams, paramMapping = null) {
   case PG_EXPR_TYPE.CAST:
     return normalizeSqlTypeSpec(expr.pgTargetType || expr.targetType).oid;
   case EXPR_TYPE.AGGREGATE: {
-    const fn = String(expr.name || '').toUpperCase();
+    const fn = String(expr.function || expr.name || '').toUpperCase();
     if (fn === COUNT_FN_NAME) return PG_OID.INT8;
     if (fn === AVG_FN_NAME) return PG_OID.FLOAT8;
-    if (fn === SUM_FN_NAME && Array.isArray(expr.args) && expr.args[0]) {
-      const inner = inferExpressionOid(expr.args[0], scope, inferredParams, paramMapping);
+    const argExpr = expr.argument;
+    if (fn === SUM_FN_NAME && argExpr) {
+      const inner = inferExpressionOid(argExpr, scope, inferredParams, paramMapping);
       return inner === PG_OID.FLOAT4 || inner === PG_OID.FLOAT8 ?
         PG_OID.FLOAT8 : PG_OID.INT8;
     }
-    if ((fn === MIN_FN_NAME || fn === MAX_FN_NAME) && expr.args?.[0]) {
-      return inferExpressionOid(expr.args[0], scope, inferredParams, paramMapping);
+    if ((fn === MIN_FN_NAME || fn === MAX_FN_NAME) && argExpr) {
+      return inferExpressionOid(argExpr, scope, inferredParams, paramMapping);
     }
     return PG_OID.TEXT;
   }

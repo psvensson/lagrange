@@ -16,7 +16,7 @@ documentClass: generated
 - [application-database-error.js](application-database-error.js) - No leading comment; first export: ApplicationDatabaseError. (importers: many)
 - [application-database-input.js](application-database-input.js) - No leading comment; first export: snapshotApplicationDatabaseOpenOptions. (importers: one)
 - [application-database-result.js](application-database-result.js) - Read the affected-row count a SqlCore result reports. (importers: many)
-- [application-database-statement-policy.js](application-database-statement-policy.js) - Whether execution options belong to an embedded application session (the private session marker the facade sets). (importers: few)
+- [application-database-statement-policy.js](application-database-statement-policy.js) - Whether execution options belong to an embedded application session (the private session marker the facade sets). (importers: many)
 - [application-database.js](application-database.js) - Whether a failed operation is a COMMIT the engine did not type as before its commit point (commitPointReached:... (importers: few)
 - [application-runtime-generation.js](application-runtime-generation.js) - No leading comment; first export: createApplicationRuntimeGeneration. (importers: few)
 - [bootstrap-leader-selection.js](bootstrap-leader-selection.js) - No leading comment; first export: resolveBootstrapLeaderSelection. (importers: few)

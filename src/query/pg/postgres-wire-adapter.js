@@ -257,7 +257,8 @@ class PostgresWireAdapter {
 
     const result = await this.sqlCore.executeRequest(request);
     const projected = projectPgWireExecutionResult(result);
-    if (projected?.success === true && !projected.columnDescriptors &&
+    const hasColumns = Array.isArray(projected?.columns) && projected.columns.length > 0;
+    if (projected?.success === true && !hasColumns && !projected.columnDescriptors &&
         classifyServiceLifecycleSql(sql).kind ===
           SERVICE_LIFECYCLE_SQL_CLASSIFICATION.LIFECYCLE) {
       const lifecycle = describeLifecycleStatement(sql);
