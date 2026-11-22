@@ -13,7 +13,7 @@
     "examples-e2e": 8,
     "pgwire-compat": 23,
     "placement-rebalance": 303,
-    "query-sql": 210,
+    "query-sql": 211,
     "release-packaging": 15,
     "runtime-primitives": 23,
     "services-runtime": 160,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2765,
-  "digest": "fnv1a32-fc898cb0",
+  "censusSize": 2766,
+  "digest": "fnv1a32-eb857890",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b6344ec9",
+  "observationDigest": "fnv1a32-12b64677",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1663,6 +1663,7 @@
     "test/query/internal-sql-adapter.test.js": "query-sql",
     "test/query/lineage-integration.test.js": "query-sql",
     "test/query/lineage-tracker.test.js": "query-sql",
+    "test/query/locking-read-authoritative-reservations.test.js": "query-sql",
     "test/query/locking-read-canonical-ast.test.js": "query-sql",
     "test/query/locking-read-execution-lifecycle.test.js": "query-sql",
     "test/query/lookup-primitive.test.js": "query-sql",
@@ -16064,6 +16065,30 @@
     "test/query/lineage-integration.test.js": {
       "files": [
         "src/wasm-service/query-budget-constants.js"
+      ]
+    },
+    "test/query/locking-read-authoritative-reservations.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/bootstrap/system-table-workflow-schema-definitions.js",
+        "src/cdc/cdc-system-table-mutation-sql-helpers.js",
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/partition/partition-participant-transaction-constants.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/partition/committed-operation-gateway-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/participant-protocol-double.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/query/locking-read-canonical-ast.test.js": {
