@@ -127,6 +127,7 @@ export function buildIndexDatasetSchema(options) {
     partitionKey: columnNames[0],
     primaryKey,
     columns,
+    tableConstraints: [],
   };
 }
 

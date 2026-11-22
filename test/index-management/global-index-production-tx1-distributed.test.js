@@ -555,6 +555,7 @@ async function setupStrictCluster(t, options = {}) {
       ...(attachProvisioner ? {tablePartitionProvisioner: provisioner} : {}),
     });
     engine.queryExecutor.leaderRetryDelayMs = 5;
+    engine.queryExecutor.queryTimeoutMs = 1500;
     await engine.indexService.initialize();
     return engine;
   };

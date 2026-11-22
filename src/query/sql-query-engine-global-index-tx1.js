@@ -13,16 +13,42 @@ import {
   planGlobalIndexWriteOperations,
 } from '../index-management/global-index-lifecycle-coordinator.js';
 
+const LOCAL_STR_COLON = ':';
 const LOCAL_STR_COMMA = ',';
 const LOCAL_STR_ENLIST_FAILED = 'Failed to enlist global index participants in TX1';
 const LOCAL_STR_MINUS = '-';
 const LOCAL_STR_SQL_AND = ' AND ';
 const LOCAL_STR_SQL_OR = ' OR ';
+const TX_ERROR_COPY_FIELDS = Object.freeze([
+  'errorCode',
+  'failureCode',
+  'refusalLayer',
+  'detail',
+]);
 
 function createUnavailableError(partitionId, message) {
   const err = new Error(message || `Index participant unavailable: ${partitionId}`);
   err.code = GLOBAL_INDEX_ERROR_CODE.PARTICIPANT_UNAVAILABLE;
   return err;
+}
+
+function throwTxPartitionFailure(partitionId, rawRes) {
+  const res = rawRes || {};
+  const detailParts = [res.failureCode, res.refusalLayer, res.detail].filter(
+    (part) => part !== undefined && part !== null && part !== '',
+  );
+  const detailSuffix = detailParts.join(LOCAL_STR_COLON);
+  const baseMsg = res.error || `TX1 partition execution failed on ${partitionId}`;
+  const err = createUnavailableError(
+    partitionId,
+    detailSuffix ? `${baseMsg} (${detailSuffix})` : baseMsg,
+  );
+  for (const field of TX_ERROR_COPY_FIELDS) {
+    if (res[field] !== undefined && res[field] !== null) {
+      err[field] = res[field];
+    }
+  }
+  throw err;
 }
 
 function buildTxPartitionExecOptions(engine, baseOptions, tableName, forRead) {
@@ -63,13 +89,7 @@ async function executeTxPartitionSql(
     execOptions,
   );
   if (!res || res.success !== true) {
-    const err = createUnavailableError(
-      partitionId,
-      res?.error || `TX1 partition execution failed on ${partitionId}`,
-    );
-    if (res?.errorCode) err.errorCode = res.errorCode;
-    if (res?.failureCode) err.failureCode = res.failureCode;
-    throw err;
+    throwTxPartitionFailure(partitionId, res);
   }
   return res;
 }

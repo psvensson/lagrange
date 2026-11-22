@@ -148,18 +148,33 @@ function recordPartitionDescriptorLocally(coordinator, runtimeState, partitionMe
   }
 }
 
+function mergeColumnTypesWithBaseTable(baseTable, columnTypes = {}) {
+  const merged = {...(columnTypes || {})};
+  const baseCols = baseTable?.schema?.columns;
+  if (Array.isArray(baseCols)) {
+    for (const col of baseCols) {
+      if (col?.name && col?.type && !merged[col.name]) {
+        merged[col.name] = col.type;
+      }
+    }
+  }
+  return merged;
+}
+
 function buildProvisionedIndexMetadata(indexService, context) {
   const {tableName, indexName, columnNames, basePrimaryKeyColumns, columnTypes} = context;
   const datasetName = getGlobalIndexDatasetName(tableName, indexName);
+  const baseTable = indexService?.sqlQueryEngine?.getTableInfo?.(tableName) || null;
+  const resolvedColumnTypes = mergeColumnTypesWithBaseTable(baseTable, columnTypes);
   const datasetSchema = buildIndexDatasetSchema({
     tableName,
     indexName,
     columnNames,
     basePrimaryKeyColumns,
-    columnTypes,
+    columnTypes: resolvedColumnTypes,
   });
   const partitionId = `__gsi_${tableName}_${indexName}_p0`;
-  const partitionKeyType = columnTypes?.[columnNames[0]] || LOCAL_STR_TEXT;
+  const partitionKeyType = resolvedColumnTypes?.[columnNames[0]] || LOCAL_STR_TEXT;
   const now = Date.now();
   const partitionMetadata = {
     partition_id: partitionId,
@@ -177,7 +192,6 @@ function buildProvisionedIndexMetadata(indexService, context) {
     created_at: now,
     updated_at: now,
   };
-  const baseTable = indexService?.sqlQueryEngine?.getTableInfo?.(tableName) || null;
   const activeVersion = Number.isSafeInteger(baseTable?.active_partition_version) ?
     baseTable.active_partition_version :
     1;
