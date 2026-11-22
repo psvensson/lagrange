@@ -87,6 +87,23 @@ function reportKeepalivePongSpent(router, connectionInfo) {
 }
 
 /**
+ * The declared reconnect schedule: attempt n waits reconnectIntervalMs x
+ * reconnectBackoffMultiplier^(n-1) for the first reconnectMaxAttempts
+ * attempts; every later attempt waits as long as the last of those - the
+ * cap (1000 ms x 1.5^9 = 38443 ms by default). Only a member peer is dialed
+ * past reconnectMaxAttempts (resolveReconnectDisposition), so the cap is the
+ * cadence at which a member that stays unreachable is dialed, never faster.
+ * @param {Object} router - The message router.
+ * @param {number} attempt - The attempt about to be scheduled (1-based).
+ * @return {number} Its delay in milliseconds.
+ */
+function reconnectDelayMs(router, attempt) {
+  const step = Math.min(attempt, router.reconnectMaxAttempts) - TRANSPORT_NUM.ONE;
+  return router.reconnectIntervalMs *
+    Math.pow(router.reconnectBackoffMultiplier, step);
+}
+
+/**
  * Connection-close handling and reconnect scheduling for the message router:
  * decide a close disposition (shutdown / retired / self-disconnect / reconnect),
  * drain pending work for the failed node, and drive the backoff-jittered
@@ -127,6 +144,7 @@ class MessageRouterConnectionCloseReconnect {
       connection.ws = null;
       connection.bootIncarnation = TRANSPORT_NUM.ZERO;
       this.clearPingInterval(connection);
+      this.dropPendingConsensusBatchForClosedNode(nodeId, connection);
       const disconnectError = Object.assign(
         new Error(ROUTER_ERROR_MSG.connectionClosed(nodeId)),
         {code: ROUTER_CONNECTION_CLOSED_ERROR_CODE},
@@ -222,12 +240,7 @@ class MessageRouterConnectionCloseReconnect {
       return;
     }
     connectionInfo.reconnectAttempts += TRANSPORT_NUM.ONE;
-    const delay =
-      this.reconnectIntervalMs *
-      Math.pow(
-        this.reconnectBackoffMultiplier,
-        connectionInfo.reconnectAttempts - TRANSPORT_NUM.ONE,
-      );
+    const delay = reconnectDelayMs(this, connectionInfo.reconnectAttempts);
     connectionInfo.reconnectDueAt = this.timeSource.now() + delay;
     this.logger.debug(ROUTER_LOG_MSG.SCHEDULING_RECONNECT, {
       nodeId: connectionInfo.nodeId,
@@ -289,7 +302,16 @@ class MessageRouterConnectionCloseReconnect {
     } else if (connectionInfo.reconnectTimeout) {
       kind = RECONNECT_DISPOSITION.PENDING;
       state = null;
-    } else if (connectionInfo.reconnectAttempts >= this.reconnectMaxAttempts) {
+    // A member peer is dialed for as long as it stays one, at the capped
+    // cadence (reconnectDelayMs): raft envelopes never dial (the consensus
+    // delivery class), so this schedule is what re-joins two live members
+    // after an outage longer than its bounded attempts. Both ends of a closed
+    // connection own one; the simultaneous-dial resolution
+    // (resolveIncomingConnectionAdoption, establishConnection's live-wins
+    // check) keeps one connection. A peer that is not, or no longer, a member
+    // stops after reconnectMaxAttempts, reported as a spent wait.
+    } else if (connectionInfo.reconnectAttempts >= this.reconnectMaxAttempts &&
+        !this.connectionAuthorityOwner.isConnectionMember(connectionInfo.nodeId)) {
       kind = RECONNECT_DISPOSITION.MAX_ATTEMPTS_REACHED;
       state = ConnectionState.CLOSED;
     }

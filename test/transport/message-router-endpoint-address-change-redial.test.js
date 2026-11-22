@@ -156,7 +156,13 @@ describe('MessageRouter same-nodeId new-address recovery', () => {
       });
       await routerB2.initialize({startServer: true});
       peerAddr = 'ws://127.0.0.1:19822';
+      // The old process is gone: it reads nothing and dials no one. (Until
+      // F-2 was repaired this case also passed with the old process alive and
+      // re-dialing under the same boot incarnation, because node-a's adopted
+      // record re-dialed at once - the NaN schedule - and always reached the
+      // new address first; record section 19.)
       routerB.handleMessage = () => {};
+      routerB.scheduleReconnect = () => {};
 
       const recovered = await waitFor(() => {
         const conn = routerA.nodeConnections.get('node-b');

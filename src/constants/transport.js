@@ -22,6 +22,10 @@ const CONNECTION_STATE = Object.freeze({
 
 const ROUTER_MESSAGE_TYPE = Object.freeze({
   SERVICE_MESSAGE: 'service_message',
+  // The consensus delivery class: a raft-rs envelope for a peer replica,
+  // declared by the sending router. It is answered by nothing - no ACK and no
+  // SERVICE_RESPONSE - because raft re-sends what a peer did not receive.
+  CONSENSUS_ENVELOPE: 'consensus_envelope',
   SERVICE_RESPONSE: 'service_response',
   ACK: 'ack',
   IDENTIFY: 'identify',
@@ -56,11 +60,18 @@ const TRANSPORT_CONFIG_KEY = Object.freeze({
   CONNECTION_POOL_CLEANUP_INTERVAL_MS: 'transport.connectionPoolCleanupIntervalMs',
 });
 
+const BULK_CHANNEL_KIB = 1024;
+const BULK_CHANNEL_MIB = BULK_CHANNEL_KIB * BULK_CHANNEL_KIB;
+
 const TRANSPORT_DEFAULT = Object.freeze({
   WS_PORT: LISTENER_PORT_DEFAULT.TRANSPORT_WEBSOCKET,
   WS_HOST: HOST.LOCALHOST,
   WS_PROTOCOL: PROTOCOL.WS,
   LOCAL_ADDRESS_PREFIX: 'ws-',
+  // Per-peer and cross-peer byte bounds for the consensus delivery lane
+  // (pending application batches + ws.bufferedAmount + new encoded batch).
+  CONSENSUS_MAX_PEER_BUFFERED_BYTES: 8 * BULK_CHANNEL_MIB,
+  CONSENSUS_MAX_TOTAL_BUFFERED_BYTES: 32 * BULK_CHANNEL_MIB,
   // ends-on: the peer acknowledges or answers the message
   MESSAGE_TIMEOUT_MS: 5000,
   ACK_TIMEOUT_QUARANTINE_THRESHOLD: 2,
@@ -209,8 +220,6 @@ const ROUTER_IDENTIFY_CHANNEL = Object.freeze({
 
 // Bulk transfer channel defaults (byte-denominated controls; the channel
 // never touches the primary router outbound queues or their reserves).
-const BULK_CHANNEL_KIB = 1024;
-const BULK_CHANNEL_MIB = BULK_CHANNEL_KIB * BULK_CHANNEL_KIB;
 const BULK_TRANSFER_CHANNEL_DEFAULT = Object.freeze({
   MAX_PENDING_SENDS: 8,
   TOKEN_BUCKET_BYTES_PER_SECOND: 8 * BULK_CHANNEL_MIB,
@@ -276,6 +285,14 @@ const ROUTER_LOG_MSG = Object.freeze({
   MAX_RECONNECTS_REACHED: 'Max reconnection attempts reached',
   SCHEDULING_RECONNECT: 'Scheduling reconnection',
   RECONNECT_FAILED: 'Reconnection failed',
+  // A keepalive that missed pingMaxMissed pongs in a row while the peer sent
+  // inbound traffic within the liveness window: the connection is kept.
+  CONNECTION_PING_TIMEOUT_SKIPPED_ALIVE:
+    'Keepalive pongs missed, connection kept: recent inbound traffic shows the peer alive',
+  // pingNode's pong did not arrive in time, but inbound traffic from the
+  // node within the liveness window answers it reachable.
+  PING_TIMEOUT_SATISFIED_BY_INBOUND:
+    'Ping timed out; recent inbound traffic from the node answers it reachable',
   RECONNECT_BEFORE_DELIVERY_FAILED:
     'Failed to reconnect target node before delivery',
   HANDLER_REGISTERED: 'Registered handler',
@@ -288,11 +305,33 @@ const ROUTER_LOG_MSG = Object.freeze({
   JOIN_COMPLETE_RECEIVED: 'Join complete received',
   JOIN_COMPLETE_ACK_SENT: 'Join complete acknowledgment sent',
   JOIN_COMPLETE_FAILED: 'Failed to process join complete message',
-  RAFT_DIRECT_DELIVERY: 'Delivering raft packet directly',
-  RAFT_DIRECT_DELIVERY_FAILED: 'Failed to deliver raft packet directly',
+  CONSENSUS_ENVELOPE_REFUSED:
+    'Consensus envelope refused by the receiving router',
+  CONSENSUS_SEND_REFUSED:
+    'Consensus envelope refused by the sending router',
   BULK_CHANNEL_ADOPTED: 'Adopted identified bulk-channel socket',
   BULK_CHANNEL_NO_REGISTRY:
     'Closing bulk-channel socket: no bulk channel registry attached',
+});
+
+// Why a sending router refused or dropped an unsent consensus envelope or
+// batch before writing it to the peer's socket.
+const CONSENSUS_SEND_REFUSAL = Object.freeze({
+  SHUTDOWN: 'shutdown',
+  INVALID_ADDRESS: 'invalid-address',
+  NO_CONNECTION: 'no-connection',
+  CONNECTION_CLOSED: 'connection-closed',
+  CONNECTION_REPLACED: 'connection-replaced',
+  PEER_BUFFER_EXCEEDED: 'peer-buffer-exceeded',
+  TOTAL_BUFFER_EXCEEDED: 'total-buffer-exceeded',
+});
+
+// Why a receiving router took no step for a consensus envelope: the record
+// stays with the receiver, since nothing is answered to the sender.
+const CONSENSUS_RECEIPT_REFUSAL = Object.freeze({
+  MALFORMED_ENVELOPE: 'malformed-envelope',
+  NO_HANDLER: 'no-handler',
+  HANDLER_FAILED: 'handler-failed',
 });
 
 const ROUTER_ERROR_MSG = Object.freeze({
@@ -304,6 +343,7 @@ const ROUTER_ERROR_MSG = Object.freeze({
   connectionClosed: (nodeId) => `Connection to node ${nodeId} closed`,
   selfConnectionFailed: (message) => `Self-connection failed: ${message}`,
   noHandlerForAddress: (address) => `No handler registered for address ${address}`,
+  addressInUse: (port) => `Address in use: in-process port ${port}`,
   QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED:
     'Query/data-plane message-group transport is not configured',
   PENDING_RESPONSE_TIMEOUT: 'Pending response timeout',
@@ -311,6 +351,14 @@ const ROUTER_ERROR_MSG = Object.freeze({
   outboundQueueBackpressured: (nodeId, maxPending) =>
     `Outbound queue for node ${nodeId} is saturated ` +
     `(maxPending=${maxPending})`,
+  consensusPeerBufferExceeded: (nodeId, bufferedBytes, maxBytes) =>
+    `Consensus buffer for node ${nodeId} exceeded ` +
+    `(bufferedBytes=${bufferedBytes}, maxBytes=${maxBytes})`,
+  consensusTotalBufferExceeded: (nodeId, totalBytes, maxBytes) =>
+    `Total consensus buffer exceeded for node ${nodeId} ` +
+    `(totalBytes=${totalBytes}, maxBytes=${maxBytes})`,
+  consensusConnectionReplaced: (nodeId) =>
+    `Connection incarnation to node ${nodeId} was replaced before batch flush`,
 });
 
 const RPC_LOG_MSG = Object.freeze({
@@ -372,6 +420,8 @@ export {
   BULK_CHANNEL_EMPTY_STATS,
   BULK_TRANSFER_CHANNEL_DEFAULT,
   CONNECTION_STATE,
+  CONSENSUS_RECEIPT_REFUSAL,
+  CONSENSUS_SEND_REFUSAL,
   OUTBOUND_DELIVERY_PRIORITY,
   ROUTER_IDENTIFY_CHANNEL,
   ROUTER_MESSAGE_TYPE,

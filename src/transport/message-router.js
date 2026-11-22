@@ -18,6 +18,7 @@ import {defineMessageRouterConnectionCloseReconnect} from './message-router-conn
 import {defineMessageRouterHandlerRegistry} from './message-router-handler-registry.js';
 import {defineMessageRouterDeliveryDelegation} from './message-router-delivery-delegation.js';
 import {defineMessageRouterStatsShutdown} from './message-router-stats-shutdown.js';
+import {createConsensusDeliveryRecord} from './message-router-consensus-delivery.js';
 import {resolveInProcessConnectionEnvironment} from './in-process-connection-environment.js';
 import {resolveTimeSource} from '../time/time-source.js';
 import {requireIssuedBootIncarnation} from
@@ -265,6 +266,19 @@ class MessageRouter extends EventEmitter {
     this.lastUnmatchedServiceResponseWarnAtMs = null;
     this.unmatchedServiceResponseWarnSuppressedCount = TRANSPORT_NUM.ZERO;
     this.serviceResponseDispositionCounts = /* @__PURE__ */ new Map();
+    // The consensus delivery class's own counts (sent and refused) and
+    // declared buffer bounds (per-peer and cross-peer).
+    this.consensusMaxPeerBufferedBytes =
+      Number.isFinite(options.consensusMaxPeerBufferedBytes) &&
+      options.consensusMaxPeerBufferedBytes > TRANSPORT_NUM.ZERO ?
+        Math.floor(options.consensusMaxPeerBufferedBytes) :
+        TRANSPORT_DEFAULT.CONSENSUS_MAX_PEER_BUFFERED_BYTES;
+    this.consensusMaxTotalBufferedBytes =
+      Number.isFinite(options.consensusMaxTotalBufferedBytes) &&
+      options.consensusMaxTotalBufferedBytes > TRANSPORT_NUM.ZERO ?
+        Math.floor(options.consensusMaxTotalBufferedBytes) :
+        TRANSPORT_DEFAULT.CONSENSUS_MAX_TOTAL_BUFFERED_BYTES;
+    this.consensusDelivery = createConsensusDeliveryRecord();
     this.initialized = false;
     this.server = null;
     this.messageCount = TRANSPORT_NUM.ZERO;

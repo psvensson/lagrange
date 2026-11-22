@@ -11,8 +11,15 @@ import {
   resolveRecoverableDeliveryError,
   sendMessage,
   sendRaw,
-  tryDeliverRaftDirect,
 } from './message-router-delivery-behaviors.js';
+import {
+  consensusDeliveryStats,
+  deliverConsensusEnvelope,
+  dropAllPendingConsensusBatches,
+  dropPendingConsensusBatchForClosedNode,
+  dropPendingConsensusBatchForConnection,
+  receiveConsensusEnvelope,
+} from './message-router-consensus-delivery.js';
 import {pingNode} from './message-router-peer-liveness.js';
 import {
   armReconnectAfterConnectFailure,
@@ -67,15 +74,28 @@ class MessageRouterDeliveryDelegation {
     );
   }
 
-  tryDeliverRaftDirect(targetAddress, messageId, payload, targetNodeId, options = {}) {
-    return tryDeliverRaftDirect(
-      this,
-      targetAddress,
-      messageId,
-      payload,
-      targetNodeId,
-      options,
-    );
+  deliverConsensusEnvelope(targetAddress, envelope) {
+    return deliverConsensusEnvelope(this, targetAddress, envelope);
+  }
+
+  receiveConsensusEnvelope(frame, delivery = null) {
+    return receiveConsensusEnvelope(this, frame, delivery);
+  }
+
+  getConsensusDeliveryStats() {
+    return consensusDeliveryStats(this);
+  }
+
+  dropPendingConsensusBatchForConnection(connection) {
+    return dropPendingConsensusBatchForConnection(this, connection);
+  }
+
+  dropPendingConsensusBatchForClosedNode(nodeId, connection = null) {
+    return dropPendingConsensusBatchForClosedNode(this, nodeId, connection);
+  }
+
+  dropAllPendingConsensusBatches() {
+    return dropAllPendingConsensusBatches(this);
   }
 
   async deliverRemote(

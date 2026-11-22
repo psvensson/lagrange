@@ -1,4 +1,5 @@
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {createPeerConnectionRecord} from './message-router-connection-record.js';
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
 
 const {
@@ -235,6 +236,7 @@ class MessageRouterConnectionLifecycleMethods {
     connectionInfo.retired = true;
     this.clearReconnectTimeout(connectionInfo);
     this.clearPingInterval(connectionInfo);
+    this.dropPendingConsensusBatchForConnection(connectionInfo);
   }
   /**
    * Return whether a connection object is still the active entry for its peer.
@@ -290,26 +292,16 @@ class MessageRouterConnectionLifecycleMethods {
     const configuredAddress =
       this.resolveCanonicalReconnectAddress(nodeId, normalizedAddress) ||
       normalizedAddress;
-    const connectionInfo = {
+    const connectionInfo = createPeerConnectionRecord({
       connectionId: uuidv4(),
       nodeId,
       address: normalizedAddress,
       configuredAddress,
       observedAddress: existing?.observedAddress || null,
-      ws: null,
       state: ConnectionState.CONNECTING,
-      reconnectAttempts: TRANSPORT_NUM.ZERO,
-      reconnectTimeout: null,
-      reconnectDueAt: null,
-      isIncoming: false,
       isSelfConnection: options.isSelfConnection || false,
-      bootIncarnation: TRANSPORT_NUM.ZERO,
-      ackTimeoutStreak: TRANSPORT_NUM.ZERO,
-      lastAckAt: null,
-      lastAckTimeoutAt: null,
-      retired: false,
       createdAt: this.timeSource.now(),
-    };
+    });
     this.nodeConnections.set(nodeId, connectionInfo);
     try {
       await this.establishConnection(connectionInfo, options.connectBudgetMs);

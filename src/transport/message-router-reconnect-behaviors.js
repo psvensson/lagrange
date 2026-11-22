@@ -1,5 +1,6 @@
 import {assertDeliveryOpen, remainingDeliveryMs, withDeliveryLifetime}
   from './message-router-delivery-lifetime.js';
+import {createPeerConnectionRecord} from './message-router-connection-record.js';
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
 import {
   TIMEOUT_BUDGET_DEFAULT,
@@ -205,27 +206,14 @@ export function ensureReconnectOwnerConnection(
   const canonicalPreferredAddress =
     router.resolveCanonicalReconnectAddress(targetNodeId, preferredAddress) ||
     preferredAddress;
-  const connectionInfo = {
+  const connectionInfo = createPeerConnectionRecord({
     connectionId: uuidv4(),
     nodeId: targetNodeId,
     address: canonicalPreferredAddress,
     configuredAddress: canonicalPreferredAddress,
-    observedAddress: null,
-    ws: null,
     state: ConnectionState.DISCONNECTED,
-    reconnectAttempts: TRANSPORT_NUM.ZERO,
-    reconnectTimeout: null,
-    reconnectDueAt: null,
-    pingInterval: null,
-    isIncoming: false,
-    isSelfConnection: false,
-    bootIncarnation: TRANSPORT_NUM.ZERO,
-    ackTimeoutStreak: TRANSPORT_NUM.ZERO,
-    lastAckAt: null,
-    lastAckTimeoutAt: null,
-    retired: false,
     createdAt: router.timeSource.now(),
-  };
+  });
   router.nodeConnections.set(targetNodeId, connectionInfo);
   return connectionInfo;
 }
@@ -687,28 +675,19 @@ export function quarantineConnectionAfterAckTimeout(
     },
   );
   const staleWs = activeConnection.ws || null;
-  const reconnectOwner = {
+  const reconnectOwner = createPeerConnectionRecord({
     connectionId: uuidv4(),
     nodeId: activeConnection.nodeId,
     nodeAddress: activeConnection.nodeAddress,
     address: activeConnection.address,
     configuredAddress: activeConnection.configuredAddress || activeConnection.address,
     observedAddress: activeConnection.observedAddress || null,
-    ws: null,
     state: ConnectionState.DISCONNECTED,
     reconnectAttempts: activeConnection.reconnectAttempts,
-    reconnectTimeout: null,
-    reconnectDueAt: null,
-    pingInterval: null,
-    isIncoming: false,
-    isSelfConnection: false,
-    bootIncarnation: TRANSPORT_NUM.ZERO,
-    ackTimeoutStreak: TRANSPORT_NUM.ZERO,
     lastAckAt: activeConnection.lastAckAt || null,
     lastAckTimeoutAt: activeConnection.lastAckTimeoutAt || null,
-    retired: false,
     createdAt: router.timeSource.now(),
-  };
+  });
   router.retireConnection(activeConnection);
   activeConnection.state = ConnectionState.CLOSED;
   router.nodeConnections.set(targetNodeId, reconnectOwner);

@@ -20,7 +20,6 @@ const {
   ROUTER_ERROR_MSG,
   ROUTER_LOG_MSG,
   ROUTER_NO_CONNECTION_ERROR_CODE,
-  RouterMessageType,
   TRANSPORT_METRIC_TRIGGER,
   TRANSPORT_NUM,
   WebSocket,
@@ -152,6 +151,12 @@ export async function deliver(
   message,
   options = {},
 ) {
+  // A raft-rs envelope travels only as the consensus delivery class
+  // (message-router-consensus-delivery.js): no lifetime, no ACK, no answer,
+  // no queued fallback. Delivery options do not apply to it.
+  if (isRaftTransportPayload(message)) {
+    return router.deliverConsensusEnvelope(targetAddress, message);
+  }
   const messageId = message.messageId || uuidv4();
   const correlationId = message.correlationId || messageId;
   let targetNodeId = options.targetNodeId;
@@ -227,51 +232,6 @@ export async function deliver(
   });
 }
 
-export function tryDeliverRaftDirect(
-  router,
-  targetAddress,
-  messageId,
-  payload,
-  targetNodeId,
-  options = {},
-) {
-  assertDeliveryOpen(options);
-  if (!isRaftTransportPayload(payload)) {
-    return null;
-  }
-  const connection = router.nodeConnections.get(targetNodeId);
-  if (
-    !connection ||
-    connection.state !== ConnectionState.CONNECTED ||
-    !connection.ws ||
-    connection.ws.readyState !== WebSocket.OPEN
-  ) {
-    return null;
-  }
-  const message = {
-    type: RouterMessageType.SERVICE_MESSAGE,
-    messageId,
-    targetAddress,
-    sourceAddress: ROUTER_ADDRESS.buildSourceAddress(router.nodeId),
-    sourceNodeId: router.nodeId,
-    payload,
-    timestamp: router.timeSource.now(),
-  };
-  router.logger.debug(ROUTER_LOG_MSG.RAFT_DIRECT_DELIVERY, {
-    messageId,
-    targetAddress,
-    targetNodeId,
-  });
-  try {
-    const encoded = JSON.stringify(message);
-    assertDeliveryOpen(options);
-    connection.ws.send(encoded);
-    return {messageId, acknowledged: true};
-  } catch (_sendError) {
-    return null;
-  }
-}
-
 export async function deliverRemote(
   router,
   targetAddress,
@@ -283,16 +243,6 @@ export async function deliverRemote(
 ) {
   return withDeliveryLifetime(router, options, async (options) => {
     assertDeliveryOpen(options);
-    const directRaftDelivery = router.tryDeliverRaftDirect(
-      targetAddress,
-      messageId,
-      payload,
-      targetNodeId,
-      options,
-    );
-    if (directRaftDelivery) {
-      return directRaftDelivery;
-    }
     const deliveryTimeoutMs = options.deliveryLifetime.remainingMs();
     const reconnectInProgress = router.buildReconnectInProgressFailure(
       targetNodeId,

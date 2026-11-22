@@ -16,7 +16,7 @@ import {ENTITY_TYPE} from '../constants/addresses.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
-import {resolveRaftTransportDeliveryOptions} from '../raft/constants.js';
+import {sendRaftEnvelope} from '../raft/raft-packet-utils.js';
 import {
   COMMITTED_MEMBERSHIP_READ_PURPOSE,
   COMMITTED_MEMBERSHIP_REFUSAL,
@@ -122,14 +122,7 @@ function messageGroupConsensusRequest(service, cdcCommitLifetime) {
     [RAFT_OPERATION_PORT_REQUEST.DEFER_ELECTION]:
       shouldDeferConsensusScheduling(service),
     [RAFT_OPERATION_PORT_REQUEST.SEND_TO_PEER]: (peerAddress, envelope) =>
-      service.transport.deliver(
-        peerAddress,
-        envelope,
-        resolveRaftTransportDeliveryOptions({
-          ...envelope,
-          targetAddress: peerAddress,
-        }),
-      ),
+      sendRaftEnvelope(service.transport, peerAddress, envelope),
     [RAFT_OPERATION_PORT_REQUEST.RESOLVE_PEER_ADDRESS]:
       (replicaIdentity, committedNodeId) =>
         resolveConsensusPeerAddress(service, replicaIdentity, committedNodeId),

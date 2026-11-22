@@ -11,7 +11,12 @@ import {MessageRouter, ConnectionState, RouterMessageType} from
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
-import {deliveryTransportOf, isDeliveredTransportDeliveryOutcome, buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {
+  TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
+  buildDeliveryEnvelope,
+  deliveryTransportOf,
+  isDeliveredTransportDeliveryOutcome,
+} from '../../src/transport/transport-semantic-outcome.js';
 import {acknowledgeThenRespond} from '../test-helpers/message-router-remote-answer.js';
 import {
   RAFT_RS_MESSAGE_TYPE,
@@ -829,7 +834,7 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
       await router.shutdown();
     });
 
-  t.test('should deliver live Raft packets directly without queueing',
+  t.test('should write a raft-rs envelope as one consensus frame, answered by nothing',
     async (t) => {
       const router = new MessageRouter({
         bootIncarnation: TEST_BOOT_INCARNATION,
@@ -873,30 +878,33 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
       );
 
       t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), true,
-        'Raft delivery should be acknowledged immediately');
+        'a written consensus envelope is delivered at once');
       t.equal(result.answer, null,
-        'a direct Raft delivery is ACK-only: delivered with no answer');
+        'the consensus class carries no answer');
       t.equal(enqueueOutboundCalled, false,
-        'direct Raft delivery should bypass the outbound queue');
+        'the consensus class never enters the outbound queue');
       t.equal(pendingResponseRegistered, false,
-        'direct Raft delivery should not register a service response waiter');
+        'the consensus class registers no service response waiter');
       t.equal(router.pendingMessages.size, 0,
-        'direct Raft delivery should not await a transport ACK');
+        'the consensus class awaits no transport ACK');
       t.equal(router.pendingResponses.size, 0,
-        'direct Raft delivery should not await a service response');
-      t.equal(sentMessages.length, 1, 'direct delivery should send one frame');
-      t.equal(sentMessages[0].type, RouterMessageType.SERVICE_MESSAGE,
-        'direct delivery should still use a service envelope');
-      t.equal(sentMessages[0].payload.protocol, RAFT_RS_TRANSPORT_PROTOCOL,
-        'direct delivery should preserve the raft-rs envelope');
-      t.equal(sentMessages[0].payload.message.msgType,
-        RAFT_RS_MESSAGE_TYPE.APPEND,
-        'direct delivery should preserve the semantic raft-rs message');
+        'the consensus class awaits no service response');
+      t.equal(sentMessages.length, 1, 'one frame is written');
+      t.equal(sentMessages[0].type, RouterMessageType.CONSENSUS_ENVELOPE,
+        'the sender declares the consensus delivery class on the frame');
+      t.same(sentMessages[0].envelopes, [{
+        targetAddress: 'remote-node/message-group/mg-1-r1',
+        payload: {
+          ...buildMessageGroupRaftRsEnvelope(),
+          messageId: 'msg-raft-direct',
+        },
+      }],
+      'the raft-rs envelope travels unchanged');
 
       await router.shutdown();
     });
 
-  t.test('should fall back to queued delivery when Raft socket is not live',
+  t.test('should fail a raft-rs envelope at once when no live socket exists',
     async (t) => {
       const router = new MessageRouter({
         bootIncarnation: TEST_BOOT_INCARNATION,
@@ -940,14 +948,17 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
         },
       );
 
-      t.equal(enqueueOutboundCalled, true,
-        'Raft delivery should fall back to the queue when no live socket exists');
-      t.equal(pendingResponseRegistered, true,
-        'queued fallback should preserve the normal response registration path');
+      t.equal(enqueueOutboundCalled, false,
+        'no queued fallback exists for the consensus class');
+      t.equal(pendingResponseRegistered, false,
+        'no response waiter is registered for the consensus class');
       t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), false,
-        'fallback result should come from the queued path');
-      t.equal(result.transport.error, 'queued-fallback',
-        'fallback result should preserve the queued delivery outcome');
+        'an envelope with no live socket is not delivered');
+      t.equal(deliveryTransportOf(result).reasonCode,
+        TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_CONNECTION,
+        'the router names why: no connection to the peer');
+      t.equal(router.pendingNodeConnections.size, 0,
+        'the envelope started no reconnect');
 
       await router.shutdown();
     });

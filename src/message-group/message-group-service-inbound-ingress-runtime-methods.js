@@ -1,9 +1,8 @@
-import {isRaftRsTransportEnvelope} from '../raft/raft-packet-utils.js';
+import {isRaftRsTransportEnvelope, stepRaftEnvelope} from '../raft/raft-packet-utils.js';
 import {
   handleLatencyCdcPropagationBatchMessage as runHandleLatencyBatchMessage,
   handleLatencyCdcPropagationMessage as runHandleLatencyMessage,
 } from './message-group-service-cdc-propagation-runtime-methods.js';
-import {turnChainValue} from '../raft/raft-rs-turn-answer.js';
 
 const MESSAGE_GROUP_SERVICE_INBOUND_INGRESS_RUNTIME_LITERAL = {
   CONSTRUCTOR: 'constructor',
@@ -119,10 +118,7 @@ function createMessageGroupServiceInboundIngressRuntimeMethods(deps = {}) {
       }
       const payload = message.payload || message;
       if (isRaftRsTransportEnvelope(payload)) {
-        if (this.raft) {
-          await turnChainValue(this.raft.step(payload));
-        }
-        return null;
+        return stepRaftEnvelope(this.raft, payload);
       }
       // Handle application messages
       // Requirements: 2.3, 5.3

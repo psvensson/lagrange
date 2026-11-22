@@ -73,7 +73,7 @@ const {
   computeReplicaElectionTimeouts,
   fs,
   path,
-  resolveRaftTransportDeliveryOptions,
+  sendRaftEnvelope,
 } = PARTITION_SERVICE_SHARED;
 
 const SERVICE_SHUTDOWN = 'partition_service_shutdown';
@@ -331,15 +331,8 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
       [RAFT_OPERATION_PORT_REQUEST.SUBSTRATE]: hostedConsensusSubstrate(this),
       [RAFT_OPERATION_PORT_REQUEST.DEFER_ELECTION]:
         this.defersElectionScheduling(),
-      [RAFT_OPERATION_PORT_REQUEST.SEND_TO_PEER]: (peerAddress, packet) =>
-        this.transport.deliver(
-          peerAddress,
-          packet,
-          resolveRaftTransportDeliveryOptions({
-            ...packet,
-            targetAddress: peerAddress,
-          }),
-        ),
+      [RAFT_OPERATION_PORT_REQUEST.SEND_TO_PEER]: (peerAddress, envelope) =>
+        sendRaftEnvelope(this.transport, peerAddress, envelope),
       // Every peer is addressed from its committed node (C3): never a row.
       [RAFT_OPERATION_PORT_REQUEST.RESOLVE_PEER_ADDRESS]:
         committedPartitionPeerAddress,

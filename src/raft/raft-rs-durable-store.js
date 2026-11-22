@@ -436,27 +436,29 @@ class RaftRsDurableStore {
 
   /**
    * Persist the storage-bearing portion of one Ready atomically, synced to
-   * disk when raft-rs says it must be (see the header). Called before any of
-   * the Ready's messages are sent.
+   * disk when raft-rs says it must be (see the header). A Ready with no
+   * snapshot, no entries and no hard state opens no transaction.
    * @param {string} groupId - The group.
    * @param {Object} ready - A Ready from the core.
    */
   persistReady(groupId, ready) {
     const entries = ready.entries || [];
-    const durability = readyCommitDurability(ready);
-    return this.transaction(() => {
-      if (ready.snapshot) {
-        this.putSnapshot(groupId, ready.snapshot);
-      }
-      this.appendEntries(groupId, entries);
-      if (ready.hardState) {
-        this.putHardState(groupId, ready.hardState);
-      }
-      if (durability === RAFT_RS_COMMIT_DURABILITY.SYNCED) {
-        this.batchedEntryCount += entries.length;
-        if (entries.length > 1) this.multiEntryReadyCount += 1;
-      }
-    }, durability);
+    if (ready.snapshot || entries.length > 0 || ready.hardState) {
+      const durability = readyCommitDurability(ready);
+      this.transaction(() => {
+        if (ready.snapshot) {
+          this.putSnapshot(groupId, ready.snapshot);
+        }
+        this.appendEntries(groupId, entries);
+        if (ready.hardState) {
+          this.putHardState(groupId, ready.hardState);
+        }
+        if (durability === RAFT_RS_COMMIT_DURABILITY.SYNCED) {
+          this.batchedEntryCount += entries.length;
+          if (entries.length > 1) this.multiEntryReadyCount += 1;
+        }
+      }, durability);
+    }
   }
 
   /**

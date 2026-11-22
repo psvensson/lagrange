@@ -1,4 +1,5 @@
 import https from 'node:https';
+import {createPeerConnectionRecord} from './message-router-connection-record.js';
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
 
 const AUTH_REJECTED_EVENT = 'authenticationRejected';
@@ -10,7 +11,6 @@ const {
   ROUTER_ERROR_MSG,
   ROUTER_LOG_MSG,
   TRANSPORT_EVENT,
-  TRANSPORT_NUM,
   WebSocketServer,
   uuidv4,
 } = MESSAGE_ROUTER_SHARED;
@@ -237,18 +237,17 @@ class MessageRouterServerLifecycle {
   handleIncomingConnection(ws, _req) {
     const connectionId = uuidv4();
     const peerCertificate = _req?.socket?.getPeerCertificate?.(true) || null;
-    const connectionInfo = {
+    // An adopted inbound record becomes its peer's reconnect owner when it
+    // closes, so it carries the same reconnect fields as an outbound one.
+    const connectionInfo = createPeerConnectionRecord({
       connectionId,
       ws,
       state: ConnectionState.CONNECTED,
-      nodeId: null,
-      bootIncarnation: TRANSPORT_NUM.ZERO,
       isIncoming: true,
-      retired: false,
       peerCertificate,
       authenticatedIdentify: !this.trustProvider?.isTlsRequired(),
       createdAt: this.timeSource.now(),
-    };
+    });
     this.logger.debug(ROUTER_LOG_MSG.INCOMING_CONNECTION, {
       connectionId,
       routerId: this.routerId,

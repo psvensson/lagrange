@@ -159,6 +159,7 @@ const RUNTIME_REASON = Object.freeze({
   UNKNOWN_OPERATION: 'unknown-operation',
   INBOUND_ENQUEUED: 'inbound-enqueued',
   INBOUND_DRAINED: 'inbound-drained',
+  INBOUND_DROPPED_QUEUE_FULL: 'inbound-dropped-queue-full',
   DELIVERY_FAILED: 'raft delivery failed',
   // The progress probe's outcomes, owned by the port's contract.
   ...RAFT_PEER_PROGRESS_PROBE_REASON,

@@ -49,11 +49,12 @@ function recordPeerDelivery(group, raftPeerId, observation) {
   }
 }
 
-// A delivered envelope the core refused to step (a response from a peer it
-// holds no progress for, a proposal it drops, a local-only message type): the
-// core's own refusal record, kept per sender with how many of that sender's
-// envelopes it has refused, oldest sender evicted first past the
-// bound. An observation for the group's status; it answers nothing.
+// A delivered envelope the group did not step: the core refused it (a
+// response from a peer it holds no progress for, a proposal it drops, a
+// local-only message type), or the runtime dropped it at a full inbound queue
+// (raft-rs-inbound-queue.js). Kept per sender with how many of that sender's
+// envelopes were not stepped, oldest sender evicted first past the bound. An
+// observation for the group's status; it answers nothing.
 function recordInboundStepRefusal(group, envelope, refused) {
   const sender = String(envelope.message?.from ?? envelope.from);
   const previous = group.inboundStepRefusals.get(sender);

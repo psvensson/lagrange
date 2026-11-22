@@ -137,6 +137,7 @@ class MessageRouterStatsShutdown {
       pendingMessages: this.pendingMessages.size,
       pendingResponses: this.pendingResponses.size,
       serviceResponseDispositions: this.getServiceResponseDispositionCounts(),
+      consensusDelivery: this.getConsensusDeliveryStats(),
       handlers: this.handlers.size,
       connections: connectionStats,
       connectedNodes: this.getConnectedNodes().length,
@@ -166,6 +167,7 @@ class MessageRouterStatsShutdown {
     });
     this.isShuttingDown = true;
     this.connectionAuthorityOwner.invalidateDeliveries();
+    this.dropAllPendingConsensusBatches();
     // Close the bulk transfer channel lane with the router (S6): adopted and
     // dialed bulk sockets plus the token-bucket drain timer.
     this.bulkChannelRegistry?.closeAll();
