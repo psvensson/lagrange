@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {VirtualTimeSource} from '../../../src/time/time-source.js';
-import {RAFT_OPERATION_OUTCOME} from
+import {RAFT_LEADERSHIP_TRANSFER_SUCCESSOR, RAFT_OPERATION_OUTCOME} from
   '../../../src/raft/raft-operation-port-constants.js';
 import {RAFT_RS_MESSAGE_TYPE} from '../../../src/raft/raft-rs-ingress-constants.js';
 import {encodeProposal} from '../../../src/raft/raft-rs-proposal-codec.js';
@@ -71,6 +71,36 @@ function captureHeartbeat(cluster) {
   assert.fail('setup: no native heartbeat captured');
 }
 
+// Every replica's waiting envelopes are processed until the transport is quiet.
+function quiesce(cluster) {
+  for (let round = 0; round < SETUP_ROUNDS; round += 1) {
+    if ([...cluster.replicas.values()].every((replica) => replica.inbox.length === 0)) return;
+    for (const id of cluster.replicas.keys()) processSetupInbox(cluster, id);
+  }
+  assert.fail('setup: RF3 transport did not quiesce');
+}
+
+// `to` leads the term after the captured heartbeat's (a named transfer: its
+// election bypasses the followers' check-quorum lease). The captured
+// heartbeat is then a real native heartbeat below `to`'s term, which raft-rs
+// answers, copy by copy, with a MsgAppendResponse to its sender (raft.rs step,
+// a lower-term MsgHeartbeat under check_quorum/pre_vote): each stepped copy
+// keeps its real native reply, and `to`'s own proposals enter its core. A
+// replica that does not lead refuses a proposal and forwards nothing
+// (raft-rs-proposal-term.js), so a follower's turn can no longer be held on
+// the send of a proposal it forwards. Setup only, before any measured cut.
+function leadNextTerm(cluster, from, to) {
+  const accepted = turnChainValue(cluster.node(from).transferLeadership({
+    successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED, replicaIdentity: to}));
+  assert.equal(accepted.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+    `setup: the transfer to ${to} was refused: ${JSON.stringify(accepted)}`);
+  cluster.tickers = [to];
+  assert.equal(cluster.settle(() => cluster.leaderReplicaId() === to), true,
+    `setup: ${to} leads the next term`);
+  quiesce(cluster);
+  return RAFT_RS_MESSAGE_TYPE.APPEND_RESPONSE;
+}
+
 function send(f, from, address, packet) {
   if (from !== B) return undefined;
   if (f.control.capture) {
@@ -88,7 +118,10 @@ function send(f, from, address, packet) {
   }));
 }
 
-function fixture(name, applyFor = null) {
+// {bLeads}: B leads the term after the captured heartbeat's (leadNextTerm);
+// otherwise B follows A, which sent it. f.replyType is the type of B's real
+// native reply to a stepped copy of the captured heartbeat.
+function fixture(name, applyFor = null, {bLeads = false} = {}) {
   const f = {events: [], gates: [], owned: [],
     control: {hold: null, capture: false},
     clocks: new Map(REPLICAS.map((id) =>
@@ -99,6 +132,8 @@ function fixture(name, applyFor = null) {
   try {
     form(f.cluster);
     f.heartbeat = captureHeartbeat(f.cluster);
+    f.replyType = bLeads ? leadNextTerm(f.cluster, A, B) :
+      RAFT_RS_MESSAGE_TYPE.HEARTBEAT_RESPONSE;
     f.peer = f.cluster.raftPeerIdOf(B);
     for (const clock of f.clocks.values()) clock.advance(0);
     return f;
@@ -166,7 +201,15 @@ function heartbeatSteps(f) {
 
 function replies(f) {
   return f.events.filter((event) => event.kind === 'native-send' &&
-    event.message.msgType === RAFT_RS_MESSAGE_TYPE.HEARTBEAT_RESPONSE);
+    event.message.msgType === f.replyType);
+}
+
+// B's actual native appends that carry the command's entry.
+function nativeAppendsOf(f, command) {
+  const data = Buffer.from(encodeProposal(command)).toString('base64');
+  return f.events.filter((event) => event.kind === 'native-send' &&
+    event.message.msgType === RAFT_RS_MESSAGE_TYPE.APPEND &&
+    (event.message.entries || []).some((entry) => entry.data === data));
 }
 
 function assertNativeDelivery(f, count) {
@@ -210,5 +253,5 @@ async function finish(t, f) {
 }
 
 export {A, B, C, SETUP_ROUNDS, assertNativeDelivery, deliverHeartbeat,
-  finish, fixture, hash, heartbeatSteps, installObservers, observe, own,
-  processSetupInbox, proposalEntries, replies};
+  finish, fixture, hash, heartbeatSteps, installObservers, leadNextTerm,
+  nativeAppendsOf, observe, own, processSetupInbox, proposalEntries, replies};

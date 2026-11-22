@@ -1,6 +1,6 @@
 // A replica whose core does not lead never proposes: its port refuses the
-// proposal with the core's own dropped-proposal refusal, and nothing is
-// forwarded. raft-rs 0.7 would otherwise forward a follower's proposal to the
+// proposal with its one named refusal (the submitting leadership ended), and
+// nothing is forwarded. raft-rs 0.7 would otherwise forward a follower's proposal to the
 // leader it knows (raft.rs step_follower, MsgPropose; the binding has no
 // switch for it), where the entry commits under that leader's term although
 // the replica it was submitted to never led it. Nothing in this system relies
@@ -18,8 +18,8 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
 import {PartitionNodeCluster} from './partition-node-cluster.js';
-import {RAFT_OPERATION_OUTCOME} from '../../../src/raft/raft-operation-port-constants.js';
-import {RAFT_RS_CORE_REFUSAL_TEXT} from '../../../src/raft/raft-rs-core-constants.js';
+import {RAFT_OPERATION_OUTCOME, RAFT_PROPOSAL_REFUSAL} from
+  '../../../src/raft/raft-operation-port-constants.js';
 import {RAFT_RS_MESSAGE_TYPE} from '../../../src/raft/raft-rs-ingress-constants.js';
 import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
@@ -61,12 +61,12 @@ test('port: a follower refuses a proposal and forwards nothing', async () => {
       commits: committed.filter((one) => one.command === FOLLOWER_COMMAND)});
     assert.deepEqual({
       outcome: answer?.outcome,
-      dropped: String(answer?.reason).endsWith(RAFT_RS_CORE_REFUSAL_TEXT.PROPOSAL_DROPPED),
+      reason: answer?.reason,
       forwarded,
       commits: committed.filter((one) => one.command === FOLLOWER_COMMAND).length,
     }, {
       outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,
-      dropped: true,
+      reason: RAFT_PROPOSAL_REFUSAL.SUBMITTING_LEADERSHIP_ENDED,
       forwarded: 0,
       commits: 0,
     }, `a follower's proposal is refused and never forwarded: ${report}`);

@@ -1,9 +1,14 @@
 // Separate W07 companion: capture location and already-owned remainder wake.
-// The original runtime-captured-inbound-service-native.test.js stays frozen.
+// Cases 1 and 2 restaged (raft-owner-authority corrective, item T): B leads
+// the term after the captured heartbeat's (fixture {bLeads}) and its turn
+// waits on its own held append instead of a proposal it forwarded as a
+// follower (a replica that does not lead now refuses a proposal).
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {RAFT_OPERATION_OUTCOME} from
-  '../../../src/raft/raft-operation-port-constants.js';
+import {
+  RAFT_LEADERSHIP_TRANSFER_SUCCESSOR,
+  RAFT_OPERATION_OUTCOME,
+} from '../../../src/raft/raft-operation-port-constants.js';
 import {RAFT_RS_MESSAGE_TYPE} from '../../../src/raft/raft-rs-ingress-constants.js';
 import {RAFT_RS_SQL} from '../../../src/raft/raft-rs-durable-store-constants.js';
 import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
@@ -17,8 +22,8 @@ import {A, B, C, SETUP_ROUNDS, assertNativeDelivery, deliverHeartbeat,
 const {CORE_OK, HOST_FAILURE} = RAFT_OPERATION_OUTCOME;
 const CAPTURED_COPIES = 2;
 
-async function runCase(t, name, body, applyFor = null) {
-  const f = fixture(name, applyFor);
+async function runCase(t, name, body, applyFor = null, options = {}) {
+  const f = fixture(name, applyFor, options);
   try {
     await body(f);
   } catch (error) {
@@ -29,10 +34,14 @@ async function runCase(t, name, body, applyFor = null) {
   }
 }
 
-async function queueBehindHeldForward(f, selected) {
-  const predecessor = {w07Companion: 'already-forwarding'};
+// B leads (fixture {bLeads}): its predecessor proposal's first real native
+// append is held, so its turn waits inside that Ready's send. Before item C
+// B followed and the held send was the MsgPropose it forwarded; a replica
+// that does not lead now refuses a proposal and forwards nothing.
+async function queueBehindHeldAppend(f, selected) {
+  const predecessor = {w07Companion: 'already-appending'};
   const first = own(f, turnChainValue(f.cluster.node(B).propose(predecessor)));
-  await observe(() => f.gates.length === 1, 'real predecessor forwarding held');
+  await observe(() => f.gates.length === 1, 'real predecessor append held');
   assert.equal(proposalEntries(f, predecessor).length, 1);
   const queued = own(f, turnChainValue(f.cluster.node(B).propose(selected)));
   f.events.push({kind: 'selected-enqueued', selected});
@@ -40,19 +49,19 @@ async function queueBehindHeldForward(f, selected) {
   return {first, queued};
 }
 
-function beginForwardHold(f, holdFirstReply = false) {
+function beginAppendHold(f, holdFirstReply = false) {
   installObservers(f);
   f.control.capture = true;
   f.control.hold = (packet) => (f.gates.length === 0 &&
-    packet.message.msgType === RAFT_RS_MESSAGE_TYPE.PROPOSE) ||
+    packet.message.msgType === RAFT_RS_MESSAGE_TYPE.APPEND) ||
     (holdFirstReply && f.gates.length === 1 &&
-      packet.message.msgType === RAFT_RS_MESSAGE_TYPE.HEARTBEAT_RESPONSE);
+      packet.message.msgType === f.replyType);
 }
 
 async function queuedCapture(f) {
   const selected = {w07Companion: 'capture-after-queued-turn-is-admitted'};
-  beginForwardHold(f);
-  const {first, queued} = await queueBehindHeldForward(f, selected);
+  beginAppendHold(f);
+  const {first, queued} = await queueBehindHeldAppend(f, selected);
   for (let ordinal = 1; ordinal <= CAPTURED_COPIES; ordinal += 1) {
     deliverHeartbeat(f, ordinal);
   }
@@ -73,8 +82,8 @@ async function queuedCapture(f) {
 
 async function consumedWakeRemainder(f) {
   const selected = {w07Companion: 'remainder-owned-by-consumed-wake'};
-  beginForwardHold(f, true);
-  const {first, queued} = await queueBehindHeldForward(f, selected);
+  beginAppendHold(f, true);
+  const {first, queued} = await queueBehindHeldAppend(f, selected);
   deliverHeartbeat(f, 1);
   f.gates[0].resolve();
   assert.equal((await first).outcome, CORE_OK);
@@ -164,15 +173,28 @@ function holdReconstructionPersistence(f) {
   return state;
 }
 
+function transferEntries(f) {
+  return f.events.filter((event) => event.kind === 'core-step' &&
+    event.message.msgType === RAFT_RS_MESSAGE_TYPE.TRANSFER_LEADER);
+}
+
 async function reconstructedCapture(f, marker) {
   prepareFailedApplication(f, marker);
   const waiting = holdReconstructionPersistence(f);
   f.control.capture = true;
-  const selected = {w07Companion: 'capture-after-ensure-execution-completes'};
-  const queued = own(f, turnChainValue(f.cluster.node(B).propose(selected)));
+  // Restaged after item C: a reconstructed follower never forwards a proposal
+  // (raft-rs-proposal-term.js); a named leadership transfer requested at a
+  // follower requires leader contact (established by the captured heartbeat)
+  // and forwards MsgTransferLeader to the reconstructed leader.
+  const selected = {
+    successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
+    replicaIdentity: B,
+  };
+  const queued = own(f, turnChainValue(
+    f.cluster.node(B).transferLeadership(selected)));
   await observe(() => waiting.held, 'native reconstruction reached real persistence wait');
   assert.equal(f.cluster.replica(B).db.inTransaction, true);
-  assert.equal(proposalEntries(f, selected).length, 0);
+  assert.equal(transferEntries(f).length, 0);
   assert.equal(appliedMarkerCount(f, marker), 0);
   f.events.push({kind: 'ensure-execution-still-awaiting-persistence'});
   deliverHeartbeat(f, 1);
@@ -186,13 +208,13 @@ async function reconstructedCapture(f, marker) {
   assert.equal(progress.applied, progress.committed);
   assert.equal(result.outcome, CORE_OK);
   assertNativeDelivery(f, 1);
-  assert.equal(proposalEntries(f, selected).length, 1);
-  const [entry] = proposalEntries(f, selected);
+  assert.equal(transferEntries(f).length, 1);
+  const [entry] = transferEntries(f);
   assert.ok(heartbeatSteps(f)[0].sequence < entry.sequence,
     'input accepted during ensureExecution belongs to the admitted capture');
   assert.ok(f.events.indexOf(replies(f)[0]) < f.events.indexOf(entry));
   assert.equal(f.events.filter((event) => event.kind === 'native-send' &&
-    event.message.msgType === RAFT_RS_MESSAGE_TYPE.PROPOSE).length, 1,
+    event.message.msgType === RAFT_RS_MESSAGE_TYPE.TRANSFER_LEADER).length, 1,
   'the selected command really forwards after reconstructed leader contact');
 }
 
@@ -238,10 +260,11 @@ async function guardedRemainder(f) {
 }
 
 test('runtime owner captures all preaccepted input when the queued turn is admitted',
-  (t) => runCase(t, 'w07-companion-queued-capture', queuedCapture));
+  (t) => runCase(t, 'w07-companion-queued-capture', queuedCapture, null, {bLeads: true}));
 
 test('runtime owner preserves remainder service after the owned wake already fired',
-  (t) => runCase(t, 'w07-companion-consumed-wake', consumedWakeRemainder));
+  (t) => runCase(t, 'w07-companion-consumed-wake', consumedWakeRemainder, null,
+    {bLeads: true}));
 
 test('runtime owner guards the generation before removing the next captured envelope',
   (t) => runCase(t, 'w07-companion-pre-dequeue-guard', guardedRemainder));

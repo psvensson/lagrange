@@ -7,7 +7,7 @@ import {armOwnedInboundDrainTimer, cancelOwnedInboundDrainTimer} from
 import {RAFT_RS_RECORD_COMPATIBILITY, RAFT_RS_COMMIT_DURABILITY} from './raft-rs-durable-store-constants.js';
 import {admitRaftRsMessage} from './raft-rs-ingress.js';
 import {RAFT_RS_OPENING_HISTORY} from './raft-rs-opening-history-constants.js';
-import {RAFT_RS_MESSAGE_TYPE} from './raft-rs-ingress-constants.js';
+import {RAFT_RS_INGRESS_REFUSAL, RAFT_RS_MESSAGE_TYPE} from './raft-rs-ingress-constants.js';
 import {recordInboundStepRefusal, sendMessages} from './raft-rs-peer-delivery.js';
 import {openedLastIndex, persistedLastIndexAfter} from './raft-rs-local-log-guard.js';
 import {
@@ -33,7 +33,7 @@ import {
 } from './raft-rs-runtime-owner-constants.js';
 import {recoveryRetryWindowMsOf, tuningOf} from './raft-rs-runtime-tuning.js';
 import {shapeGroupObservation} from './raft-rs-status-observation.js';
-import {observeCurrentAuthority} from './raft-rs-current-authority.js';
+import {countedTick, observeCurrentAuthority} from './raft-rs-current-authority.js';
 import {PROPOSE_COMMAND, proposeUnderSubmittedTerm, withSubmittedTerm} from './raft-rs-proposal-term.js';
 import {
   confChangeSettlement,
@@ -1702,7 +1702,8 @@ function transferLeadership(group, expectedGeneration, command) {
 
 // A proposal the core refused: dropped by a running leadership transfer (read
 // from the core in the same turn) it is the retryable transfer-in-progress
-// answer; any other refusal is answered as the core gave it.
+// answer; any other refusal - the port's named submitting-leadership refusal
+// is none of the core's - is answered as given.
 function answerRefusedProposal(group, expectedGeneration, refused) {
   if (refused.outcome !== CORE_REFUSED) {
     return refused;
@@ -1789,8 +1790,7 @@ function settlePrimitiveInvocation(group, command, expectedGeneration, invoked) 
 function invokePrimitive(group, expectedGeneration, command, [operation, args]) {
   const core = (name, ...values) => invokeCoreAt(group, expectedGeneration, name, ...values);
   if (command.type !== PROPOSE_COMMAND) return core(operation, ...args);
-  return proposeUnderSubmittedTerm(core,
-    (error) => coreCallFailure(group, operation, args, error), command);
+  return proposeUnderSubmittedTerm(core, command);
 }
 
 function performCommand(group, command, expectedGeneration) {
@@ -1823,13 +1823,15 @@ function performCommand(group, command, expectedGeneration) {
       command.typedOperation !== undefined) {
     return executeTypedConfChangeOperation({
       group, expectedGeneration, operation: command.typedOperation,
-      invokeCoreAt, leaderReplicaIdOf: semanticLeaderIdentity,
+      submittedTerm: command.submittedTerm, invokeCoreAt,
+      leaderReplicaIdOf: semanticLeaderIdentity,
       answerGroupConfChangeRefusal, answerRefusedProposal, drainReady,
     });
   }
   const refused = command.type === PROPOSE_CONF_CHANGE ?
     refusedConfChange({group, expectedGeneration, change: command.change,
-      invokeCoreAt, leaderReplicaIdOf: semanticLeaderIdentity}) : null;
+      submittedTerm: command.submittedTerm, invokeCoreAt,
+      leaderReplicaIdOf: semanticLeaderIdentity}) : null;
   if (refused !== null) {
     return answerGroupConfChangeRefusal(group, expectedGeneration, refused);
   }
@@ -2141,12 +2143,11 @@ function executeCommand(group, command) {
   if (command?.type === PROPOSE_COMMAND && group.tail !== null) {
     const deferred = Promise.withResolvers();
     group.queuedProposals.push({...withSubmittedTerm(group, command), deferred});
-    if (group.queuedProposals.length === 1) {
-      enqueue(group, () => drainQueuedProposalBatch(group));
-    }
+    if (group.queuedProposals.length === 1) enqueue(group, () => drainQueuedProposalBatch(group));
     return pendingTurn(deferred.promise);
   }
-  return enqueue(group, () => perform(group, withSubmittedTerm(group, command)));
+  return enqueue(group, countedTick(group, command?.type === TICK_COMMAND, () =>
+    perform(group, withSubmittedTerm(group, command))));
 }
 
 function snapshotEnvelope(envelope) {
@@ -2233,7 +2234,7 @@ function createRuntimeDispatcher(request) {
     reconstructing: false,
     entered: 0,
     tail: null,
-    queuedProposals: [],
+    queuedProposals: [], queuedTicks: 0,
     inbound: [],
     inboundBytes: 0,
     inboundRejectedCount: 0,
@@ -2281,17 +2282,15 @@ function createRuntimeDispatcher(request) {
         return runtimeRecoveryOutcome(group);
       }
       const admission = admitRaftRsMessage({
-        envelope,
-        localGroupId: group.groupId,
-        localPeerId: group.peerId,
-      });
+        envelope, localGroupId: group.groupId, localPeerId: group.peerId});
       if (!admission.admitted) {
-        return outcome(CORE_REFUSED, {
-          reason: admission.outcome,
-          phase: RUNTIME_PHASE.ADMISSION,
-          retryable: false,
-          recoveryRequired: false,
-        });
+        const refused = outcome(CORE_REFUSED, {reason: admission.outcome,
+          phase: RUNTIME_PHASE.ADMISSION, retryable: false, recoveryRequired: false});
+        if (admission.outcome === RAFT_RS_INGRESS_REFUSAL.FORWARDED_PROPOSAL) {
+          recordInboundStepRefusal(group, envelope, refused);
+          SHAPED_STATUS.delete(group.statusObservation);
+        }
+        return refused;
       }
       // Inside a failed group's retry window a delivery is dropped (raft
       // re-sends what a peer did not receive), so nothing accumulates while

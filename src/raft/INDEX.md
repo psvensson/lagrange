@@ -68,7 +68,7 @@ documentClass: generated
 - [raft-rs-preparation-custody.js](raft-rs-preparation-custody.js) - Resource custody is part of lifecycle preparation, never allocation authority. (importers: few)
 - [raft-rs-proposal-codec-constants.js](raft-rs-proposal-codec-constants.js) - The names the rs-raft proposal codec owns. (importers: few)
 - [raft-rs-proposal-codec.js](raft-rs-proposal-codec.js) - The rs-raft proposal codec: the one place a proposal becomes the bytes the core replicates, and committed bytes... (importers: hub)
-- [raft-rs-proposal-term.js](raft-rs-proposal-term.js) - A proposal enters the core only under the leadership it was submitted under. (importers: one)
+- [raft-rs-proposal-term.js](raft-rs-proposal-term.js) - A proposal enters the core only under the leadership it was submitted under. (importers: few)
 - [raft-rs-ready-loop-constants.js](raft-rs-ready-loop-constants.js) - Values the Ready loop needs that belong to raft-rs's own wire model. (importers: hub)
 - [raft-rs-record-integer.js](raft-rs-record-integer.js) - Exact integer conversion at the durable Raft record's SQLite boundary. (importers: few)
 - [raft-rs-replica-lifecycle-constants.js](raft-rs-replica-lifecycle-constants.js) - Owned by the replica lifecycle owner (raft-rs-replica-lifecycle-owner.js): the durable table its rows live in and... (importers: many)
