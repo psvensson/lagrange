@@ -351,10 +351,12 @@ test('(e) a leader whose own-term entry has not applied is NOT_SETTLED ' +
     }
     release = holdSendsOf(cluster, LEADER);
     const delivered = deliverToInbound(cluster, LEADER);
+    const pendingTurn = settleDelivered(cluster.node(LEADER), PARTITION_ID);
     const answered = cluster.node(LEADER).readStatus();
     const during = observe(cluster, LEADER);
     release();
     release = null;
+    await pendingTurn;
     await settleEventLoop();
     cluster.tickers = [LEADER];
     assert.ok(cluster.settle(() => observe(cluster, LEADER)

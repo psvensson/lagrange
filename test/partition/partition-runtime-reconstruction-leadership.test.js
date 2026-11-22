@@ -758,8 +758,11 @@ test('W-B6-5: a core failure (the shared WASM instance trapped) still ' +
     assert.equal(trapped.outcome, RAFT_OPERATION_OUTCOME.CORE_FATAL,
       `setup: the core trapped (${JSON.stringify(trapped)})`);
 
-    // The next operation replaces the runtime: every group is restored and
-    // resumed once - the sibling, a sole voter, campaigns once.
+    // The runtime owner's scheduled replacement restores every group once -
+    // the sibling, a sole voter, campaigns once (readStatus() observes without driving).
+    assert.equal(await waitForCondition(() =>
+      sibling.partition.raft.readStatus().role === RAFT_ROLE.LEADER,
+    GROUP_BUDGET_MS), true, 'the sibling leads in the replaced runtime');
     const siblingStatus = sibling.partition.raft.readStatus();
     assert.equal(siblingStatus.runtimeGeneration,
       siblingBefore.runtimeGeneration + 1,
@@ -1059,8 +1062,9 @@ test('F-aa: a failure within one window of a successful reconstruction is ' +
     try {
       assert.equal((await insert(partition, 'row-big', oversized,
         'faa-fresh-1')).success, false, 'setup: the proposal is not appended');
-      assert.equal(partition.raft.readStatus().role, RAFT_ROLE.LEADER,
-        'a first failure is reconstructed at once: the sole voter leads again');
+      assert.equal(await waitForCondition(() =>
+        partition.raft.readStatus().role === RAFT_ROLE.LEADER, GROUP_BUDGET_MS),
+      true, 'a first failure is reconstructed at once: the sole voter leads again');
       assert.equal(await waitForParticipantRelease(partition), true,
         'the release owner revalidates after the first reconstruction');
       assert.equal((await insert(partition, 'row-big', oversized,
@@ -1088,8 +1092,9 @@ test('F-aa: a failure within one window of a successful reconstruction is ' +
       try {
         assert.equal((await insert(partition, 'row-big', oversized,
           'faa-fresh-3')).success, false, 'setup: a later proposal fails');
-        assert.equal(partition.raft.readStatus().role, RAFT_ROLE.LEADER,
-          'a failure more than one window after the last one starts a fresh ' +
+        assert.equal(await waitForCondition(() =>
+          partition.raft.readStatus().role === RAFT_ROLE.LEADER, GROUP_BUDGET_MS),
+        true, 'a failure more than one window after the last one starts a fresh ' +
         'record: it is reconstructed at once');
         assert.equal(reconstructions.count, 1, 'exactly one reconstruction');
       } finally {

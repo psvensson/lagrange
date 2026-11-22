@@ -534,9 +534,16 @@ test('progress, recovery, runtime replacement, and compaction sync continue ' +
 
     // Group recovery via tick() with 0 readStatus() calls.
     failNextApply.armed = true;
-    const failed = await turnChainValue(portA.propose({zeroPoll: 2}));
-    assert.equal(failed.outcome, HOST_FAILURE);
-    assert.equal(failed.recoveryRequired, true);
+    const proposedFail = await turnChainValue(portA.propose({zeroPoll: 2}));
+    assert.equal(proposedFail.outcome, CORE_OK);
+    for (const id of ['nopoll-b', 'nopoll-c']) {
+      for (const env of cluster.replica(id).inbox.splice(0)) cluster.node(id).step(env);
+      clocks.get(id).advance(0);
+    }
+    for (const env of cluster.replica('nopoll-a').inbox.splice(0)) portA.step(env);
+    const failedStep = await turnChainValue(portA.tick());
+    assert.equal(failedStep.outcome, HOST_FAILURE);
+    assert.equal(failedStep.recoveryRequired, true);
     const reconstructed = await turnChainValue(portA.tick());
     assert.equal(reconstructed.outcome, CORE_OK);
     quiesceWithClocks(cluster, clocks, replicaIds);
@@ -612,7 +619,7 @@ test('readCommittedMembership BOOTSTRAP/WITNESS are pure settled reads while ' +
     assert.equal(port[OBSERVE]().inboundQueued, delivered);
 
     const settleId = '__rcm_settle__';
-    const learnerTurn = await turnChainValue(port.readCommittedMembership({
+    const learnerTurn = await port.readCommittedMembership({
       purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.LEARNER_ACTION,
       groupId: 'pure-read-rcm',
       action: {
@@ -624,7 +631,7 @@ test('readCommittedMembership BOOTSTRAP/WITNESS are pure settled reads while ' +
         peerId: deriveRaftRsPeerId(settleId),
         nodeId: 'rcm-node',
       },
-    }));
+    });
     assert.ok(typeof learnerTurn?.kind === 'string');
     assert.equal(port[OBSERVE]().inboundQueued, 0,
       'LEARNER_ACTION explicitly drained pending inbound');

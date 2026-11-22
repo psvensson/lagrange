@@ -12,6 +12,7 @@ import {inboundStepRefusal} from './raft-rs-local-log-guard.js';
 import {recordInboundStepRefusal} from './raft-rs-peer-delivery.js';
 import {persistenceAdmitted} from './raft-rs-persistence-admission.js';
 import {
+  DURABLE_PROGRESS_OBSERVATION,
   NO_LEADER,
   ROLE,
   ROLE_LEADER,
@@ -187,7 +188,40 @@ function reportWaitBoundExceeded(group, kind, fields) {
   report(group, kind, fields);
 }
 
+// The group's durable progress as its durable record holds it now: an
+// observation for a held group's status (nothing writes the record while
+// the group is held), or the named state that it could not be read.
+function durableProgressOf(group) {
+  try {
+    const progress = group.store.readDurableProgress(group.groupId);
+    return deepFreeze({
+      state: DURABLE_PROGRESS_OBSERVATION.OBSERVED,
+      commitIndex: Number(progress.commitIndex),
+      appliedIndex: Number(progress.appliedIndex),
+    });
+  } catch (error) {
+    return deepFreeze({
+      state: DURABLE_PROGRESS_OBSERVATION.UNREADABLE,
+      reason: String(error?.message || error),
+    });
+  }
+}
+
+// A durable record the store could not read: its message, and as its detail
+// the record table the store names and SQLite's own code.
+function durableRecordReadFailure(error) {
+  return {
+    message: String(error?.message || error),
+    detail: {
+      ...(typeof error?.table === 'string' ? {table: error.table} : {}),
+      ...(typeof error?.code === 'string' ? {code: error.code} : {}),
+    },
+  };
+}
+
 export {
+  durableProgressOf,
+  durableRecordReadFailure,
   enterReseedHold,
   recordReseedHold,
   refuseInboundStep,

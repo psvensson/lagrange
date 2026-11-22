@@ -335,6 +335,7 @@ function createRaftRsOperationPort(request) {
     holdForReseed: () => holdForReseed(),
     reportFault: reportRaftRsRuntimeFault,
     emit,
+    hasListeners: (eventName) => (listeners.get(eventName)?.size ?? 0) > 0,
   } : null;
   // Resolve every request callback before this final same-turn check. Moving
   // it above argument construction permits a reentrant getter to revoke the
