@@ -181,10 +181,12 @@ function createRemoteLiveQueryCdcCoordinator({
   const activeSubscriptions = new Map();
   const remoteSubscribersById = new Map();
   const retiringSubscriptions = new Set();
+  const latestRebindTokenByKey = new Map();
   const clock = resolveTimeSource({timeSource});
   const liveQueryCdcAddress = buildLiveQueryCdcAddress(nodeId);
   const activeRouter = resolveInboundRouter(messageRouter);
   let nextBindingGeneration = 0;
+  let nextRebindToken = 0;
   let continuationTimer = null;
   let continuationTimerTargetMs = 0;
   let flushInFlight = false;
@@ -382,31 +384,23 @@ function createRemoteLiveQueryCdcCoordinator({
       return;
     }
     if (sub.phase === REMOTE_CDC_PHASE.CONNECTING) {
-      if (sub.inFlightSubscribe !== null || sub.retryNotBeforeMs > clock.now()) {
-        return;
-      }
+      if (sub.inFlightSubscribe !== null || sub.retryNotBeforeMs > clock.now()) return;
       const subAnswer = await subscribeToPartition(
-        sub.partitionId,
-        sub.queryId,
-        sub.handler,
-        {...sub.subOptions, requiresCatchup: true},
+        sub.partitionId, sub.queryId, sub.handler, {...sub.subOptions, requiresCatchup: true},
       );
       const currentSub = activeSubscriptions.get(sub.subKey);
-      if (isFailedSubscribeAnswer(subAnswer) ||
-          !currentSub ||
-          isGroupClosed(findGroupById(sub.queryId))) {
-        return;
-      }
+      if (isFailedSubscribeAnswer(subAnswer) || subAnswer?.cancelled === true || !currentSub ||
+          (subAnswer?.bindingGeneration !== undefined &&
+            currentSub.bindingGeneration !== subAnswer.bindingGeneration) ||
+          isGroupClosed(findGroupById(sub.queryId))) return;
       markGroupSubscribed(group, sub.partitionId, subAnswer);
       if (currentSub.phase === REMOTE_CDC_PHASE.CATCHING_UP) {
         await runCatchupRefresh(group, currentSub);
       }
       return;
     }
-    if (sub.phase === REMOTE_CDC_PHASE.CATCHING_UP) {
-      if (sub.inFlightRefresh !== null || sub.retryNotBeforeMs > clock.now()) {
-        return;
-      }
+    if (sub.phase === REMOTE_CDC_PHASE.CATCHING_UP &&
+        sub.inFlightRefresh === null && sub.retryNotBeforeMs <= clock.now()) {
       await runCatchupRefresh(group, sub);
     }
   };
@@ -547,6 +541,7 @@ function createRemoteLiveQueryCdcCoordinator({
       result: {
         ...settled.answer,
         subscribed: true,
+        bindingGeneration: remoteSub.bindingGeneration,
         catchingUp: remoteSub.phase === REMOTE_CDC_PHASE.CATCHING_UP,
       },
     };
@@ -685,39 +680,50 @@ function createRemoteLiveQueryCdcCoordinator({
     return Boolean(sub.localPartition?.isLeader === false && remoteTarget);
   };
 
+  const isRebindSuperseded = (subKey, rebindToken) =>
+    latestRebindTokenByKey.get(subKey) !== rebindToken ||
+    Boolean(activeSubscriptions.get(subKey)?.subscribed);
+
   const rebindSubscriptionIfNeeded = async (sub, partitionId, record) => {
     const group = findGroupById(sub.queryId);
-    if (isGroupClosed(group) ||
-        activeSubscriptions.get(sub.subKey) !== sub ||
+    if (isGroupClosed(group) || activeSubscriptions.get(sub.subKey) !== sub ||
         !shouldRebindSubscription(sub, partitionId, record)) {
       return;
     }
+    const rebindToken = ++nextRebindToken;
+    latestRebindTokenByKey.set(sub.subKey, rebindToken);
     try {
       await unsubscribeFromPartition(partitionId, sub.queryId);
-      if (isGroupClosed(findGroupById(sub.queryId))) return;
+      if (isGroupClosed(findGroupById(sub.queryId)) ||
+          latestRebindTokenByKey.get(sub.subKey) !== rebindToken) return;
       const subAnswer = await subscribeToPartition(
-        partitionId,
-        sub.queryId,
-        sub.handler,
-        {...sub.subOptions, requiresCatchup: true},
+        partitionId, sub.queryId, sub.handler, {...sub.subOptions, requiresCatchup: true},
       );
-      if (isGroupClosed(findGroupById(sub.queryId))) return;
+      if (isGroupClosed(findGroupById(sub.queryId)) || subAnswer?.cancelled === true ||
+          latestRebindTokenByKey.get(sub.subKey) !== rebindToken) return;
+      const currentSub = activeSubscriptions.get(sub.subKey);
       if (isFailedSubscribeAnswer(subAnswer)) {
-        markGroupPending(group, partitionId);
+        if (!currentSub?.subscribed) markGroupPending(group, partitionId);
         return;
       }
+      if (!currentSub || (subAnswer?.bindingGeneration !== undefined &&
+          currentSub.bindingGeneration !== subAnswer.bindingGeneration)) return;
       markGroupSubscribed(group, partitionId, subAnswer);
-      const currentSub = activeSubscriptions.get(sub.subKey);
-      if (currentSub && currentSub.phase === REMOTE_CDC_PHASE.CATCHING_UP) {
+      if (currentSub.phase === REMOTE_CDC_PHASE.CATCHING_UP) {
         await runCatchupRefresh(group, currentSub);
       }
     } catch (error) {
-      markGroupPending(group, partitionId);
+      if (!isGroupClosed(findGroupById(sub.queryId)) &&
+          !isRebindSuperseded(sub.subKey, rebindToken)) {
+        markGroupPending(group, partitionId);
+      }
       logger.warn(LOG_MSG_REMOTE_REBIND_FAILED, {
-        partitionId,
-        queryId: sub.queryId,
-        error: error.message,
+        partitionId, queryId: sub.queryId, error: error.message,
       });
+    } finally {
+      if (latestRebindTokenByKey.get(sub.subKey) === rebindToken) {
+        latestRebindTokenByKey.delete(sub.subKey);
+      }
     }
   };
 
@@ -748,6 +754,7 @@ function createRemoteLiveQueryCdcCoordinator({
     }
     activeSubscriptions.clear();
     remoteSubscribersById.clear();
+    latestRebindTokenByKey.clear();
     if (liveQueryCdcAddress) {
       activeRouter?.unregisterExact?.(liveQueryCdcAddress, dispatchInboundCdcEvent);
     }

@@ -783,4 +783,591 @@ describe('P4 Live-Query Remote CDC Owned Lifecycle and Coverage Witnesses', () =
     assert.equal(sub.phase, REMOTE_CDC_PHASE.CLOSED);
     assert.equal(cleaned.effects[0].type, REMOTE_CDC_EFFECT.RETIRE_RECORD);
   });
+
+  it('P4.2: failover during an awaited failover subscribe preserves latest subscribedPartitions and retires old targets', async () => {
+    routers = await createBridgedRouters(['node-a', 'node-b', 'node-c', 'node-d']);
+    const routerA = routers.get('node-a');
+    const routerB = routers.get('node-b');
+    const routerC = routers.get('node-c');
+    const routerD = routers.get('node-d');
+
+    let notifyNodeCRegistered = null;
+    let releaseNodeCResponse = null;
+    const nodeCRegistered = new Promise((resolve) => {
+      notifyNodeCRegistered = resolve;
+    });
+    const nodeCGate = new Promise((resolve) => {
+      releaseNodeCResponse = resolve;
+    });
+    let holdNodeCOnce = true;
+
+    const origDeliverA = routerA.deliver.bind(routerA);
+    routerA.deliver = async (targetAddress, message, opts = {}) => {
+      if (holdNodeCOnce &&
+          message?.type === 'LIVE_QUERY_CDC_SUBSCRIBE' &&
+          targetAddress.startsWith('node-c/')) {
+        holdNodeCOnce = false;
+        const realResp = await origDeliverA(targetAddress, message, opts);
+        notifyNodeCRegistered();
+        await nodeCGate;
+        return realResp;
+      }
+      return origDeliverA(targetAddress, message, opts);
+    };
+
+    ({leader: leaderB} = await startLeader({
+      tableName: 'live_orders',
+      schema: TABLE_SCHEMA,
+      nodeId: 'node-b',
+      replicaId: 'p1',
+      transport: routerB,
+    }, 'p1'));
+    ({leader: leaderC} = await startLeader({
+      tableName: 'live_orders',
+      schema: TABLE_SCHEMA,
+      nodeId: 'node-c',
+      replicaId: 'p1',
+      transport: routerC,
+    }, 'p1'));
+    const {leader: leaderD} = await startLeader({
+      tableName: 'live_orders',
+      schema: TABLE_SCHEMA,
+      nodeId: 'node-d',
+      replicaId: 'p1',
+      transport: routerD,
+    }, 'p1');
+
+    try {
+      let currentPartitions = [{
+        partition_id: 'p1',
+        table_name: 'live_orders',
+        partition_key_start: null,
+        partition_key_end: null,
+        partition_key_type: 'INTEGER',
+        leader_node_id: 'node-b',
+      }];
+      let currentReplicas = [{partition_id: 'p1', node_id: 'node-b'}];
+      const systemCache = createTopologyCache(() => currentPartitions, () => currentReplicas);
+      const parserEngine = new SQLQueryEngine();
+      const sqlEngine = {
+        parse: (sql) => parserEngine.parse(sql),
+        executeQuery: async (sql, params = []) => {
+          const rows = oracleDb.prepare(sql).all(...params);
+          return {rows, results: rows, count: rows.length};
+        },
+      };
+      wiringA = createLiveQueryStartupWiring({
+        nodeId: 'node-a',
+        systemTableCache: systemCache,
+        sqlQueryEngine: sqlEngine,
+        partitionServicesProvider: () => new Map(),
+        messageRouter: routerA,
+      });
+
+      const client = createMockClient('nested-failover-client');
+      const reg = await wiringA.liveQueryManager.registerLiveQuery(SELECT_OPEN_SQL, client);
+      const group = wiringA.liveQueryManager.findGroupByQueryId(reg.queryId);
+      assert.equal(leaderB.cdcSubscribers.size, 1, 'initial target node-b subscribed');
+      assert.equal(group.subscribedPartitions.has('p1'), true);
+
+      // Failover 1 (node-b -> node-c): hold node-c subscribe response after remote registration.
+      currentPartitions = [{...currentPartitions[0], leader_node_id: 'node-c'}];
+      currentReplicas = [{partition_id: 'p1', node_id: 'node-c'}];
+      systemCache.emitCacheChange(TABLES.PARTITIONS, 'UPDATE', currentPartitions[0]);
+      await nodeCRegistered;
+      assert.equal(leaderB.cdcSubscribers.size, 0, 'node-b retired on failover 1');
+      assert.equal(leaderC.cdcSubscribers.size, 1, 'node-c registered during awaited failover 1');
+
+      // Failover 2 (node-c -> node-d) completes while failover 1's node-c response is still held!
+      currentPartitions = [{...currentPartitions[0], leader_node_id: 'node-d'}];
+      currentReplicas = [{partition_id: 'p1', node_id: 'node-d'}];
+      systemCache.emitCacheChange(TABLES.PARTITIONS, 'UPDATE', currentPartitions[0]);
+
+      const attachedD = await waitForMatch(
+        () => leaderD.cdcSubscribers.size === 1 && group.subscribedPartitions.has('p1'),
+      );
+      assert.ok(attachedD, 'failover 2 subscribed latest target node-d');
+
+      // Release stale failover 1 response from node-c: must NOT demote group.subscribedPartitions!
+      releaseNodeCResponse();
+      const retiredC = await waitForMatch(() => leaderC.cdcSubscribers.size === 0);
+      assert.ok(retiredC, 'stale node-c failover registration retired cleanly');
+      await new Promise((resolve) => setTimeout(resolve, 40));
+
+      assert.equal(
+        group.subscribedPartitions.has('p1'),
+        true,
+        'stale failover 1 completion must NOT demote latest target p1 from subscribedPartitions',
+      );
+      assert.equal(
+        group.pendingSubscriptions.has('p1'),
+        false,
+        'latest live target p1 must NOT be demoted to pendingSubscriptions',
+      );
+      assert.equal(leaderB.cdcSubscribers.size, 0, 'node-b remains retired');
+      assert.equal(leaderC.cdcSubscribers.size, 0, 'node-c remains retired');
+      assert.equal(leaderD.cdcSubscribers.size, 1, 'latest target node-d remains subscribed');
+
+      // Verify latest target node-d continues delivering live writes.
+      oracleDb.prepare(INSERT_ORDER_SQL).run(1, 'Diana', 'OPEN', 500, 's1');
+      applyCommitted(
+        leaderD,
+        {...committedQueryOf('nf-1', INSERT_ORDER_SQL), params: [1, 'Diana', 'OPEN', 500, 's1']},
+      );
+      const delivered = await waitForMatch(() => client.observedRows.size === 1);
+      assert.ok(delivered, 'latest target node-d delivers live committed write');
+      assert.equal(client.observedRows.get(1).customer, 'Diana');
+
+      wiringA.liveQueryManager.unregisterLiveQuery(reg.queryId, client.id);
+    } finally {
+      await leaderD.shutdown();
+    }
+  });
+
+  it('P4.4: newer overflow/reset debt arriving during an awaited catch-up refresh survives stale epoch-1 completion and converges while idle', async () => {
+    routers = await createBridgedRouters(['node-a', 'node-b']);
+    const routerA = routers.get('node-a');
+    const routerB = routers.get('node-b');
+
+    let failSubscribe = true;
+    const origDeliverA = routerA.deliver.bind(routerA);
+    routerA.deliver = async (targetAddress, message, opts = {}) => {
+      if (failSubscribe && message?.type === 'LIVE_QUERY_CDC_SUBSCRIBE') {
+        return buildDeliveryEnvelope({
+          acknowledged: false,
+          deferRetry: true,
+          noHandler: false,
+          retryAfterMs: 25,
+          error: 'defer initial subscribe',
+        });
+      }
+      return origDeliverA(targetAddress, message, opts);
+    };
+
+    let deferEventDelivery = false;
+    let resyncRefusedDuringHeldRefresh = false;
+    let resyncAcceptedAfterHeldRefresh = false;
+    const origDeliverB = routerB.deliver.bind(routerB);
+    routerB.deliver = async (targetAddress, message, opts = {}) => {
+      if (message?.type === 'LIVE_QUERY_CDC_EVENT') {
+        if (deferEventDelivery) {
+          return buildDeliveryEnvelope({
+            acknowledged: false,
+            deferRetry: true,
+            noHandler: false,
+            retryAfterMs: 25,
+            error: 'defer CDC to build overflow',
+          });
+        }
+        const env = await origDeliverB(targetAddress, message, opts);
+        if (message.resyncRequired === true) {
+          if (env?.answer?.success === false) {
+            resyncRefusedDuringHeldRefresh = true;
+          } else if (env?.answer?.success === true) {
+            resyncAcceptedAfterHeldRefresh = true;
+          }
+        }
+        return env;
+      }
+      return origDeliverB(targetAddress, message, opts);
+    };
+
+    ({leader: leaderB} = await startLeader({
+      tableName: 'live_orders',
+      schema: TABLE_SCHEMA,
+      nodeId: 'node-b',
+      replicaId: 'p1',
+      transport: routerB,
+    }, 'p1'));
+
+    const partitions = [{
+      partition_id: 'p1',
+      table_name: 'live_orders',
+      partition_key_start: null,
+      partition_key_end: null,
+      partition_key_type: 'INTEGER',
+      leader_node_id: 'node-b',
+    }];
+    const systemCache = createTopologyCache(
+      () => partitions,
+      () => [{partition_id: 'p1', node_id: 'node-b'}],
+    );
+    const parserEngine = new SQLQueryEngine();
+    let holdEpoch1CatchupRead = false;
+    let epoch1ReadStarted = false;
+    let releaseEpoch1Read = null;
+    const epoch1ReadGate = new Promise((resolve) => {
+      releaseEpoch1Read = resolve;
+    });
+    const sqlEngine = {
+      callCount: 0,
+      parse: (sql) => parserEngine.parse(sql),
+      executeQuery: async (sql, params = []) => {
+        sqlEngine.callCount += 1;
+        if (holdEpoch1CatchupRead) {
+          holdEpoch1CatchupRead = false;
+          // Snapshot ONLY pre-overflow Row 1 before yielding.
+          const staleEpoch1Rows = oracleDb.prepare(sql).all(...params);
+          epoch1ReadStarted = true;
+          await epoch1ReadGate;
+          return {rows: staleEpoch1Rows, results: staleEpoch1Rows, count: staleEpoch1Rows.length};
+        }
+        const rows = oracleDb.prepare(sql).all(...params);
+        return {rows, results: rows, count: rows.length};
+      },
+    };
+    wiringA = createLiveQueryStartupWiring({
+      nodeId: 'node-a',
+      systemTableCache: systemCache,
+      sqlQueryEngine: sqlEngine,
+      partitionServicesProvider: () => new Map(),
+      messageRouter: routerA,
+    });
+
+    const client = createMockClient('held-refresh-overflow-client');
+    const reg = await wiringA.liveQueryManager.registerLiveQuery(SELECT_OPEN_SQL, client);
+    assert.deepEqual(client.messages[0].rows, [], 'initial snapshot empty while subscribe deferred');
+
+    // Commit Row 1, hold the post-handshake epoch-1 catch-up read, and let subscribe succeed.
+    oracleDb.prepare(INSERT_ORDER_SQL).run(1, 'Alice', 'OPEN', 100, 's1');
+    applyCommitted(
+      leaderB,
+      {...committedQueryOf('hr-1', INSERT_ORDER_SQL), params: [1, 'Alice', 'OPEN', 100, 's1']},
+    );
+    holdEpoch1CatchupRead = true;
+    failSubscribe = false;
+
+    const epoch1Held = await waitForMatch(() => epoch1ReadStarted);
+    assert.ok(epoch1Held, 'epoch-1 catch-up refresh is held in flight with Row 1 only');
+
+    // While epoch-1 catch-up refresh is STILL held, trigger overflow (>256 rows) on leaderB
+    // and let the resyncRequired delivery reach node-a while epoch-1 refresh is running!
+    deferEventDelivery = true;
+    const totalRows = 262;
+    for (let id = 2; id <= totalRows; id += 1) {
+      const params = [id, `Customer-${id}`, 'OPEN', id * 10, `s-${id}`];
+      oracleDb.prepare(INSERT_ORDER_SQL).run(...params);
+      applyCommitted(leaderB, {...committedQueryOf(`hr-${id}`, INSERT_ORDER_SQL), params});
+    }
+    const remoteEntry = Array.from(leaderB.remoteLiveQueryCdcSubscribers.values())[0];
+    const overflowed = await waitForMatch(() => remoteEntry.overflowResyncRequired === true);
+    assert.ok(overflowed, 'overflowResyncRequired raised while epoch-1 catch-up refresh is held');
+
+    deferEventDelivery = false;
+    const refusedDuringHeld = await waitForMatch(() => resyncRefusedDuringHeldRefresh);
+    assert.ok(
+      refusedDuringHeld,
+      'receiver refused resyncRequired settlement while epoch-1 refresh was in flight',
+    );
+    assert.equal(
+      remoteEntry.overflowResyncRequired,
+      true,
+      'producer retained overflowResyncRequired while epoch-1 refresh remained held',
+    );
+
+    // Release the stale epoch-1 catch-up read (returns ONLY Row 1): newer epoch-2 debt must
+    // survive and converge to all 262 rows while idle with ZERO further writes!
+    releaseEpoch1Read();
+
+    const converged = await waitForMatch(
+      () => client.observedRows.size === totalRows &&
+        resyncAcceptedAfterHeldRefresh &&
+        remoteEntry.overflowResyncRequired === false,
+      3000,
+    );
+    assert.ok(converged, 'newer epoch-2 overflow debt survived stale epoch-1 completion while idle');
+    const sortedObserved = Array.from(client.observedRows.values()).sort((a, b) => a.id - b.id);
+    assert.deepEqual(sortedObserved, oracleDb.prepare(`${SELECT_OPEN_SQL} ORDER BY id`).all());
+
+    const settledCalls = sqlEngine.callCount;
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    assert.equal(sqlEngine.callCount, settledCalls, 'zero idle polling after epoch-2 settles');
+
+    wiringA.liveQueryManager.unregisterLiveQuery(reg.queryId, client.id);
+  });
+
+  it('P5.3: bounded exhaustive BFS exploration over transitionRemoteCdcSubscription preserves safety, custody, and convergence', () => {
+    const MAX_DEPTH = 9;
+    const MAX_DEBT_EPOCHS = 3;
+    const MAX_ATTEMPTS = 4;
+
+    const cloneSub = (sub) => ({
+      ...sub,
+      inFlightSubscribe: sub.inFlightSubscribe ? {...sub.inFlightSubscribe} : null,
+      inFlightRefresh: sub.inFlightRefresh ? {...sub.inFlightRefresh} : null,
+    });
+
+    const stateKey = (sub, wasCancelled) => [
+      sub.phase,
+      sub.subscribed ? 1 : 0,
+      sub.needsCatchupOnSubscribe ? 1 : 0,
+      sub.inFlightSubscribe ? sub.inFlightSubscribe.attemptId : 0,
+      sub.inFlightRefresh ? sub.inFlightRefresh.coversResetDebtEpoch : -1,
+      sub.inFlightCleanups,
+      sub.remoteUnsubscribeDispatched ? 1 : 0,
+      sub.resetDebtEpoch,
+      sub.settledResetEpoch,
+      sub.retryNotBeforeMs > 0 ? 1 : 0,
+      wasCancelled ? 1 : 0,
+    ].join('|');
+
+    const assertIndependentInvariants = (sub, wasCancelled, context) => {
+      assert.ok(sub.settledResetEpoch <= sub.resetDebtEpoch,
+        `${context}: settledResetEpoch <= resetDebtEpoch`);
+      assert.ok(sub.inFlightCleanups >= 0, `${context}: non-negative inFlightCleanups`);
+      assert.ok(sub.retryNotBeforeMs >= 0, `${context}: non-negative retryNotBeforeMs`);
+
+      if (sub.phase === REMOTE_CDC_PHASE.LIVE) {
+        assert.equal(sub.subscribed, true, `${context}: LIVE requires subscribed === true`);
+        assert.equal(sub.settledResetEpoch, sub.resetDebtEpoch,
+          `${context}: LIVE forbids unsettled resetDebtEpoch`);
+      }
+      if (sub.phase === REMOTE_CDC_PHASE.CLOSED) {
+        assert.equal(sub.inFlightSubscribe, null, `${context}: CLOSED forbids inFlightSubscribe`);
+        assert.equal(sub.inFlightCleanups, 0, `${context}: CLOSED forbids pending inFlightCleanups`);
+      }
+      if (wasCancelled) {
+        assert.ok(
+          sub.phase === REMOTE_CDC_PHASE.RETIRING || sub.phase === REMOTE_CDC_PHASE.CLOSED,
+          `${context}: cancelled subscription can never re-enter active phase ${sub.phase}`,
+        );
+      }
+
+      // Every non-terminal/non-LIVE state must either have an in-flight effect or an owned wake.
+      const isQuiescent = sub.phase === REMOTE_CDC_PHASE.CLOSED ||
+        (sub.phase === REMOTE_CDC_PHASE.LIVE && sub.settledResetEpoch === sub.resetDebtEpoch);
+      const hasInFlight = sub.inFlightSubscribe !== null ||
+        sub.inFlightRefresh !== null ||
+        sub.inFlightCleanups > 0;
+      if (!isQuiescent && !hasInFlight) {
+        assert.equal(
+          hasOutstandingRemoteCdcObligation(sub),
+          true,
+          `${context}: active non-quiescent state without in-flight work must retain an owned wake`,
+        );
+      }
+    };
+
+    const assertBoundedConvergence = (sub, context) => {
+      const sim = cloneSub(sub);
+      let steps = 0;
+      while (steps < 12 &&
+          sim.phase !== REMOTE_CDC_PHASE.LIVE &&
+          sim.phase !== REMOTE_CDC_PHASE.CLOSED) {
+        steps += 1;
+        if (sim.phase === REMOTE_CDC_PHASE.RETIRING) {
+          if (sim.inFlightSubscribe !== null) {
+            transitionRemoteCdcSubscription(sim, {
+              type: REMOTE_CDC_EVENT.SUBSCRIBE_SETTLED,
+              attemptId: sim.inFlightSubscribe.attemptId,
+              binding: sim.inFlightSubscribe,
+              accepted: true,
+              nowMs: 5000 + steps,
+            });
+          } else if (sim.inFlightCleanups > 0) {
+            transitionRemoteCdcSubscription(sim, {type: REMOTE_CDC_EVENT.CLEANUP_SETTLED});
+          } else {
+            break;
+          }
+          continue;
+        }
+        if (sim.phase === REMOTE_CDC_PHASE.CONNECTING) {
+          if (sim.inFlightSubscribe === null) {
+            transitionRemoteCdcSubscription(sim, {type: REMOTE_CDC_EVENT.START_SUBSCRIBE});
+          } else {
+            transitionRemoteCdcSubscription(sim, {
+              type: REMOTE_CDC_EVENT.SUBSCRIBE_SETTLED,
+              attemptId: sim.inFlightSubscribe.attemptId,
+              binding: sim.inFlightSubscribe,
+              accepted: true,
+              requiresCatchup: true,
+              nowMs: 5000 + steps,
+            });
+          }
+          continue;
+        }
+        if (sim.phase === REMOTE_CDC_PHASE.CATCHING_UP) {
+          if (sim.inFlightRefresh === null) {
+            transitionRemoteCdcSubscription(sim, {type: REMOTE_CDC_EVENT.START_REFRESH});
+          } else {
+            transitionRemoteCdcSubscription(sim, {
+              type: REMOTE_CDC_EVENT.REFRESH_SETTLED,
+              attempt: sim.inFlightRefresh,
+              authoritative: true,
+              nowMs: 5000 + steps,
+              scheduleOnIncomplete: true,
+            });
+          }
+        }
+      }
+      assert.ok(
+        sim.phase === REMOTE_CDC_PHASE.LIVE || sim.phase === REMOTE_CDC_PHASE.CLOSED,
+        `${context}: state must converge to LIVE or CLOSED within bounded steps (got ${sim.phase})`,
+      );
+    };
+
+    const initial = createRemoteCdcSubscriptionState({
+      subKey: 'q1:p1',
+      partitionId: 'p1',
+      queryId: 'q1',
+      subscriberId: 'node-a:q1:p1:1',
+      bindingGeneration: 1,
+      transportKind: REMOTE_CDC_TRANSPORT_KIND.REMOTE,
+      targetNodeId: 'node-b',
+      targetAddress: 'node-b/partition/p1',
+      handler: () => {},
+      wrappedHandler: () => {},
+      needsCatchupOnSubscribe: false,
+    });
+
+    const visited = new Set([stateKey(initial, false)]);
+    const observedPhases = new Set([initial.phase]);
+    const queue = [{sub: initial, depth: 0, wasCancelled: false}];
+    let transitionsChecked = 0;
+
+    while (queue.length > 0) {
+      const {sub, depth, wasCancelled} = queue.shift();
+      observedPhases.add(sub.phase);
+      assertIndependentInvariants(sub, wasCancelled, `depth=${depth}`);
+      assertBoundedConvergence(sub, `depth=${depth}`);
+      if (depth >= MAX_DEPTH) continue;
+
+      const actions = [];
+      if (sub.phase === REMOTE_CDC_PHASE.CONNECTING &&
+          sub.inFlightSubscribe === null &&
+          sub.nextAttemptId < MAX_ATTEMPTS) {
+        actions.push({type: REMOTE_CDC_EVENT.START_SUBSCRIBE});
+      }
+      if (sub.inFlightSubscribe !== null) {
+        actions.push(
+          {
+            type: REMOTE_CDC_EVENT.SUBSCRIBE_SETTLED,
+            attemptId: sub.inFlightSubscribe.attemptId,
+            binding: sub.inFlightSubscribe,
+            accepted: true,
+            requiresCatchup: true,
+            nowMs: 1000 + depth * 10,
+          },
+          {
+            type: REMOTE_CDC_EVENT.SUBSCRIBE_SETTLED,
+            attemptId: sub.inFlightSubscribe.attemptId,
+            binding: sub.inFlightSubscribe,
+            accepted: true,
+            requiresCatchup: false,
+            nowMs: 1000 + depth * 10,
+          },
+          {
+            type: REMOTE_CDC_EVENT.SUBSCRIBE_SETTLED,
+            attemptId: sub.inFlightSubscribe.attemptId,
+            binding: sub.inFlightSubscribe,
+            accepted: false,
+            retryAfterMs: 250,
+            error: 'deferred',
+            nowMs: 1000 + depth * 10,
+          },
+          {
+            type: REMOTE_CDC_EVENT.SUBSCRIBE_SETTLED,
+            attemptId: sub.inFlightSubscribe.attemptId,
+            binding: sub.inFlightSubscribe,
+            accepted: false,
+            uncertainRemoteRegistration: true,
+            retryAfterMs: null,
+            error: 'transport-error',
+            nowMs: 1000 + depth * 10,
+          },
+        );
+      }
+      if (!wasCancelled && sub.resetDebtEpoch < MAX_DEBT_EPOCHS) {
+        actions.push({
+          type: REMOTE_CDC_EVENT.RAISE_RESET_DEBT,
+          scheduleContinuation: true,
+        });
+      }
+      if (sub.phase === REMOTE_CDC_PHASE.CATCHING_UP &&
+          sub.inFlightRefresh === null &&
+          sub.nextAttemptId < MAX_ATTEMPTS) {
+        actions.push({type: REMOTE_CDC_EVENT.START_REFRESH});
+      }
+      if (sub.inFlightRefresh !== null) {
+        actions.push(
+          {
+            type: REMOTE_CDC_EVENT.REFRESH_SETTLED,
+            attempt: sub.inFlightRefresh,
+            authoritative: true,
+            nowMs: 1000 + depth * 10,
+            scheduleOnIncomplete: true,
+          },
+          {
+            type: REMOTE_CDC_EVENT.REFRESH_SETTLED,
+            attempt: sub.inFlightRefresh,
+            authoritative: false,
+            retryAfterMs: 150,
+            error: 'sql-err',
+            nowMs: 1000 + depth * 10,
+            scheduleOnIncomplete: true,
+          },
+        );
+      }
+      if (sub.phase !== REMOTE_CDC_PHASE.CLOSED && !wasCancelled) {
+        actions.push({type: REMOTE_CDC_EVENT.CANCEL});
+      }
+      if (sub.inFlightCleanups > 0) {
+        actions.push({type: REMOTE_CDC_EVENT.CLEANUP_SETTLED});
+      }
+
+      for (const action of actions) {
+        const next = cloneSub(sub);
+        const prevNotBefore = next.retryNotBeforeMs;
+        const prevDebtEpoch = next.resetDebtEpoch;
+        const prevPhase = next.phase;
+        const res = transitionRemoteCdcSubscription(next, action);
+        transitionsChecked += 1;
+        const nextCancelled = wasCancelled || action.type === REMOTE_CDC_EVENT.CANCEL;
+
+        // Verify transition-level contracts.
+        if (action.type === REMOTE_CDC_EVENT.SUBSCRIBE_SETTLED &&
+            (prevPhase === REMOTE_CDC_PHASE.RETIRING || prevPhase === REMOTE_CDC_PHASE.CLOSED) &&
+            (action.accepted || action.uncertainRemoteRegistration)) {
+          const unsubEffect = res.effects.find(
+            (e) => e.type === REMOTE_CDC_EFFECT.SEND_REMOTE_UNSUBSCRIBE,
+          );
+          assert.ok(unsubEffect, 'retiring late subscribe MUST emit SEND_REMOTE_UNSUBSCRIBE');
+          assert.equal(unsubEffect.binding.subscriberId, action.binding.subscriberId);
+          assert.equal(unsubEffect.binding.targetAddress, action.binding.targetAddress);
+        }
+        if (action.type === REMOTE_CDC_EVENT.REFRESH_SETTLED &&
+            action.authoritative &&
+            !wasCancelled &&
+            action.attempt.coversResetDebtEpoch < prevDebtEpoch) {
+          assert.equal(res.settled, false, 'older refresh cannot settle newer debt epoch');
+          assert.equal(next.phase, REMOTE_CDC_PHASE.CATCHING_UP);
+        }
+        if (action.type === REMOTE_CDC_EVENT.SUBSCRIBE_SETTLED &&
+            !action.accepted && !wasCancelled) {
+          assert.ok(
+            next.retryNotBeforeMs >= prevNotBefore,
+            'retryNotBeforeMs must never move backwards on subsequent deferral',
+          );
+          if (action.retryAfterMs) {
+            assert.ok(
+              next.retryNotBeforeMs >= action.nowMs + action.retryAfterMs,
+              'retryNotBeforeMs must honor transport retryAfterMs deadline',
+            );
+          }
+        }
+
+        const key = stateKey(next, nextCancelled);
+        if (!visited.has(key)) {
+          visited.add(key);
+          queue.push({sub: next, depth: depth + 1, wasCancelled: nextCancelled});
+        }
+      }
+    }
+
+    for (const phase of Object.values(REMOTE_CDC_PHASE)) {
+      assert.ok(observedPhases.has(phase), `BFS explored phase ${phase}`);
+    }
+    assert.ok(visited.size >= 100, `explored ${visited.size} distinct reachable lifecycle states`);
+    assert.ok(transitionsChecked >= 250, `verified ${transitionsChecked} lifecycle transitions`);
+  });
 });
