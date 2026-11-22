@@ -604,11 +604,15 @@ test('progress, recovery, runtime replacement, and compaction sync continue ' +
     const storeA = new RaftRsDurableStore(cluster.replica('nopoll-a').db);
     const progressBefore = storeA.readDurableProgress('pure-read-zero-polling');
     const compacted = storeA.compactCommittedPrefix('pure-read-zero-polling', {
-      toIndex: progressBefore.appliedIndex,
+      toIndex: Number(progressBefore.appliedIndex),
     });
-    assert.equal(compacted.compacted, true);
+    assert.equal(compacted.changed, true, JSON.stringify(compacted));
+    const syncMark = cluster.coreEntries.length;
     const syncedTick = await turnChainValue(portA.tick());
     assert.equal(syncedTick.outcome, CORE_OK);
+    assert.equal(cluster.coreEntries.slice(syncMark).some((entry) =>
+      entry.operation === 'seed_storage'), true,
+    'compacted storage synced into core on tick() with 0 readStatus() calls');
   } finally {
     console.error = originalConsoleError;
     setCoreFaultInjector(null);
