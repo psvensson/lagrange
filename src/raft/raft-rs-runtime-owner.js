@@ -21,8 +21,8 @@ import {
 } from './raft-rs-inbound-queue.js';
 import {openedLastIndex, persistedLastIndexAfter} from './raft-rs-local-log-guard.js';
 import {
-  durableProgressOf, durableRecordReadFailure,
-  enterReseedHold, recordReseedHold, refuseInboundStep,
+  applicationFailureOf, durableProgressOf, durableRecordReadFailure,
+  enterReseedHold, hostFailure, recordReseedHold, refuseInboundStep,
   reportCoreTrap, reportRuntimeReplaced, reportWaitBoundExceeded,
 } from './raft-rs-runtime-faults.js';
 import {
@@ -43,7 +43,7 @@ import {
 } from './raft-rs-runtime-owner-constants.js';
 import {recoveryRetryWindowMsOf, tuningOf} from './raft-rs-runtime-tuning.js';
 import {
-  UNSHAPED_STATUS, cachedShapedGroupStatus, reseedHoldStatus,
+  UNSHAPED_STATUS, cachedShapedGroupStatus, reseedHoldStatus, validateObservationIdentities,
 } from './raft-rs-status-observation.js';
 import {countedTick, observeCurrentAuthority} from './raft-rs-current-authority.js';
 import {PROPOSE_COMMAND, proposeUnderSubmittedTerm, withSubmittedTerm} from './raft-rs-proposal-term.js';
@@ -124,25 +124,6 @@ const groups = new Map();
 
 function outcome(outcomeName, fields = {}) {
   return deepFreeze({outcome: outcomeName, ...fields});
-}
-
-function hostFailure(phase, error, recoveryRequired = false) {
-  return outcome(HOST_FAILURE, {
-    reason: String(error?.message || error),
-    ...(error?.detail && typeof error.detail === 'object' ?
-      {detail: error.detail} : {}),
-    phase,
-    retryable: true,
-    recoveryRequired,
-  });
-}
-
-// A committed-entry application may name its own failure: a typed `reason`
-// with a `detail` object is carried as the host failure's reason and detail;
-// any other failure is its message.
-function applicationFailureOf(error) {
-  return typeof error?.reason === 'string' && error.reason.length > 0 ?
-    {message: error.reason, detail: error.detail} : error;
 }
 
 // The group has no role and no leader while it is unusable: announced once,
@@ -545,9 +526,10 @@ function resumeAfterReconstruction(group, expectedGeneration) {
     return campaignGroup(group, expectedGeneration);
   }
   group.resumingRuntime = false;
-  announce(group, expectedGeneration);
-  return settledTurn(
-    outcome(CORE_OK, {reason: RUNTIME_REASON.RUNTIME_RECONSTRUCTED}));
+  const announced = announce(group, expectedGeneration);
+  return settledTurn(announced.ok ?
+    outcome(CORE_OK, {reason: RUNTIME_REASON.RUNTIME_RECONSTRUCTED}) :
+    announced.result);
 }
 
 // The shared attempt's typed answer is also the reentrant admission fence.
@@ -1013,7 +995,8 @@ function syncCompactedStorage(group) {
       raftRsConfStateKey(record.confState) !== group.announcedConfStateKey) {
     group.appliedTerm = restoreAppliedTerm(record);
     recordAppliedEntry(group, appliedIdx, admitted);
-    announce(group, runtimeGeneration);
+    const announced = announce(group, runtimeGeneration);
+    if (!announced.ok) return announced.result;
   }
   return null;
 }
@@ -1327,7 +1310,8 @@ function drainReady(group, expectedGeneration, startCycles = 0,
     if (!hasReady.value) {
       if (announceOnDrain) {
         group.resumingRuntime = false;
-        announce(group, expectedGeneration);
+        const announced = announce(group, expectedGeneration);
+        if (!announced.ok) return settledTurn(announced.result);
       }
       return settledTurn(outcome(CORE_OK, {reason: RUNTIME_REASON.DRAINED}));
     }
@@ -1388,11 +1372,12 @@ function announcePendingGateAndCatchUp(group, now, observed) {
 
 function announce(group, expectedGeneration) {
   const status = invokeCoreAt(group, expectedGeneration, 'status');
-  if (!status.ok) return;
+  if (!status.ok) return {ok: false, result: status.result};
   const now = status.value;
   const before = group.lastStatus;
-  group.lastStatus = now;
   const observed = settleStatusObservation(group, expectedGeneration, now);
+  if (!observed.ok) return observed;
+  group.lastStatus = now;
   announcePendingGateAndCatchUp(group, now, observed);
   announceAppliedProgress(group, expectedGeneration, observed);
   if (before && now.raftState !== before.raftState) {
@@ -1404,19 +1389,19 @@ function announce(group, expectedGeneration) {
   if (before && now.lead !== before.lead) {
     group.emit(RUNTIME_EVENT.LEADER_CHANGE, semanticLeaderIdentity(group, now.lead));
   }
-  if (observed.ok) announceMembership(group, observed.value, now);
+  announceMembership(group, observed.value, now);
   const settlement = confChangeSettlement({before, now,
     confChangeEntries: group.confChangeEntriesApplied ?? 0,
     appliedIndex: group.appliedIndex});
   group.confChangeEntriesApplied = 0;
   if (settlement !== null) group.emit(RUNTIME_EVENT.CONF_CHANGE_APPLIED, settlement);
-  if (observed.ok && observed.changed &&
-      group.hasListeners?.(RUNTIME_EVENT.STATUS_CHANGED)) {
+  if (observed.changed && group.hasListeners?.(RUNTIME_EVENT.STATUS_CHANGED)) {
     const shaped = readStatusObserved(group);
     if (shaped.settled && shaped.result.outcome === CORE_OK) {
       group.emit(RUNTIME_EVENT.STATUS_CHANGED, shaped.result);
     }
   }
+  return {ok: true};
 }
 
 function announceAppliedProgress(group, expectedGeneration, observed) {
@@ -1454,6 +1439,9 @@ function readGroupObservation(group, expectedGeneration, rawStatus = null) {
   const conf = invokeCoreAt(
     group, expectedGeneration, CORE_OPERATION.CONF_STATE);
   if (!conf.ok) return conf;
+  const failed = validateObservationIdentities(group, status.value, conf.value,
+    (error) => groupHostFailure(group, RUNTIME_PHASE.ADDRESS_RESOLUTION, error));
+  if (failed !== null) return {ok: false, result: failed};
   // The applied index is the runtime's own, read in the same turn as the
   // configuration: the index whose apply left the core holding it (commit
   // may run ahead of it), never the core's status.applied.
@@ -1526,7 +1514,7 @@ function readStatusObserved(group) {
     return settledTurn(recoveryOutcome(group, RUNTIME_REASON.RECOVERY_DEFERRED));
   }
   return settledTurn(cachedShapedGroupStatus(group, observation,
-    (error) => groupHostFailure(group, RUNTIME_PHASE.ADDRESS_RESOLUTION, error)));
+    (error) => hostFailure(RUNTIME_PHASE.ADDRESS_RESOLUTION, error, true)));
 }
 
 function campaignGroup(group, expectedGeneration) {
@@ -2247,11 +2235,10 @@ function createRuntimeDispatcher(request) {
     recordIdentity: Object.freeze(() =>
       enqueue(group, () => {
         const result = recordIdentity(group);
-        if (runtimeHealth === HEALTHY && group.health === USABLE &&
-            group.handle !== null && !group.closed) {
-          announce(group, runtimeGeneration);
-        }
-        return settledTurn(result);
+        const announced = runtimeHealth === HEALTHY && group.health === USABLE &&
+            group.handle !== null && !group.closed ?
+          announce(group, runtimeGeneration) : {ok: true};
+        return settledTurn(announced.ok ? result : announced.result);
       })),
     participationGateOpen: Object.freeze(() => runtimeHealth === HEALTHY &&
       group.health === USABLE && group.gateOpen === true),

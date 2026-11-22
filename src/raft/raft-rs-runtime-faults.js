@@ -219,10 +219,32 @@ function durableRecordReadFailure(error) {
   };
 }
 
+function hostFailure(phase, error, recoveryRequired = false) {
+  return deepFreeze({
+    outcome: RAFT_OPERATION_OUTCOME.HOST_FAILURE,
+    reason: String(error?.message || error),
+    ...(error?.detail && typeof error.detail === 'object' ?
+      {detail: error.detail} : {}),
+    phase,
+    retryable: true,
+    recoveryRequired,
+  });
+}
+
+// A committed-entry application may name its own failure: a typed `reason`
+// with a `detail` object is carried as the host failure's reason and detail;
+// any other failure is its message.
+function applicationFailureOf(error) {
+  return typeof error?.reason === 'string' && error.reason.length > 0 ?
+    {message: error.reason, detail: error.detail} : error;
+}
+
 export {
+  applicationFailureOf,
   durableProgressOf,
   durableRecordReadFailure,
   enterReseedHold,
+  hostFailure,
   recordReseedHold,
   refuseInboundStep,
   reportCoreTrap,
