@@ -186,8 +186,10 @@ class EmptyReadyPersistenceScenario {
 
   followerFacts() {
     const status = this.port(FOLLOWER).readStatus();
-    return {role: status.role, term: status.term, leaderId: status.leaderId,
-      commitIndex: status.commitIndex, appliedIndex: status.appliedIndex};
+    return {role: status.role, term: String(status.term),
+      leaderId: status.leaderId,
+      commitIndex: String(status.commitIndex),
+      appliedIndex: String(status.appliedIndex)};
   }
 
   durableRecordOf(replicaId) {
@@ -497,10 +499,10 @@ test('(i-4) committed entries apply, Ready/LightReady advancement continues, ' +
     const followerRecordBefore = RaftRsDurableStore.readDurableRecordIn(
       cluster.replica(follower).db, PARTITION_ID);
     assert.equal(followerRecordBefore.hardState.commit,
-      leaderStatusBefore.commitIndex,
+      String(leaderStatusBefore.commitIndex),
       'follower durable hardState.commit equals the settled commit index');
     assert.equal(followerRecordBefore.appliedIndex,
-      leaderStatusBefore.appliedIndex,
+      String(leaderStatusBefore.appliedIndex),
       'follower durable appliedIndex equals the settled applied index');
 
     // Restart the follower and the leader from their SQLite files and verify
