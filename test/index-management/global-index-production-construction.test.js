@@ -47,12 +47,10 @@ import {
 import {
   buildDeliveryEnvelope,
 } from '../../src/transport/transport-semantic-outcome.js';
-import {
-  createMockSystemCache,
-} from '../query/sql-query-engine-test-support.js';
 import {ledgerRows} from '../partition/placement-admission-fixture.js';
 import {
   createSeededSchemaAwareGateway,
+  seedRealSystemTableCache,
   withFoundingPlacementEnvironment,
 } from './global-index-founding-witness-support.js';
 
@@ -193,7 +191,7 @@ async function setupProductionEnvironment(t) {
 
   const allPartitionDefs = [...basePartitionDefs, ...indexPartitionDefs];
 
-  const systemCache = createMockSystemCache(tables, allPartitionDefs);
+  const systemCache = seedRealSystemTableCache(tables, allPartitionDefs);
   const idxSchema = buildIndexDatasetSchema({
     tableName: 'users',
     indexName: 'idx_users_email',
@@ -253,6 +251,7 @@ async function setupProductionEnvironment(t) {
     catalogDbPath,
     tables,
     allPartitionDefs,
+    systemCache,
   );
   const messageRouter = createPartitionMessageRouter(partitionServices);
 

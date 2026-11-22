@@ -237,6 +237,36 @@ function createSeededSchemaAwareGateway(catalogDbPath, tables, partitions, syste
   return result;
 }
 
+function seedRealSystemTableCache(tables, partitions, nodeId = 'test-node') {
+  const cache = new SystemTableCache();
+  for (const t of tables) {
+    cache.applySystemTableChange(TABLES.TABLES, CDC_OPERATION.INSERT, {
+      ...t,
+      schema_definition: t.schema_definition || (t.schema ? JSON.stringify(t.schema) : undefined),
+    });
+  }
+  for (const p of partitions) {
+    cache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.INSERT, {
+      partition_version: 1,
+      replica_count: 1,
+      size_bytes: 0,
+      leader_node_id: p.leader_node_id || nodeId,
+      state: 'NORMAL',
+      ...p,
+    });
+    cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
+      service_id: p.partition_id,
+      service_type: 'partition',
+      partition_id: p.partition_id,
+      node_id: p.leader_node_id || nodeId,
+      raft_role: 'leader',
+      address: `${p.leader_node_id || nodeId}/partition/${p.partition_id}`,
+      status: 'active',
+    });
+  }
+  return cache;
+}
+
 function createTargetRouter(partitionServices) {
   return {
     async deliver(address, message) {
@@ -464,5 +494,6 @@ export {
   createSeededSchemaAwareGateway,
   createTargetRouter,
   executeSystemDbMutation,
+  seedRealSystemTableCache,
   withFoundingPlacementEnvironment,
 };
