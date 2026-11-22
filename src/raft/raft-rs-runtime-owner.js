@@ -33,7 +33,7 @@ import {
 } from './raft-rs-runtime-owner-constants.js';
 import {recoveryRetryWindowMsOf, tuningOf} from './raft-rs-runtime-tuning.js';
 import {shapeGroupObservation} from './raft-rs-status-observation.js';
-import {observeCurrentAuthority} from './raft-rs-current-authority.js';
+import {countedTick, observeCurrentAuthority} from './raft-rs-current-authority.js';
 import {PROPOSE_COMMAND, proposeUnderSubmittedTerm, withSubmittedTerm} from './raft-rs-proposal-term.js';
 import {
   confChangeSettlement,
@@ -2141,12 +2141,11 @@ function executeCommand(group, command) {
   if (command?.type === PROPOSE_COMMAND && group.tail !== null) {
     const deferred = Promise.withResolvers();
     group.queuedProposals.push({...withSubmittedTerm(group, command), deferred});
-    if (group.queuedProposals.length === 1) {
-      enqueue(group, () => drainQueuedProposalBatch(group));
-    }
+    if (group.queuedProposals.length === 1) enqueue(group, () => drainQueuedProposalBatch(group));
     return pendingTurn(deferred.promise);
   }
-  return enqueue(group, () => perform(group, withSubmittedTerm(group, command)));
+  return enqueue(group, countedTick(group, command?.type === TICK_COMMAND, () =>
+    perform(group, withSubmittedTerm(group, command))));
 }
 
 function snapshotEnvelope(envelope) {
@@ -2233,7 +2232,7 @@ function createRuntimeDispatcher(request) {
     reconstructing: false,
     entered: 0,
     tail: null,
-    queuedProposals: [],
+    queuedProposals: [], queuedTicks: 0,
     inbound: [],
     inboundBytes: 0,
     inboundRejectedCount: 0,

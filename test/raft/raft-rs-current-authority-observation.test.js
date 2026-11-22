@@ -219,15 +219,19 @@ test('(a) a deposed leader whose core already follows the newer term is ' +
       atRejoin, answered: summary(answered), during, durableDuring,
       answeredAgain: summary(answeredAgain), afterRelease: summary(afterRelease)};
     const report = `measured ${JSON.stringify(measured)}`;
+    // The core still leads the old term, but the successor's newer-term
+    // envelopes wait in its inbound: NOT_SETTLED (corrective item B-1).
     assert.deepEqual({
       role: atRejoin.answer.role, term: atRejoin.answer.term,
+      unsettledReason: atRejoin.answer.unsettledReason,
       inboundQueued: atRejoin.answer.inboundQueued,
       turnPending: atRejoin.answer.turnPending,
       operations: atRejoin.operations, effects: atRejoin.effects,
     }, {
-      role: RAFT_ROLE.LEADER, term: before.term, inboundQueued: delivered,
-      turnPending: false, operations: [...OBSERVATION_CORE_OPERATIONS],
-      effects: NO_EFFECTS,
+      role: PORT_CONTRACT.RAFT_AUTHORITY_OBSERVATION.NOT_SETTLED, term: before.term,
+      unsettledReason: PORT_CONTRACT.RAFT_AUTHORITY_UNSETTLED_REASON.HIGHER_TERM_INBOUND,
+      inboundQueued: delivered, turnPending: false,
+      operations: [...OBSERVATION_CORE_OPERATIONS], effects: NO_EFFECTS,
     }, `observed before the read, the delivered inbound stays queued: ${report}`);
     assert.deepEqual({
       role: during.answer.role, term: during.answer.term,

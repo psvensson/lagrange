@@ -426,7 +426,9 @@ export class ControllableConsensusPort {
         turnPending: false,
         readyHeld: false,
         inboundQueued: 0,
+        tickBacklog: 0,
         role: this.role,
+        unsettledReason: null,
         term: this.term,
         leaderPeerId: this.role === RAFT_ROLE.LEADER ? String(this.peerId) :
           null,
