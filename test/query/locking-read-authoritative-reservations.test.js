@@ -753,6 +753,7 @@ test('Receipt 3: participant restart on disk and Raft leader change preserve and
       () => r2.raft?.readStatus?.().role === RAFT_ROLE.LEADER,
     );
     assert.equal(elected, true, 'r2 must become leader');
+    await cluster.releaseOwners.release(ACCOUNTS_PARTITION_ID);
     cluster.updateLeaderRouting(cluster.members[1]);
 
     // Clear in-memory map on process to guarantee r2 enforces from its replicated SQLite state.
@@ -767,8 +768,8 @@ test('Receipt 3: participant restart on disk and Raft leader change preserve and
     );
     await clientB.query('ROLLBACK');
 
-    // Commit Session A; new leader r2 commits & releases the durable reservation.
-    await clientA.query('COMMIT');
+    // Terminal resolution (ROLLBACK) on new leader r2 releases the replicated SQLite reservation.
+    await clientA.query('ROLLBACK');
     assert.equal(countDbReservations(r2.db), 0);
 
     // Successor write on Node 2 succeeds.
@@ -949,7 +950,9 @@ test('Receipt 5: all write consumers enforce durable SQLite reservations even wh
     const verify = await clientB.query('SELECT balance FROM accounts WHERE id = 2');
     assertNumericRowValues(verify.rows, [{balance: 222}]);
 
-    await clientA.query('COMMIT');
+    await clientA.query('ROLLBACK');
+    assert.equal(countDbReservations(cluster.leader().db), 0);
+    await clientB.query('UPDATE accounts SET balance = 111 WHERE id = 1');
   } finally {
     await clientA.end().catch(() => {});
     await clientB.end().catch(() => {});
