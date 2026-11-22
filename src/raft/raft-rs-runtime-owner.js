@@ -9,6 +9,9 @@ import {admitRaftRsMessage} from './raft-rs-ingress.js';
 import {RAFT_RS_OPENING_HISTORY} from './raft-rs-opening-history-constants.js';
 import {RAFT_RS_MESSAGE_TYPE} from './raft-rs-ingress-constants.js';
 import {recordInboundStepRefusal, sendMessages} from './raft-rs-peer-delivery.js';
+import {
+  INBOUND_QUEUE_FULL, dequeueInboundEnvelope, queueInboundEnvelope,
+} from './raft-rs-inbound-queue.js';
 import {openedLastIndex, persistedLastIndexAfter} from './raft-rs-local-log-guard.js';
 import {
   enterReseedHold, recordReseedHold, refuseInboundStep,
@@ -24,8 +27,7 @@ import {
 import {RAFT_RS_PEER_IDENTITY_RESOLUTION} from './raft-rs-peer-identity-constants.js';
 import {
   CONF_STATE_NOT_ANNOUNCED, CORE_CALL_WITHOUT_HANDLE, CORE_OPERATION,
-  CORE_REFUSAL_KIND, DEFAULT_MAX_INBOUND_QUEUE_LENGTH,
-  DEFAULT_MAX_INBOUND_QUEUE_BYTES, DURABLE_PROGRESS_OBSERVATION,
+  CORE_REFUSAL_KIND, DURABLE_PROGRESS_OBSERVATION,
   FOLLOWER_RAFT_STATE, HEALTHY, INBOUND_DRAIN_DELAY_MS, INBOUND_WAKE_DEBT,
   NO_LEADER, PERSISTENCE_ADMISSION_WAIT, RECOVERY_REQUIRED, REPLACING,
   ROLE, ROLE_LEADER, RUNTIME_COMMAND, RUNTIME_FAULT_REPORT, RUNTIME_EVENT,
@@ -1902,36 +1904,6 @@ function stepOneInbound(group, expectedGeneration, envelope) {
   return {done: false, ready: drainReady(group, expectedGeneration)};
 }
 
-const DEFAULT_INBOUND_ENVELOPE_BYTES = 64;
-const ERR_CODE_INBOUND_QUEUE_OVERFLOW = 'RAFT_INBOUND_QUEUE_OVERFLOW';
-
-function estimateInboundEnvelopeBytes(envelope) {
-  return (
-    Number(envelope?.message?.byteLength ?? envelope?.byteLength) ||
-    DEFAULT_INBOUND_ENVELOPE_BYTES
-  );
-}
-
-function dequeueInboundEnvelope(group) {
-  const envelope = group.inbound.shift();
-  const entryBytes = estimateInboundEnvelopeBytes(envelope);
-  group.inboundBytes = Math.max(0, group.inboundBytes - entryBytes);
-  return envelope;
-}
-
-function pushInboundEnvelopeWithBounds(group, envelope) {
-  const entryBytes = estimateInboundEnvelopeBytes(envelope);
-  if (group.inbound.length >= group.maxInboundQueueLength ||
-      group.inboundBytes + entryBytes > group.maxInboundQueueBytes) {
-    group.inboundRejectedCount += 1;
-    const error = new Error('Raft inbound queue overflow');
-    error.code = ERR_CODE_INBOUND_QUEUE_OVERFLOW;
-    throw error;
-  }
-  group.inbound.push(snapshotEnvelope(envelope));
-  group.inboundBytes += entryBytes;
-}
-
 function drainInbound(group, expectedGeneration, remaining, continuation) {
   group.draining = true;
   try {
@@ -2149,14 +2121,6 @@ function executeCommand(group, command) {
   return enqueue(group, () => perform(group, withSubmittedTerm(group, command)));
 }
 
-function snapshotEnvelope(envelope) {
-  return deepFreeze({
-    ...envelope,
-    message: envelope.message && typeof envelope.message === 'object' ?
-      {...envelope.message} : envelope.message,
-  });
-}
-
 function createRuntimeDispatcher(request) {
   // This is a refused opening, not admitted work or a second recovery driver.
   // Existing groups retain the continuation; a final close clears a failed
@@ -2165,16 +2129,6 @@ function createRuntimeDispatcher(request) {
     const refused = runtimeRecoveryOutcome(request);
     throw Object.assign(new Error(refused.reason), {consensus: refused});
   }
-  const maxInboundQueueLength = Number.isInteger(request.maxInboundQueueLength) ?
-    request.maxInboundQueueLength :
-    Number.isInteger(request.options?.maxInboundQueueLength) ?
-      request.options.maxInboundQueueLength :
-      DEFAULT_MAX_INBOUND_QUEUE_LENGTH;
-  const maxInboundQueueBytes = Number.isInteger(request.maxInboundQueueBytes) ?
-    request.maxInboundQueueBytes :
-    Number.isInteger(request.options?.maxInboundQueueBytes) ?
-      request.options.maxInboundQueueBytes :
-      DEFAULT_MAX_INBOUND_QUEUE_BYTES;
   const store = new RaftRsDurableStore(request.database);
   const group = {
     key: nextGroupKey++,
@@ -2236,9 +2190,6 @@ function createRuntimeDispatcher(request) {
     queuedProposals: [],
     inbound: [],
     inboundBytes: 0,
-    inboundRejectedCount: 0,
-    maxInboundQueueLength,
-    maxInboundQueueBytes,
     draining: false,
     inboundDrainScheduled: false,
     inboundDrainTimer: null,
@@ -2309,7 +2260,10 @@ function createRuntimeDispatcher(request) {
         return outcome(CORE_OK, {
           reason: PARTICIPATION_GATE.INBOUND_DROPPED_IDENTITY_UNRECORDED});
       }
-      pushInboundEnvelopeWithBounds(group, envelope);
+      if (!queueInboundEnvelope(group, envelope)) {
+        recordInboundStepRefusal(group, envelope, INBOUND_QUEUE_FULL);
+        return INBOUND_QUEUE_FULL;
+      }
       reportNativeInboundStage(group, NATIVE_INBOUND_STAGE.ACCEPTED);
       scheduleInboundDrain(group);
       return outcome(CORE_OK, {reason: RUNTIME_REASON.INBOUND_ENQUEUED});
