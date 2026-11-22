@@ -9,11 +9,13 @@ import {
   endStorageIncarnationCustody,
   isIncarnationAdmissible,
   markCustodyCloseFailed,
+  recordUnclosedReaderCustody,
   registerRetainedReaderCustody,
   resolveStorageIncarnation,
   unregisterRetainedReaderCustody,
 } from '../storage/retained-read-view-custody.js';
 import {
+  applyOpenedSnapshotToView,
   buildViewRecord,
   closeReaderHandle,
   queryRowsFromRetainedView,
@@ -59,6 +61,7 @@ function createShardReadViewManager(options = {}) {
   const customCloseReader = options.closeReader ?? null;
   const activeViews = new Map();
   const unclosedViews = new Map();
+  const openingViews = new Map();
   const expiredReapedViewIds = new Set();
   let viewCounter = 0;
   let reapedViewCount = 0;
@@ -87,9 +90,18 @@ function createShardReadViewManager(options = {}) {
     view.fenced = true;
     view.invalidated = true;
     view.invalidationReason = reason;
+    openingViews.delete(view.readViewId);
     activeViews.delete(view.readViewId);
     unclosedViews.set(view.readViewId, view);
-    markCustodyCloseFailed(view.readViewId, closeResult.error);
+    if (!markCustodyCloseFailed(view.readViewId, closeResult.error)) {
+      recordUnclosedReaderCustody({
+        closeHandler: (nextReason) => invalidateReadView(view.readViewId, nextReason),
+        error: closeResult.error,
+        incarnation: view.incarnation,
+        policyDomain: view.policyDomain,
+        viewId: view.readViewId,
+      });
+    }
     refreshTotals();
     return false;
   }
@@ -108,6 +120,7 @@ function createShardReadViewManager(options = {}) {
       view.invalidated = true;
       view.invalidationReason = reason;
     }
+    openingViews.delete(view.readViewId);
     activeViews.delete(view.readViewId);
     unclosedViews.delete(view.readViewId);
     unregisterRetainedReaderCustody(view.readViewId);
@@ -116,14 +129,21 @@ function createShardReadViewManager(options = {}) {
     return true;
   }
 
+  function lookupManagedView(readViewId) {
+    return activeViews.get(readViewId) ??
+      unclosedViews.get(readViewId) ??
+      openingViews.get(readViewId) ??
+      null;
+  }
+
   function releaseReadView(readViewId) {
-    const view = activeViews.get(readViewId) ?? unclosedViews.get(readViewId);
+    const view = lookupManagedView(readViewId);
     if (!view) return false;
     return closeAndSettleView(view, CLOSE_MODE_RELEASE, INVALIDATED_DEFAULT_REASON);
   }
 
   function invalidateReadView(readViewId, reason = INVALIDATED_DEFAULT_REASON) {
-    const view = activeViews.get(readViewId) ?? unclosedViews.get(readViewId);
+    const view = lookupManagedView(readViewId);
     if (!view) return false;
     return closeAndSettleView(view, CLOSE_MODE_INVALIDATE, reason);
   }
@@ -152,10 +172,7 @@ function createShardReadViewManager(options = {}) {
     expiredReapedViewIds.add(readViewId);
   }
 
-  function reapExpiredViews(nowMs = limits.nowProvider()) {
-    const closedIds = [];
-    const failedIds = [];
-    retryUnclosedViews(closedIds, failedIds);
+  function reapActiveViews(nowMs, closedIds, failedIds) {
     for (const view of [...activeViews.values()]) {
       const currentIncarnation = resolveStorageIncarnation(view.partitionServiceRef);
       const incarnationGone =
@@ -176,6 +193,13 @@ function createShardReadViewManager(options = {}) {
         }
       }
     }
+  }
+
+  function reapExpiredViews(nowMs = limits.nowProvider()) {
+    const closedIds = [];
+    const failedIds = [];
+    retryUnclosedViews(closedIds, failedIds);
+    reapActiveViews(nowMs, closedIds, failedIds);
     refreshTotals();
     return Object.freeze({closedIds, failedIds});
   }
@@ -205,50 +229,73 @@ function createShardReadViewManager(options = {}) {
     return releasedCount;
   }
 
-  async function acquireReadView({
-    invocationId,
-    attemptId = DEFAULT_ATTEMPT_ID,
-    partitionId,
-    partitionVersion = 1,
-    bindingVersionId = null,
-    hostNodeId = null,
-    partitionService,
-    deadlineMs,
-    statement,
-    keyColumns,
-    boundParameters = [],
-  }) {
-    const nowMs = limits.nowProvider();
-    reapExpiredViews(nowMs);
-    const incarnation = resolveStorageIncarnation(partitionService);
-    assertAcquisitionPreconditions({
-      deadlineMs, incarnation, isShutdown, maxViews: limits.maxRetainedViews,
-      nowMs, partitionService, retainedCount: activeViews.size + unclosedViews.size,
-    });
-    const opened = await openSnapshotHandle({
-      boundParameters, deadlineMs, incarnation, keyColumns, limits, options,
-      partitionId, partitionService, statement, totals: refreshTotals(),
-    });
-    viewCounter += 1;
-    const readViewId =
-      `rv:${invocationId}:${attemptId}:${partitionId}:${viewCounter}`;
-    const viewRecord = buildViewRecord({
-      attemptId, bindingVersionId, createdAtMs: nowMs, deadlineMs, hostNodeId,
-      incarnation, invocationId, keyColumns,
-      nativeHandleBytes: opened.nativeHandleBytes,
-      partitionId, partitionService, partitionVersion, readViewId,
-      readerDb: opened.readerDb, snapshotBufferBytes: opened.snapshotBufferBytes,
-      snapshotMeta: opened.snapshotMeta, snapshotRows: opened.snapshotRows,
-    });
-    activeViews.set(readViewId, viewRecord);
+  function attachOpenedReaderCustody(viewRecord, readerDb, incarnation) {
+    viewRecord.readerDb = readerDb;
+    if (!isIncarnationAdmissible(incarnation)) {
+      closeAndSettleView(
+        viewRecord,
+        CLOSE_MODE_INVALIDATE,
+        STORAGE_INCARNATION_CHANGED_REASON,
+      );
+      throw createPagedRoutingError(
+        PAGED_EXECUTION_ERROR_CODE.READ_VIEW_UNAVAILABLE,
+        VIEW_ERROR_MSG.INCARNATION_ENDED,
+      );
+    }
     registerRetainedReaderCustody({
-      closeHandler: (reason) => invalidateReadView(readViewId, reason),
-      incarnation, policyDomain: POLICY_DOMAIN.QUERY_READ_VIEW, viewId: readViewId,
+      closeHandler: (reason) => invalidateReadView(viewRecord.readViewId, reason),
+      incarnation,
+      policyDomain: POLICY_DOMAIN.QUERY_READ_VIEW,
+      viewId: viewRecord.readViewId,
     });
+  }
+
+  function settleOpeningFailure(viewRecord, partitionService, err) {
+    openingViews.delete(viewRecord.readViewId);
+    if (viewRecord.custodyState === CUSTODY_STATE.ACTIVE && viewRecord.readerDb) {
+      closeAndSettleView(viewRecord, CLOSE_MODE_INVALIDATE, err.message);
+    }
+    const currentIncarnation = resolveStorageIncarnation(partitionService);
+    if (!isIncarnationAdmissible(currentIncarnation) ||
+        viewRecord.custodyState !== CUSTODY_STATE.ACTIVE) {
+      if (err.pagedCode === PAGED_EXECUTION_ERROR_CODE.READ_VIEW_UNAVAILABLE) {
+        throw err;
+      }
+      if (!isIncarnationAdmissible(currentIncarnation)) {
+        throw createPagedRoutingError(
+          PAGED_EXECUTION_ERROR_CODE.READ_VIEW_UNAVAILABLE,
+          VIEW_ERROR_MSG.INCARNATION_ENDED,
+          {cause: err},
+        );
+      }
+    }
+    throw err;
+  }
+
+  function assertOpenedViewHealthyAndBounded(viewRecord, partitionService) {
+    const currentIncarnation = resolveStorageIncarnation(partitionService);
+    if (viewRecord.custodyState !== CUSTODY_STATE.ACTIVE ||
+        !isIncarnationAdmissible(currentIncarnation)) {
+      if (viewRecord.custodyState === CUSTODY_STATE.ACTIVE) {
+        closeAndSettleView(
+          viewRecord,
+          CLOSE_MODE_INVALIDATE,
+          STORAGE_INCARNATION_CHANGED_REASON,
+        );
+      }
+      throw createPagedRoutingError(
+        PAGED_EXECUTION_ERROR_CODE.READ_VIEW_UNAVAILABLE,
+        VIEW_ERROR_MSG.INCARNATION_ENDED,
+      );
+    }
     const postTotals = refreshTotals();
     if (postTotals.totalObservedWalBytes > limits.maxRetainedWalBytes ||
         postTotals.totalPinnedBytes > limits.maxRetainedBytes) {
-      closeAndSettleView(viewRecord, CLOSE_MODE_INVALIDATE, VIEW_ERROR_MSG.BYTE_LIMIT_REACHED);
+      closeAndSettleView(
+        viewRecord,
+        CLOSE_MODE_INVALIDATE,
+        VIEW_ERROR_MSG.BYTE_LIMIT_REACHED,
+      );
       throw createPagedRoutingError(
         PAGED_EXECUTION_ERROR_CODE.READ_VIEW_UNAVAILABLE,
         postTotals.totalObservedWalBytes > limits.maxRetainedWalBytes ?
@@ -256,6 +303,56 @@ function createShardReadViewManager(options = {}) {
           VIEW_ERROR_MSG.BYTE_LIMIT_REACHED,
       );
     }
+  }
+
+  async function acquireReadView({
+    invocationId, attemptId = DEFAULT_ATTEMPT_ID, partitionId,
+    partitionVersion = 1, bindingVersionId = null, hostNodeId = null,
+    partitionService, deadlineMs, statement, keyColumns, boundParameters = [],
+  }) {
+    const nowMs = limits.nowProvider();
+    reapExpiredViews(nowMs);
+    const incarnation = resolveStorageIncarnation(partitionService);
+    assertAcquisitionPreconditions({
+      deadlineMs, incarnation, isShutdown, maxViews: limits.maxRetainedViews,
+      nowMs, partitionService,
+      retainedCount: activeViews.size + unclosedViews.size + openingViews.size,
+    });
+    viewCounter += 1;
+    const readViewId =
+      `rv:${invocationId}:${attemptId}:${partitionId}:${viewCounter}`;
+    const viewRecord = buildViewRecord({
+      attemptId, bindingVersionId, createdAtMs: nowMs, deadlineMs, hostNodeId,
+      incarnation, invocationId, keyColumns,
+      nativeHandleBytes: incarnation.dbPath ? limits.nativeHandleOverheadBytes : 0,
+      partitionId, partitionService, partitionVersion, readViewId,
+      readerDb: null, snapshotBufferBytes: 0, snapshotMeta: null, snapshotRows: null,
+    });
+    openingViews.set(readViewId, viewRecord);
+    let opened;
+    try {
+      opened = await openSnapshotHandle({
+        boundParameters, deadlineMs, incarnation, keyColumns, limits, options,
+        onOpenedReader: (readerDb) =>
+          attachOpenedReaderCustody(viewRecord, readerDb, incarnation),
+        partitionId, partitionService, statement, totals: refreshTotals(),
+      });
+    } catch (err) {
+      settleOpeningFailure(viewRecord, partitionService, err);
+    }
+    openingViews.delete(readViewId);
+    applyOpenedSnapshotToView(viewRecord, opened);
+    if (!opened.readerDb && viewRecord.custodyState === CUSTODY_STATE.ACTIVE &&
+        isIncarnationAdmissible(resolveStorageIncarnation(partitionService))) {
+      registerRetainedReaderCustody({
+        closeHandler: (reason) => invalidateReadView(readViewId, reason),
+        incarnation, policyDomain: POLICY_DOMAIN.QUERY_READ_VIEW, viewId: readViewId,
+      });
+    }
+    if (viewRecord.custodyState === CUSTODY_STATE.ACTIVE) {
+      activeViews.set(readViewId, viewRecord);
+    }
+    assertOpenedViewHealthyAndBounded(viewRecord, partitionService);
     ensureReaperRunning();
     return viewRecord;
   }
@@ -351,7 +448,7 @@ function createShardReadViewManager(options = {}) {
   }
 
   function stats() {
-    reapExpiredViews(limits.nowProvider());
+    reapActiveViews(limits.nowProvider(), [], []);
     const totals = refreshTotals();
     return Object.freeze({
       activeViewCount: activeViews.size,
@@ -374,7 +471,11 @@ function createShardReadViewManager(options = {}) {
     }
     const closedIds = [];
     const failedIds = [];
-    for (const view of [...activeViews.values(), ...unclosedViews.values()]) {
+    for (const view of [
+      ...activeViews.values(),
+      ...unclosedViews.values(),
+      ...openingViews.values(),
+    ]) {
       if (closeAndSettleView(view, CLOSE_MODE_INVALIDATE, MANAGER_SHUTDOWN_REASON)) {
         closedIds.push(view.readViewId);
       } else {

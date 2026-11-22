@@ -215,25 +215,21 @@ function closeReaderHandle(readerDb, view, customCloseReader) {
     {closed: true, error: null};
 }
 
-function openPinnedWalReader(dbPath, partitionId, options) {
+function openPinnedWalReader(dbPath, partitionId, options, onOpenedReader) {
   const readerDb = new Database(dbPath, {readonly: true});
-  try {
-    options.onSnapshotStage?.(STAGE_AFTER_OPEN, {dbPath, partitionId, readerDb});
-    readerDb.exec(BEGIN_DEFERRED_SQL);
-    readerDb.prepare(PIN_WAL_SNAPSHOT_SQL).get();
-    options.onSnapshotStage?.(STAGE_AFTER_PIN, {dbPath, partitionId, readerDb});
-    const snapshotMeta = readPinnedSnapshotMetadata(readerDb, partitionId);
-    options.onSnapshotStage?.(STAGE_AFTER_WATERMARK, {
-      dbPath,
-      partitionId,
-      readerDb,
-      snapshotMeta,
-    });
-    return {readerDb, snapshotMeta};
-  } catch (err) {
-    closeReaderHandle(readerDb, null, options.closeReader);
-    throw err;
-  }
+  onOpenedReader(readerDb);
+  options.onSnapshotStage?.(STAGE_AFTER_OPEN, {dbPath, partitionId, readerDb});
+  readerDb.exec(BEGIN_DEFERRED_SQL);
+  readerDb.prepare(PIN_WAL_SNAPSHOT_SQL).get();
+  options.onSnapshotStage?.(STAGE_AFTER_PIN, {dbPath, partitionId, readerDb});
+  const snapshotMeta = readPinnedSnapshotMetadata(readerDb, partitionId);
+  options.onSnapshotStage?.(STAGE_AFTER_WATERMARK, {
+    dbPath,
+    partitionId,
+    readerDb,
+    snapshotMeta,
+  });
+  return {readerDb, snapshotMeta};
 }
 
 function queryRowsFromRetainedView(
@@ -345,9 +341,23 @@ function buildViewRecord({
   };
 }
 
+function applyOpenedSnapshotToView(viewRecord, opened) {
+  viewRecord.nativeHandleBytes = opened.nativeHandleBytes;
+  viewRecord.readerDb = opened.readerDb;
+  viewRecord.snapshotBufferBytes = opened.snapshotBufferBytes;
+  viewRecord.snapshotRows = opened.snapshotRows;
+  viewRecord.schemaVersion = opened.snapshotMeta?.schemaVersion ?? null;
+  viewRecord.snapshotAppliedIndex =
+    opened.snapshotMeta?.snapshotAppliedIndex ?? null;
+  viewRecord.snapshotTerm = opened.snapshotMeta?.snapshotTerm ?? null;
+  viewRecord.pinnedBytes =
+    opened.nativeHandleBytes + opened.snapshotBufferBytes;
+}
+
 export {
   DEFAULT_NATIVE_HANDLE_OVERHEAD_BYTES,
   NO_INVALIDATION_REASON,
+  applyOpenedSnapshotToView,
   buildViewRecord,
   closeReaderHandle,
   openPinnedWalReader,
