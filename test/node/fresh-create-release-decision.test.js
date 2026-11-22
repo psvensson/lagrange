@@ -188,7 +188,13 @@ test('no-release-read-cycle: local committed replica_operations-p1 leader ' +
     partitionId: opsPartition,
     initialized: true,
     isShutdown: false,
-    raft: {readStatus: () => currentStatus},
+    raft: {
+      readStatus: () => currentStatus,
+      observeCurrentAuthority: () => ({
+        ...currentStatus,
+        currentTermApplied: currentStatus.role === 'leader',
+      }),
+    },
     async executeQuery(_sql, params) {
       localQueries += 1;
       assert.deepEqual(params, [opsIdentity.operationId]);

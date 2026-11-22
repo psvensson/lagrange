@@ -6,6 +6,8 @@ import {REPAIR_READ_SCOPE} from './replica-operation-retained-repair-authority.j
 // No decision outcome is reused across turns: an arrival that overlaps a
 // proposing decision inherits its outcome; any later arrival decides afresh.
 import {isDeepStrictEqual} from 'node:util';
+import {RAFT_ROLE} from '../raft/constants.js';
+import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
 import {readCommittedStatementOutcome} from '../partition/partition-committed-statement-outcome.js';
 import {PARTITION_COMMITTED_STATEMENT_RECORD_STATE as RECORD} from
   '../partition/partition-committed-statement-outcome-constants.js';
@@ -37,8 +39,19 @@ function ownReplicaBirth(cache, service) {
     {state: REPLICA_BIRTH.ATTESTED, createdAt} : UNATTESTED_BIRTH;
 }
 
+function ingressAuthority(service) {
+  const authority = service.raft?.observeCurrentAuthority?.();
+  return authority?.outcome === RAFT_OPERATION_OUTCOME.CORE_OK &&
+    authority.role === RAFT_ROLE.LEADER &&
+    authority.currentTermApplied === true ? authority : null;
+}
+
+function ingressTerm(service) {
+  return ingressAuthority(service)?.term ?? null;
+}
+
 function ownsIngress(service, term) {
-  return service.isLeader && ledgerTerm(service) === term;
+  return service.isLeader && term !== null && ingressTerm(service) === term;
 }
 
 function ownsNativeCompleter(attempt, payload) {

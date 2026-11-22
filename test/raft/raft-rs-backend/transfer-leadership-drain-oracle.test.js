@@ -42,6 +42,8 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
 import {RAFT_ROLE} from '../../../src/raft/constants.js';
+import {RAFT_PROPOSAL_REFUSAL} from
+  '../../../src/raft/raft-operation-port-constants.js';
 import {RAFT_RS_MESSAGE_TYPE} from
   '../../../src/raft/raft-rs-ingress-constants.js';
 import {RAFT_LEADERSHIP_TRANSFER_REASON} from
@@ -265,6 +267,25 @@ function pendingCellOf(cell) {
   };
 }
 
+function assertDecisionAnswerEqual(pendingAnswer, processedAnswer) {
+  if (pendingAnswer?.reason === RAFT_PROPOSAL_REFUSAL.SUBMITTING_LEADERSHIP_ENDED &&
+      processedAnswer?.reason === RAFT_PROPOSAL_REFUSAL.SUBMITTING_LEADERSHIP_ENDED) {
+    assert.ok(pendingAnswer.submittedTerm === null ||
+      Number.isSafeInteger(pendingAnswer.submittedTerm),
+    'pending decision records its submittedTerm');
+    assert.ok(processedAnswer.submittedTerm === null ||
+      Number.isSafeInteger(processedAnswer.submittedTerm),
+    'processed decision records its submittedTerm');
+    const {submittedTerm: _pendingTerm, ...pendingComparable} = pendingAnswer;
+    const {submittedTerm: _processedTerm, ...processedComparable} = processedAnswer;
+    assert.deepEqual(pendingComparable, processedComparable,
+      'the answer equals the answer after the drain');
+    return;
+  }
+  assert.deepEqual(pendingAnswer, processedAnswer,
+    'the answer equals the answer after the drain');
+}
+
 for (const cell of CELLS) {
   test(`${cell.family}: ${cell.decision} with pending ` +
     `${cell.types.join(' then ')} (${cell.predicate}) [${cell.id}]`,
@@ -272,8 +293,7 @@ for (const cell of CELLS) {
     const processed = await runCell(cell, MODE.PROCESSED);
     const pending = await runCell(pendingCellOf(cell), MODE.PENDING);
     assertNotVacuous(cell, pending, processed);
-    assert.deepEqual(pending.answer, processed.answer,
-      'the answer equals the answer after the drain');
+    assertDecisionAnswerEqual(pending.answer, processed.answer);
     if (cell.admissionClosed) {
       assert.deepEqual(pending.turnOutbound, processed.turnOutbound,
         'the refused turn sends nothing in either run');

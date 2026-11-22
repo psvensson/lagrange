@@ -223,6 +223,17 @@ const LEDGER_LEADER = Object.freeze({
       lastIndex: 1,
       currentTermApplied: true,
     }),
+    observeCurrentAuthority: () => ({
+      outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+      groupId: LEDGER_PARTITION_ID,
+      replicaIdentity: LEDGER_REPLICA_ID,
+      role: RAFT_ROLE.LEADER,
+      term: 1,
+      commitIndex: 1,
+      appliedIndex: 1,
+      lastIndex: 1,
+      currentTermApplied: true,
+    }),
   },
 });
 const ROUTE_ROW_KEY = Object.freeze({

@@ -48,6 +48,7 @@ import {
   DELIVERED_TO_PEER,
   PartitionNodeCluster,
 } from './raft-rs-backend/partition-node-cluster.js';
+import {settleDelivered} from './raft-rs-backend/transfer-leadership-driver.js';
 
 const PARTITION_ID = 'cao-p1';
 const REPLICAS = Object.freeze(['cao-p1-r1', 'cao-p1-r2', 'cao-p1-r3']);
@@ -204,14 +205,16 @@ test('(a) a deposed leader whose core already follows the newer term is ' +
 
     const meter = effectsMeter(cluster, LEADER);
     const atRejoin = meter(() => observe(cluster, LEADER));
-    // readStatus() with delivered inbound drives it: the core steps the
-    // newer term, and the turn waits on the held reply.
+    // An explicit turn (LEARNER_ACTION) drives the delivered inbound: the core
+    // steps the newer term, and the turn waits on the held reply.
+    const pendingTurn = settleDelivered(cluster.node(LEADER), PARTITION_ID);
     const answered = cluster.node(LEADER).readStatus();
     const during = meter(() => observe(cluster, LEADER));
     const durableDuring = durableFacts(cluster, LEADER);
     const answeredAgain = cluster.node(LEADER).readStatus();
     release();
     release = null;
+    await pendingTurn;
     await settleEventLoop();
     const afterRelease = cluster.node(LEADER).readStatus();
 
@@ -277,9 +280,13 @@ test('(b)(d) an observation enters the core for status and has_ready only, ' +
     const delivered = deliverToInbound(cluster, LEADER);
     const withInbound = meter(() => observe(cluster, LEADER));
     const readStatusWithInbound = meter(() => cluster.node(LEADER).readStatus());
+    const settledWithInbound = meter(() =>
+      settleDelivered(cluster.node(LEADER), PARTITION_ID));
     const measured = {delivered, idle, withInbound,
       readStatusWithInbound: {operations: readStatusWithInbound.operations.length,
-        effects: readStatusWithInbound.effects}};
+        effects: readStatusWithInbound.effects},
+      settledWithInbound: {operations: settledWithInbound.operations.length,
+        effects: settledWithInbound.effects}};
     const report = `measured ${JSON.stringify(measured)}`;
     assert.ok(delivered > 0, `replies were delivered: ${report}`);
     assert.deepEqual({operations: idle.operations, effects: idle.effects,
@@ -294,9 +301,11 @@ test('(b)(d) an observation enters the core for status and has_ready only, ' +
     {operations: [...OBSERVATION_CORE_OPERATIONS], effects: NO_EFFECTS,
       inboundQueued: delivered},
     `(b) delivered inbound stays queued and unstepped: ${report}`);
-    // The contrast: readStatus() with the same inbound drives it.
-    assert.equal(readStatusWithInbound.effects.steps, delivered,
-      `readStatus() steps the delivered inbound: ${report}`);
+    assert.equal(readStatusWithInbound.effects.steps, 0,
+      `pure readStatus() steps nothing: ${report}`);
+    // The contrast: an explicit settle turn with the same inbound drives it.
+    assert.equal(settledWithInbound.effects.steps, delivered,
+      `LEARNER_ACTION settle steps the delivered inbound: ${report}`);
   } finally {
     cluster.dispose();
   }
@@ -342,10 +351,12 @@ test('(e) a leader whose own-term entry has not applied is NOT_SETTLED ' +
     }
     release = holdSendsOf(cluster, LEADER);
     const delivered = deliverToInbound(cluster, LEADER);
+    const pendingTurn = settleDelivered(cluster.node(LEADER), PARTITION_ID);
     const answered = cluster.node(LEADER).readStatus();
     const during = observe(cluster, LEADER);
     release();
     release = null;
+    await pendingTurn;
     await settleEventLoop();
     cluster.tickers = [LEADER];
     assert.ok(cluster.settle(() => observe(cluster, LEADER)

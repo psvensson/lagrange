@@ -25,6 +25,7 @@ import {setActualCoreEntryObserver, setCoreFaultInjector,
   setNativeInboundStageObserver} from '../../../src/raft/raft-rs-runtime-owner.js';
 import {PARTITION_TIMING, PartitionNodeCluster} from './partition-node-cluster.js';
 import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
+import {settleDelivered} from './transfer-leadership-driver.js';
 import {leadNextTerm, nativeAppendsOf} from './runtime-captured-inbound-companion-fixture.js';
 
 const REPLICAS = ['w07-a', 'w07-b', 'w07-c'];
@@ -62,6 +63,7 @@ function processSetupInbox(cluster, replica) {
   for (const envelope of cluster.replica(replica).inbox.splice(0)) {
     cluster.node(replica).step(envelope);
   }
+  settleDelivered(cluster.node(replica), cluster.partitionId);
   return cluster.node(replica).readStatus();
 }
 
@@ -390,6 +392,7 @@ test('W07 refusal: a native per-message refusal preserves the preaccepted tail',
     const accepted = acknowledgements.find((envelope) => envelope.message.from !== cPeer);
     assert.ok(refused && accepted, 'setup: actual B/C removal acknowledgements');
     f.cluster.node(A).step(accepted);
+    settleDelivered(f.cluster.node(A), f.cluster.partitionId);
     f.cluster.node(A).readStatus();
     // Restaged after item C (a follower refuses a proposal and forwards
     // nothing): the valid tail is B's actual acknowledgement of the leader's

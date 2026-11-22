@@ -361,7 +361,7 @@ const PARTITION_SERVICE_REMOTE_QUERY_METHODS = Object.freeze({
     if (isWriteOperation) {
       return {state: READ_AUTHORITY_WITNESS_STATE.NOT_APPLICABLE};
     }
-    return readAuthorityWitnessOf(this, this.readOwnRaftStatus());
+    return readAuthorityWitnessOf(this, observeOwnAuthority(this));
   },
   /**
    * Handle remote SQL query execution.

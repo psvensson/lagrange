@@ -72,6 +72,7 @@ test('a status read during a replacement waiting on delivery answers a named hol
       }
       assert.equal(fatal.outcome, RAFT_OPERATION_OUTCOME.CORE_FATAL);
       holdDelivery = true;
+      const replacementTurn = turnChainValue(cluster.node(victim).tick());
       const status = cluster.node(victim).readStatus();
       assert.equal(typeof status?.outcome, 'string',
         'the read answers a status, never a promise of one');
@@ -84,7 +85,7 @@ test('a status read during a replacement waiting on delivery answers a named hol
       assert.equal(status.recoveryRequired, true);
       holdDelivery = false;
       for (const release of held.splice(0)) release(undefined);
-      const resumed = await turnChainValue(cluster.node(victim).tick());
+      const resumed = await replacementTurn;
       assert.equal(typeof resumed.outcome, 'string');
       assert.equal(cluster.node(victim).readStatus().runtimeHealth, 'healthy');
     } finally {

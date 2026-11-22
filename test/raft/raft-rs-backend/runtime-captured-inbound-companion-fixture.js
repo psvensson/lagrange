@@ -10,6 +10,7 @@ import {setActualCoreEntryObserver, setCoreFaultInjector,
   setNativeInboundStageObserver} from '../../../src/raft/raft-rs-runtime-owner.js';
 import {PartitionNodeCluster} from './partition-node-cluster.js';
 import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
+import {settleDelivered} from './transfer-leadership-driver.js';
 
 const REPLICAS = ['w07-companion-a', 'w07-companion-b', 'w07-companion-c'];
 const [A, B, C] = REPLICAS;
@@ -45,6 +46,7 @@ function processSetupInbox(cluster, replica) {
   for (const envelope of cluster.replica(replica).inbox.splice(0)) {
     cluster.node(replica).step(envelope);
   }
+  settleDelivered(cluster.node(replica), cluster.partitionId);
   return cluster.node(replica).readStatus();
 }
 

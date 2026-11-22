@@ -66,9 +66,9 @@ for (const hasWitness of [true, false]) {
           nodeId: 'serving-node',
           replicaId: 'services-p1-r1',
           readOwnRaftStatus: PartitionServiceCoreBase.prototype.readOwnRaftStatus,
-          raft: {readStatus: () => ({outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+          raft: {observeCurrentAuthority: () => ({outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
             groupId: partitionId, replicaIdentity: 'services-p1-r1', role: 'leader',
-            term: 7})},
+            term: 7, currentTermApplied: true})},
           timeSource: {now: () => 12345},
         }, false);
       t.equal(witness.state, 'observed', 'remote owner supplies the witness');

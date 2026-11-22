@@ -23,11 +23,16 @@
 
 import assert from 'node:assert/strict';
 
-import {RaftRsPeerIdentityRegistry} from
-  '../../../src/raft/raft-rs-peer-identity.js';
+import {
+  RaftRsPeerIdentityRegistry,
+  deriveRaftRsPeerId,
+} from '../../../src/raft/raft-rs-peer-identity.js';
+import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from
+  '../../../src/raft/raft-committed-membership-constants.js';
 import {
   RAFT_EVENT,
   RAFT_MEMBERSHIP_OPERATION,
+  RAFT_MEMBERSHIP_TRANSITION_STAGE,
   RAFT_OPERATION_OUTCOME,
 } from '../../../src/raft/raft-operation-port-constants.js';
 import {RAFT_OPERATION_PORT_REQUEST} from
@@ -39,6 +44,31 @@ import {PartitionNodeCluster} from './partition-node-cluster.js';
 
 const LEADER_ROLE = 'leader';
 const {CORE_OK, CORE_REFUSED, HOST_FAILURE} = RAFT_OPERATION_OUTCOME;
+const SETTLE_REPLICA_IDENTITY = '__settle__';
+const SETTLE_PEER_ID = deriveRaftRsPeerId(SETTLE_REPLICA_IDENTITY);
+
+/**
+ * Drain delivered inbound messages on a port without ticking, via the
+ * explicit queued LEARNER_ACTION settle-then-read turn.
+ * @param {Object} port - The operation port.
+ * @param {string} groupId - The group id.
+ * @return {*} Settled or pending turn value.
+ */
+function settleDelivered(port, groupId) {
+  return turnChainValue(port.readCommittedMembership({
+    purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.LEARNER_ACTION,
+    groupId,
+    action: {
+      operationId: 'settle',
+      transitionIdentity: 'settle',
+      permitSequence: 1,
+      stage: RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER,
+      replicaIdentity: SETTLE_REPLICA_IDENTITY,
+      peerId: SETTLE_PEER_ID,
+      nodeId: 'settle-node',
+    },
+  }));
+}
 
 // The contract under test, as the F1 design and its lead decisions seal it
 // (design-f1-step-down-port-2026-09-25.md section 5): the request shapes and
@@ -247,7 +277,7 @@ class TransferLeadershipDriver {
           replica.node.step(envelope);
         }
         if (pending.length > 0) {
-          replica.node.readStatus();
+          settleDelivered(replica.node, this.cluster.partitionId);
           moved += pending.length;
         }
       }
@@ -270,7 +300,7 @@ class TransferLeadershipDriver {
       for (const envelope of pending) {
         replica.node.step(envelope);
       }
-      replica.node.readStatus();
+      settleDelivered(replica.node, this.cluster.partitionId);
     }
   }
 
@@ -505,4 +535,5 @@ export {
   mostCaughtUp,
   namedSuccessor,
   returnLeadershipBeforeOwnRemoval,
+  settleDelivered,
 };

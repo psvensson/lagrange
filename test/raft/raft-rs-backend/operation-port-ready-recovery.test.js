@@ -344,7 +344,7 @@ test('runtime replacement cannot re-enter a Ready generation suspended in host d
         console.error = originalConsoleError;
       }
       assert.equal(fatal.outcome, CORE_FATAL);
-      const replaced = await cluster.node(victim).readStatus();
+      const replaced = await turnChainValue(cluster.node(victim).tick());
       const entriesAfterReplacement = cluster.coreEntryCount();
       releaseDelivery(buildDeliveryEnvelope({acknowledged: true}));
       const staleContinuation = await pendingReady;
@@ -352,7 +352,8 @@ test('runtime replacement cannot re-enter a Ready generation suspended in host d
       assert.equal(staleContinuation.phase, 'runtime-generation-changed');
       assert.equal(cluster.coreEntryCount(), entriesAfterReplacement,
         'the old Ready continuation makes no call into reconstructed handles');
-      assert.equal(replaced.runtimeHealth, 'healthy');
+      assert.equal(replaced.outcome, CORE_OK);
+      assert.equal(cluster.node(victim).readStatus().runtimeHealth, 'healthy');
     } finally {
       cluster.dispose();
     }
@@ -375,7 +376,8 @@ test('runtime traps and temporary host unavailability preserve logical identity'
       assert.equal(unavailable.outcome, HOST_FAILURE);
       assert.equal(unavailable.phase, 'ready-persistence');
       assert.equal(lifecycleState(cluster.replica('identity-replica')), 'active');
-      const afterStorage = await port.readStatus();
+      await turnChainValue(port.tick());
+      const afterStorage = port.readStatus();
       assert.equal(afterStorage.peerId, initial.peerId);
       assert.equal(afterStorage.replicaIdentity, initial.replicaIdentity);
       assert.equal(afterStorage.runtimeHealth, 'healthy');
@@ -413,7 +415,8 @@ test('runtime traps and temporary host unavailability preserve logical identity'
       }
       assert.equal(trapped.outcome, CORE_FATAL);
       assert.equal(lifecycleState(trappedCluster.replica(victim)), 'active');
-      const restored = await trappedCluster.node(victim).readStatus();
+      await turnChainValue(trappedCluster.node(victim).tick());
+      const restored = trappedCluster.node(victim).readStatus();
       assert.equal(restored.peerId, before.peerId);
       assert.equal(restored.replicaIdentity, before.replicaIdentity);
       assert.equal(restored.runtimeHealth, 'healthy');

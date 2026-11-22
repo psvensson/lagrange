@@ -173,4 +173,42 @@ function shapeGroupObservation(group, observation, leaderIdentityUnresolved) {
   return result;
 }
 
-export {currentTermApplied, shapeGroupObservation, setNativeStatusObserver};
+const UNSHAPED_STATUS = Object.freeze({observation: null});
+
+function cachedShapedGroupStatus(group, observation, leaderIdentityUnresolved) {
+  const deliveryEpoch = group.peerDeliveryEpoch;
+  const refusalEpoch = group.inboundRefusalEpoch;
+  const cached = group.shapedStatus;
+  if (cached.observation === observation &&
+      cached.deliveryEpoch === deliveryEpoch &&
+      cached.refusalEpoch === refusalEpoch) {
+    return cached.shaped;
+  }
+  const shaped = shapeGroupObservation(
+    group, observation, leaderIdentityUnresolved);
+  if (shaped.outcome === RAFT_OPERATION_OUTCOME.CORE_OK) {
+    group.shapedStatus = Object.freeze({
+      observation, shaped, deliveryEpoch, refusalEpoch,
+    });
+  }
+  return shaped;
+}
+
+function reseedHoldStatus(group, runtimeHealth, runtimeGeneration) {
+  return deepFreeze({
+    ...group.reseedHold,
+    groupHealth: group.health,
+    runtimeHealth,
+    runtimeGeneration,
+    lifecycleIncarnation: group.lifecycleIncarnation,
+  });
+}
+
+export {
+  UNSHAPED_STATUS,
+  cachedShapedGroupStatus,
+  currentTermApplied,
+  reseedHoldStatus,
+  setNativeStatusObserver,
+  shapeGroupObservation,
+};

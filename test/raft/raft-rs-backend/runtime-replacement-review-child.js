@@ -93,8 +93,8 @@ try {
         throw Object.assign(new Error('injected native create refusal'), {kind: CORE_REFUSAL_KIND});
       }
     });
-    receipt.initiator = await pa.readStatus();
-    receipt.other = await pc.readStatus();
+    receipt.initiator = await turnChainValue(pa.tick());
+    receipt.other = await turnChainValue(pc.tick());
     assert.equal(receipt.refusals, 1, 'the middle group must refuse real reconstruction');
     assert.equal(receipt.other.outcome, OUTCOME.CORE_OK,
       'later group must not use a discarded handle after an earlier restoration refusal');
@@ -109,7 +109,7 @@ try {
       receipt.callbacks.push({status, enteredCore: receipt.entries.length - before});
     });
     readFault.enabled = true;
-    receipt.initiator = await pc.readStatus();
+    receipt.initiator = await turnChainValue(pc.tick());
     readFault.enabled = false;
     assert.equal(receipt.callbacks.length, 1, 'an actual recovery announcement must invoke the callback');
     assert.equal(receipt.callbacks[0].enteredCore, 0,
@@ -130,19 +130,19 @@ try {
       if (file === manifest) receipt.manifestReads += 1;
       return nativeReadFile.call(this, file, ...args);
     };
-    const first = await pa.readStatus(); receipt.firstRefusal = first;
+    const first = await turnChainValue(pa.tick()); receipt.firstRefusal = first;
     assert.equal(first.outcome, OUTCOME.HOST_FAILURE);
     const initialAttempts = receipt.manifestReads;
     assert.equal(initialAttempts, 1, 'the first failed real artifact read must engage');
     for (let index = 0; index < 24; index += 1) {
-      const refusal = await [pb, pc, pa][index % 3].readStatus();
+      const refusal = await turnChainValue([pb, pc, pa][index % 3].tick());
       assert.equal(refusal.outcome, OUTCOME.HOST_FAILURE);
     }
     assert.equal(receipt.manifestReads, initialAttempts,
       'all groups must share one reload attempt per retry window');
     assert.ok(first.retryAfterMs > 0, 'the shared hold must name a positive remaining window');
     clock.advance(first.retryAfterMs - 1);
-    assert.equal((await pb.readStatus()).outcome, OUTCOME.HOST_FAILURE);
+    assert.equal((await turnChainValue(pb.tick())).outcome, OUTCOME.HOST_FAILURE);
     assert.equal(receipt.manifestReads, initialAttempts, 'no retry before the existing deadline');
     fs.writeFileSync(gluePath, originalGlue);
     if (scenario === 'last-close') {
@@ -158,7 +158,8 @@ try {
       receipt.openedAfterFinalClose = true;
     } else {
       clock.advance(1);
-      const resumed = await pb.readStatus();
+      await turnChainValue(pb.tick());
+      const resumed = pb.readStatus();
       assert.equal(resumed.outcome, OUTCOME.CORE_OK);
       assert.equal(resumed.runtimeGeneration, receipt.initial.runtimeGeneration + 1,
         'the due caller causes exactly one successful native instantiation');
@@ -180,17 +181,18 @@ try {
         throw new globalThis.WebAssembly.RuntimeError('injected trap during reconstruction');
       }
     });
-    const failed = await pa.readStatus();
+    const failed = await turnChainValue(pa.tick());
     receipt.restoreFailure = failed;
     assert.equal(receipt.restoreTraps, 1);
     assert.equal(failed.outcome, OUTCOME.HOST_FAILURE);
     assert.equal(failed.recoveryRequired, true);
     assert.ok(failed.retryAfterMs > 0);
     const before = receipt.entries.length;
-    assert.equal((await pc.readStatus()).outcome, OUTCOME.HOST_FAILURE);
+    assert.equal((await turnChainValue(pc.tick())).outcome, OUTCOME.HOST_FAILURE);
     assert.equal(receipt.entries.length, before, 'partial new handles cannot escape the failed replacement');
     clock.advance(failed.retryAfterMs);
-    const recovered = await pc.readStatus();
+    await turnChainValue(pc.tick());
+    const recovered = pc.readStatus();
     assert.equal(recovered.outcome, OUTCOME.CORE_OK);
     assert.equal(recovered.runtimeGeneration, receipt.initial.runtimeGeneration + 2);
   } else if (scenario === 'close-during-restore') {
@@ -203,7 +205,7 @@ try {
       receipt.callbacks.push({closed, enteredCore: receipt.entries.length - before});
     });
     readFault.enabled = true;
-    receipt.initiator = await pa.readStatus();
+    receipt.initiator = await turnChainValue(pa.tick());
     readFault.enabled = false;
     assert.equal(receipt.callbacks.length, 1);
     assert.equal(receipt.callbacks[0].closed.outcome, OUTCOME.CORE_OK);
@@ -216,15 +218,15 @@ try {
     unsubscribe(); unsubscribe = undefined;
   } else {
     receipt.phase = 'control:recovery';
-    assert.equal((await pc.readStatus()).outcome, OUTCOME.CORE_OK);
+    assert.equal((await turnChainValue(pc.tick())).outcome, OUTCOME.CORE_OK);
   }
   setCoreFaultInjector(null); readFault.enabled = false;
   // A held individual group may need its owner-advertised window. Never invent a new budget.
   for (const group of clusters) {
     if (closedGroups.has(group)) continue;
-    let status = await portOf(group).readStatus();
+    let status = await turnChainValue(portOf(group).tick());
     if (status.outcome === OUTCOME.HOST_FAILURE && status.retryAfterMs > 0) {
-      clock.advance(status.retryAfterMs); status = await portOf(group).readStatus();
+      clock.advance(status.retryAfterMs); status = await turnChainValue(portOf(group).tick());
     }
     assert.equal(status.outcome, OUTCOME.CORE_OK);
     assert.equal((await turnChainValue(portOf(group).propose(`after:${group.partitionId}`))).outcome, OUTCOME.CORE_OK);

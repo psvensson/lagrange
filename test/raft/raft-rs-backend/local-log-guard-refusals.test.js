@@ -235,7 +235,7 @@ test('a core trap and the runtime replacement it causes each write one ' +
         dbFile: cluster.dbFileOf('tl-b'), groupId: cluster.partitionId,
         status: victim, from: ids['tl-a'], term: String(victim.term)})));
       trapped = await turnChainValue(cluster.node('tl-b').tick());
-      cluster.node('tl-a').readStatus();
+      await turnChainValue(cluster.node('tl-a').tick());
     });
     assert.equal(trapped.outcome, RAFT_OPERATION_OUTCOME.CORE_FATAL);
     const traps = errors.filter(({context}) =>

@@ -633,6 +633,9 @@ test('F-ah: a core failure restores every readable group; a group whose ' +
         `setup: the core trapped (${JSON.stringify(trapped)})`);
 
       // The sibling's next operation replaces the runtime.
+      const siblingTick = await turnChainValue(sibling.partition.raft.tick());
+      assert.equal(siblingTick?.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+        `the replacement answers the sibling's operation (${JSON.stringify(siblingTick)})`);
       const siblingStatus = answerOf(() => sibling.partition.raft
         .readStatus());
       assert.equal(siblingStatus.threw, null, 'the replacement answers the ' +

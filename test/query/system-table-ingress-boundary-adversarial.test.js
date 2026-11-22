@@ -759,9 +759,16 @@ test('Surface 6: PartitionService.handleRemoteQuery, executeMigrationAlterQuery,
         // The witness producer reads the replica's raft status through the
         // service's seam, as the real PartitionService does.
         readOwnRaftStatus: PartitionServiceCoreBase.prototype.readOwnRaftStatus,
-        raft: {readStatus: () => ({outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
-          groupId: `${tableName}-p1`, replicaIdentity: `${tableName}-p1-r1`,
-          role: 'leader', term: 1})},
+        raft: {
+          readStatus: () => ({outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+            groupId: `${tableName}-p1`, replicaIdentity: `${tableName}-p1-r1`,
+            role: 'leader', term: 1, commitIndex: 1, appliedIndex: 1,
+            currentTermApplied: true}),
+          observeCurrentAuthority: () => ({outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+            groupId: `${tableName}-p1`, replicaIdentity: `${tableName}-p1-r1`,
+            role: 'leader', term: 1, commitIndex: 1, appliedIndex: 1,
+            currentTermApplied: true}),
+        },
         timeSource: {now: () => 1000},
         logger: {debug() {}, error() {}, warn() {}, info() {}},
         resolveLeaderAddress() {

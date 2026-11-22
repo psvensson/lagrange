@@ -10,6 +10,7 @@ import {RAFT_OPERATION_OUTCOME as OUTCOME} from '../../../src/raft/raft-operatio
 import {closeMessageGroupConsensus} from '../../../src/message-group/message-group-consensus-port.js';
 import {releaseWasmServiceReplicaConsensus} from '../../../src/wasm-service/wasm-service-replica-lifecycle.js';
 import {WASM_SERVICE_LIFECYCLE_REFUSAL, WASM_SERVICE_REPLICA_STATE as STATE} from '../../../src/wasm-service/wasm-service-constants.js';
+import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 function assertBoth(kind, failure, secondary, service, shared) {
   assertInitializationRefusal(kind, failure, service.replicaId, shared);
@@ -36,7 +37,8 @@ for (const kind of KINDS) {
               throw new globalThis.WebAssembly.RuntimeError('cleanup witness replacement trap');
             }
           });
-          shared = await fixture.port.readStatus();
+          await turnChainValue(fixture.port.tick());
+          shared = fixture.port.readStatus();
           assert.equal(trapped, 1); assert.equal(shared.outcome, OUTCOME.HOST_FAILURE);
           assert.ok(shared.retryAfterMs > 0);
         }
@@ -79,7 +81,8 @@ for (const kind of KINDS) {
           assert.equal(service.db, null);
           if (kind === 'wasm-service') assert.equal(service.lifecycleState, STATE.STOPPED);
           if (shared) fixture.clock.advance(shared.retryAfterMs);
-          assert.equal((await fixture.port.readStatus()).outcome, OUTCOME.CORE_OK);
+          await turnChainValue(fixture.port.tick());
+          assert.equal(fixture.port.readStatus().outcome, OUTCOME.CORE_OK);
           const successor = buildService(fixture, kind);
           await successor.initialize();
           assert.equal(successor.raft.readStatus().outcome, OUTCOME.CORE_OK);
@@ -373,7 +376,8 @@ test('WASM hosting lifecycle retains a cleanup-required replica rather than over
     assert.equal(owner.getReplica(definition.serviceId), service);
     fail = false; await owner.stopReplica(definition.serviceId);
     assert.equal(db.open, false); assert.equal(owner.getReplica(definition.serviceId), null);
-    assert.equal((await fixture.port.readStatus()).outcome, OUTCOME.CORE_OK);
+    await turnChainValue(fixture.port.tick());
+    assert.equal(fixture.port.readStatus().outcome, OUTCOME.CORE_OK);
     const successor = owner.createReplica(definition, config); fixture.services.push(successor);
     await successor.initialize(); assert.equal(successor.initialized, true);
   } finally {

@@ -24,6 +24,9 @@ const RAFT_EVENT = Object.freeze({
   // the scheduling it was asked for while the gate was closed (committed-
   // read amendment 1, section 3.3).
   GATE_OPENED: PARTICIPATION_GATE.GATE_OPENED,
+  // The settled status observation changed at an end-of-turn settle point.
+  // Carries the frozen shaped status; never emitted when unchanged.
+  STATUS_CHANGED: 'status changed',
   // A configuration change settled in this drain: a conf-change entry
   // applied (effective or not - a RemoveNode of a non-member and an AddNode
   // of a member apply without changing the configuration key), or the

@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2432,
+    "unit": 2433,
     "integration": 131,
     "bootstrap": 231,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2801,
-  "digest": "fnv1a32-68a88b38",
+  "censusSize": 2802,
+  "digest": "fnv1a32-6bf5847f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1877,6 +1877,7 @@
     "test/raft/raft-rs-backend/proposal-submitting-leadership.test.js": "unit",
     "test/raft/raft-rs-backend/queued-proposal-leadership-fence.test.js": "unit",
     "test/raft/raft-rs-backend/raft-rs-ingress-fuzz.test.js": "unit",
+    "test/raft/raft-rs-backend/raft-status-pure-read.test.js": "unit",
     "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js": "unit",
     "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js": "unit",
     "test/raft/raft-rs-backend/replica-membership-witness.test.js": "unit",

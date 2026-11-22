@@ -13,8 +13,8 @@
 //   PENDING   - the envelopes are handed to the requester's step() and left
 //               unprocessed, then the request is made;
 //   PROCESSED - the same envelopes are handed over and processed first by the
-//               requester's own status read (a drain that never ticks), then
-//               the same request is made.
+//               requester's own explicit settle turn (LEARNER_ACTION, a drain
+//               that never ticks), then the same request is made.
 //
 // It returns everything the claim calls externally relevant, observed the
 // same way in both runs, so the test compares the two and never an expected
@@ -58,10 +58,12 @@ import {
   RAFT_RS_MESSAGE_TYPE_RANGE,
   RAFT_RS_TRANSPORT_PROTOCOL,
 } from '../../../src/raft/raft-rs-ingress-constants.js';
-import {encodeProposal} from '../../../src/raft/raft-rs-proposal-codec.js';
 import {computeReplicaElectionTimeouts} from
   '../../../src/raft/replica-election-timeouts.js';
-import {TransferLeadershipDriver} from './transfer-leadership-driver.js';
+import {
+  TransferLeadershipDriver,
+  settleDelivered,
+} from './transfer-leadership-driver.js';
 import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 const ROOT = path.resolve(
@@ -72,9 +74,7 @@ const MESSAGE_TYPE_FN = /fn num_to_msg_type\([^)]*\)[^{]*\{([\s\S]*?)\n\}/u;
 const MESSAGE_TYPE_ARM = /(\d+)\s*=>\s*(Msg\w+)\s*,/gu;
 const MESSAGE_NAME = /MessageType::(Msg\w+)/gu;
 const STEP = 'step';
-const PAYLOAD_ENCODING = 'base64';
 const UNSYNCED_WRITES = 'synchronous = OFF';
-const ENTRY_NORMAL = 0;
 // Microtask and macrotask turns a flush yields, so every promise chain the
 // runtime started (sends released on a microtask) completes before a read.
 const FLUSH_TURNS = 2;
@@ -284,7 +284,8 @@ class OracleRun {
   async deliverOnly(replicaIds) {
     for (const replicaId of replicaIds) {
       this.driver.stepUndrained(replicaId);
-      this.driver.port(replicaId).readStatus();
+      await settleDelivered(
+        this.driver.port(replicaId), this.driver.cluster.partitionId);
       await this.settle();
     }
   }
@@ -335,8 +336,12 @@ class OracleRun {
     for (let burst = 0; burst < DELIVERY_BOUND; burst += 1) {
       let moved = 0;
       for (const replicaId of this.replicaIds) {
-        moved += this.driver.stepUndrained(replicaId);
-        this.driver.port(replicaId).readStatus();
+        const stepped = this.driver.stepUndrained(replicaId);
+        if (stepped > 0) {
+          await settleDelivered(
+            this.driver.port(replicaId), this.driver.cluster.partitionId);
+          moved += stepped;
+        }
       }
       await this.settle();
       if (moved === 0) {
@@ -477,16 +482,6 @@ function craft(run, {to, from, fromRaftId = null, msgType, term = null,
   });
 }
 
-/**
- * One normal entry carrying a proposal, as a forwarded MsgPropose holds it.
- * @param {*} command - The proposal.
- * @return {Object} The entry.
- */
-function proposalEntry(command) {
-  return {entryType: ENTRY_NORMAL, term: '0', index: '0',
-    data: Buffer.from(encodeProposal(command)).toString(PAYLOAD_ENCODING)};
-}
-
 function stepCount(entries) {
   return entries.filter((entry) => entry === STEP).length;
 }
@@ -507,6 +502,7 @@ async function decide(run, cell, mode) {
   const delivered = driver.stepUndrained(requester);
   const processed = {};
   if (mode === MODE.PROCESSED) {
+    await settleDelivered(driver.port(requester), driver.cluster.partitionId);
     processed.reference = driver.port(requester).readStatus();
     await run.settle();
     processed.steps = stepCount(run.coreOperations().slice(handedAt));
@@ -601,7 +597,6 @@ export {
   assertStatusRecord,
   bindingEnumerations,
   craft,
-  proposalEntry,
   runCell,
   stepCount,
 };

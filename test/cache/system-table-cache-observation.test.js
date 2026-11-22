@@ -45,10 +45,7 @@ function buildTableRow(schemaVersion, originHlc, updatedAtMs = 1_000) {
   };
 }
 
-test('buildRemoteReadAuthorityWitness includes appliedIndex and commitIndex from raft.readStatus()', (t) => {
-  // The witness producer reads the replica's own raft status through the
-  // service's seam (readOwnRaftStatus: a CORE_OK status of this group and
-  // replica), as the real PartitionService does.
+test('buildRemoteReadAuthorityWitness includes appliedIndex and commitIndex from observeCurrentAuthority()', (t) => {
   const fakeService = {
     partitionId: 'partition-0',
     nodeId: 'node-leader',
@@ -56,7 +53,7 @@ test('buildRemoteReadAuthorityWitness includes appliedIndex and commitIndex from
     timeSource: {now: () => 4_200},
     readOwnRaftStatus: PartitionServiceCoreBase.prototype.readOwnRaftStatus,
     raft: {
-      readStatus: () => ({
+      observeCurrentAuthority: () => ({
         outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
         groupId: 'partition-0',
         replicaIdentity: 'replica-leader',
@@ -88,6 +85,59 @@ test('buildRemoteReadAuthorityWitness includes appliedIndex and commitIndex from
     role: RAFT_ROLE.LEADER,
     observedAtMs: 4_200,
   });
+  t.end();
+});
+
+test('buildRemoteReadAuthorityWitness reflects uncached authority hold over stale readStatus', (t) => {
+  const heldWitness =
+    PARTITION_SERVICE_REMOTE_QUERY_METHODS.buildRemoteReadAuthorityWitness.call({
+      partitionId: 'partition-0',
+      nodeId: 'node-leader',
+      replicaId: 'replica-leader',
+      role: 'LEADER',
+      timeSource: {now: () => 5_000},
+      raft: {
+        readStatus: () => ({outcome: 'CORE_OK', role: 'leader', term: 3, commitIndex: 28, appliedIndex: 27}),
+        observeCurrentAuthority: () => ({outcome: 'HOST_FAILURE', reason: 'runtime held'}),
+      },
+    }, false);
+  t.same(heldWitness, {
+    state: READ_AUTHORITY_WITNESS_STATE.OBSERVED,
+    partitionId: 'partition-0',
+    servingNodeId: 'node-leader',
+    servingReplicaId: 'replica-leader',
+    term: null,
+    appliedIndex: null,
+    commitIndex: null,
+    currentTermApplied: false,
+    role: null,
+    observedAtMs: 5_000,
+  });
+
+  const unsettledWitness =
+    PARTITION_SERVICE_REMOTE_QUERY_METHODS.buildRemoteReadAuthorityWitness.call({
+      partitionId: 'partition-0',
+      nodeId: 'node-leader',
+      replicaId: 'replica-leader',
+      role: 'LEADER',
+      timeSource: {now: () => 5_100},
+      raft: {
+        readStatus: () => ({outcome: 'CORE_OK', role: 'leader', term: 3, commitIndex: 28, appliedIndex: 27}),
+        observeCurrentAuthority: () => ({
+          outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+          groupId: 'partition-0',
+          replicaIdentity: 'replica-leader',
+          role: 'not-settled',
+          term: 4,
+          commitIndex: 29,
+          appliedIndex: 28,
+        }),
+      },
+    }, false);
+  t.equal(unsettledWitness.role, 'not-settled');
+  t.equal(unsettledWitness.term, 4);
+  t.equal(unsettledWitness.appliedIndex, 28);
+  t.equal(unsettledWitness.commitIndex, 29);
   t.end();
 });
 

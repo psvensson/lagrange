@@ -111,13 +111,14 @@ function rowRefusalOf(row, identity, leader) {
   return leader.hasWriteOrigin === true ? null : foundingRefusalOf(row);
 }
 
-function isLocalCommittedLeaderStatus(status) {
-  return status?.outcome === RAFT_OPERATION_OUTCOME.CORE_OK &&
-    status.role === RAFT_ROLE.LEADER &&
-    !isHeldByHostFailure(status) &&
-    Number.isSafeInteger(status.commitIndex) && status.commitIndex > 0 &&
-    Number.isSafeInteger(status.appliedIndex) &&
-    status.appliedIndex >= status.commitIndex;
+function isLocalCommittedLeaderAuthority(authority) {
+  return authority?.outcome === RAFT_OPERATION_OUTCOME.CORE_OK &&
+    authority.role === RAFT_ROLE.LEADER &&
+    authority.currentTermApplied === true &&
+    !isHeldByHostFailure(authority) &&
+    Number.isSafeInteger(authority.commitIndex) && authority.commitIndex > 0 &&
+    Number.isSafeInteger(authority.appliedIndex) &&
+    authority.appliedIndex >= authority.commitIndex;
 }
 
 function isQueryableOperationsService(service) {
@@ -131,9 +132,9 @@ function isQueryableOperationsService(service) {
 }
 
 function isServiceCommittedLeader(service) {
-  const readStatus = service?.raft?.readStatus;
-  return typeof readStatus === 'function' &&
-    isLocalCommittedLeaderStatus(readStatus.call(service.raft));
+  const observe = service?.raft?.observeCurrentAuthority;
+  return typeof observe === 'function' &&
+    isLocalCommittedLeaderAuthority(observe.call(service.raft));
 }
 
 function localCommittedOperationsLeader(handler) {

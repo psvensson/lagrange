@@ -47,6 +47,7 @@ function recordPeerDelivery(group, raftPeerId, observation) {
   if (group.peerDelivery.size > PEER_DELIVERY_OBSERVATION_LIMIT) {
     group.peerDelivery.delete(group.peerDelivery.keys().next().value);
   }
+  group.peerDeliveryEpoch = (group.peerDeliveryEpoch ?? 0) + 1;
 }
 
 // A delivered envelope the group did not step: the core refused it (a
@@ -72,6 +73,7 @@ function recordInboundStepRefusal(group, envelope, refused) {
     group.inboundStepRefusals.delete(
       group.inboundStepRefusals.keys().next().value);
   }
+  group.inboundRefusalEpoch = (group.inboundRefusalEpoch ?? 0) + 1;
 }
 
 function peerDeliveryFailed(group, raftPeerId, phase, cause, failedPeers) {
