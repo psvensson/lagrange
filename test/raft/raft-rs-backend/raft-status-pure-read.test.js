@@ -498,6 +498,23 @@ test('step (h): STATUS_CHANGED emits only when settled status changes and ' +
   }
 });
 
+async function electWithoutStatusRead(cluster, clocks, leaderId, replicaIds) {
+  for (let round = 0; round < 200; round += 1) {
+    if (cluster.node(leaderId)[OBSERVE]().currentTermApplied === true) {
+      quiesceWithClocks(cluster, clocks, replicaIds);
+      return;
+    }
+    for (const id of replicaIds) {
+      await turnChainValue(cluster.node(id).tick());
+      drainInboxThroughPort(cluster, clocks.get(id), id);
+    }
+    if (cluster.node(leaderId)[OBSERVE]().role !== 'leader') {
+      await turnChainValue(cluster.node(leaderId).campaign());
+    }
+  }
+  assert.fail(`setup: ${leaderId} did not become settled leader without readStatus()`);
+}
+
 test('progress, recovery, runtime replacement, and compaction sync continue ' +
   'with zero readStatus() calls', async () => {
   const failNextApply = {armed: false};
@@ -549,9 +566,7 @@ test('progress, recovery, runtime replacement, and compaction sync continue ' +
     quiesceWithClocks(cluster, clocks, replicaIds);
     assert.equal(cluster.replica('nopoll-a').appliedCommands.length, 2,
       'group recovery replayed and applied entry without any readStatus() call');
-    // Re-elect nopoll-a before testing runtime replacement (3-voter restore opens as follower).
-    assert.equal((await turnChainValue(portA.campaign())).outcome, CORE_OK);
-    quiesceWithClocks(cluster, clocks, replicaIds);
+    await electWithoutStatusRead(cluster, clocks, 'nopoll-a', replicaIds);
 
     // Runtime replacement via tick() with 0 readStatus() calls.
     setCoreFaultInjector((groupId, operation) => {
@@ -566,8 +581,7 @@ test('progress, recovery, runtime replacement, and compaction sync continue ' +
     assert.equal(fatal.outcome, CORE_FATAL);
     const replaced = await turnChainValue(portA.tick());
     assert.equal(replaced.outcome, CORE_OK);
-    assert.equal((await turnChainValue(portA.campaign())).outcome, CORE_OK);
-    quiesceWithClocks(cluster, clocks, replicaIds);
+    await electWithoutStatusRead(cluster, clocks, 'nopoll-a', replicaIds);
     const afterTrapWrite = await turnChainValue(portA.propose({zeroPoll: 3}));
     assert.equal(afterTrapWrite.outcome, CORE_OK);
     quiesceWithClocks(cluster, clocks, replicaIds);
