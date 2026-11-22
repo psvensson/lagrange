@@ -61,18 +61,24 @@ test('a kept attempt blocked on an entry-key collision is typed blocked work in 
       },
     });
     const statement = placementStatement({partitionId: 'tables-p1', target: NODE.B});
-    await owner.submitAdmission(statement);
-    await owner.submitAdmission(statement);
-    assert.deepEqual(answers.map((answer) => answer.failureCode),
-      [PLACEMENT_ADMISSION_ERROR.BYTES, PLACEMENT_ADMISSION_ERROR.BYTES],
-      'the same attempt re-requests under the same entry and meets the collision');
-    assert.deepEqual(owner.blockedPlacementAttempts(), [{
-      state: PLACEMENT_ATTEMPT_STATE.BLOCKED_ON_KEY_COLLISION, attemptKey: ATTEMPT_KEY,
-      entryId: collidingEntryId, recordClass: PARTITION_COMMITTED_RECORD_CLASS.STATEMENT,
-    }], 'the blocked attempt is a typed, named state');
-    assert.equal(warnings.length, 1, 'one warning for the blocked attempt, not one per pass');
-    assert.equal(warnings[0].fields.entryId, collidingEntryId);
-    assert.equal(warnings[0].fields.recordClass, PARTITION_COMMITTED_RECORD_CLASS.STATEMENT);
-    assert.equal(leader.db.prepare(ATTEMPT_ROW_SQL).get(ATTEMPT_KEY)?.entry_id,
-      collidingEntryId, 'the attempt stays durable: nothing retires it automatically');
+    try {
+      owner.setLeader(true);
+      await owner.awaitCurrentWorkIdle();
+      await owner.submitAdmission(statement);
+      await owner.submitAdmission(statement);
+      assert.deepEqual(answers.map((answer) => answer.failureCode),
+        [PLACEMENT_ADMISSION_ERROR.BYTES, PLACEMENT_ADMISSION_ERROR.BYTES],
+        'the same attempt re-requests under the same entry and meets the collision');
+      assert.deepEqual(owner.blockedPlacementAttempts(), [{
+        state: PLACEMENT_ATTEMPT_STATE.BLOCKED_ON_KEY_COLLISION, attemptKey: ATTEMPT_KEY,
+        entryId: collidingEntryId, recordClass: PARTITION_COMMITTED_RECORD_CLASS.STATEMENT,
+      }], 'the blocked attempt is a typed, named state');
+      assert.equal(warnings.length, 1, 'one warning for the blocked attempt, not one per pass');
+      assert.equal(warnings[0].fields.entryId, collidingEntryId);
+      assert.equal(warnings[0].fields.recordClass, PARTITION_COMMITTED_RECORD_CLASS.STATEMENT);
+      assert.equal(leader.db.prepare(ATTEMPT_ROW_SQL).get(ATTEMPT_KEY)?.entry_id,
+        collidingEntryId, 'the attempt stays durable: nothing retires it automatically');
+    } finally {
+      owner.shutdown();
+    }
   }));

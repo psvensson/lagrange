@@ -87,10 +87,22 @@ function assignRetainedPlacementRepairMethods(Repository) {
       } finally {
         attempt.awaitingCallers -= 1;
       }
+      this.settleRetainedRepairCallerAnswer(attempt, answer);
+      return answer;
+    },
+
+    settleRetainedRepairCallerAnswer(attempt, answer) {
       if (this.retainedRepairAttemptIsCurrent(attempt)) {
         attempt.callerAnswer = answer ? CALLER.NONE : CALLER.WITHHELD;
+        return;
       }
-      return answer;
+      if (!answer && attempt.verdict && !this.isShuttingDownRequested()) {
+        attempt.callerAnswer = CALLER.WITHHELD;
+        if (attempt.awaitingCallers === 0) {
+          const {operationId, createdAt} = attempt.operation;
+          this.reportRetainedRepairVerdict({operationId, createdAt, verdict: attempt.verdict});
+        }
+      }
     },
 
     async answerRetainedRepairCaller(attempt, operation) {
@@ -276,6 +288,7 @@ function assignRetainedPlacementRepairMethods(Repository) {
       const {operationId, createdAt} = attempt.operation;
       if (this.retainedPlacementRepairs.get(operationId) !== attempt) return;
       this.retainedPlacementRepairs.delete(operationId);
+      attempt.verdict = verdict;
       if (attempt.callerAnswer === CALLER.WITHHELD && attempt.awaitingCallers === 0) {
         this.reportRetainedRepairVerdict({operationId, createdAt, verdict});
       }

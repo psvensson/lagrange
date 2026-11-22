@@ -457,11 +457,11 @@ test('the gate registers the withheld wait before asking and clears it when the 
       const verdicts = observeRetainedVerdicts(owner);
       const ensure = repository.ensureRetainedOperationRow;
       let intercepted = false;
+      let registeredBeforeAsk = false;
       repository.ensureRetainedOperationRow = async function(operation) {
         if (!intercepted) {
           intercepted = true;
-          assert.equal(owner.withheldDispatchByOperationId.has(initial.operation_id), true,
-            'the wait is registered before asking the retained owner');
+          registeredBeforeAsk = owner.withheldDispatchByOperationId.has(initial.operation_id);
           repository.reportRetainedRepairVerdict(
             verdictFor(initial, {state: RETAINED_REPAIR_VERDICT.CONFIRMED}));
           return false;
@@ -469,6 +469,8 @@ test('the gate registers the withheld wait before asking and clears it when the 
         return ensure.call(this, operation);
       };
       await claimAndReenter(owner, leader, initial);
+      assert.equal(registeredBeforeAsk, true,
+        'the wait is registered before asking the retained owner');
       assert.equal(verdicts.length, 1);
       await verdicts[0].answer.dispatch;
       await settleOperationLane(owner, initial);

@@ -16,7 +16,11 @@ import {
 import {
   STORAGE_RESERVATION_AUTHORITY_ERROR,
 } from './storage-reservation-authority.js';
-import {retainWithheldDispatch} from './operation-workflow-withheld-dispatch.js';
+import {
+  clearWithheldDispatch,
+  retainWithheldDispatch,
+  settleWithheldGateRefusal,
+} from './operation-workflow-withheld-dispatch.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 
 const {
@@ -116,8 +120,6 @@ function handleTerminalReservationAttempt(owner, operation, attempt) {
  *   dispatch may proceed.
  * @private
  */
-const OPERATION_ROW_REPAIR_REFUSED = 'retained operation row repair refused';
-
 function reservationAttemptIsActive(attempt, options) {
   return attempt?.outcome === OPERATION_RESERVATION_ATTEMPT_OUTCOME.ALREADY_ACTIVE ||
     (options.allowCreateReservation !== false &&
@@ -135,15 +137,13 @@ async function ensureDispatchReservationOrSkip(owner, operation, options = {}) {
     await owner.ensureReservationForOperation(operation, {allowCreate: false}) :
     await owner.ensureReservationForOperation(operation);
   if (reservationAttemptIsActive(attempt, options)) {
+    const wait = retainWithheldDispatch(owner, operation);
     const repaired = await repairGateRepairedOperationRow(owner, operation, attempt);
-    if (repaired) return null;
-    // Withheld: the retained owner's later verdict for this record is the wake.
-    retainWithheldDispatch(owner, operation);
-    return owner.buildSkippedOperationResult(
-      OPERATION_WORKFLOW_OWNER_REASON.OPERATION_NOT_DISPATCHABLE,
-      operation.operationId,
-      {error: OPERATION_ROW_REPAIR_REFUSED},
-    );
+    if (repaired) {
+      clearWithheldDispatch(owner, operation.operationId);
+      return null;
+    }
+    return settleWithheldGateRefusal(owner, operation, wait);
   }
   if (
     attempt?.error === STORAGE_RESERVATION_AUTHORITY_ERROR.OPERATION_TERMINAL

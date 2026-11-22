@@ -24,9 +24,21 @@ const UNKNOWN_REPLICA_ID = 'unknown';
 
 const {
   OperationType,
+  REBALANCE_COORDINATOR_DEFER_REASON,
   REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
   REMOVE_SAFETY_READINESS_DIMENSION,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
+
+function buildEntityUnavailableRemoveSafetyEvaluation(
+  context,
+  operation,
+  errorMessage,
+) {
+  const deferReason = context.repository.isReplaceRemoveDispatchPhase(operation) ?
+    REBALANCE_COORDINATOR_DEFER_REASON.REPLACE_REMOVE_SAFETY_BLOCKED :
+    REBALANCE_COORDINATOR_DEFER_REASON.REMOVE_SAFETY_BLOCKED;
+  return context.buildDeferredRemoveSafetyEvaluation(errorMessage, deferReason);
+}
 
 function isRuntimeServiceRowActive(row) {
   return row?.status === ReplicaStatus.ACTIVE &&
@@ -61,7 +73,8 @@ async function evaluateEntityRemoveSafety(context, operation, identity) {
   const observation = await context.getEntityReplicaRowsForSafety(identity);
   const rows = Array.isArray(observation?.rows) ? observation.rows : [];
   if (observation?.available !== true) {
-    return context.buildDeferredRemoveSafetyEvaluationForOperation(
+    return buildEntityUnavailableRemoveSafetyEvaluation(
+      context,
       operation,
       `${identity.entityType} ${identity.entityId} safety check unavailable`,
     );
@@ -125,14 +138,14 @@ async function evaluateEntityRemoveSafety(context, operation, identity) {
     identity.entityId,
   );
   if (!Number.isInteger(minReplicaCount) || minReplicaCount < 1) {
-    return context.buildDeferredRemoveSafetyEvaluationForOperation(
+    return buildEntityUnavailableRemoveSafetyEvaluation(
+      context,
       operation,
       `${identity.entityType} ${identity.entityId} safety policy unavailable`,
     );
   }
   if (projectedRows.length < minReplicaCount) {
-    return context.buildDeferredRemoveSafetyEvaluationForOperation(
-      operation,
+    return context.buildFailedRemoveSafetyEvaluation(
       `${identity.entityType} ${identity.entityId} would drop active replicas ` +
         `below minimum (${projectedRows.length}/${minReplicaCount})`,
     );
