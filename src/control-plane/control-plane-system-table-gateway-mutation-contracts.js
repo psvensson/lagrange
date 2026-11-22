@@ -52,6 +52,10 @@ function resolveMutationCompletionStateFromClassification(classification) {
   if (classification.completionStatePresent) {
     return classification.completionState;
   }
+  if (classification.known &&
+      classification.outcome === CONTROL_PLANE_MUTATION_OUTCOME.UNKNOWN) {
+    return CONTROL_PLANE_MUTATION_OUTCOME.UNKNOWN;
+  }
   if (classification.failed) {
     return resolveFailedMutationOutcome(classification);
   }
@@ -196,6 +200,13 @@ function resolveControlPlaneMutationContractOutcome(
   result = {},
   normalizedOutcome,
 ) {
+  // Handed over, not proven: pending, its owned next action the re-send.
+  if (normalizedOutcome === CONTROL_PLANE_MUTATION_OUTCOME.UNKNOWN) {
+    return buildOwnerContractOutcome({
+      contractState: OWNER_CONTRACT_STATE.PENDING,
+      nextAction: OWNER_CONTRACT_NEXT_ACTION.RETRY,
+    });
+  }
   if (
     normalizedOutcome === CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED ||
     normalizedOutcome === CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY

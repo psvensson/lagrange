@@ -30,6 +30,10 @@ import {AssignmentEpoch} from '../../src/rebalancer/assignment-epoch.js';
 import {
   createMockSqlQueryEngine,
 } from './cdc-integration-service-test-support.js';
+import {
+  createBootstrapLaneReplica,
+  raftLaneRefusal,
+} from '../test-helpers/bootstrap-lane-replica.js';
 
 // Initialize configuration and logging for tests
 beforeEach(() => {
@@ -728,20 +732,10 @@ test('executeSQLDirectToLocalPartition executes on local partition', async (t) =
   });
   service.initialize();
 
-  // Mock partition service
-  const mockPartitionService = {
-    partitionId: 'services-p1',
-    initialized: true,
-    isLeader: true,
-    executeLocalQuery: async (sql, params) => {
-      t.ok(sql.includes('INSERT INTO services'), 'should receive INSERT SQL');
-      t.equal(params.length, 2, 'should receive params');
-      return {success: true, affectedRows: 1};
-    },
-  };
+  const replica = createBootstrapLaneReplica({partitionId: 'services-p1'});
 
   const mockPartitionServices = new Map();
-  mockPartitionServices.set('services-p1', mockPartitionService);
+  mockPartitionServices.set('services-p1', replica);
 
   service.setBootstrapMode(true, mockPartitionServices);
 
@@ -750,8 +744,14 @@ test('executeSQLDirectToLocalPartition executes on local partition', async (t) =
     ['service-1', 'node1/service/1'],
   );
 
+  t.equal(replica.raftWrites.length, 1,
+    'the write goes through the local partition\'s raft lane exactly once');
+  t.ok(replica.raftWrites[0].sql.includes('INSERT INTO services'),
+    'should receive INSERT SQL');
+  t.equal(replica.raftWrites[0].params.length, 2, 'should receive params');
+  t.equal(replica.outsideRaft.length, 0, 'nothing is executed outside raft');
   t.ok(result.success, 'should return success');
-  t.equal(result.affectedRows, 1, 'should return affected rows');
+  t.equal(result.changes, 1, 'should return the partition\'s changed rows');
   t.end();
 });
 
@@ -781,12 +781,8 @@ test('executeSQLDirectToLocalPartition throws when partition not found', async (
   service.initialize();
 
   const mockPartitionServices = new Map();
-  mockPartitionServices.set('nodes-p1', {
-    partitionId: 'nodes-p1',
-    initialized: true,
-    isLeader: true,
-    executeLocalQuery: async () => ({success: true, affectedRows: 1}),
-  });
+  mockPartitionServices.set('nodes-p1',
+    createBootstrapLaneReplica({partitionId: 'nodes-p1'}));
 
   service.setBootstrapMode(true, mockPartitionServices);
 
@@ -815,12 +811,8 @@ test('executeSQLDirectToLocalPartition throws when SQL parsing fails', async (t)
   service.initialize();
 
   const mockPartitionServices = new Map();
-  mockPartitionServices.set('services-p1', {
-    partitionId: 'services-p1',
-    initialized: true,
-    isLeader: true,
-    executeLocalQuery: async () => ({success: true, affectedRows: 1}),
-  });
+  mockPartitionServices.set('services-p1',
+    createBootstrapLaneReplica({partitionId: 'services-p1'}));
 
   service.setBootstrapMode(true, mockPartitionServices);
 
@@ -843,30 +835,22 @@ test('executeSQLDirectToLocalPartition handles partition errors', async (t) => {
   });
   service.initialize();
 
-  const mockPartitionService = {
-    partitionId: 'services-p1',
-    initialized: true,
-    isLeader: true,
-    executeLocalQuery: async () => {
-      return {success: false, error: 'Partition error'};
-    },
-  };
+  const replica = createBootstrapLaneReplica({partitionId: 'services-p1', refuse: true});
 
   const mockPartitionServices = new Map();
-  mockPartitionServices.set('services-p1', mockPartitionService);
+  mockPartitionServices.set('services-p1', replica);
 
   service.setBootstrapMode(true, mockPartitionServices);
 
-  try {
-    await service.executeSQLDirectToLocalPartition(
-      'INSERT INTO services (service_id) VALUES (?)',
-      ['service-1'],
-    );
-    t.fail('should throw error when partition returns error');
-  } catch (error) {
-    t.ok(error.message.includes('Partition error'), 'should throw partition error');
-  }
+  const result = await service.executeSQLDirectToLocalPartition(
+    'INSERT INTO services (service_id) VALUES (?)',
+    ['service-1'],
+  );
 
+  t.same(result, raftLaneRefusal('services-p1'),
+    'the raft lane\'s own failure is the write\'s answer');
+  t.equal(replica.raftWrites.length, 1, 'the raft lane carried the write once');
+  t.equal(replica.outsideRaft.length, 0, 'nothing is executed outside raft');
   t.end();
 });
 
@@ -877,19 +861,10 @@ test('CDCIntegrationService - executeSQL routes to direct partition in bootstrap
     });
     service.initialize();
 
-    let directCallMade = false;
-    const mockPartitionService = {
-      partitionId: 'services-p1',
-      initialized: true,
-      isLeader: true,
-      executeLocalQuery: async (_sql, _params) => {
-        directCallMade = true;
-        return {success: true, affectedRows: 1};
-      },
-    };
+    const replica = createBootstrapLaneReplica({partitionId: 'services-p1'});
 
     const mockPartitionServices = new Map();
-    mockPartitionServices.set('services-p1', mockPartitionService);
+    mockPartitionServices.set('services-p1', replica);
 
     service.setBootstrapMode(true, mockPartitionServices);
 
@@ -902,7 +877,9 @@ test('CDCIntegrationService - executeSQL routes to direct partition in bootstrap
     );
 
     t.ok(result.success, 'should succeed');
-    t.ok(directCallMade, 'should call direct partition method in bootstrap mode');
+    t.equal(replica.raftWrites.length, 1,
+      'the bootstrap write goes through the local partition\'s raft lane exactly once');
+    t.equal(replica.outsideRaft.length, 0, 'nothing is executed outside raft');
     t.end();
   });
 

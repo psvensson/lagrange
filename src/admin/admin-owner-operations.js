@@ -52,16 +52,21 @@ const ADMIN_OWNER_OPERATION_PATH = Object.freeze({
   logMarker: ADMIN_OWNER_OPERATION_ROUTE.LOG_MARKER,
 });
 
-// The named outcome of one admin owner operation (R07).
+// The named outcome of one admin owner operation (R07). UNKNOWN: the owner
+// handed the change to its producer and its outcome is not proven - it may
+// still apply; neither refused nor not-ready (the client re-reads the owner's
+// state, or re-sends, before deciding).
 const ADMIN_OWNER_OPERATION_OUTCOME = Object.freeze({
   APPLIED: 'applied',
   REFUSED: 'refused',
   OWNER_NOT_READY: 'owner_not_ready',
+  UNKNOWN: 'unknown',
   FAILED: 'failed',
 });
 
 const ADMIN_OWNER_OPERATION_ERROR_CODE = Object.freeze({
   OWNER_NOT_READY: 'ADMIN_OWNER_NOT_READY',
+  OUTCOME_UNKNOWN: 'ADMIN_OWNER_OUTCOME_UNKNOWN',
   CONFIG_KEY_REQUIRED: 'CONFIG_KEY_REQUIRED',
   NODE_ID_REQUIRED: 'NODE_ID_REQUIRED',
   NODE_DRAIN_REMOTE_UNSUPPORTED: 'NODE_DRAIN_REMOTE_UNSUPPORTED',
@@ -69,6 +74,7 @@ const ADMIN_OWNER_OPERATION_ERROR_CODE = Object.freeze({
 
 const ADMIN_OWNER_OPERATION_ERROR_MSG = Object.freeze({
   OWNER_NOT_READY: 'The owner of this operation is not available yet',
+  OUTCOME_UNKNOWN: 'The owner handed the change over; its outcome is not confirmed',
   CONFIG_KEY_REQUIRED: 'configKey is required',
   NODE_ID_REQUIRED: 'nodeId is required',
   NODE_DRAIN_REMOTE_UNSUPPORTED:
@@ -131,6 +137,20 @@ function ownerNotReady(retryAfterMs = null, error = null) {
   });
 }
 
+// The owner's own code, when it named the unknown (e.g. an unconfirmed
+// marker), travels beside the route's one code for the outcome.
+function outcomeUnknown(error) {
+  return answer(HTTP_STATUS.SERVICE_UNAVAILABLE, {
+    success: false,
+    outcome: ADMIN_OWNER_OPERATION_OUTCOME.UNKNOWN,
+    errorCode: ADMIN_OWNER_OPERATION_ERROR_CODE.OUTCOME_UNKNOWN,
+    error: ADMIN_OWNER_OPERATION_ERROR_MSG.OUTCOME_UNKNOWN,
+    mutationOutcome: CONTROL_PLANE_MUTATION_OUTCOME.UNKNOWN,
+    ...(isNonEmptyString(error?.code) ? {ownerErrorCode: error.code} : {}),
+    ...(Number.isFinite(error?.retryAfterMs) ? {retryAfterMs: error.retryAfterMs} : {}),
+  });
+}
+
 function applied(fields) {
   return answer(HTTP_STATUS.OK, {
     success: true,
@@ -166,6 +186,9 @@ function answerOwnerFailure(error) {
   const code = isNonEmptyString(error?.code) ? error.code : null;
   if (REFUSAL_STATUS_BY_CODE.has(code)) {
     return refusal(code, error.message);
+  }
+  if (error?.outcome === CONTROL_PLANE_MUTATION_OUTCOME.UNKNOWN) {
+    return outcomeUnknown(error);
   }
   if (error?.deferRetry === true ||
       NOT_READY_MUTATION_OUTCOMES.has(error?.outcome)) {

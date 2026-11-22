@@ -40,6 +40,8 @@ import {
   OWNER_OUTCOME_FRESHNESS,
   OWNER_OUTCOME_STATE,
 } from '../../src/control-plane/owner-outcome-contract.js';
+import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
+import {engineCommittedWriteAnswer} from '../test-helpers/committed-write-answer.js';
 
 const TEST_REGISTER_SERVICE_RETRY_AFTER_MS = 1000;
 const TEST_CONTROL_PLANE_PRESSURE_DEGRADED_CODE =
@@ -818,23 +820,55 @@ test('BootstrapAPI - register-service retries deferred services publication befo
     await api.shutdown();
   });
 
-test('BootstrapAPI - register-service falls back to bootstrap-scoped SQL ' +
-  'mutation routing when CDC mutation helpers are not ready yet',
+// The seed's real composition: its CDC integration owner is wired into the
+// BootstrapAPI before HTTP opens (lagrange-runtime-startup hydrates it before
+// bootstrapAPI.initialize()), so a register-service always meets the CDC write
+// path. The pre-CDC SQL fallback this case used to drive is removed
+// (7d261f681, ruling 2026-11-21); a register-service before CDC is wired is
+// the typed retryable refusal (register-service-retryable-refusal.test.js).
+test('BootstrapAPI - register-service on the seed persists through the CDC ' +
+  'write path that is wired before HTTP opens',
 async (t) => {
   initializeTestEnvironment();
 
+  // One engine, as on the seed (the CDC owner's and the API's). Each write
+  // statement is recorded with whether the CDC owner issued it, and answers
+  // what the engine answers for the committed statement.
   const sqlCalls = [];
+  const cdcWrites = [];
+  let insideCdcOwner = 0;
+  const engine = {
+    async executeQuery(sql, params, options) {
+      if (/^\s*SELECT\b/iu.test(sql)) {
+        return {success: true, rows: []};
+      }
+      sqlCalls.push({sql, params, options, viaCdcOwner: insideCdcOwner > 0});
+      return engineCommittedWriteAnswer(sql, params, options);
+    },
+  };
+  const cdcIntegrationService = new CDCIntegrationService({
+    nodeId: 'seed-node-1', sqlQueryEngine: engine});
+  cdcIntegrationService.initialize();
+  t.teardown(() => cdcIntegrationService.markShuttingDown());
+  for (const method of ['insertSystemTableRow', 'upsertSystemTableRow',
+    'updateSystemTableRow', 'deleteSystemTableRow']) {
+    const write = cdcIntegrationService[method].bind(cdcIntegrationService);
+    cdcIntegrationService[method] = async (tableName, ...rest) => {
+      cdcWrites.push({method, tableName});
+      insideCdcOwner += 1;
+      try {
+        return await write(tableName, ...rest);
+      } finally {
+        insideCdcOwner -= 1;
+      }
+    };
+  }
   const api = new BootstrapAPI({
     seedNodeId: 'seed-node-1',
     seedNodeAddress: 'ws://localhost:8080',
     systemTableCache: createEmptySystemTableCache(),
-    sqlQueryEngine: {
-      async executeQuery(sql, params, options) {
-        sqlCalls.push({sql, params, options});
-        return {success: true, affectedRows: 1};
-      },
-    },
-    cdcIntegrationService: null,
+    sqlQueryEngine: engine,
+    cdcIntegrationService,
   });
 
   await api.initialize(0, {listen: false});
@@ -859,7 +893,7 @@ async (t) => {
   });
 
   t.equal(response.statusCode, 200,
-    'register-service should not fail just because the bootstrap seed has not wired CDC mutations yet');
+    `register-service on the seed succeeds through its CDC write path (${response.body})`);
   const responseBody = JSON.parse(response.body);
   t.match(
     responseBody[SERVICE_REGISTRATION_HANDOFF_FIELD.CONTRACT],
@@ -916,23 +950,19 @@ async (t) => {
       ),
     'fulfilled register-service contract should include next-action diagnostics',
   );
-  t.equal(sqlCalls.length, 1,
-    'bootstrap register-service should route through the SQL fallback once');
+  // The removed fallback's four assertions, restated for the real path
+  // (confirmed 2026-11-21): exactly one services INSERT reaches the CDC
+  // owner, and no raw SQL write happens.
+  t.same(cdcWrites.map(({tableName}) => tableName), [TABLES.SERVICES],
+    'exactly one write reaches the CDC owner, on the canonical services table');
+  t.equal(sqlCalls.length, 1, 'that write is one engine statement');
   t.match(
     sqlCalls[0].sql,
     /^INSERT INTO services \(/,
     'register-service should persist through the canonical services table',
   );
-  t.equal(
-    sqlCalls[0].options.phaseScope,
-    'bootstrap',
-    'bootstrap writes should opt into the explicit startup fallback scope',
-  );
-  t.equal(
-    'skipCacheWait' in sqlCalls[0].options,
-    false,
-    'the bootstrap SQL path is gated by its phase scope alone (no cache-wait opt-out exists: writes answer at their commit)',
-  );
+  t.equal(sqlCalls.filter(({viaCdcOwner}) => !viaCdcOwner).length, 0,
+    'no raw SQL write: every write statement was issued by the CDC owner');
 
   await api.shutdown();
 });

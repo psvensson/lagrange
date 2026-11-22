@@ -10,6 +10,7 @@ import {CDC_OPERATION, STRING} from '../constants/index.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
+  CONTROL_PLANE_MUTATION_OUTCOME,
 } from '../control-plane/control-plane-system-table-gateway.js';
 import {classifyControlPlaneMutationResult} from
   '../control-plane/control-plane-mutation-outcome-classifier.js';
@@ -65,6 +66,27 @@ function resolveConfigStampMs(nowMs, nodeClock) {
     return nowMs;
   }
   return typeof nodeClock === 'function' ? nodeClock() : Date.now();
+}
+
+function selectSeedOutcomeBucket(counts, mutationResult) {
+  const effect = classifyControlPlaneMutationResult(mutationResult);
+  if (effect.applied) return counts.seeded;
+  const present = !effect.failed && (effect.zeroAffectedRows ||
+    effect.outcome === CONTROL_PLANE_MUTATION_OUTCOME.NO_OP);
+  if (present) return counts.alreadyPresent;
+  return !effect.valid || effect.outcome === CONTROL_PLANE_MUTATION_OUTCOME.UNKNOWN ?
+    counts.unknown : counts.refused;
+}
+
+function assertSeedConfigurationComplete(counts) {
+  if (counts.refused.length === 0 && counts.unknown.length === 0) return counts;
+  const error = new Error(
+    `${CONFIG_ERROR_MSG.SEEDING_INCOMPLETE_PREFIX}refused=${counts.refused.length}, ` +
+    `unknown=${counts.unknown.length}`,
+  );
+  error.code = CONFIG_ERROR_CODE.SEEDING_INCOMPLETE;
+  error.counts = counts;
+  throw error;
 }
 
 class DynamicConfigService extends EventEmitter {
@@ -154,32 +176,24 @@ class DynamicConfigService extends EventEmitter {
     updatedBy = CONFIG_SEED_SOURCE.SYSTEM,
     _options = {},
   ) {
-    const seeded = [];
-    const skipped = [];
+    const counts = {seeded: [], alreadyPresent: [], refused: [], unknown: []};
     // The rows are stamped by the node seeding them.
     const now = resolveConfigStampMs(_options.nowMs, this.now);
 
     for (const [key, definition] of Object.entries(CONFIG_DEFINITIONS)) {
-      // Check for environment variable override
       const envKey = this.keyToEnvVar(key);
       const envValue = process.env[envKey];
       const value = envValue !== undefined ?
         this.parseEnvValue(envValue, definition.type) :
         definition.defaultValue;
-
-      // Insert into config table
       const row = {
         [CONFIG_TABLE_COLUMN.KEY]: key,
-        [CONFIG_TABLE_COLUMN.VALUE]: this.serializeValue(
-          value, definition.type,
-        ),
+        [CONFIG_TABLE_COLUMN.VALUE]: this.serializeValue(value, definition.type),
         [CONFIG_TABLE_COLUMN.VALUE_TYPE]: definition.type,
-        [CONFIG_TABLE_COLUMN.REQUIRES_RESTART]:
-          definition.requiresRestart ? 1 : 0,
+        [CONFIG_TABLE_COLUMN.REQUIRES_RESTART]: definition.requiresRestart ? 1 : 0,
         [CONFIG_TABLE_COLUMN.DESCRIPTION]: definition.description,
         [CONFIG_TABLE_COLUMN.DEFAULT_VALUE]: this.serializeValue(
-          definition.defaultValue, definition.type,
-        ),
+          definition.defaultValue, definition.type),
         [CONFIG_TABLE_COLUMN.UPDATED_BY]: updatedBy,
         [CONFIG_TABLE_COLUMN.UPDATED_AT]: now,
         [CONFIG_TABLE_COLUMN.CREATED_AT]: now,
@@ -189,27 +203,18 @@ class DynamicConfigService extends EventEmitter {
         deliveryPriority: CONFIG_MUTATION_DELIVERY_PRIORITY,
         ignoreExisting: true,
       };
-
       const mutationResult = await this.getControlPlaneSystemTableGateway()
-        .insertSystemTableRow(
-          SYSTEM_TABLE_NAME.CONFIG,
-          row,
-          writeOptions,
-        );
-
-      if (this.didConfigSeedInsertApply(mutationResult)) {
-        seeded.push(key);
-      } else {
-        skipped.push(key);
-      }
+        .insertSystemTableRow(SYSTEM_TABLE_NAME.CONFIG, row, writeOptions);
+      selectSeedOutcomeBucket(counts, mutationResult).push(key);
     }
 
     this.logger.info(CONFIG_LOG_MSG.SEEDING_COMPLETE, {
-      seeded: seeded.length,
-      skipped: skipped.length,
+      seeded: counts.seeded.length,
+      alreadyPresent: counts.alreadyPresent.length,
+      refused: counts.refused.length,
+      unknown: counts.unknown.length,
     });
-
-    return {seeded, skipped};
+    return assertSeedConfigurationComplete(counts);
   }
 
   /**

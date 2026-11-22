@@ -108,7 +108,11 @@ test('SQLQueryEngine - default CREATE TABLE quorum does not fall back ' +
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
     controlPlaneReadinessService: createProvisioningReadyService(cache),
-    tablePartitionProvisioningTimeoutMs: 10,
+    // The attempt deadline (73fbf0576) is checked before and after every
+    // admission read; it must cover those in-process reads so the rejection
+    // comes from the admission answers, not from a spent deadline. The
+    // insufficient-targets rejection does not wait for it.
+    tablePartitionProvisioningTimeoutMs: 2000,
     tablePartitionProvisioningPollIntervalMs: 1,
     tablePartitionTargetNodeConvergenceTimeoutMs: 1,
   });

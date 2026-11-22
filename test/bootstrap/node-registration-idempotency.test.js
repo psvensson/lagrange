@@ -16,6 +16,7 @@ import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {TABLES} from '../../src/constants/index.js';
 import {insertViaUpsert} from
   '../test-helpers/endpoint-incarnation-fixture.js';
+import {cdcCommittedWriteAnswer} from '../test-helpers/committed-write-answer.js';
 
 /**
  * Wire a NodeJoiningService so registerNodeInCluster can
@@ -36,9 +37,9 @@ function createWiredService({
     insertSystemTableRow(...args) {
       return insertViaUpsert(this, args);
     },
-    upsertSystemTableRow: async (tableName, rowData) => {
+    upsertSystemTableRow: async (tableName, rowData, options) => {
       upsertCalls.push({tableName, rowData});
-      return {success: true};
+      return cdcCommittedWriteAnswer('upsertSystemTableRow', [tableName, rowData, options]);
     },
   };
 

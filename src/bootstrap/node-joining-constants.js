@@ -319,6 +319,7 @@ const JOINING_ERROR_MSG = Object.freeze({
     `Failed to upsert message group metadata for ${groupId}`,
   READY_SIGNAL_NOT_ACK: 'Control plane did not acknowledge ready signal',
   controlPlaneMessageFailed: (message) => `Control plane message failed: ${message}`,
+  CONTROL_PLANE_MESSAGE_WAS_NOT_ACKNOWLEDGED: 'control-plane message was not acknowledged',
   controlPlaneCdcSubscribeFailed: (tableName, message) =>
     `CDC subscription failed for ${tableName}: ${message}`,
   REPLICA_HANDLER_ROUTER_REQUIRED: 'MessageRouter must be initialized before ReplicaHandler',

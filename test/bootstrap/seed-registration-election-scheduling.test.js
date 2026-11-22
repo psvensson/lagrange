@@ -16,6 +16,10 @@ const REQUIRED_PARTITION_IDS = Object.freeze([
   INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES],
   INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.TABLES],
   INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.MESSAGE_GROUPS],
+  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS],
+  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICE_ENDPOINTS],
+  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.CONFIG],
+  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS],
 ]);
 const REQUIRED_REPLICA_COUNT = 3;
 
@@ -222,7 +226,7 @@ test('registration owns the exact dependency cut and spends its gate once',
     }});
 
     t.same(phase.getRequiredLeaderPartitionIds(), REQUIRED_PARTITION_IDS,
-      'the registration owner publishes its four direct-write dependencies');
+      'the registration owner publishes its eight direct-write dependencies');
     await phase.waitForRequiredPartitionLeadership();
     await phase.waitForRequiredPartitionLeadership();
     t.equal(waitTurns, 1,

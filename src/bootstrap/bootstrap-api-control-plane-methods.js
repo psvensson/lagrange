@@ -369,6 +369,9 @@ const bootstrapApiControlPlaneMethods = {
         Number.isFinite(error?.retryAfterMs) ?
           Math.max(0, Math.floor(error.retryAfterMs)) :
           null,
+      // A typed refusal that says retry (deferRetry) keeps saying it: the one
+      // retryable mapping below answers it with the retryable status.
+      deferRetry: error?.deferRetry === true,
       pressureAction:
         typeof error?.pressureAction === 'string' ?
           error.pressureAction :

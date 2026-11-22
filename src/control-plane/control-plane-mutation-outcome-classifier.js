@@ -20,14 +20,25 @@ const DATA_DESCRIPTOR_VALUE_PROPERTY = 'value';
 const EMPTY_NORMALIZED_TEXT = '';
 const AFFECTED_ROWS_PROPERTY = 'affectedRows';
 const SETTLED_REPLAY_PROPERTY = 'settledReplay';
-// The count of a write applied as a settled replay whose count is not known:
-// absent (never zero rows), so the write classifies as applied.
+// A count that is not known - a write applied as a settled replay whose count
+// is not retained, or a write whose outcome is UNKNOWN (an unproven count is
+// not an observation): absent, never zero rows.
 const UNKNOWN_AFFECTED_ROWS = objectFreeze({
   present: false,
   valid: true,
   value: 0,
 });
 
+// The flags of a named outcome: `known` - the answer names an outcome of the
+// vocabulary that agrees with its own `success`; `applied` - its effect is
+// proven applied; `accepted` - the write was not refused (it was admitted,
+// deferred, or handed over); `deferred` - its owner continues it later;
+// `retryable` - the same write may be sent again; `terminal` - nothing
+// continues it. `failed` (the view) is the producer's own `success: false`.
+// These are properties of the named outcome and are not gated by `failed`:
+// a failed answer legitimately names DEFERRED, OWNER_NOT_READY or UNKNOWN.
+// An outcome that contradicts the answer's own success (APPLIED on a failed
+// answer, UNKNOWN on a successful one) makes the answer invalid: fail closed.
 function freezeEffect(
   outcome,
   applied,
@@ -105,6 +116,16 @@ CONTROL_PLANE_MUTATION_OUTCOME_CLASSIFICATION[
   false,
   true,
   false,
+  true,
+  false,
+);
+CONTROL_PLANE_MUTATION_OUTCOME_CLASSIFICATION[
+  CONTROL_PLANE_MUTATION_OUTCOME.UNKNOWN
+] = freezeEffect(
+  CONTROL_PLANE_MUTATION_OUTCOME.UNKNOWN,
+  false,
+  true,
+  true,
   true,
   false,
 );
@@ -295,7 +316,6 @@ function classifyControlPlaneMutationResult(result) {
     readOwnDataProperty(result, 'pressureAction'),
     isKnownPressureAction,
   );
-  const affectedRows = normalizeAffectedRows(result, partitionResultProperty);
 
   const outcomeIsAbsent = outcomeProperty.valid &&
     (!outcomeProperty.present || outcomeProperty.value === null ||
@@ -310,18 +330,26 @@ function classifyControlPlaneMutationResult(result) {
   const effect = outcomeIsKnown ?
     CONTROL_PLANE_MUTATION_OUTCOME_CLASSIFICATION[outcomeProperty.value] :
     UNKNOWN_CLASSIFICATION;
+  const affectedRows =
+    effect.outcome === CONTROL_PLANE_MUTATION_OUTCOME.UNKNOWN ?
+      UNKNOWN_AFFECTED_ROWS :
+      normalizeAffectedRows(result, partitionResultProperty);
   const successIsAbsent = successProperty.valid &&
     !successProperty.present;
   const successIsBoolean = successProperty.valid &&
     successProperty.present &&
     typeof successProperty.value === 'boolean';
+  const failed = successIsBoolean && successProperty.value === false;
+  const contradictsSuccess = outcomeIsKnown && (failed ? effect.applied :
+    successIsBoolean &&
+      effect.outcome === CONTROL_PLANE_MUTATION_OUTCOME.UNKNOWN);
   const valid = partitionResultProperty.valid &&
     (outcomeIsAbsent || outcomeIsKnown) &&
     (successIsAbsent || successIsBoolean) &&
+    !contradictsSuccess &&
     affectedRows.valid &&
     completionState.valid &&
     pressureAction.valid;
-  const failed = successIsBoolean && successProperty.value === false;
   let applied = false;
   if (valid && !failed) {
     if (outcomeIsKnown) {

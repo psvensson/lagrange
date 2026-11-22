@@ -30,6 +30,7 @@ import {insertViaUpsert} from
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 import {createNodeRegistrationIssueRecord} from
   '../../src/control-plane/owners/node-registration-incarnation-write.js';
+import {cdcCommittedWriteAnswer} from '../test-helpers/committed-write-answer.js';
 
 /**
  * Build a minimal node row for testing.
@@ -102,7 +103,8 @@ describe('NodeStorageBudgetSetup', () => {
         insertSystemTableRow(...args) {
           return insertViaUpsert(this, args);
         },
-        upsertSystemTableRow: async () => ({success: true}),
+        upsertSystemTableRow: async (...args) =>
+          cdcCommittedWriteAnswer('upsertSystemTableRow', args),
       };
       const service = NodeStorageBudgetSetup.create({
         nodeId: 'test-node-1',
@@ -126,9 +128,9 @@ describe('NodeStorageBudgetSetup', () => {
         insertSystemTableRow(...args) {
           return insertViaUpsert(this, args);
         },
-        upsertSystemTableRow: async (tableName, rowData) => {
+        upsertSystemTableRow: async (tableName, rowData, options) => {
           upsertCalls.push({tableName, rowData});
-          return {success: true};
+          return cdcCommittedWriteAnswer('upsertSystemTableRow', [tableName, rowData, options]);
         },
       };
     });
@@ -228,9 +230,9 @@ describe('Bootstrap pipeline budget integration', () => {
       insertSystemTableRow(...args) {
         return insertViaUpsert(this, args);
       },
-      upsertSystemTableRow: async (tableName, rowData) => {
+      upsertSystemTableRow: async (tableName, rowData, options) => {
         upsertCalls.push({tableName, rowData});
-        return {success: true};
+        return cdcCommittedWriteAnswer('upsertSystemTableRow', [tableName, rowData, options]);
       },
     };
 
@@ -272,9 +274,9 @@ describe('Bootstrap pipeline budget integration', () => {
       insertSystemTableRow(...args) {
         return insertViaUpsert(this, args);
       },
-      upsertSystemTableRow: async (tableName, rowData) => {
+      upsertSystemTableRow: async (tableName, rowData, options) => {
         upsertCalls.push({tableName, rowData});
-        return {success: true};
+        return cdcCommittedWriteAnswer('upsertSystemTableRow', [tableName, rowData, options]);
       },
     };
 
@@ -394,7 +396,8 @@ describe('Startup diagnostics (Req 9.4)', () => {
       insertSystemTableRow(...args) {
         return insertViaUpsert(this, args);
       },
-      upsertSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async (...args) =>
+        cdcCommittedWriteAnswer('upsertSystemTableRow', args),
     };
     const service = NodeStorageBudgetSetup.create({
       nodeId: 'diag-node',
@@ -436,7 +439,8 @@ describe('Startup diagnostics (Req 9.4)', () => {
       insertSystemTableRow(...args) {
         return insertViaUpsert(this, args);
       },
-      upsertSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async (...args) =>
+        cdcCommittedWriteAnswer('upsertSystemTableRow', args),
     };
     const service = NodeStorageBudgetSetup.create({
       nodeId: 'diag-node-2',
@@ -478,7 +482,8 @@ describe('Shared setup ownership (Req 9.5, 11.1)', () => {
       insertSystemTableRow(...args) {
         return insertViaUpsert(this, args);
       },
-      upsertSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async (...args) =>
+        cdcCommittedWriteAnswer('upsertSystemTableRow', args),
     };
     const service = NodeStorageBudgetSetup.create({
       nodeId: 'owner-node',
@@ -507,7 +512,8 @@ describe('Shared setup ownership (Req 9.5, 11.1)', () => {
     });
     joiner.cdcIntegrationService = {
       sqlQueryEngine: {},
-      upsertSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async (...args) =>
+        cdcCommittedWriteAnswer('upsertSystemTableRow', args),
     };
 
     const svc1 = joiner.getNodeStorageBudgetService();

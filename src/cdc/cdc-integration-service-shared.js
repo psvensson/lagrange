@@ -378,7 +378,28 @@ function buildSystemTableMutationError(result, fallbackMessage) {
       ...result.firstFailedParticipant,
     };
   }
+  carryDistributedAnswerIdentity(error, result);
   return error;
+}
+
+// The distributed answer a thrown failure stands for: every participant's own
+// answer (its partition, entry and typed outcome), the participant set and
+// the write's identity. Without them a definite failure of one partition (a
+// committed statement failure, a refusal before proposal) reaches the
+// named-write owner as a failure of no partition, which it can only judge
+// unknown and re-send.
+const DISTRIBUTED_PARTICIPANT_SET_FIELDS = Object.freeze(['partitions', 'mirrorPartitions']);
+const DISTRIBUTED_IDENTITY_FIELDS = Object.freeze(['idempotencyKey', 'operationId']);
+function carryDistributedAnswerIdentity(error, result) {
+  if (!Array.isArray(result?.participantResults)) return;
+  error.participantResults = result.participantResults.map((entry) =>
+    entry && typeof entry === 'object' ? {...entry} : entry);
+  for (const field of DISTRIBUTED_PARTICIPANT_SET_FIELDS) {
+    if (Array.isArray(result[field])) error[field] = [...result[field]];
+  }
+  for (const field of DISTRIBUTED_IDENTITY_FIELDS) {
+    if (typeof result[field] === 'string') error[field] = result[field];
+  }
 }
 function resolveSystemTableOwnerHandoffFailureTableName(
   value,

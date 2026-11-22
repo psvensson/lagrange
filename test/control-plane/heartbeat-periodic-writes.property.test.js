@@ -21,6 +21,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {HEARTBEAT_STATE} from
   '../../src/control-plane/heartbeat-service-constants.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {cdcCommittedWriteAnswer} from '../test-helpers/committed-write-answer.js';
 
 /**
  * Initialize test singletons.
@@ -67,16 +68,17 @@ function createMockCdc() {
     get upsertCount() {
       return upsertCount;
     },
-    updateSystemTableRow: async () => {
+    updateSystemTableRow: async (tableName, whereClause, rowData, options) => {
       updateCount++;
-      return {success: true};
+      return cdcCommittedWriteAnswer('updateSystemTableRow',
+        [tableName, whereClause, rowData, options]);
     },
     insertSystemTableRow(...args) {
       return insertViaUpsert(this, args);
     },
-    upsertSystemTableRow: async () => {
+    upsertSystemTableRow: async (tableName, rowData, options) => {
       upsertCount++;
-      return {success: true};
+      return cdcCommittedWriteAnswer('upsertSystemTableRow', [tableName, rowData, options]);
     },
   };
 }

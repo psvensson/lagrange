@@ -1,12 +1,15 @@
 /**
- * The bootstrap-mode direct write path of the CDC integration service (the
- * seed's registration window): SQL executed on the local partition replicas.
- * Every hop to a partition passes the owner's terminal gate
- * (submitRoutedMutationHop).
+ * The bootstrap-mode path of the CDC integration service (the seed's
+ * registration window): reads on the local partition replica, writes through
+ * raft on the local leader. Every hop to a partition passes the owner's
+ * terminal gate (submitRoutedMutationHop).
  */
 
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
 import {CDC_TERMINAL_STAGE} from './cdc-constants.js';
+import {
+  normalizeLocalSystemTableWriteResult,
+} from './cdc-integration-service-authoritative-read-flow.js';
 import {submitRoutedMutationHop} from './cdc-terminal-gate.js';
 import {
   classifyPartitionStatementHead,
@@ -118,61 +121,17 @@ async function executeBootstrapDirectSql(service, sql, params = []) {
     }
     return result;
   }
-  // Writes ride raft whenever any candidate can carry the append: the
-  // per-replica direct loop lands only on the replica instances present
-  // in this map at this instant (ONE per partition), OUTSIDE the raft
-  // log, so every replica absent from the map diverges durably and
-  // nothing ever heals it (round-11: the registration-era services rows
-  // missing from the raft leader's db wedged serve-eligibility
-  // permanently). proposeWrite on a follower forwards to the known
-  // leader, and registration waits for partition leadership before
-  // writing, so the raft lane is the normal path; the direct fan-out
-  // remains only for the genuinely leaderless earliest-bootstrap window
-  // where the raft lane itself fails.
-  const raftLaneService =
-    leaderService || initializedCandidates.find(
-      (candidate) => typeof candidate.executeQuery === 'function',
-    ) || null;
-  const issuedLane = {};
-  if (raftLaneService && typeof raftLaneService.executeQuery === 'function') {
-    try {
-      const result = await submitRoutedMutationHop(service,
-        CDC_TERMINAL_STAGE.BOOTSTRAP_DIRECT,
-        () => raftLaneService.executeQuery(sql, params));
-      if (result && result.success !== false) {
-        return result;
-      }
-      issuedLane.answer = result;
-      service.logger.warn(CDC_LOG_MSG.BOOTSTRAP_RAFT_WRITE_LANE_FELL_BACK, {
-        tableName,
-        partitionId: raftLaneService.partitionId,
-        error: result?.error || null,
-      });
-    } catch (error) {
-      issuedLane.answer = error;
-      service.logger.warn(CDC_LOG_MSG.BOOTSTRAP_RAFT_WRITE_LANE_FELL_BACK, {
-        tableName,
-        partitionId: raftLaneService.partitionId,
-        error: error?.message || String(error),
-      });
-    }
-  }
-  const targets = initializedCandidates;
-  const results = [];
-  for (const target of targets) {
-    const result = await submitRoutedMutationHop(service,
-      CDC_TERMINAL_STAGE.BOOTSTRAP_DIRECT,
-      () => target.executeLocalQuery(sql, params),
-      results.at(-1) ?? issuedLane.answer);
-    results.push(result);
-    if (!result || result.success === false) {
-      throw new Error(
-        result?.error ||
-          `Direct partition write failed for table: ${tableName}`,
-      );
-    }
-  }
-  return results[0];
+  // A write rides raft only: the local leader carries the append (or the
+  // first candidate, whose proposal forwards to the known leader), and its
+  // answer - applied, or a typed failure - is the write's answer, with the
+  // partition's `changes` count rendered to the CDC boundary's `affectedRows`
+  // by the same normalizer the local-leader leg uses. No statement is
+  // executed outside raft: a replica absent from such an execution diverges
+  // for good, and a statement whose raft entry still commits would apply
+  // twice (R11: no fallback).
+  return normalizeLocalSystemTableWriteResult(
+    await submitRoutedMutationHop(service, CDC_TERMINAL_STAGE.BOOTSTRAP_DIRECT,
+      () => partitionService.executeQuery(sql, params)));
 }
 
 export {executeBootstrapDirectSql};

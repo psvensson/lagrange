@@ -24,12 +24,9 @@ import {
 } from '../../src/control-plane/owners/runtime-access-policy-owner.js';
 import {TABLES} from '../../src/constants/index.js';
 import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
-import {answerSettledStatement} from
-  '../../src/partition/partition-committed-statement-outcome.js';
-import {PARTITION_COMMITTED_COMMAND_OUTCOME} from
-  '../../src/partition/partition-service-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {engineCommittedWriteAnswer} from '../test-helpers/committed-write-answer.js';
 
 const PROMPT_MS = 1000;
 const PENDING = Symbol('pending');
@@ -77,8 +74,12 @@ function composeLostAnswer() {
       {config_key: params[0], updated_at_hlc: originHlc});
     return originHlc;
   };
+  // The engine's answers are built by the producers (committed-write-answer):
+  // the retry of the same key is the partition's settled replay of the
+  // entry (answerSettledStatement, asked by a command with its own timestamp);
+  // a later statement is a fresh commit at its origin HLC.
   const engine = {
-    async executeQuery(_sql, params) {
+    async executeQuery(sql, params, options) {
       commits.attempts += 1;
       if (commits.loseFirst && commits.attempts === 1) {
         commit(params);
@@ -86,14 +87,12 @@ function composeLostAnswer() {
       }
       if (commits.loseFirst && commits.attempts === 2) {
         commits.loseFirst = false;
-        const answer = answerSettledStatement(
-          {partitionId: 'config-p1', nodeId: 'node-1', replicaId: 'config-p1-r1'},
-          {recorded: {outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED,
-            logIndex: 9, term: 2, changes: 1, lastInsertRowid: 0},
-          command: {timestamp: hlc(commits.nextLogical + 10)}});
-        return {...answer, affectedRows: answer.changes};
+        return engineCommittedWriteAnswer(sql, params, options, {settledReplay: true,
+          nodeId: 'node-1', logIndex: 9, term: 2, changes: 1, lastInsertRowid: 0,
+          originHlc: hlc(commits.nextLogical + 10)});
       }
-      return {success: true, affectedRows: 1, originHlc: commit(params)};
+      return engineCommittedWriteAnswer(sql, params, options,
+        {nodeId: 'node-1', originHlc: commit(params)});
     },
   };
   const service = new CDCIntegrationService({nodeId: 'node-1',

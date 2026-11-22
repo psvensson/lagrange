@@ -26,6 +26,7 @@ import {
 } from './heartbeat-memory-trend-test-helpers.js';
 import './heartbeat-owner-completion-test-cases.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {cdcCommittedWriteAnswer} from '../test-helpers/committed-write-answer.js';
 
 test('Heartbeat memory trend slope helper handles minimal and rising samples', async (t) => {
   t.equal(calculateUsageSlopePerMinute([]), 0, 'empty sample list should return 0');
@@ -178,14 +179,16 @@ test('HeartbeatService sendHeartbeat uses injected clock', async (t) => {
     nodeId: 'node-clock',
     nodeAddress: '10.0.0.10:8080',
     cdcIntegrationService: {
-      updateSystemTableRow: async (_table, _whereClause, updateRow) => {
+      updateSystemTableRow: async (_table, _whereClause, updateRow, options) => {
         capturedUpdate = updateRow;
-        return {success: true};
+        return cdcCommittedWriteAnswer('updateSystemTableRow',
+          [_table, _whereClause, updateRow, options]);
       },
       insertSystemTableRow(...args) {
         return insertViaUpsert(this, args);
       },
-      upsertSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async (...args) =>
+        cdcCommittedWriteAnswer('upsertSystemTableRow', args),
     },
     systemTableCache: createMockCache(),
     now: () => now,
@@ -294,7 +297,7 @@ test('HeartbeatService skips cache wait for heartbeat writes and fails on missin
           },
           upsertSystemTableRow: async (tableName, row, writeOptions) => {
             upserts.push({tableName, row, options: writeOptions});
-            return {success: true};
+            return cdcCommittedWriteAnswer('upsertSystemTableRow', [tableName, row, writeOptions]);
           },
         },
         systemTableCache: {
@@ -383,16 +386,17 @@ test('HeartbeatService throttles endpoint upserts but refreshes after interval',
     nodeId: 'node-c',
     nodeAddress: '10.0.0.3:8080',
     cdcIntegrationService: {
-      updateSystemTableRow: async () => {
+      updateSystemTableRow: async (tableName, whereClause, rowData, options) => {
         counters.nodeUpdates += 1;
-        return {success: true};
+        return cdcCommittedWriteAnswer('updateSystemTableRow',
+          [tableName, whereClause, rowData, options]);
       },
       insertSystemTableRow(...args) {
         return insertViaUpsert(this, args);
       },
-      upsertSystemTableRow: async () => {
+      upsertSystemTableRow: async (tableName, rowData, options) => {
         counters.endpointUpserts += 1;
-        return {success: true};
+        return cdcCommittedWriteAnswer('upsertSystemTableRow', [tableName, rowData, options]);
       },
     },
     systemTableCache: createMockCache(),
@@ -450,16 +454,17 @@ test('HeartbeatService coalesces unchanged node heartbeat writes within min inte
       nodeId: 'node-e',
       nodeAddress: '10.0.0.5:8080',
       cdcIntegrationService: {
-        updateSystemTableRow: async () => {
+        updateSystemTableRow: async (tableName, whereClause, rowData, options) => {
           counters.nodeUpdates += 1;
-          return {success: true};
+          return cdcCommittedWriteAnswer('updateSystemTableRow',
+            [tableName, whereClause, rowData, options]);
         },
         insertSystemTableRow(...args) {
           return insertViaUpsert(this, args);
         },
-        upsertSystemTableRow: async () => {
+        upsertSystemTableRow: async (tableName, rowData, options) => {
           counters.endpointUpserts += 1;
-          return {success: true};
+          return cdcCommittedWriteAnswer('upsertSystemTableRow', [tableName, rowData, options]);
         },
       },
       systemTableCache: createMockCache(),
@@ -504,14 +509,16 @@ test('HeartbeatService forces node heartbeat refresh once max staleness elapses'
       nodeId: 'node-f',
       nodeAddress: '10.0.0.6:8080',
       cdcIntegrationService: {
-        updateSystemTableRow: async () => {
+        updateSystemTableRow: async (tableName, whereClause, rowData, options) => {
           nodeUpdates += 1;
-          return {success: true};
+          return cdcCommittedWriteAnswer('updateSystemTableRow',
+            [tableName, whereClause, rowData, options]);
         },
         insertSystemTableRow(...args) {
           return insertViaUpsert(this, args);
         },
-        upsertSystemTableRow: async () => ({success: true}),
+        upsertSystemTableRow: async (...args) =>
+          cdcCommittedWriteAnswer('upsertSystemTableRow', args),
       },
       systemTableCache: createMockCache(),
       nodeMetadataMinUpdateIntervalMs: 1000,
@@ -646,14 +653,16 @@ test('HeartbeatService suppresses bucket-equivalent utilization churn even after
       nodeId: 'node-f1',
       nodeAddress: '10.0.0.61:8080',
       cdcIntegrationService: {
-        updateSystemTableRow: async () => {
+        updateSystemTableRow: async (tableName, whereClause, rowData, options) => {
           nodeUpdates += 1;
-          return {success: true};
+          return cdcCommittedWriteAnswer('updateSystemTableRow',
+            [tableName, whereClause, rowData, options]);
         },
         insertSystemTableRow(...args) {
           return insertViaUpsert(this, args);
         },
-        upsertSystemTableRow: async () => ({success: true}),
+        upsertSystemTableRow: async (...args) =>
+          cdcCommittedWriteAnswer('upsertSystemTableRow', args),
       },
       systemTableCache: createMockCache(),
       nodeMetadataMinUpdateIntervalMs: 1000,
@@ -701,14 +710,16 @@ test('HeartbeatService writes immediately when structural metadata changes',
       nodeId: 'node-f2',
       nodeAddress: '10.0.0.62:8080',
       cdcIntegrationService: {
-        updateSystemTableRow: async () => {
+        updateSystemTableRow: async (tableName, whereClause, rowData, options) => {
           nodeUpdates += 1;
-          return {success: true};
+          return cdcCommittedWriteAnswer('updateSystemTableRow',
+            [tableName, whereClause, rowData, options]);
         },
         insertSystemTableRow(...args) {
           return insertViaUpsert(this, args);
         },
-        upsertSystemTableRow: async () => ({success: true}),
+        upsertSystemTableRow: async (...args) =>
+          cdcCommittedWriteAnswer('upsertSystemTableRow', args),
       },
       systemTableCache: createMockCache(),
       nodeMetadataMinUpdateIntervalMs: 1000,
@@ -748,16 +759,17 @@ test('HeartbeatService prefers node-state reporter for node heartbeats', async (
     nodeId: 'node-reporter',
     nodeAddress: '10.0.0.9:8080',
     cdcIntegrationService: {
-      updateSystemTableRow: async () => {
+      updateSystemTableRow: async (tableName, whereClause, rowData, options) => {
         nodeUpdates += 1;
-        return {success: true};
+        return cdcCommittedWriteAnswer('updateSystemTableRow',
+          [tableName, whereClause, rowData, options]);
       },
       insertSystemTableRow(...args) {
         return insertViaUpsert(this, args);
       },
-      upsertSystemTableRow: async () => {
+      upsertSystemTableRow: async (tableName, rowData, options) => {
         endpointUpserts += 1;
-        return {success: true};
+        return cdcCommittedWriteAnswer('upsertSystemTableRow', [tableName, rowData, options]);
       },
       executeAuthoritativeSystemTableRead: async () => {
         authoritativeReads += 1;
@@ -901,14 +913,16 @@ test('HeartbeatService surfaces reporter failure when node-state reporter fails'
       nodeId: 'node-reporter-fallback',
       nodeAddress: '10.0.0.10:8080',
       cdcIntegrationService: {
-        updateSystemTableRow: async () => {
+        updateSystemTableRow: async (tableName, whereClause, rowData, options) => {
           nodeUpdates += 1;
-          return {success: true};
+          return cdcCommittedWriteAnswer('updateSystemTableRow',
+            [tableName, whereClause, rowData, options]);
         },
         insertSystemTableRow(...args) {
           return insertViaUpsert(this, args);
         },
-        upsertSystemTableRow: async () => ({success: true}),
+        upsertSystemTableRow: async (...args) =>
+          cdcCommittedWriteAnswer('upsertSystemTableRow', args),
       },
       systemTableCache: createMockCache(),
       nodeMetadataMinUpdateIntervalMs: 0,
@@ -956,14 +970,16 @@ async (t) => {
     nodeAddress: '10.0.0.15:8080',
     heartbeatAttemptTimeoutMs: 7000,
     cdcIntegrationService: {
-      updateSystemTableRow: async () => {
+      updateSystemTableRow: async (tableName, whereClause, rowData, options) => {
         nodeUpdates += 1;
-        return {success: true};
+        return cdcCommittedWriteAnswer('updateSystemTableRow',
+          [tableName, whereClause, rowData, options]);
       },
       insertSystemTableRow(...args) {
         return insertViaUpsert(this, args);
       },
-      upsertSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async (...args) =>
+        cdcCommittedWriteAnswer('upsertSystemTableRow', args),
     },
     systemTableCache: createMockCache(),
     nodeMetadataMinUpdateIntervalMs: 0,
@@ -1017,14 +1033,16 @@ async (t) => {
     nodeAddress: '10.0.0.16:8080',
     heartbeatAttemptTimeoutMs: 7000,
     cdcIntegrationService: {
-      updateSystemTableRow: async () => {
+      updateSystemTableRow: async (tableName, whereClause, rowData, options) => {
         nodeUpdates += 1;
-        return {success: true};
+        return cdcCommittedWriteAnswer('updateSystemTableRow',
+          [tableName, whereClause, rowData, options]);
       },
       insertSystemTableRow(...args) {
         return insertViaUpsert(this, args);
       },
-      upsertSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async (...args) =>
+        cdcCommittedWriteAnswer('upsertSystemTableRow', args),
     },
     systemTableCache: createMockCache(),
     nodeMetadataMinUpdateIntervalMs: 0,
@@ -1080,14 +1098,16 @@ async (t) => {
     nodeId: 'node-reporter-default-visibility',
     nodeAddress: '10.0.0.14:8080',
     cdcIntegrationService: {
-      updateSystemTableRow: async () => {
+      updateSystemTableRow: async (tableName, whereClause, rowData, options) => {
         nodeUpdates += 1;
-        return {success: true};
+        return cdcCommittedWriteAnswer('updateSystemTableRow',
+          [tableName, whereClause, rowData, options]);
       },
       insertSystemTableRow(...args) {
         return insertViaUpsert(this, args);
       },
-      upsertSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async (...args) =>
+        cdcCommittedWriteAnswer('upsertSystemTableRow', args),
       executeAuthoritativeSystemTableRead: async () => {
         authoritativeReads += 1;
         return {
@@ -1146,14 +1166,15 @@ test('HeartbeatService surfaces reporter failure without routed SQL fallback',
       cdcIntegrationService: {
         updateSystemTableRow: async (_table, _where, _row, options = {}) => {
           nodeWriteOptions.push(options);
-          return {success: true};
+          return cdcCommittedWriteAnswer('updateSystemTableRow',
+            [_table, _where, _row, options]);
         },
         insertSystemTableRow(...args) {
           return insertViaUpsert(this, args);
         },
         upsertSystemTableRow: async (_table, _row, options = {}) => {
           endpointWriteOptions.push(options);
-          return {success: true};
+          return cdcCommittedWriteAnswer('upsertSystemTableRow', [_table, _row, options]);
         },
       },
       systemTableCache: createMockCache(),
@@ -1200,14 +1221,16 @@ async (t) => {
     nodeId: 'node-reporter-visibility-gap',
     nodeAddress: '10.0.0.11:8080',
     cdcIntegrationService: {
-      updateSystemTableRow: async () => {
+      updateSystemTableRow: async (tableName, whereClause, rowData, options) => {
         nodeUpdates += 1;
-        return {success: true};
+        return cdcCommittedWriteAnswer('updateSystemTableRow',
+          [tableName, whereClause, rowData, options]);
       },
       insertSystemTableRow(...args) {
         return insertViaUpsert(this, args);
       },
-      upsertSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async (...args) =>
+        cdcCommittedWriteAnswer('upsertSystemTableRow', args),
       executeAuthoritativeSystemTableRead: async () => {
         authoritativeReads += 1;
         return {
@@ -1300,11 +1323,13 @@ async (t) => {
     nodeId: 'node-reporter-routed-visibility',
     nodeAddress: '10.0.0.12:8080',
     cdcIntegrationService: {
-      updateSystemTableRow: async () => ({success: true}),
+      updateSystemTableRow: async (...args) =>
+        cdcCommittedWriteAnswer('updateSystemTableRow', args),
       insertSystemTableRow(...args) {
         return insertViaUpsert(this, args);
       },
-      upsertSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async (...args) =>
+        cdcCommittedWriteAnswer('upsertSystemTableRow', args),
       executeAuthoritativeSystemTableRead: async (
         tableName,
         sql,
@@ -1388,11 +1413,13 @@ async (t) => {
     nodeId: 'node-reporter-confirmation-gap',
     nodeAddress: '10.0.0.30:8080',
     cdcIntegrationService: {
-      updateSystemTableRow: async () => ({success: true}),
+      updateSystemTableRow: async (...args) =>
+        cdcCommittedWriteAnswer('updateSystemTableRow', args),
       insertSystemTableRow(...args) {
         return insertViaUpsert(this, args);
       },
-      upsertSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async (...args) =>
+        cdcCommittedWriteAnswer('upsertSystemTableRow', args),
       executeAuthoritativeSystemTableRead: async () => {
         authoritativeReads += 1;
         return {

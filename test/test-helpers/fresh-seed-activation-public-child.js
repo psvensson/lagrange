@@ -24,7 +24,10 @@ import {createRightsSampler, everyRightTransferred, readIssuedDeclaration,
 
 // R27: a solver probe never starts a seed.
 refuseUnderProbe('a fresh seed runtime');
-const [mode, directory, nodeId, portsJson, host] = process.argv.slice(2);
+// The log level is optional (default error); so is an observation of the
+// seed's bootstrap write window (seed-bootstrap-lane-observer.js modes).
+const [mode, directory, nodeId, portsJson, host, logLevel = 'error', laneObservation = null] =
+  process.argv.slice(2);
 const ports = JSON.parse(portsJson);
 // Periodic sampling is bounded to one sample per macrotask and interval.
 // The committed transition observer below also samples each durable change,
@@ -240,6 +243,9 @@ setOriginalAllocationRightObserver(() => observe(sampleRights));
 
 // --- the supported startup path --------------------------------------------
 
+const bootstrapLane = laneObservation === null ? null :
+  (await import('./seed-bootstrap-lane-observer.js'))
+    .installSeedBootstrapLaneObserver(laneObservation);
 let startupError = null;
 let cleanupError = null;
 let service = null;
@@ -256,7 +262,7 @@ try {
       admin: {websocketPort: ports.adminWebSocketPort},
       transport: {wsHost: host},
       partition: {defaultReplicaCount: 1},
-      logging: {level: 'error'},
+      logging: {level: logLevel},
       storage: {dataDir: directory},
     },
     environment: {NODE_ID: nodeId, NODE_HOST_ID: hostname(),
@@ -284,6 +290,8 @@ if (runtime !== null) {
       service.write = await db.query(SQL.INSERT, ['row-1', 'written-before-restart']);
     }
     service.read = await db.query(SQL.SELECT, ['row-1']);
+    // An observation mode may act once more on the running seed.
+    if (bootstrapLane !== null) service.afterStart = await bootstrapLane.afterStart();
   } catch (error) {
     service = {...service, error: errorRecord(error)};
   }
@@ -305,6 +313,7 @@ const report = {kind: 'fresh-seed-startup-settled', mode, pid: process.pid, dire
     rightSequences: durable.sampler?.sequences ?? {}, rightsAtSettle, admission, tcpConnections,
     probeOutcomes: Object.fromEntries(probeOutcomes), listeners,
     coreEntries, nativeEntryCount, nativeLeaders: [...nativeLeaders.values()], observerErrors,
+    bootstrapLane: bootstrapLane?.report() ?? null,
     samplingCost: {samples: durable.samples, totalMs: durable.sampleMs}}};
 // The parent records the real outcome before explicitly reaping this process.
 process.once('message', (message) => {

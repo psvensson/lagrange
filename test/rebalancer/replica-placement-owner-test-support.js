@@ -79,6 +79,10 @@ import {
 
 import {installCommittedOperationMutationFixture} from './operation-outcome-fixture.js';
 import {createMockControlPlaneSystemTableGateway} from './test-helpers.js';
+import {engineCommittedWriteAnswer} from '../test-helpers/committed-write-answer.js';
+import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
+
+const QUIET_LOGGER = Object.freeze({debug() {}, info() {}, warn() {}, error() {}});
 
 function createLeaderDatabaseReadBoundary(sqlQueryEngine) {
   return {
@@ -87,6 +91,23 @@ function createLeaderDatabaseReadBoundary(sqlQueryEngine) {
       sqlQueryEngine.execute(sql, params),
     registerTableChangeCallback: () => {},
     unregisterTableChangeCallback: () => {},
+  };
+}
+
+// The coordinator's CDC owner: the leader-database read boundary plus the
+// real CDCIntegrationService write methods over the same leader engine, so a
+// structured replica_operations mutation is written as production writes it.
+function createLeaderDatabaseCdcOwner(sqlQueryEngine, nodeId) {
+  const writer = new CDCIntegrationService({nodeId, sqlQueryEngine});
+  writer.initialize();
+  writer.logger = QUIET_LOGGER;
+  const write = (method) => (...args) => writer[method](...args);
+  return {
+    ...createLeaderDatabaseReadBoundary(sqlQueryEngine),
+    insertSystemTableRow: write('insertSystemTableRow'),
+    upsertSystemTableRow: write('upsertSystemTableRow'),
+    updateSystemTableRow: write('updateSystemTableRow'),
+    deleteSystemTableRow: write('deleteSystemTableRow'),
   };
 }
 
@@ -294,8 +315,13 @@ export async function runGrowthPromoteProductionWitness({
           rowsAffected: info.changes,
         };
       },
-      executeQuery: async (sql, params = []) =>
-        sqlQueryEngine.execute(sql, params),
+      // The engine entry answers a committed write with the engine's answer,
+      // carrying the producer's durable commit receipt for the write's entry.
+      executeQuery: async (sql, params = [], options = {}) => {
+        const answer = await sqlQueryEngine.execute(sql, params);
+        return /^\s*SELECT/iu.test(sql) || answer.success !== true ? answer :
+          engineCommittedWriteAnswer(sql, params, options, {changes: answer.changes});
+      },
     };
     const createTestCoordinator = () => {
       const instance = new RebalanceCoordinator({
@@ -307,7 +333,7 @@ export async function runGrowthPromoteProductionWitness({
           getNodeReadinessSync: () => ({ready: true}),
           getPriorityRecoveryPlanningSnapshotSync: () => null,
         }),
-        cdcIntegrationService: createLeaderDatabaseReadBoundary(sqlQueryEngine),
+        cdcIntegrationService: createLeaderDatabaseCdcOwner(sqlQueryEngine, 'n1'),
         tablePolicyService: {getReplicationFactor: () => 3},
         sqlQueryEngine,
         transactionCoordinator: {

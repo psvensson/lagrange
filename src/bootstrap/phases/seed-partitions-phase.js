@@ -17,11 +17,11 @@ import {AssignmentEpoch} from '../../rebalancer/assignment-epoch.js';
 import {ReplicaStatus} from '../../rebalancer/replica-status.js';
 import {EPOCH_CONFIG_KEY} from '../../cdc/cdc-integration-service.js';
 import {StartupRecoveryCoordinator} from '../startup-recovery-coordinator.js';
-import {classifySystemPartition} from '../system-partition-classification.js';
 import {resolveCanonicalLeaderService} from '../../cache/leader-readiness-gate.js';
 import {
-  BOOTSTRAP_PHASE, BOOTSTRAP_DEFAULT, BOOTSTRAP_ERROR, BOOTSTRAP_LOG_MSG,
-  BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT, BOOTSTRAP_UNIFIED_RECONCILE,
+  BOOTSTRAP_DEFAULT, BOOTSTRAP_ERROR, BOOTSTRAP_LOG_MSG,
+  BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT, BOOTSTRAP_PIPELINE_ERROR_CODE,
+  BOOTSTRAP_UNIFIED_RECONCILE,
 } from '../bootstrap-constants.js';
 import {
   SYSTEM_TABLE_NAME, SYSTEM_TABLE_SCHEMAS, INITIAL_PARTITION_IDS,
@@ -559,6 +559,7 @@ class SeedPartitionsPhase {
         missing, timeoutMs,
       ),
     );
+    error.code = BOOTSTRAP_PIPELINE_ERROR_CODE.PARTITION_LEADERSHIP_TIMEOUT;
     error.missingLeaders = missing;
     error.timeoutMs = timeoutMs;
     throw error;
@@ -599,9 +600,6 @@ class SeedPartitionsPhase {
     if (!this.hasInitializedLocalPartitionReplica(partitionId)) {
       return false;
     }
-    if (this.canBypassDirectBootstrapPriorityPartitionLeadership(partitionId)) {
-      return true;
-    }
 
     const readinessState =
       typeof d.getBootstrapReadinessState === 'function' ?
@@ -618,25 +616,6 @@ class SeedPartitionsPhase {
       allowBootstrapInitPriorityBypass: true,
     })
       .shouldBypassLocalPriorityControlPlaneStartupReadiness === true;
-  }
-
-  canBypassDirectBootstrapPriorityPartitionLeadership(partitionId) {
-    const d = this.delegates;
-    if (!classifySystemPartition({partitionId}).priorityControlPlane) {
-      return false;
-    }
-    const phase = typeof d.getPhase === 'function' ?
-      d.getPhase() :
-      null;
-    if (phase !== BOOTSTRAP_PHASE.PARTITIONS &&
-        phase !== BOOTSTRAP_PHASE.REGISTRATION) {
-      return false;
-    }
-    const cdcIntegrationService =
-      typeof d.getCdcIntegrationService === 'function' ?
-        d.getCdcIntegrationService() :
-        null;
-    return cdcIntegrationService?.sqlQueryEngine == null;
   }
 
   canBypassCanonicalPartitionLeadership(partitionId) {

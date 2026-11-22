@@ -8,6 +8,7 @@ import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {evaluateOperationLedgerQuorumConcentration} from
   '../../src/rebalancer/operation-ledger-quorum-concentration.js';
+import {cdcCommittedWriteAnswer} from '../test-helpers/committed-write-answer.js';
 
 // Quest formation-ledger-post-spread-voter-visibility-latency (affinity-demo
 // run-27): a promoted priority-control-plane replica's durable
@@ -84,8 +85,10 @@ function createCacheFake() {
 
 /**
  * Contract-faithful durable services store + CDC integration fake:
- * - updateSystemTableRow applies WHERE-equality CAS semantics and returns an
- *   honest affectedRows count (the run-15 lineage contract);
+ * - updateSystemTableRow applies WHERE-equality CAS semantics and answers
+ *   what the CDC integration service answers for the committed statement,
+ *   with its honest affected-row count (the run-15 lineage contract) and the
+ *   producer's durable commit receipt (committed-write-answer.js);
  * - a successful durable write propagates to the subscribed caches (the CDC
  *   round-trip), through the same stale-guarded merge;
  * - refreshAuthoritativeCacheRow repairs a cache row FROM the durable store
@@ -114,7 +117,7 @@ function createDurableStoreFake({caches}) {
       }
     },
     cdcIntegrationService: {
-      async updateSystemTableRow(tableName, whereClause, data) {
+      async updateSystemTableRow(tableName, whereClause, data, options) {
         if (tableName !== SERVICES) {
           throw new Error(`unexpected table ${tableName}`);
         }
@@ -129,7 +132,8 @@ function createDurableStoreFake({caches}) {
             propagate(rows.get(serviceId));
           }
         }
-        return {success: true, affectedRows};
+        return cdcCommittedWriteAnswer('updateSystemTableRow',
+          [tableName, whereClause, data, options], {changes: affectedRows});
       },
       async refreshAuthoritativeCacheRow(tableName, key) {
         const row = rows.get(key);
@@ -166,6 +170,9 @@ function createRoleHelperForReplica({
 }) {
   const svc = {
     replicaId,
+    // A partition service always knows the node it runs on: the one its
+    // replica's durable services row names (the role CAS guards on node_id).
+    nodeId: store.rows.get(replicaId)?.node_id ?? null,
     role: initialRole,
     partitionId: LEDGER_PARTITION_ID,
     systemTableCache: cache,
@@ -489,9 +496,10 @@ test('durable voter visibility - in-flight learner flush superseded during readA
     tableName,
     whereClause,
     data,
+    options,
   ) => {
     writtenRoles.push(data.raft_role);
-    return originalUpdate(tableName, whereClause, data);
+    return originalUpdate(tableName, whereClause, data, options);
   };
 
   const helper = createRoleHelperForReplica({replicaId, cache, store, warns});
