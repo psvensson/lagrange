@@ -22,6 +22,9 @@ import {
 import {
   GLOBAL_INDEX_ACCESS_PATH,
 } from '../../src/index-management/global-index-read-router.js';
+import {
+  buildIndexDatasetSchema,
+} from '../../src/index-management/global-index-dataset-manager.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {
   createCommittedServeEligibilityOwner,
@@ -325,6 +328,7 @@ async function createRealPartition(dir, {partitionId, tableName, keyRange, schem
     schema,
   }));
   await ps.initialize();
+  ps.startElection();
   if (schema) {
     await resumeFixtureParticipantAdmission(ps);
   }
@@ -468,17 +472,24 @@ async function setupStrictCluster(t, options = {}) {
   let idxP0 = null;
   let idxP1 = null;
   if (includeIndexPartitions) {
+    const idxSchema = buildIndexDatasetSchema({
+      tableName: 'users',
+      indexName: 'idx_users_email',
+      columnNames: ['email'],
+      basePrimaryKeyColumns: ['id'],
+      columnTypes: {id: 'INTEGER', email: 'TEXT'},
+    });
     idxP0 = await createRealPartition(tmpDir, {
       partitionId: '__gsi_users_idx_users_email_p0',
       tableName: '__idx_users_idx_users_email',
       keyRange: {start: null, end: 'm'},
-      schema: null,
+      schema: idxSchema,
     });
     idxP1 = await createRealPartition(tmpDir, {
       partitionId: '__gsi_users_idx_users_email_p1',
       tableName: '__idx_users_idx_users_email',
       keyRange: {start: 'm', end: null},
-      schema: null,
+      schema: idxSchema,
     });
     partitionServices.set('__gsi_users_idx_users_email_p0-r1', idxP0);
     partitionServices.set('__gsi_users_idx_users_email_p1-r1', idxP1);
@@ -566,8 +577,6 @@ test('TX1 real-participant isolation, rollback atomicity, and unavailable partic
     'CREATE GLOBAL INDEX idx_users_email ON users (email)',
   );
   t.equal(createRes.success, true, 'CREATE GLOBAL INDEX succeeds on strict cluster');
-  await resumeFixtureParticipantAdmission(env.idxP0);
-  await resumeFixtureParticipantAdmission(env.idxP1);
 
   const selectByEmailSql = 'SELECT * FROM users WHERE email = ? ORDER BY id ASC';
 

@@ -34,14 +34,8 @@ const LOCAL_STR_CRITICAL = 'critical';
 
 function resolvePartitionServiceInstance(service, partitionId) {
   if (!service) return null;
-  if (typeof service.getPartition === 'function') {
-    const p = service.getPartition(partitionId);
-    if (p) return p;
-  }
-  if (service.partitionId === partitionId) {
-    return service;
-  }
-  return null;
+  if (typeof service.getPartition === 'function') return service.getPartition(partitionId) || null;
+  return service.partitionId === partitionId ? service : null;
 }
 
 function resolveEnginePartitionInstance(engine, partitionId) {
@@ -52,10 +46,7 @@ function resolveEnginePartitionInstance(engine, partitionId) {
       provided.get(partitionId) : provided;
     if (p) return p;
   }
-  if (typeof engine.getPartitionService === 'function') {
-    return engine.getPartitionService(partitionId);
-  }
-  return null;
+  return engine.getPartitionService ? engine.getPartitionService(partitionId) : null;
 }
 
 function wrapPartitionInstance(instance, partitionRow) {
@@ -104,6 +95,7 @@ function assignIndexServiceCollaborators(service, options) {
     'storageManager',
     'queryRouter',
     'partitionDatabases',
+    'partitionProvisioner',
     'globalIndexCoordinator',
   ];
   for (const field of fields) {
@@ -182,7 +174,9 @@ class IndexService {
     }
 
     this.logger.info(INDEX_LOG_MSG.SERVICE_INITIALIZING);
+    this._attachSystemTableCacheListener();
     await this.loadIndicesFromCache();
+    this.syncGlobalIndexesFromCache();
     this.initialized = true;
     this.logger.info(INDEX_LOG_MSG.SERVICE_INITIALIZED, {
       indexCount: this.getTotalIndexCount(),
@@ -745,6 +739,8 @@ class IndexService {
    */
   setSystemTableCache(cache) {
     this.systemTableCache = cache;
+    this._attachSystemTableCacheListener();
+    this.syncGlobalIndexesFromCache();
   }
 
   /**
@@ -781,6 +777,7 @@ class IndexService {
    */
   async shutdown() {
     this.logger.info(INDEX_LOG_MSG.SHUTTING_DOWN);
+    this._detachSystemTableCacheListener();
     this.indexCache.clear();
     this.indices?.clear();
     this.initialized = false;

@@ -137,6 +137,8 @@ const indexServiceGlobalMethods = {
       this.globalIndexCoordinator = new GlobalIndexLifecycleCoordinator(
         buildProductionCoordinatorOptions(this),
       );
+      this._attachSystemTableCacheListener?.();
+      this.syncGlobalIndexesFromCache?.();
     }
     return this.globalIndexCoordinator;
   },

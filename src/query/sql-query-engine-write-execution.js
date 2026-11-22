@@ -25,6 +25,7 @@ import {
 } from './sql-query-engine-metadata-authority-refresh.js';
 import {
   executeEngineWriteWithGlobalIndexes,
+  hasActiveGlobalIndexes,
 } from './sql-query-engine-global-index-integration.js';
 
 
@@ -138,6 +139,14 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
   resolveWriteTransactionOwnership(sessionId, writePlan) {
     if (this.transactionCoordinator.getTransaction(sessionId)) {
       return WRITE_TRANSACTION_OWNERSHIP.EXPLICIT;
+    }
+    const tableName = writePlan?.ast?.table || null;
+    if (
+      this.transactionCoordinator &&
+      tableName &&
+      hasActiveGlobalIndexes(this.indexService, tableName)
+    ) {
+      return WRITE_TRANSACTION_OWNERSHIP.STATEMENT_AUTOCOMMIT;
     }
     return writePlan.partitionStatements.size <= 1 ?
       WRITE_TRANSACTION_OWNERSHIP.DIRECT_AUTOCOMMIT :
