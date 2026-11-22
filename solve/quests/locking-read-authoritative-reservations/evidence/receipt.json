@@ -63,7 +63,16 @@
       "verdict": "approve",
       "candidate": "f607d58a43f6f26c34dd9537ee5b53d4c3408120",
       "reviewedHead": "ed646d56db7768a220f6bd901679539b8e4e8757",
-      "detail": "Prior P1/P2/P5 verification by @verifier preserved; Findings 3A & 4 follow-up candidate 106f33faeb14ba9c226f420703f50c220e7e7e64 pending independent approval by @verifier-v2."
+      "detail": "Prior P1/P2/P5 verification by @verifier preserved."
+    },
+    {
+      "id": "independent-verification",
+      "passed": true,
+      "verifier": "subagent:verifier-v2",
+      "verdict": "approve",
+      "candidate": "106f33faeb14ba9c226f420703f50c220e7e7e64",
+      "reviewedHead": "639fea5355fcf1f7d238dbbd433064e3d6d00ad3",
+      "detail": "Independent adversarial review by @verifier-v2 (board #50, request_id=5b15c536-9f96-4f89-84f2-d23d6d34bc39) approved Findings 3A & 4 on work/locking-read-authoritative-reservations-20261122 at HEAD & origin SHA 639fea5355fcf1f7d238dbbd433064e3d6d00ad3 (GREEN code commit 106f33faeb14ba9c226f420703f50c220e7e7e64 over RED a2356f3c45cd38da8fc2596f419b104503f326af and base ccd2fe4dfeda19eef546b6c7d94438b95ccc5a39): verified Finding 3A sequential replay lock checks across sealSession, dryRunCarriedOperations, runCommittedOperations, and staging with Witness 3d (3d-i/ii/iii/iv) and Witness 5 (96 schedules + verifySequentialCommitPreparedLockConflict); verified Finding 4 complete removal of partition-locking-read-store.js/SQLite access and deleted durable-mutation exports from partition-locking-read-reservation.js with dependency-cruiser rule locking-read-reservation-no-durable-store (reachable: true) and Witness 4b; verified tv-dator NDJSON 20/20 pass (626 assertions, 0 retries, placement-pid=3738506), controller re-run 46/46 subtests, scenario-a guard PASS, test:deps (0 violations across 6,334 modules / 31,512 edges), audit:impact-contracts (103/78), audit:shards (2,766), audit:quest-log-append-only clean, eslint (0), and file sizes clean (all touched src <= 799, tests <= 1478)."
     }
   ]
 }
