@@ -88,7 +88,7 @@ documentClass: generated
 - [sql-locking-read-constants.js](sql-locking-read-constants.js) - Canonical constants owner module for locking read (SELECT ... (importers: many)
 - [sql-locking-read-execution.js](sql-locking-read-execution.js) - Locking read (SELECT ... (importers: many)
 - [sql-locking-read-grammar.js](sql-locking-read-grammar.js) - Locking read grammar and AST validation for PostgreSQL SELECT ... (importers: few)
-- [sql-locking-read-remote.js](sql-locking-read-remote.js) - Remote and cluster-authoritative locking-read reservation helpers. (importers: few)
+- [sql-locking-read-remote.js](sql-locking-read-remote.js) - Remote and cluster-authoritative locking-read reservation helpers. (importers: one)
 - [sql-parse-cache.js](sql-parse-cache.js) - LRU cache for parsed SQL ASTs keyed on (sql, dialect). (importers: few)
 - [sql-parser-expression-methods.js](sql-parser-expression-methods.js) - Refuse a node-sql-parser node that carries a key this converter does not read. (importers: one)
 - [sql-parser-schema-mutation-methods.js](sql-parser-schema-mutation-methods.js) - Convert a RETURNING clause from node-sql-parser AST. (importers: one)
