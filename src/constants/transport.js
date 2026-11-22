@@ -280,6 +280,14 @@ const ROUTER_LOG_MSG = Object.freeze({
   MAX_RECONNECTS_REACHED: 'Max reconnection attempts reached',
   SCHEDULING_RECONNECT: 'Scheduling reconnection',
   RECONNECT_FAILED: 'Reconnection failed',
+  // A keepalive that missed pingMaxMissed pongs in a row while the peer sent
+  // inbound traffic within the liveness window: the connection is kept.
+  CONNECTION_PING_TIMEOUT_SKIPPED_ALIVE:
+    'Keepalive pongs missed, connection kept: recent inbound traffic shows the peer alive',
+  // pingNode's pong did not arrive in time, but inbound traffic from the
+  // node within the liveness window answers it reachable.
+  PING_TIMEOUT_SATISFIED_BY_INBOUND:
+    'Ping timed out; recent inbound traffic from the node answers it reachable',
   RECONNECT_BEFORE_DELIVERY_FAILED:
     'Failed to reconnect target node before delivery',
   HANDLER_REGISTERED: 'Registered handler',
@@ -316,6 +324,7 @@ const ROUTER_ERROR_MSG = Object.freeze({
   connectionClosed: (nodeId) => `Connection to node ${nodeId} closed`,
   selfConnectionFailed: (message) => `Self-connection failed: ${message}`,
   noHandlerForAddress: (address) => `No handler registered for address ${address}`,
+  addressInUse: (port) => `Address in use: in-process port ${port}`,
   QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED:
     'Query/data-plane message-group transport is not configured',
   PENDING_RESPONSE_TIMEOUT: 'Pending response timeout',
