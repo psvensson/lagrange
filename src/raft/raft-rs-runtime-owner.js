@@ -542,10 +542,7 @@ function resumeAfterReconstruction(group, expectedGeneration) {
   if (group.gateOpen && isSoleVoter(conf.value, group.peerId)) {
     return campaignGroup(group, expectedGeneration);
   }
-  if (group.resumingRuntime) {
-    group.resumingRuntime = false;
-    group.health = USABLE;
-  }
+  group.resumingRuntime = false;
   announce(group, expectedGeneration);
   return settledTurn(
     outcome(CORE_OK, {reason: RUNTIME_REASON.RUNTIME_RECONSTRUCTED}));
@@ -634,16 +631,13 @@ function resumeRuntimeGroup(group) {
       RUNTIME_REASON.GENERATION_CHANGED, true));
   }
   group.pendingRuntimeResume = null;
+  group.health = USABLE;
   group.resumingRuntime = true;
   const finish = (result) => {
-    const stillResuming = group.resumingRuntime;
     group.resumingRuntime = false;
     if (result.outcome !== CORE_OK && runtimeHealth === HEALTHY &&
-        (group.health !== RECOVERY_REQUIRED || stillResuming)) {
+        group.health !== RECOVERY_REQUIRED) {
       groupFailed(group, hostFailure(result.phase, result.reason, true));
-    } else if (result.outcome === CORE_OK && runtimeHealth === HEALTHY &&
-        stillResuming) {
-      group.health = USABLE;
     }
     // The shared runtime's successful resumption is the existing owner
     // transition that can discharge an accepted wake consumed by its barrier.
@@ -1330,10 +1324,7 @@ function drainReady(group, expectedGeneration, startCycles = 0,
     }
     if (!hasReady.value) {
       if (announceOnDrain) {
-        if (group.resumingRuntime) {
-          group.resumingRuntime = false;
-          group.health = USABLE;
-        }
+        group.resumingRuntime = false;
         announce(group, expectedGeneration);
       }
       return settledTurn(outcome(CORE_OK, {reason: RUNTIME_REASON.DRAINED}));

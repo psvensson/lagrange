@@ -549,6 +549,9 @@ test('progress, recovery, runtime replacement, and compaction sync continue ' +
     quiesceWithClocks(cluster, clocks, replicaIds);
     assert.equal(cluster.replica('nopoll-a').appliedCommands.length, 2,
       'group recovery replayed and applied entry without any readStatus() call');
+    // Re-elect nopoll-a before testing runtime replacement (3-voter restore opens as follower).
+    assert.equal((await turnChainValue(portA.campaign())).outcome, CORE_OK);
+    quiesceWithClocks(cluster, clocks, replicaIds);
 
     // Runtime replacement via tick() with 0 readStatus() calls.
     setCoreFaultInjector((groupId, operation) => {
@@ -563,6 +566,8 @@ test('progress, recovery, runtime replacement, and compaction sync continue ' +
     assert.equal(fatal.outcome, CORE_FATAL);
     const replaced = await turnChainValue(portA.tick());
     assert.equal(replaced.outcome, CORE_OK);
+    assert.equal((await turnChainValue(portA.campaign())).outcome, CORE_OK);
+    quiesceWithClocks(cluster, clocks, replicaIds);
     const afterTrapWrite = await turnChainValue(portA.propose({zeroPoll: 3}));
     assert.equal(afterTrapWrite.outcome, CORE_OK);
     quiesceWithClocks(cluster, clocks, replicaIds);
