@@ -270,11 +270,10 @@ test('W1: an INSERT in flight across a forced runtime replacement commits ' +
       `acknowledged by the failed runtime (${JSON.stringify(inFlight)})`);
 
     // The replaced runtime restores the group and commits the durable entry.
-    assert.equal(await waitFor(() => {
-      partition.raft.readStatus();
-      return rowCount(dbPath) === 2;
-    }), true, 'the in-flight entry commits and applies in the replaced ' +
-      'runtime');
+    assert.equal(await waitFor(() =>
+      partition.raft.readStatus().outcome === RAFT_OPERATION_OUTCOME.CORE_OK &&
+      rowCount(dbPath) === 2), true,
+    'the in-flight entry commits and applies in the replaced runtime');
     assert.equal(partition.raft.readStatus().runtimeGeneration,
       generationBefore + 1, 'setup: the runtime was replaced once');
 
@@ -305,13 +304,18 @@ async () => {
     armTrapAfterPersistence('w1-race');
     await withMutedConsoleError(() => write(partition, INSERT_SQL,
       ['row-1', 'in-flight'], 'w1r-in-flight'));
-    // No wait: the immediate retry drives the replacement, which invalidates
-    // the pre-replacement release admission proof and defers the retry.
+    // An immediate retry before recovery completes sees the failed runtime /
+    // invalidated admission proof and defers under cutover pause.
     const paused = await write(partition, INSERT_SQL, ['row-1', 'in-flight'],
       'w1r-in-flight');
     assert.equal(paused.success, false, 'immediate retry before release is deferred');
     assert.equal(paused.failureCode, 'partition_write_cutover_paused');
     assert.equal(paused.deferRetry, true);
+    assert.equal(await waitFor(() =>
+      partition.raft.readStatus().outcome === RAFT_OPERATION_OUTCOME.CORE_OK &&
+      partition.raft.readStatus().role === RAFT_ROLE.LEADER &&
+      rowCount(dbPath) === 2), true,
+    'the replaced runtime restores leadership and commits the in-flight entry');
     await resumeFixtureParticipantAdmission(partition);
     const retry = await write(partition, INSERT_SQL, ['row-1', 'in-flight'],
       'w1r-in-flight');
