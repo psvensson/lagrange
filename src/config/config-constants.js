@@ -88,6 +88,7 @@ const CONFIG_ERROR_MSG = Object.freeze({
   INVALID_NUMBER_PREFIX: 'Invalid number value for ',
   DEPRECATED_ENV_PREFIX: 'Deprecated environment variable ',
   DEPRECATED_ENV_INFIX: ' — use ',
+  SEEDING_INCOMPLETE_PREFIX: 'Configuration seeding incomplete: ',
 });
 
 // Validation and mutation observation outcomes owned by configuration.
@@ -96,6 +97,7 @@ const CONFIG_ERROR_CODE = Object.freeze({
   VALUE_INVALID: 'CONFIG_VALUE_INVALID',
   OBSERVATION_CHANGED: 'CONFIG_MUTATION_OBSERVATION_CHANGED',
   OUTCOME_UNCONFIRMED: 'CONFIG_MUTATION_OUTCOME_UNCONFIRMED',
+  SEEDING_INCOMPLETE: 'CONFIG_SEEDING_INCOMPLETE',
 });
 
 const CONFIG_STATS_DEFAULT = Object.freeze({

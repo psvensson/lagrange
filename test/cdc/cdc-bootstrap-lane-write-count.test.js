@@ -19,6 +19,9 @@ import {test} from '../../src/test-helpers/tap.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
 import {classifyControlPlaneMutationResult} from
   '../../src/control-plane/control-plane-mutation-outcome-classifier.js';
+import {CONTROL_PLANE_MUTATION_OUTCOME} from
+  '../../src/control-plane/control-plane-system-table-gateway-constants.js';
+import {CONFIG_ERROR_CODE} from '../../src/config/config-constants.js';
 import {CONFIG_DEFINITIONS, DynamicConfigService} from
   '../../src/config/dynamic-config-service.js';
 import {INITIAL_PARTITION_IDS, SYSTEM_TABLE_NAME} from
@@ -101,3 +104,49 @@ test('config seeding over present rows counts them already present', async (t) =
   t.same(sizes, {seeded: 0, alreadyPresent: DEFINITION_COUNT, refused: 0, unknown: 0},
     'a definition the store already holds is counted already present');
 });
+
+async function seedWithReturnedOutcome(mutationResult) {
+  const service = new DynamicConfigService({nodeId: SEED_NODE_ID,
+    controlPlaneSystemTableGateway: {
+      insertSystemTableRow: async () => mutationResult,
+    }});
+  await service.initialize();
+  try {
+    await service.seedConfiguration('system', {nowMs: 1});
+    return {error: null, sizes: null};
+  } catch (error) {
+    return {
+      error,
+      sizes: Object.fromEntries(Object.entries(error.counts ?? {})
+        .map(([name, keys]) => [name, keys.length])),
+    };
+  }
+}
+
+test('config seeding counts non-throwing gateway refusals as refused and throws typed',
+  async (t) => {
+    const {error, sizes} = await seedWithReturnedOutcome({
+      success: false,
+      outcome: CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY,
+      deferRetry: true,
+    });
+    t.ok(error instanceof Error, 'seeding throws when any definition is refused');
+    t.equal(error?.code, CONFIG_ERROR_CODE.SEEDING_INCOMPLETE,
+      'thrown error carries the typed seeding-incomplete code');
+    t.same(sizes, {seeded: 0, alreadyPresent: 0, refused: DEFINITION_COUNT, unknown: 0},
+      'every refused definition is counted under refused');
+  });
+
+test('config seeding counts unconfirmed writes as unknown and throws typed',
+  async (t) => {
+    const {error, sizes} = await seedWithReturnedOutcome({
+      success: false,
+      outcome: CONTROL_PLANE_MUTATION_OUTCOME.UNKNOWN,
+      deferRetry: true,
+    });
+    t.ok(error instanceof Error, 'seeding throws when any definition outcome is unknown');
+    t.equal(error?.code, CONFIG_ERROR_CODE.SEEDING_INCOMPLETE,
+      'thrown error carries the typed seeding-incomplete code');
+    t.same(sizes, {seeded: 0, alreadyPresent: 0, refused: 0, unknown: DEFINITION_COUNT},
+      'every unconfirmed definition is counted under unknown');
+  });

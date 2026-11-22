@@ -78,6 +78,17 @@ function selectSeedOutcomeBucket(counts, mutationResult) {
     counts.unknown : counts.refused;
 }
 
+function assertSeedConfigurationComplete(counts) {
+  if (counts.refused.length === 0 && counts.unknown.length === 0) return counts;
+  const error = new Error(
+    `${CONFIG_ERROR_MSG.SEEDING_INCOMPLETE_PREFIX}refused=${counts.refused.length}, ` +
+    `unknown=${counts.unknown.length}`,
+  );
+  error.code = CONFIG_ERROR_CODE.SEEDING_INCOMPLETE;
+  error.counts = counts;
+  throw error;
+}
+
 class DynamicConfigService extends EventEmitter {
   /**
    * Create a new DynamicConfigService.
@@ -203,7 +214,7 @@ class DynamicConfigService extends EventEmitter {
       refused: counts.refused.length,
       unknown: counts.unknown.length,
     });
-    return counts;
+    return assertSeedConfigurationComplete(counts);
   }
 
   /**

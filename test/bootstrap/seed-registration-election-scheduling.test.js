@@ -226,7 +226,7 @@ test('registration owns the exact dependency cut and spends its gate once',
     }});
 
     t.same(phase.getRequiredLeaderPartitionIds(), REQUIRED_PARTITION_IDS,
-      'the registration owner publishes its four direct-write dependencies');
+      'the registration owner publishes its eight direct-write dependencies');
     await phase.waitForRequiredPartitionLeadership();
     await phase.waitForRequiredPartitionLeadership();
     t.equal(waitTurns, 1,
