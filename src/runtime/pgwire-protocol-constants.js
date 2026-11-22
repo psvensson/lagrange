@@ -58,6 +58,8 @@ const PG_BACKEND_MSG = Object.freeze({
   PARSE_COMPLETE: 0x31, // '1'
   BIND_COMPLETE: 0x32, // '2'
   CLOSE_COMPLETE: 0x33, // '3'
+  PARAMETER_DESCRIPTION: 0x74, // 't'
+  PORTAL_SUSPENDED: 0x73, // 's'
   NO_DATA: 0x6E, // 'n'
   EMPTY_QUERY: 0x49, // 'I'
 });
@@ -117,6 +119,15 @@ const PG_ERROR_CODE = Object.freeze({
   LOCK_NOT_AVAILABLE: '55P03',
   CANNOT_CONNECT_NOW: '57P03',
   SERIALIZATION_FAILURE: '40001',
+  INVALID_SQL_STATEMENT_NAME: '26000',
+  INVALID_CURSOR_NAME: '34000',
+});
+
+// --- Protocol wire format codes ---
+
+const PG_FORMAT_CODE = Object.freeze({
+  TEXT: 0,
+  BINARY: 1,
 });
 
 // --- Describe target types ---
@@ -228,6 +239,7 @@ export {
   PG_ERROR_FIELD,
   PG_SEVERITY,
   PG_ERROR_CODE,
+  PG_FORMAT_CODE,
   PG_DESCRIBE_TYPE,
   PG_CLOSE_TYPE,
   PG_SERVER_PARAMS,

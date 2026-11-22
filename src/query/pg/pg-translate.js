@@ -88,6 +88,7 @@ function translateTypeCast(expr, convertExprFn) {
     expression: innerExpr,
     targetType: affinity,
     affinity,
+    pgTargetType: pgType,
   };
 }
 

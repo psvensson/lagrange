@@ -28,7 +28,7 @@
   "censusSize": 2766,
   "digest": "fnv1a32-7fc8a429",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-2e845c4a",
+  "observationDigest": "fnv1a32-de955090",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -16196,6 +16196,7 @@
         "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/query/pg/postgres-compatibility-catalog.js",
+        "src/runtime/pgwire-credential-verifier.js",
         "src/runtime/pgwire-runtime-module.js",
         "test/helpers/sqlite-partition-sql-engine.js",
         "test/test-helpers/participant-protocol-double.js",
@@ -22002,6 +22003,11 @@
         "src/runtime/pgwire-protocol-handler.js",
         "src/runtime/pgwire-runtime-module.js",
         "src/runtime/runtime-startup-wiring.js"
+      ]
+    },
+    "test/runtime/pgwire-protocol-handler.test.js": {
+      "files": [
+        "src/query/pg/postgres-wire-description.js"
       ]
     },
     "test/runtime/pgwire-protocol-ordering.test.js": {

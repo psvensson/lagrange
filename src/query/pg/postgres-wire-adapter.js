@@ -27,6 +27,9 @@ import {
   PG_WIRE_SQLSTATE,
 } from './pg-wire-constants.js';
 import {
+  describeLifecycleStatement,
+} from './postgres-wire-description.js';
+import {
   SERVICE_LIFECYCLE_SQL_CLASSIFICATION,
   SERVICE_LIFECYCLE_SQL_COMMAND,
   classifyServiceLifecycleSql,
@@ -221,9 +224,10 @@ class PostgresWireAdapter {
       resolveStatementAuthorizationAction(sql),
     );
     if (!authorization?.authorized) {
-      throw new Error(
-        authorization?.error || PG_WIRE_ERROR_MSG.AUTHORIZATION_FAILED,
-      );
+      const reason = typeof authorization?.error === 'string' ?
+        authorization.error :
+        PG_WIRE_ERROR_MSG.AUTHORIZATION_FAILED;
+      throw new Error(reason);
     }
 
     // The statement's wall-time budget is the request budget's own limit.
@@ -252,7 +256,76 @@ class PostgresWireAdapter {
     });
 
     const result = await this.sqlCore.executeRequest(request);
-    return projectPgWireExecutionResult(result);
+    const projected = projectPgWireExecutionResult(result);
+    if (projected?.success === true && !projected.columnDescriptors &&
+        classifyServiceLifecycleSql(sql).kind ===
+          SERVICE_LIFECYCLE_SQL_CLASSIFICATION.LIFECYCLE) {
+      const lifecycle = describeLifecycleStatement(sql);
+      return {...projected, columnDescriptors: lifecycle.columns};
+    }
+    return projected;
+  }
+
+  /**
+   * Describe a SQL statement (parameter OIDs and result columns) without
+   * executing side effects or invoking guest code.
+   *
+   * @param {string} sessionId - Authenticated session identifier.
+   * @param {string} sql - SQL statement text.
+   * @param {number[]} [paramTypes] - Client-declared parameter OIDs from Parse.
+   * @param {Object} [options] - Request options.
+   * @return {Promise<Object>} Description result.
+   */
+  async describe(sessionId, sql, paramTypes = [], options = {}) {
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      throw new Error(PG_WIRE_ERROR_MSG.SESSION_NOT_AUTHENTICATED);
+    }
+    if (session.state === PG_SESSION_STATE.CLOSED) {
+      throw new Error(PG_WIRE_ERROR_MSG.SESSION_CLOSED);
+    }
+    const authorization = this.authHandler.authorizeQuery(
+      session.securityContext,
+      resolveStatementAuthorizationAction(sql),
+    );
+    if (!authorization?.authorized) {
+      const reason = typeof authorization?.error === 'string' ?
+        authorization.error :
+        PG_WIRE_ERROR_MSG.AUTHORIZATION_FAILED;
+      throw new Error(reason);
+    }
+    if (typeof sql === 'string' && sql.trim().length === 0) {
+      return Object.freeze({
+        success: true,
+        described: true,
+        statementType: null,
+        isEmpty: true,
+        returnsRows: false,
+        paramCount: 0,
+        paramOids: Object.freeze([]),
+        columns: Object.freeze([]),
+      });
+    }
+    if (classifyServiceLifecycleSql(sql).kind ===
+        SERVICE_LIFECYCLE_SQL_CLASSIFICATION.LIFECYCLE) {
+      return describeLifecycleStatement(sql, paramTypes);
+    }
+    const budgets = normalizeQueryBudget(options.budgets);
+    const request = createSqlRequest({
+      statement: sql,
+      parameters: paramTypes,
+      tenantId: session.tenantId,
+      sessionId,
+      executionMode: EXECUTION_MODE.DESCRIBE,
+      budgets,
+      dialect: PARSER_DIALECT.POSTGRESQL,
+      timeoutBudget: createTimeoutBudget({
+        configuredBudgetMs: budgets.WALL_TIME_LIMIT_MS,
+      }),
+      securityContext: session.securityContext,
+      expectedTransactionId: options.expectedTransactionId ?? null,
+    });
+    return this.sqlCore.executeRequest(request);
   }
 
   /**

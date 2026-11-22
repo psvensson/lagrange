@@ -15,3 +15,4 @@ documentClass: generated
 - [postgres-compatibility-catalog.js](postgres-compatibility-catalog.js) - Canonical catalog of PostgreSQL wire-protocol compatibility dimensions, external client identifiers, error codes,... (importers: few)
 - [postgres-compatibility-matrix.js](postgres-compatibility-matrix.js) - PostgreSQL wire-protocol compatibility matrix generator and regression verifier for Q10... (importers: one)
 - [postgres-wire-adapter.js](postgres-wire-adapter.js) - PostgresWireAdapter - adapter for external SQL protocol sessions. (importers: many)
+- [postgres-wire-description.js](postgres-wire-description.js) - Canonical PostgreSQL wire-protocol metadata description owner. (importers: few)

@@ -63,6 +63,8 @@ const EXT_EXPR_TYPE = Object.freeze({
   NUMBER: 'number',
   PARAM: 'param',
   VAR: 'var',
+  CAST: 'cast',
+  EXPR: 'expr',
 });
 
 // node-sql-parser keys of each structural node this converter reads, or that
@@ -209,7 +211,18 @@ const sqlParserSelectMethods = {
    * @return {Object[]} Column and STAR nodes.
    */
   convertColumns(columns) {
-    return arrayMap(columns, (col) => {
+    return arrayMap(columns, (rawCol) => {
+      const col = rawCol?.type === EXT_EXPR_TYPE.CAST ? {
+        type: EXT_EXPR_TYPE.EXPR,
+        expr: {
+          type: rawCol.type,
+          keyword: rawCol.keyword,
+          expr: rawCol.expr,
+          symbol: rawCol.symbol,
+          target: rawCol.target,
+        },
+        as: rawCol.as ?? null,
+      } : rawCol;
       refuseUnreadKeys(col, READ_COLUMN_KEYS, UNREAD_CLAUSE_SCOPE.RESULT_COLUMN);
       if (col.expr.type === EXT_EXPR_TYPE.STAR ||
           col.expr.column === STAR_VALUE) {
@@ -219,7 +232,7 @@ const sqlParserSelectMethods = {
       // SQLite names a bare column reference by the column itself; any other
       // unaliased expression by its source span.
       const span = col.as || expression.type === EXPR_TYPE.COLUMN_REF ? null :
-        this.columnSpans.get(col) ?? null;
+        this.columnSpans.get(rawCol) ?? null;
       return {
         type: EXPR_TYPE.COLUMN,
         expression,

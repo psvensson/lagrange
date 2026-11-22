@@ -38,6 +38,11 @@ const TRANSACTION_CONTROL_KIND = Object.freeze({
 
 const OPTIONAL_NOISE_WORDS = new Set(['WORK', 'TRANSACTION']);
 const TRANSACTION_KEYWORD = 'TRANSACTION';
+const SET_KEYWORD = 'SET';
+const SESSION_KEYWORD = 'SESSION';
+const LOCAL_KEYWORD = 'LOCAL';
+const CHARACTERISTICS_KEYWORD = 'CHARACTERISTICS';
+const AS_KEYWORD = 'AS';
 
 // Leading keyword -> the statement it begins and whether it takes the
 // PostgreSQL transaction modes (BEGIN, START TRANSACTION) and whether the
@@ -120,6 +125,33 @@ function readModeList(tokens, index) {
   return {wellFormed: !expectMode, unsupportedMode};
 }
 
+const SET_TRANSACTION_PREFIXES = Object.freeze([
+  Object.freeze([SET_KEYWORD, TRANSACTION_KEYWORD]),
+  Object.freeze([SET_KEYWORD, LOCAL_KEYWORD, TRANSACTION_KEYWORD]),
+  Object.freeze([SET_KEYWORD, SESSION_KEYWORD, TRANSACTION_KEYWORD]),
+  Object.freeze([
+    SET_KEYWORD, SESSION_KEYWORD, CHARACTERISTICS_KEYWORD, AS_KEYWORD, TRANSACTION_KEYWORD,
+  ]),
+]);
+
+function resolveSetTransactionMode(tokens) {
+  const matched = SET_TRANSACTION_PREFIXES.find((prefix) =>
+    prefix.every((word, idx) => tokens[idx] === word),
+  );
+  if (!matched) {
+    return null;
+  }
+  const modes = matched.length < tokens.length ?
+    readModeList(tokens, matched.length) :
+    {wellFormed: false, unsupportedMode: null};
+  return modes.wellFormed ?
+    {
+      kind: TRANSACTION_CONTROL_KIND.UNSUPPORTED_MODE,
+      unsupportedMode: modes.unsupportedMode || SUPPORTED_TRANSACTION_MODE,
+    } :
+    {kind: TRANSACTION_CONTROL_KIND.MALFORMED, unsupportedMode: null};
+}
+
 /**
  * Resolve a transaction-control statement the way the engine executes it.
  * @param {string} sql - Statement text.
@@ -136,6 +168,8 @@ function resolveTransactionControlStatement(sql) {
     stripTrailingTerminators(stripSqlComments(sql).trim()).toUpperCase();
   if (statement.includes(SQL_STATEMENT_TERMINATOR)) return none;
   const tokens = tokenize(statement);
+  const setTransaction = resolveSetTransactionMode(tokens);
+  if (setTransaction) return setTransaction;
   const rule = STATEMENT_BY_LEADING_KEYWORD.get(tokens[0]);
   if (!rule) return none;
   let index = 1;

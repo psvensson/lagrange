@@ -287,7 +287,7 @@ function validatePayloadShape(command, payload) {
   }
 }
 
-function parseServiceLifecycleSql(statement, parameters = []) {
+function validateServiceLifecycleSqlGrammar(statement) {
   const classification = classifyServiceLifecycleSql(statement);
   if (classification.kind !== SERVICE_LIFECYCLE_SQL_CLASSIFICATION.LIFECYCLE) {
     return classification;
@@ -300,6 +300,15 @@ function parseServiceLifecycleSql(statement, parameters = []) {
       SERVICE_LIFECYCLE_SQL_MESSAGE.GRAMMAR_UNSUPPORTED,
     );
   }
+  return classification;
+}
+
+function parseServiceLifecycleSql(statement, parameters = []) {
+  const classification = validateServiceLifecycleSqlGrammar(statement);
+  if (classification.kind !== SERVICE_LIFECYCLE_SQL_CLASSIFICATION.LIFECYCLE) {
+    return classification;
+  }
+  const command = classification.command;
   if (command === SERVICE_LIFECYCLE_SQL_COMMAND.SHOW_ALL) {
     if (!Array.isArray(parameters) || parameters.length !== 0) {
       sqlFailure(
@@ -323,4 +332,5 @@ export {
   ServiceLifecycleSqlError,
   classifyServiceLifecycleSql,
   parseServiceLifecycleSql,
+  validateServiceLifecycleSqlGrammar,
 };

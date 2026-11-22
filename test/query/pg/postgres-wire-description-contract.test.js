@@ -29,6 +29,8 @@ import {
   PG_FRONTEND_MSG,
   PG_PROTOCOL_VERSION,
 } from '../../../src/runtime/pgwire-protocol-constants.js';
+import {buildPgwireCredentialVerifier} from
+  '../../../src/runtime/pgwire-credential-verifier.js';
 import {PostgresWireRuntimeModule} from
   '../../../src/runtime/pgwire-runtime-module.js';
 import {isSqlRequest} from '../../../src/query/sql-request.js';
@@ -433,7 +435,17 @@ function createWireHarness({authMode = 'trust', customExecutor = null} = {}) {
     partitions: PARTITIONS,
   });
   const observedRequests = [];
-  const runtime = new PostgresWireRuntimeModule({logger: silentLogger});
+  const credentialVerifier = authMode === 'password' ?
+    buildPgwireCredentialVerifier({
+      PGWIRE_AUTH_USER: USER,
+      PGWIRE_AUTH_PASSWORD: PASSWORD,
+      PGWIRE_AUTH_DATABASE: DATABASE,
+    }) :
+    null;
+  const runtime = new PostgresWireRuntimeModule({
+    logger: silentLogger,
+    credentialVerifier,
+  });
   const context = {
     serviceId: META_SERVICE_ID.POSTGRES_WIRE,
     host: HOST,

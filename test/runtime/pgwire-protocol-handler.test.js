@@ -14,6 +14,8 @@
 import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
+import {describePostgresSqlStatement} from
+  '../../src/query/pg/postgres-wire-description.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 
 import {
@@ -120,6 +122,21 @@ class MockAdapter {
     if (this.authError) throw new Error(this.authError);
     this.sessions.set(sessionId, credentials);
     return {sessionId, tenantId: credentials.tenantId};
+  }
+  async describe(_sessionId, sql, paramTypes = []) {
+    const desc = describePostgresSqlStatement({sql, paramTypes});
+    if (!desc.returnsRows || !Array.isArray(this.execResult?.columns) ||
+        this.execResult.columns.length === 0) {
+      return desc;
+    }
+    const cols = this.execResult.columns.map((c) => ({
+      name: typeof c === 'string' ? c : c.name,
+      oid: 25,
+      typeSize: -1,
+      typeModifier: -1,
+      formatCode: 0,
+    }));
+    return {...desc, columns: cols};
   }
   async execute(sessionId, sql, params) {
     this.executions.push({sessionId, sql, params});
@@ -831,9 +848,7 @@ describe('pgwire-protocol-handler', () => {
     it('should handle Describe for statement', async () => {
       const socket = new MockSocket();
       const handler = new PgWireProtocolHandler({
-        adapter: new MockAdapter(),
-        socket,
-        logger: silentLogger,
+        adapter: new MockAdapter(), socket, logger: silentLogger,
       });
       handler.start();
       await doStartup(handler, socket);
@@ -841,14 +856,19 @@ describe('pgwire-protocol-handler', () => {
       socket.emit('data', buildParseMsg('', 'SELECT 1'));
       await new Promise((r) => setImmediate(r));
       socket.written = [];
-
-      socket.emit('data', buildDescribeMsg(
-        PG_DESCRIBE_TYPE.STATEMENT, '',
-      ));
+      socket.emit('data', buildDescribeMsg(PG_DESCRIBE_TYPE.STATEMENT, ''));
       await new Promise((r) => setImmediate(r));
+      assert.equal(socket.findMessages(PG_BACKEND_MSG.PARAMETER_DESCRIPTION).length, 1);
+      assert.equal(socket.findMessages(PG_BACKEND_MSG.ROW_DESCRIPTION).length, 1);
+      assert.equal(socket.findMessages(PG_BACKEND_MSG.NO_DATA).length, 0);
 
-      const noData = socket.findMessages(PG_BACKEND_MSG.NO_DATA);
-      assert.equal(noData.length, 1);
+      socket.emit('data', buildParseMsg('s_tx', 'BEGIN'));
+      await new Promise((r) => setImmediate(r));
+      socket.written = [];
+      socket.emit('data', buildDescribeMsg(PG_DESCRIBE_TYPE.STATEMENT, 's_tx'));
+      await new Promise((r) => setImmediate(r));
+      assert.equal(socket.findMessages(PG_BACKEND_MSG.PARAMETER_DESCRIPTION).length, 1);
+      assert.equal(socket.findMessages(PG_BACKEND_MSG.NO_DATA).length, 1);
 
       handler.destroy();
     });
@@ -1358,42 +1378,28 @@ describe('pgwire-protocol-handler', () => {
     });
 
     it('extractColumns from columns array', () => {
-      const cols = extractColumns({columns: ['a', 'b']});
-      assert.deepStrictEqual(cols, [{name: 'a'}, {name: 'b'}]);
+      assert.deepStrictEqual(extractColumns({columns: ['a', 'b']}), [{name: 'a'}, {name: 'b'}]);
     });
-
     it('extractColumns from rows keys', () => {
-      const cols = extractColumns({rows: [{x: 1, y: 2}]});
-      assert.deepStrictEqual(cols, [{name: 'x'}, {name: 'y'}]);
+      assert.deepStrictEqual(extractColumns({rows: [{x: 1, y: 2}]}), [{name: 'x'}, {name: 'y'}]);
     });
-
     it('extractColumns returns empty for no data', () => {
       assert.deepStrictEqual(extractColumns({}), []);
       assert.deepStrictEqual(extractColumns(null), []);
     });
-
     it('extractRowValues from object row', () => {
-      const vals = extractRowValues(
-        {a: 1, b: 'hi'},
-        [{name: 'a'}, {name: 'b'}],
+      assert.deepStrictEqual(
+        extractRowValues({a: 1, b: 'hi'}, [{name: 'a'}, {name: 'b'}]), [1, 'hi'],
       );
-      assert.deepStrictEqual(vals, [1, 'hi']);
     });
-
     it('extractRowValues from array row', () => {
-      const vals = extractRowValues(
+      assert.deepStrictEqual(
+        extractRowValues([1, null, 'x'], [{name: 'a'}, {name: 'b'}, {name: 'c'}]),
         [1, null, 'x'],
-        [{name: 'a'}, {name: 'b'}, {name: 'c'}],
       );
-      assert.deepStrictEqual(vals, [1, null, 'x']);
     });
-
     it('extractRowValues handles missing keys', () => {
-      const vals = extractRowValues(
-        {a: 1},
-        [{name: 'a'}, {name: 'b'}],
-      );
-      assert.deepStrictEqual(vals, [1, null]);
+      assert.deepStrictEqual(extractRowValues({a: 1}, [{name: 'a'}, {name: 'b'}]), [1, null]);
     });
   });
 
@@ -1465,26 +1471,14 @@ describe('pgwire-protocol-handler', () => {
   });
 
   describe('constants', () => {
-    it('should export frozen PG_PROTOCOL_VERSION', () => {
+    it('should export frozen protocol constant maps', () => {
       assert.ok(Object.isFrozen(PG_PROTOCOL_VERSION));
       assert.equal(PG_PROTOCOL_VERSION.CODE, (3 << 16) | 0);
-    });
-
-    it('should export frozen PG_FRONTEND_MSG', () => {
       assert.ok(Object.isFrozen(PG_FRONTEND_MSG));
       assert.equal(PG_FRONTEND_MSG.QUERY, 0x51);
-    });
-
-    it('should export frozen PG_BACKEND_MSG', () => {
       assert.ok(Object.isFrozen(PG_BACKEND_MSG));
       assert.equal(PG_BACKEND_MSG.AUTH, 0x52);
-    });
-
-    it('should export frozen PG_HANDLER_ERROR', () => {
       assert.ok(Object.isFrozen(PG_HANDLER_ERROR));
-    });
-
-    it('should export HANDLER_PHASE', () => {
       assert.ok(Object.isFrozen(HANDLER_PHASE));
       assert.equal(HANDLER_PHASE.STARTUP, 'startup');
       assert.equal(HANDLER_PHASE.NORMAL, 'normal');

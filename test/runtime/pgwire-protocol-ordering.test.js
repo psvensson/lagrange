@@ -101,6 +101,19 @@ describe('pgwire protocol ordering and framing', () => {
     });
     const adapter = {
       async authenticate() {},
+      async describe() {
+        return {
+          success: true,
+          described: true,
+          statementType: 'SELECT',
+          returnsRows: true,
+          paramCount: 1,
+          paramOids: [25],
+          columns: [
+            {name: 'value', oid: 23, typeSize: 4, typeModifier: -1, formatCode: 0},
+          ],
+        };
+      },
       async execute() {
         await executionGate;
         return {success: true, rows: [{value: 1}], columns: ['value']};
@@ -131,6 +144,17 @@ describe('pgwire protocol ordering and framing', () => {
     const handler = new PgWireProtocolHandler({
       adapter: {
         async authenticate() {},
+        async describe() {
+          return {
+            success: true,
+            described: true,
+            statementType: 'SELECT',
+            returnsRows: true,
+            paramCount: 0,
+            paramOids: [],
+            columns: [],
+          };
+        },
         closeSession() {},
       },
       socket,

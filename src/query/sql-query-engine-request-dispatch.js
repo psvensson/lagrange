@@ -5,6 +5,9 @@
 import {META_SERVICE_ID} from '../constants/wasm-meta.js';
 import {isSystemTableName} from
   '../bootstrap/system-table-schema-shared-constants.js';
+import {readExecutedStatementType} from './application-database-result.js';
+import {describePostgresSqlStatement} from './pg/postgres-wire-description.js';
+import {QUERY_OPERATION} from './query-constants.js';
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {SQLQueryEngineLifecycleAndCallbackDispatch} from
   './sql-query-engine-lifecycle-and-callback-dispatch.js';
@@ -377,8 +380,42 @@ class SQLQueryEngineRequestDispatch extends
     }
   }
 
+  async describeSqlRequest(sqlRequest, executionOptions = {}) {
+    const queryOptions = buildClientRequestQueryOptions(
+      sqlRequest,
+      executionOptions,
+    );
+    const statementCheck = await this.checkPlanRequestStatement(
+      sqlRequest,
+      queryOptions,
+    );
+    if (!statementCheck.allowed) {
+      return statementCheck.refusal;
+    }
+    let descriptionResult;
+    try {
+      descriptionResult = describePostgresSqlStatement({
+        sql: sqlRequest.statement,
+        paramTypes: sqlRequest.parameters,
+        resolveTableSchema: (tableName) =>
+          this.queryExecutor.resolveTableInfo(tableName),
+      });
+    } catch (error) {
+      descriptionResult = {
+        success: false,
+        error: error.message,
+        errorCode: error.code ? error.code : resolveParseFailureCode(error),
+        ...(error.sqlState ? {sqlState: error.sqlState} : {}),
+        ...(error.details ? {details: error.details} : {}),
+      };
+    }
+    return descriptionResult;
+  }
+
   async dispatchSqlRequest(sqlRequest, executionOptions = {}) {
     switch (sqlRequest.executionMode) {
+    case EXECUTION_MODE.DESCRIBE:
+      return this.describeSqlRequest(sqlRequest, executionOptions);
     case EXECUTION_MODE.SQL_STATEMENT: {
       const admission = admitRequestTransaction(
         this.transactionCoordinator, sqlRequest);
@@ -400,11 +437,23 @@ class SQLQueryEngineRequestDispatch extends
           SERVICE_LIFECYCLE_EXECUTION_DISPOSITION.HANDLED) {
         return lifecycleExecution.result;
       }
-      return this.executeQuery(
+      const result = await this.executeQuery(
         sqlRequest.statement,
         sqlRequest.parameters,
         buildClientRequestQueryOptions(sqlRequest, executionOptions),
       );
+      const executedType = readExecutedStatementType(result);
+      if (result?.success === true &&
+          (executedType === QUERY_AST_TYPE.SELECT ||
+            executedType === QUERY_OPERATION.EXPLAIN_DISTRIBUTED)) {
+        const description = describePostgresSqlStatement({
+          sql: sqlRequest.statement,
+          resolveTableSchema: (tableName) =>
+            this.queryExecutor.resolveTableInfo(tableName),
+        });
+        return {...result, columnDescriptors: description.columns};
+      }
+      return result;
     }
     case EXECUTION_MODE.STAGE:
       return this.executeStageRequest(sqlRequest, executionOptions);
