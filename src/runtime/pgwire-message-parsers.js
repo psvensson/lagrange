@@ -76,6 +76,66 @@ function parseParseMessage(payload) {
   };
 }
 
+function readBindFormatList(payload, startOffset) {
+  if (startOffset + LOCAL_NUM_TWO > payload.length) {
+    throw createProtocolViolationError(MALFORMED_BIND_MSG);
+  }
+  const count = payload.readInt16BE(startOffset);
+  let off = startOffset + LOCAL_NUM_TWO;
+  if (count < 0 || off + count * LOCAL_NUM_TWO > payload.length) {
+    throw createProtocolViolationError(MALFORMED_BIND_MSG);
+  }
+  const formats = [];
+  for (let i = 0; i < count; i += 1) {
+    formats.push(payload.readInt16BE(off));
+    off += LOCAL_NUM_TWO;
+  }
+  return {formats, nextOffset: off};
+}
+
+function resolveBindParamFormat(paramFormats, index) {
+  if (paramFormats.length === 0) return PG_FORMAT_CODE.TEXT;
+  if (paramFormats.length === 1) return paramFormats[0];
+  return paramFormats[index];
+}
+
+function readSingleBindParam(payload, startOffset, formatCode) {
+  if (startOffset + LOCAL_NUM_FOUR > payload.length) {
+    throw createProtocolViolationError(MALFORMED_BIND_MSG);
+  }
+  const len = payload.readInt32BE(startOffset);
+  const dataOffset = startOffset + LOCAL_NUM_FOUR;
+  if (len === -1) {
+    return {value: null, nextOffset: dataOffset};
+  }
+  if (len < -1 || dataOffset + len > payload.length) {
+    throw createProtocolViolationError(MALFORMED_BIND_MSG);
+  }
+  const value = formatCode === PG_FORMAT_CODE.BINARY ?
+    Buffer.from(payload.subarray(dataOffset, dataOffset + len)) :
+    payload.toString(LOCAL_STR_UTF8, dataOffset, dataOffset + len);
+  return {value, nextOffset: dataOffset + len};
+}
+
+function readBindParamValues(payload, startOffset, paramFormats) {
+  if (startOffset + LOCAL_NUM_TWO > payload.length) {
+    throw createProtocolViolationError(MALFORMED_BIND_MSG);
+  }
+  const numParams = payload.readInt16BE(startOffset);
+  if (numParams < 0) {
+    throw createProtocolViolationError(MALFORMED_BIND_MSG);
+  }
+  let off = startOffset + LOCAL_NUM_TWO;
+  const params = [];
+  for (let i = 0; i < numParams; i += 1) {
+    const fmt = resolveBindParamFormat(paramFormats, i);
+    const param = readSingleBindParam(payload, off, fmt);
+    params.push(param.value);
+    off = param.nextOffset;
+  }
+  return {params, nextOffset: off};
+}
+
 /**
  * Parse a Bind message payload.
  * @param {Buffer} payload - Message payload.
@@ -83,79 +143,23 @@ function parseParseMessage(payload) {
  *   params: Array<string|Buffer|null>, resultFormats: number[]}}
  */
 function parseBindMessage(payload) {
-  let off = 0;
-  const portal = readCString(payload, off);
-  off = portal.nextOffset;
-  const statement = readCString(payload, off);
-  off = statement.nextOffset;
-
-  if (off + LOCAL_NUM_TWO > payload.length) {
-    throw createProtocolViolationError(MALFORMED_BIND_MSG);
-  }
-  const numFormats = payload.readInt16BE(off);
-  off += LOCAL_NUM_TWO;
-  if (numFormats < 0 || off + numFormats * LOCAL_NUM_TWO > payload.length) {
-    throw createProtocolViolationError(MALFORMED_BIND_MSG);
-  }
-  const paramFormats = [];
-  for (let i = 0; i < numFormats; i += 1) {
-    paramFormats.push(payload.readInt16BE(off));
-    off += LOCAL_NUM_TWO;
-  }
-
-  if (off + LOCAL_NUM_TWO > payload.length) {
-    throw createProtocolViolationError(MALFORMED_BIND_MSG);
-  }
-  const numParams = payload.readInt16BE(off);
-  off += LOCAL_NUM_TWO;
-  if (numParams < 0) {
-    throw createProtocolViolationError(MALFORMED_BIND_MSG);
-  }
-  const params = [];
-  for (let i = 0; i < numParams; i += 1) {
-    if (off + LOCAL_NUM_FOUR > payload.length) {
-      throw createProtocolViolationError(MALFORMED_BIND_MSG);
-    }
-    const len = payload.readInt32BE(off);
-    off += LOCAL_NUM_FOUR;
-    if (len === -1) {
-      params.push(null);
-    } else if (len < -1 || off + len > payload.length) {
-      throw createProtocolViolationError(MALFORMED_BIND_MSG);
-    } else {
-      const fmt = numFormats === 0 ?
-        PG_FORMAT_CODE.TEXT :
-        numFormats === 1 ? paramFormats[0] : paramFormats[i];
-      if (fmt === PG_FORMAT_CODE.BINARY) {
-        params.push(Buffer.from(payload.subarray(off, off + len)));
-      } else {
-        params.push(payload.toString(LOCAL_STR_UTF8, off, off + len));
-      }
-      off += len;
-    }
-  }
-
-  const resultFormats = [];
-  if (off < payload.length) {
-    if (off + LOCAL_NUM_TWO > payload.length) {
-      throw createProtocolViolationError(MALFORMED_BIND_MSG);
-    }
-    const numResultFormats = payload.readInt16BE(off);
-    off += LOCAL_NUM_TWO;
-    if (numResultFormats < 0 || off + numResultFormats * LOCAL_NUM_TWO > payload.length) {
-      throw createProtocolViolationError(MALFORMED_BIND_MSG);
-    }
-    for (let i = 0; i < numResultFormats; i += 1) {
-      resultFormats.push(payload.readInt16BE(off));
-      off += LOCAL_NUM_TWO;
-    }
-  }
+  const portal = readCString(payload, 0);
+  const statement = readCString(payload, portal.nextOffset);
+  const paramFormatList = readBindFormatList(payload, statement.nextOffset);
+  const paramValues = readBindParamValues(
+    payload,
+    paramFormatList.nextOffset,
+    paramFormatList.formats,
+  );
+  const resultFormats = paramValues.nextOffset < payload.length ?
+    readBindFormatList(payload, paramValues.nextOffset).formats :
+    [];
 
   return {
     portal: portal.value,
     statement: statement.value,
-    paramFormats,
-    params,
+    paramFormats: paramFormatList.formats,
+    params: paramValues.params,
     resultFormats,
   };
 }

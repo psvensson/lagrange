@@ -26,7 +26,6 @@ import {
   EXPLAIN_DISTRIBUTED_COLUMNS,
   LIFECYCLE_COLUMNS_BY_COMMAND,
   PG_OID,
-  PG_TYPE_SIZE,
   buildColumnDescriptor,
   normalizeSqlTypeSpec,
 } from './postgres-wire-description-catalog.js';
@@ -68,6 +67,13 @@ const TEXT_FUNCTION_NAMES = new Set([
   'REPLACE', 'CONCAT', 'GROUP_CONCAT', 'STRING_AGG', 'TYPEOF',
 ]);
 const NUMERIC_OPERATORS = new Set(['+', '-', '*', '/', '%']);
+const BOOLEAN_EXPR_TYPES = new Set([
+  EXPR_TYPE.UNARY,
+  EXPR_TYPE.IN,
+  EXPR_TYPE.BETWEEN,
+  EXPR_TYPE.LIKE,
+  PG_EXPR_TYPE.EXISTS,
+]);
 
 function noUserTableSchema() {
   return null;
@@ -146,68 +152,86 @@ function resolveParameterSlot(paramNode, paramMapping) {
   return paramNode.index;
 }
 
-function buildSelectScope(ast, inferredParams, outerScope, resolveTableSchema, paramMapping) {
-  const relations = [];
-  const byAlias = new Map(outerScope ? outerScope.byAlias : undefined);
+function applyCteColumnAliases(cte, columns) {
+  if (!Array.isArray(cte.columns) || cte.columns.length === 0) return columns;
+  return columns.map((col, idx) => buildColumnDescriptor(
+    idx < cte.columns.length ? cte.columns[idx] : col.name,
+    col.oid,
+    col.tableOid,
+    col.columnAttr,
+  ));
+}
 
-  const registerRelation = (alias, columns) => {
-    const entry = {alias, columns};
-    relations.push(entry);
-    if (alias) byAlias.set(alias, entry);
-  };
-
-  if (Array.isArray(ast.ctes)) {
-    for (const cte of ast.ctes) {
-      const cteDesc = describeSelectStatement(
-        cte.query,
-        inferredParams,
-        {byAlias, relations: []},
-        resolveTableSchema,
-        paramMapping,
-      );
-      const aliasedCols = Array.isArray(cte.columns) && cte.columns.length > 0 ?
-        cteDesc.columns.map((col, idx) => buildColumnDescriptor(
-          idx < cte.columns.length ? cte.columns[idx] : col.name,
-          col.oid,
-          col.tableOid,
-          col.columnAttr,
-        )) :
-        cteDesc.columns;
-      registerRelation(cte.name, aliasedCols);
-    }
+function registerCteScopes(ctes, byAlias, inferredParams, resolveTableSchema, paramMapping) {
+  if (!Array.isArray(ctes)) return;
+  for (const cte of ctes) {
+    const cteDesc = describeSelectStatement(
+      cte.query,
+      inferredParams,
+      {byAlias, relations: []},
+      resolveTableSchema,
+      paramMapping,
+    );
+    const aliasedCols = applyCteColumnAliases(cte, cteDesc.columns);
+    byAlias.set(cte.name, {alias: cte.name, columns: aliasedCols});
   }
+}
 
+function collectFromSources(ast) {
   const fromEntries = [];
   if (ast.from) fromEntries.push(ast.from);
-  if (Array.isArray(ast.joins)) {
-    for (const join of ast.joins) {
-      if (join.table) fromEntries.push(join.table);
-    }
+  for (const join of ast.joins || []) {
+    if (join.table) fromEntries.push(join.table);
   }
+  return fromEntries;
+}
+
+function registerFromSource(
+  source,
+  byAlias,
+  ownRelations,
+  inferredParams,
+  resolveTableSchema,
+  paramMapping,
+) {
+  if (source.subquery) {
+    const subDesc = describeSelectStatement(
+      source.subquery,
+      inferredParams,
+      {byAlias, relations: []},
+      resolveTableSchema,
+      paramMapping,
+    );
+    const alias = source.alias || null;
+    const entry = {alias, columns: subDesc.columns};
+    ownRelations.push(entry);
+    if (alias) byAlias.set(alias, entry);
+    return;
+  }
+  if (typeof source.name !== 'string') return;
+  const existingCte = byAlias.get(source.name);
+  const cols = existingCte ?
+    existingCte.columns :
+    resolveCatalogTableColumns(source.name, resolveTableSchema);
+  const alias = source.alias || source.name;
+  const entry = {alias, columns: cols};
+  ownRelations.push(entry);
+  byAlias.set(alias, entry);
+}
+
+function buildSelectScope(ast, inferredParams, outerScope, resolveTableSchema, paramMapping) {
+  const byAlias = new Map(outerScope ? outerScope.byAlias : undefined);
+  registerCteScopes(ast.ctes, byAlias, inferredParams, resolveTableSchema, paramMapping);
   const ownRelations = [];
-  for (const source of fromEntries) {
-    if (source.subquery) {
-      const subDesc = describeSelectStatement(
-        source.subquery,
-        inferredParams,
-        {byAlias, relations: []},
-        resolveTableSchema,
-        paramMapping,
-      );
-      const alias = source.alias || null;
-      const entry = {alias, columns: subDesc.columns};
-      ownRelations.push(entry);
-      if (alias) byAlias.set(alias, entry);
-    } else if (typeof source.name === 'string') {
-      const existingCte = byAlias.get(source.name);
-      const cols = existingCte ?
-        existingCte.columns :
-        resolveCatalogTableColumns(source.name, resolveTableSchema);
-      const alias = source.alias || source.name;
-      const entry = {alias, columns: cols};
-      ownRelations.push(entry);
-      byAlias.set(alias, entry);
-    }
+  for (const source of collectFromSources(ast)) {
+    registerFromSource(
+      source,
+      byAlias,
+      ownRelations,
+      inferredParams,
+      resolveTableSchema,
+      paramMapping,
+    );
   }
   return {byAlias, relations: ownRelations};
 }
@@ -240,85 +264,90 @@ function inferLiteralOid(expr) {
   return PG_OID.TEXT;
 }
 
-function inferExpressionOid(expr, scope, inferredParams, paramMapping = null) {
-  if (!expr || typeof expr !== 'object') return PG_OID.TEXT;
-  switch (expr.type) {
-  case EXPR_TYPE.COLUMN_REF: {
+function inferAggregateOid(expr, scope, inferredParams, paramMapping) {
+  const fn = String(expr.function || expr.name || '').toUpperCase();
+  if (fn === COUNT_FN_NAME) return PG_OID.INT8;
+  if (fn === AVG_FN_NAME) return PG_OID.FLOAT8;
+  const argExpr = expr.argument;
+  if (!argExpr) return PG_OID.TEXT;
+  if (fn === SUM_FN_NAME) {
+    const inner = inferExpressionOid(argExpr, scope, inferredParams, paramMapping);
+    return inner === PG_OID.FLOAT4 || inner === PG_OID.FLOAT8 ?
+      PG_OID.FLOAT8 : PG_OID.INT8;
+  }
+  if (fn === MIN_FN_NAME || fn === MAX_FN_NAME) {
+    return inferExpressionOid(argExpr, scope, inferredParams, paramMapping);
+  }
+  return PG_OID.TEXT;
+}
+
+function inferFunctionCallOid(expr, scope, inferredParams, paramMapping) {
+  const fn = String(expr.name || '').toUpperCase();
+  if (fn === LENGTH_FN_NAME || fn === CHAR_LENGTH_FN_NAME) return PG_OID.INT4;
+  if (TEXT_FUNCTION_NAMES.has(fn)) return PG_OID.TEXT;
+  if (fn !== COALESCE_FN_NAME && fn !== NULLIF_FN_NAME) return PG_OID.TEXT;
+  for (const arg of expr.args || []) {
+    if (arg?.sqlType !== LITERAL_STORAGE_NULL) {
+      return inferExpressionOid(arg, scope, inferredParams, paramMapping);
+    }
+  }
+  return PG_OID.TEXT;
+}
+
+function inferCaseOid(expr, scope, inferredParams, paramMapping) {
+  for (const branch of expr.conditions || []) {
+    if (branch.thenExpression?.sqlType !== LITERAL_STORAGE_NULL) {
+      return inferExpressionOid(branch.thenExpression, scope, inferredParams, paramMapping);
+    }
+  }
+  if (expr.elseExpr && expr.elseExpr.sqlType !== LITERAL_STORAGE_NULL) {
+    return inferExpressionOid(expr.elseExpr, scope, inferredParams, paramMapping);
+  }
+  return PG_OID.TEXT;
+}
+
+function inferNumericBinaryOid(left, right) {
+  const isFloat = left === PG_OID.FLOAT8 || right === PG_OID.FLOAT8 ||
+    left === PG_OID.FLOAT4 || right === PG_OID.FLOAT4;
+  if (isFloat) return PG_OID.FLOAT8;
+  if (left === PG_OID.NUMERIC || right === PG_OID.NUMERIC) return PG_OID.NUMERIC;
+  if (left === PG_OID.INT8 || right === PG_OID.INT8) return PG_OID.INT8;
+  if (left === PG_OID.INT4 && right === PG_OID.INT4) return PG_OID.INT4;
+  return PG_OID.TEXT;
+}
+
+function inferBinaryOid(expr, scope, inferredParams, paramMapping) {
+  const op = String(expr.operator || '').toUpperCase();
+  if (BOOLEAN_OPERATORS.has(op)) return PG_OID.BOOL;
+  if (!NUMERIC_OPERATORS.has(op)) return PG_OID.TEXT;
+  const left = inferExpressionOid(expr.left, scope, inferredParams, paramMapping);
+  const right = inferExpressionOid(expr.right, scope, inferredParams, paramMapping);
+  return inferNumericBinaryOid(left, right);
+}
+
+const EXPR_OID_INFERERS = Object.freeze({
+  [EXPR_TYPE.COLUMN_REF]: (expr, scope) => {
     const col = lookupColumnDescriptor(scope, expr.table, expr.column);
     return col ? col.oid : PG_OID.TEXT;
-  }
-  case EXPR_TYPE.LITERAL:
-    return inferLiteralOid(expr);
-  case EXPR_TYPE.PARAMETER:
-    return inferredParams.get(resolveParameterSlot(expr, paramMapping)) || PG_OID.TEXT;
-  case PG_EXPR_TYPE.CAST:
-    return normalizeSqlTypeSpec(expr.pgTargetType || expr.targetType).oid;
-  case EXPR_TYPE.AGGREGATE: {
-    const fn = String(expr.function || expr.name || '').toUpperCase();
-    if (fn === COUNT_FN_NAME) return PG_OID.INT8;
-    if (fn === AVG_FN_NAME) return PG_OID.FLOAT8;
-    const argExpr = expr.argument;
-    if (fn === SUM_FN_NAME && argExpr) {
-      const inner = inferExpressionOid(argExpr, scope, inferredParams, paramMapping);
-      return inner === PG_OID.FLOAT4 || inner === PG_OID.FLOAT8 ?
-        PG_OID.FLOAT8 : PG_OID.INT8;
-    }
-    if ((fn === MIN_FN_NAME || fn === MAX_FN_NAME) && argExpr) {
-      return inferExpressionOid(argExpr, scope, inferredParams, paramMapping);
-    }
-    return PG_OID.TEXT;
-  }
-  case PG_EXPR_TYPE.FUNCTION_CALL: {
-    const fn = String(expr.name || '').toUpperCase();
-    if (fn === LENGTH_FN_NAME || fn === CHAR_LENGTH_FN_NAME) return PG_OID.INT4;
-    if (TEXT_FUNCTION_NAMES.has(fn)) return PG_OID.TEXT;
-    if ((fn === COALESCE_FN_NAME || fn === NULLIF_FN_NAME) && Array.isArray(expr.args)) {
-      for (const arg of expr.args) {
-        if (arg?.sqlType !== LITERAL_STORAGE_NULL) {
-          return inferExpressionOid(arg, scope, inferredParams, paramMapping);
-        }
-      }
-    }
-    return PG_OID.TEXT;
-  }
-  case PG_EXPR_TYPE.CASE: {
-    for (const branch of expr.conditions || []) {
-      if (branch.thenExpression?.sqlType !== LITERAL_STORAGE_NULL) {
-        return inferExpressionOid(branch.thenExpression, scope, inferredParams, paramMapping);
-      }
-    }
-    if (expr.elseExpr && expr.elseExpr.sqlType !== LITERAL_STORAGE_NULL) {
-      return inferExpressionOid(expr.elseExpr, scope, inferredParams, paramMapping);
-    }
-    return PG_OID.TEXT;
-  }
-  case EXPR_TYPE.BINARY: {
-    const op = String(expr.operator || '').toUpperCase();
-    if (BOOLEAN_OPERATORS.has(op)) return PG_OID.BOOL;
-    if (NUMERIC_OPERATORS.has(op)) {
-      const left = inferExpressionOid(expr.left, scope, inferredParams, paramMapping);
-      const right = inferExpressionOid(expr.right, scope, inferredParams, paramMapping);
-      if (left === PG_OID.FLOAT8 || right === PG_OID.FLOAT8 ||
-          left === PG_OID.FLOAT4 || right === PG_OID.FLOAT4) {
-        return PG_OID.FLOAT8;
-      }
-      if (left === PG_OID.NUMERIC || right === PG_OID.NUMERIC) return PG_OID.NUMERIC;
-      if (left === PG_OID.INT8 || right === PG_OID.INT8) return PG_OID.INT8;
-      if (left === PG_OID.INT4 && right === PG_OID.INT4) return PG_OID.INT4;
-    }
-    return PG_OID.TEXT;
-  }
-  case EXPR_TYPE.UNARY:
-  case EXPR_TYPE.IN:
-  case EXPR_TYPE.BETWEEN:
-  case EXPR_TYPE.LIKE:
-  case PG_EXPR_TYPE.EXISTS:
-    return PG_OID.BOOL;
-  case EXPR_TYPE.COLLATE:
-    return inferExpressionOid(expr.expression, scope, inferredParams, paramMapping);
-  default:
-    return PG_OID.TEXT;
-  }
+  },
+  [EXPR_TYPE.LITERAL]: (expr) => inferLiteralOid(expr),
+  [EXPR_TYPE.PARAMETER]: (expr, _scope, inferredParams, paramMapping) =>
+    inferredParams.get(resolveParameterSlot(expr, paramMapping)) || PG_OID.TEXT,
+  [PG_EXPR_TYPE.CAST]: (expr) =>
+    normalizeSqlTypeSpec(expr.pgTargetType || expr.targetType).oid,
+  [EXPR_TYPE.AGGREGATE]: inferAggregateOid,
+  [PG_EXPR_TYPE.FUNCTION_CALL]: inferFunctionCallOid,
+  [PG_EXPR_TYPE.CASE]: inferCaseOid,
+  [EXPR_TYPE.BINARY]: inferBinaryOid,
+  [EXPR_TYPE.COLLATE]: (expr, scope, inferredParams, paramMapping) =>
+    inferExpressionOid(expr.expression, scope, inferredParams, paramMapping),
+});
+
+function inferExpressionOid(expr, scope, inferredParams, paramMapping = null) {
+  if (!expr || typeof expr !== 'object') return PG_OID.TEXT;
+  if (BOOLEAN_EXPR_TYPES.has(expr.type)) return PG_OID.BOOL;
+  const inferer = EXPR_OID_INFERERS[expr.type];
+  return inferer ? inferer(expr, scope, inferredParams, paramMapping) : PG_OID.TEXT;
 }
 
 function recordInferredParam(inferredParams, paramNode, oid, paramMapping) {
@@ -328,6 +357,43 @@ function recordInferredParam(inferredParams, paramNode, oid, paramMapping) {
     inferredParams.set(slot, oid);
   }
 }
+
+function tryInferColumnParam(colExpr, paramExpr, scope, inferredParams, paramMapping) {
+  if (colExpr?.type !== EXPR_TYPE.COLUMN_REF || paramExpr?.type !== EXPR_TYPE.PARAMETER) {
+    return false;
+  }
+  const col = lookupColumnDescriptor(scope, colExpr.table, colExpr.column);
+  if (col) recordInferredParam(inferredParams, paramExpr, col.oid, paramMapping);
+  return true;
+}
+
+function inferBinaryParameters(expr, scope, inferredParams, paramMapping) {
+  if (tryInferColumnParam(expr.left, expr.right, scope, inferredParams, paramMapping)) return;
+  tryInferColumnParam(expr.right, expr.left, scope, inferredParams, paramMapping);
+}
+
+function inferInListParameters(expr, scope, inferredParams, paramMapping) {
+  if (expr.expression?.type !== EXPR_TYPE.COLUMN_REF || !Array.isArray(expr.values)) return;
+  const col = lookupColumnDescriptor(scope, expr.expression.table, expr.expression.column);
+  if (!col) return;
+  for (const val of expr.values) {
+    if (val?.type === EXPR_TYPE.PARAMETER) {
+      recordInferredParam(inferredParams, val, col.oid, paramMapping);
+    }
+  }
+}
+
+function inferLikeParameters(expr, _scope, inferredParams, paramMapping) {
+  if (expr.right?.type === EXPR_TYPE.PARAMETER) {
+    recordInferredParam(inferredParams, expr.right, PG_OID.TEXT, paramMapping);
+  }
+}
+
+const PARAM_INFERERS_BY_TYPE = Object.freeze({
+  [EXPR_TYPE.BINARY]: inferBinaryParameters,
+  [EXPR_TYPE.IN]: inferInListParameters,
+  [EXPR_TYPE.LIKE]: inferLikeParameters,
+});
 
 function inferParametersInExpression(expr, scope, inferredParams, paramMapping) {
   if (!expr || typeof expr !== 'object') return;
@@ -342,33 +408,64 @@ function inferParametersInExpression(expr, scope, inferredParams, paramMapping) 
     recordInferredParam(inferredParams, expr.expression, oid, paramMapping);
     return;
   }
-  if (expr.type === EXPR_TYPE.BINARY) {
-    if (expr.left?.type === EXPR_TYPE.COLUMN_REF && expr.right?.type === EXPR_TYPE.PARAMETER) {
-      const col = lookupColumnDescriptor(scope, expr.left.table, expr.left.column);
-      if (col) recordInferredParam(inferredParams, expr.right, col.oid, paramMapping);
-    } else if (expr.right?.type === EXPR_TYPE.COLUMN_REF &&
-        expr.left?.type === EXPR_TYPE.PARAMETER) {
-      const col = lookupColumnDescriptor(scope, expr.right.table, expr.right.column);
-      if (col) recordInferredParam(inferredParams, expr.left, col.oid, paramMapping);
-    }
-  }
-  if (expr.type === EXPR_TYPE.IN && expr.expression?.type === EXPR_TYPE.COLUMN_REF &&
-      Array.isArray(expr.values)) {
-    const col = lookupColumnDescriptor(scope, expr.expression.table, expr.expression.column);
-    if (col) {
-      for (const val of expr.values) {
-        if (val?.type === EXPR_TYPE.PARAMETER) {
-          recordInferredParam(inferredParams, val, col.oid, paramMapping);
-        }
-      }
-    }
-  }
-  if (expr.type === EXPR_TYPE.LIKE && expr.right?.type === EXPR_TYPE.PARAMETER) {
-    recordInferredParam(inferredParams, expr.right, PG_OID.TEXT, paramMapping);
-  }
+  const handler = PARAM_INFERERS_BY_TYPE[expr.type];
+  if (handler) handler(expr, scope, inferredParams, paramMapping);
   for (const value of Object.values(expr)) {
     inferParametersInExpression(value, scope, inferredParams, paramMapping);
   }
+}
+
+function inferSelectParameters(ast, scope, inferredParams, paramMapping) {
+  inferParametersInExpression(ast.where, scope, inferredParams, paramMapping);
+  inferParametersInExpression(ast.having, scope, inferredParams, paramMapping);
+  inferParametersInExpression(ast.columns, scope, inferredParams, paramMapping);
+  for (const join of ast.joins || []) {
+    inferParametersInExpression(join.on, scope, inferredParams, paramMapping);
+  }
+  if (ast.limit?.count?.type === EXPR_TYPE.PARAMETER) {
+    recordInferredParam(inferredParams, ast.limit.count, PG_OID.INT8, paramMapping);
+  }
+  if (ast.limit?.offset?.type === EXPR_TYPE.PARAMETER) {
+    recordInferredParam(inferredParams, ast.limit.offset, PG_OID.INT8, paramMapping);
+  }
+}
+
+function expandStarColumn(col, scope) {
+  if (col.table) {
+    const rel = scope.byAlias.get(col.table);
+    if (!rel) {
+      throw createDescriptionError(
+        QUERY_ERROR_CODE.TABLE_NOT_FOUND,
+        null,
+        DESCRIBE_ERROR_MSG.TABLE_NOT_FOUND_PREFIX + col.table,
+      );
+    }
+    return rel.columns;
+  }
+  if (scope.relations.length === 0) {
+    throw createDescriptionError(
+      QUERY_ERROR_CODE.SYNTAX_ERROR,
+      null,
+      DESCRIBE_ERROR_MSG.STAR_REQUIRES_TABLE,
+    );
+  }
+  const expanded = [];
+  for (const rel of scope.relations) expanded.push(...rel.columns);
+  return expanded;
+}
+
+function projectSelectColumns(astColumns, scope, inferredParams, paramMapping) {
+  const columns = [];
+  for (const col of astColumns || []) {
+    if (col.type === EXPR_TYPE.STAR) {
+      columns.push(...expandStarColumn(col, scope));
+      continue;
+    }
+    const name = resultColumnName(col);
+    const oid = inferExpressionOid(col.expression, scope, inferredParams, paramMapping);
+    columns.push(buildColumnDescriptor(name, oid));
+  }
+  return columns;
 }
 
 function describeSelectStatement(
@@ -379,50 +476,8 @@ function describeSelectStatement(
   paramMapping = null,
 ) {
   const scope = buildSelectScope(ast, inferredParams, outerScope, resolveTableSchema, paramMapping);
-  inferParametersInExpression(ast.where, scope, inferredParams, paramMapping);
-  inferParametersInExpression(ast.having, scope, inferredParams, paramMapping);
-  inferParametersInExpression(ast.columns, scope, inferredParams, paramMapping);
-  if (Array.isArray(ast.joins)) {
-    for (const join of ast.joins) {
-      inferParametersInExpression(join.on, scope, inferredParams, paramMapping);
-    }
-  }
-  if (ast.limit?.count?.type === EXPR_TYPE.PARAMETER) {
-    recordInferredParam(inferredParams, ast.limit.count, PG_OID.INT8, paramMapping);
-  }
-  if (ast.limit?.offset?.type === EXPR_TYPE.PARAMETER) {
-    recordInferredParam(inferredParams, ast.limit.offset, PG_OID.INT8, paramMapping);
-  }
-
-  const columns = [];
-  for (const col of ast.columns || []) {
-    if (col.type === EXPR_TYPE.STAR) {
-      if (col.table) {
-        const rel = scope.byAlias.get(col.table);
-        if (!rel) {
-          throw createDescriptionError(
-            QUERY_ERROR_CODE.TABLE_NOT_FOUND,
-            null,
-            DESCRIBE_ERROR_MSG.TABLE_NOT_FOUND_PREFIX + col.table,
-          );
-        }
-        columns.push(...rel.columns);
-      } else if (scope.relations.length === 0) {
-        throw createDescriptionError(
-          QUERY_ERROR_CODE.SYNTAX_ERROR,
-          null,
-          DESCRIBE_ERROR_MSG.STAR_REQUIRES_TABLE,
-        );
-      } else {
-        for (const rel of scope.relations) columns.push(...rel.columns);
-      }
-      continue;
-    }
-    const name = resultColumnName(col);
-    const oid = inferExpressionOid(col.expression, scope, inferredParams, paramMapping);
-    columns.push(buildColumnDescriptor(name, oid));
-  }
-
+  inferSelectParameters(ast, scope, inferredParams, paramMapping);
+  const columns = projectSelectColumns(ast.columns, scope, inferredParams, paramMapping);
   if (ast.setOperation?.right) {
     describeSelectStatement(
       ast.setOperation.right,
@@ -435,36 +490,46 @@ function describeSelectStatement(
   return {columns};
 }
 
-function inferDmlParameters(ast, inferredParams, resolveTableSchema, paramMapping) {
-  const cols = resolveCatalogTableColumns(ast.table, resolveTableSchema);
-  const scope = {byAlias: new Map([[ast.table, {alias: ast.table, columns: cols}]]),
-    relations: [{alias: ast.table, columns: cols}]};
-
-  if (ast.type === AST_TYPE.INSERT) {
-    const targetCols = Array.isArray(ast.columns) ?
-      ast.columns.map((name) => cols.find((c) => c.name === name) || null) :
-      cols;
-    for (const row of ast.values || []) {
-      for (let i = 0; i < row.length; i += 1) {
-        if (row[i]?.type === EXPR_TYPE.PARAMETER && targetCols[i]) {
-          recordInferredParam(inferredParams, row[i], targetCols[i].oid, paramMapping);
-        } else {
-          inferParametersInExpression(row[i], scope, inferredParams, paramMapping);
-        }
+function inferInsertParameters(ast, cols, scope, inferredParams, paramMapping) {
+  const targetCols = Array.isArray(ast.columns) ?
+    ast.columns.map((name) => cols.find((c) => c.name === name) || null) :
+    cols;
+  for (const row of ast.values || []) {
+    for (let i = 0; i < row.length; i += 1) {
+      const value = row[i];
+      if (value?.type === EXPR_TYPE.PARAMETER && targetCols[i]) {
+        recordInferredParam(inferredParams, value, targetCols[i].oid, paramMapping);
+      } else {
+        inferParametersInExpression(value, scope, inferredParams, paramMapping);
       }
     }
+  }
+}
+
+function inferUpdateParameters(ast, cols, scope, inferredParams, paramMapping) {
+  for (const assign of ast.assignments || []) {
+    const target = cols.find((c) => c.name === assign.column);
+    if (target && assign.value?.type === EXPR_TYPE.PARAMETER) {
+      recordInferredParam(inferredParams, assign.value, target.oid, paramMapping);
+    } else {
+      inferParametersInExpression(assign.value, scope, inferredParams, paramMapping);
+    }
+  }
+  inferParametersInExpression(ast.where, scope, inferredParams, paramMapping);
+}
+
+function inferDmlParameters(ast, inferredParams, resolveTableSchema, paramMapping) {
+  const cols = resolveCatalogTableColumns(ast.table, resolveTableSchema);
+  const scope = {
+    byAlias: new Map([[ast.table, {alias: ast.table, columns: cols}]]),
+    relations: [{alias: ast.table, columns: cols}],
+  };
+  if (ast.type === AST_TYPE.INSERT) {
+    inferInsertParameters(ast, cols, scope, inferredParams, paramMapping);
     return;
   }
   if (ast.type === AST_TYPE.UPDATE) {
-    for (const assign of ast.assignments || []) {
-      const target = cols.find((c) => c.name === assign.column);
-      if (target && assign.value?.type === EXPR_TYPE.PARAMETER) {
-        recordInferredParam(inferredParams, assign.value, target.oid, paramMapping);
-      } else {
-        inferParametersInExpression(assign.value, scope, inferredParams, paramMapping);
-      }
-    }
-    inferParametersInExpression(ast.where, scope, inferredParams, paramMapping);
+    inferUpdateParameters(ast, cols, scope, inferredParams, paramMapping);
     return;
   }
   if (ast.type === AST_TYPE.DELETE) {
@@ -533,16 +598,7 @@ function parseSqlForDescription(sql) {
   }
 }
 
-function describePostgresSqlStatement({
-  sql,
-  paramTypes = [],
-  resolveTableSchema = noUserTableSchema,
-}) {
-  if (classifyServiceLifecycleSql(sql).kind ===
-      SERVICE_LIFECYCLE_SQL_CLASSIFICATION.LIFECYCLE) {
-    return describeLifecycleStatement(sql, paramTypes);
-  }
-
+function stripExplainDistributedPrefix(sql) {
   const isExplainDistributed = EXPLAIN_DISTRIBUTED_PREFIX.test(sql);
   const statementSql = isExplainDistributed ? sql.replace(EXPLAIN_DISTRIBUTED_PREFIX, '') : sql;
   if (isExplainDistributed && !statementSql.trim()) {
@@ -552,43 +608,50 @@ function describePostgresSqlStatement({
       DESCRIBE_ERROR_MSG.EXPLAIN_REQUIRES_STATEMENT,
     );
   }
+  return {isExplainDistributed, statementSql};
+}
 
-  let ast;
+function buildEmptyStatementDescription(paramTypes) {
+  if (Array.isArray(paramTypes) && paramTypes.length > 0) {
+    throw createDescriptionError(
+      QUERY_ERROR_CODE.SYNTAX_ERROR,
+      PG_ERROR_CODE.PROTOCOL_VIOLATION,
+      DESCRIBE_ERROR_MSG.PARAM_TYPES_EXCEED_PLACEHOLDERS,
+    );
+  }
+  return Object.freeze({
+    success: true,
+    described: true,
+    statementType: null,
+    isEmpty: true,
+    returnsRows: false,
+    paramCount: 0,
+    paramOids: Object.freeze([]),
+    columns: Object.freeze([]),
+  });
+}
+
+function parseStatementOrDetectEmpty(statementSql, isExplainDistributed) {
   try {
-    ast = parseSqlForDescription(statementSql);
+    return {isEmpty: false, ast: parseSqlForDescription(statementSql)};
   } catch (error) {
     if (!isExplainDistributed && error?.code === QUERY_ERROR_CODE.EMPTY_STATEMENT) {
-      if (Array.isArray(paramTypes) && paramTypes.length > 0) {
-        throw createDescriptionError(
-          QUERY_ERROR_CODE.SYNTAX_ERROR,
-          PG_ERROR_CODE.PROTOCOL_VIOLATION,
-          DESCRIBE_ERROR_MSG.PARAM_TYPES_EXCEED_PLACEHOLDERS,
-        );
-      }
-      return Object.freeze({
-        success: true,
-        described: true,
-        statementType: null,
-        isEmpty: true,
-        returnsRows: false,
-        paramCount: 0,
-        paramOids: Object.freeze([]),
-        columns: Object.freeze([]),
-      });
+      return {isEmpty: true, ast: undefined};
     }
     throw error;
   }
+}
 
-  const paramMapping = Array.isArray(ast._paramMapping) ? ast._paramMapping : null;
+function seedDeclaredParamTypes(paramMapping, paramTypes) {
   const inferredParams = new Map();
-  if (paramMapping) {
-    for (let i = 0; i < paramTypes.length; i += 1) {
-      if (Number(paramTypes[i]) > 0) inferredParams.set(i, Number(paramTypes[i]));
-    }
+  if (!paramMapping) return inferredParams;
+  for (let i = 0; i < paramTypes.length; i += 1) {
+    if (Number(paramTypes[i]) > 0) inferredParams.set(i, Number(paramTypes[i]));
   }
+  return inferredParams;
+}
 
-  let columns = Object.freeze([]);
-  let returnsRows = false;
+function describeStatementAst(ast, inferredParams, resolveTableSchema, paramMapping) {
   if (ast.type === AST_TYPE.SELECT) {
     const selectDesc = describeSelectStatement(
       ast,
@@ -597,10 +660,12 @@ function describePostgresSqlStatement({
       resolveTableSchema,
       paramMapping,
     );
-    columns = Object.freeze(selectDesc.columns);
-    returnsRows = true;
-  } else if (ast.type === AST_TYPE.INSERT || ast.type === AST_TYPE.UPDATE ||
-      ast.type === AST_TYPE.DELETE) {
+    return {columns: Object.freeze(selectDesc.columns), returnsRows: true};
+  }
+  const isDml = ast.type === AST_TYPE.INSERT ||
+    ast.type === AST_TYPE.UPDATE ||
+    ast.type === AST_TYPE.DELETE;
+  if (isDml) {
     if (ast.returning) {
       throw createDescriptionError(
         QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE,
@@ -610,7 +675,31 @@ function describePostgresSqlStatement({
     }
     inferDmlParameters(ast, inferredParams, resolveTableSchema, paramMapping);
   }
+  return {columns: Object.freeze([]), returnsRows: false};
+}
 
+function describePostgresSqlStatement({
+  sql,
+  paramTypes = [],
+  resolveTableSchema = noUserTableSchema,
+}) {
+  if (classifyServiceLifecycleSql(sql).kind ===
+      SERVICE_LIFECYCLE_SQL_CLASSIFICATION.LIFECYCLE) {
+    return describeLifecycleStatement(sql, paramTypes);
+  }
+  const {isExplainDistributed, statementSql} = stripExplainDistributedPrefix(sql);
+  const parsed = parseStatementOrDetectEmpty(statementSql, isExplainDistributed);
+  if (parsed.isEmpty) return buildEmptyStatementDescription(paramTypes);
+
+  const ast = parsed.ast;
+  const paramMapping = Array.isArray(ast._paramMapping) ? ast._paramMapping : null;
+  const inferredParams = seedDeclaredParamTypes(paramMapping, paramTypes);
+  const {columns, returnsRows} = describeStatementAst(
+    ast,
+    inferredParams,
+    resolveTableSchema,
+    paramMapping,
+  );
   const paramOids = finalizeParameterOids(ast, paramTypes, inferredParams);
   if (isExplainDistributed) {
     return Object.freeze({
@@ -635,9 +724,6 @@ function describePostgresSqlStatement({
 }
 
 export {
-  PG_OID,
-  PG_TYPE_SIZE,
   describeLifecycleStatement,
   describePostgresSqlStatement,
-  normalizeSqlTypeSpec,
 };

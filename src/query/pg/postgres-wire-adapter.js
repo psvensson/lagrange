@@ -196,22 +196,7 @@ class PostgresWireAdapter {
     };
   }
 
-  /**
-   * Execute a SQL statement within an authenticated session.
-   *
-   * Requirement 3.2: Compile and execute statements via SqlCore.
-   *
-   * @param {string} sessionId - Authenticated session identifier.
-   * @param {string} sql - SQL statement text.
-   * @param {unknown[]} [params] - Bind parameters.
-   * @param {Object} [options] - Execution options.
-   * @param {Object} [options.budgets] - Budget overrides.
-   * @param {Object} [options.hints] - Planner hint overrides.
-   * @param {string|null} [options.expectedTransactionId] - The explicit
-   *   transaction the protocol session believes it is in.
-   * @return {Promise<Object>} Query result from SqlCore.
-   */
-  async execute(sessionId, sql, params = [], options = {}) {
+  _requireAuthorizedSession(sessionId, sql) {
     const session = this.sessions.get(sessionId);
     if (!session) {
       throw new Error(PG_WIRE_ERROR_MSG.SESSION_NOT_AUTHENTICATED);
@@ -229,7 +214,37 @@ class PostgresWireAdapter {
         PG_WIRE_ERROR_MSG.AUTHORIZATION_FAILED;
       throw new Error(reason);
     }
+    return session;
+  }
 
+  _projectExecutedResult(sql, result) {
+    const projected = projectPgWireExecutionResult(result);
+    const hasColumns = Array.isArray(projected?.columns) && projected.columns.length > 0;
+    const needsLifecycleColumns =
+      projected?.success === true && !hasColumns && !projected.columnDescriptors &&
+      classifyServiceLifecycleSql(sql).kind === SERVICE_LIFECYCLE_SQL_CLASSIFICATION.LIFECYCLE;
+    return needsLifecycleColumns ?
+      {...projected, columnDescriptors: describeLifecycleStatement(sql).columns} :
+      projected;
+  }
+
+  /**
+   * Execute a SQL statement within an authenticated session.
+   *
+   * Requirement 3.2: Compile and execute statements via SqlCore.
+   *
+   * @param {string} sessionId - Authenticated session identifier.
+   * @param {string} sql - SQL statement text.
+   * @param {unknown[]} [params] - Bind parameters.
+   * @param {Object} [options] - Execution options.
+   * @param {Object} [options.budgets] - Budget overrides.
+   * @param {Object} [options.hints] - Planner hint overrides.
+   * @param {string|null} [options.expectedTransactionId] - The explicit
+   *   transaction the protocol session believes it is in.
+   * @return {Promise<Object>} Query result from SqlCore.
+   */
+  async execute(sessionId, sql, params = [], options = {}) {
+    const session = this._requireAuthorizedSession(sessionId, sql);
     // The statement's wall-time budget is the request budget's own limit.
     const budgets = normalizeQueryBudget(options.budgets);
     const request = createSqlRequest({
@@ -248,23 +263,13 @@ class PostgresWireAdapter {
       expectedTransactionId: options.expectedTransactionId ?? null,
       abortSignal: options.abortSignal,
     });
-
     this.logger.debug(ADAPTER_LOG_MSG.EXECUTING_VIA_SQLCORE, {
       sessionId: request.sessionId,
       tenantId: request.tenantId,
       executionMode: request.executionMode,
     });
-
     const result = await this.sqlCore.executeRequest(request);
-    const projected = projectPgWireExecutionResult(result);
-    const hasColumns = Array.isArray(projected?.columns) && projected.columns.length > 0;
-    if (projected?.success === true && !hasColumns && !projected.columnDescriptors &&
-        classifyServiceLifecycleSql(sql).kind ===
-          SERVICE_LIFECYCLE_SQL_CLASSIFICATION.LIFECYCLE) {
-      const lifecycle = describeLifecycleStatement(sql);
-      return {...projected, columnDescriptors: lifecycle.columns};
-    }
-    return projected;
+    return this._projectExecutedResult(sql, result);
   }
 
   /**
@@ -278,23 +283,7 @@ class PostgresWireAdapter {
    * @return {Promise<Object>} Description result.
    */
   async describe(sessionId, sql, paramTypes = [], options = {}) {
-    const session = this.sessions.get(sessionId);
-    if (!session) {
-      throw new Error(PG_WIRE_ERROR_MSG.SESSION_NOT_AUTHENTICATED);
-    }
-    if (session.state === PG_SESSION_STATE.CLOSED) {
-      throw new Error(PG_WIRE_ERROR_MSG.SESSION_CLOSED);
-    }
-    const authorization = this.authHandler.authorizeQuery(
-      session.securityContext,
-      resolveStatementAuthorizationAction(sql),
-    );
-    if (!authorization?.authorized) {
-      const reason = typeof authorization?.error === 'string' ?
-        authorization.error :
-        PG_WIRE_ERROR_MSG.AUTHORIZATION_FAILED;
-      throw new Error(reason);
-    }
+    const session = this._requireAuthorizedSession(sessionId, sql);
     if (typeof sql === 'string' && sql.trim().length === 0) {
       return Object.freeze({
         success: true,

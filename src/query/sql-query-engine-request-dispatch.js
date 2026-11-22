@@ -437,50 +437,59 @@ class SQLQueryEngineRequestDispatch extends
     return descriptionResult;
   }
 
+  async executeSqlStatementRequest(sqlRequest, executionOptions = {}) {
+    const admission = admitRequestTransaction(
+      this.transactionCoordinator, sqlRequest);
+    if (admission.state === STATEMENT_ADMISSION.REFUSED) {
+      return admission.failure;
+    }
+    const lifecycleOptions = {
+      sessionId: sqlRequest.sessionId,
+      ...(sqlRequest.securityContext ?
+        {securityContext: sqlRequest.securityContext} : {}),
+      ...(sqlRequest.abortSignal ?
+        {abortSignal: sqlRequest.abortSignal} : {}),
+    };
+    const lifecycleExecution = await this.tryExecuteServiceLifecycleSql(
+      sqlRequest.statement,
+      sqlRequest.parameters,
+      lifecycleOptions,
+    );
+    if (lifecycleExecution.disposition ===
+        SERVICE_LIFECYCLE_EXECUTION_DISPOSITION.HANDLED) {
+      return lifecycleExecution.result;
+    }
+    const result = await this.executeQuery(
+      sqlRequest.statement,
+      sqlRequest.parameters,
+      buildClientRequestQueryOptions(sqlRequest, executionOptions),
+    );
+    return this.attachPgColumnDescriptors(sqlRequest, result);
+  }
+
+  attachPgColumnDescriptors(sqlRequest, result) {
+    const executedType = readExecutedStatementType(result);
+    const shouldDescribe = result?.success === true &&
+      sqlRequest.dialect === PARSER_DIALECT.POSTGRESQL &&
+      (executedType === QUERY_AST_TYPE.SELECT ||
+        executedType === QUERY_OPERATION.EXPLAIN_DISTRIBUTED);
+    if (!shouldDescribe) {
+      return result;
+    }
+    const description = describePostgresSqlStatement({
+      sql: sqlRequest.statement,
+      resolveTableSchema: (tableName) =>
+        this.queryExecutor.resolveTableInfo(tableName),
+    });
+    return {...result, columnDescriptors: description.columns};
+  }
+
   async dispatchSqlRequest(sqlRequest, executionOptions = {}) {
     switch (sqlRequest.executionMode) {
     case EXECUTION_MODE.DESCRIBE:
       return this.describeSqlRequest(sqlRequest, executionOptions);
-    case EXECUTION_MODE.SQL_STATEMENT: {
-      const admission = admitRequestTransaction(
-        this.transactionCoordinator, sqlRequest);
-      if (admission.state === STATEMENT_ADMISSION.REFUSED) {
-        return admission.failure;
-      }
-      const lifecycleExecution = await this.tryExecuteServiceLifecycleSql(
-        sqlRequest.statement,
-        sqlRequest.parameters,
-        {
-          sessionId: sqlRequest.sessionId,
-          ...(sqlRequest.securityContext ?
-            {securityContext: sqlRequest.securityContext} : {}),
-          ...(sqlRequest.abortSignal ?
-            {abortSignal: sqlRequest.abortSignal} : {}),
-        },
-      );
-      if (lifecycleExecution.disposition ===
-          SERVICE_LIFECYCLE_EXECUTION_DISPOSITION.HANDLED) {
-        return lifecycleExecution.result;
-      }
-      const result = await this.executeQuery(
-        sqlRequest.statement,
-        sqlRequest.parameters,
-        buildClientRequestQueryOptions(sqlRequest, executionOptions),
-      );
-      const executedType = readExecutedStatementType(result);
-      if (result?.success === true &&
-          sqlRequest.dialect === PARSER_DIALECT.POSTGRESQL &&
-          (executedType === QUERY_AST_TYPE.SELECT ||
-            executedType === QUERY_OPERATION.EXPLAIN_DISTRIBUTED)) {
-        const description = describePostgresSqlStatement({
-          sql: sqlRequest.statement,
-          resolveTableSchema: (tableName) =>
-            this.queryExecutor.resolveTableInfo(tableName),
-        });
-        return {...result, columnDescriptors: description.columns};
-      }
-      return result;
-    }
+    case EXECUTION_MODE.SQL_STATEMENT:
+      return this.executeSqlStatementRequest(sqlRequest, executionOptions);
     case EXECUTION_MODE.STAGE:
       return this.executeStageRequest(sqlRequest, executionOptions);
     case EXECUTION_MODE.PLAN:

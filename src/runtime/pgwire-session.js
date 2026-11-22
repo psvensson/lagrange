@@ -128,9 +128,7 @@ class PgWireSession {
    */
   setPreparedStatement(name, query, paramTypes = [], description = null) {
     this._statements.set(name, {query, paramTypes, description});
-    // Close any existing portal with the same name or bound to this statement
-    // per PG protocol semantics.
-    this._portals.delete(name);
+    // Close all portals bound to this statement per PG protocol semantics.
     for (const [portalName, portal] of this._portals.entries()) {
       if (portal.statementName === name) {
         this._portals.delete(portalName);
@@ -165,7 +163,6 @@ class PgWireSession {
    */
   closePreparedStatement(name) {
     this._statements.delete(name);
-    this._portals.delete(name);
     for (const [portalName, portal] of this._portals.entries()) {
       if (portal.statementName === name) {
         this._portals.delete(portalName);

@@ -621,6 +621,46 @@ class PgWireProtocolHandler {
    * @param {unknown[]} params - Bind parameters.
    * @private
    */
+  _throwIfResultFailed(result) {
+    if (result?.success !== false) return;
+    const message = result.error ? result.error : PG_HANDLER_ERROR.QUERY_EXECUTION_FAILED;
+    const error = new Error(message);
+    Object.assign(error, result);
+    throw error;
+  }
+
+  _writeExecutionRows(result, executionMeta) {
+    const isExtended = executionMeta.extended === true;
+    const columns = isExtended ?
+      executionMeta.portalDescription.columns : extractColumns(result);
+    if (columns.length === 0 || !Array.isArray(result?.rows)) return;
+    if (!isExtended) this._socket.write(buildRowDescription(columns));
+    for (const row of result.rows) {
+      this._socket.write(buildDataRow(extractRowValues(row, columns), columns));
+    }
+  }
+
+  _sendExecutionSuccess(result, executionMeta) {
+    // The tag is derived before any row frame is written: a result the
+    // wire cannot tag is refused whole (XX000), never rows then an error.
+    const tag = deriveCommandTag(result);
+    this._writeExecutionRows(result, executionMeta);
+    const statementType = readExecutedStatementType(result);
+    if (result?.contractState === OWNER_CONTRACT_STATE.UNDER_REPLICATED) {
+      const ep = result.epoch?.publicationEpoch != null ?
+        ` at epoch ${result.epoch.publicationEpoch}` : '';
+      const msg =
+        `Table created under_replicated: ${result.missingReplicaCount ?? 1} replica(s) missing${ep}`;
+      this._socket.write(
+        buildNoticeResponse(PG_SEVERITY.NOTICE, PG_ERROR_CODE.SUCCESSFUL_COMPLETION, msg),
+      );
+    }
+    const notice = takeTransactionEndNotice(this._session, statementType);
+    if (notice) this._socket.write(notice);
+    this._socket.write(buildCommandComplete(tag));
+    this._applyTransactionOutcome(statementType, result);
+  }
+
   async _executeAndSend(query, params, executionMeta = {}) {
     const stateBefore = this._session.getTransactionState();
     let succeeded = false;
@@ -633,46 +673,8 @@ class PgWireProtocolHandler {
         this._socket.write(buildEmptyQueryResponse());
         return true;
       }
-      if (result?.success === false) {
-        const error = new Error(
-          result.error || result.message ||
-          PG_HANDLER_ERROR.QUERY_EXECUTION_FAILED,
-        );
-        Object.assign(error, result);
-        throw error;
-      }
-
-      // The tag is derived before any row frame is written: a result the
-      // wire cannot tag is refused whole (XX000), never rows then an error.
-      const tag = deriveCommandTag(result);
-
-      // Extended mode emits RowDescription in Describe; simple mode emits it here.
-      const isExtended = executionMeta.extended === true;
-      const columns = isExtended ?
-        executionMeta.portalDescription.columns :
-        extractColumns(result);
-      if (columns.length > 0 && Array.isArray(result?.rows)) {
-        if (!isExtended) this._socket.write(buildRowDescription(columns));
-        for (const row of result.rows) {
-          this._socket.write(buildDataRow(extractRowValues(row, columns), columns));
-        }
-      }
-
-      const statementType = readExecutedStatementType(result);
-      if (result?.contractState === OWNER_CONTRACT_STATE.UNDER_REPLICATED) {
-        const ep = result.epoch?.publicationEpoch != null ?
-          ` at epoch ${result.epoch.publicationEpoch}` : '';
-        const msg =
-          `Table created under_replicated: ${result.missingReplicaCount ?? 1} replica(s) missing${ep}`;
-        this._socket.write(buildNoticeResponse(
-          PG_SEVERITY.NOTICE, PG_ERROR_CODE.SUCCESSFUL_COMPLETION, msg,
-        ));
-      }
-      const notice = takeTransactionEndNotice(this._session, statementType);
-      if (notice) this._socket.write(notice);
-      this._socket.write(buildCommandComplete(tag));
-
-      this._applyTransactionOutcome(statementType, result);
+      this._throwIfResultFailed(result);
+      this._sendExecutionSuccess(result, executionMeta);
       succeeded = true;
     } catch (err) {
       this._answerFailure(err, stateBefore);

@@ -139,6 +139,25 @@ describe('PgWireSession', () => {
       assert.equal(s.getPortal('s'), null);
     });
 
+    it('should preserve same-named portal bound to a different statement', () => {
+      const s = new PgWireSession({sessionId: 's1'});
+      s.setPreparedStatement('s1', 'SELECT 1');
+      s.setPreparedStatement('s2', 'SELECT 2');
+      s.setPortal('s1', 's2', []);
+      s.setPortal('p_bound_s1', 's1', []);
+
+      s.setPreparedStatement('s1', 'SELECT 3');
+      assert.ok(s.getPortal('s1'));
+      assert.equal(s.getPortal('s1').statementName, 's2');
+      assert.equal(s.getPortal('p_bound_s1'), null);
+
+      s.setPortal('p2_bound_s1', 's1', []);
+      s.closePreparedStatement('s1');
+      assert.ok(s.getPortal('s1'));
+      assert.equal(s.getPortal('s1').statementName, 's2');
+      assert.equal(s.getPortal('p2_bound_s1'), null);
+    });
+
     it('should report existence via hasPreparedStatement', () => {
       const s = new PgWireSession({sessionId: 's1'});
       assert.equal(s.hasPreparedStatement('x'), false);
