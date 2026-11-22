@@ -270,6 +270,7 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.leaderNodeMutationHelper = this.createLeaderNodeMutationHelper();
     this.pendingLeaderNodeUpdate = null;
     this.persistedLeaderNodeId = null;
+    this.publishedLeaderTerm = null;
     this.localCanonicalLeaderObservation = null;
     this.metadataPublicationReadinessTransitionListener =
       this.handleMetadataPublicationReadinessTransition.bind(this);

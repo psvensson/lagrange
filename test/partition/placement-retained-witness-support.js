@@ -21,6 +21,7 @@ const CONTINUATION_STEP_MS = 1000;
 const REPAIR_COMMAND = 'PLACEMENT_REPAIR';
 const READ_FAULT = Object.freeze({THROW: 'throw'});
 const ROW_SQL = 'SELECT * FROM replica_operations WHERE operation_id = ?';
+const WAIT_BOUND_SPENT = 'wait_bound_spent';
 
 // Await a production promise for a bounded number of event-loop turns.
 async function bounded(promise, label) {
@@ -120,8 +121,8 @@ function ledgerRow(world, operationId) {
   return world.leader.db.prepare(ROW_SQL).get(operationId);
 }
 
-// A real producer creates the historical row; a committed delete removes it.
-async function retainMissingOperation(world, {operationId, partitionId, replicaId,
+// A real producer creates the operation row through the ledger.
+async function persistOperation(world, {operationId, partitionId, replicaId,
   targetNodeId = NODE.B}) {
   const operation = createOperationAt({operationId, type: OperationType.REMOVE, partitionId,
     replicaId, sourceNodeId: NODE.A, targetNodeId, membershipPublicationEpoch: 7}, Date.now());
@@ -130,6 +131,12 @@ async function retainMissingOperation(world, {operationId, partitionId, replicaI
   await world.coordinator.repository.persistNewOperation(operation);
   const retained = await world.coordinator.getOperation(operation.operationId);
   assert.ok(retained, 'a real producer created the historical row');
+  return retained;
+}
+
+// A real producer creates the historical row; a committed delete removes it.
+async function retainMissingOperation(world, identity) {
+  const retained = await persistOperation(world, identity);
   await world.gateway.submitMutation({tableName: 'replica_operations', operation: 'delete',
     whereClause: {operation_id: retained.operationId}});
   assert.equal(ledgerRow(world, retained.operationId), undefined);
@@ -169,7 +176,8 @@ function remoteSender(world, nodeId = NODE.A) {
       `the sender cache admits the published ${table} row`);
   };
   publish('partitions', {partition_id: world.leader.partitionId,
-    leader_node_id: world.leader.nodeId});
+    leader_node_id: world.leader.nodeId,
+    leader_term: world.leader.raft.readStatus().term});
   publish('services', endpoint);
   assert.equal(coordinator.resolveRemoteLedgerLeader()?.replicaId, world.leader.replicaId,
     'the sender resolves the canonical ledger route');
@@ -180,6 +188,27 @@ function repairMessages(messages) {
   return messages.filter((message) => message.payload.type === REPAIR_COMMAND);
 }
 
-export {READ_FAULT, admitCompetitor, advanceContinuation, bounded, controlOwnerReads,
-  idleRepairs, installVirtualClock, ledgerRow, remoteSender, repairCommands, repairMessages,
-  retainMissingOperation};
+// Record what the repository logs at warn and error level for one operation,
+// passing every line through to the real logger.
+function captureRepairLogs(repository, operationId) {
+  const logger = repository.logger;
+  const original = {warn: logger.warn, error: logger.error};
+  const lines = [];
+  for (const level of ['warn', 'error']) {
+    logger[level] = (message, fields) => {
+      if (fields?.operationId === operationId || fields?.scope?.operationId === operationId) {
+        lines.push({level, message, fields});
+      }
+      return original[level].call(logger, message, fields);
+    };
+  }
+  return {lines,
+    spentReports: () => lines.filter((line) => line.fields?.event === WAIT_BOUND_SPENT),
+    restore() {
+      Object.assign(logger, original);
+    }};
+}
+
+export {READ_FAULT, admitCompetitor, advanceContinuation, bounded, captureRepairLogs,
+  controlOwnerReads, idleRepairs, installVirtualClock, ledgerRow, persistOperation, remoteSender,
+  repairCommands, repairMessages, retainMissingOperation};

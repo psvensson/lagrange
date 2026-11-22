@@ -6,8 +6,8 @@ import {RETAINED_REPAIR_DECISION as DECISION, RETAINED_REPAIR_MODE as MODE, PROP
   RETAINED_REPAIR_CUSTODY as CUSTODY, RETAINED_REPAIR_ENTRY as ENTRY,
   RETAINED_REPAIR_NATIVE as NATIVE, RETAINED_REPAIR_NATIVE_FENCE as FENCE,
   RETAINED_REPAIR_NATIVE_ANSWER as NATIVE_ANSWER, RETAINED_REPAIR_DECISION_RUN as RUN,
-  SELF_CUSTODY, NATIVE_IDLE, IDLE_DECISION, pinnedEntry, settledEntry,
-  RETAINED_REPAIR_CALLER as CALLER, RETAINED_REPAIR_RETIREMENT as RETIREMENT,
+  RETAINED_REPAIR_WAITING as WAITING, SELF_CUSTODY, NATIVE_IDLE, IDLE_DECISION, pinnedEntry,
+  settledEntry, RETAINED_REPAIR_CALLER as CALLER, RETAINED_REPAIR_RETIREMENT as RETIREMENT,
   CONFIRMED_VERDICT, unconfirmedVerdict,
   entryBody, retainedRepairRecord, materializeRepairContention} from './replica-operation-retained-repair-record.js';
 import {RETAINED_REPAIR_DISCLAIM, matchesRetainedRepairObservation} from
@@ -30,14 +30,17 @@ import {isDeepStrictEqual} from 'node:util';
 import {PLACEMENT_CLEARING_TRIGGER, PLACEMENT_TRIGGER, PLACEMENT_OUTCOME} from './replica-placement-owner-constants.js';
 
 const REPAIR_LOG = Object.freeze({ANSWER_UNAVAILABLE: 'Retained placement repair answer unavailable',
-  AUTHORITY_REFUSED: 'Retained placement repair authority refused',
   DEFINITELY_REFUSED: 'Retained placement repair entry definitely refused'});
-// Owed revalidation waits: the binding is unavailable (next route publication,
+// Owed revalidation waits: the send found no route (next route publication,
 // no timer), or the native outcome is unknown (the continuation re-presents).
 const RETAINED_REPAIR_WAIT = Object.freeze({ROUTE_UNAVAILABLE: 'route_unavailable',
   OUTCOME_UNKNOWN: PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN});
+// Each owed reason names its owner: the bounded continuation, the next route
+// publication, or (any other typed refusal) a change of the row or binding.
 const CONTINUATION_REASONS = new Set([...TRANSIENT_AUTHORITY_REFUSALS, RETAINED_REPAIR_DISCLAIM,
   RETAINED_REPAIR_WAIT.OUTCOME_UNKNOWN, PLACEMENT_ADMISSION_ERROR.OWNER_UNAVAILABLE]);
+const ROUTE_REASONS = new Set([RETAINED_REPAIR_WAIT.ROUTE_UNAVAILABLE,
+  REPAIR_AUTHORITY_REFUSAL.UNQUALIFIED_BINDING]);
 const UNFENCED = Object.freeze({state: FENCE.UNFENCED});
 
 // One immutable process-retained envelope per operation; no durable reconstruction
@@ -120,10 +123,12 @@ function assignRetainedPlacementRepairMethods(Repository) {
 
     runRetainedRepairDecision(attempt, kinds) {
       const mode = this.retainedRepairObservationMode(attempt, kinds);
+      const waiting = this.beginRetainedRepairDecision(attempt);
       const promise = Promise.resolve().then(() => this.decideRetainedRepair(attempt, kinds, mode))
         .finally(() => {
           if (attempt.decision.promise !== promise) return;
           attempt.decision = IDLE_DECISION;
+          this.endRetainedRepairDecision(attempt, waiting);
           this.releaseEndedRetainedTenure(attempt);
         });
       attempt.decision = {state: RUN.RUNNING, mode, promise};
@@ -171,9 +176,12 @@ function assignRetainedPlacementRepairMethods(Repository) {
       return {binding, changed};
     },
 
+    // A pure publication hint that leaves the binding as it was decides
+    // nothing; an owed revalidation always reaches a read.
     async retryRetainedRepairDecision(attempt, kinds, mode) {
       const {binding, changed} = this.bindRetainedRepairDecision(attempt);
-      if (mode === MODE.HANDOFF && !changed && kinds === OBSERVATION.ROUTE) return false;
+      if (mode === MODE.HANDOFF && !changed && kinds === OBSERVATION.ROUTE &&
+          attempt.owed === OBSERVATION.NONE) return false;
       if (binding.state === BINDING.UNAVAILABLE) {
         return this.confirmUnboundRetainedRepair(attempt, kinds, binding);
       }
@@ -195,10 +203,15 @@ function assignRetainedPlacementRepairMethods(Repository) {
     // A delegated sender re-presents its exact entry to the current binding.
     // After a committed refusal of that entry it reads the census once: ABSENT
     // proposes a successor, so a join never ends on ABSENT with nothing owed.
+    // The node that would propose evaluates contention first: a join whose
+    // binding is now the local ledger leader decides as a retry.
     async joinRetainedRepairDecision(attempt, kinds) {
       const {binding} = this.bindRetainedRepairDecision(attempt);
       if (binding.state === BINDING.UNAVAILABLE) {
         return this.confirmUnboundRetainedRepair(attempt, kinds, binding);
+      }
+      if (binding.state === BINDING.LOCAL) {
+        return this.retryRetainedRepairDecision(attempt, kinds, MODE.RETRY);
       }
       const satisfied = await this.submitRetainedPlacementRepairAttempt(attempt, UNFENCED, binding);
       if (satisfied || !this.retainedRepairAttemptIsCurrent(attempt)) return satisfied;
@@ -217,14 +230,15 @@ function assignRetainedPlacementRepairMethods(Repository) {
     },
 
     // Without a binding nothing can be presented, but a qualified read still
-    // settles a present row (EXACT or CHANGED). Absence, contention or a
-    // failed read leave the obligation to the next route publication.
+    // settles a present row (EXACT or CHANGED). Every other read outcome keeps
+    // its own name and owner (an absence is UNQUALIFIED_BINDING, owed to the
+    // route; a failed read, to the continuation; an invalid row, to a row
+    // change); the route is owed in every case.
     async confirmUnboundRetainedRepair(attempt, kinds, binding) {
       const decision = await this.readRetainedRepairDecision(attempt, REPAIR_READ_SCOPE.SUBJECT,
         binding);
-      if (decision.state !== DECISION.EXACT && decision.state !== DECISION.CHANGED) {
-        return this.oweRetainedRepair(attempt, kinds | OBSERVATION.ROUTE,
-          RETAINED_REPAIR_WAIT.ROUTE_UNAVAILABLE);
+      if (decision.state === DECISION.UNAVAILABLE) {
+        return this.oweRetainedRepair(attempt, kinds | OBSERVATION.ROUTE, decision.reason);
       }
       this.satisfyRetainedRepairRevalidation(attempt);
       return this.settleRetainedRepairDecision(attempt, decision);
@@ -243,12 +257,14 @@ function assignRetainedPlacementRepairMethods(Repository) {
       return this.settleRetainedRepairDecision(attempt, decision);
     },
 
-    // The local ledger committed the pinned entry: present that exact entry
+    // The ledger committed the pinned entry: present that exact entry
     // again, and native replay answers its committed result with no proposal.
     async resolveCommittedPinnedEntry(attempt) {
       if (attempt.entry.state !== ENTRY.PINNED) return false;
       const {binding} = this.bindRetainedRepairDecision(attempt);
-      if (binding.state !== BINDING.LOCAL) return false;
+      if (binding.state === BINDING.UNAVAILABLE) {
+        return this.confirmUnboundRetainedRepair(attempt, OBSERVATION.OWN_ROW, binding);
+      }
       return this.submitRetainedPlacementRepairAttempt(attempt, UNFENCED, binding);
     },
 
@@ -295,19 +311,21 @@ function assignRetainedPlacementRepairMethods(Repository) {
     },
 
     // A failed read or an unavailable dependency: the kinds this decision was
-    // asked to revalidate stay owed. The blocker and its clearing trigger stay
-    // what the committed refusal said; a failed read never rewrites them.
+    // asked to revalidate stay owed, and the record names what it now waits
+    // for (the decision's end arms or closes the continuation accordingly).
+    // The blocker and its clearing trigger stay what the committed refusal
+    // said; a failed read never rewrites them.
     oweRetainedRepair(attempt, kinds, reason) {
       if (!this.retainedRepairAttemptIsCurrent(attempt)) return false;
       attempt.owed |= kinds;
       attempt.lastDecision = {state: DECISION.UNAVAILABLE, reason};
       if (CONTINUATION_REASONS.has(reason)) {
-        this.armRetainedRepairContinuation(attempt, reason);
-      } else if (reason === REPAIR_AUTHORITY_REFUSAL.UNQUALIFIED_BINDING) {
+        attempt.waiting = {state: WAITING.CONTINUATION, reason};
+      } else if (ROUTE_REASONS.has(reason)) {
         attempt.owed |= OBSERVATION.ROUTE;
-      } else if (reason !== RETAINED_REPAIR_WAIT.ROUTE_UNAVAILABLE) {
-        this.logger.error(REPAIR_LOG.AUTHORITY_REFUSED,
-          {operationId: attempt.operation.operationId, reason});
+        attempt.waiting = {state: WAITING.ROUTE_PUBLICATION, reason};
+      } else {
+        attempt.waiting = {state: WAITING.ROW_CHANGE, reason};
       }
       return false;
     },
@@ -362,12 +380,15 @@ function assignRetainedPlacementRepairMethods(Repository) {
         return this.oweRetainedRepair(attempt, OBSERVATION.ROUTE,
           RETAINED_REPAIR_WAIT.ROUTE_UNAVAILABLE);
       }
+      // A bound receiver attests custody on any answer while it holds the
+      // exact entry; it then owns the entry, its trigger and its continuation.
+      if (binding.state === BINDING.REMOTE) {
+        this.recordRetainedRepairCustody(attempt, answer, binding);
+      }
       const committed = isCommittedRepairAnswer(answer, attempt);
+      if (!committed && attempt.custody.state === CUSTODY.DELEGATED) return false;
       if (answer.committed === true && !committed) return this.retainUnknownRepairOutcome(attempt);
       if (!committed) {
-        if (binding.state === BINDING.REMOTE) {
-          this.recordRetainedRepairCustody(attempt, answer, binding);
-        }
         return this.retainUncommittedRepairAnswer(attempt, answer, releaseSequence, binding);
       }
       attempt.minimumLedgerIndex = Math.max(attempt.minimumLedgerIndex, answer.logIndex);

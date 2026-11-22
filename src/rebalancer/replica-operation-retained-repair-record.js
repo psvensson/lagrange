@@ -44,6 +44,13 @@ const RETAINED_REPAIR_BLOCKER = Object.freeze({NONE: 'none', OPERATIONS: 'operat
 const RETAINED_REPAIR_CONTINUATION = Object.freeze({IDLE: 'idle', ARMED: 'armed',
   OPEN: 'open', SPENT: 'spent'});
 const RETAINED_REPAIR_DECISION_RUN = Object.freeze({IDLE: 'idle', RUNNING: 'running'});
+// What a record waits for, named on the record and logged once per
+// transition: nothing owed (its blocker's trigger or its custodian owns it);
+// its bounded continuation; a spent bound (a later legitimate trigger); the
+// next ledger route publication; a change of the offending row or binding.
+const RETAINED_REPAIR_WAITING = Object.freeze({NONE: 'none', CONTINUATION: 'continuation',
+  BOUND_SPENT: 'bound_spent', ROUTE_PUBLICATION: 'route_publication',
+  ROW_CHANGE: 'row_change'});
 
 const UNPINNED_ENTRY = Object.freeze({state: RETAINED_REPAIR_ENTRY.UNPINNED});
 const UNOBSERVED_BINDING = Object.freeze({state: RETAINED_REPAIR_BINDING.UNOBSERVED});
@@ -54,6 +61,7 @@ const NO_BLOCKER = Object.freeze({kind: RETAINED_REPAIR_BLOCKER.NONE});
 const IDLE_CONTINUATION = Object.freeze({state: RETAINED_REPAIR_CONTINUATION.IDLE});
 const IDLE_DECISION = Object.freeze({state: RETAINED_REPAIR_DECISION_RUN.IDLE});
 const UNOBSERVED_DECISION = Object.freeze({state: RETAINED_REPAIR_DECISION.UNOBSERVED});
+const NOT_WAITING = Object.freeze({state: RETAINED_REPAIR_WAITING.NONE});
 
 function pinnedEntry(entryId, body) {
   return Object.freeze({state: RETAINED_REPAIR_ENTRY.PINNED, entryId, body});
@@ -84,7 +92,8 @@ function retainedRepairRecord(operation, origin, entry = UNPINNED_ENTRY) {
     lastDecision: UNOBSERVED_DECISION,
     // Hints queued for the drain, and the revalidation a failed read left owed.
     observations: REPAIR_OBSERVATION.NONE, owed: REPAIR_OBSERVATION.NONE,
-    continuation: IDLE_CONTINUATION, minimumLedgerIndex: 0, minimumLedgerTerm: 0};
+    continuation: IDLE_CONTINUATION, waiting: NOT_WAITING,
+    minimumLedgerIndex: 0, minimumLedgerTerm: 0};
 }
 
 function materializeRepairContention(result, rows) {
@@ -103,6 +112,6 @@ export {RETAINED_REPAIR_DECISION, RETAINED_REPAIR_MODE, PROPOSING_MODES, RETAINE
   RETAINED_REPAIR_ENTRY, RETAINED_REPAIR_BINDING, RETAINED_REPAIR_CUSTODY, RETAINED_REPAIR_TENURE,
   RETAINED_REPAIR_NATIVE, RETAINED_REPAIR_NATIVE_FENCE, RETAINED_REPAIR_NATIVE_ANSWER,
   RETAINED_REPAIR_BLOCKER, RETAINED_REPAIR_CONTINUATION, RETAINED_REPAIR_DECISION_RUN,
-  UNPINNED_ENTRY, SELF_CUSTODY, NO_TENURE, NATIVE_IDLE, NO_BLOCKER, IDLE_CONTINUATION,
-  IDLE_DECISION, pinnedEntry, settledEntry, entryBody, retainedRepairRecord,
-  materializeRepairContention};
+  RETAINED_REPAIR_WAITING, UNPINNED_ENTRY, SELF_CUSTODY, NO_TENURE, NATIVE_IDLE, NO_BLOCKER,
+  IDLE_CONTINUATION, IDLE_DECISION, NOT_WAITING, pinnedEntry, settledEntry, entryBody,
+  retainedRepairRecord, materializeRepairContention};

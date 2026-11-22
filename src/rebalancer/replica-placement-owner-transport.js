@@ -39,7 +39,9 @@ function resolvePlacementLedgerRoute(cache) {
   const address = candidate[COLUMN.ADDRESS];
   if (candidate[COLUMN.SERVICE_ID] !== replicaId ||
       !isBoundPartitionAddress(address, nodeId, replicaId)) return null;
-  return {nodeId, replicaId, address};
+  const leaderTerm = partition?.[COLUMN.LEADER_TERM];
+  return {nodeId, replicaId, address,
+    leaderTerm: Number.isSafeInteger(leaderTerm) && leaderTerm > 0 ? leaderTerm : null};
 }
 
 function resolvePlacementLedgerDelivery(coordinator) {

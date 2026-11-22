@@ -71,6 +71,7 @@ const PARTITIONS_SCHEMA = {
     {name: 'replica_count', type: COLUMN_TYPE.INTEGER, notNull: true, defaultValue: 3},
     {name: 'size_bytes', type: COLUMN_TYPE.INTEGER, notNull: true, defaultValue: 0},
     {name: 'leader_node_id', type: COLUMN_TYPE.TEXT},
+    {name: 'leader_term', type: COLUMN_TYPE.INTEGER},
     {name: 'state', type: COLUMN_TYPE.TEXT, notNull: true, defaultValue: '\'NORMAL\''},
     {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
     {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
