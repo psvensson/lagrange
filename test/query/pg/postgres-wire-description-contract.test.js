@@ -463,11 +463,6 @@ function createWireHarness({authMode = 'trust', customExecutor = null} = {}) {
     observedRequests,
     async start() {
       const runtimeConfig = {host: HOST, authMode, tlsMode: 'disable'};
-      if (authMode === 'password') {
-        runtimeConfig.authUser = USER;
-        runtimeConfig.authPassword = PASSWORD;
-        runtimeConfig.authDatabase = DATABASE;
-      }
       const prepared = await runtime.prepare({
         serviceId: META_SERVICE_ID.POSTGRES_WIRE,
         runtimeConfig: JSON.stringify(runtimeConfig),

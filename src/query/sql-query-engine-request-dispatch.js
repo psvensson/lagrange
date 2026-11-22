@@ -6,6 +6,7 @@ import {META_SERVICE_ID} from '../constants/wasm-meta.js';
 import {isSystemTableName} from
   '../bootstrap/system-table-schema-shared-constants.js';
 import {readExecutedStatementType} from './application-database-result.js';
+import {PARSER_DIALECT} from './pg/pg-compat-constants.js';
 import {describePostgresSqlStatement} from './pg/postgres-wire-description.js';
 import {QUERY_OPERATION} from './query-constants.js';
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
@@ -444,6 +445,7 @@ class SQLQueryEngineRequestDispatch extends
       );
       const executedType = readExecutedStatementType(result);
       if (result?.success === true &&
+          sqlRequest.dialect === PARSER_DIALECT.POSTGRESQL &&
           (executedType === QUERY_AST_TYPE.SELECT ||
             executedType === QUERY_OPERATION.EXPLAIN_DISTRIBUTED)) {
         const description = describePostgresSqlStatement({
