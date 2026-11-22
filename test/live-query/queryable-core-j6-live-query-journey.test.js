@@ -455,7 +455,13 @@ async function createBridgedRouters(nodeIds, capturedCdcDeliveries) {
       if (!peer.handlers.get(targetAddress)) {
         return {result: {messageId, correlationId, acknowledged: false, noHandler: true, error: 'noHandler'}, queueWaitMs: 0};
       }
-      return peer.deliverLocal(targetAddress, messageId, payload, correlationId, opts);
+      return peer.deliverLocal(
+        targetAddress,
+        messageId,
+        payload,
+        correlationId,
+        {timeoutMs: opts?.timeoutMs},
+      );
     };
   }
   return routers;
