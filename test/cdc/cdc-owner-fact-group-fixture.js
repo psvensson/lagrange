@@ -156,6 +156,7 @@ function createHeldRaftNetwork() {
   const deliver = network.deliver.bind(network);
   let holds = () => false;
   let pends = () => false;
+  let onPending = null;
   const pending = [];
   const delivered = [];
   network.deliver = async (address, payload, options) => {
@@ -165,6 +166,7 @@ function createHeldRaftNetwork() {
     if (pends(address, payload)) {
       const released = Promise.withResolvers();
       pending.push(released);
+      onPending?.();
       await released.promise;
     }
     delivered.push({to: String(payload?.to), message: payload?.message ?? {}});
@@ -172,6 +174,7 @@ function createHeldRaftNetwork() {
   };
   const releasePending = () => {
     pends = () => false;
+    onPending = null;
     for (const released of pending.splice(0)) released.resolve();
   };
   return {
@@ -183,8 +186,10 @@ function createHeldRaftNetwork() {
     // Matching sends are delivered only when released (held, not dropped):
     // the sender's core turn stays pending at that peer send meanwhile.
     holdPending(predicate) {
+      const entered = Promise.withResolvers();
       pends = predicate;
-      return {held: () => pending.length, release: releasePending};
+      onPending = () => entered.resolve();
+      return {entered: entered.promise, held: () => pending.length, release: releasePending};
     },
     releasePending,
     // How many raft messages reached `peer` that `predicate` accepts.

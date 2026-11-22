@@ -13,11 +13,15 @@ import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE as READ_MODE} from
 import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
 import {LEDGER_PARTITION_ID} from
   '../../src/partition/partition-placement-admission-decision.js';
+import {PartitionServiceCoreBase} from
+  '../../src/partition/partition-service-core-base.js';
 import {PARTITION_SERVICE_REMOTE_QUERY_METHODS} from
   '../../src/partition/partition-service-remote-query-methods.js';
 import {PartitionServiceRowOwner} from
   '../../src/partition/partition-service-row-owner.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {RAFT_OPERATION_OUTCOME} from
+  '../../src/raft/raft-operation-port-constants.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
 import {
   RESERVATION_STATUS,
@@ -199,13 +203,27 @@ function createMockAdmissionService() {
 // PARTITIONS leader_node_id. Every applied write reaches the coordinator's
 // SystemTableCache through the cache's CDC apply entry (its change feed).
 const LEDGER_NODE_ID = 'ledger-leader-node';
+const LEDGER_REPLICA_ID = `${LEDGER_PARTITION_ID}-r1`;
 const LEDGER_LEADER = Object.freeze({
   partitionId: LEDGER_PARTITION_ID,
   nodeId: LEDGER_NODE_ID,
-  replicaId: `${LEDGER_PARTITION_ID}-r1`,
+  replicaId: LEDGER_REPLICA_ID,
   role: RAFT_ROLE.LEADER,
   timeSource: {now: () => Date.now()},
-  raft: {readStatus: () => ({term: 1, commitIndex: 1, appliedIndex: 1})},
+  readOwnRaftStatus: PartitionServiceCoreBase.prototype.readOwnRaftStatus,
+  raft: {
+    readStatus: () => ({
+      outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+      groupId: LEDGER_PARTITION_ID,
+      replicaIdentity: LEDGER_REPLICA_ID,
+      role: RAFT_ROLE.LEADER,
+      term: 1,
+      commitIndex: 1,
+      appliedIndex: 1,
+      lastIndex: 1,
+      currentTermApplied: true,
+    }),
+  },
 });
 const ROUTE_ROW_KEY = Object.freeze({
   [TABLES.PARTITIONS]: 'partition_id',

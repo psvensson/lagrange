@@ -548,15 +548,21 @@ test('row_changed re-evaluates the gate once; a definite refusal ends the wait w
   await withPlacementExecution(async ({owner, leader, initial, deliveries}) => {
     const repository = owner.repository;
     const verdicts = observeRetainedVerdicts(owner);
-    const operation = repository.rowToOperation(initial);
-    await owner.ensureReservationForOperation(operation);
-    assert.equal(committedUpdate(leader, 'execution-mirror:definite-refusal-delete',
-      'DELETE FROM replica_operations WHERE operation_id = ?', [initial.operation_id]), 1);
+    const read = repository.executeReplicaOperationsRead;
+    let deleted = false;
+    repository.executeReplicaOperationsRead = (sql, params, options) => {
+      if (sql.startsWith(RETAINED_READ_PREFIX) && !deleted) {
+        deleted = true;
+        assert.equal(committedUpdate(leader, 'execution-mirror:definite-refusal-delete',
+          'DELETE FROM replica_operations WHERE operation_id = ?', [initial.operation_id]), 1);
+      }
+      return read.call(repository, sql, params, options);
+    };
     repository.repairRetainedPlacement = async () => ({
       success: false, committed: false,
       failureCode: PLACEMENT_ADMISSION_ERROR.BYTES,
     });
-    const result = await owner.dispatchOperation(operation);
+    const result = await owner.dispatchOperation(repository.rowToOperation(initial));
     assert.equal(result.skipped, true);
     assert.equal(result.reason,
       OPERATION_WORKFLOW_OWNER_SHARED.OPERATION_WORKFLOW_OWNER_REASON.OPERATION_NOT_DISPATCHABLE);

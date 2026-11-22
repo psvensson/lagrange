@@ -388,10 +388,11 @@ test('readOwnerFact: a leader whose commit index has advanced past its applied p
   const index = await group.nextWriteIndex(leader);
   const held = group.holdCommitAdvanceOf(leader, index);
   const written = group.issueWrite(leader, operationId);
-  t.equal(await group.waitFor(() =>
+  await held.entered;
+  t.equal(
     Number(leader.raft.observeCurrentAuthority().commitIndex) >= index &&
-    Number(readPartitionAppliedIndex(leader)) < index), true,
-  'setup: the row committed and the leader\'s turn pends before applying it');
+    Number(readPartitionAppliedIndex(leader)) < index, true,
+    'setup: the row committed and the leader\'s turn pends before applying it');
   const answer = await leader.handleRemoteQuery(ownerFactRequestTo(leader, [operationId]));
   t.equal(answer?.failureCode, REASON.APPLY_BEHIND_COMMIT, 'refused typed: apply behind commit');
   t.equal(answer?.rowSet === undefined && answer?.rows === undefined, true,
