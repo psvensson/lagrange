@@ -16,11 +16,16 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {TABLES} from '../../src/constants/index.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
+import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
+import {waitForCondition} from '../partition/partition-service-test-support.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 import {
   resumeFixtureParticipantAdmission,
 } from '../test-helpers/participant-transaction-fixture.js';
 import {IndexService} from '../../src/index-management/index-service.js';
+import {
+  buildIndexDatasetSchema,
+} from '../../src/index-management/global-index-dataset-manager.js';
 import {
   GLOBAL_INDEX_STATE,
 } from '../../src/index-management/global-index-catalog-contract.js';
@@ -48,9 +53,6 @@ import {
 import {
   createTransactionPersistenceGateway,
 } from '../test-helpers/transaction-persistence-gateway.js';
-import {
-  answerParticipantTransactionRequest,
-} from '../test-helpers/participant-protocol-double.js';
 
 const USERS_SCHEMA = {
   columns: [
@@ -284,39 +286,18 @@ function resolveTargetPartition(partitionServicesMap, address) {
   return null;
 }
 
-function executePartitionQueryMessage(partition, message) {
-  const stmt = partition.db.prepare(message.sql);
-  const queryParams = message.params || [];
-  if (message.sql.trim().toUpperCase().startsWith('SELECT')) {
-    const rows = stmt.all(...queryParams);
-    return buildDeliveryEnvelope({acknowledged: true}, {
-      success: true,
-      rows,
-      rowCount: rows.length,
-    });
-  }
-  const info = stmt.run(...queryParams);
-  return buildDeliveryEnvelope({acknowledged: true}, {
-    success: true,
-    changes: info.changes,
-    lastInsertRowid: info.lastInsertRowid,
-  });
-}
-
 function createPartitionMessageRouter(partitionServicesMap) {
   return {
     async deliver(address, message) {
       const partition = resolveTargetPartition(partitionServicesMap, address);
-      if (partition && message.type === 'TRANSACTION') {
+      if (!partition) {
         return buildDeliveryEnvelope(
-          {acknowledged: true},
-          answerParticipantTransactionRequest(message, partition.partitionId),
+          {acknowledged: false, error: `Participant unavailable: ${address}`},
+          {success: false, error: `Participant unavailable: ${address}`},
         );
       }
-      if (partition && message.type === 'QUERY' && partition.db?.prepare) {
-        return executePartitionQueryMessage(partition, message);
-      }
-      return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: []});
+      const response = await partition.handleApplicationMessage(message);
+      return buildDeliveryEnvelope({acknowledged: true}, response);
     },
   };
 }
@@ -326,6 +307,7 @@ async function createRealPartition(dir, {
   tableName,
   keyRange,
   schema,
+  systemCache,
 }) {
   const dbPath = path.join(dir, `${partitionId}.db`);
   const ps = new PartitionService(withFoundingStamp({
@@ -335,12 +317,15 @@ async function createRealPartition(dir, {
     replicaId: `${partitionId}-r1`,
     replicaIds: [`${partitionId}-r1`],
     nodeId: 'test-node',
-    systemTableCache: {getAll: () => [], get: () => null, filter: () => []},
+    systemTableCache: systemCache || {getAll: () => [], get: () => null, filter: () => []},
     dbPath,
     keyRange,
     schema,
   }));
   await ps.initialize();
+  ps.startElection();
+  await turnChainValue(ps.raft.campaign());
+  await waitForCondition(() => ps.role === 'leader', 2000, 5);
   if (schema) {
     await resumeFixtureParticipantAdmission(ps);
   }
@@ -357,6 +342,7 @@ async function setupProductionEnvironment(t) {
       partition_key: 'id',
       primaryKey: ['id'],
       partition_key_type: 'INTEGER',
+      active_partition_version: 1,
       schema: USERS_SCHEMA,
     },
   ];
@@ -401,29 +387,42 @@ async function setupProductionEnvironment(t) {
 
   const allPartitionDefs = [...basePartitionDefs, ...indexPartitionDefs];
 
+  const systemCache = createMockSystemCache(tables, allPartitionDefs);
+  const idxSchema = buildIndexDatasetSchema({
+    tableName: 'users',
+    indexName: 'idx_users_email',
+    columnNames: ['email'],
+    basePrimaryKeyColumns: ['id'],
+    columnTypes: {id: 'INTEGER', email: 'TEXT'},
+  });
+
   const usersP0 = await createRealPartition(tmpDir, {
     partitionId: 'users_p0',
     tableName: 'users',
     keyRange: {start: null, end: 100},
     schema: USERS_SCHEMA,
+    systemCache,
   });
   const usersP1 = await createRealPartition(tmpDir, {
     partitionId: 'users_p1',
     tableName: 'users',
     keyRange: {start: 100, end: null},
     schema: USERS_SCHEMA,
+    systemCache,
   });
   const idxP0 = await createRealPartition(tmpDir, {
     partitionId: '__gsi_users_idx_users_email_p0',
     tableName: '__idx_users_idx_users_email',
     keyRange: {start: null, end: 'm'},
-    schema: null,
+    schema: idxSchema,
+    systemCache,
   });
   const idxP1 = await createRealPartition(tmpDir, {
     partitionId: '__gsi_users_idx_users_email_p1',
     tableName: '__idx_users_idx_users_email',
     keyRange: {start: 'm', end: null},
-    schema: null,
+    schema: idxSchema,
+    systemCache,
   });
 
   const partitionServices = new Map([
@@ -449,7 +448,6 @@ async function setupProductionEnvironment(t) {
     tables,
     allPartitionDefs,
   );
-  const systemCache = createMockSystemCache(tables, allPartitionDefs);
   const messageRouter = createPartitionMessageRouter(partitionServices);
 
   const createEngineAndService = async () => {
@@ -461,6 +459,8 @@ async function setupProductionEnvironment(t) {
       controlPlaneSystemTableGateway: gateway,
       partitionServicesProvider: () => partitionServices,
     });
+    engine.queryExecutor.leaderRetryDelayMs = 5;
+    engine.queryExecutor.queryTimeoutMs = 1500;
     await engine.indexService.initialize();
     return {engine, indexService: engine.indexService};
   };
