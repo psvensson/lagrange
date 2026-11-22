@@ -1059,12 +1059,14 @@ test('Witness 1b: committed Raft apply of ACQUIRE is 100% deterministic across r
     const [r1, r2, r3] = cluster.group.services;
     let capturedAcquireCommand = null;
 
-    // Inject conflicting process-local WRITE_STAGED entry right before follower r2 applies committed ACQUIRE.
+    // Simulate separate process on r2 holding a divergent process-local WRITE_STAGED entry
+    // in RESERVATIONS right before r2 applies the committed ACQUIRE command.
     const origR2Apply = r2.applyCommittedEntry.bind(r2);
     r2.applyCommittedEntry = (committedArg) => {
       if (committedArg?.command?.type === 'LOCKING_READ_RESERVATION' &&
           committedArg?.command?.reservation?.op === 'ACQUIRE') {
         capturedAcquireCommand = committedArg.command;
+        clearMemoryReservations();
         acquireRowReservation({
           tableName: ACCOUNTS_TABLE,
           partitionId: ACCOUNTS_PARTITION_ID,
