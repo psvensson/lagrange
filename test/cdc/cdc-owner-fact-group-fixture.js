@@ -439,6 +439,25 @@ async function openLedgerGroupSurface(t, testFileUrl) {
     writeRow,
     waitFor: (predicate) => group.waitFor(predicate),
     deliveredTo: (service, predicate) => raft.deliveredTo(peerOf(service), predicate),
+    // The log index the leader's next write takes, its write path open.
+    async nextWriteIndex(leader) {
+      await openWriteAdmission(leader);
+      return Number(leader.raft.readStatus().lastIndex) + 1;
+    },
+    // A raft write through the leader, not awaited: its pending answer.
+    issueWrite(leader, operationId) {
+      return leader.executeQuery(INSERT_SQL, [operationId, leader.replicaId],
+        {entryId: `owner-fact-write-${operationId}`});
+    },
+    // Hold, pending, the leader's sends that tell a follower the commit
+    // index reached `index`: the turn that advanced its commit pends at that
+    // send, before it applies the entries it committed.
+    holdCommitAdvanceOf(service, index) {
+      const peer = peerOf(service);
+      return raft.holdPending((_address, packet) => String(packet?.from) === peer &&
+        COMMIT_CARRYING.has(packet?.message?.msgType) &&
+        Number(packet.message.commit) >= index);
+    },
     // Hold, pending, every raft message `service` sends that `predicate`
     // accepts ({msgType, term, commit, ...}).
     holdPendingSendsOf(service, predicate) {

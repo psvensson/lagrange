@@ -46,6 +46,8 @@ const DELETE_SQL = 'DELETE FROM replica_operations WHERE operation_id = ?';
 // Reasons this round adds (literal: a witness must not pass on an undefined name).
 const FOREIGN_TRANSACTION = 'owner_fact_foreign_transaction';
 const FLOOR_OTHER_PARTITION = 'owner_fact_floor_other_partition';
+const PUBLISHED_LEADER_UNUSABLE = 'owner_fact_published_leader_unusable';
+const UNPUBLISHED_NODE = 'owner-fact-node-without-service';
 // Long enough for an unshared owner fact to be answered, far below the
 // plain read's own deadline.
 const OWN_ANSWER_WAIT_MS = 1000;
@@ -227,12 +229,22 @@ test('readOwnerFact: a leader whose core has stepped its successor\'s term while
   t.equal(old.raft.readStatus().role, RAFT_ROLE.LEADER,
     'setup: the status the old leader reports is still its last announced observation');
   const request = ownerFactRequestTo(old, [OPERATION]);
+  // The decision is made before the statement: a replica that does not lead
+  // executes nothing.
+  let executed = 0;
+  const executeQuery = old.executeQuery;
+  old.executeQuery = function counted(...args) {
+    executed += 1;
+    return executeQuery.apply(this, args);
+  };
   const local = decisionOf(await old.handleRemoteQuery(structuredClone(request)));
   const remote = decisionOf(
     await group.deliverOverTransport(other.nodeId, old, structuredClone(request)));
+  old.executeQuery = executeQuery;
   t.equal(local.failureCode, REASON.NOT_LEADER, 'in process: its core no longer leads, so it refuses');
   t.equal(local.shipsRows, false, 'in process: no rows');
   t.same(remote, local, 'over the transport: the same typed answer');
+  t.equal(executed, 0, 'it never executes the statement');
   held.release();
 });
 
@@ -365,6 +377,47 @@ test('readOwnerFact: an answer decided for another floor is not this read\'s ans
     const own = await readOwnerFact(answerOf, ownerFactDraft([OPERATION]));
     t.equal(own.state, STATE.READY, 'the decision of exactly this request is its answer');
   });
+
+test('readOwnerFact: a leader whose commit index has advanced past its applied position ' +
+  'mid-turn refuses typed, never answering the committed row as absent',
+{timeout: TEST_TIMEOUT_MS}, async (t) => {
+  const group = await openLedgerGroupSurface(t, import.meta.url);
+  const [leader] = group.services;
+  await group.settleLeader(leader);
+  const operationId = `${OPERATION}-mid-turn`;
+  const index = await group.nextWriteIndex(leader);
+  const held = group.holdCommitAdvanceOf(leader, index);
+  const written = group.issueWrite(leader, operationId);
+  t.equal(await group.waitFor(() =>
+    Number(leader.raft.observeCurrentAuthority().commitIndex) >= index &&
+    Number(readPartitionAppliedIndex(leader)) < index), true,
+  'setup: the row committed and the leader\'s turn pends before applying it');
+  const answer = await leader.handleRemoteQuery(ownerFactRequestTo(leader, [operationId]));
+  t.equal(answer?.failureCode, REASON.APPLY_BEHIND_COMMIT, 'refused typed: apply behind commit');
+  t.equal(answer?.rowSet === undefined && answer?.rows === undefined, true,
+    'the committed row is never answered as absent');
+  held.release();
+  t.equal((await written)?.success, true, 'setup: the write completes once the turn resumes');
+  const after = await leader.handleRemoteQuery(ownerFactRequestTo(leader, [operationId]));
+  t.equal(after?.success, true, 'READY once the leader applied what it committed');
+});
+
+test('readOwnerFact: a published leader with no usable service is a named unavailable, and ' +
+  'no other replica is asked', {timeout: TEST_TIMEOUT_MS}, async (t) => {
+  const group = await openLedgerGroupSurface(t, import.meta.url);
+  const [leader, reader] = group.services;
+  await group.settleLeader(leader);
+  for (const service of group.services) group.seedRow(service, OPERATION);
+  const surface = await group.surfaceOf(reader.nodeId, {leaderNodeId: UNPUBLISHED_NODE});
+  const sentBefore = group.transit.length;
+  const answer = await readOwnerFact(surface.readLeaderRequired, requestFor(OPERATION));
+  t.equal(answer.state, STATE.UNAVAILABLE, 'never an answer from a replica not published');
+  t.equal(answer.reason, PUBLISHED_LEADER_UNUSABLE, 'typed: published leader unusable');
+  t.equal(group.transit.length, sentBefore, 'no replica is asked');
+  surface.publishLeader(leader.nodeId);
+  const after = await readOwnerFact(surface.readLeaderRequired, requestFor(OPERATION));
+  t.equal(after.state, STATE.READY, 'READY once the publication names a usable leader');
+});
 
 test('readOwnerFact: the caller verifies what it received; a successful empty answer ' +
   'carrying a follower\'s witness is not absence', {timeout: TEST_TIMEOUT_MS}, async (t) => {
