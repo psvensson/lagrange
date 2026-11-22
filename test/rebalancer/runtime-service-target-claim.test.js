@@ -111,6 +111,7 @@ test('distinct-intent target conflict reallocates through the canonical ' +
   });
   const persistedReplicaIds = [];
   const persistNewOperation = coordinator.persistNewOperation.bind(coordinator);
+  coordinator.isPlacementAdmissionManagedEntityType = () => false;
   coordinator.persistNewOperation = async (operation) => {
     persistedReplicaIds.push(operation.replicaId);
     if (persistedReplicaIds.length === 1) {
@@ -208,6 +209,7 @@ test('same deterministic REPLACE intent adopts the persisted canonical ' +
     nodeId: SOURCE_NODE_ID,
   });
   let localCandidate = null;
+  coordinator.isPlacementAdmissionManagedEntityType = () => false;
   coordinator.maybeRearmReusedPendingOperation =
     async (operation) => operation;
   coordinator.persistNewOperation = async (operation) => {

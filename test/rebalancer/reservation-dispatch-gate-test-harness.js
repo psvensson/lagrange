@@ -1,7 +1,7 @@
 import {TABLES} from '../../src/constants/index.js';
 import {workflowFixtureHistory} from './operation-outcome-fixture.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {NUM, UNIFIED_SERVICE_TYPE, WORKFLOW_STEP} from
+import {NUM, WORKFLOW_STEP} from
   '../../src/constants/index.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
 import {
@@ -180,7 +180,18 @@ function createMockAdmissionService() {
 
 function createCoordinatorWithStorage(options = {}) {
   const sqlEngine = options.sqlQueryEngine || createTrackingSqlEngine();
-  const cache = options.systemTableCache || createMockCache();
+  const cache = options.systemTableCache || createMockCache({
+    services: [
+      {
+        service_id: 'sys-postgres-wire-r0',
+        replica_id: 'sys-postgres-wire-r0',
+        partition_id: 'sys-postgres-wire',
+        service_type: SERVICE_TYPE.MESSAGE_GROUP,
+        node_id: options.nodeId || TEST_NODE_ID,
+        status: 'active',
+      },
+    ],
+  });
   const accounting = new StorageCapacityAccountingService({
     systemTableCache: cache,
   });
@@ -267,7 +278,7 @@ function createRuntimeServiceDeferralFixture(options = {}) {
       replicaIntentId: 'sys-postgres-wire-r1',
       partitionId: 'sys-postgres-wire',
       nodeId: TEST_TARGET_NODE_ID,
-      entityType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
+      entityType: SERVICE_TYPE.MESSAGE_GROUP,
       entityId: 'sys-postgres-wire',
     },
     sqlEngine,

@@ -14,7 +14,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import {test} from '../../src/test-helpers/tap.js';
-import {UNIFIED_SERVICE_TYPE, WORKFLOW_STEP} from
+import {WORKFLOW_STEP} from
   '../../src/constants/index.js';
 import {
   REPLICA_OPERATIONS_SCHEMA,
@@ -147,7 +147,7 @@ function runtimeMove() {
     replicaIntentId: RUNTIME_REPLICA_ID,
     partitionId: RUNTIME_SERVICE_ID,
     nodeId: TEST_TARGET_NODE_ID,
-    entityType: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
+    entityType: 'message_group',
     entityId: RUNTIME_SERVICE_ID,
   };
 }

@@ -25,6 +25,7 @@ import {
   INCOMPLETE_OPERATION_OBSERVATION_STATE,
 } from '../../src/rebalancer/replica-operation-repository.js';
 import {createTestCoordinator} from './test-helpers.js';
+import {createPlacementBoundTestCoordinator} from './placement-bound-coordinator-fixture.js';
 
 const DEFERRED_PRIORITY_ENTITY_OBSERVATION = Object.freeze({
   state: INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED,
@@ -87,12 +88,26 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
       const coordinator = createTestCoordinator({
         nodeId: 'seed-node',
         enableTimeouts: false,
+        cacheData: {
+          services: [
+            {
+              service_id: 'nodes-p1-r0',
+              replica_id: 'nodes-p1-r0',
+              partition_id: 'nodes-p1',
+              service_type: 'message_group',
+              node_id: 'seed-node',
+              status: 'active',
+            },
+          ],
+        },
       });
       coordinator.initialize();
 
       try {
         const move = {
           type: 'ADD',
+          entityType: 'message_group',
+          entityId: 'nodes-p1',
           partitionId: 'nodes-p1',
           nodeId: 'node-2',
           replicaId: 'replica-1',
@@ -123,12 +138,26 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
       const coordinator = createTestCoordinator({
         nodeId: 'seed-node',
         enableTimeouts: false,
+        cacheData: {
+          services: [
+            {
+              service_id: 'nodes-p1-r0',
+              replica_id: 'nodes-p1-r0',
+              partition_id: 'nodes-p1',
+              service_type: 'message_group',
+              node_id: 'seed-node',
+              status: 'active',
+            },
+          ],
+        },
       });
       coordinator.initialize();
 
       try {
         const first = await coordinator.createOperation({
           type: 'ADD',
+          entityType: 'message_group',
+          entityId: 'nodes-p1',
           partitionId: 'nodes-p1',
           nodeId: 'node-2',
           replicaId: 'replica-1',
@@ -136,6 +165,8 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
 
         const second = await coordinator.createOperation({
           type: 'ADD',
+          entityType: 'message_group',
+          entityId: 'nodes-p1',
           partitionId: 'nodes-p1',
           nodeId: 'node-3', // different node
           replicaId: 'replica-2',
@@ -155,18 +186,34 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
       const coordinator = createTestCoordinator({
         nodeId: 'seed-node',
         enableTimeouts: false,
+        cacheData: {
+          services: [
+            {
+              service_id: 'tbl-test-p1-r0',
+              replica_id: 'tbl-test-p1-r0',
+              partition_id: 'tbl-test-p1',
+              service_type: 'message_group',
+              node_id: 'seed-node',
+              status: 'active',
+            },
+          ],
+        },
       });
       coordinator.initialize();
 
       try {
         const first = await coordinator.createOperation({
           type: 'ADD',
+          entityType: 'message_group',
+          entityId: 'tbl-test-p1',
           partitionId: 'tbl-test-p1',
           nodeId: 'node-2',
         });
 
         const second = await coordinator.createOperation({
           type: 'ADD',
+          entityType: 'message_group',
+          entityId: 'tbl-test-p1',
           partitionId: 'tbl-test-p1',
           nodeId: 'node-3',
         });
@@ -313,6 +360,8 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
       try {
         const removeReplicaOne = await coordinator.createOperation({
           type: 'REMOVE',
+          entityType: 'message_group',
+          entityId: 'nodes-p1',
           partitionId: 'nodes-p1',
           nodeId: 'seed-node',
           replicaId: 'nodes-p1-r1',
@@ -320,6 +369,8 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
 
         const removeReplicaOneDuplicate = await coordinator.createOperation({
           type: 'REMOVE',
+          entityType: 'message_group',
+          entityId: 'nodes-p1',
           partitionId: 'nodes-p1',
           nodeId: 'seed-node',
           replicaId: 'nodes-p1-r1',
@@ -333,6 +384,8 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
 
         const removeReplicaTwo = await coordinator.createOperation({
           type: 'REMOVE',
+          entityType: 'message_group',
+          entityId: 'nodes-p1',
           partitionId: 'nodes-p1',
           nodeId: 'seed-node',
           replicaId: 'nodes-p1-r2',
@@ -418,11 +471,10 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
     'critical REPLACE keeps one existing add-like recovery operation ' +
       'when authoritative entity reads miss and the planner switches target nodes',
     async (t) => {
-      const coordinator = createTestCoordinator({
+      const coordinator = await createPlacementBoundTestCoordinator({
         nodeId: 'seed-node',
         enableTimeouts: false,
       });
-      coordinator.initialize();
 
       try {
         coordinator.repository.getOperationsByEntityAuthoritativeObservation =
@@ -553,8 +605,10 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
   );
 
   t.test('positive terminal ledger evidence retires the recent creation hint', async (t) => {
-    const coordinator = createTestCoordinator({nodeId: 'seed-node', enableTimeouts: false});
-    coordinator.initialize();
+    const coordinator = await createPlacementBoundTestCoordinator({
+      nodeId: 'seed-node',
+      enableTimeouts: false,
+    });
     const move = {type: OperationType.ADD, partitionId: 'nodes-p1', nodeId: 'node-2'};
     try {
       const first = await coordinator.createOperation(move);

@@ -9,7 +9,10 @@ import {
   POLICY_ERROR_CODE,
 } from '../../src/policy/policy-constants.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
-import {OperationType} from '../../src/rebalancer/replica-status.js';
+import {
+  OperationType,
+  createOperation,
+} from '../../src/rebalancer/replica-status.js';
 import {ReplicaOperationMessageType} from '../../src/rebalancer/replica-operation-constants.js';
 import {createMockCache, createTestCoordinator} from './test-helpers.js';
 
@@ -364,12 +367,17 @@ test('unavailable policy cannot lower the minimum-five REMOVE floor or terminali
         const world = buildScenario();
         let restartedCoordinator = null;
         try {
-          const operation = await world.coordinator.createOperation({
+          const operation = createOperation({
+            operationId: `op-remove-${PARTITION}-${name}`,
             type: OperationType.REMOVE,
             partitionId: PARTITION,
-            nodeId: NODE,
+            sourceNodeId: NODE,
+            targetNodeId: NODE,
             replicaId: `${PARTITION}-r1`,
           });
+          operation.entityType = 'partition';
+          operation.entityId = PARTITION;
+          await world.coordinator.repository.persistNewOperation(operation);
           const baseline = await world.owner.evaluateRemoveSafety(operation);
           assert.match(baseline.error, /below minimum/, 'five voters cannot lose one under minimum five');
           assert.deepEqual(world.faultState.lastReadOptions, {

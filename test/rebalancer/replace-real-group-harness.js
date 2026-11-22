@@ -36,6 +36,11 @@
 
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {EventEmitter} from 'node:events';
+import {
+  COMMITTED_FORMATION,
+  bindPlacementAdmission,
+  startPlacementLedger,
+} from './placement-bound-coordinator-fixture.js';
 
 import {DELIVERED_TO_PEER, PartitionNodeCluster} from
   '../raft/raft-rs-backend/partition-node-cluster.js';
@@ -915,6 +920,7 @@ function startCoordinator(world, controlPlaneSystemTableGatewayFactory) {
     enableTimeouts: false,
     replaceWitness: false,
     committedMembershipFixture: false,
+    openLedgerDatabase: world.ledger?.openDatabase,
     systemTableCache: world.cache,
     onCommittedOperationWrite: (row) => captureTerminalWrite(world, row),
     controlPlaneSystemTableGatewayFactory,
@@ -926,6 +932,7 @@ function startCoordinator(world, controlPlaneSystemTableGatewayFactory) {
     },
     readinessFixture: {
       callbacks: world.readiness,
+      formation: COMMITTED_FORMATION,
       now: () => Date.now() + world.clockOffsetMs,
       readNodeRows: () => world.members.map(([, nodeId]) =>
         readyNode(nodeId, Date.now() + world.clockOffsetMs)),
@@ -951,6 +958,9 @@ function startCoordinator(world, controlPlaneSystemTableGatewayFactory) {
     now: () => Date.now() + world.clockOffsetMs,
   };
   coordinator.initialize();
+  if (world.ledger) {
+    bindPlacementAdmission(coordinator, world.ledger, false);
+  }
   coordinator.attachReplicaConsensusEvents(world.relay);
   world.coordinator = coordinator;
   return coordinator;
@@ -1102,6 +1112,7 @@ async function disposeWorld(world) {
     if (world.coordinator) {
       await world.coordinator.shutdown();
     }
+    await world.ledger?.stop();
     await world.sourceHandler?.dispose();
   } finally {
     world.registry.clear();
@@ -1149,6 +1160,7 @@ function coordinatorGatewayFactory(options, world) {
 async function openReplaceWorld(options = {}) {
   const world = createReplaceWorld(options);
   try {
+    world.ledger = await startPlacementLedger({nodeId: world.ownerNodeId});
     startCoordinator(world, coordinatorGatewayFactory(options, world));
     if (options.initializeOperation) await options.initializeOperation(world);
     else await createReplace(world);

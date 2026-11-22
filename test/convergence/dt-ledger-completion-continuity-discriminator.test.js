@@ -958,14 +958,17 @@ function createCriticalPartitionServiceRow({
 }
 
 function buildPendingRemoveRow(operationId) {
-  const operation = createOperationAt({
-    operationId,
-    type: OperationType.REMOVE,
-    partitionId: 'nodes-p1',
-    sourceNodeId: 'seed-node',
-    targetNodeId: 'node-d',
-    replicaId: 'nodes-p1-r1',
-  });
+  const operation = createOperationAt(
+    {
+      operationId,
+      type: OperationType.REMOVE,
+      partitionId: 'nodes-p1',
+      sourceNodeId: 'seed-node',
+      targetNodeId: 'node-d',
+      replicaId: 'nodes-p1-r1',
+    },
+    1_700_000_000_000,
+  );
   operation.entityType = 'partition';
   operation.entityId = 'nodes-p1';
   return buildCanonicalReplicaOperationRow(operation, null);
