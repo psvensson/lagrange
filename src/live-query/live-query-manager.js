@@ -559,7 +559,11 @@ class LiveQueryManager extends EventEmitter {
   removeGroup(group) {
     const groupKey = group.groupKey || group.getQuerySignature();
     if (this.unsubscribeFromPartition) {
-      for (const partitionId of Array.from(group.subscribedPartitions)) {
+      const trackedPartitions = new Set([
+        ...group.subscribedPartitions,
+        ...(group.pendingSubscriptions || []),
+      ]);
+      for (const partitionId of trackedPartitions) {
         try {
           // The wiring's unsubscribe is asynchronous I/O and answers a
           // promise on every path (live-query-startup-wiring.js).
