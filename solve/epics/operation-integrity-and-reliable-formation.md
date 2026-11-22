@@ -112,6 +112,52 @@ Recovery retains obligations and progresses; startup and shutdown own their
 resources. The authoring and proof workflow must catch invented contracts and
 invalid evidence before integration.
 
+## Usable alpha completion (approved 22 November 2026)
+
+The user approved the [twelve-package completion plan](operation-integrity-and-reliable-formation/usable-alpha-completion.md)
+for making the implemented SQL and WASI product usable through its public
+interfaces, retained-storage recovery and measured resource limits. It is a
+delivery sequence within this epic and the existing feature owners; their
+acceptance, release allocation and original evidence remain authoritative.
+The [implementing-agent start note](operation-integrity-and-reliable-formation/usable-alpha-start-here.md)
+connects that plan to the ongoing takeover and the currently observed
+withheld-dispatch repair. Resolve live refs and active assignments before using
+its dated source checkpoint. Continue the current bounded unit and preserve its
+writer; this adoption does not replace the integration owner's current summary,
+start a runtime task or lab run, change a sealed predicate, or establish a pass.
+
+Reconciled candidate and branch state on 22 November 2026 (against accepted
+change-selection base `0dbed1718c2d07c1fcb8bbe56b87ac41763c262c` and current
+`origin/main` `223a9e30c0238b6ace2fa05ec703c5d6f75761e4`):
+- `work/integration-candidate-20261121` (`afde15a89`, above `ca95a9090`,
+  `13ec4cb65`, `e9e85853d`, `9aa1aed42`, and `4b12b9844`) integrates:
+  - `work/services-read-lifetime-20261121` at `19cd99e27` (SERVICES read lifetime,
+    7/7 green on `adams-gamla`, 469 assertions);
+  - `work/named-write-participant-binding-20261121` at `ee42a0618` (named
+    control-plane writes and strict read-authority witness, 4/4 green on
+    `tv-dator`, 219 assertions);
+  - `work/retained-ledger-observation-repair-20261121` at `8c7e29eb9` (W1
+    retained-repair owner corrective round `f615921f5` and T2 `PARTITIONS.leader_term`
+    term-only tenure resolution `438e2cb4c`..`8c7e29eb9`, independently approved,
+    11/11 mutants killed, 6/7 retained suites and T2 witness green on `adams-gamla`);
+  - `work/placement-owner-repair-20261121` stages 1–2 at `8e84e2801` (W1b
+    placement-owner custody and barrier, independently approved, 12/13 green on
+    `4b12b9844` and 13/13 after `0a88745f6` write-kernel tenure fence merge);
+  - `work/write-kernel-tenure-fence-20261121` at `0a88745f6` (write-kernel
+    leadership tenure fence, independently approved, 9/9 green and curing
+    `placement-owner-authority-write-kernel` 2/2 on `9aa1aed42`);
+  - `work/raft-owner-authority-20261121` at `b1114d70b` and
+    `work/owner-fact-read-20261121` at `4393a1b5d` (S0 owner-fact read point and
+    raft-owner current authority / proposal submitting-leadership fence,
+    independently approved, 16/16 S0 files and 21/21 raft-owner files green,
+    curing `queued-proposal-leadership-fence` 1/1 on `13ec4cb65`);
+  - Task I withheld-dispatch re-drive corrective (`b3985c9e7` red, `e9e85853d` /
+    `ca95a9090` green: held-lane retained-turn re-arm, pre-ask registration,
+    shared same-step/async verdict handling, `row_changed` single re-evaluation,
+    and fence mutant kills) and Ruling #5 entity `REMOVE` unavailable-evidence
+    deferral vs. proven minimum-floor breach (`rebalancer-entity-interaction-contract`
+    64/64 green).
+
 ## Core integration handoff, 21 November 2026
 
 | Decision on resume | Current evidence and next action |

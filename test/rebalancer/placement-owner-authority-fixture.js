@@ -311,19 +311,16 @@ class LedgerLog {
     this.deliverAll();
   }
 
-  // rs-raft's currentTermApplied AS DEFINED IN PRODUCTION TODAY
-  // (raft-rs-status-observation.js: leader and applied > pendingConfIndex;
-  // pendingConfIndex is the last index when the replica became leader and the
-  // index of every configuration change it proposes): true once the term start
-  // applied, false again while the last applied entry is a configuration change
-  // of this leader. A witness can also withhold it (node.termStartWithheld).
+  // rs-raft's currentTermApplied as defined in production
+  // (raft-rs-status-observation.js: leader and appliedTerm === term): true
+  // once the replica has applied an entry of its own term (including a
+  // configuration change of this leader). A witness can also withhold it
+  // (node.termStartWithheld).
   currentTermApplied(node) {
     const port = node.ledger.controllablePort;
     if (port.role !== RAFT_ROLE.LEADER || node.termStartWithheld === true) return false;
-    const key = `${node.nodeId}@${port.term}`;
-    const index = this.termStarts.get(key);
-    if (index === undefined) return false;
-    return this.applied.get(node) > Math.max(index, this.pendingConf.get(key) ?? index);
+    const applied = this.applied.get(node) ?? 0;
+    return applied > 0 && this.entries[applied - 1]?.term === port.term;
   }
 
   // A configuration change the leader proposed, committed and applied: an

@@ -4,10 +4,10 @@
 //
 // The fact read: the ledger port's status `currentTermApplied`, read while the
 // custody's term start is PENDING and latched on the first true read. The
-// fixture's port models the PRODUCTION definition today
-// (raft-rs-status-observation.js: leader and applied > pendingConfIndex), so a
-// configuration change the leader applied makes it false again until one more
-// entry applies (placement-owner-authority-fixture.js, LedgerLog).
+// fixture's port models the production definition
+// (raft-rs-status-observation.js: leader and appliedTerm === term), so a
+// configuration change the leader applied at its own term satisfies the
+// barrier on a quiet ledger (placement-owner-authority-fixture.js, LedgerLog).
 // Fixture evidence ceiling: the ledger log is the fixture's, not rs-raft.
 import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
@@ -95,8 +95,8 @@ test('barrier and the production definition: a custody that begins while the las
   await world.idle();
   const report = reportOf(t, world, a);
   assert.ok(admitted, 'the custody started planning on a quiet ledger whose last applied ' +
-    'entry is its configuration change (red while currentTermApplied is applied > ' +
-    `pendingConfIndex: the barrier reads false and no applied progress follows); ${report}`);
+    'entry is its configuration change (currentTermApplied is appliedTerm === term, so the ' +
+    `barrier opens without waiting for another entry); ${report}`);
 }));
 
 test('drain start: a status read that announces applied progress inside the first pass\'s ' +
