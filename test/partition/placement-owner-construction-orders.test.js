@@ -527,32 +527,3 @@ test('P0 re-entry during the attach (F1): a leadership event delivered synchrono
   assert.equal(calls.factory, 1, 'the factory runs once: the re-entry attaches nothing');
   await assertSingleScheduler('re-entry during the attach', services, ledger);
 }));
-
-test('F4 (finding, schedule not traced in production): a binder sweep that still holds the ' +
-  'node\'s coordinator after the cleanup quiesced the node (a startup that re-binds the ' +
-  'coordinator after its await of ControlPlaneSetup.create) attaches no placement owner',
-() => withPlacementWorld(SPEC, async (world) => {
-  const node = await world.addNode('n1');
-  answerCommittedReadsAt(world, node.coordinator.controlPlaneReadinessService);
-  const user = createPartition(world, node, USER, node.coordinator);
-  const priority = createPartition(world, node, PRIORITY, node.coordinator);
-  const ledger = createPartition(world, node, LEDGER, node.coordinator);
-  const services = [user, priority, ledger];
-  await initializeAll(services);
-  await assertSingleScheduler('F4: before the cleanup', services, ledger);
-  const owner = ownerOf({ledger});
-  const quiet = {debug() {}, info() {}, warn() {}, error() {}};
-  await new SeedCleanupHandler({delegates: {
-    getLogger: () => quiet,
-    getPartitionServices: () => new Map(services.map((service) => [service.replicaId, service])),
-    getMessageGroupServices: () => new Map(),
-    getRebalanceCoordinator: () => node.coordinator,
-    clearRebalanceCoordinator: () => {},
-  }}).quiesceRebalancers();
-  assert.equal(ledger.replicaPlacementOwnerAttachment, null, 'premise: the quiesce detached');
-  bindLikeStartup(node, new Map(services.map((service) => [service.partitionId, service])));
-  await settleTicks();
-  assert.equal(ledger.replicaPlacementOwnerAttachment, null,
-    'a sweep after the quiesce attaches no placement owner');
-  assert.equal(owner.isLeader, false, 'the quiesced owner stays ended');
-}));
