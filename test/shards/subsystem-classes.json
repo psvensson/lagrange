@@ -13,7 +13,7 @@
     "examples-e2e": 8,
     "pgwire-compat": 23,
     "placement-rebalance": 294,
-    "query-sql": 209,
+    "query-sql": 210,
     "release-packaging": 15,
     "runtime-primitives": 23,
     "services-runtime": 160,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2738,
-  "digest": "fnv1a32-2ba0993d",
+  "censusSize": 2739,
+  "digest": "fnv1a32-0b87838c",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-14afeea6",
+  "observationDigest": "fnv1a32-ea350b4f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1688,6 +1688,7 @@
     "test/query/query-executor-durable-commit-witness.test.js": "query-sql",
     "test/query/query-executor-executeonpartition-leader-resolution.test.js": "query-sql",
     "test/query/query-executor-executeonpartition-no-handler-repair.test.js": "query-sql",
+    "test/query/query-executor-no-handler-quarantine-clock.test.js": "query-sql",
     "test/query/query-executor-recovery-owned-routing.test.js": "query-sql",
     "test/query/query-executor-recovery-read-lifetime.test.js": "query-sql",
     "test/query/query-executor-routable-services-and-read-delivery.test.js": "query-sql",
@@ -15983,6 +15984,16 @@
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-write-kernel.js"
+      ]
+    },
+    "test/query/query-executor-no-handler-quarantine-clock.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-read-contracts.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/control-plane/serve-eligibility-test-support.js"
       ]
     },
     "test/query/query-executor-recovery-owned-routing.test.js": {

@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2379,
+    "unit": 2380,
     "integration": 126,
     "bootstrap": 226,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2738,
-  "digest": "fnv1a32-208b2db0",
+  "censusSize": 2739,
+  "digest": "fnv1a32-bed65442",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1669,6 +1669,7 @@
     "test/query/query-executor-durable-commit-witness.test.js": "unit",
     "test/query/query-executor-executeonpartition-leader-resolution.test.js": "unit",
     "test/query/query-executor-executeonpartition-no-handler-repair.test.js": "unit",
+    "test/query/query-executor-no-handler-quarantine-clock.test.js": "unit",
     "test/query/query-executor-recovery-owned-routing.test.js": "unit",
     "test/query/query-executor-recovery-read-lifetime.test.js": "unit",
     "test/query/query-executor-routable-services-and-read-delivery.test.js": "unit",

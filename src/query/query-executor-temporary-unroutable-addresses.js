@@ -11,7 +11,7 @@ const queryExecutorTemporaryUnroutableAddressMethods = {
   /**
    * Mark one partition service endpoint as temporarily unroutable after a
    * runtime no-handler witness so follow-up calls do not immediately retry the
-   * same stale address.
+   * same stale address. The window runs on the executor's node clock.
    * @param {string} partitionId
    * @param {string} address
    * @private
@@ -26,7 +26,7 @@ const queryExecutorTemporaryUnroutableAddressMethods = {
       return;
     }
     const expiresAt =
-      Date.now() + this.resolveNoHandlerAddressQuarantineMs(partitionId);
+      this.timeSource.now() + this.resolveNoHandlerAddressQuarantineMs(partitionId);
     const fingerprint = buildPartitionServiceWitnessFingerprint(service);
     const existing =
       this.temporarilyUnroutableAddressesByPartition.get(partitionId);
@@ -129,7 +129,7 @@ const queryExecutorTemporaryUnroutableAddressMethods = {
       }
       return false;
     }
-    if (expiresAt > Date.now()) {
+    if (expiresAt > this.timeSource.now()) {
       return true;
     }
     existing.delete(address);
