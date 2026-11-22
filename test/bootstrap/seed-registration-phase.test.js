@@ -285,8 +285,12 @@ test('SeedRegistrationPhase waits only for cache-hydration leader partitions bef
         'services-p1',
         'tables-p1',
         'message_groups-p1',
+        'service_definitions-p1',
+        'service_endpoints-p1',
+        'config-p1',
+        'control_plane_publications-p1',
       ],
-    }], 'bootstrap-direct registration should wait only for cache-hydration leader partitions');
+    }], 'bootstrap-direct registration should wait for every partition the window writes');
     t.same(events, [
       'enable',
       'registerMessageGroup',

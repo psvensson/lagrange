@@ -299,7 +299,8 @@ class CDCIntegrationServiceMutationOperations {
           operation: CDCOperationType.INSERT,
           tableName,
           data: rowData,
-          affectedRows: result?.affectedRows,
+          ...(typeof result?.affectedRows === 'number' ?
+            {affectedRows: result.affectedRows} : {}),
           partitionResult: result,
         };
       } catch (error) {

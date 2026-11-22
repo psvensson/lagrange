@@ -7,6 +7,9 @@
 
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
 import {CDC_TERMINAL_STAGE} from './cdc-constants.js';
+import {
+  normalizeLocalSystemTableWriteResult,
+} from './cdc-integration-service-authoritative-read-flow.js';
 import {submitRoutedMutationHop} from './cdc-terminal-gate.js';
 import {
   classifyPartitionStatementHead,
@@ -120,12 +123,15 @@ async function executeBootstrapDirectSql(service, sql, params = []) {
   }
   // A write rides raft only: the local leader carries the append (or the
   // first candidate, whose proposal forwards to the known leader), and its
-  // answer - applied, or a typed failure - is the write's answer. No
-  // statement is executed outside raft: a replica absent from such an
-  // execution diverges for good, and a statement whose raft entry still
-  // commits would apply twice (R11: no fallback).
-  return submitRoutedMutationHop(service, CDC_TERMINAL_STAGE.BOOTSTRAP_DIRECT,
-    () => partitionService.executeQuery(sql, params));
+  // answer - applied, or a typed failure - is the write's answer, with the
+  // partition's `changes` count rendered to the CDC boundary's `affectedRows`
+  // by the same normalizer the local-leader leg uses. No statement is
+  // executed outside raft: a replica absent from such an execution diverges
+  // for good, and a statement whose raft entry still commits would apply
+  // twice (R11: no fallback).
+  return normalizeLocalSystemTableWriteResult(
+    await submitRoutedMutationHop(service, CDC_TERMINAL_STAGE.BOOTSTRAP_DIRECT,
+      () => partitionService.executeQuery(sql, params)));
 }
 
 export {executeBootstrapDirectSql};

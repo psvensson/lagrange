@@ -28,7 +28,7 @@
   "censusSize": 2738,
   "digest": "fnv1a32-e5fb0768",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-a899d384",
+  "observationDigest": "fnv1a32-d530ea82",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -4452,7 +4452,9 @@
         "src/cdc/cdc-integration-service-projection-wait.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/control-plane-system-table-gateway-read-contracts.js",
-        "src/partition/proposal-queue-constants.js"
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/partition/proposal-queue-constants.js",
+        "src/query/distributed/distributed-write-coordinator.js"
       ],
       "directories": [
         "src/cdc"
