@@ -12,6 +12,7 @@ import {renderExpressionWithParameters} from './sql-statement-renderer.js';
 import {
   GLOBAL_INDEX_ACCESS_PATH,
   GLOBAL_INDEX_ERROR_CODE,
+  GLOBAL_INDEX_ERROR_MSG,
 } from '../index-management/index-constants.js';
 import {
   maintainsOnWrite,
@@ -451,6 +452,14 @@ async function executeDirectLocalGlobalIndexWrite({
   }
 }
 
+function resolveGlobalIndexWriteSchemaPks(coordinator, tableName) {
+  const schemaInfo = coordinator.resolveTableSchema?.(tableName) || null;
+  if (schemaInfo?.basePrimaryKeyColumns?.length > 0) {
+    return schemaInfo.basePrimaryKeyColumns;
+  }
+  return [LOCAL_STR_ID];
+}
+
 /**
  * Execute a distributed write statement with synchronous global index
  * maintenance when active global indexes exist on the target table.
@@ -482,12 +491,16 @@ async function executeEngineWriteWithGlobalIndexes(engine, context) {
 
   const startTimeNs = process.hrtime.bigint();
   const basePartitionIds = resolveBasePartitionIds(writePlan);
-  const schemaInfo = coordinator.resolveTableSchema?.(tableName) || null;
-  const basePrimaryKeyColumns = schemaInfo?.basePrimaryKeyColumns?.length > 0 ?
-    schemaInfo.basePrimaryKeyColumns :
-    [LOCAL_STR_ID];
+  const basePrimaryKeyColumns = resolveGlobalIndexWriteSchemaPks(coordinator, tableName);
 
   if (!transactionIdentity) {
+    if (engine.queryExecutor) {
+      return {
+        success: false,
+        error: GLOBAL_INDEX_ERROR_MSG.DISTRIBUTED_TX_IDENTITY_UNAVAILABLE,
+        errorCode: GLOBAL_INDEX_ERROR_CODE.PARTICIPANT_UNAVAILABLE,
+      };
+    }
     return executeDirectLocalGlobalIndexWrite({
       coordinator,
       statement,

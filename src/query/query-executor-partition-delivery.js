@@ -81,6 +81,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
     const allowReadinessAuthoritativeRefresh =
       this.shouldAllowRoutingAuthoritativeRefresh(executionOptions);
     const requireCanonicalLeader =
+      executionOptions?.requireLeader === true ||
       executionOptions?.readAuthority?.leaderMode ===
         CONTROL_PLANE_READ_LEADER_MODE.REQUIRED;
     const isLeaderPinnedDelivery =
@@ -205,17 +206,13 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         this, partitionId, executionOptions);
       const resolveAttemptCandidates = () => candidateEligibility.resolve(
         this.resolvePartitionServiceCandidates(
-          partitionId,
-          forRead,
-          preferLeader,
-          preferSameLatencyGroup,
-          routingReadinessDimension,
+          partitionId, forRead, preferLeader, preferSameLatencyGroup, routingReadinessDimension,
           {
             allowReadinessAuthoritativeRefresh,
+            requireLeader: executionOptions?.requireLeader === true,
             [QUERY_EXECUTOR_ROUTING_OPTION_FIELD.READ_AUTHORITY]:
               executionOptions?.readAuthority || null,
-            recoveryCandidateSelectionKey:
-              executionOptions.recoveryCandidateSelectionKey,
+            recoveryCandidateSelectionKey: executionOptions.recoveryCandidateSelectionKey,
             transactionIdentity: executionOptions?.transactionIdentity || null,
           },
         ), Boolean(readDelivery), requireCanonicalLeader);

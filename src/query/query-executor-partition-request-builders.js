@@ -118,8 +118,11 @@ function stampTransactionIdentityFields(request, executionOptions,
 // leader-qualified read (and, for readOwnerFact, its read point floor), and a
 // replica that may not serve it refuses typed, with no rows.
 function leaderReadFieldOf(executionOptions, forRead) {
-  return forRead === true && executionOptions?.readAuthority?.leaderMode ===
-    CONTROL_PLANE_READ_LEADER_MODE.REQUIRED ?
+  const requiresLeader =
+    executionOptions?.requireLeader === true ||
+    executionOptions?.readAuthority?.leaderMode ===
+      CONTROL_PLANE_READ_LEADER_MODE.REQUIRED;
+  return forRead === true && requiresLeader ?
     {[LEADER_READ_REQUEST_FIELD]: leaderReadRequestOf(
       executionOptions.ownerFactFloor)} :
     {};
@@ -289,4 +292,8 @@ function resolvePartitionExecutionBuilders({
   });
 }
 
-export {createDefaultPartitionRequestBuilder, resolvePartitionExecutionBuilders};
+export {
+  createDefaultPartitionRequestBuilder,
+  decodePartitionResponseRows,
+  resolvePartitionExecutionBuilders,
+};

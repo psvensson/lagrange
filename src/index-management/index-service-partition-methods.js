@@ -35,10 +35,13 @@ function normalizePartitionIndexArgs(partitionId, indexMetadataOrName, ...rest) 
 }
 
 function executeOnPartitionServiceTarget(target, sql, params) {
-  if (target?.db?.prepare) {
+  if (target?.handleRemoteQuery) {
+    return target.handleRemoteQuery({sql, params});
+  }
+  if (target?.db?.prepare && !target?.raft) {
     return target.db.prepare(sql).run();
   }
-  if (typeof target?.executeQuery === 'function') {
+  if (target?.executeQuery) {
     return target.executeQuery(sql, params);
   }
   return undefined;
@@ -47,7 +50,7 @@ function executeOnPartitionServiceTarget(target, sql, params) {
 function resolvePartitionFromService(service, partitionId) {
   if (!service) return null;
   if (service.partitionId === partitionId) return service;
-  if (typeof service.getPartition === 'function') {
+  if (service.getPartition) {
     return service.getPartition(partitionId) || null;
   }
   return null;
@@ -55,12 +58,12 @@ function resolvePartitionFromService(service, partitionId) {
 
 function resolveEnginePartitionTarget(engine, partitionId) {
   if (!engine) return null;
-  if (typeof engine.partitionServicesProvider === 'function') {
+  if (engine.partitionServicesProvider) {
     const provided = engine.partitionServicesProvider(partitionId);
-    return (provided instanceof Map || typeof provided?.get === 'function') ?
+    return (provided instanceof Map || provided?.get) ?
       provided.get(partitionId) : provided;
   }
-  if (typeof engine.getPartitionService === 'function') {
+  if (engine.getPartitionService) {
     return engine.getPartitionService(partitionId);
   }
   return null;
@@ -68,30 +71,30 @@ function resolveEnginePartitionTarget(engine, partitionId) {
 
 function hasHandleExecutor(partition) {
   return Boolean(
-    partition?.db?.prepare ||
+    partition?.handleRemoteQuery ||
+    (partition?.db?.prepare && !partition?.raft) ||
     partition?.storage?.getDatabase ||
-    typeof partition?.executeQuery === 'function',
+    partition?.executeQuery,
   );
 }
 
 function hasServiceExecutor(service) {
   if (!service) return false;
   return Boolean(
-    service.db?.prepare ||
-    typeof service.getPartition === 'function' ||
-    typeof service.executeQuery === 'function' ||
-    typeof service.executePartitionQuery === 'function' ||
-    typeof service.executeOnPartition === 'function',
+    service.handleRemoteQuery ||
+    (service.db?.prepare && !service.raft) ||
+    service.getPartition ||
+    service.executeQuery ||
+    service.executePartitionQuery ||
+    service.executeOnPartition,
   );
 }
 
 function hasEngineExecutor(engine) {
   if (!engine) return false;
-  return Boolean(
-    typeof engine.partitionServicesProvider === 'function' ||
-    typeof engine.getPartitionService === 'function' ||
-    typeof engine.queryExecutor?.executeOnPartition === 'function',
-  );
+  if (engine.queryExecutor?.executeOnPartition) return true;
+  if (engine.partitionServicesProvider) return true;
+  return Boolean(engine.getPartitionService);
 }
 
 function extractPartitionId(partition) {
@@ -129,18 +132,27 @@ function resolveRebuildTarget(service, tableId, indexName) {
   return null;
 }
 
+function executeOnLocalPartitionDb(partition, sql) {
+  if (partition?.db?.prepare && !partition?.raft) {
+    return partition.db.prepare(sql).run();
+  }
+  const storageDb = partition?.storage?.getDatabase?.();
+  if (storageDb?.prepare) {
+    return storageDb.prepare(sql).run();
+  }
+  return undefined;
+}
+
 const indexServicePartitionMethods = {
   executeOnPartitionHandle(partition, sql, params) {
-    if (partition?.db?.prepare) {
-      return partition.db.prepare(sql).run();
+    if (partition?.handleRemoteQuery) {
+      return partition.handleRemoteQuery({sql, params});
     }
-    if (partition?.storage?.getDatabase) {
-      const db = partition.storage.getDatabase();
-      if (db?.prepare) {
-        return db.prepare(sql).run();
-      }
+    const localResult = executeOnLocalPartitionDb(partition, sql);
+    if (localResult !== undefined) {
+      return localResult;
     }
-    if (typeof partition?.executeQuery === 'function') {
+    if (partition?.executeQuery) {
       return partition.executeQuery(sql, params);
     }
     return undefined;
@@ -153,10 +165,10 @@ const indexServicePartitionMethods = {
     if (directResult !== undefined) {
       return directResult;
     }
-    if (typeof this.partitionService.executePartitionQuery === 'function') {
+    if (this.partitionService.executePartitionQuery) {
       return this.partitionService.executePartitionQuery(partitionId, sql, params);
     }
-    if (typeof this.partitionService.executeOnPartition === 'function') {
+    if (this.partitionService.executeOnPartition) {
       return this.partitionService.executeOnPartition(partitionId, sql, params);
     }
     return undefined;
@@ -164,14 +176,14 @@ const indexServicePartitionMethods = {
 
   executeViaSqlQueryEngine(partitionId, sql, params) {
     if (!this.sqlQueryEngine) return undefined;
+    const executor = this.sqlQueryEngine.queryExecutor;
+    if (executor?.executeOnPartition) {
+      return executor.executeOnPartition(partitionId, sql, params, false, true);
+    }
     const target = resolveEnginePartitionTarget(this.sqlQueryEngine, partitionId);
     const directResult = executeOnPartitionServiceTarget(target, sql, params);
     if (directResult !== undefined) {
       return directResult;
-    }
-    const executor = this.sqlQueryEngine.queryExecutor;
-    if (typeof executor?.executeOnPartition === 'function') {
-      return executor.executeOnPartition(partitionId, sql, params, false, true);
     }
     return undefined;
   },

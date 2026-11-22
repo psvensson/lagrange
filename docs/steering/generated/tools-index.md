@@ -76,6 +76,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `audit:guidelines` — `npm run audit:guideline:literals && npm run audit:guideline:decision-boundaries && npm run audit:guideline:boundary-mode-contracts && npm run audit:guideline:hot-path-diagnostics && npm run audit:guideline:deferred-outcomes && npm run audit:guideline:silent-catch && npm run audit:guideline:ambient-intrinsics && npm run audit:style-terminal-vocabulary && npm run audit:guideline:navigability`
 - `audit:hold-engagement-owner` — `node scripts/check-hold-engagement-owner.js`
 - `audit:impact-contracts` — `node scripts/checks/impact-contract-registry.js`
+- `audit:leader-required-read-census` — `node scripts/checks/leader-required-read-census-ratchet.js`
 - `audit:no-kiro` — `node scripts/check-no-kiro-refs.js`
 - `audit:no-legacy-consensus-references` — `node scripts/checks/no-legacy-consensus-reference-ratchet.js`
 - `audit:no-legacy-consensus-references:strict` — `node scripts/checks/no-legacy-consensus-reference-audit.js`
@@ -273,7 +274,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:roadmap-authority` — `node scripts/run-documentation-current-state-scenario.js roadmap-audience-authority-cutover`
 - `test:safety-pregate` — `node scripts/run-classified-test-files.js $(cat test/shards/safety-pregate.txt)`
 - `test:smoke` — `node scripts/run-project-hardening-acceptance.js --manifest test/manifests/developer-smoke-proof-manifest.json --receipt-dir test-output/acceptance/developer-smoke`
-- `test:static` — `node scripts/checks/run-static-audits.js --chain "npm run test:unused && npm run test:unused:prod && npm run test:unused:ratchet && npm run test:deps && npm run audit:file-size && npm run test:complexity && npm run test:metrics && npm run test:metadata-gateway:audit && npm run audit:runtime-grammar && npm run audit:operation-progress-authority && npm run audit:service-portability-claims && npm run audit:current-capabilities && npm run audit:cli-docs && npm run audit:closure-ledger && npm run audit:no-kiro && npm run audit:no-legacy-naming && npm run audit:no-legacy-consensus-references && npm run audit:quest-log-append-only && npm run audit:comparative-recompute && npm run audit:benchmark-history-append-only && npm run audit:closed-quest-shape && npm run audit:steering-diet && npm run audit:rule-set && npm run audit:impact-contracts && npm run audit:shards && npm run audit:guidelines && npm run audit:doc-audience && npm run audit:doc-ascii && npm run audit:documentation-current && npm run audit:source-owner-index && npm run audit:roadmap-authority && npm run steering:check && npm run lint:scripts && npm run lint"`
+- `test:static` — `node scripts/checks/run-static-audits.js --chain "npm run test:unused && npm run test:unused:prod && npm run test:unused:ratchet && npm run test:deps && npm run audit:file-size && npm run test:complexity && npm run test:metrics && npm run test:metadata-gateway:audit && npm run audit:runtime-grammar && npm run audit:operation-progress-authority && npm run audit:service-portability-claims && npm run audit:current-capabilities && npm run audit:cli-docs && npm run audit:closure-ledger && npm run audit:no-kiro && npm run audit:no-legacy-naming && npm run audit:no-legacy-consensus-references && npm run audit:leader-required-read-census && npm run audit:quest-log-append-only && npm run audit:comparative-recompute && npm run audit:benchmark-history-append-only && npm run audit:closed-quest-shape && npm run audit:steering-diet && npm run audit:rule-set && npm run audit:impact-contracts && npm run audit:shards && npm run audit:guidelines && npm run audit:doc-audience && npm run audit:doc-ascii && npm run audit:documentation-current && npm run audit:source-owner-index && npm run audit:roadmap-authority && npm run steering:check && npm run lint:scripts && npm run lint"`
 - `test:static:postpush` — `node scripts/checks/run-static-audits.js`
 - `test:task27:invariant-suite` — `bash scripts/run-task27-deterministic-invariant-suite.sh`
 - `test:topology-failure-gates` — Run the topology failure gates.
@@ -295,4 +296,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-196 scripts indexed; 38 have a curated description, 158 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+197 scripts indexed; 38 have a curated description, 159 fall back to their raw command. Improve coverage in the two sources named in the header comment.

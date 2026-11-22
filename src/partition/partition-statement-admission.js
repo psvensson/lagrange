@@ -215,9 +215,9 @@ function isColumnListToEnd(tokens, open) {
     tokens[index + 1]?.text === CHAR.CLOSE_PAREN && endsAt(tokens, index + 2);
 }
 
-// CREATE INDEX [IF NOT EXISTS] <name> ON <table> (<column>, ...)
-function matchCreateIndex(tokens) {
-  const at = skipKeywords(tokens, 2, [KEYWORD.IF, KEYWORD.NOT, KEYWORD.EXISTS]);
+// CREATE [UNIQUE] INDEX [IF NOT EXISTS] <name> ON <table> (<column>, ...)
+function matchCreateIndex(tokens, indexStart) {
+  const at = skipKeywords(tokens, indexStart, [KEYWORD.IF, KEYWORD.NOT, KEYWORD.EXISTS]);
   const indexName = nameAt(tokens, at);
   const on = at + 1;
   const tableName = tokens[on]?.upper === KEYWORD.ON ? nameAt(tokens, on + 1) : null;
@@ -237,11 +237,13 @@ function matchDropIndex(tokens) {
 }
 
 function matchIndexDdl(lexed) {
-  if (lexed.tokens[1]?.upper !== KEYWORD.INDEX) {
-    return null;
+  if (lexed.head === KEYWORD.CREATE) {
+    const indexAt = skipKeywords(lexed.tokens, 1, [KEYWORD.UNIQUE]);
+    return lexed.tokens[indexAt]?.upper === KEYWORD.INDEX ?
+      matchCreateIndex(lexed.tokens, indexAt + 1) : null;
   }
-  return lexed.head === KEYWORD.CREATE ? matchCreateIndex(lexed.tokens) :
-    matchDropIndex(lexed.tokens);
+  return lexed.tokens[1]?.upper === KEYWORD.INDEX ?
+    matchDropIndex(lexed.tokens) : null;
 }
 
 // The indexes the partition's schema declares (created at initialization on

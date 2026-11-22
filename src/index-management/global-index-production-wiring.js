@@ -5,7 +5,9 @@
  */
 
 import {TABLES} from '../constants/index.js';
-import {CACHE_CDC_OPERATIONS} from '../cache/cache-constants.js';
+import {
+  CONTROL_PLANE_MUTATION_OPERATION,
+} from '../control-plane/control-plane-system-table-gateway-constants.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {
   GLOBAL_INDEX_STATE,
@@ -13,11 +15,10 @@ import {
 } from './global-index-catalog-contract.js';
 import {getGlobalIndexDatasetName} from './global-index-dataset-manager.js';
 import {
-  ensureIndexDatasetTableInCache,
+  ensureIndexDatasetTableInGateway,
   executePartitionReadSql,
   executePartitionWriteSql,
   hasDistributedPartitionRoute,
-  propagateSystemTableCacheChange,
   provisionIndexPartitionsWithRuntime,
   syncGlobalIndexesFromSystemCache,
 } from './global-index-distributed-execution.js';
@@ -36,6 +37,7 @@ import {extractPredicateConditions} from './global-index-read-router.js';
 import {buildIndexInsertSql} from './global-index-write-maintenance.js';
 import {
   GLOBAL_INDEX_ERROR_CODE,
+  GLOBAL_INDEX_STATEMENT_LABEL,
   INDEX_TYPE,
 } from './index-constants.js';
 
@@ -53,9 +55,6 @@ const GENERATION_SUFFIX_REGEX = /-gen(\d+)$/u;
 const NUMERIC_TYPE_REGEX = /\b(INT|INTEGER|BIGINT|SMALLINT|TINYINT|REAL|FLOAT|DOUBLE|NUMERIC|DECIMAL)\b/iu;
 const NUMERIC_VALUE_REGEX = /^-?\d+(?:\.\d+)?$/u;
 
-const SQL_BEGIN_IMMEDIATE = 'BEGIN IMMEDIATE';
-const SQL_COMMIT = 'COMMIT';
-const SQL_ROLLBACK = 'ROLLBACK';
 const SQL_WHERE_PREFIX = 'WHERE ';
 
 function coerceCursorScalar(value, colType) {
@@ -203,54 +202,65 @@ function parseGenerationFromIndexId(indexId) {
   return match ? Number(match[1]) : 1;
 }
 
-async function persistCatalogInsert(indexService, record) {
-  const row = toIndicesTableRow(record);
-  if (indexService.canWriteSystemTable()) {
-    const gateway = indexService.getControlPlaneSystemTableGateway();
-    if (gateway) {
-      await gateway.insertSystemTableRow(
-        TABLES.INDICES,
-        row,
-        {
-          workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-          deliveryPriority: LOCAL_STR_CRITICAL,
-        },
+async function submitCatalogMutation(gateway, mutation, rowOperationFn) {
+  const options = {
+    workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+    deliveryPriority: LOCAL_STR_CRITICAL,
+  };
+  if (gateway?.submitMutation) {
+    const res = await gateway.submitMutation(mutation, options);
+    if (res && res.success === false) {
+      const err = new Error(res.error || `Catalog mutation failed on ${mutation.tableName}`);
+      if (res.errorCode) err.code = res.errorCode;
+      if (res.failureCode) err.failureCode = res.failureCode;
+      throw err;
+    }
+    if (gateway.awaitProjectionAt && res?.position) {
+      await gateway.awaitProjectionAt(
+        res.position,
+        {statement: GLOBAL_INDEX_STATEMENT_LABEL.CATALOG_MUTATION},
       );
     }
+    return res;
   }
-  propagateSystemTableCacheChange(
-    indexService,
-    TABLES.INDICES,
-    CACHE_CDC_OPERATIONS.INSERT,
-    row,
+  if (rowOperationFn) {
+    return rowOperationFn(options);
+  }
+  return null;
+}
+
+async function persistCatalogInsert(indexService, record) {
+  const row = toIndicesTableRow(record);
+  if (!indexService.canWriteSystemTable()) return;
+  const gateway = indexService.getControlPlaneSystemTableGateway();
+  if (!gateway) return;
+  await submitCatalogMutation(
+    gateway,
+    {operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT, tableName: TABLES.INDICES, row},
+    gateway.insertSystemTableRow ?
+      (opts) => gateway.insertSystemTableRow(TABLES.INDICES, row, opts) :
+      null,
   );
 }
 
-async function persistCatalogUpdate(indexService, indexId, update, updatedRecord) {
+async function persistCatalogUpdate(indexService, indexId, update) {
   if (!indexId) return;
   const data = toIndicesUpdateData(update);
-  if (indexService.canWriteSystemTable()) {
-    const gateway = indexService.getControlPlaneSystemTableGateway();
-    if (gateway && gateway.updateSystemTableRow) {
-      await gateway.updateSystemTableRow(
-        TABLES.INDICES,
-        {index_id: indexId},
-        data,
-        {
-          workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-          deliveryPriority: LOCAL_STR_CRITICAL,
-        },
-      );
-    }
-  }
-  const cacheRow = updatedRecord ?
-    {...toIndicesTableRow(updatedRecord), ...data, index_id: indexId} :
-    {index_id: indexId, ...data};
-  propagateSystemTableCacheChange(
-    indexService,
-    TABLES.INDICES,
-    CACHE_CDC_OPERATIONS.UPDATE,
-    cacheRow,
+  if (!indexService.canWriteSystemTable()) return;
+  const gateway = indexService.getControlPlaneSystemTableGateway();
+  if (!gateway) return;
+  const whereClause = {index_id: indexId};
+  await submitCatalogMutation(
+    gateway,
+    {
+      operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+      tableName: TABLES.INDICES,
+      whereClause,
+      data,
+    },
+    gateway.updateSystemTableRow ?
+      (opts) => gateway.updateSystemTableRow(TABLES.INDICES, whereClause, data, opts) :
+      null,
   );
 }
 
@@ -261,24 +271,19 @@ async function persistCatalogDelete(indexService, record) {
     table_id: record.table_id,
     index_name: record.index_name,
   };
-  if (indexService.canWriteSystemTable()) {
-    const gateway = indexService.getControlPlaneSystemTableGateway();
-    if (gateway && gateway.deleteSystemTableRow) {
-      await gateway.deleteSystemTableRow(
-        TABLES.INDICES,
-        predicate,
-        {
-          workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-          deliveryPriority: LOCAL_STR_CRITICAL,
-        },
-      );
-    }
-  }
-  propagateSystemTableCacheChange(
-    indexService,
-    TABLES.INDICES,
-    CACHE_CDC_OPERATIONS.DELETE,
-    predicate,
+  if (!indexService.canWriteSystemTable()) return;
+  const gateway = indexService.getControlPlaneSystemTableGateway();
+  if (!gateway) return;
+  await submitCatalogMutation(
+    gateway,
+    {
+      operation: CONTROL_PLANE_MUTATION_OPERATION.DELETE,
+      tableName: TABLES.INDICES,
+      whereClause: predicate,
+    },
+    gateway.deleteSystemTableRow ?
+      (opts) => gateway.deleteSystemTableRow(TABLES.INDICES, predicate, opts) :
+      null,
   );
 }
 
@@ -348,7 +353,7 @@ function syncServiceIndexEntryFromRecord(indexService, record) {
   indexService._cacheIndexMetadata(meta);
 }
 
-function createBackfillCallbacks(indexService, resolveDb, resolveTableSchema) {
+function createBackfillCallbacks(indexService, resolveTableSchema) {
   return {
     fetchBasePartitionBatch: async ({
       tableName,
@@ -378,10 +383,10 @@ function createBackfillCallbacks(indexService, resolveDb, resolveTableSchema) {
       const sql = `SELECT * FROM ${quoteIdentifier(tableName)} ${whereSql} ORDER BY ${orderBy} LIMIT ?`;
       return executePartitionReadSql(
         indexService,
-        resolveDb,
         partitionId,
         sql,
         [...params, batchSize],
+        {tableName},
       );
     },
     verifyBaseRowImage: async ({
@@ -396,26 +401,17 @@ function createBackfillCallbacks(indexService, resolveDb, resolveTableSchema) {
       const whereParts = pkCols.map((col) => `${quoteIdentifier(col)} = ?`);
       const params = pkCols.map((col) => pkValues[col]);
       const sql = `SELECT * FROM ${quoteIdentifier(tableName)} WHERE ${whereParts.join(LOCAL_STR_AND)}`;
-      const rows = await executePartitionReadSql(indexService, resolveDb, partitionId, sql, params);
+      const rows = await executePartitionReadSql(
+        indexService,
+        partitionId,
+        sql,
+        params,
+        {tableName},
+      );
       return rows[0] || null;
     },
     writeIndexBatch: async ({datasetName, indexPartitionId, entries}) => {
       if (!Array.isArray(entries) || entries.length === 0) return;
-      const db = resolveDb(indexPartitionId);
-      if (db) {
-        db.exec(SQL_BEGIN_IMMEDIATE);
-        try {
-          for (const entry of entries) {
-            const {sql, params} = buildIndexInsertSql(datasetName, entry);
-            db.prepare(sql).run(...params);
-          }
-          db.exec(SQL_COMMIT);
-        } catch (err) {
-          db.exec(SQL_ROLLBACK);
-          throw err;
-        }
-        return;
-      }
       for (const entry of entries) {
         const {sql, params} = buildIndexInsertSql(datasetName, entry);
         await executePartitionWriteSql(indexService, indexPartitionId, sql, params, datasetName);
@@ -435,7 +431,7 @@ function buildBaseFetchResidualClause(whereClause, params) {
   };
 }
 
-function createReadRouterCallbacks(indexService, resolveDb, getBaseTablePartitions) {
+function createReadRouterCallbacks(indexService, getBaseTablePartitions) {
   return {
     executeIndexScan: async ({
       datasetName,
@@ -458,10 +454,10 @@ function createReadRouterCallbacks(indexService, resolveDb, getBaseTablePartitio
         const sql = `SELECT * FROM ${quoteIdentifier(datasetName)} ${whereSql}`;
         const partRows = await executePartitionReadSql(
           indexService,
-          resolveDb,
           pId,
           sql,
           whereParams,
+          {tableName: datasetName},
         );
         rows.push(...partRows);
       }
@@ -487,10 +483,10 @@ function createReadRouterCallbacks(indexService, resolveDb, getBaseTablePartitio
         ];
         const fetched = await executePartitionReadSql(
           indexService,
-          resolveDb,
           basePartitionId,
           sql,
           queryParams,
+          {tableName},
         );
         if (fetched[0]) rows.push(fetched[0]);
       }
@@ -524,10 +520,10 @@ function createReadRouterCallbacks(indexService, resolveDb, getBaseTablePartitio
         const sql = `SELECT ${colsSql} FROM ${quoteIdentifier(tableName)} ${whereSql}`;
         const partRows = await executePartitionReadSql(
           indexService,
-          resolveDb,
           pId,
           sql,
           whereParams,
+          {tableName},
         );
         rows.push(...partRows);
       }
@@ -544,6 +540,26 @@ function syncGlobalIndexesForService(indexService) {
   );
 }
 
+async function removeIndexCatalogMetadata(indexService, record) {
+  await persistCatalogDelete(indexService, record);
+  indexService._removeIndexFromCache(
+    record.index_name,
+    record.table_id || record.table_name,
+  );
+}
+
+async function dropIndexDatasetPartition(indexService, {tableName, indexName, partitionId}) {
+  if (!hasDistributedPartitionRoute(indexService, partitionId)) return;
+  const datasetName = getGlobalIndexDatasetName(tableName, indexName);
+  await executePartitionWriteSql(
+    indexService,
+    partitionId,
+    `DELETE FROM ${quoteIdentifier(datasetName)}`,
+    [],
+    datasetName,
+  );
+}
+
 function buildCatalogPersistenceHooks(indexService) {
   return {
     refreshCatalogPartitions: async () => {
@@ -551,7 +567,7 @@ function buildCatalogPersistenceHooks(indexService) {
       syncGlobalIndexesForService(indexService);
     },
     onCatalogInsert: async (record) => {
-      ensureIndexDatasetTableInCache(indexService, record);
+      await ensureIndexDatasetTableInGateway(indexService, record);
       await persistCatalogInsert(indexService, record);
       syncServiceIndexEntryFromRecord(indexService, record);
     },
@@ -559,13 +575,8 @@ function buildCatalogPersistenceHooks(indexService) {
       await persistCatalogUpdate(indexService, indexId, update, updatedRecord);
       syncServiceIndexEntryFromRecord(indexService, updatedRecord);
     },
-    onCatalogDelete: async (record) => {
-      await persistCatalogDelete(indexService, record);
-      indexService._removeIndexFromCache(
-        record.index_name,
-        record.table_id || record.table_name,
-      );
-    },
+    onCatalogDelete: (record) => removeIndexCatalogMetadata(indexService, record),
+    onDropIndexDataset: (params) => dropIndexDatasetPartition(indexService, params),
   };
 }
 
@@ -619,8 +630,8 @@ function buildProductionCoordinatorOptions(indexService) {
     provisionIndexPartitions: (context) =>
       provisionIndexPartitionsWithRuntime(indexService, getCoordinator, runtimeState, context),
     ...buildCatalogPersistenceHooks(indexService),
-    ...createBackfillCallbacks(indexService, resolveDb, resolveTableSchema),
-    ...createReadRouterCallbacks(indexService, resolveDb, getBaseTablePartitions),
+    ...createBackfillCallbacks(indexService, resolveTableSchema),
+    ...createReadRouterCallbacks(indexService, getBaseTablePartitions),
   };
 }
 

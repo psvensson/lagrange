@@ -656,6 +656,12 @@ async function enforceCoordinatorUniqueConstraints(coordinator, ast, params = []
   if (uniqueColumnSets.length === 0) return;
   const partitionIds = resolveTablePartitionIds(coordinator, ast.table);
   if (partitionIds.length === 0) return;
+  if (
+    ast.type === QUERY_AST_TYPE.INSERT &&
+    (ast.orIgnore === true || (ast.orReplace === true && partitionIds.length <= 1))
+  ) {
+    return;
+  }
 
   for (const colNames of uniqueColumnSets) {
     if (ast.type === QUERY_AST_TYPE.INSERT) {

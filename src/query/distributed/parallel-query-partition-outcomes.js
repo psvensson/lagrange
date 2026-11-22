@@ -122,6 +122,11 @@ function buildPartitionExecutionSuccessOutcome(
     ...(result.partial === undefined ? {} : {partial: result.partial}),
     ...(result.durableCommitWitness === undefined ? {} :
       {durableCommitWitness: result.durableCommitWitness}),
+    ...(result.originHlc === undefined ? {} : {originHlc: result.originHlc}),
+    ...(result.acceptingNodeId === undefined ? {} :
+      {acceptingNodeId: result.acceptingNodeId}),
+    ...(result.acknowledgedAtMs === undefined ? {} :
+      {acknowledgedAtMs: result.acknowledgedAtMs}),
     ...(result.authoritativeObservation === undefined ? {} :
       {authoritativeObservation: result.authoritativeObservation}),
     ...(Number.isSafeInteger(result.readGeneration) ?

@@ -47,12 +47,12 @@ import {
 import {
   buildDeliveryEnvelope,
 } from '../../src/transport/transport-semantic-outcome.js';
+import {ledgerRows} from '../partition/placement-admission-fixture.js';
 import {
-  createMockSystemCache,
-} from '../query/sql-query-engine-test-support.js';
-import {
-  createTransactionPersistenceGateway,
-} from '../test-helpers/transaction-persistence-gateway.js';
+  createSeededSchemaAwareGateway,
+  seedRealSystemTableCache,
+  withFoundingPlacementEnvironment,
+} from './global-index-founding-witness-support.js';
 
 const USERS_SCHEMA = {
   columns: [
@@ -76,202 +76,6 @@ afterEach(() => {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
 });
-
-function initCatalogSchema(db) {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS tables (
-      table_id TEXT PRIMARY KEY,
-      table_name TEXT,
-      partition_key TEXT,
-      primary_key TEXT,
-      partition_key_type TEXT
-    );
-    CREATE TABLE IF NOT EXISTS partitions (
-      partition_id TEXT PRIMARY KEY,
-      table_id TEXT,
-      table_name TEXT,
-      partition_key TEXT,
-      partition_key_start TEXT,
-      partition_key_end TEXT
-    );
-    CREATE TABLE IF NOT EXISTS indices (
-      index_id TEXT PRIMARY KEY,
-      table_id TEXT NOT NULL,
-      table_name TEXT,
-      index_name TEXT NOT NULL,
-      column_names TEXT NOT NULL,
-      index_type TEXT NOT NULL DEFAULT 'btree',
-      is_global INTEGER NOT NULL DEFAULT 1,
-      is_unique INTEGER NOT NULL DEFAULT 0,
-      state TEXT NOT NULL DEFAULT 'CREATING',
-      backfill_cursor_partition_id TEXT,
-      backfill_cursor_pk TEXT,
-      backfill_total_rows INTEGER NOT NULL DEFAULT 0,
-      error_message TEXT,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER
-    );
-  `);
-}
-
-function seedCatalogTables(db, tables) {
-  const insertTable = db.prepare(
-    'INSERT OR REPLACE INTO tables (table_id, table_name, partition_key, primary_key, partition_key_type) VALUES (?, ?, ?, ?, ?)',
-  );
-  for (const t of tables) {
-    const pkCol = t.partition_key || 'id';
-    insertTable.run(
-      t.table_id || t.table_name,
-      t.table_name,
-      pkCol,
-      JSON.stringify(t.primaryKey || [pkCol]),
-      t.partition_key_type || 'INTEGER',
-    );
-  }
-}
-
-function serializeBoundaryValue(val) {
-  return val === null || val === undefined ? null : String(val);
-}
-
-function seedCatalogPartitions(db, partitions) {
-  const insertPartition = db.prepare(
-    'INSERT OR REPLACE INTO partitions (partition_id, table_id, table_name, partition_key, partition_key_start, partition_key_end) VALUES (?, ?, ?, ?, ?, ?)',
-  );
-  for (const p of partitions) {
-    insertPartition.run(
-      p.partition_id,
-      p.table_id || p.table_name,
-      p.table_name,
-      p.partition_key || null,
-      serializeBoundaryValue(p.partition_key_start),
-      serializeBoundaryValue(p.partition_key_end),
-    );
-  }
-}
-
-function serializeIndexColumnsForTest(rawCols) {
-  return typeof rawCols === 'string' ? rawCols : JSON.stringify(rawCols || []);
-}
-
-function normalizeIndicesInsertParams(data) {
-  const createdAt = data.created_at || Date.now();
-  const isGlobal = data.is_global !== undefined ? Number(Boolean(data.is_global)) : 0;
-  return [
-    data.index_id,
-    data.table_id,
-    data.table_name || null,
-    data.index_name,
-    serializeIndexColumnsForTest(data.column_names),
-    data.index_type || 'btree',
-    isGlobal,
-    data.is_unique ? 1 : 0,
-    data.state || 'CREATING',
-    data.backfill_cursor_partition_id ?? null,
-    data.backfill_cursor_pk ?? null,
-    Number(data.backfill_total_rows || 0),
-    data.error_message ?? null,
-    createdAt,
-    data.updated_at || createdAt,
-  ];
-}
-
-function runIndicesInsert(db, data) {
-  const sql = `
-    INSERT OR REPLACE INTO indices (
-      index_id, table_id, table_name, index_name, column_names,
-      index_type, is_global, is_unique, state,
-      backfill_cursor_partition_id, backfill_cursor_pk, backfill_total_rows,
-      error_message, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `;
-  db.prepare(sql).run(...normalizeIndicesInsertParams(data));
-}
-
-function runIndicesUpdate(db, whereClause, data) {
-  const setEntries = Object.entries(data);
-  const whereEntries = Object.entries(whereClause);
-  if (setEntries.length === 0 || whereEntries.length === 0) return;
-  const setParts = setEntries.map(([col]) => `${col} = ?`);
-  const whereParts = whereEntries.map(([col]) => `${col} = ?`);
-  const sql = `UPDATE indices SET ${setParts.join(', ')} WHERE ${whereParts.join(' AND ')}`;
-  db.prepare(sql).run(
-    ...setEntries.map(([, val]) => val),
-    ...whereEntries.map(([, val]) => val),
-  );
-}
-
-function runIndicesDelete(db, whereClause) {
-  if (whereClause.index_id) {
-    db.prepare('DELETE FROM indices WHERE index_id = ?').run(whereClause.index_id);
-  } else if (whereClause.index_name) {
-    db.prepare('DELETE FROM indices WHERE index_name = ?').run(whereClause.index_name);
-  }
-}
-
-function createDurableSystemGateway(catalogDbPath, tables, partitions) {
-  const db = new Database(catalogDbPath);
-  initCatalogSchema(db);
-  seedCatalogTables(db, tables);
-  seedCatalogPartitions(db, partitions);
-  const txGateway = createTransactionPersistenceGateway();
-  const txTables = new Set([
-    TABLES.SQL_TRANSACTIONS,
-    TABLES.SQL_TRANSACTION_PARTICIPANTS,
-    TABLES.SQL_WRITE_OPERATIONS,
-  ]);
-
-  let cdcService = null;
-  const gateway = {
-    db,
-    resolveCdcIntegrationService() {
-      return cdcService;
-    },
-    supportsMutationSubmission: () => true,
-    async submitMutation(mutation, mutationOptions = {}) {
-      return txGateway.submitMutation(mutation, mutationOptions);
-    },
-    async readAuthoritativeRows(tableName, sql, params = []) {
-      if (txTables.has(tableName)) {
-        return txGateway.readAuthoritativeRows(tableName, sql, params);
-      }
-      return {success: true, rows: db.prepare(sql).all(...params)};
-    },
-    async readRows(_tableName, sql, params = []) {
-      return {rows: db.prepare(sql).all(...params)};
-    },
-    async insertSystemTableRow(tableName, data) {
-      if (tableName === TABLES.INDICES) runIndicesInsert(db, data);
-      return {success: true};
-    },
-    async updateSystemTableRow(tableName, whereClause, data) {
-      if (tableName === TABLES.INDICES) runIndicesUpdate(db, whereClause, data);
-      return {success: true};
-    },
-    async deleteSystemTableRow(tableName, whereClause) {
-      if (tableName === TABLES.INDICES) runIndicesDelete(db, whereClause);
-      return {success: true};
-    },
-    close() {
-      txGateway.db.close();
-      db.close();
-    },
-  };
-
-  cdcService = {
-    async insertSystemTableRow(tableName, data) {
-      return gateway.insertSystemTableRow(tableName, data);
-    },
-    async updateSystemTableRow(tableName, whereClause, data) {
-      return gateway.updateSystemTableRow(tableName, whereClause, data);
-    },
-    async deleteSystemTableRow(tableName, whereClause) {
-      return gateway.deleteSystemTableRow(tableName, whereClause);
-    },
-  };
-
-  return {gateway, cdcService};
-}
 
 function resolveTargetPartition(partitionServicesMap, address) {
   const parts = address.split('/');
@@ -353,6 +157,7 @@ async function setupProductionEnvironment(t) {
       table_id: 'users',
       table_name: 'users',
       partition_key: 'id',
+      partition_key_type: 'INTEGER',
       partition_key_start: null,
       partition_key_end: 100,
     },
@@ -361,6 +166,7 @@ async function setupProductionEnvironment(t) {
       table_id: 'users',
       table_name: 'users',
       partition_key: 'id',
+      partition_key_type: 'INTEGER',
       partition_key_start: 100,
       partition_key_end: null,
     },
@@ -372,6 +178,7 @@ async function setupProductionEnvironment(t) {
       table_id: '__idx_users_idx_users_email',
       table_name: '__idx_users_idx_users_email',
       partition_key: 'email',
+      partition_key_type: 'TEXT',
       partition_key_start: null,
       partition_key_end: 'm',
     },
@@ -380,6 +187,7 @@ async function setupProductionEnvironment(t) {
       table_id: '__idx_users_idx_users_email',
       table_name: '__idx_users_idx_users_email',
       partition_key: 'email',
+      partition_key_type: 'TEXT',
       partition_key_start: 'm',
       partition_key_end: null,
     },
@@ -387,7 +195,7 @@ async function setupProductionEnvironment(t) {
 
   const allPartitionDefs = [...basePartitionDefs, ...indexPartitionDefs];
 
-  const systemCache = createMockSystemCache(tables, allPartitionDefs);
+  const systemCache = seedRealSystemTableCache(tables, allPartitionDefs);
   const idxSchema = buildIndexDatasetSchema({
     tableName: 'users',
     indexName: 'idx_users_email',
@@ -443,10 +251,11 @@ async function setupProductionEnvironment(t) {
   `);
 
   const catalogDbPath = path.join(tmpDir, 'catalog.db');
-  const {gateway, cdcService} = createDurableSystemGateway(
+  const {gateway, cdcService} = createSeededSchemaAwareGateway(
     catalogDbPath,
     tables,
     allPartitionDefs,
+    systemCache,
   );
   const messageRouter = createPartitionMessageRouter(partitionServices);
 
@@ -651,6 +460,14 @@ test('Production construction 2: TX1 synchronous INSERT/UPDATE/DELETE maintenanc
   const {engine, indexService} = await env.createEngineAndService();
   await indexService.createIndex('CREATE GLOBAL INDEX idx_users_email ON users (email)');
   const coordinator = indexService.getGlobalIndexCoordinator();
+  const txContext = {
+    getDatabase(partitionId) {
+      for (const svc of env.partitionServices.values()) {
+        if (svc.partitionId === partitionId) return svc.db;
+      }
+      return null;
+    },
+  };
 
   // 1. INSERT via transactional write hook
   const insertedRow = {id: 15, email: 'charlie@example.com', name: 'Charlie', status: 'active'};
@@ -660,6 +477,7 @@ test('Production construction 2: TX1 synchronous INSERT/UPDATE/DELETE maintenanc
     basePartitionId: 'users_p0',
     afterRows: [insertedRow],
     basePrimaryKeyColumns: ['id'],
+    txContext,
     baseWriteFn: async () => {
       env.usersP0.db.prepare(
         'INSERT INTO users (id, email, name, status) VALUES (?, ?, ?, ?)',
@@ -685,6 +503,7 @@ test('Production construction 2: TX1 synchronous INSERT/UPDATE/DELETE maintenanc
     beforeRows: [insertedRow],
     afterRows: [updatedRow],
     basePrimaryKeyColumns: ['id'],
+    txContext,
     baseWriteFn: async () => {
       env.usersP0.db.prepare('UPDATE users SET email = ? WHERE id = ?').run(updatedRow.email, 15);
       env.oracleDb.prepare('UPDATE users SET email = ? WHERE id = ?').run(updatedRow.email, 15);
@@ -708,6 +527,7 @@ test('Production construction 2: TX1 synchronous INSERT/UPDATE/DELETE maintenanc
     basePartitionId: 'users_p0',
     beforeRows: [updatedRow],
     basePrimaryKeyColumns: ['id'],
+    txContext,
     baseWriteFn: async () => {
       env.usersP0.db.prepare('DELETE FROM users WHERE id = ?').run(15);
       env.oracleDb.prepare('DELETE FROM users WHERE id = ?').run(15);
@@ -734,6 +554,7 @@ test('Production construction 2: TX1 synchronous INSERT/UPDATE/DELETE maintenanc
       basePartitionId: 'users_p1',
       afterRows: [blockedRow],
       basePrimaryKeyColumns: ['id'],
+      txContext,
       baseWriteFn: async () => {
         env.usersP1.db.prepare(
           'INSERT INTO users (id, email, name, status) VALUES (?, ?, ?, ?)',
@@ -1069,4 +890,124 @@ test('Production construction 5: SQLQueryEngine public DML and SELECT engage glo
   );
 
   await engine.shutdown();
+});
+
+test('Production construction 6 (2A positive): fresh global index provisioning through real provisionInitialTablePartition and placement admission', async (t) => {
+  await withFoundingPlacementEnvironment(async ({
+    engine,
+    leader,
+    gateway,
+    cache,
+    createdReplicas,
+  }) => {
+    await engine.executeQuery(
+      'INSERT INTO users (id, email, name, status) VALUES (?, ?, ?, ?)',
+      [10, 'alice@example.com', 'Alice', 'active'],
+    );
+    await engine.executeQuery(
+      'INSERT INTO users (id, email, name, status) VALUES (?, ?, ?, ?)',
+      [20, 'bob@example.com', 'Bob', 'pending'],
+    );
+
+    const preExisting = cache.filter(
+      TABLES.PARTITIONS,
+      (p) => p.table_name === '__idx_users_idx_users_email',
+    );
+    t.equal(preExisting.length, 0, 'No pre-created index partitions exist before CREATE GLOBAL INDEX');
+
+    const createRes = await engine.executeQuery(
+      'CREATE GLOBAL INDEX idx_users_email ON users (email)',
+    );
+    t.equal(createRes.success, true, 'Fresh CREATE GLOBAL INDEX succeeds with placement admission');
+    t.equal(createdReplicas.length, 1, 'Founding operation instantiated 1 real PartitionService');
+
+    const schemaOps = gateway.db.prepare('SELECT * FROM schema_operations').all();
+    const gsiJob = schemaOps.find((row) => row.table_name === '__idx_users_idx_users_email');
+    t.ok(gsiJob, 'Durable schema provisioning job row recorded for GSI dataset');
+    t.equal(gsiJob.status, 'SUCCEEDED', 'GSI durable schema provisioning job reached SUCCEEDED');
+
+    const rows = ledgerRows(leader);
+    t.ok(rows.length >= 1, 'Real placement admission ledger recorded native FOUND row(s)');
+    const foundedOp = rows.find((row) =>
+      row.partition_id === '__gsi_users_idx_users_email_p0',
+    );
+    t.ok(foundedOp, 'Ledger recorded native FOUND operation for GSI partition');
+    const [initialStep] = JSON.parse(foundedOp.steps_history);
+    t.equal(
+      initialStep.placementAdmission?.foundingIntentId,
+      `${gsiJob.job_id}:__gsi_users_idx_users_email_p0`,
+      'Founding admission intent binds deterministically to durable schema job identity',
+    );
+
+    const idxRecord = gateway.db.prepare(
+      'SELECT * FROM indices WHERE index_name = ?',
+    ).get('idx_users_email');
+    t.equal(idxRecord?.state, GLOBAL_INDEX_STATE.READ_WRITE, 'Fresh GSI reached READ_WRITE');
+    t.equal(idxRecord?.backfill_total_rows, 2, 'Backfilled existing base rows into founded GSI');
+
+    const selectRes = await engine.executeQuery(
+      'SELECT * FROM users WHERE email = ? ORDER BY id ASC',
+      ['alice@example.com'],
+    );
+    t.equal(selectRes.success, true);
+    t.equal(
+      selectRes.globalIndexPlan?.accessPath,
+      GLOBAL_INDEX_ACCESS_PATH.GLOBAL_SECONDARY_INDEX,
+      'Query after real founding engages GLOBAL_SECONDARY_INDEX',
+    );
+    t.same(
+      selectRes.rows.map((r) => ({id: r.id, email: r.email, name: r.name})),
+      [{id: 10, email: 'alice@example.com', name: 'Alice'}],
+      'Query against newly founded GSI partition returns authoritative row',
+    );
+  });
+});
+
+test('Production construction 7 (2A negative): missing/conflicting founding identity and unavailable placement authority fail closed', async (t) => {
+  await withFoundingPlacementEnvironment(async ({engine, leader, coordinator}) => {
+    await t.rejects(
+      engine.provisionInitialTablePartition({
+        tableId: '__idx_users_idx_missing_id',
+        tableName: '__idx_users_idx_missing_id',
+        partitionId: '__gsi_users_idx_missing_id_p0',
+        replicaCount: 1,
+        targetNodeIds: ['test-node'],
+      }),
+      {code: 'PLACEMENT_FOUND_IDENTITY_REQUIRED'},
+      'provisionInitialTablePartition rejects missing founding identity fail-closed',
+    );
+
+    await t.rejects(
+      engine.provisionInitialTablePartition({
+        tableId: '__idx_users_idx_conflict_id',
+        tableName: '__idx_users_idx_conflict_id',
+        partitionId: '__gsi_users_idx_conflict_id_p0',
+        replicaCount: 1,
+        targetNodeIds: ['test-node'],
+        schemaJobId: 'schema-job-1',
+        partitionWorkflowId: 'workflow-1',
+      }),
+      {code: 'PLACEMENT_FOUND_IDENTITY_REQUIRED'},
+      'provisionInitialTablePartition preserves XOR founding identity guard fail-closed',
+    );
+    t.same(ledgerRows(leader), [], 'Refused founding attempts leave zero ledger rows');
+
+    const originalNodeId = coordinator.nodeId;
+    coordinator.nodeId = '';
+    await t.rejects(
+      engine.indexService.createIndex('CREATE GLOBAL INDEX idx_users_no_host ON users (email)'),
+      {code: 'PLACEMENT_FOUND_IDENTITY_REQUIRED'},
+      'CREATE GLOBAL INDEX fails closed when placement coordinator lacks hosting nodeId',
+    );
+    coordinator.nodeId = originalNodeId;
+
+    coordinator.controlPlaneReadinessService.answerCommittedNodes = () => ({
+      formation: {state: 'UNAVAILABLE', latchEpoch: null},
+    });
+    await t.rejects(
+      engine.indexService.createIndex('CREATE GLOBAL INDEX idx_users_unlatched ON users (email)'),
+      {failureCode: 'FORMATION_NOT_LATCHED'},
+      'CREATE GLOBAL INDEX fails closed with typed placement refusal when formation unlatched',
+    );
+  });
 });

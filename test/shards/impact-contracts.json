@@ -2385,6 +2385,36 @@
         "test/query/locking-read-execution-lifecycle.test.js",
         "test/transaction/queryable-core-j4-locking-read-journey.test.js"
       ]
+    },
+    "gsi-founding-workflow-identity": {
+      "description": "Global secondary index dataset provisioning runs through SchemaProvisioningJobOwner with canonical TABLES and PARTITIONS metadata persisted through the control-plane gateway before invoking provisionInitialTablePartition, passing a real schemaJobId and owner fence without synthetic IDs or weakening requireFoundingIdentity's XOR guard.",
+      "owners": [
+        "src/index-management/global-index-distributed-execution.js",
+        "src/query/schema-provisioning-intent.js",
+        "src/query/schema-provisioning-job-owner.js",
+        "src/query/sql-query-engine-initial-partition-provisioning.js",
+        "src/partition/partition-placement-admission.js"
+      ],
+      "tests": [
+        "test/index-management/global-index-production-construction.test.js"
+      ]
+    },
+    "gsi-canonical-partition-execution": {
+      "description": "GSI catalog updates go strictly through ControlPlaneSystemTableGateway/CDC without direct cache mutation, and hosted partition reads, backfill writes, index maintenance writes, and drops execute through authoritative leader-qualified/replicated partition owners rather than local SQLite or PartitionService.db handles.",
+      "owners": [
+        "src/index-management/global-index-production-wiring.js",
+        "src/index-management/global-index-distributed-execution.js",
+        "src/index-management/global-index-partition-discovery.js",
+        "src/index-management/global-index-lifecycle-coordinator.js",
+        "src/index-management/index-service-partition-methods.js",
+        "src/query/sql-query-engine-global-index-integration.js",
+        "src/query/query-executor-partition-delivery.js",
+        "src/query/query-executor-partition-routing-candidates.js",
+        "src/query/query-executor-partition-request-builders.js"
+      ],
+      "tests": [
+        "test/index-management/global-index-production-tx1-distributed.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -5121,6 +5151,58 @@
       "contract": "locking-read-reciprocal-committed-exclusion",
       "witnessTests": [
         "test/query/locking-read-authoritative-reservations.test.js"
+      ]
+    },
+    "gsi-dataset-provisioning-and-founding-admission": {
+      "description": "GSI runtime dataset provisioning (SchemaProvisioningJobOwner execution, identity qualification, canonical table/partition metadata persistence) and initial partition founding admission change together so newly founded GSI partitions carry a real schemaJobId without weakening requireFoundingIdentity.",
+      "endpoints": [
+        {
+          "id": "gsi-runtime-provisioning-workflow",
+          "owners": [
+            "src/index-management/global-index-distributed-execution.js",
+            "src/query/schema-provisioning-intent.js",
+            "src/query/schema-provisioning-job-owner.js"
+          ]
+        },
+        {
+          "id": "initial-partition-founding-admission",
+          "owners": [
+            "src/query/sql-query-engine-initial-partition-provisioning.js",
+            "src/partition/partition-placement-admission.js"
+          ]
+        }
+      ],
+      "contract": "gsi-founding-workflow-identity",
+      "witnessTests": [
+        "test/index-management/global-index-production-construction.test.js"
+      ]
+    },
+    "gsi-distributed-ops-and-canonical-partition-execution": {
+      "description": "GSI backfill, index read routing, TX1 maintenance, and catalog propagation stay coupled with QueryExecutor leader-required candidate routing and hosted PartitionService boundaries so hosted follower replicas never serve stale raw SQLite reads or un-replicated local writes.",
+      "endpoints": [
+        {
+          "id": "gsi-coordinator-and-wiring",
+          "owners": [
+            "src/index-management/global-index-production-wiring.js",
+            "src/index-management/global-index-distributed-execution.js",
+            "src/index-management/global-index-partition-discovery.js",
+            "src/index-management/global-index-lifecycle-coordinator.js",
+            "src/index-management/index-service-partition-methods.js"
+          ]
+        },
+        {
+          "id": "query-executor-leader-qualified-routing",
+          "owners": [
+            "src/query/sql-query-engine-global-index-integration.js",
+            "src/query/query-executor-partition-delivery.js",
+            "src/query/query-executor-partition-routing-candidates.js",
+            "src/query/query-executor-partition-request-builders.js"
+          ]
+        }
+      ],
+      "contract": "gsi-canonical-partition-execution",
+      "witnessTests": [
+        "test/index-management/global-index-production-tx1-distributed.test.js"
       ]
     }
   }

@@ -515,6 +515,17 @@ async function verifyChildPartitionLifecycle(engine, context, t) {
     table_name: 'orders',
     partition_key_start: 100,
     partition_key_end: null,
+    partition_key_type: 'INTEGER',
+    leader_node_id: 'test-node',
+  });
+  cache.services.push({
+    service_id: 'orders-p3',
+    service_type: 'partition',
+    partition_id: 'orders-p3',
+    node_id: 'test-node',
+    raft_role: 'leader',
+    address: 'test-node/partition/orders-p3',
+    status: 'active',
   });
   gateway.db.prepare(
     'INSERT INTO partitions (partition_id, table_id, table_name) VALUES (?, ?, ?)',

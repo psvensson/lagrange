@@ -4,8 +4,10 @@
  */
 
 import {TABLES} from '../constants/index.js';
+import {RAFT_ROLE} from '../raft/constants.js';
 import {
   resolveDeclaredPrimaryKeyColumns,
+  resolveDeclaredTableSchema,
 } from '../partition/partition-boundary-representation.js';
 import {GLOBAL_INDEX_ERROR_CODE} from './index-constants.js';
 
@@ -66,8 +68,22 @@ function readDatabaseViaGetter(handle) {
   return null;
 }
 
+function isHostedPartitionService(handle) {
+  if (!handle || typeof handle !== 'object') return false;
+  return Boolean(
+    handle.handleRemoteQuery ||
+    handle.handleApplicationMessage ||
+    handle.raftGroup ||
+    handle.raft ||
+    typeof handle.isLeader === 'boolean' ||
+    typeof handle.role === 'string',
+  );
+}
+
 function extractSqliteDb(handle) {
-  if (!handle || typeof handle !== 'object') return null;
+  if (!handle || typeof handle !== 'object' || isHostedPartitionService(handle)) {
+    return null;
+  }
   if (handle.prepare && handle.exec) {
     return handle.open === false ? null : handle;
   }
@@ -78,15 +94,18 @@ function extractSqliteDb(handle) {
   return isOpenDb(resolved) ? resolved : null;
 }
 
+function isLeaderCandidate(svc) {
+  return Boolean(svc && (svc.isLeader === true || svc.role === RAFT_ROLE.LEADER));
+}
+
 function selectPreferredService(candidates) {
-  let firstWithOpenDb = null;
-  for (const svc of candidates) {
-    const db = extractSqliteDb(svc);
-    if (!db) continue;
-    if (svc.isLeader) return svc;
-    if (!firstWithOpenDb) firstWithOpenDb = svc;
-  }
-  return firstWithOpenDb || candidates[0] || null;
+  if (!Array.isArray(candidates) || candidates.length === 0) return null;
+  const leader = candidates.find((svc) => isLeaderCandidate(svc));
+  if (leader) return leader;
+  const usable = candidates.find(
+    (svc) => isHostedPartitionService(svc) || Boolean(extractSqliteDb(svc)),
+  );
+  return usable || candidates[0] || null;
 }
 
 function findPartitionInCollection(container, partitionId) {
@@ -142,10 +161,36 @@ function resolveFromEngine(engine, partitionId) {
   return null;
 }
 
+function findHostedCandidateInContainers(containers, partitionId) {
+  for (const container of containers) {
+    const candidate = findPartitionInContainer(container, partitionId);
+    if (isHostedPartitionService(candidate)) return candidate;
+  }
+  return null;
+}
+
+function resolveHostedPartitionService(indexService, partitionId) {
+  if (!indexService || !partitionId) return null;
+  const engine = indexService.sqlQueryEngine;
+  return findHostedCandidateInContainers(
+    [
+      indexService.partitionServices,
+      indexService.partitionService,
+      indexService.partitionServicesProvider?.(partitionId),
+      engine?.partitionServicesProvider?.(partitionId),
+      engine?.getPartitionService?.(partitionId),
+    ],
+    partitionId,
+  );
+}
+
 function resolvePartitionDatabase(indexService, coordinator, partitionId) {
   if (!partitionId) return null;
   if (coordinator && coordinator.partitionDatabases.has(partitionId)) {
-    return coordinator.partitionDatabases.get(partitionId);
+    return extractSqliteDb(coordinator.partitionDatabases.get(partitionId));
+  }
+  if (resolveHostedPartitionService(indexService, partitionId)) {
+    return null;
   }
   const directSources = [
     indexService.partitionDatabases,
@@ -341,8 +386,9 @@ async function preloadProductionPartitionMetadata(indexService) {
 function extractColumnsListFromTableInfo(tableInfo) {
   if (!tableInfo) return [];
   if (Array.isArray(tableInfo.columns)) return tableInfo.columns;
-  if (tableInfo.schema && Array.isArray(tableInfo.schema.columns)) {
-    return tableInfo.schema.columns;
+  const schema = resolveDeclaredTableSchema(tableInfo);
+  if (schema && Array.isArray(schema.columns)) {
+    return schema.columns;
   }
   return [];
 }
@@ -355,8 +401,21 @@ function resolveEngineTableInfo(indexService, tableName) {
 }
 
 function resolveCacheTableInfo(indexService, tableName) {
-  if (indexService.systemTableCache && indexService.systemTableCache.get) {
-    return indexService.systemTableCache.get(TABLES.TABLES, tableName) || null;
+  const cache = indexService?.systemTableCache;
+  if (!cache) return null;
+  if (cache.get) {
+    const direct = cache.get(TABLES.TABLES, tableName);
+    if (direct) return direct;
+  }
+  const matchesTable = (row) =>
+    Boolean(row && (row.table_name === tableName || row.table_id === tableName));
+  if (cache.find) {
+    const found = cache.find(TABLES.TABLES, matchesTable);
+    if (found) return found;
+  }
+  if (cache.getAll) {
+    const all = cache.getAll(TABLES.TABLES) || [];
+    return all.find(matchesTable) || null;
   }
   return null;
 }
@@ -441,6 +500,7 @@ export {
   extractTableNameFromRow,
   preloadProductionPartitionMetadata,
   quoteIdentifier,
+  resolveHostedPartitionService,
   resolvePartitionDatabase,
   resolveTableSchemaMetadata,
 };
