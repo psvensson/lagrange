@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2704,
+    "ordinary": 2705,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2730,
-  "digest": "fnv1a32-6643754f",
+  "censusSize": 2731,
+  "digest": "fnv1a32-13e7e842",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1841,6 +1841,7 @@
     "test/raft/raft-rs-backend/proposal-submitting-leadership.test.js": "ordinary",
     "test/raft/raft-rs-backend/queued-proposal-leadership-fence.test.js": "ordinary",
     "test/raft/raft-rs-backend/raft-rs-ingress-fuzz.test.js": "ordinary",
+    "test/raft/raft-rs-backend/raft-status-pure-read.test.js": "ordinary",
     "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js": "ordinary",
     "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js": "ordinary",
     "test/raft/raft-rs-backend/replica-membership-witness.test.js": "ordinary",

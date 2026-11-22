@@ -19,16 +19,16 @@
     "services-runtime": 160,
     "solver-tooling": 7,
     "storage-partition": 246,
-    "storage-raft": 166,
+    "storage-raft": 167,
     "test-infrastructure": 167,
     "transactions": 17,
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2730,
-  "digest": "fnv1a32-2189740a",
+  "censusSize": 2731,
+  "digest": "fnv1a32-395bccc0",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-7912cfb4",
+  "observationDigest": "fnv1a32-ce9a837d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1861,6 +1861,7 @@
     "test/raft/raft-rs-backend/proposal-submitting-leadership.test.js": "storage-raft",
     "test/raft/raft-rs-backend/queued-proposal-leadership-fence.test.js": "storage-raft",
     "test/raft/raft-rs-backend/raft-rs-ingress-fuzz.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/raft-status-pure-read.test.js": "storage-raft",
     "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js": "storage-raft",
     "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js": "storage-raft",
     "test/raft/raft-rs-backend/replica-membership-witness.test.js": "storage-raft",
@@ -17849,6 +17850,16 @@
       ],
       "env": [
         "INGRESS_FUZZ_SEEDS"
+      ]
+    },
+    "test/raft/raft-rs-backend/raft-status-pure-read.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/transport/transport-semantic-outcome.js"
       ]
     },
     "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js": {
