@@ -155,6 +155,84 @@ obligation. Permanent refusal is explicit and cannot disguise an endlessly
 retrying operation. Recovery may preserve an unresolved obligation after the
 ordinary request has settled; it must not invent success to release it.
 
+### Owner fact and hint
+
+A control-plane read that an owner schedules or proposes on is one of two
+canonical reads (`src/control-plane/control-plane-owner-fact-read.js`). A
+**hint** (`readHint`) is the node's projection: it may schedule a turn, it
+carries no identity and it cannot be passed where an owner fact is required.
+An **owner fact** (`readOwnerFact`) is READY with rows and the serving
+replica's witness, or UNAVAILABLE with a named reason; an empty READY is the
+only absence. Neither read authorises an effect: an effect is granted by a
+conditional committed write that revalidates its own predicate.
+
+The safe read point of an owner fact is decided by the replica that answers,
+at its receiver (`PartitionService.handleRemoteQuery`), on its raft core's
+current authority observation (`observeCurrentAuthority`: read, never driven,
+never cached): it leads (a leader that has not applied an entry of its term
+while a turn pends is reported not settled, which is not leading); it has
+applied an entry of its own term (`currentTermApplied`; by Raft's leader
+completeness its log holds every entry an earlier leader committed, and it
+commits them only through such an entry); its applied position is not behind the commit
+index it observed; and the caller's floor, a position `{partitionId, index,
+term}` typed by the raft group it was taken in, names this partition and is
+met. A read on a connection inside a transaction the receiver did not open is
+refused. The rows and the applied position the witness names are read in one
+read transaction of the replica's one SQLite connection (the statement and the
+raft store's applied-state row), with no await after that status; after the
+read the replica checks it still leads in the same term; otherwise it refuses
+typed and ships no rows. The witness echoes the read it decided (kind and
+floor); `readOwnerFact` accepts only an answer that echoes its own request,
+and the gateway never shares one owner fact's read with a read of another
+kind, floor or deadline.
+Each decision is the core's state at that instant, not the status of its last
+completed turn. The node that hosts the replica reaches the same
+receiver in process; every other node reaches it over the query transport,
+redirect-first, inside the original request's deadline, under the routing
+class the caller states. Only the published leader's replicas are asked while
+a leader is published; one with no usable service ends the read typed
+(`owner_fact_published_leader_unusable`) and asks no other replica, because
+the PARTITIONS publication carries no term (`leader_node_id`, `updated_at`
+only) against which another replica's claim to lead could be ordered (at most
+one leader per term): an honest deposed leader would answer like the leader.
+Every routable replica is asked only while no leader is published, and there
+that exposure remains until the publication carries the leader's term.
+
+This is a leader-local read point, not a linearizable read: no quorum round
+confirms leadership when the rows are read, and the serving replica's role is
+its own local belief. With `check_quorum`, a leader cut off from its quorum
+checks its quorum contact once per election timeout over the activity since
+the previous check, so, while its core turns run, it steps down after one to
+two election timeouts counted in its own ticks: `electionTick = max(heartbeatTick
++ 1, ceil(electionMinMs / tickMs))`, `tickMs = floor(heartbeatMs / 3)`
+(`src/raft/raft-rs-runtime-tuning.js:14-37`,
+`src/raft/raft-rs-group-constants.js:18-23`); at the defaults (election
+minimum 1000 ms, heartbeat 50 ms: 16 ms ticks, 63 ticks) that is about 2 s,
+longer in wall time when the event loop stalls. That bound does not hold while
+a core turn is pending: the leader's ticks queue behind the turn, so a cut-off
+leader may not step down for as long as the turn pends (up to the persistence
+admission bound, 120 s, `src/raft/raft-rs-runtime-owner-constants.js:240`).
+What protects an owner fact is the receiver's refusal unless its raft core's
+current observation is the settled leader answer, not the step-down; until the
+raft owner reports a leader unsettled while a newer-term envelope waits in its
+own inbound queue (verification B-1,
+`test/cdc/cdc-owner-fact-queued-successor-acceptance.test.js`, red until then),
+such a leader can answer for as long as its turn pends. Otherwise an owner fact
+is the leader's applied state, stale by at most the step-down bound when it
+was answered, plus the answer's transit, which the caller's deadline bounds.
+
+Precondition for consumers: an absence-dependent consumer (one that concludes
+from an empty result that a row does not exist) may rely only on `readOwnerFact`,
+whose receiver refuses an insufficient read point
+(`test/cdc/cdc-owner-fact-receiver-read-point.test.js`). Every other
+leader-REQUIRED read is qualified only by the serving replica's leader role and
+can answer a row its leader's predecessor committed as absent
+(`test/cdc/cdc-leader-required-fresh-leader-absence.test.js`, open); its
+consumers keep that gap until they migrate. For a consumer left temporarily on
+the older path, an effect-time condition is protective only if it revalidates
+the relevant predicate; an unrelated conditional write does not make a stale
+absence decision safe.
+
 ### Participant release observes a held runtime through one continuation
 
 The replica handler's participant-release recovery queue is the volatile

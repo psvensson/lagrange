@@ -44,12 +44,12 @@ const RAFT_RS_INGRESS_REFUSAL = Object.freeze({
   //     compaction, so a leader never answers a lagging peer with one) and
   //     MsgReadIndex / MsgReadIndexResp (it exports no read_index).
   MESSAGE_TYPE_WITHOUT_PRODUCER: 'message-type-without-producer',
-  //   - a forwarded proposal carrying anything but what a port proposes: a
-  //     NORMAL entry whose data is canonical base64 of a JSON proposal. A
-  //     configuration change is proposed only at the leader's own port and
-  //     never forwarded; bytes that are not a proposal would commit and then
-  //     fail every apply of that entry, on every replica, for good.
-  FORWARDED_ENTRY_NOT_A_PROPOSAL: 'forwarded-entry-not-a-proposal',
+  //   - a forwarded proposal (MsgPropose): a replica that does not lead
+  //     refuses a proposal at its port and never forwards one
+  //     (raft-rs-proposal-term.js), so no legitimate sender produces
+  //     MsgPropose; admitting one from a defective or older peer would let the
+  //     leader append it under its own term.
+  FORWARDED_PROPOSAL: 'forwarded-proposal',
 });
 
 // The message types the binding's own `num_to_msg_type` maps. A number

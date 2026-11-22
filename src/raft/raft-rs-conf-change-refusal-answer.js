@@ -9,6 +9,7 @@ import {
   decideTypedConfChangeOperation,
   resolveVoterTargetCount,
 } from './raft-rs-conf-change-admission.js';
+import {confChangeTermRefusal} from './raft-rs-proposal-term.js';
 import {encodeCommittedAdmissionContext} from
   './raft-rs-committed-membership-context.js';
 import {deepFreeze} from './raft-operation-port.js';
@@ -485,20 +486,21 @@ function readCoreStatusAndConfState({group, expectedGeneration, invokeCoreAt}) {
  * @param {Object} context
  * @return {Object|null}
  */
-function refusedConfChange({group, expectedGeneration, change, invokeCoreAt,
-  leaderReplicaIdOf}) {
+function refusedConfChange({group, expectedGeneration, change, submittedTerm,
+  invokeCoreAt, leaderReplicaIdOf}) {
   const coreState = readCoreStatusAndConfState({
     group, expectedGeneration, invokeCoreAt,
   });
   if (!coreState.ok) {
     return coreState.result;
   }
-  return confChangeProposalRefusal({
-    status: coreState.status,
-    confState: coreState.confState,
-    change,
-    leaderReplicaIdOf: (lead) => leaderReplicaIdOf(group, lead),
-  });
+  return confChangeTermRefusal(coreState.status, submittedTerm) ??
+    confChangeProposalRefusal({
+      status: coreState.status,
+      confState: coreState.confState,
+      change,
+      leaderReplicaIdOf: (lead) => leaderReplicaIdOf(group, lead),
+    });
 }
 
 /**
@@ -509,13 +511,17 @@ function refusedConfChange({group, expectedGeneration, change, invokeCoreAt,
  * @return {Object} The runtime turn.
  */
 function executeTypedConfChangeOperation({group, expectedGeneration, operation,
-  invokeCoreAt, leaderReplicaIdOf, answerGroupConfChangeRefusal,
+  submittedTerm, invokeCoreAt, leaderReplicaIdOf, answerGroupConfChangeRefusal,
   answerRefusedProposal, drainReady}) {
   const coreState = readCoreStatusAndConfState({
     group, expectedGeneration, invokeCoreAt,
   });
   if (!coreState.ok) {
     return settledTurn(coreState.result);
+  }
+  const termRefusal = confChangeTermRefusal(coreState.status, submittedTerm);
+  if (termRefusal !== null) {
+    return settledTurn(termRefusal);
   }
   const decision = decideTypedConfChangeOperation({
     group,

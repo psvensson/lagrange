@@ -454,6 +454,10 @@ function createRaftRsOperationPort(request) {
     // A status read never waits (the runtime's readStatusNow): its turn
     // settles in this run, and the status is answered as is.
     readStatus: () => execute({type: 'read-status'}).result,
+    // The core as it is at this call, read and never driven (the runtime's
+    // observeCurrentAuthority): no turn, nothing queued, nothing awaited.
+    [RAFT_OPERATION.OBSERVE_CURRENT_AUTHORITY]: () =>
+      dispatch(() => dispatcher.observeCurrentAuthority()).result,
     // The committed configuration as frozen data ({purpose} is a
     // COMMITTED_MEMBERSHIP_READ_PURPOSE; a bootstrap read by default).
     [RAFT_OPERATION.READ_COMMITTED_MEMBERSHIP]: (readRequest) => {

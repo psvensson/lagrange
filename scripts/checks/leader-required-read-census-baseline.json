@@ -1,0 +1,4 @@
+{
+  "description": "Leader-REQUIRED system-table reads in src that are not yet owner facts (readOwnerFact): one-way, may only decrease as consumers migrate (scripts/checks/leader-required-read-census-ratchet.js).",
+  "baselineCount": 37
+}

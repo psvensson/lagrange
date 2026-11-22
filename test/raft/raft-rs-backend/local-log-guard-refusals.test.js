@@ -138,14 +138,23 @@ test('W5 P3: an empty proposal forwarded by a peer is refused before step',
       FORMED_ENTRIES);
     try {
       const ids = peerIdsOf(cluster);
-      const steps = await deliverAlone(cluster, 'p3-a', envelopeTo(
+      const before = cluster.coreEntries.length;
+      const admitted = await turnChainValue(cluster.node('p3-a').step(envelopeTo(
         cluster.partitionId, ids['p3-a'], {
           msgType: RAFT_RS_MESSAGE_TYPE.PROPOSE,
           from: ids['p3-b'],
           entries: [],
-        }));
-      assertRefused(cluster, 'p3-a', ids['p3-b'],
-        RAFT_RS_LOCAL_LOG_REFUSAL.EMPTY_FORWARDED_PROPOSAL, steps);
+        })));
+      await turnChainValue(cluster.node('p3-a').tick());
+      assert.equal(admitted.outcome, RAFT_OPERATION_OUTCOME.CORE_REFUSED);
+      assert.equal(admitted.reason,
+        RAFT_RS_INGRESS_REFUSAL.FORWARDED_PROPOSAL);
+      assert.equal(stepCount(cluster, before), 0,
+        'the core stepped the refused forwarded proposal');
+      const record = refusalFrom(cluster, 'p3-a', ids['p3-b']);
+      assert.equal(record?.reason, RAFT_RS_INGRESS_REFUSAL.FORWARDED_PROPOSAL);
+      assert.equal(record?.phase, RUNTIME_PHASE.ADMISSION);
+      assert.equal(record?.refusalCount, 1);
       assert.ok(stillCommits(cluster, 'p3-a', ['p3-b', 'p3-c']));
     } finally {
       cluster.dispose();
@@ -299,27 +308,26 @@ test('refusal ERROR lines are rate limited per group and reason: one ' +
   const cluster = formedCluster('w5-rate', ['rt-a', 'rt-b', 'rt-c'],
     FORMED_ENTRIES);
   try {
-    const ids = peerIdsOf(cluster);
     const leader = cluster.node('rt-a').readStatus();
     const beyond = String(BigInt(leader.commitIndex) + BEYOND);
     const alternating = await floodLines(cluster, 'rt-a', (index) =>
       index % 2 === 0 ?
-        {msgType: RAFT_RS_MESSAGE_TYPE.PROPOSE, from: ids['rt-b'],
-          entries: []} :
-        {msgType: RAFT_RS_MESSAGE_TYPE.APPEND_RESPONSE, from: ids['rt-b'],
+        {msgType: RAFT_RS_MESSAGE_TYPE.HEARTBEAT, from: '999',
+          term: String(leader.term), commit: beyond} :
+        {msgType: RAFT_RS_MESSAGE_TYPE.APPEND_RESPONSE, from: '999',
           term: String(leader.term), index: beyond, reject: false});
     assert.ok(alternating.length <= 2 * LINES_PER_REASON_BOUND,
       `${alternating.length} lines for ${FLOOD} alternating refusals`);
-    assert.equal(refusalFrom(cluster, 'rt-a', ids['rt-b']).refusalCount,
+    assert.equal(refusalFrom(cluster, 'rt-a', '999').refusalCount,
       FLOOD, 'the per-sender record no longer counts every refusal');
     const spoofed = await floodLines(cluster, 'rt-a', (index) => ({
-      msgType: RAFT_RS_MESSAGE_TYPE.PROPOSE, from: String(1000 + index),
-      entries: []}));
+      msgType: RAFT_RS_MESSAGE_TYPE.HEARTBEAT, from: String(1000 + index),
+      term: String(leader.term), commit: beyond}));
     assert.ok(spoofed.length <= LINES_PER_REASON_BOUND,
       `${spoofed.length} lines for ${FLOOD} spoofed senders`);
     const last = spoofed.at(-1).context;
     assert.equal(last.reason,
-      RAFT_RS_LOCAL_LOG_REFUSAL.EMPTY_FORWARDED_PROPOSAL);
+      RAFT_RS_LOCAL_LOG_REFUSAL.UNADMITTED_COMMIT_BEYOND_LOCAL_LOG);
     assert.ok(last.occurrences > FLOOD / 2,
       `the summary does not count the refusals: ${last.occurrences}`);
     assert.equal(cluster.node('rt-a').readStatus().role, 'leader');

@@ -5,9 +5,9 @@
     "admin-diagnostics": 122,
     "architecture-governance": 21,
     "bootstrap-membership": 350,
-    "cdc-metadata": 72,
+    "cdc-metadata": 79,
     "cli-tooling": 99,
-    "control-plane": 237,
+    "control-plane": 238,
     "convergence-topology": 88,
     "distributed-harness": 223,
     "examples-e2e": 8,
@@ -19,16 +19,16 @@
     "services-runtime": 160,
     "solver-tooling": 7,
     "storage-partition": 257,
-    "storage-raft": 160,
+    "storage-raft": 166,
     "test-infrastructure": 167,
     "transactions": 17,
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2751,
-  "digest": "fnv1a32-f77112e0",
+  "censusSize": 2765,
+  "digest": "fnv1a32-fc898cb0",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b65f0d2c",
+  "observationDigest": "fnv1a32-637e4393",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -384,7 +384,14 @@
     "test/cdc/cdc-integration-service-time-seam.test.js": "cdc-metadata",
     "test/cdc/cdc-integration-service-write-metrics.test.js": "cdc-metadata",
     "test/cdc/cdc-integration-service.test.js": "cdc-metadata",
+    "test/cdc/cdc-leader-required-fresh-leader-absence.test.js": "cdc-metadata",
     "test/cdc/cdc-observability.test.js": "cdc-metadata",
+    "test/cdc/cdc-owner-fact-hosted-replica.test.js": "cdc-metadata",
+    "test/cdc/cdc-owner-fact-non-leader-absence.test.js": "cdc-metadata",
+    "test/cdc/cdc-owner-fact-queued-successor-acceptance.test.js": "cdc-metadata",
+    "test/cdc/cdc-owner-fact-receiver-read-point.test.js": "cdc-metadata",
+    "test/cdc/cdc-owner-fact-redirect-deadline.test.js": "cdc-metadata",
+    "test/cdc/cdc-owner-fact-stale-published-leader.test.js": "cdc-metadata",
     "test/cdc/cdc-owner-required-authoritative-routing.test.js": "cdc-metadata",
     "test/cdc/cdc-pipeline-metrics.property.test.js": "cdc-metadata",
     "test/cdc/cdc-pipeline-metrics.test.js": "cdc-metadata",
@@ -565,6 +572,7 @@
     "test/control-plane/control-plane-mutation-outcome-classifier.test.js": "control-plane",
     "test/control-plane/control-plane-mutation-readiness-durable-priority-spread.repro.test.js": "control-plane",
     "test/control-plane/control-plane-mutation-readiness.test.js": "control-plane",
+    "test/control-plane/control-plane-owner-fact-read.test.js": "control-plane",
     "test/control-plane/control-plane-publication-merge.test.js": "control-plane",
     "test/control-plane/control-plane-publications-leadership.test.js": "control-plane",
     "test/control-plane/control-plane-read-authority-token.test.js": "control-plane",
@@ -1829,9 +1837,11 @@
     "test/raft/raft-rs-backend/evidence-o1-real-chain.test.js": "storage-raft",
     "test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js": "storage-raft",
     "test/raft/raft-rs-backend/evidence-o1-static.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/follower-proposal-refusal.test.js": "storage-raft",
     "test/raft/raft-rs-backend/formation-learner-placement-reversal.test.js": "storage-raft",
     "test/raft/raft-rs-backend/formation-placement-lease-authority.test.js": "storage-raft",
     "test/raft/raft-rs-backend/formation-placement-native-retirement.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/forwarded-proposal-ingress-refusal.test.js": "storage-raft",
     "test/raft/raft-rs-backend/founding-growth-core-witnesses.test.js": "storage-raft",
     "test/raft/raft-rs-backend/founding-growth-lifecycle-witnesses.test.js": "storage-raft",
     "test/raft/raft-rs-backend/host-contract-citations.test.js": "storage-raft",
@@ -1870,6 +1880,7 @@
     "test/raft/raft-rs-backend/partition-snapshot-compaction-catchup.test.js": "storage-raft",
     "test/raft/raft-rs-backend/peer-identity.test.js": "storage-raft",
     "test/raft/raft-rs-backend/persistence-admission.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/proposal-submitting-leadership.test.js": "storage-raft",
     "test/raft/raft-rs-backend/queued-proposal-leadership-fence.test.js": "storage-raft",
     "test/raft/raft-rs-backend/raft-rs-ingress-fuzz.test.js": "storage-raft",
     "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js": "storage-raft",
@@ -1904,6 +1915,9 @@
     "test/raft/raft-rs-backend/transfer-leadership-write-path.test.js": "storage-raft",
     "test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js": "storage-raft",
     "test/raft/raft-rs-backend/zero-legacy-consensus-runtime.test.js": "storage-raft",
+    "test/raft/raft-rs-current-authority-deposition.test.js": "storage-raft",
+    "test/raft/raft-rs-current-authority-observation.test.js": "storage-raft",
+    "test/raft/raft-rs-current-term-applied.test.js": "storage-raft",
     "test/raft/raft-rs-lifecycle-turn-admission.test.js": "storage-raft",
     "test/raft/raft-rs-original-allocation-cold-inspection.test.js": "storage-raft",
     "test/raft/raft-rs-original-allocation-custody.test.js": "storage-raft",
@@ -4358,6 +4372,222 @@
         "src/bootstrap/system-table-schemas-constants.js"
       ]
     },
+    "test/cdc/cdc-leader-required-fresh-leader-absence.test.js": {
+      "files": [
+        "Dockerfile",
+        "package-lock.json",
+        "package.json",
+        "scripts/checks/leader-required-read-census-baseline.json",
+        "scripts/checks/no-legacy-consensus-reference-baseline.json",
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
+        "src/control-plane/control-plane-owner-fact-read-contract.js",
+        "src/control-plane/control-plane-owner-fact-read.js",
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/query/query-executor-partition-request-builders.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/cdc/cdc-owner-fact-group-fixture.js",
+        "test/control-plane/serve-eligibility-test-support.js",
+        "test/partition/committed-operation-gateway-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ],
+      "directories": [
+        "architecture",
+        "examples",
+        "scripts",
+        "solve",
+        "src",
+        "test",
+        "test/distributed"
+      ]
+    },
+    "test/cdc/cdc-owner-fact-hosted-replica.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
+        "src/control-plane/control-plane-owner-fact-read-contract.js",
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/query/query-executor-partition-request-builders.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/control-plane/serve-eligibility-test-support.js",
+        "test/partition/committed-operation-gateway-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/cdc/cdc-owner-fact-non-leader-absence.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
+        "src/control-plane/control-plane-owner-fact-read-contract.js",
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/query/query-executor-partition-request-builders.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/cdc/cdc-owner-fact-group-fixture.js",
+        "test/control-plane/serve-eligibility-test-support.js",
+        "test/partition/committed-operation-gateway-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/cdc/cdc-owner-fact-queued-successor-acceptance.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
+        "src/control-plane/control-plane-owner-fact-read-contract.js",
+        "src/control-plane/control-plane-owner-fact-read.js",
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/query/query-executor-partition-request-builders.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/control-plane/serve-eligibility-test-support.js",
+        "test/partition/committed-operation-gateway-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/cdc/cdc-owner-fact-receiver-read-point.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
+        "src/control-plane/control-plane-owner-fact-read-contract.js",
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/query/query-executor-partition-request-builders.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/control-plane/serve-eligibility-test-support.js",
+        "test/partition/committed-operation-gateway-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/cdc/cdc-owner-fact-redirect-deadline.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
+        "src/control-plane/control-plane-owner-fact-read-contract.js",
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/query/query-executor-partition-request-builders.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/cdc/cdc-owner-fact-group-fixture.js",
+        "test/control-plane/serve-eligibility-test-support.js",
+        "test/partition/committed-operation-gateway-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/cdc/cdc-owner-fact-stale-published-leader.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
+        "src/control-plane/control-plane-owner-fact-read-contract.js",
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/query/query-executor-partition-request-builders.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/cdc/cdc-owner-fact-group-fixture.js",
+        "test/control-plane/serve-eligibility-test-support.js",
+        "test/partition/committed-operation-gateway-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
     "test/cdc/cdc-owner-required-authoritative-routing.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
@@ -4869,6 +5099,12 @@
     "test/control-plane/control-plane-mutation-readiness.test.js": {
       "files": [
         "src/control-plane/control-plane-mutation-readiness.js"
+      ]
+    },
+    "test/control-plane/control-plane-owner-fact-read.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-readiness-constants.js"
       ]
     },
     "test/control-plane/control-plane-publication-merge.test.js": {
@@ -17575,6 +17811,17 @@
         "src/rebalancer/rebalancer-constants.js"
       ]
     },
+    "test/raft/raft-rs-backend/follower-proposal-refusal.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/transport/transport-semantic-outcome.js"
+      ]
+    },
     "test/raft/raft-rs-backend/formation-learner-placement-reversal.test.js": {
       "files": [
         "src/bootstrap/shared/partition-service-construction.js",
@@ -17700,6 +17947,18 @@
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/participant-transaction-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/raft/raft-rs-backend/forwarded-proposal-ingress-refusal.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-conf-state-key.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/transport/transport-semantic-outcome.js"
       ]
     },
     "test/raft/raft-rs-backend/founding-growth-core-witnesses.test.js": {
@@ -18206,6 +18465,18 @@
         "src/transport/transport-semantic-outcome.js"
       ]
     },
+    "test/raft/raft-rs-backend/proposal-submitting-leadership.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-conf-state-key.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/transport/transport-semantic-outcome.js"
+      ]
+    },
     "test/raft/raft-rs-backend/queued-proposal-leadership-fence.test.js": {
       "files": [
         "src/raft/raft-committed-membership-stamp.js",
@@ -18463,11 +18734,15 @@
     },
     "test/raft/raft-rs-backend/runtime-turn-integrity.test.js": {
       "files": [
+        "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-conf-state-key.js",
         "src/raft/raft-rs-core-constants.js",
         "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-ingress-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/transport/transport-semantic-outcome.js"
       ]
@@ -18721,6 +18996,36 @@
         "src/raft",
         "test/distributed/config",
         "test/distributed/harness"
+      ]
+    },
+    "test/raft/raft-rs-current-authority-deposition.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/transport/transport-semantic-outcome.js"
+      ]
+    },
+    "test/raft/raft-rs-current-authority-observation.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/transport/transport-semantic-outcome.js"
+      ]
+    },
+    "test/raft/raft-rs-current-term-applied.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/transport/transport-semantic-outcome.js"
       ]
     },
     "test/raft/raft-rs-original-allocation-cold-inspection.test.js": {

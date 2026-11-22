@@ -1,4 +1,6 @@
 import {test} from '../../src/test-helpers/tap.js';
+import {PartitionServiceCoreBase} from '../../src/partition/partition-service-core-base.js';
+import {RAFT_OPERATION_OUTCOME} from '../../src/raft/raft-operation-port-constants.js';
 import {ParallelQueryCoordinator} from '../../src/query/distributed/parallel-query-coordinator.js';
 import {PartitionQueryMetrics, QueryExecutionMetrics} from '../../src/query/distributed/parallel-query-execution-metrics.js';
 import {DistributedWriteCoordinator} from '../../src/query/distributed/distributed-write-coordinator.js';
@@ -63,8 +65,10 @@ for (const hasWitness of [true, false]) {
           partitionId,
           nodeId: 'serving-node',
           replicaId: 'services-p1-r1',
-          role: 'leader',
-          raft: {readStatus: () => ({term: 7})},
+          readOwnRaftStatus: PartitionServiceCoreBase.prototype.readOwnRaftStatus,
+          raft: {readStatus: () => ({outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+            groupId: partitionId, replicaIdentity: 'services-p1-r1', role: 'leader',
+            term: 7})},
           timeSource: {now: () => 12345},
         }, false);
       t.equal(witness.state, 'observed', 'remote owner supplies the witness');

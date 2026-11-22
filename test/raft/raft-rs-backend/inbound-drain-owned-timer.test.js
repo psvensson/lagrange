@@ -518,9 +518,16 @@ test('scheduled inbound drain bounds batches to 32 entries per turn and avoids '
       throw new globalThis.WebAssembly.RuntimeError('drain-step-trap');
     }
   });
+  // B's own turn held on a real send: a tick turn steps a heartbeat and its
+  // reply waits on the held send. (A follower's proposal is refused and
+  // sends nothing: raft-rs-proposal-term.js.)
+  const holdTurnOfB = () => {
+    ctx.cluster.node(B).step(ctx.heartbeat);
+    return turnChainValue(ctx.cluster.node(B).tick());
+  };
   try {
     ctx.setHold(true);
-    const firstTurn = turnChainValue(ctx.cluster.node(B).propose({seq: 'hold-1'}));
+    const firstTurn = holdTurnOfB();
     for (let i = 0; i < 64 && ctx.heldB.length === 0; i += 1) {
       await Promise.resolve();
     }
@@ -542,7 +549,7 @@ test('scheduled inbound drain bounds batches to 32 entries per turn and avoids '
     // Non-CORE_OK drain must not spin a 0ms timer loop.
     drainTurns.length = 0;
     ctx.setHold(true);
-    const secondTurn = turnChainValue(ctx.cluster.node(B).propose({seq: 'hold-2'}));
+    const secondTurn = holdTurnOfB();
     for (let i = 0; i < 64 && ctx.heldB.length === 0; i += 1) {
       await Promise.resolve();
     }

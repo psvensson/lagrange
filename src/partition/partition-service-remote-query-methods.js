@@ -30,6 +30,16 @@ import {
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL, pickTypedWriteAnswer} from
   './partition-write-kernel.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {readStateField} from '../utils/state-field-read.js';
+import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
+import {
+  LEADER_READ_KIND,
+  LEADER_READ_REQUEST_FIELD,
+  LEADER_READ_REQUEST_MALFORMED,
+  OWNER_FACT_UNAVAILABLE_REASON as LEADER_READ_REFUSAL,
+  leaderReadOf,
+  leaderReadWitnessRefusal,
+} from '../control-plane/control-plane-owner-fact-read-contract.js';
 
 const READ_AUTHORITY_WITNESS_STATE = Object.freeze({
   NOT_APPLICABLE: 'not_applicable',
@@ -117,7 +127,8 @@ function writeRoutingRefusal(service, payload, isWriteOperation) {
     partitionId: service.partitionId};
 }
 
-async function executeRemoteQuery(service, payload) {
+// appliedPositionRead: an owner fact's read at the store's applied position.
+async function executeRemoteQuery(service, payload, appliedPositionRead) {
   const sql = payload.sql;
   const params = payload.typedParams !== undefined && payload.typedParams !== null ?
     decodeTypedParams(payload.typedParams) :
@@ -141,6 +152,7 @@ async function executeRemoteQuery(service, payload) {
     resultMaxBytes: payload[QUERY_RESULT_REQUEST_FIELD.MAX_BYTES],
     resultMaxRows: payload[QUERY_RESULT_REQUEST_FIELD.MAX_ROWS],
     wireRead: true,
+    appliedPositionRead,
   });
 }
 
@@ -182,6 +194,162 @@ function remoteQueryFailure(service, sql, error) {
     errorCode: error.code || null, partitionId: service.partitionId};
 }
 
+function safeIndexOf(value) {
+  return Number.isSafeInteger(value) ? value : null;
+}
+
+// The store's applied index as the statement owner read it (a decimal
+// string), as a witness index.
+function storePositionOf(value) {
+  return typeof value === 'string' ? safeIndexOf(Number(value)) : null;
+}
+
+// The serving replica described from one raft observation: for a
+// leader-qualified read the raft owner's current authority observation
+// (observeOwnAuthority), for any other read the status its runtime reports
+// (readOwnRaftStatus). Role, term, the commit and applied index and whether
+// it has applied an entry of its own term (raft-rs commits an earlier
+// leader's entries only through one, so such a leader has applied every
+// entry an earlier leader committed) come from that observation, never from
+// the event-derived service role.
+function readAuthorityWitnessOf(service, status, read = undefined) {
+  return {
+    state: READ_AUTHORITY_WITNESS_STATE.OBSERVED,
+    partitionId: service.partitionId,
+    servingNodeId: service.nodeId,
+    servingReplicaId: service.replicaId,
+    term: safeIndexOf(status?.term),
+    appliedIndex: safeIndexOf(status?.appliedIndex),
+    commitIndex: safeIndexOf(status?.commitIndex),
+    currentTermApplied: status?.currentTermApplied === true,
+    // A replica whose core gave no usable observation claims no role.
+    role: readStateField(status?.role),
+    // The leader-qualified read this receiver decided, echoed to its caller.
+    ...(read === undefined ? {} : {leaderRead: read}),
+    // The witness records WHEN THIS REPLICA observed its own authority, so
+    // it reads this replica's clock. This is the owner decision the metered
+    // oracle's knownAmbientSiteOutsideProofCone reserved: the site had no
+    // clock owner when it was recorded, and the composed formation reaching
+    // it is what supplied one.
+    observedAtMs: service.timeSource.now(),
+  };
+}
+
+function logRemoteQueryHandling(service, sql) {
+  service.logger.debug(PARTITION_SERVICE_LOG_MSG.HANDLING_REMOTE_QUERY, {
+    sql: sql.substring(0, PARTITION_SERVICE_VALUE.DEFAULT_QUERY_TIMEOUT_MS),
+    partitionId: service.partitionId,
+    replicaId: service.replicaId,
+  });
+}
+
+// The replica's raft core as it is now (the raft owner's current authority
+// observation: never a turn, never cached, never driving), when it is a usable
+// observation of this replica in this group; else null. A leader that has not
+// applied an entry of its own term while a turn pends reports NOT_SETTLED,
+// which is not LEADER.
+function observeOwnAuthority(service) {
+  const observation = service.raft.observeCurrentAuthority();
+  return observation?.outcome === RAFT_OPERATION_OUTCOME.CORE_OK &&
+    observation.groupId === service.partitionId &&
+    observation.replicaIdentity === service.replicaId ? observation : null;
+}
+
+// A replica that does not lead names the live leader its own core knows, at
+// its committed address; with none it says so (an explicit unavailable).
+function unaddressedLeaderOf(refusal) {
+  return {leaderAddressRefusal: readStateField(refusal?.code)};
+}
+
+function leaderRedirectOf(service) {
+  try {
+    return {redirect: PARTITION_SERVICE_RESPONSE.LEADER_REDIRECT,
+      leaderAddress: service.resolveLeaderAddress()};
+  } catch (refusal) {
+    return unaddressedLeaderOf(refusal);
+  }
+}
+
+function requestsLeaderQualifiedRead(payload, isWriteOperation) {
+  return !isWriteOperation && payload[LEADER_READ_REQUEST_FIELD] !== undefined;
+}
+
+// A refused leader-qualified read carries no rows: only the typed reason, the
+// witness the decision was made on and, for a non-leader, its known leader.
+function leaderReadRefusal(service, reason, witness) {
+  const refusal = {success: false, error: reason, failureCode: reason,
+    partitionId: service.partitionId,
+    readAuthorityWitness: Object.freeze(witness)};
+  return reason === LEADER_READ_REFUSAL.NOT_LEADER ?
+    {...refusal, ...leaderRedirectOf(service)} : refusal;
+}
+
+// After the read: the replica still leads in the same term with the same
+// runtime (observeOwnAuthority also re-checks group and replica identity).
+function leaderReadRefusalAfter(service, before) {
+  const after = observeOwnAuthority(service);
+  return after?.role !== RaftRole.LEADER || after.term !== before.term ||
+    after.lifecycleIncarnation !== before.lifecycleIncarnation ||
+    after.runtimeGeneration !== before.runtimeGeneration ?
+    LEADER_READ_REFUSAL.NOT_LEADER : null;
+}
+
+// An owner fact is never read through a connection inside a transaction this
+// receiver did not open (it would see that transaction's staged rows). No
+// path holds one across requests today (participant staging rolls back in
+// the same synchronous run); this is the one synchronous check that keeps it
+// so for owner facts.
+function foreignTransactionRefusal(service, read) {
+  return read.kind === LEADER_READ_KIND.OWNER_FACT && service.db.inTransaction === true ?
+    LEADER_READ_REFUSAL.FOREIGN_TRANSACTION : null;
+}
+
+// An owner fact's witness names the applied position its rows were read at:
+// the store's applied index, read in the statement's own read transaction.
+function witnessAtReadPosition(witness, read, result) {
+  return Object.freeze(read.kind === LEADER_READ_KIND.OWNER_FACT ?
+    {...witness, appliedIndex: storePositionOf(result?.appliedPosition)} : witness);
+}
+
+/**
+ * Answer a leader-qualified read (the request's leaderRead field) as its
+ * receiver: decided here, by the leader-read predicate, on its raft core's
+ * current observation, with nothing awaited between that observation and the
+ * statement. An owner fact's rows and the applied position its witness names
+ * are read in one read transaction (the statement owner's applied-position
+ * read), on a connection no foreign transaction holds. The witness echoes the
+ * read decided. A refused read executes nothing and ships no rows.
+ * @param {Object} service - The receiving PartitionService.
+ * @param {Object} payload - The QUERY payload.
+ * @param {string} sql - Its statement.
+ * @return {Promise<Object>} The answer or the typed refusal.
+ */
+async function answerLeaderQualifiedRead(service, payload, sql) {
+  const read = leaderReadOf(payload[LEADER_READ_REQUEST_FIELD]);
+  if (read === null) {
+    return {success: false, error: LEADER_READ_REQUEST_MALFORMED,
+      failureCode: LEADER_READ_REQUEST_MALFORMED,
+      partitionId: service.partitionId};
+  }
+  const before = observeOwnAuthority(service);
+  const witness = readAuthorityWitnessOf(service, before, read);
+  const refusal = leaderReadWitnessRefusal(witness,
+    {partitionId: service.partitionId, read}) ?? foreignTransactionRefusal(service, read);
+  if (refusal !== null) return leaderReadRefusal(service, refusal, witness);
+  logRemoteQueryHandling(service, sql);
+  let result;
+  try {
+    result = await executeRemoteQuery(service, payload,
+      read.kind === LEADER_READ_KIND.OWNER_FACT);
+  } catch (error) {
+    return remoteQueryFailure(service, sql, error);
+  }
+  const after = leaderReadRefusalAfter(service, before);
+  return after === null ?
+    remoteQueryAnswer(service, result, witnessAtReadPosition(witness, read, result)) :
+    leaderReadRefusal(service, after, witness);
+}
+
 const PARTITION_SERVICE_REMOTE_QUERY_METHODS = Object.freeze({
   /**
    * Describe the replica that actually served a successful read.
@@ -193,28 +361,7 @@ const PARTITION_SERVICE_REMOTE_QUERY_METHODS = Object.freeze({
     if (isWriteOperation) {
       return {state: READ_AUTHORITY_WITNESS_STATE.NOT_APPLICABLE};
     }
-    // The term is the consensus core's own, read through the port.
-    const status = this.raft?.readStatus();
-    return {
-      state: READ_AUTHORITY_WITNESS_STATE.OBSERVED,
-      partitionId: this.partitionId,
-      servingNodeId: this.nodeId,
-      servingReplicaId: this.replicaId,
-      term: status?.term ?? null,
-      appliedIndex: Number.isSafeInteger(status?.appliedIndex) ?
-        status.appliedIndex :
-        null,
-      commitIndex: Number.isSafeInteger(status?.commitIndex) ?
-        status.commitIndex :
-        null,
-      role: this.role,
-      // The witness records WHEN THIS REPLICA observed its own authority, so
-      // it reads this replica's clock. This is the owner decision the metered
-      // oracle's knownAmbientSiteOutsideProofCone reserved: the site had no
-      // clock owner when it was recorded, and the composed formation reaching
-      // it is what supplied one.
-      observedAtMs: this.timeSource.now(),
-    };
+    return readAuthorityWitnessOf(this, this.readOwnRaftStatus());
   },
   /**
    * Handle remote SQL query execution.
@@ -366,18 +513,14 @@ const PARTITION_SERVICE_REMOTE_QUERY_METHODS = Object.freeze({
       }
       return participantAnswer;
     }
+    if (requestsLeaderQualifiedRead(payload, isWriteOperation)) {
+      return answerLeaderQualifiedRead(this, payload, sql);
+    }
     const readAuthorityWitness =
       this.buildRemoteReadAuthorityWitness(isWriteOperation);
-    this.logger.debug(PARTITION_SERVICE_LOG_MSG.HANDLING_REMOTE_QUERY, {
-      sql: sql.substring(
-        0,
-        PARTITION_SERVICE_VALUE.DEFAULT_QUERY_TIMEOUT_MS,
-      ),
-      partitionId: this.partitionId,
-      replicaId: this.replicaId,
-    });
+    logRemoteQueryHandling(this, sql);
     try {
-      const result = await executeRemoteQuery(this, payload);
+      const result = await executeRemoteQuery(this, payload, false);
       return remoteQueryAnswer(this, result, readAuthorityWitness);
     } catch (error) {
       return remoteQueryFailure(this, sql, error);

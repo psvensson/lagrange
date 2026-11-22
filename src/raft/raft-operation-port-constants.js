@@ -50,6 +50,44 @@ const RAFT_CONSENSUS_STARTUP_OUTCOME = Object.freeze({
 const RAFT_OPERATION = Object.freeze({
   READ_COMMITTED_MEMBERSHIP: 'readCommittedMembership',
   PROPOSE_MEMBERSHIP_TRANSITION: 'proposeMembershipTransition',
+  // The core as it is at the call, read and never driven, for a decision
+  // that must not rest on the status of the last completed core entry
+  // (readStatus answers that one while a core turn is pending).
+  OBSERVE_CURRENT_AUTHORITY: 'observeCurrentAuthority',
+});
+
+// A field of the current authority observation the core holds but a turn in
+// progress may not yet have made durable: the role and leader of a leader
+// that has not applied an entry of its own term, while a turn is pending or
+// the core holds a Ready.
+const RAFT_AUTHORITY_OBSERVATION = Object.freeze({
+  NOT_SETTLED: 'not-settled',
+});
+
+// Why the observation reports a core that leads as NOT_SETTLED (its
+// unsettledReason; null when the role is settled). Each is a fact the
+// process holds and the core does not yet have (raft-rs-current-authority.js):
+// an envelope of a higher term waiting unstepped in the group's own inbound;
+// a tick waiting behind the pending turn (the core's clock, and with it
+// check-quorum, stands still); an entry of its own term not yet applied
+// while a turn is pending or the core holds a Ready.
+const RAFT_AUTHORITY_UNSETTLED_REASON = Object.freeze({
+  HIGHER_TERM_INBOUND: 'higher-term-inbound-queued',
+  CLOCK_BEHIND: 'ticks-queued-behind-turn',
+  OWN_TERM_UNAPPLIED: 'own-term-entry-unapplied',
+});
+
+// The port's one answer to a proposal whose submitting leadership does not
+// hold at its propose step (raft-rs-proposal-term.js): it was submitted while
+// this replica did not lead, or the replica no longer leads, or it leads
+// another term. CORE_REFUSED, never a host failure or a deferral; nothing was
+// proposed or forwarded (proposed: false - a definite outcome). The
+// submission's authority is gone: the submitter decides again under the
+// leadership it observes now (routes to the leader, or proposes anew while it
+// leads) and never re-sends the same proposal on this answer (retryable:
+// false).
+const RAFT_PROPOSAL_REFUSAL = Object.freeze({
+  SUBMITTING_LEADERSHIP_ENDED: 'proposal-submitting-leadership-ended',
 });
 
 const RAFT_MEMBERSHIP_TRANSITION_STAGE = Object.freeze({
@@ -262,6 +300,8 @@ const RAFT_MEMBERSHIP_ADMISSION_OUTCOME = Object.freeze({
 });
 
 export {
+  RAFT_AUTHORITY_OBSERVATION,
+  RAFT_AUTHORITY_UNSETTLED_REASON,
   RAFT_CATCH_UP_REQUEST_KIND,
   RAFT_CONSENSUS_STARTUP_OUTCOME,
   RAFT_FOUNDING_GROWTH_OUTCOME,
@@ -279,4 +319,5 @@ export {
   RAFT_OPERATION,
   RAFT_OPERATION_OUTCOME,
   RAFT_PEER_PROGRESS_PROBE_REASON,
+  RAFT_PROPOSAL_REFUSAL,
 };
