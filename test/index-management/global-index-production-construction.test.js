@@ -26,8 +26,15 @@ import {
 } from '../../src/index-management/global-index-catalog-contract.js';
 import {
   GLOBAL_INDEX_ACCESS_PATH,
+  GlobalIndexReadRouter,
   INDEX_REJECTION_REASON,
 } from '../../src/index-management/global-index-read-router.js';
+import {
+  GlobalIndexBackfillCoordinator,
+} from '../../src/index-management/global-index-backfill-coordinator.js';
+import {
+  GLOBAL_INDEX_ERROR_CODE,
+} from '../../src/index-management/index-constants.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {
   createCommittedServeEligibilityOwner,
@@ -783,4 +790,47 @@ test('Production construction 3: checkpoint resume across restart, unreadable fa
   );
 
   await freshIndexService.shutdown();
+});
+
+test('Production construction 4: unwired backfill and read-router fail closed (no silent no-ops)', async (t) => {
+  const backfill = new GlobalIndexBackfillCoordinator();
+  let backfillErr = null;
+  try {
+    await backfill.executeBackfill({
+      indexId: 'idx-1',
+      tableName: 'users',
+      indexName: 'idx_users_email',
+      columnNames: ['email'],
+      state: GLOBAL_INDEX_STATE.WRITE_ONLY,
+    });
+  } catch (err) {
+    backfillErr = err;
+  }
+  t.ok(backfillErr, 'Unwired GlobalIndexBackfillCoordinator rejects executeBackfill');
+  t.equal(backfillErr?.code, GLOBAL_INDEX_ERROR_CODE.DEPENDENCY_UNAVAILABLE);
+
+  const router = new GlobalIndexReadRouter({
+    getIndexCatalog: () => [
+      {
+        index_name: 'idx_users_email',
+        column_names: ['email'],
+        is_global: 1,
+        state: GLOBAL_INDEX_STATE.READ_WRITE,
+      },
+    ],
+    getIndexPartitions: () => [{partition_id: 'p-idx-0'}],
+    getBaseTablePartitions: () => [{partition_id: 'p-base-0'}],
+  });
+
+  let scanErr = null;
+  try {
+    await router.executeQuery({
+      tableName: 'users',
+      whereClause: {email: 'alice@example.com'},
+    });
+  } catch (err) {
+    scanErr = err;
+  }
+  t.ok(scanErr, 'Unwired GlobalIndexReadRouter rejects executeQuery');
+  t.equal(scanErr?.code, GLOBAL_INDEX_ERROR_CODE.DEPENDENCY_UNAVAILABLE);
 });

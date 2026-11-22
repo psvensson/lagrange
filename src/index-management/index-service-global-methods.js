@@ -15,7 +15,12 @@ import {
 } from './index-constants.js';
 import {
   GlobalIndexLifecycleCoordinator,
+  parseGlobalIndexDdl,
 } from './global-index-lifecycle-coordinator.js';
+import {buildProductionCoordinatorOptions} from './global-index-production-wiring.js';
+
+const DEFAULT_INDEX_TYPE = INDEX_TYPE.BTREE;
+const DEFAULT_READABLE_STATE = INDEX_READABLE_STATE.READY;
 
 function isGlobalIndexRequest(input, options = {}) {
   if (input?.isGlobal === true || input?.global === true) {
@@ -47,8 +52,22 @@ function resolveGlobalIndexColumns(cat, input, options) {
 }
 
 function buildGlobalIndexMetadata(result, cat, tableId, fields) {
-  return {
-    indexId: result.indexId || cat?.index_id || `idx-${fields.indexName}`,
+  let indexId = `idx-${fields.indexName}`;
+  if (result.indexId) {
+    indexId = result.indexId;
+  } else if (cat?.indexId) {
+    indexId = cat.indexId;
+  } else if (cat?.index_id) {
+    indexId = cat.index_id;
+  }
+  let createdAt = Date.now();
+  if (cat?.createdAt !== undefined) {
+    createdAt = cat.createdAt;
+  } else if (cat?.created_at !== undefined) {
+    createdAt = cat.created_at;
+  }
+  const metadata = {
+    indexId,
     tableId,
     tableName: fields.tableName,
     indexName: fields.indexName,
@@ -58,9 +77,19 @@ function buildGlobalIndexMetadata(result, cat, tableId, fields) {
     isGlobal: true,
     global: true,
     state: result.state || cat?.state || GLOBAL_INDEX_STATE.READ_WRITE,
-    createdAt: cat?.created_at || Date.now(),
+    createdAt,
     generation: result.generation || cat?.index_generation || 1,
   };
+  if (result.interrupted) {
+    metadata.interrupted = true;
+    metadata.cursorPartitionId = result.cursorPartitionId;
+    metadata.cursorPk = result.cursorPk;
+    metadata.totalRows = result.totalRows;
+  }
+  if (result.deferred) {
+    metadata.deferred = true;
+  }
+  return metadata;
 }
 
 function isGlobalIndexName(metadata, coordinator, indexName) {
@@ -85,9 +114,9 @@ const indexServiceGlobalMethods = {
    */
   getGlobalIndexCoordinator() {
     if (!this.globalIndexCoordinator) {
-      this.globalIndexCoordinator = new GlobalIndexLifecycleCoordinator({
-        logger: this.logger,
-      });
+      this.globalIndexCoordinator = new GlobalIndexLifecycleCoordinator(
+        buildProductionCoordinatorOptions(this),
+      );
     }
     return this.globalIndexCoordinator;
   },
@@ -146,7 +175,21 @@ const indexServiceGlobalMethods = {
    */
   async _createGlobalIndexEntry(input, options = {}) {
     const coordinator = this.getGlobalIndexCoordinator();
-    const result = await coordinator.createGlobalIndex(input, options);
+    let rawTableName = null;
+    if (input && typeof input === 'object' && input.tableName) {
+      rawTableName = input.tableName;
+    } else if (options.tableName) {
+      rawTableName = options.tableName;
+    } else if (typeof input === 'string') {
+      rawTableName = parseGlobalIndexDdl(input).tableName;
+    }
+    const resolvedInputTableId = rawTableName ?
+      await this._resolveGlobalIndexTableId(rawTableName) :
+      null;
+    const createOptions = resolvedInputTableId && !options.tableId ?
+      {...options, tableId: resolvedInputTableId} :
+      options;
+    const result = await coordinator.createGlobalIndex(input, createOptions);
 
     const indexName = resolveGlobalIndexName(result, input, options);
     const cat = coordinator.getCatalogRecord?.(indexName);
@@ -173,12 +216,11 @@ const indexServiceGlobalMethods = {
    * @return {Promise<boolean>} True if dropped.
    */
   async _dropGlobalIndexEntry(indexName, indexMetadata, tableId, {ifExists}) {
-    if (this.globalIndexCoordinator) {
-      await this.globalIndexCoordinator.dropGlobalIndex(indexName, {ifExists});
-    }
+    const coordinator = this.getGlobalIndexCoordinator();
+    const dropOutcome = await coordinator.dropGlobalIndex(indexName, {ifExists});
     const resolvedTableId = indexMetadata?.tableId || tableId;
     this._removeIndexFromCache(indexName, resolvedTableId);
-    if (indexMetadata) {
+    if (indexMetadata && (!coordinator.onCatalogDelete || !dropOutcome?.dropped)) {
       await this.deleteIndexMetadata(indexMetadata, resolvedTableId, indexName);
     }
     this.logger.info(INDEX_LOG_MSG.INDEX_DROPPED, {
@@ -187,6 +229,34 @@ const indexServiceGlobalMethods = {
       indexName,
     });
     return true;
+  },
+
+  /**
+   * Execute transactional write with synchronous global index maintenance.
+   * @param {Object} writeContext - Write context.
+   * @return {Promise<Object>}
+   */
+  async executeTransactionalWrite(writeContext) {
+    return this.getGlobalIndexCoordinator().executeTransactionalWrite(writeContext);
+  },
+
+  /**
+   * Plan and execute read query via global secondary index or scatter-gather.
+   * @param {Object} readContext - Read context.
+   * @return {Promise<Object[]>}
+   */
+  async planAndExecuteRead(readContext) {
+    return this.getGlobalIndexCoordinator().planAndExecuteRead(readContext);
+  },
+
+  /**
+   * Resume an interrupted global index backfill from its durable checkpoint.
+   * @param {string} indexName - Index name.
+   * @param {Object} [options={}] - Resume options.
+   * @return {Promise<Object>}
+   */
+  async resumeGlobalIndexBackfill(indexName, options = {}) {
+    return this.getGlobalIndexCoordinator().resumeBackfill(indexName, options);
   },
 
   /**
@@ -230,17 +300,33 @@ const indexServiceGlobalMethods = {
   _catalogToMetadata(cat) {
     const indexName = cat.index_name || cat.indexName;
     const tableName = cat.table_name || cat.tableName || null;
+    let tableId = tableName;
+    if (cat.tableId !== undefined) {
+      tableId = cat.tableId;
+    } else if (cat.table_id !== undefined) {
+      tableId = cat.table_id;
+    }
+    let columnNames = [];
+    if (Array.isArray(cat.columnNames)) {
+      columnNames = cat.columnNames;
+    } else if (Array.isArray(cat.column_names)) {
+      columnNames = cat.column_names;
+    } else if (typeof cat.column_names === 'string') {
+      columnNames = JSON.parse(cat.column_names || STRING.EMPTY_JSON_ARRAY);
+    }
     return {
       indexId: cat.index_id || cat.indexId,
-      tableId: tableName,
+      tableId,
       tableName,
       indexName,
-      columnNames: cat.column_names || cat.columnNames || [],
-      indexType: cat.index_type || INDEX_TYPE.BTREE,
-      unique: Boolean(cat.unique || cat.is_unique),
+      columnNames,
+      indexType: cat.index_type !== undefined ? cat.index_type : DEFAULT_INDEX_TYPE,
+      unique: cat.isUnique !== undefined ?
+        Boolean(cat.isUnique) :
+        Boolean(cat.unique || cat.is_unique),
       isGlobal: true,
       global: true,
-      state: cat.state || INDEX_READABLE_STATE.READY,
+      state: cat.state !== undefined ? cat.state : DEFAULT_READABLE_STATE,
       createdAt: cat.created_at || cat.createdAt || Date.now(),
     };
   },

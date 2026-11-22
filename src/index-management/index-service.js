@@ -25,6 +25,10 @@ import {QUERY_ERROR_CODE} from '../query/query-constants.js';
 import {indexServiceCdcHandler} from './index-service-cdc-handler.js';
 import {indexServicePartitionMethods} from './index-service-partition-methods.js';
 import {indexServiceGlobalMethods} from './index-service-global-methods.js';
+import {
+  hydrateGlobalIndexFromRow,
+  preloadProductionPartitionMetadata,
+} from './global-index-production-wiring.js';
 
 const LOCAL_STR_CRITICAL = 'critical';
 
@@ -107,8 +111,17 @@ class IndexService {
     this.systemTableCache = options.systemTableCache || null;
     this.sqlQueryEngine = options.sqlQueryEngine || null;
     this.partitionService = options.partitionService || null;
+    this.partitionManager = options.partitionManager || null;
+    this.partitionDirectory = options.partitionDirectory || null;
+    this.partitionServices = options.partitionServices || null;
+    this.partitionServicesProvider = options.partitionServicesProvider || null;
+    this.storageManager = options.storageManager || null;
+    this.queryRouter = options.queryRouter || null;
+    this.partitionDatabases = options.partitionDatabases || null;
     this.controlPlaneSystemTableGateway =
-      options.controlPlaneSystemTableGateway || null;
+      options.controlPlaneSystemTableGateway ||
+      options.systemTableGateway ||
+      null;
     this.requirePartitionMaterialization =
       Boolean(options.requirePartitionMaterialization);
     this.globalIndexCoordinator = options.globalIndexCoordinator || null;
@@ -154,6 +167,7 @@ class IndexService {
    */
   async loadIndicesFromCache() {
     try {
+      await preloadProductionPartitionMetadata(this);
       let indices = [];
       if (this.canReadMetadata()) {
         const result = await this.getControlPlaneSystemTableGateway().readRows(
@@ -170,24 +184,32 @@ class IndexService {
           this.indexCache.set(tableId, new Map());
         }
 
-        const indexMetadata = {
-          indexId: index.index_id,
-          tableId: index.table_id,
-          tableName: index.table_name || null,
-          indexName: index.index_name,
-          columnNames: JSON.parse(
-            index.column_names || STRING.EMPTY_JSON_ARRAY,
-          ),
-          indexType: index.index_type || INDEX_TYPE.BTREE,
-          unique: Boolean(index.unique || index.is_unique),
-          state: index.state || INDEX_READABLE_STATE.READY,
-          createdAt: index.created_at,
-        };
+        let indexMetadata;
+        if (index.is_global) {
+          const coordinator = this.getGlobalIndexCoordinator();
+          indexMetadata = hydrateGlobalIndexFromRow(this, coordinator, index);
+        } else {
+          indexMetadata = {
+            indexId: index.index_id,
+            tableId: index.table_id,
+            tableName: index.table_name || null,
+            indexName: index.index_name,
+            columnNames: JSON.parse(
+              index.column_names || STRING.EMPTY_JSON_ARRAY,
+            ),
+            indexType: index.index_type || INDEX_TYPE.BTREE,
+            unique: Boolean(index.unique || index.is_unique),
+            state: index.state || INDEX_READABLE_STATE.READY,
+            createdAt: index.created_at,
+          };
+        }
 
-        this.indexCache.get(tableId).set(
-          index.index_name, indexMetadata,
-        );
-        this.indices.set(index.index_name, indexMetadata);
+        if (indexMetadata) {
+          this.indexCache.get(tableId).set(
+            index.index_name, indexMetadata,
+          );
+          this.indices.set(index.index_name, indexMetadata);
+        }
       }
 
       this.logger.debug(INDEX_LOG_MSG.INDICES_LOADED, {
@@ -527,9 +549,13 @@ class IndexService {
     }
     const gateway = this.getControlPlaneSystemTableGateway();
     if (gateway) {
+      const whereClause = {table_id: resolvedTableId, index_name: indexName};
+      if (indexMetadata?.indexId) {
+        whereClause.index_id = indexMetadata.indexId;
+      }
       await gateway.deleteSystemTableRow(
         TABLES.INDICES,
-        {table_id: resolvedTableId, index_name: indexName},
+        whereClause,
         {
           workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
           deliveryPriority: LOCAL_STR_CRITICAL,

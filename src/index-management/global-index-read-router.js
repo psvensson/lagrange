@@ -17,6 +17,7 @@ import {
 } from './global-index-dataset-manager.js';
 import {
   GLOBAL_INDEX_ACCESS_PATH,
+  GLOBAL_INDEX_ERROR_CODE,
   INDEX_REJECTION_REASON,
 } from './index-constants.js';
 import {PartitionResolver} from '../query/partition-resolver.js';
@@ -36,6 +37,22 @@ const LOCAL_STR_COLUMN = 'column';
 
 const EQUALITY_OPERATORS = new Set([LOCAL_STR_EQUALS, '==', 'IS']);
 const RANGE_OPERATORS = new Set(['<', '<=', '>', '>=', 'BETWEEN']);
+
+const READ_ROUTER_PORT = Object.freeze({
+  EXECUTE_INDEX_SCAN: 'executeIndexScan',
+  EXECUTE_BASE_FETCH: 'executeBaseFetch',
+  EXECUTE_SCATTER_GATHER: 'executeScatterGather',
+});
+
+function unwiredAsyncReadExecutor(executorName) {
+  return async () => {
+    const error = new Error(
+      `GlobalIndexReadRouter requires wired '${executorName}'`,
+    );
+    error.code = GLOBAL_INDEX_ERROR_CODE.DEPENDENCY_UNAVAILABLE;
+    throw error;
+  };
+}
 
 function isColumnNode(node) {
   return Boolean(node && (node.type === LOCAL_STR_COLUMN || node.column));
@@ -444,9 +461,12 @@ export class GlobalIndexReadRouter {
     this.getBaseTablePartitions = options.getBaseTablePartitions || (() => []);
     this.resolveBasePartitionId = options.resolveBasePartitionId || null;
     this.partitionResolver = options.partitionResolver || new PartitionResolver();
-    this.executeIndexScan = options.executeIndexScan || (async () => []);
-    this.executeBaseFetch = options.executeBaseFetch || (async () => []);
-    this.executeScatterGather = options.executeScatterGather || (async () => []);
+    this.executeIndexScan = options.executeIndexScan ||
+      unwiredAsyncReadExecutor(READ_ROUTER_PORT.EXECUTE_INDEX_SCAN);
+    this.executeBaseFetch = options.executeBaseFetch ||
+      unwiredAsyncReadExecutor(READ_ROUTER_PORT.EXECUTE_BASE_FETCH);
+    this.executeScatterGather = options.executeScatterGather ||
+      unwiredAsyncReadExecutor(READ_ROUTER_PORT.EXECUTE_SCATTER_GATHER);
     this.logger = options.logger || console;
   }
 
@@ -704,8 +724,10 @@ export class GlobalIndexReadRouter {
     const indexRows = await this.executeIndexScan({
       datasetName,
       indexName: selectedIndex.indexName,
+      columnNames: selectedIndex.columnNames,
       indexPartitions,
       whereClause,
+      params: queryContext.params || [],
     });
 
     if (!indexRows || indexRows.length === 0) {

@@ -10,12 +10,16 @@
 import {
   GLOBAL_INDEX_STATE,
   assertSupportedGlobalIndexDefinition,
+  checkIndexExistence,
   createGlobalIndexRecord,
+  findCatalogTarget,
   normalizeGlobalIndexRecord,
+  resolveBackfillOutcome,
 } from './global-index-catalog-contract.js';
 import {GlobalIndexDatasetManager} from './global-index-dataset-manager.js';
 import {GlobalIndexBackfillCoordinator} from './global-index-backfill-coordinator.js';
 import {GlobalIndexWriteMaintenance} from './global-index-write-maintenance.js';
+import {sortRowsByOrderBy} from './global-index-production-wiring.js';
 import {
   GLOBAL_INDEX_ACCESS_PATH,
   GlobalIndexReadRouter,
@@ -159,30 +163,6 @@ function resolveWriteOperations(maintenance, context) {
   return {operations: [], enlistedIndexPartitions: []};
 }
 
-function resolveBackfillOutcome(context) {
-  const {isCurrent, isInterrupted, indexId, indexName, currentGen, result} = context;
-  if (!isCurrent) {
-    return {indexId, indexName, generation: currentGen, fenced: true};
-  } else if (isInterrupted) {
-    return {
-      indexId,
-      indexName,
-      generation: currentGen,
-      state: GLOBAL_INDEX_STATE.BACKFILLING,
-      interrupted: true,
-      ...result,
-    };
-  } else {
-    return {
-      indexId,
-      indexName,
-      generation: currentGen,
-      state: GLOBAL_INDEX_STATE.READ_WRITE,
-      completed: true,
-    };
-  }
-}
-
 function normalizeGlobalIndexDefinition(ddlOrAst, options) {
   const rawDef = typeof ddlOrAst === 'string' ?
     parseGlobalIndexDdl(ddlOrAst) :
@@ -201,33 +181,6 @@ function normalizeGlobalIndexDefinition(ddlOrAst, options) {
   };
 }
 
-function findCatalogTarget(catalog, update) {
-  const targetName = update.indexName || update.index_name;
-  if (targetName && catalog.has(targetName)) {
-    return catalog.get(targetName);
-  }
-  if (!update.indexId) {
-    return null;
-  }
-  for (const rec of catalog.values()) {
-    if ((rec.index_id || rec.indexId) === update.indexId) {
-      return rec;
-    }
-  }
-  return null;
-}
-
-function checkIndexExistence(catalog, def, options) {
-  const indexName = def.indexName;
-  if (catalog.has(indexName)) {
-    if (def.ifNotExists || options.ifNotExists) {
-      return true;
-    }
-    throw new Error(`Index '${indexName}' already exists`);
-  }
-  return false;
-}
-
 /**
  * End-to-end coordinator for Global Secondary Index lifecycle.
  */
@@ -242,6 +195,14 @@ export class GlobalIndexLifecycleCoordinator {
     this.indexPartitionsByName = new Map();
     this.partitionDatabases = new Map();
     this.logger = options.logger || console;
+    this.externalGetBaseTablePartitions = options.getBaseTablePartitions || null;
+    this.externalGetIndexPartitions = options.getIndexPartitions || null;
+    this.resolvePartitionDatabase = options.resolvePartitionDatabase || null;
+    this.resolveTableSchema = options.resolveTableSchema || null;
+    this.refreshCatalogPartitions = options.refreshCatalogPartitions || null;
+    this.onCatalogInsert = options.onCatalogInsert || null;
+    this.onCatalogUpdate = options.onCatalogUpdate || null;
+    this.onCatalogDelete = options.onCatalogDelete || null;
 
     this.metrics = {
       totalWrites: 0,
@@ -252,6 +213,9 @@ export class GlobalIndexLifecycleCoordinator {
     this.suppressedRollbackErrors = 0;
 
     this._initializeComponents(options);
+    if (options.bindCoordinator) {
+      options.bindCoordinator(this);
+    }
   }
 
   _initializeComponents(options) {
@@ -323,7 +287,13 @@ export class GlobalIndexLifecycleCoordinator {
    * @return {Object[]}
    */
   getBaseTablePartitions(tableName) {
-    return this.basePartitionsByTable.get(tableName) || [];
+    if (this.basePartitionsByTable.has(tableName)) {
+      return this.basePartitionsByTable.get(tableName);
+    }
+    if (this.externalGetBaseTablePartitions) {
+      return this.externalGetBaseTablePartitions(tableName);
+    }
+    return [];
   }
 
   /**
@@ -332,7 +302,13 @@ export class GlobalIndexLifecycleCoordinator {
    * @return {Object[]}
    */
   getIndexPartitions(indexName) {
-    return this.indexPartitionsByName.get(indexName) || [];
+    if (this.indexPartitionsByName.has(indexName)) {
+      return this.indexPartitionsByName.get(indexName);
+    }
+    if (this.externalGetIndexPartitions) {
+      return this.externalGetIndexPartitions(indexName);
+    }
+    return [];
   }
 
   /**
@@ -343,8 +319,9 @@ export class GlobalIndexLifecycleCoordinator {
   getIndexesForTable(tableName) {
     const results = [];
     for (const record of this.catalog.values()) {
-      if ((record.table_name || record.tableName) === tableName) {
-        results.push(normalizeGlobalIndexRecord(record));
+      const normalized = normalizeGlobalIndexRecord(record);
+      if (normalized.tableName === tableName || normalized.tableId === tableName) {
+        results.push(normalized);
       }
     }
     return results;
@@ -375,11 +352,14 @@ export class GlobalIndexLifecycleCoordinator {
     return this.getCatalogRecord(indexName);
   }
 
-  _saveCatalogRecord(record) {
+  async _saveCatalogRecord(record) {
     this.catalog.set(record.index_name || record.indexName, record);
+    if (this.onCatalogInsert) {
+      await this.onCatalogInsert(record);
+    }
   }
 
-  _updateCatalogRecord(update) {
+  async _updateCatalogRecord(update) {
     const target = findCatalogTarget(this.catalog, update);
     if (!target) return;
     const activeId = target.index_id || target.indexId;
@@ -388,13 +368,19 @@ export class GlobalIndexLifecycleCoordinator {
     }
     Object.assign(target, update);
     target.updated_at = update.updatedAt || Date.now();
+    if (this.onCatalogUpdate) {
+      await this.onCatalogUpdate(activeId, update, target);
+    }
   }
 
   _provisionIndexDatasets(tableName, indexName, columnNames, basePrimaryKeyColumns, options) {
     const partitions = this.getIndexPartitions(indexName);
+    if (this.resolvePartitionDatabase && partitions.length === 0) {
+      throw new Error(`No index partitions available for global index '${indexName}'`);
+    }
     for (const p of partitions) {
       const pId = p.partition_id || p.partitionId;
-      const db = this.partitionDatabases.get(pId);
+      const db = this._getPartitionDb(pId);
       if (db) {
         this.datasetManager.createIndexDataset(db, {
           tableName,
@@ -403,6 +389,10 @@ export class GlobalIndexLifecycleCoordinator {
           basePrimaryKeyColumns,
           columnTypes: options.columnTypes || {},
         });
+      } else if (this.resolvePartitionDatabase) {
+        const error = new Error(`${LIFECYCLE_ERROR_MSG.PARTICIPANT_UNAVAILABLE}: ${pId}`);
+        error.code = ERROR_CODE_PARTICIPANT_UNAVAILABLE;
+        throw error;
       }
     }
   }
@@ -411,7 +401,7 @@ export class GlobalIndexLifecycleCoordinator {
     const partitions = this.getIndexPartitions(indexName);
     for (const p of partitions) {
       const pId = p.partition_id || p.partitionId;
-      const db = this.partitionDatabases.get(pId);
+      const db = this._getPartitionDb(pId);
       if (db) {
         this.datasetManager.dropIndexDataset(db, tableName, indexName);
       }
@@ -436,8 +426,13 @@ export class GlobalIndexLifecycleCoordinator {
     }
 
     const userYield = options.backfillOptions?.shouldYield;
+    let resolvedBatchSize = options.batchSize;
+    if (options.backfillOptions?.batchSize !== undefined) {
+      resolvedBatchSize = options.backfillOptions.batchSize;
+    }
     const backfillOptions = {
       ...options.backfillOptions,
+      batchSize: resolvedBatchSize,
       shouldYield: (progress) => {
         if (!this._isGenerationCurrent(indexName, currentGen, indexId)) {
           return true;
@@ -454,7 +449,7 @@ export class GlobalIndexLifecycleCoordinator {
       const isCurrent = this._isGenerationCurrent(indexName, currentGen, indexId);
       const isInterrupted = Boolean(result?.interrupted);
       if (isCurrent && !isInterrupted) {
-        this._updateCatalogRecord({indexId, state: GLOBAL_INDEX_STATE.READ_WRITE});
+        await this._updateCatalogRecord({indexId, state: GLOBAL_INDEX_STATE.READ_WRITE});
       }
       return resolveBackfillOutcome({
         isCurrent,
@@ -466,7 +461,7 @@ export class GlobalIndexLifecycleCoordinator {
       });
     } catch (err) {
       if (this._isGenerationCurrent(indexName, currentGen, indexId)) {
-        this._updateCatalogRecord({
+        await this._updateCatalogRecord({
           indexId,
           state: GLOBAL_INDEX_STATE.FAILED,
           errorMessage: err.message,
@@ -485,25 +480,31 @@ export class GlobalIndexLifecycleCoordinator {
    * @return {Promise<Object>}
    */
   async createGlobalIndex(ddlOrAst, options = {}) {
+    if (this.refreshCatalogPartitions) await this.refreshCatalogPartitions();
     const def = normalizeGlobalIndexDefinition(ddlOrAst, options);
     assertSupportedGlobalIndexDefinition(def);
 
-    const exists = checkIndexExistence(this.catalog, def, options);
-    if (exists) {
+    if (checkIndexExistence(this.catalog, def, options)) {
       return this.getCatalogRecord(def.indexName);
     }
 
     const {indexName, tableName, columnNames} = def;
-
-    const currentGen = this.generations.has(indexName) ?
-      this.generations.get(indexName) :
-      1;
+    const currentGen = this.generations.has(indexName) ? this.generations.get(indexName) : 1;
     this.generations.set(indexName, currentGen);
 
-    const indexId = options.indexId || `${indexName}-gen${currentGen}`;
+    const schemaInfo = this.resolveTableSchema ? this.resolveTableSchema(tableName) : null;
     const basePrimaryKeyColumns = def.basePrimaryKeyColumns ||
       options.basePrimaryKeyColumns ||
-      [LOCAL_STR_ID];
+      (schemaInfo?.basePrimaryKeyColumns?.length > 0 ?
+        schemaInfo.basePrimaryKeyColumns :
+        [LOCAL_STR_ID]);
+    let columnTypes = {};
+    if (options.columnTypes !== undefined) {
+      columnTypes = options.columnTypes;
+    } else if (schemaInfo?.columnTypes !== undefined) {
+      columnTypes = schemaInfo.columnTypes;
+    }
+    const indexId = options.indexId || `${indexName}-gen${currentGen}`;
 
     const record = createGlobalIndexRecord({
       indexId,
@@ -515,18 +516,27 @@ export class GlobalIndexLifecycleCoordinator {
     });
     record.index_generation = currentGen;
     record.basePrimaryKeyColumns = basePrimaryKeyColumns;
-    this._saveCatalogRecord(record);
+    await this._saveCatalogRecord(record);
 
-    this._provisionIndexDatasets(
-      tableName,
-      indexName,
-      columnNames,
-      basePrimaryKeyColumns,
-      options,
-    );
+    try {
+      this._provisionIndexDatasets(
+        tableName,
+        indexName,
+        columnNames,
+        basePrimaryKeyColumns,
+        {...options, columnTypes},
+      );
+    } catch (err) {
+      await this._updateCatalogRecord({
+        indexId,
+        state: GLOBAL_INDEX_STATE.FAILED,
+        errorMessage: err.message,
+      });
+      throw err;
+    }
 
-    this._updateCatalogRecord({indexId, state: GLOBAL_INDEX_STATE.WRITE_ONLY});
-    this._updateCatalogRecord({indexId, state: GLOBAL_INDEX_STATE.BACKFILLING});
+    await this._updateCatalogRecord({indexId, state: GLOBAL_INDEX_STATE.WRITE_ONLY});
+    await this._updateCatalogRecord({indexId, state: GLOBAL_INDEX_STATE.BACKFILLING});
 
     if (options.deferBackfill === true) {
       return {
@@ -548,12 +558,16 @@ export class GlobalIndexLifecycleCoordinator {
    * @return {Promise<Object>}
    */
   async resumeBackfill(indexName, options = {}) {
+    if (this.refreshCatalogPartitions) await this.refreshCatalogPartitions();
     const record = this.getCatalogRecord(indexName);
-    if (!record) {
-      throw new Error(`Index '${indexName}' not found`);
-    }
+    if (!record) throw new Error(`Index '${indexName}' not found`);
     if (options.basePrimaryKeyColumns) {
       record.basePrimaryKeyColumns = options.basePrimaryKeyColumns;
+    } else if (this.resolveTableSchema) {
+      const schemaInfo = this.resolveTableSchema(record.tableName);
+      if (schemaInfo?.basePrimaryKeyColumns?.length > 0) {
+        record.basePrimaryKeyColumns = schemaInfo.basePrimaryKeyColumns;
+      }
     }
     const currentGen = this.generations.get(indexName) || record.index_generation || 1;
     return this._runBackfillToCompletion(record, currentGen, options);
@@ -566,24 +580,24 @@ export class GlobalIndexLifecycleCoordinator {
    * @return {Promise<Object>}
    */
   async dropGlobalIndex(indexName, options = {}) {
-    const record = this.getCatalogRecord(indexName);
-    if (!record) {
-      if (options.ifExists) {
-        return {dropped: false, indexName};
-      }
+    if (this.refreshCatalogPartitions) await this.refreshCatalogPartitions();
+    const rawRecord = this.catalog.get(indexName);
+    if (!rawRecord) {
+      if (options.ifExists) return {dropped: false, indexName};
       throw new Error(`Index '${indexName}' not found`);
     }
 
-    const indexId = record.index_id || record.indexId;
-    this._updateCatalogRecord({indexId, state: GLOBAL_INDEX_STATE.DROPPING});
+    const indexId = rawRecord.index_id || rawRecord.indexId;
+    await this._updateCatalogRecord({indexId, state: GLOBAL_INDEX_STATE.DROPPING});
 
     const currentGen = this.generations.get(indexName) || 1;
     this.generations.set(indexName, currentGen + 1);
 
-    const tableName = record.table_name || record.tableName;
+    const tableName = rawRecord.table_name || rawRecord.tableName;
     this._dropIndexDatasets(tableName, indexName);
 
     this.catalog.delete(indexName);
+    if (this.onCatalogDelete) await this.onCatalogDelete(rawRecord);
     return {dropped: true, indexName, priorGeneration: currentGen};
   }
 
@@ -592,7 +606,13 @@ export class GlobalIndexLifecycleCoordinator {
       const db = txContext.getDatabase(partitionId);
       if (db) return db;
     }
-    return this.partitionDatabases.get(partitionId) || null;
+    if (this.partitionDatabases.has(partitionId)) {
+      return this.partitionDatabases.get(partitionId);
+    }
+    if (this.resolvePartitionDatabase) {
+      return this.resolvePartitionDatabase(partitionId);
+    }
+    return null;
   }
 
   _recordWriteMetric(tableName, activeIndexCount, participantFanout, latencyMs) {
@@ -682,11 +702,22 @@ export class GlobalIndexLifecycleCoordinator {
    * @return {Promise<Object>}
    */
   async executeTransactionalWrite(writeContext) {
+    if (this.refreshCatalogPartitions) await this.refreshCatalogPartitions();
     const startTimeNs = process.hrtime.bigint();
     const {tableName, basePartitionId, baseWriteFn, txContext} = writeContext;
+    let effectiveContext = writeContext;
+    if (!writeContext.basePrimaryKeyColumns && this.resolveTableSchema) {
+      const schemaInfo = this.resolveTableSchema(tableName);
+      if (schemaInfo?.basePrimaryKeyColumns?.length > 0) {
+        effectiveContext = {
+          ...writeContext,
+          basePrimaryKeyColumns: schemaInfo.basePrimaryKeyColumns,
+        };
+      }
+    }
 
     const activeIndexes = this.writeMaintenance.getActiveIndexesForTable(tableName);
-    const plan = resolveWriteOperations(this.writeMaintenance, writeContext);
+    const plan = resolveWriteOperations(this.writeMaintenance, effectiveContext);
     const participants = Array.from(new Set([basePartitionId, ...plan.enlistedIndexPartitions]));
     const participantFanout = participants.length;
 
@@ -714,19 +745,23 @@ export class GlobalIndexLifecycleCoordinator {
    * @return {Promise<Object[]>}
    */
   async planAndExecuteRead(readContext) {
+    if (this.refreshCatalogPartitions) await this.refreshCatalogPartitions();
     const {
       tableName,
       where,
       whereClause,
       projectedColumns,
       executeScatterGatherRead,
+      orderBy,
     } = readContext;
 
     const effectiveWhere = whereClause || where;
+    const schemaInfo = this.resolveTableSchema ? this.resolveTableSchema(tableName) : null;
     const plan = this.readRouter.planAccessPath({
       tableName,
       whereClause: effectiveWhere,
       projectedColumns,
+      basePrimaryKeyColumns: schemaInfo?.basePrimaryKeyColumns,
     });
 
     let rows;
@@ -745,7 +780,8 @@ export class GlobalIndexLifecycleCoordinator {
       });
     }
 
-    return Array.isArray(rows) ? rows : [];
+    const resultRows = Array.isArray(rows) ? rows : [];
+    return orderBy ? sortRowsByOrderBy(resultRows, orderBy) : resultRows;
   }
 
   /**
