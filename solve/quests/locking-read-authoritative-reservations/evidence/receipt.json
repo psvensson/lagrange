@@ -1,0 +1,51 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "locking-read-authoritative-reservations",
+  "status": "pass",
+  "candidate": "c39c505b40b71734579c93508c241f276ea8b351",
+  "generatedAt": "2026-11-22T15:35:00.000Z",
+  "testFileDigests": {
+    "test/query/locking-read-authoritative-reservations.test.js": "2213dca9d0da23fed8e082815b78122e800a0605a406de9c0d58cd9472e229fc",
+    "test/query/locking-read-execution-lifecycle.test.js": "8938d690f3bc9e4a8d67e6fb52a76fb17488096305707d2e385a8c7907f5752a",
+    "test/transaction/queryable-core-j4-locking-read-journey.test.js": "6adc9295fa6f86de49c0de5d34c2cb87e5b2e62c68789d4fc252704c51b08aef",
+    "test/query/locking-read-canonical-ast.test.js": "47ae7b227afd0ed8e4cdaaf494bff11bfc0769d586881e4360bdb161ee858f7f"
+  },
+  "receipts": [
+    {
+      "id": "public-cross-node-conflict-enforced-or-refused",
+      "passed": true,
+      "command": "focused.mjs c39c505b40b71734579c93508c241f276ea8b351 auto -> /mnt/data/peter/projects/lagrange-takeover-20261121/lab/pkg5-divergence-green",
+      "detail": "Red witnesses captured at f04a462e27d51fc0abec67d9d7956bc0a9903c95 (lab/pkg5-red-witness-2) and cf0cad5d0cca67271c1fd5e1f723fbbf9669e9eb (lab/pkg5-divergence-red). Green across separate PgWire gateways/nodes on Receipt 1, Receipt 1b (stale read generation conflict), Witness 1a (leader-side staged-write claims block FOR UPDATE across processes with cleared process-local RESERVATIONS), and Witness 1b (deterministic SQLite-only Raft apply across r1/r2/r3). Fleet runs: lab/pkg5-green-7 (7/7 files, 367 assertions) and lab/pkg5-divergence-green (7/7 files, 370 assertions)."
+    },
+    {
+      "id": "reservation-admission-failure-visible",
+      "passed": true,
+      "command": "focused.mjs c39c505b40b71734579c93508c241f276ea8b351 auto -> /mnt/data/peter/projects/lagrange-takeover-20261121/lab/pkg5-divergence-green",
+      "detail": "Receipt 2 verifies acquireRowReservation with store === null fails closed without phantom memory entries, and read-only SQLite store causes multi-partition SELECT ... FOR UPDATE to fail closed and roll back partial locks on accounts-p2."
+    },
+    {
+      "id": "participant-restart-and-owner-change",
+      "passed": true,
+      "command": "focused.mjs c39c505b40b71734579c93508c241f276ea8b351 auto -> /mnt/data/peter/projects/lagrange-takeover-20261121/lab/pkg5-divergence-green",
+      "detail": "Receipt 3a/3b and Witness 1b verify durable _lagrange_locking_read_reservations survive file-backed SQLite restart and Raft leadership transfer (r1 -> r2 -> r3 deterministic settled outcomes) with zero reliance on process-local RESERVATIONS memory."
+    },
+    {
+      "id": "terminal-resolution-and-resource-release",
+      "passed": true,
+      "command": "focused.mjs c39c505b40b71734579c93508c241f276ea8b351 auto -> /mnt/data/peter/projects/lagrange-takeover-20261121/lab/pkg5-divergence-green",
+      "detail": "Receipt 4 and Witness 2 verify COMMIT, ROLLBACK, abrupt PgWire TCP disconnect, coordinator cancel, coordinator timeout, partial multi-row acquisition rollback, and strictly partition-scoped per-participant release (accounts-p1 release preserves accounts-p2 until accounts-p2 releases itself, plus shared-DB partition isolation)."
+    },
+    {
+      "id": "all-write-consumers-censused",
+      "passed": true,
+      "command": "focused.mjs c39c505b40b71734579c93508c241f276ea8b351 auto -> /mnt/data/peter/projects/lagrange-takeover-20261121/lab/pkg5-divergence-green",
+      "detail": "Receipt 5 verifies scoped INSERT, omitted-PK INSERT, INSERT OR REPLACE, equality UPDATE/DELETE, scan/secondary-index UPDATE/DELETE, and competing SELECT ... FOR UPDATE enforce 55P03 from durable SQLite reservations even with empty process-local maps, while disjoint writes progress."
+    },
+    {
+      "id": "independent-verification",
+      "passed": true,
+      "verifier": "subagent:e9afe79f-8d12-49c4-86b6-629c54ca6f0c",
+      "detail": "Independent adversarial review by subagent:e9afe79f-8d12-49c4-86b6-629c54ca6f0c identified replica apply divergence via process-local RESERVATIONS and cross-partition release-scope leakage; both findings were witnessed red at cf0cad5d0cca67271c1fd5e1f723fbbf9669e9eb (lab/pkg5-divergence-red) and verified green at c39c505b40b71734579c93508c241f276ea8b351 (lab/pkg5-divergence-green, 7/7 files, 370 assertions passed)."
+    }
+  ]
+}
