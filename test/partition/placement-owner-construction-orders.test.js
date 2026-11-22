@@ -245,11 +245,12 @@ test('P0 join order: partition services initialised and leading before the coord
   await assertSingleScheduler('join', [user, priority, ledger], ledger);
 }));
 
-// StartupRuntimeSurfaceOwner.bindControlPlaneServices over `services`.
-function bindLikeStartup(node, services) {
+// StartupRuntimeSurfaceOwner.bindControlPlaneServices over `services`, with
+// the coordinator the node holds when the sweep runs.
+function bindLikeStartup(node, services, coordinator = node.coordinator) {
   new StartupRuntimeSurfaceOwner({delegates: {
     getTablePolicyService: () => node.tablePolicy,
-    getRebalanceCoordinator: () => node.coordinator,
+    getRebalanceCoordinator: () => coordinator,
     getMessageGroupServices: () => new Map(),
     getPartitionServices: () => services,
   }}).bindControlPlaneServices();
@@ -440,8 +441,10 @@ test('P0 teardown: after the cleanup quiesced the node\'s rebalancing, a later l
     'the quiesced ledger replica is not registered again');
   // F4: the binder sweep is the one re-attach path left after a quiesce (it has
   // no shutting-down check and runs after ControlPlaneSetup.create at both call
-  // sites): sweeping the quiesced node's services attaches nothing either.
-  bindLikeStartup(node, new Map(services.map((service) => [service.partitionId, service])));
+  // sites). It reads the node's coordinator, which the cleanup cleared: sweeping
+  // the quiesced node's services attaches nothing.
+  bindLikeStartup(node, new Map(services.map((service) => [service.partitionId, service])),
+    coordinator);
   await settleTicks();
   assert.deepEqual(attachedAfterQuiesce.length, 0,
     'the binder sweep after the quiesce attaches no placement owner');
@@ -499,8 +502,11 @@ test('P0 re-entry during the attach (F1): a leadership event delivered synchrono
   };
   // The substituted port delivers one leadership event to the partition from
   // inside its status read (a read that may run a consensus turn and notify).
-  const readStatus = ledger.raft.readStatus.bind(ledger.raft);
-  ledger.raft.readStatus = () => {
+  // The opened port is frozen: the ledger's port is replaced by one that
+  // delegates every member to it and observes its status read.
+  const port = ledger.raft;
+  const readStatus = () => port.readStatus();
+  const observedReadStatus = () => {
     if (calls.reentries === 0) {
       calls.reentries += 1;
       if (calls.depth > 0) calls.reentryWhileAttaching += 1;
@@ -512,6 +518,7 @@ test('P0 re-entry during the attach (F1): a leadership event delivered synchrono
     }
     return readStatus();
   };
+  ledger.raft = Object.create(port, {readStatus: {value: observedReadStatus}});
   bindLikeStartup(node, new Map([[USER, user], [PRIORITY, priority], [LEDGER, ledger]]));
   await settleTicks();
   assert.equal(calls.reentryWhileAttaching, 1,
@@ -519,4 +526,33 @@ test('P0 re-entry during the attach (F1): a leadership event delivered synchrono
   assert.deepEqual(calls.thrown, [], 'the re-entrant leadership event does not throw');
   assert.equal(calls.factory, 1, 'the factory runs once: the re-entry attaches nothing');
   await assertSingleScheduler('re-entry during the attach', services, ledger);
+}));
+
+test('F4 (finding, schedule not traced in production): a binder sweep that still holds the ' +
+  'node\'s coordinator after the cleanup quiesced the node (a startup that re-binds the ' +
+  'coordinator after its await of ControlPlaneSetup.create) attaches no placement owner',
+() => withPlacementWorld(SPEC, async (world) => {
+  const node = await world.addNode('n1');
+  answerCommittedReadsAt(world, node.coordinator.controlPlaneReadinessService);
+  const user = createPartition(world, node, USER, node.coordinator);
+  const priority = createPartition(world, node, PRIORITY, node.coordinator);
+  const ledger = createPartition(world, node, LEDGER, node.coordinator);
+  const services = [user, priority, ledger];
+  await initializeAll(services);
+  await assertSingleScheduler('F4: before the cleanup', services, ledger);
+  const owner = ownerOf({ledger});
+  const quiet = {debug() {}, info() {}, warn() {}, error() {}};
+  await new SeedCleanupHandler({delegates: {
+    getLogger: () => quiet,
+    getPartitionServices: () => new Map(services.map((service) => [service.replicaId, service])),
+    getMessageGroupServices: () => new Map(),
+    getRebalanceCoordinator: () => node.coordinator,
+    clearRebalanceCoordinator: () => {},
+  }}).quiesceRebalancers();
+  assert.equal(ledger.replicaPlacementOwnerAttachment, null, 'premise: the quiesce detached');
+  bindLikeStartup(node, new Map(services.map((service) => [service.partitionId, service])));
+  await settleTicks();
+  assert.equal(ledger.replicaPlacementOwnerAttachment, null,
+    'a sweep after the quiesce attaches no placement owner');
+  assert.equal(owner.isLeader, false, 'the quiesced owner stays ended');
 }));
