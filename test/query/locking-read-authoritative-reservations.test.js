@@ -282,6 +282,11 @@ async function setupTwoNodeCluster(options = {}) {
 
   const node1 = makeNodeEngine(0);
   const node2 = makeNodeEngine(1);
+  node2.engine.queryExecutor.setBootstrapTopologySnapshotOwner({
+    resolveCanonicalPartitionLeaderNodeId: (pid) =>
+      pid === releaseOwners.control.partitionId ? members[0][1] : null,
+  });
+  group.services[1].sqlQueryEngine = node2.engine;
   await seedAccountsData(node1.engine);
 
   const pg1 = await startPgWireNode(node1.engine);
