@@ -88,26 +88,13 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
       const coordinator = createTestCoordinator({
         nodeId: 'seed-node',
         enableTimeouts: false,
-        cacheData: {
-          services: [
-            {
-              service_id: 'nodes-p1-r0',
-              replica_id: 'nodes-p1-r0',
-              partition_id: 'nodes-p1',
-              service_type: 'message_group',
-              node_id: 'seed-node',
-              status: 'active',
-            },
-          ],
-        },
       });
       coordinator.initialize();
+      coordinator.isPlacementAdmissionManagedEntityType = () => false;
 
       try {
         const move = {
           type: 'ADD',
-          entityType: 'message_group',
-          entityId: 'nodes-p1',
           partitionId: 'nodes-p1',
           nodeId: 'node-2',
           replicaId: 'replica-1',
@@ -138,26 +125,13 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
       const coordinator = createTestCoordinator({
         nodeId: 'seed-node',
         enableTimeouts: false,
-        cacheData: {
-          services: [
-            {
-              service_id: 'nodes-p1-r0',
-              replica_id: 'nodes-p1-r0',
-              partition_id: 'nodes-p1',
-              service_type: 'message_group',
-              node_id: 'seed-node',
-              status: 'active',
-            },
-          ],
-        },
       });
       coordinator.initialize();
+      coordinator.isPlacementAdmissionManagedEntityType = () => false;
 
       try {
         const first = await coordinator.createOperation({
           type: 'ADD',
-          entityType: 'message_group',
-          entityId: 'nodes-p1',
           partitionId: 'nodes-p1',
           nodeId: 'node-2',
           replicaId: 'replica-1',
@@ -165,8 +139,6 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
 
         const second = await coordinator.createOperation({
           type: 'ADD',
-          entityType: 'message_group',
-          entityId: 'nodes-p1',
           partitionId: 'nodes-p1',
           nodeId: 'node-3', // different node
           replicaId: 'replica-2',
@@ -186,34 +158,19 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
       const coordinator = createTestCoordinator({
         nodeId: 'seed-node',
         enableTimeouts: false,
-        cacheData: {
-          services: [
-            {
-              service_id: 'tbl-test-p1-r0',
-              replica_id: 'tbl-test-p1-r0',
-              partition_id: 'tbl-test-p1',
-              service_type: 'message_group',
-              node_id: 'seed-node',
-              status: 'active',
-            },
-          ],
-        },
       });
       coordinator.initialize();
+      coordinator.isPlacementAdmissionManagedEntityType = () => false;
 
       try {
         const first = await coordinator.createOperation({
           type: 'ADD',
-          entityType: 'message_group',
-          entityId: 'tbl-test-p1',
           partitionId: 'tbl-test-p1',
           nodeId: 'node-2',
         });
 
         const second = await coordinator.createOperation({
           type: 'ADD',
-          entityType: 'message_group',
-          entityId: 'tbl-test-p1',
           partitionId: 'tbl-test-p1',
           nodeId: 'node-3',
         });
@@ -356,12 +313,11 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
         enableTimeouts: false,
       });
       coordinator.initialize();
+      coordinator.isPlacementAdmissionManagedEntityType = () => false;
 
       try {
         const removeReplicaOne = await coordinator.createOperation({
           type: 'REMOVE',
-          entityType: 'message_group',
-          entityId: 'nodes-p1',
           partitionId: 'nodes-p1',
           nodeId: 'seed-node',
           replicaId: 'nodes-p1-r1',
@@ -369,8 +325,6 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
 
         const removeReplicaOneDuplicate = await coordinator.createOperation({
           type: 'REMOVE',
-          entityType: 'message_group',
-          entityId: 'nodes-p1',
           partitionId: 'nodes-p1',
           nodeId: 'seed-node',
           replicaId: 'nodes-p1-r1',
@@ -384,8 +338,6 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
 
         const removeReplicaTwo = await coordinator.createOperation({
           type: 'REMOVE',
-          entityType: 'message_group',
-          entityId: 'nodes-p1',
           partitionId: 'nodes-p1',
           nodeId: 'seed-node',
           replicaId: 'nodes-p1-r2',

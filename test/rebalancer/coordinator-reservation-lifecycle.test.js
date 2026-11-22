@@ -168,6 +168,7 @@ function createCoordinatorWithStorage(t, options = {}) {
       options.storageAdmissionService || createMockAdmissionService(),
   });
   coordinator.initialize();
+  coordinator.isPlacementAdmissionManagedEntityType = () => false;
   t.teardown(() => coordinator.shutdown());
   return {coordinator, sqlEngine, accounting};
 }

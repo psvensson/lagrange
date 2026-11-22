@@ -71,7 +71,7 @@ test('successor discriminator: runtime-service ingress retains exactly one ' +
       moveResult = await runtimeRebalancer.executeMoveViaCoordinator({
         type: 'add',
         partitionId: RUNTIME_SERVICE_ID,
-        entityType: 'message_group',
+        entityType: 'runtime_service',
         entityId: RUNTIME_SERVICE_ID,
         nodeId: TARGET_NODE_ID,
         replicaId: RUNTIME_REPLICA_ID,
@@ -157,7 +157,7 @@ test('successor discriminator: terminal settlement wins before retained ' +
       await coordinator.createOperation({
         type: OperationType.ADD,
         partitionId: 'successor-terminal-p1',
-        entityType: 'message_group',
+        entityType: 'partition',
         entityId: 'successor-terminal-p1',
         nodeId: TARGET_NODE_ID,
         replicaIntentId: 'successor-terminal-p1-r4',
@@ -204,7 +204,7 @@ test('successor discriminator: a continuation older than the shutdown fence ' +
   const createPromise = coordinator.createOperation({
     type: OperationType.ADD,
     partitionId: 'successor-shutdown-p1',
-    entityType: 'message_group',
+    entityType: 'partition',
     entityId: 'successor-shutdown-p1',
     nodeId: TARGET_NODE_ID,
     replicaIntentId: 'successor-shutdown-p1-r4',

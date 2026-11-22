@@ -409,21 +409,6 @@ test('coordinator createOperation persists readiness snapshot in initial step',
         get() {
           return null;
         },
-        getAll(tableName) {
-          if (tableName === 'services') {
-            return [
-              {
-                service_id: 'group-1-r1',
-                replica_id: 'group-1-r1',
-                partition_id: 'group-1',
-                service_type: 'message_group',
-                node_id: 'node-local',
-                status: 'active',
-              },
-            ];
-          }
-          return [];
-        },
       },
       cdcIntegrationService: {
       },
@@ -447,14 +432,14 @@ test('coordinator createOperation persists readiness snapshot in initial step',
       enableTimeouts: false,
     });
     coordinator.initialize();
+    coordinator.isPlacementAdmissionManagedEntityType = () => false;
 
     try {
       const operation = await coordinator.createOperation({
         type: 'ADD',
-        entityType: 'message_group',
-        entityId: 'group-1',
-        partitionId: 'group-1',
+        partitionId: 'partition-1',
         nodeId: targetNodeId,
+        deferDispatchUntilBootstrapTopology: true,
       });
 
       t.ok(operation, 'operation created');
@@ -797,21 +782,6 @@ test('coordinator updateStep persists readiness snapshot in step entry',
       systemTableCache: {
         get() {
           return null;
-        },
-        getAll(tableName) {
-          if (tableName === 'services') {
-            return [
-              {
-                service_id: 'group-1-r1',
-                replica_id: 'group-1-r1',
-                partition_id: 'group-1',
-                service_type: 'message_group',
-                node_id: 'node-local',
-                status: 'active',
-              },
-            ];
-          }
-          return [];
         },
       },
       cdcIntegrationService: {

@@ -58,6 +58,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {CDC_OPERATION, NODE_STATE, WORKFLOW_STEP} from
   '../../src/constants/index.js';
 import {
+  OPERATION_METADATA_KEY,
   OperationType,
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
@@ -981,6 +982,21 @@ async function createReplace(world) {
     membershipPublicationEpoch: PLANNING_EPOCH,
   });
   operation.replicaId = world.targetReplicaId;
+  const bootstrapTopology = await coordinator.buildOperationBootstrapTopology({
+    normalizedMoveType: OperationType.REPLACE,
+    entityType: 'partition',
+    entityId: world.partitionId,
+    partitionId: world.partitionId,
+    targetNodeId: world.targetNodeId,
+    targetReplicaId: world.targetReplicaId,
+    deferredBootstrap: false,
+  });
+  if (bootstrapTopology?.bootstrapMembership) {
+    operation[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP] =
+      bootstrapTopology.bootstrapMembership;
+    operation.stepsHistory[0][OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP] =
+      bootstrapTopology.bootstrapMembership;
+  }
   operation.workflowStep = WORKFLOW_STEP.ACTIVE;
   operation.status = ReplicaStatus.ACTIVE;
   await coordinator.repository.persistOperationUpdate(operation);

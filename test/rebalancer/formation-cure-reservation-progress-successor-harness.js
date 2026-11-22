@@ -211,28 +211,14 @@ function configureCreationOwner(coordinator) {
 
 function createSuccessorFixture(options = {}) {
   const timers = createTimerQueue();
-  const ownerNodeId = options.nodeId || 'successor-owner-node';
   const coordinator = createTestCoordinator({
-    nodeId: ownerNodeId,
+    nodeId: options.nodeId || 'successor-owner-node',
     autoProgressCreatedOperations: true,
     enableTimeouts: false,
     setTimeoutFn: timers.setTimeoutFn,
     clearTimeoutFn: timers.clearTimeoutFn,
-    cacheData: {
-      services: [
-        'sys-postgres-wire',
-        'successor-terminal-p1',
-        'successor-shutdown-p1',
-      ].map((id) => ({
-        service_id: `${id}-r0`,
-        replica_id: `${id}-r0`,
-        partition_id: id,
-        service_type: 'message_group',
-        node_id: ownerNodeId,
-        status: 'active',
-      })),
-    },
   });
+  coordinator.isPlacementAdmissionManagedEntityType = () => false;
   configureCreationOwner(coordinator);
   const boundary = installReservationBoundary(coordinator);
   const normalArmOperationIds = [];
@@ -259,7 +245,7 @@ function createSuccessorFixture(options = {}) {
 function createRuntimeServiceIngress(coordinator, entityId) {
   return createTestRebalancer({
     entityId,
-    entityType: 'message_group',
+    entityType: 'runtime_service',
     nodeId: coordinator.nodeId,
     rebalanceCoordinator: coordinator,
   });

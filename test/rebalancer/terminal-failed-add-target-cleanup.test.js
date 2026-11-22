@@ -47,9 +47,15 @@ import {REBALANCE_COORDINATOR_LOG_MSG} from
 import {
   createMockCache,
   createObservationOnlyMutationPort,
-  createTestCoordinator,
+  createTestCoordinator as createBaseTestCoordinator,
   createTestRebalancer,
 } from './test-helpers.js';
+
+function createTestCoordinator(options = {}) {
+  const coordinator = createBaseTestCoordinator(options);
+  coordinator.isPlacementAdmissionManagedEntityType = () => false;
+  return coordinator;
+}
 
 const PARTITION_ID = 'orders-p1';
 const TARGET_ID = 'orders-p1-r4';

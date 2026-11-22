@@ -56,8 +56,13 @@ import {
 import {
   buildMockPolicyAuthorityWitness,
   createMockPolicyService,
-  createTestCoordinator,
 } from './test-helpers.js';
+import {
+  createPlacementBoundTestCoordinator,
+} from './placement-bound-coordinator-fixture.js';
+import {
+  TEST_BOOT_INCARNATION,
+} from '../test-helpers/boot-incarnation-fixture.js';
 
 const GUARD_ACTIVE_STATUS = 'active';
 const GUARD_MUTATION_DELETE = 'delete';
@@ -78,6 +83,9 @@ function buildPartitionServiceRow({partitionId, replicaId, nodeId, raftRole}) {
     status: GUARD_ACTIVE_STATUS,
     raft_role: raftRole,
     address: `${nodeId}/partition/${replicaId}`,
+    created_at: 1,
+    updated_at: 1,
+    state_entered_at: 1,
   };
 }
 
@@ -87,6 +95,8 @@ function buildReadyNodeRow(nodeId) {
     status: 'active',
     connection_state: 'ready',
     ready_lease_expires_at: Date.now() + 60000,
+    boot_incarnation: TEST_BOOT_INCARNATION,
+    storage_incarnation: TEST_BOOT_INCARNATION,
   };
 }
 
@@ -220,7 +230,7 @@ test('REMOVE must not rest terminal REMOVED while the retired ' +
   const TEST_PARTITION_ID = 'guard-table-p1';
   const RETIRING_REPLICA_ID = 'guard-table-p1-r4';
   const deliveries = [];
-  const coordinator = createTestCoordinator({
+  const coordinator = await createPlacementBoundTestCoordinator({
     nodeId: 'seed-node',
     enableTimeouts: false,
     messageRouter: buildInitiatedDeliveryRouter(deliveries),
@@ -344,7 +354,7 @@ test('REPLACE must not rest terminal REMOVED while the retired ' +
   const TEST_GROUP_ID = 'mg-1';
   const SOURCE_REPLICA_ID = 'mg-1-r1';
   const deliveries = [];
-  const coordinator = createTestCoordinator({
+  const coordinator = await createPlacementBoundTestCoordinator({
     nodeId: 'seed-node',
     enableTimeouts: false,
     messageRouter: buildInitiatedDeliveryRouter(deliveries),

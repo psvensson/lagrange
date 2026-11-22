@@ -84,19 +84,8 @@ test(
       nodeId: NODE_ID,
       autoProgressCreatedOperations: true,
       enableTimeouts: false,
-      cacheData: {
-        services: [
-          {
-            service_id: `${PARTITION_ID}-r1`,
-            replica_id: `${PARTITION_ID}-r1`,
-            partition_id: PARTITION_ID,
-            service_type: 'message_group',
-            node_id: NODE_ID,
-            status: 'active',
-          },
-        ],
-      },
     });
+    coordinator.isPlacementAdmissionManagedEntityType = () => false;
     const gateway = coordinator.controlPlaneSystemTableGateway;
     const originalExecuteQuery = gateway.executeQuery.bind(gateway);
     const originalReadAuthoritativeRows =
@@ -251,7 +240,7 @@ test(
       const move = {
         type: OperationType.ADD,
         partitionId: PARTITION_ID,
-        entityType: 'message_group',
+        entityType: 'partition',
         entityId: PARTITION_ID,
         nodeId: TARGET_NODE_ID,
         replicaIntentId: REPLICA_ID,

@@ -149,6 +149,7 @@ async function createOperationCapturingInserts(move) {
     },
   });
   coordinator.initialize();
+  coordinator.isPlacementAdmissionManagedEntityType = () => false;
   const inserts = [];
   // The repository builds the canonical row and the INSERT parameters from the
   // same operation in the same persist call; both are captured so the write

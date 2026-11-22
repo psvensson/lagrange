@@ -89,6 +89,7 @@ function createBarrier(parties) {
 
 function configureCoordinator(coordinator, options = {}) {
   const counters = {reservations: 0};
+  coordinator.isPlacementAdmissionManagedEntityType = () => false;
   coordinator.assertLocalControlPlaneMutationReady = () => {};
   coordinator.runOperationLedgerInterlockAccountedCreate = async (_move, create) =>
     create();

@@ -72,7 +72,7 @@ test('Property 10: Operation Log Persistence', async (t) => {
           const request = buildPersistencePropertyMove(move);
           const {coordinator, persistedOperations} =
             await createTestCoordinatorWithPersistence(
-              committedVoterWorld(request),
+              request.replicaId ? committedVoterWorld(request) : {},
             );
 
           try {
@@ -104,7 +104,7 @@ test('Property 10: Operation Log Persistence', async (t) => {
           const request = buildPersistencePropertyMove(move);
           const {coordinator, persistedOperations} =
             await createTestCoordinatorWithPersistence(
-              committedVoterWorld(request),
+              request.replicaId ? committedVoterWorld(request) : {},
             );
 
           try {
@@ -146,7 +146,7 @@ test('Property 10: Operation Log Persistence', async (t) => {
           const request = buildPersistencePropertyMove(move);
           const {coordinator, persistedOperations} =
             await createTestCoordinatorWithPersistence(
-              committedVoterWorld(request),
+              request.replicaId ? committedVoterWorld(request) : {},
             );
 
           try {
@@ -181,7 +181,7 @@ test('Property 10: Operation Log Persistence', async (t) => {
           const request = buildPersistencePropertyMove(move);
           const {coordinator, persistedOperations} =
             await createTestCoordinatorWithPersistence(
-              committedVoterWorld(request),
+              request.replicaId ? committedVoterWorld(request) : {},
             );
 
           try {
@@ -220,7 +220,7 @@ test('Property 10: Operation Log Persistence', async (t) => {
           const request = buildPersistencePropertyMove(move);
           const {coordinator, persistedOperations} =
             await createTestCoordinatorWithPersistence(
-              committedVoterWorld(request),
+              request.replicaId ? committedVoterWorld(request) : {},
             );
 
           try {
@@ -257,7 +257,7 @@ test('Property 10: Operation Log Persistence', async (t) => {
           const request = buildPersistencePropertyMove(move);
           const {coordinator, persistedOperations} =
             await createTestCoordinatorWithPersistence(
-              committedVoterWorld(request),
+              request.replicaId ? committedVoterWorld(request) : {},
             );
 
           try {

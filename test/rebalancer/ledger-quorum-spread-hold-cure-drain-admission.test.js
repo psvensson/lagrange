@@ -306,6 +306,7 @@ function createDrainFixture({
     storageAdmissionService,
     tablePolicyService,
   });
+  coordinator.isPlacementAdmissionManagedEntityType = () => false;
   installAuthoritativeServicesRead(coordinator, cache);
   const rebalancer = createTestRebalancer({
     entityId: TEST_LEDGER_PARTITION_ID,

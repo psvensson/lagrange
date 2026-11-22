@@ -365,6 +365,7 @@ async function runPlacementScenario(t, finiteAuthorityFailure = false) {
       ...controlledRetryScheduler(finiteAuthorityFailure),
     });
     coordinator.config.maxConcurrentAdds = 5;
+    coordinator.isPlacementAdmissionManagedEntityType = () => false;
     coordinator.logger = QUIET_LOGGER;
     coordinator.workflowOwner.logger = QUIET_LOGGER;
 

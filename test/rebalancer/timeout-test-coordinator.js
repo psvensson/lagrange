@@ -179,6 +179,9 @@ function createTimeoutTestCoordinator(options = {}) {
   });
 
   coordinator.initialize();
+  if (!options.openLedgerDatabase) {
+    coordinator.isPlacementAdmissionManagedEntityType = () => false;
+  }
   const shutdown = coordinator.shutdown.bind(coordinator);
   coordinator.shutdown = async () => {
     try {
