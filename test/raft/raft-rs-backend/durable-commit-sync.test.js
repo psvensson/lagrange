@@ -9,6 +9,15 @@
 // and an OS crash, not only a process crash. Application writes keep the
 // connection's own setting.
 //
+// Explicit R09 supersession (Owner Decision #2, 2026-11-22,
+// lagrange-takeover-20261121/reports/raft-frame-delivery-record.md section 4.3
+// and section 21): a Ready with no durable mutations (READY_SHAPE.NO_STORAGE:
+// no snapshot, no entries, and no hardState) opens no SQLite transaction
+// (commit === null). Every storage-bearing Ready shape (TERM_OR_VOTE, ENTRIES,
+// CONF_CHANGE, COMMIT_ONLY, SNAPSHOT) still commits in SQLite before any
+// message of that Ready leaves, at FULL when raft-rs requires a sync and at
+// NORMAL for commit-only hard state (mustSync === false).
+//
 // Everything is measured on the real connection: the observer reads
 // `PRAGMA synchronous` on the replica's own SQLite connection inside each
 // transaction immediately before COMMIT, and the expected answer comes from
@@ -99,12 +108,17 @@ function assertPersistDurability(events, label) {
     const required = raftRsRequiresSync(persist);
     const shape = readyShape(persist);
     shapes.set(shape, (shapes.get(shape) ?? 0) + 1);
-    assert.ok(commit !== null, `${label}: persist of ${shape} committed`);
     assert.equal(persist.mustSync, required,
       `${label}: the core's must_sync matches raft-rs's rule for ${shape}`);
-    assert.equal(commit.level >= SQLITE_SYNCHRONOUS.FULL, required,
-      `${label}: a ${shape} Ready commits at level ${commit.level}; ` +
-      `raft-rs requires a sync: ${required}`);
+    if (shape === READY_SHAPE.NO_STORAGE) {
+      assert.equal(commit, null,
+        `${label}: an empty (${shape}) Ready opens no SQLite transaction`);
+    } else {
+      assert.ok(commit !== null, `${label}: persist of ${shape} committed`);
+      assert.equal(commit.level >= SQLITE_SYNCHRONOUS.FULL, required,
+        `${label}: a ${shape} Ready commits at level ${commit.level}; ` +
+        `raft-rs requires a sync: ${required}`);
+    }
     assert.equal(end.levelAfter, SQLITE_SYNCHRONOUS.NORMAL,
       `${label}: the connection is back at NORMAL after a ${shape} persist`);
   }
@@ -112,8 +126,9 @@ function assertPersistDurability(events, label) {
 }
 
 // Every message the replica hands its transport leaves after the Ready it
-// came from was committed - durably when raft-rs required it. The sends of a
-// Ready run in the same synchronous drain as its take_ready, so the last
+// came from was committed - durably when raft-rs required it. An empty Ready
+// (NO_STORAGE) carries no durable mutation and opens no transaction. The sends
+// of a Ready run in the same synchronous drain as its take_ready, so the last
 // take_ready before a send is that send's Ready.
 function assertSendsFollowDurableCommit(events, fileOf) {
   let checked = 0;
@@ -140,12 +155,17 @@ function assertSendsFollowDurableCommit(events, fileOf) {
       `send #${index}: the sender's own record persisted its Ready`);
     const committed = between.find((event) =>
       event.type === DURABLE_EVENT.COMMITTED && event.file === persist.file);
-    assert.ok(committed !== undefined,
-      `send #${index} from ${send.from}: the persist COMMITTED before it`);
-    if (raftRsRequiresSync(persist)) {
-      assert.ok(committed.level >= SQLITE_SYNCHRONOUS.FULL,
-        `send #${index} from ${send.from}: a must-sync Ready was committed ` +
-        `at level ${committed.level} before its messages left`);
+    if (readyShape(persist) === READY_SHAPE.NO_STORAGE) {
+      assert.equal(committed, undefined,
+        `send #${index} from ${send.from}: an empty Ready opens no transaction before send`);
+    } else {
+      assert.ok(committed !== undefined,
+        `send #${index} from ${send.from}: the persist COMMITTED before it`);
+      if (raftRsRequiresSync(persist)) {
+        assert.ok(committed.level >= SQLITE_SYNCHRONOUS.FULL,
+          `send #${index} from ${send.from}: a must-sync Ready was committed ` +
+          `at level ${committed.level} before its messages left`);
+      }
     }
     checked += 1;
   }
@@ -339,14 +359,22 @@ test('the persist transaction: fail closed without the flag, restored on ' +
     // A Ready the core did not flag either way is synced (sync when in
     // doubt).
     store.persistReady('g', {hardState: VOTE, entries: [ENTRY]});
-    // A Ready the core says needs no sync does not pay one.
+    // A Ready the core says needs no sync (commit-index-only hard state)
+    // still persists to SQLite without paying a FULL sync.
     store.persistReady('g', {mustSync: false,
       hardState: {...VOTE, commit: '1'}, entries: []});
-    const [unflagged, commitOnly] = persistCommits(observer.events);
+    // An empty Ready (no snapshot, no entries, no hard state) opens no SQLite
+    // transaction at all.
+    store.persistReady('g', {mustSync: false, entries: []});
+    const [unflagged, commitOnly, emptyReady] = persistCommits(observer.events);
     assert.equal(unflagged.commit.level, SQLITE_SYNCHRONOUS.FULL,
       'a Ready without must_sync is committed at FULL');
     assert.equal(commitOnly.commit.level, SQLITE_SYNCHRONOUS.NORMAL,
       'a commit-index-only Ready is committed at NORMAL');
+    assert.equal(store.readDurableRecord('g').hardState.commit, '1',
+      'a commit-index-only Ready with mustSync === false still persists to SQLite');
+    assert.equal(emptyReady.commit, null,
+      'an empty Ready opens no SQLite transaction');
 
     // A failing persist rolls back and still restores the level.
     assert.throws(() => store.persistReady('g', {mustSync: true,

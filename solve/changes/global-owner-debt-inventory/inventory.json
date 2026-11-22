@@ -7,7 +7,7 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "610773eb676f0a15ae5e3d97ee9c5ccd0b6135647fef15bceb08f240f24a1f63"
+        "sha256": "ad64b98334a79a408d684524e116bd320f89ef2fadce9cf192a06cf45039cd2d"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -23,8 +23,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3785456,
-        "sha256": "8a956390a5e3f22c89d89276b4ca72a1ea28d246601fb55f50d676f58c84c159"
+        "bytes": 3786742,
+        "sha256": "25206b97377bc0ad3421c025e53e1830e53ab3becf0c08a460a420eb6aeceada"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -42,7 +42,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "da7d5493139b2185e2f95f35929958e2c6818c5d82a1539ec9bae9ea8609c990"
+        "sha256": "6e86112bb08d4d6d01512597357381eae1a39dc5506bb67498b06fde09391c54"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "a57c8ac7f61c42d9a6ba06e9a56a09360a961291e4a1f52d7f4a1850a6785a3e"
+    "inputDigest": "656439b73f70e1761fd4c6fed49c08a56f974c5ee80d67dd57490c29e7efcbd6"
   },
   "reconciliation": {
     "complexity": {
@@ -73,11 +73,11 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "610773eb676f0a15ae5e3d97ee9c5ccd0b6135647fef15bceb08f240f24a1f63"
+        "sha256": "ad64b98334a79a408d684524e116bd320f89ef2fadce9cf192a06cf45039cd2d"
       },
-      "declaredCount": 1736,
-      "observedCount": 1736,
-      "assignedCount": 1736
+      "declaredCount": 1737,
+      "observedCount": 1737,
+      "assignedCount": 1737
     },
     "cognitive": {
       "identity": {
@@ -135,13 +135,13 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "da7d5493139b2185e2f95f35929958e2c6818c5d82a1539ec9bae9ea8609c990"
+          "sha256": "6e86112bb08d4d6d01512597357381eae1a39dc5506bb67498b06fde09391c54"
         },
-        "cloneGroups": 604,
-        "duplicatedLines": 21588,
-        "sourceCloneTouches": 1208,
-        "sourceDuplicatedLineTouches": 43176,
-        "nonzeroSourceCount": 396,
+        "cloneGroups": 607,
+        "duplicatedLines": 21690,
+        "sourceCloneTouches": 1214,
+        "sourceDuplicatedLineTouches": 43380,
+        "nonzeroSourceCount": 398,
         "touchMultiplicity": 2
       }
     ],
@@ -173,35 +173,35 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3785456,
-        "sha256": "8a956390a5e3f22c89d89276b4ca72a1ea28d246601fb55f50d676f58c84c159"
+        "bytes": 3786742,
+        "sha256": "25206b97377bc0ad3421c025e53e1830e53ab3becf0c08a460a420eb6aeceada"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 7871,
         "sha256": "c74ac7531e8a59a48fcee584fa7767c7d6188e6489f4104eb404ded8e1400372"
       },
-      "sourceDigest": "63f0a09831b94e01a1c9b1a86dcf79b3985e11dd29c1d5855c0371dd3d98f3c4",
-      "moduleCount": 6394,
-      "edgeCount": 38125,
+      "sourceDigest": "9cb1f75976bd5ceb0ffd447c267a92f8d97834b74142d626775ee21ba8194f0f",
+      "moduleCount": 6395,
+      "edgeCount": 38143,
       "unresolvedCount": 39
     }
   },
   "assignment": {
-    "sourceSignalCount": 2406,
-    "assignedSignalCount": 2406,
-    "uniqueAssignmentCount": 2406,
-    "digest": "c23080190df13b8183bf5344be6bc2b8650ebe5fc9337862def24f68b5929210"
+    "sourceSignalCount": 2409,
+    "assignedSignalCount": 2409,
+    "uniqueAssignmentCount": 2409,
+    "digest": "978d0fbefb30cf9ec44d19e04701c5adb135457cdecb1cb9f7bce59d1c9f8e27"
   },
   "signalCounts": {
     "cognitive": 148,
-    "complexity": 1736,
-    "duplication": 446,
+    "complexity": 1737,
+    "duplication": 448,
     "fileSize": 36,
     "lintExclusion": 40
   },
   "summary": {
-    "filesWithDebt": 1251,
+    "filesWithDebt": 1253,
     "rankedBoundaryCount": 109,
     "semanticBoundaryCount": 20,
     "fallbackBoundaryCount": 89,
@@ -1437,6 +1437,34 @@
       ]
     },
     {
+      "key": "area:test/raft",
+      "owner": null,
+      "boundary": "test/raft",
+      "classification": "test-owner-area",
+      "ownerAreas": [
+        "test/raft"
+      ],
+      "fileCount": 8,
+      "signalCount": 9,
+      "complexity": 2,
+      "cognitive": 0,
+      "oversizedFiles": 0,
+      "duplicatedLines": 398,
+      "cloneTouches": 14,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 2,
+      "importOut": 155,
+      "score": 47.8,
+      "topPaths": [
+        "test/raft/raft-rs-empty-ready-persistence.test.js",
+        "test/raft/raft-rs-quiet-ready-cost.test.js",
+        "test/raft/raft-rs-backend/formation-learner-placement-reversal.test.js",
+        "test/raft/raft-rs-backend/formation-placement-lease-authority-fixture.js",
+        "test/raft/raft-rs-backend/message-group-on-raft-rs.test.js"
+      ]
+    },
+    {
       "key": "area:test/runtime",
       "owner": null,
       "boundary": "test/runtime",
@@ -1509,7 +1537,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 168,
+      "importIn": 169,
       "importOut": 79,
       "score": 36,
       "topPaths": [
@@ -1755,34 +1783,6 @@
         "src/control-plane/replica-dispatch-service-dispatch-observation-methods.js",
         "src/control-plane/replica-dispatch-service-lifecycle.js",
         "src/control-plane/replica-dispatch-service.js"
-      ]
-    },
-    {
-      "key": "area:test/raft",
-      "owner": null,
-      "boundary": "test/raft",
-      "classification": "test-owner-area",
-      "ownerAreas": [
-        "test/raft"
-      ],
-      "fileCount": 6,
-      "signalCount": 6,
-      "complexity": 1,
-      "cognitive": 0,
-      "oversizedFiles": 0,
-      "duplicatedLines": 194,
-      "cloneTouches": 8,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 2,
-      "importOut": 127,
-      "score": 23.4,
-      "topPaths": [
-        "test/raft/raft-rs-backend/formation-learner-placement-reversal.test.js",
-        "test/raft/raft-rs-backend/formation-placement-lease-authority-fixture.js",
-        "test/raft/raft-rs-backend/message-group-on-raft-rs.test.js",
-        "test/raft/raft-rs-backend/formation-placement-native-retirement.test.js",
-        "test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js"
       ]
     },
     {
