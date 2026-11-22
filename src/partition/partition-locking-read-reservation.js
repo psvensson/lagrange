@@ -252,13 +252,16 @@ function evaluateReservationConflict(storeOutcome, existing, transactionId, rowK
 }
 
 function handleReentrantUpgrade(options) {
-  const {conflictOutcome, existing, record, kind, store} = options;
+  const {conflictOutcome, storeOutcome, existing, record, kind, store} = options;
   if (conflictOutcome.unavailable) {
     return conflictOutcome;
   }
+  const missingFromStoreOrNonForUpdate = !storeOutcome ||
+    !existing ||
+    existing.kind !== LOCKING_READ_RESERVATION_KIND.FOR_UPDATE;
   const needsUpgrade = conflictOutcome.reentrant === true &&
     kind === LOCKING_READ_RESERVATION_KIND.FOR_UPDATE &&
-    (!existing || existing.kind !== LOCKING_READ_RESERVATION_KIND.FOR_UPDATE);
+    missingFromStoreOrNonForUpdate;
   if (!needsUpgrade) {
     return conflictOutcome;
   }
@@ -313,6 +316,7 @@ function acquireAuthoritativeForUpdate(store, options, record) {
       if (conflictOutcome !== null) {
         return handleReentrantUpgrade({
           conflictOutcome,
+          storeOutcome,
           existing,
           record,
           kind: LOCKING_READ_RESERVATION_KIND.FOR_UPDATE,
