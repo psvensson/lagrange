@@ -16,7 +16,7 @@
     "query-sql": 210,
     "release-packaging": 15,
     "runtime-primitives": 23,
-    "services-runtime": 160,
+    "services-runtime": 161,
     "solver-tooling": 7,
     "storage-partition": 257,
     "storage-raft": 166,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2765,
-  "digest": "fnv1a32-fc898cb0",
+  "censusSize": 2766,
+  "digest": "fnv1a32-ce18a331",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-7482914f",
+  "observationDigest": "fnv1a32-e1a5dbd6",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2566,6 +2566,7 @@
     "test/service/request-binding-route-resolver.test.js": "services-runtime",
     "test/service/request-cell-call-bridge.test.js": "services-runtime",
     "test/service/request-cell-http-adapter.test.js": "services-runtime",
+    "test/service/retained-read-view-generation-custody.test.js": "services-runtime",
     "test/service/service-compiler-editor-typings.test.js": "services-runtime",
     "test/service/service-consensus-creation-intent.test.js": "services-runtime",
     "test/service/service-consensus-creation-recovery.integration.test.js": "services-runtime",
@@ -25422,6 +25423,20 @@
     "test/service/request-cell-call-bridge.test.js": {
       "files": [
         "src/service/request-cell-call-bridge.js"
+      ]
+    },
+    "test/service/retained-read-view-generation-custody.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/raft/snapshot-checkpoint-store.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/service/service-consensus-creation-intent.test.js": {

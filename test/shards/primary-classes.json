@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2406,
+    "unit": 2407,
     "integration": 126,
     "bootstrap": 226,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2765,
-  "digest": "fnv1a32-9250f3b4",
+  "censusSize": 2766,
+  "digest": "fnv1a32-bc57fd78",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -2547,6 +2547,7 @@
     "test/service/request-binding-route-resolver.test.js": "unit",
     "test/service/request-cell-call-bridge.test.js": "unit",
     "test/service/request-cell-http-adapter.test.js": "unit",
+    "test/service/retained-read-view-generation-custody.test.js": "unit",
     "test/service/service-compiler-editor-typings.test.js": "unit",
     "test/service/service-consensus-creation-intent.test.js": "unit",
     "test/service/service-consensus-creation-recovery.integration.test.js": "integration",
