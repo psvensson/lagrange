@@ -365,7 +365,6 @@ function createCoordinator(sqlEngine) {
   });
   coordinator.initialize();
   coordinator.isPlacementAdmissionManagedEntityType = () => false;
-  coordinator.isPlacementAdmissionManagedEntityType = () => false;
   coordinator.repository.waitForOperationPersistRetry = async () => {};
   return coordinator;
 }
