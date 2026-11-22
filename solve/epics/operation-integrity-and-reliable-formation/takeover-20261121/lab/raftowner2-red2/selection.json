@@ -1,0 +1,17 @@
+{
+  "sha": "4e18b4c1d7030baeb8d754765da9203048abc1bd",
+  "host": "adams-gamla",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/raft/raft-rs-backend/proposal-submitting-leadership.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/raft/raft-rs-backend/proposal-submitting-leadership.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

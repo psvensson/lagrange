@@ -1,0 +1,21 @@
+{
+  "sha": "7039f9018f68fff668018c0d0b67e50b66ffe4da",
+  "host": "adams-gamla",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/transport/router-in-process-address-in-use.test.js",
+    "test/transport/message-router-ping-wait-bound-spent.test.js",
+    "test/transport/router-server-manager.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/transport/router-in-process-address-in-use.test.js",
+        "test/transport/router-server-manager.test.js",
+        "test/transport/message-router-ping-wait-bound-spent.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

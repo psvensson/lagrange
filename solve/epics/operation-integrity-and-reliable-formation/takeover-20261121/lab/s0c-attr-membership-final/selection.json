@@ -1,0 +1,17 @@
+{
+  "sha": "d358ab712f3c09f1d5d45ea627ca76d8f225d824",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/integration/membership-consistency.integration.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/integration/membership-consistency.integration.test.js"
+      ],
+      "jobs": 1,
+      "resourceClass": "exclusive"
+    }
+  ]
+}

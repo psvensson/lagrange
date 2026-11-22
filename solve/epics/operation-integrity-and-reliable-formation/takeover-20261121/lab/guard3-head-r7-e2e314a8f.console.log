@@ -1,0 +1,7 @@
+lab test: tv-dator: ordinary (1 files) cores=12 mem=15.4GiB speed x1.46
+[tv-dator] placement-shell=3464705
+[tv-dator] machine-lock-busy={"project":"lagrange","agent":"claude:merger-3","controller":"peter-System-Product-Name","purpose":"test:ordinary,bootstrap,exclusive","sha":"e35fc5a3d0de362cab6bd7f577d3a379f273502a","startedAt":"2026-11-22T00:41:08Z","expectedMinutes":1,"pid":3464292}
+placement: host-busy tv-dator held-by claude:merger-3 since 2026-11-22T00:41:08Z
+lab test: tv-dator: # test-files total=1 pass=0 fail=1 assertions=0
+lab test: tv-dator: 1 file(s) reported no result: exit 98
+# test-files total=1 pass=0 fail=1 assertions=0

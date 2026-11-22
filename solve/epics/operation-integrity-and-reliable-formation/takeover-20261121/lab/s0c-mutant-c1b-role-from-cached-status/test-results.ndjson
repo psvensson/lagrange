@@ -1,1 +1,1 @@
-{"file":"test/cdc/cdc-owner-fact-receiver-read-point.test.js","attempt":1,"ok":true,"assertions":86,"durationMs":6215,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cdc/cdc-owner-fact-receiver-read-point.test.js","attempt":1,"ok":false,"assertions":98,"durationMs":6725,"retriedOnce":false,"firstFailureLine":"not ok 6 - it never executes the statement"}

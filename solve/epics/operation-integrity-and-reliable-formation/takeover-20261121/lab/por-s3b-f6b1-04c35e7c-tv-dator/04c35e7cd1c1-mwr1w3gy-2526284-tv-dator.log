@@ -1,0 +1,2734 @@
+placement-shell=3417956
+placement-head=04c35e7cd1c12c5b8bc637ae9883c4a85e556463
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3418406
+# test-files planned=15
+classified lane ordinary: 12 file(s), jobs=4
+thermal: ok cpu 61C (coretemp/Package id 0) nvme 47C (nvme/Sensor 1)
+ok test/partition/partition-service-learner-promotion.test.js (47 assertions, 2082ms)
+ok test/partition/placement-owner-construction-orders.test.js (10 assertions, 4881ms)
+ok test/rebalancer/placement-owner-authority-negatives.test.js (3 assertions, 6305ms)
+ok test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js (26 assertions, 1477ms)
+ok test/rebalancer/operation-record-completeness.property.test.js (29 assertions, 5591ms)
+ok test/control-plane/cl-036-local-leader-row-seed.test.js (50 assertions, 1343ms)
+not ok test/rebalancer/timeout-triggers-failure.property.test.js (46 assertions, 4397ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: Property 7: Timeout Triggers Failure
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  replicaCount: 3,
+  dbPath: '/tmp/tx1-v3-xfIRcL/partition.db'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+Became leader {
+  term: 1,
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1',
+  rebalancerActive: true
+}
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'placement-admit:test-node-1:3ec31cad-44e4-4644-99d8-a4ec136a0a75',
+  logIndex: 3,
+  obligations: 1
+}
+    # Subtest: operation in PENDING times out and fails
+        ok 1 - Initial step is PENDING
+        ok 2 - Initial status is pending
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+        not ok 3 - Status is failed after timeout
+          ---
+          compare: ===
+          at:
+            fileName: test/rebalancer/timeout-triggers-failure.property.test.js
+            lineNumber: 51
+            columnNumber: 9
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/rebalancer/timeout-triggers-failure.property.test.js:51:9)
+          source: >2
+          
+                  // Verify operation failed
+                  t.equal(updatedOp.status, ReplicaStatus.FAILED, 'Status is failed after timeout');
+            --------^
+                  t.equal(updatedOp.workflow_step, 'FAILED', 'Workflow step is FAILED');
+                  t.ok(updatedOp.error_message.includes('Timeout'),
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -failed
+            +pending
+          ...
+        
+        not ok 4 - Workflow step is FAILED
+          ---
+          compare: ===
+          at:
+            fileName: test/rebalancer/timeout-triggers-failure.property.test.js
+            lineNumber: 52
+            columnNumber: 9
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/rebalancer/timeout-triggers-failure.property.test.js:52:9)
+          source: >2
+                  // Verify operation failed
+                  t.equal(updatedOp.status, ReplicaStatus.FAILED, 'Status is failed after timeout');
+                  t.equal(updatedOp.workflow_step, 'FAILED', 'Workflow step is FAILED');
+            --------^
+                  t.ok(updatedOp.error_message.includes('Timeout'),
+                    'Error message mentions timeout');
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -FAILED
+            +PENDING
+          ...
+        
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+        not ok 5 - Cannot read properties of null (reading 'includes')
+          ---
+          stack: >
+            Test.<anonymous>
+            (test/rebalancer/timeout-triggers-failure.property.test.js:53:36)
+          at:
+            fileName: test/rebalancer/timeout-triggers-failure.property.test.js
+            lineNumber: 53
+            columnNumber: 36
+            typeName: Test
+            methodName: <anonymous>
+            functionName: Test.<anonymous>
+          type: TypeError
+          tapCaught: returnedPromiseRejection
+          source: >2
+                  t.equal(updatedOp.status, ReplicaStatus.FAILED, 'Status is failed after timeout');
+                  t.equal(updatedOp.workflow_step, 'FAILED', 'Workflow step is FAILED');
+                  t.ok(updatedOp.error_message.includes('Timeout'),
+            -----------------------------------^
+                    'Error message mentions timeout');
+                } finally {
+          ...
+        
+        1..5
+    not ok 1 - operation in PENDING times out and fails # time=2244.267ms
+      ---
+      at:
+        fileName: test/rebalancer/timeout-triggers-failure.property.test.js
+        lineNumber: 26
+        columnNumber: 11
+        typeName: Test
+      source: |
+      
+        test('Property 7: Timeout Triggers Failure', async (t) => {
+          await t.test('operation in PENDING times out and fails', async (t) => {
+        ----------^
+            const {coordinator, backdateOperation, getTrackedOperation} =
+              await createPlacementBoundTimeoutTestCoordinator({pendingTimeoutMs: 1});
+      ...
+    
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  replicaCount: 3,
+  dbPath: '/tmp/tx1-v3-uYmDGr/partition.db'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'placement-admit:test-node-1:e9902dee-c43c-45ff-b098-7d39e2e51ac2',
+  logIndex: 3,
+  obligations: 1
+}
+Operation step changed {
+  operationId: 'pl-test-partition-3-0',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  reason: 'dispatch_sending',
+  status: 'pending',
+  partitionId: 'test-partition'
+}
+    # Subtest: operation in SENDING times out and fails
+        ok 1 - Step is SENDING
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+        not ok 2 - Status is failed after timeout
+          ---
+          compare: ===
+          at:
+            fileName: test/rebalancer/timeout-triggers-failure.property.test.js
+            lineNumber: 85
+            columnNumber: 9
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/rebalancer/timeout-triggers-failure.property.test.js:85:9)
+          source: >2
+          
+                  // Verify operation failed
+                  t.equal(updatedOp.status, ReplicaStatus.FAILED, 'Status is failed after timeout');
+            --------^
+                  t.ok(updatedOp.error_message.includes('SENDING'),
+                    'Error message mentions SENDING step');
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -failed
+            +pending
+          ...
+        
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+        not ok 3 - Cannot read properties of null (reading 'includes')
+          ---
+          stack: >
+            Test.<anonymous>
+            (test/rebalancer/timeout-triggers-failure.property.test.js:86:36)
+          at:
+            fileName: test/rebalancer/timeout-triggers-failure.property.test.js
+            lineNumber: 86
+            columnNumber: 36
+            typeName: Test
+            methodName: <anonymous>
+            functionName: Test.<anonymous>
+          type: TypeError
+          tapCaught: returnedPromiseRejection
+          source: >2
+                  // Verify operation failed
+                  t.equal(updatedOp.status, ReplicaStatus.FAILED, 'Status is failed after timeout');
+                  t.ok(updatedOp.error_message.includes('SENDING'),
+            -----------------------------------^
+                    'Error message mentions SENDING step');
+                } finally {
+          ...
+        
+        1..3
+    not ok 2 - operation in SENDING times out and fails # time=46.757ms
+      ---
+      at:
+        fileName: test/rebalancer/timeout-triggers-failure.property.test.js
+        lineNumber: 60
+        columnNumber: 11
+        typeName: Test
+      source: |2
+          });
+      
+          await t.test('operation in SENDING times out and fails', async (t) => {
+        ----------^
+            const {coordinator, backdateOperation, getTrackedOperation} =
+              await createPlacementBoundTimeoutTestCoordinator({pendingTimeoutMs: 1});
+      ...
+    
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  replicaCount: 3,
+  dbPath: '/tmp/tx1-v3-AbmtEp/partition.db'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'placement-admit:test-node-1:1d95e8e2-0bf7-4f77-bb90-9430708007b5',
+  logIndex: 3,
+  obligations: 1
+}
+Operation step changed {
+  operationId: 'pl-test-partition-3-0',
+  previousStep: 'PENDING',
+  newStep: 'CREATING',
+  reason: 'dispatch_creating',
+  status: 'creating',
+  partitionId: 'test-partition'
+}
+    # Subtest: operation in CREATING times out and fails
+        ok 1 - Step is CREATING
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+Durable terminal release obligations registered {
+  operationId: 'pl-test-partition-3-0',
+  workflowStep: 'FAILED',
+  partitionId: 'test-partition',
+  cause: 'terminal_release_pending',
+  attempt: 0,
+  delayMs: 500
+}
+metrics.rebalance.operation {
+  operationId: 'pl-test-partition-3-0',
+  entityType: 'partition',
+  finalState: 'failed',
+  totalDurationMs: 10
+}
+        ok 2 - Status is failed after timeout
+        ok 3 - Error message mentions CREATING step
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+        1..3
+    ok 3 - operation in CREATING times out and fails # time=45.408ms
+    
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  replicaCount: 3,
+  dbPath: '/tmp/tx1-v3-w0TRah/partition.db'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'placement-admit:test-node-1:5abe5c52-a10a-4bcf-b956-fd7a196db39f',
+  logIndex: 3,
+  obligations: 1
+}
+Operation step changed {
+  operationId: 'pl-test-partition-3-0',
+  previousStep: 'PENDING',
+  newStep: 'SYNCING',
+  reason: 'dispatch_sending',
+  status: 'syncing',
+  partitionId: 'test-partition'
+}
+    # Subtest: operation in SYNCING times out and fails
+        ok 1 - Step is SYNCING
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+Durable terminal release obligations registered {
+  operationId: 'pl-test-partition-3-0',
+  workflowStep: 'FAILED',
+  partitionId: 'test-partition',
+  cause: 'terminal_release_pending',
+  attempt: 0,
+  delayMs: 500
+}
+metrics.rebalance.operation {
+  operationId: 'pl-test-partition-3-0',
+  entityType: 'partition',
+  finalState: 'failed',
+  totalDurationMs: 7
+}
+        ok 2 - Status is failed after timeout
+        ok 3 - Error message mentions SYNCING step
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+        1..3
+    ok 4 - operation in SYNCING times out and fails # time=35.175ms
+    
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  replicaCount: 3,
+  dbPath: '/tmp/tx1-v3-mdv4b1/partition.db'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'placement-admit:test-node-1:430ff1cb-bffc-4868-ad33-99a11d79878a',
+  logIndex: 3,
+  obligations: 1
+}
+Operation step changed {
+  operationId: 'pl-test-partition-3-0',
+  previousStep: 'PENDING',
+  newStep: 'STOPPING',
+  reason: 'dispatch_stopping',
+  status: 'removing',
+  partitionId: 'test-partition'
+}
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+Sending replica operation {
+  operationId: 'pl-test-partition-3-0',
+  target: 'test-node/service/replica-handler',
+  type: 'REMOVE_REPLICA',
+  entityType: 'partition',
+  entityId: 'test-partition',
+  replaceRemovePhase: false,
+  firstAttemptForStep: true
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+    # Subtest: operation in STOPPING remains removing during timeout checks
+        ok 1 - Step is STOPPING
+        ok 2 - Status remains removing while waiting on external removal
+        ok 3 - Workflow step remains STOPPING
+        ok 4 - No timeout error is recorded for STOPPING REMOVE
+        1..4
+    ok 5 - operation in STOPPING remains removing during timeout checks # time=38.064ms
+    
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  replicaCount: 3,
+  dbPath: '/tmp/tx1-v3-GpenPm/partition.db'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'placement-admit:test-node-1:f179440a-bd9c-48ad-a116-71b66998aa51',
+  logIndex: 3,
+  obligations: 1
+}
+Operation step changed {
+  operationId: 'pl-test-partition-3-0',
+  previousStep: 'PENDING',
+  newStep: 'STOPPING',
+  reason: 'dispatch_stopping',
+  status: 'removing',
+  partitionId: 'test-partition'
+}
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+Sending replica operation {
+  operationId: 'pl-test-partition-3-0',
+  target: 'test-node/service/replica-handler',
+  type: 'REMOVE_REPLICA',
+  entityType: 'partition',
+  entityId: 'test-partition',
+  replaceRemovePhase: false,
+  firstAttemptForStep: true
+}
+Durable terminal release obligations registered {
+  operationId: 'pl-test-partition-3-0',
+  workflowStep: 'FAILED',
+  partitionId: 'test-partition',
+  cause: 'terminal_release_pending',
+  attempt: 0,
+  delayMs: 500
+}
+metrics.rebalance.operation {
+  operationId: 'pl-test-partition-3-0',
+  entityType: 'partition',
+  finalState: 'failed',
+  totalDurationMs: 6
+}
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+    # Subtest: acknowledged redrive without observed removal cannot suppress timeout
+        ok 1 - the expired removal failed
+        ok 2 - the failure comes from the normal STOPPING deadline
+        1..2
+    ok 6 - acknowledged redrive without observed removal cannot suppress timeout # time=35.936ms
+    
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  replicaCount: 3,
+  dbPath: '/tmp/tx1-v3-jV2EeG/partition.db'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'placement-admit:test-node-1:6a55e4b0-6253-4972-bf47-f3a9736b5c09',
+  logIndex: 3,
+  obligations: 1
+}
+Durable terminal release obligations registered {
+  operationId: 'pl-test-partition-3-0',
+  workflowStep: 'ACTIVE',
+  partitionId: 'test-partition',
+  cause: 'terminal_release_pending',
+  attempt: 0,
+  delayMs: 500
+}
+Operation completed {
+  operationId: 'pl-test-partition-3-0',
+  type: 'ADD',
+  partitionId: 'test-partition',
+  targetNodeId: 'test-node'
+}
+metrics.rebalance.operation {
+  operationId: 'pl-test-partition-3-0',
+  entityType: 'partition',
+  finalState: 'active',
+  totalDurationMs: 3
+}
+    # Subtest: completed operation does not timeout
+        ok 1 - Step is ACTIVE
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+        ok 2 - Status is still active after timeout check
+        ok 3 - Workflow step is still ACTIVE
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+        1..3
+    ok 7 - completed operation does not timeout # time=30.417ms
+    
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  replicaCount: 3,
+  dbPath: '/tmp/tx1-v3-M5B55u/partition.db'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'placement-admit:test-node-1:9b044fd5-006e-47d7-92dd-495e00c76054',
+  logIndex: 3,
+  obligations: 1
+}
+Durable terminal release obligations registered {
+  operationId: 'pl-test-partition-3-0',
+  workflowStep: 'FAILED',
+  partitionId: 'test-partition',
+  cause: 'terminal_release_pending',
+  attempt: 0,
+  delayMs: 500
+}
+metrics.rebalance.operation {
+  operationId: 'pl-test-partition-3-0',
+  entityType: 'partition',
+  finalState: 'failed',
+  totalDurationMs: 2
+}
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+    # Subtest: failed operation does not timeout again
+        ok 1 - Error message unchanged after timeout check
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+        1..1
+    ok 8 - failed operation does not timeout again # time=34.924ms
+    
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  replicaCount: 3,
+  dbPath: '/tmp/tx1-v3-AkIbhD/partition.db'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'placement-admit:test-node-1:70cd0415-1721-4aeb-b1b4-c9cbf2bb278b',
+  logIndex: 3,
+  obligations: 1
+}
+    # Subtest: timeout increments statistics
+        ok 1 - Initial timeout count is 0
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+        not ok 2 - Timeout count is 1 after timeout
+          ---
+          compare: ===
+          at:
+            fileName: test/rebalancer/timeout-triggers-failure.property.test.js
+            lineNumber: 299
+            columnNumber: 9
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/rebalancer/timeout-triggers-failure.property.test.js:299:9)
+          source: >2
+          
+                  const afterStats = await coordinator.getStats();
+                  t.equal(afterStats.operationsTimedOut, 1, 'Timeout count is 1 after timeout');
+            --------^
+                } finally {
+                  await coordinator.shutdown();
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -1
+            +0
+          ...
+        
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+        1..2
+    not ok 9 - timeout increments statistics # time=35.32ms
+      ---
+      at:
+        fileName: test/rebalancer/timeout-triggers-failure.property.test.js
+        lineNumber: 278
+        columnNumber: 11
+        typeName: Test
+      source: |2
+          });
+      
+          await t.test('timeout increments statistics', async (t) => {
+        ----------^
+            const {coordinator, backdateOperation} =
+              await createPlacementBoundTimeoutTestCoordinator({pendingTimeoutMs: 1});
+      ...
+    
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  replicaCount: 3,
+  dbPath: '/tmp/tx1-v3-0XbEPP/partition.db'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'placement-admit:test-node-1:40b1052c-8156-4f76-8e96-ee0059e1c1d0',
+  logIndex: 3,
+  obligations: 1
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'placement-admit:test-node-1:3e275328-a779-4a83-b837-819a5adbd3ec',
+  logIndex: 4,
+  obligations: 1
+}
+    # Subtest: multiple operations can timeout in same check
+        ok 1 - Two operations tracked
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+        not ok 2 - Op1 status is failed
+          ---
+          compare: ===
+          at:
+            fileName: test/rebalancer/timeout-triggers-failure.property.test.js
+            lineNumber: 337
+            columnNumber: 9
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/rebalancer/timeout-triggers-failure.property.test.js:337:9)
+          source: >2
+          
+                  // Verify both operations failed
+                  t.equal(updatedOp1.status, ReplicaStatus.FAILED, 'Op1 status is failed');
+            --------^
+                  t.equal(updatedOp2.status, ReplicaStatus.FAILED, 'Op2 status is failed');
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -failed
+            +pending
+          ...
+        
+        not ok 3 - Op2 status is failed
+          ---
+          compare: ===
+          at:
+            fileName: test/rebalancer/timeout-triggers-failure.property.test.js
+            lineNumber: 338
+            columnNumber: 9
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/rebalancer/timeout-triggers-failure.property.test.js:338:9)
+          source: >2
+                  // Verify both operations failed
+                  t.equal(updatedOp1.status, ReplicaStatus.FAILED, 'Op1 status is failed');
+                  t.equal(updatedOp2.status, ReplicaStatus.FAILED, 'Op2 status is failed');
+            --------^
+          
+                  const stats = await coordinator.getStats();
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -failed
+            +pending
+          ...
+        
+        not ok 4 - Two operations timed out
+          ---
+          compare: ===
+          at:
+            fileName: test/rebalancer/timeout-triggers-failure.property.test.js
+            lineNumber: 341
+            columnNumber: 9
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/rebalancer/timeout-triggers-failure.property.test.js:341:9)
+          source: |2
+          
+                  const stats = await coordinator.getStats();
+                  t.equal(stats.operationsTimedOut, 2, 'Two operations timed out');
+            --------^
+                } finally {
+                  await coordinator.shutdown();
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -2
+            +0
+          ...
+        
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+        1..4
+    not ok 10 - multiple operations can timeout in same check # time=50.196ms
+      ---
+      at:
+        fileName: test/rebalancer/timeout-triggers-failure.property.test.js
+        lineNumber: 305
+        columnNumber: 11
+        typeName: Test
+      source: >2
+          });
+      
+          await t.test('multiple operations can timeout in same check', async (t) => {
+        ----------^
+            const {coordinator, backdateOperation, getTrackedOperation, trackedOperations} =
+              await createPlacementBoundTimeoutTestCoordinator({pendingTimeoutMs: 1});
+      ...
+    
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  replicaCount: 3,
+  dbPath: '/tmp/tx1-v3-x4Ssvi/partition.db'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'placement-admit:test-node-1:cf3777be-73ff-41ad-a7ba-07e6f4b02991',
+  logIndex: 3,
+  obligations: 1
+}
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  replicaCount: 3,
+  dbPath: '/tmp/tx1-v3-YHJqWX/partition.db'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'placement-admit:test-node-1:8e2194cb-da6c-4f09-99ff-6ef058af4d7e',
+  logIndex: 3,
+  obligations: 1
+}
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  replicaCount: 3,
+  dbPath: '/tmp/tx1-v3-a666tb/partition.db'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'placement-admit:test-node-1:67d23fe6-c52f-4307-b675-c117704ec813',
+  logIndex: 3,
+  obligations: 1
+}
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  replicaCount: 3,
+  dbPath: '/tmp/tx1-v3-zP9u9W/partition.db'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'placement-admit:test-node-1:77ab13a5-14df-4fa0-bb75-55bfba4cb247',
+  logIndex: 3,
+  obligations: 1
+}
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  replicaCount: 3,
+  dbPath: '/tmp/tx1-v3-ZkgY1s/partition.db'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'placement-admit:test-node-1:7c0c8047-1662-4780-a109-d1c99f3be4af',
+  logIndex: 3,
+  obligations: 1
+}
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  replicaCount: 3,
+  dbPath: '/tmp/tx1-v3-uvtfve/partition.db'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'placement-admit:test-node-1:5d76464f-b8aa-4dae-9345-deac3e62162e',
+  logIndex: 3,
+  obligations: 1
+}
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  replicaCount: 3,
+  dbPath: '/tmp/tx1-v3-I0n0MA/partition.db'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'placement-admit:test-node-1:93921e12-e09e-49fc-ae03-64614566e9d2',
+  logIndex: 3,
+  obligations: 1
+}
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  replicaCount: 3,
+  dbPath: '/tmp/tx1-v3-QjY7ov/partition.db'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'placement-admit:test-node-1:26e75f5c-eeac-4df4-8b40-da98d9beb4a3',
+  logIndex: 3,
+  obligations: 1
+}
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  replicaCount: 3,
+  dbPath: '/tmp/tx1-v3-0LziSU/partition.db'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'placement-admit:test-node-1:a208d9ca-f8d2-4085-939f-7aeaa0e358fc',
+  logIndex: 3,
+  obligations: 1
+}
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  replicaCount: 3,
+  dbPath: '/tmp/tx1-v3-yNe3P8/partition.db'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'placement-admit:test-node-1:5eda73e8-da7f-4397-b5f9-c6fc79e7b2c9',
+  logIndex: 3,
+  obligations: 1
+}
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+    # Subtest: operation within timeout does not fail
+        ok 1 - Operations within timeout do not fail
+        1..1
+    ok 11 - operation within timeout does not fail # time=278.975ms
+    
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  replicaCount: 3,
+  dbPath: '/tmp/tx1-v3-8SEYRs/partition.db'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'placement-admit:test-node-1:4b648999-a191-44dc-b14f-af022e706fd6',
+  logIndex: 3,
+  obligations: 1
+}
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+    # Subtest: operationFailed event is emitted on timeout
+        not ok 1 - operationFailed event was emitted
+          ---
+          at:
+            fileName: test/rebalancer/timeout-triggers-failure.property.test.js
+            lineNumber: 408
+            columnNumber: 9
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/rebalancer/timeout-triggers-failure.property.test.js:408:9)
+          source: |2
+          
+                  // Verify event was emitted
+                  t.ok(failedEvent !== null, 'operationFailed event was emitted');
+            --------^
+                  t.equal(failedEvent.operation.operationId, operation.operationId,
+                    'Event contains correct operation');
+          ...
+        
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+        not ok 2 - Cannot read properties of null (reading 'operation')
+          ---
+          stack: >
+            Test.<anonymous>
+            (test/rebalancer/timeout-triggers-failure.property.test.js:409:27)
+          at:
+            fileName: test/rebalancer/timeout-triggers-failure.property.test.js
+            lineNumber: 409
+            columnNumber: 27
+            typeName: Test
+            methodName: <anonymous>
+            functionName: Test.<anonymous>
+          type: TypeError
+          tapCaught: returnedPromiseRejection
+          source: |2
+                  // Verify event was emitted
+                  t.ok(failedEvent !== null, 'operationFailed event was emitted');
+                  t.equal(failedEvent.operation.operationId, operation.operationId,
+            --------------------------^
+                    'Event contains correct operation');
+                  t.ok(failedEvent.errorMessage.includes('Timeout'),
+          ...
+        
+        1..2
+    not ok 12 - operationFailed event is emitted on timeout # time=37.306ms
+      ---
+      at:
+        fileName: test/rebalancer/timeout-triggers-failure.property.test.js
+        lineNumber: 385
+        columnNumber: 11
+        typeName: Test
+      source: |2
+          });
+      
+          await t.test('operationFailed event is emitted on timeout', async (t) => {
+        ----------^
+            const {coordinator, backdateOperation} =
+              await createPlacementBoundTimeoutTestCoordinator({pendingTimeoutMs: 1});
+      ...
+    
+    1..12
+not ok 1 - Property 7: Timeout Triggers Failure # time=2950.209ms
+  ---
+  at:
+    fileName: test/rebalancer/timeout-triggers-failure.property.test.js
+    lineNumber: 25
+    columnNumber: 1
+    isToplevel: true
+  source: |2
+      './placement-bound-coordinator-fixture.js';
+  
+    test('Property 7: Timeout Triggers Failure', async (t) => {
+    ^
+      await t.test('operation in PENDING times out and fails', async (t) => {
+        const {coordinator, backdateOperation, getTrackedOperation} =
+  ...
+
+1..1
+# { total: 33, pass: 22, fail: 11 }
+# time=2965.741ms
+ok test/rebalancer/remove-workflow-step-progression.property.test.js (34 assertions, 4721ms)
+ok test/partition/split-rebalance-trigger.test.js (12 assertions, 413ms)
+not ok test/convergence/dt6-rebalancer-timeout-failure-virtual-clock.test.js (12 assertions, 3210ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  replicaCount: 3,
+  dbPath: '/tmp/tx1-v3-oKN4wZ/partition.db'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'placement-admit:test-node-1:a0572fbf-48c1-4d03-9caa-f36460633228',
+  logIndex: 3,
+  obligations: 1
+}
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+# Subtest: the real timeout->FAILED transition fires only once VIRTUAL time passes the step timeout
+    ok 1 - at virtual now == updated_at (elapsed 0) the real reconcile left the operation PENDING
+    ok 2 - workflow step still PENDING before timeout
+    not ok 3 - once virtual time advanced past the step timeout, the real failOperation transition fired
+      ---
+      compare: ===
+      at:
+        fileName: test/convergence/dt6-rebalancer-timeout-failure-virtual-clock.test.js
+        lineNumber: 66
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/convergence/dt6-rebalancer-timeout-failure-virtual-clock.test.js:66:7)
+      source: >2
+            t.equal(m.afterFirstCheck.workflow_step, 'PENDING', 'workflow step still PENDING before timeout');
+      
+            t.equal(m.afterAdvance.status, ReplicaStatus.FAILED,
+        ------^
+              'once virtual time advanced past the step timeout, the real failOperation transition fired');
+            t.equal(m.afterAdvance.workflow_step, 'FAILED', 'the real terminal mutation set workflow step FAILED');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -failed
+        +pending
+      ...
+    
+    not ok 4 - the real terminal mutation set workflow step FAILED
+      ---
+      compare: ===
+      at:
+        fileName: test/convergence/dt6-rebalancer-timeout-failure-virtual-clock.test.js
+        lineNumber: 68
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/convergence/dt6-rebalancer-timeout-failure-virtual-clock.test.js:68:7)
+      source: >2
+            t.equal(m.afterAdvance.status, ReplicaStatus.FAILED,
+              'once virtual time advanced past the step timeout, the real failOperation transition fired');
+            t.equal(m.afterAdvance.workflow_step, 'FAILED', 'the real terminal mutation set workflow step FAILED');
+        ------^
+            t.ok(String(m.afterAdvance.error_message).includes('Timeout'),
+              'the persisted failure carries the real timeout error message');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -FAILED
+        +PENDING
+      ...
+    
+    not ok 5 - the persisted failure carries the real timeout error message
+      ---
+      at:
+        fileName: test/convergence/dt6-rebalancer-timeout-failure-virtual-clock.test.js
+        lineNumber: 69
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/convergence/dt6-rebalancer-timeout-failure-virtual-clock.test.js:69:7)
+      source: >2
+              'once virtual time advanced past the step timeout, the real failOperation transition fired');
+            t.equal(m.afterAdvance.workflow_step, 'FAILED', 'the real terminal mutation set workflow step FAILED');
+            t.ok(String(m.afterAdvance.error_message).includes('Timeout'),
+        ------^
+              'the persisted failure carries the real timeout error message');
+            t.ok(String(m.afterAdvance.error_message).includes('PENDING'),
+      ...
+    
+    not ok 6 - the failure names the PENDING step that timed out
+      ---
+      at:
+        fileName: test/convergence/dt6-rebalancer-timeout-failure-virtual-clock.test.js
+        lineNumber: 71
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/convergence/dt6-rebalancer-timeout-failure-virtual-clock.test.js:71:7)
+      source: |2
+            t.ok(String(m.afterAdvance.error_message).includes('Timeout'),
+              'the persisted failure carries the real timeout error message');
+            t.ok(String(m.afterAdvance.error_message).includes('PENDING'),
+        ------^
+              'the failure names the PENDING step that timed out');
+          });
+      ...
+    
+    1..6
+not ok 1 - the real timeout->FAILED transition fires only once VIRTUAL time passes the step timeout # time=1955.818ms
+  ---
+  at:
+    fileName: test/convergence/dt6-rebalancer-timeout-failure-virtual-clock.test.js
+    lineNumber: 59
+    columnNumber: 3
+    isToplevel: true
+  source: >
+    }
+  
+  
+    t.test('the real timeout->FAILED transition fires only once VIRTUAL time
+    passes the step timeout',
+  
+    --^
+      async (t) => {
+        const m = await runVirtualTimeout({advanceMs: 100});
+  ...
+
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  replicaCount: 3,
+  dbPath: '/tmp/tx1-v3-BLDi7z/partition.db'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'placement-admit:test-node-1:e757870f-05c3-4d9b-b468-1db6e0b7ad43',
+  logIndex: 3,
+  obligations: 1
+}
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+# Subtest: within the timeout the real reconcile does NOT fail the operation (virtual-clock gated)
+    ok 1 - elapsed < timeout in virtual time -> the real reconcile keeps the operation PENDING
+    ok 2 - no terminal transition before the timeout
+    1..2
+ok 2 - within the timeout the real reconcile does NOT fail the operation (virtual-clock gated) # time=34.28ms
+
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  replicaCount: 3,
+  dbPath: '/tmp/tx1-v3-BC9KfY/partition.db'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'placement-admit:test-node-1:33083b0e-7861-4e27-a42d-4460f1bbcaeb',
+  logIndex: 3,
+  obligations: 1
+}
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+Initializing partition service {
+  partitionId: 'replica_operations-p1',
+  tableId: 'replica_operations',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  replicaCount: 3,
+  dbPath: '/tmp/tx1-v3-XVm7Pa/partition.db'
+}
+Created table {
+  tableName: 'replica_operations',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r2',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Joining peer with fully qualified address {
+  peerId: 'tx1-v3-r3',
+  peerAddress: null,
+  addressStatus: 'unavailable',
+  replicaId: 'tx1-v3-r1',
+  partitionId: 'replica_operations-p1'
+}
+Partition size updated {
+  partitionId: 'replica_operations-p1',
+  sizeBytes: 118784,
+  sizeMB: '0.11'
+}
+Partition service initialized {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  sizeBytes: 118784
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+}
+Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+Raft leadership transition evidence {
+  partitionId: 'replica_operations-p1',
+  replicaId: 'tx1-v3-r1',
+  nodeId: 'test-node-1',
+  peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+  eventType: 'role_transition',
+  role: 'leader',
+  trigger: 'quorum_elected',
+  term: 1
+}
+RebalanceCoordinator initialized {
+  nodeId: 'test-node-1',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Applying committed entry {
+  partitionId: 'replica_operations-p1',
+  commandType: 'PLACEMENT_ADMIT'
+}
+CDC obligations recorded with the committed decision {
+  partitionId: 'replica_operations-p1',
+  entryId: 'placement-admit:test-node-1:781c903f-d1f0-4cfc-931d-f0ae9b28f3a8',
+  logIndex: 3,
+  obligations: 1
+}
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+Shutting down RebalanceCoordinator { nodeId: 'test-node-1', inFlightOperations: 0 }
+Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+# Subtest: the real terminal-mutation drive is deterministic across runs
+    ok 1 - identical virtual drive -> identical persisted FAILED transition (incl. deterministic elapsed)
+    1..1
+ok 3 - the real terminal-mutation drive is deterministic across runs # time=45.725ms
+
+1..3
+# { total: 9, pass: 5, fail: 4 }
+# time=2163.44ms
+ok test/rebalancer/add-workflow-step-progression.property.test.js (39 assertions, 4035ms)
+ok test/rebalancer/placement-owner-authority-wakes.test.js (10 assertions, 70478ms)
+# test-files total=12 pass=10 fail=2 assertions=318
+classified lane bootstrap: 3 file(s), jobs=2
+thermal: ok cpu 52C (coretemp/Package id 0) nvme 49C (nvme/Sensor 1)
+ok test/bootstrap/shared/service-installation-reconciler-setup.test.js (7 assertions, 1366ms)
+ok test/bootstrap/node-ready-rebalance-trigger.test.js (68 assertions, 1733ms)
+ok test/bootstrap/runtime-service-rebalancer-owner.test.js (52 assertions, 6550ms)
+# test-files total=3 pass=3 fail=0 assertions=127
+placement-results={"file":"test/partition/partition-service-learner-promotion.test.js","attempt":1,"ok":true,"assertions":47,"durationMs":2082,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/placement-owner-construction-orders.test.js","attempt":1,"ok":true,"assertions":10,"durationMs":4881,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/placement-owner-authority-negatives.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":6305,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js","attempt":1,"ok":true,"assertions":26,"durationMs":1477,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/operation-record-completeness.property.test.js","attempt":1,"ok":true,"assertions":29,"durationMs":5591,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/control-plane/cl-036-local-leader-row-seed.test.js","attempt":1,"ok":true,"assertions":50,"durationMs":1343,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/timeout-triggers-failure.property.test.js","attempt":1,"ok":false,"assertions":46,"durationMs":4397,"retriedOnce":false,"firstFailureLine":"not ok 3 - Status is failed after timeout"}
+placement-results={"file":"test/rebalancer/remove-workflow-step-progression.property.test.js","attempt":1,"ok":true,"assertions":34,"durationMs":4721,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/partition/split-rebalance-trigger.test.js","attempt":1,"ok":true,"assertions":12,"durationMs":413,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/convergence/dt6-rebalancer-timeout-failure-virtual-clock.test.js","attempt":1,"ok":false,"assertions":12,"durationMs":3210,"retriedOnce":false,"firstFailureLine":"not ok 3 - once virtual time advanced past the step timeout, the real failOperation transition fired"}
+placement-results={"file":"test/rebalancer/add-workflow-step-progression.property.test.js","attempt":1,"ok":true,"assertions":39,"durationMs":4035,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/placement-owner-authority-wakes.test.js","attempt":1,"ok":true,"assertions":10,"durationMs":70478,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/shared/service-installation-reconciler-setup.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":1366,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/node-ready-rebalance-trigger.test.js","attempt":1,"ok":true,"assertions":68,"durationMs":1733,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/bootstrap/runtime-service-rebalancer-owner.test.js","attempt":1,"ok":true,"assertions":52,"durationMs":6550,"retriedOnce":false,"firstFailureLine":null}

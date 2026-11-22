@@ -873,3 +873,57 @@ merely bounded, two live members that exchange only raft are disconnected for go
 | `ca6071d4d` | F-2 witness `test/transport/router-adopted-connection-reconnect-schedule.test.js` (two routers, A dials B, B adopts; sever plus dial blackout; 30 virtual s; policy-agnostic: the adopted end follows the same declared schedule as the dialing end, no re-dial within `reconnectIntervalMs`, a finite attempt count) | `lab/raftframes2-f2-red` (adams-gamla) | **red**: dialing end 6 dials at 1005 / 2505 / 4755 / 8130 / 13192 / 20788 ms (the declared schedule), attempts 7; adopted end **5999 dials** (one per 5 ms drive step), shortest gap 5 ms, attempts NaN |
 | `aaba000fb` | C13 long-outage clause restored (verifier finding 1, lead (c)): outage of 20 min, longer than the bounded schedule by more than one capped delay; both ends dial until the heal (last dial within one cap of it), never more often than the capped schedule permits; the link returns within one cap of the heal; raft alone resumes both ways; numbers printed with `t.diagnostic` | `lab/raftframes2-c13-red` (adams-gamla) | short case green; long case **red**: schedule interval 1000, 10 attempts, bounded span 113330 ms, cap 38443 ms, permitted 39 dials in the outage; dialing end `rfr-a` **10 dials, CLOSED at the heal, last dial 1086672 ms before it**; adopted end `rfr-b` **240001 dials** (NaN, last 5 ms before the heal); the link came back 5 ms after the heal only through the NaN dialer; raft 4 / 4 after |
 | `9c3604ed9` (local ref `probe/f2-bounded-only`, NOT for merge, never pushed) | F-2 bounded alone: the one record initializer, no reconnect owner | `lab/raftframes2-probe-bounded` (tv-dator; adams-gamla and adam-laptop "not ready": runner failures) | F-2 witness **green**; C13 short green; C13 long **red, the hazard**: both ends 10 dials, both CLOSED at the heal, last dial 1086672 ms before it, **the link never came back (`restoredAfterMs` null) and raft received 0 / 0 after the heal**: two live members permanently disconnected (the reason the reconnect owner exists) |
+| `f792423ff` | **Repair**: `createPeerConnectionRecord` (`src/transport/message-router-connection-record.js`) at the four production creation sites (inbound `server-lifecycle`, `connectToNode`, `ensureReconnectOwnerConnection`, the quarantine replacement); `reconnectDelayMs` (cap = last bounded delay) and the member rule in `resolveReconnectDisposition`; `connectionAuthorityOwner.isConnectionMember` | `lab/raftframes2-f2-green` (tv-dator), 15 files | 14 / 15: F-2 witness **green**, C13 short and long **green**, (e), R-1, C7, W-HID-1, demux, `message-router.test.js` (499), quarantine guard, ping wait bound, incarnation fence, cold-reconnect grant, transport cleanup, delivery-deadline liveness green; **`message-router-endpoint-address-change-redial` case 2 red** (green at `aaba000fb`, `lab/raftframes2-redial-before`): see 19.5 |
+
+### 19.5 A test that passed through F-2
+
+`message-router-endpoint-address-change-redial.test.js` "recovers connectivity to a peer that restarted on a new
+address" kept the OLD node-b alive and re-dialing under the same boot incarnation as the new node-b, only deaf
+(`routerB.handleMessage = () => {}`). Mechanism (INFERRED from the code and the two runs; the failure state is
+node-a's record `reconnecting` at `ws://localhost:19821`, the old node-b's advertised address, so node-a had just
+lost a connection adopted from the old node-b): node-a's keepalive severs the deaf link; both ends re-dial on the
+same first backoff (100 ms in that test); the old node-b's dial reaches node-a while node-a's record is
+reconnecting and is adopted (`resolveIncomingConnectionAdoption`: a non-connected existing record is replaced);
+node-a's own dial to the new address then opens against a live record and drops itself
+(`establishConnection`'s live-wins check); the cycle repeats on every keepalive sever. Before the repair node-a's
+adopted record re-dialed at once (NaN) and always reached the new address first. A restarted process's old
+incarnation dials no one: the world now says so (`routerB.scheduleReconnect = () => {}`, commit below).
+**Residual for the transport owner (not changed here):** two live processes claiming one node id under one boot
+incarnation can keep the adopting end on the wrong one; real restarts carry a new boot incarnation, and the
+adoption has no canonical-endpoint fence (it adopts an IDENTIFY whose advertised address the resolver does not
+name while its own record is reconnecting).
+
+### 19.6 Router message-table members (lead, 2026-11-21, own pair)
+
+Census (read-only scan of every `<TABLE>.<member>` reference in `src` and `test` against the tables of
+`src/constants/transport.js` and the shared router vocabulary): three undefined members, no other
+(`test/diagnostics/lease-liveness-decision-grid.js` `CONNECTION_STATE.READY` is that file's own table).
+`ROUTER_ERROR_MSG.addressInUse` (`router-server-manager.js:196`: an in-process port clash threw a TypeError),
+`ROUTER_LOG_MSG.CONNECTION_PING_TIMEOUT_SKIPPED_ALIVE` (`close-reconnect.js:391`) and
+`ROUTER_LOG_MSG.PING_TIMEOUT_SATISFIED_BY_INBOUND` (`peer-liveness.js:95`): both INFO lines logged with no message,
+and their test passed vacuously (it filtered lines on `message === undefined`).
+
+| Commit | What | Run | Result |
+| --- | --- | --- | --- |
+| `f5bcbe857` | witnesses: `router-in-process-address-in-use.test.js` re-created from `work/line-regression-causes-20261121` `e5cdc7770`; the ping test asserts the INFO line carries a message | `lab/raftframes2-msg-red` (tv-dator) | **red**: address-in-use (TypeError); ping cases 3 and 4 |
+
+Item 1 continued:
+
+| Commit | What | Run | Result |
+| --- | --- | --- | --- |
+| `97978ad99` | `message-router-endpoint-address-change-redial`: the old process dials no one (19.5) | `lab/raftframes2-transport-all` (tv-dator): every `test/transport/*.test.js` (67 files) | 62 / 67. Red: the two 19.6 witnesses (fixed by the next commit); (c1) `raft-frame-pair-coalescing` (kept, O-4); `node-identity-separation.property` and `node-registration-creates-endpoint.property` (**F-7**, below). Everything else green, the redial case included |
+
+**F-7 (pre-existing red, routed, not this line's):** `test/transport/node-identity-separation.property.test.js` and
+`node-registration-creates-endpoint.property.test.js` fail with "Failed to register node: The proposal was accepted
+into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent"
+(`node-registration-owner.js:106`). Red at `d3edaa08c` (`lab/raftframes2-props-d3edaa08c`) and at the branch base
+`23344cddc` (`lab/raftframes2-props-base`), so neither this line's transport work nor items A-C caused it. Owner: the
+node-registration / write-kernel outcome owner.
+| `7039f9018` | 19.6 fix: the three members at `src/constants/transport.js` | `lab/raftframes2-msg-green` (adams-gamla) | **green**: address-in-use, ping wait bound (30), router-server-manager (40) |
+
+Stale comments named by the verifier (not edited; outside this writer's paths, `src/cdc/**` and `src/partition/**`):
+`src/cdc/cdc-event-handler.js:615-616` "Raft will handle retries and leader election" -> suggested "The router's
+reconnect owner re-dials a member peer at its capped cadence (message-router-connection-close-reconnect.js)";
+`src/partition/partition-service-entry-apply-base.js:360-361` "so the sender never records it as taken (F1)" ->
+"the receiving router records the refusal (`consensusDelivery.receiptRefusals`); the sender's outcome is the write".
+No active 2026-11-21 branch touches the first; the second is touched by most of them (it would conflict).

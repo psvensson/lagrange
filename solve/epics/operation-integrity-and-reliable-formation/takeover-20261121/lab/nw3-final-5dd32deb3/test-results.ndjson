@@ -1,0 +1,31 @@
+{"file":"test/cdc/bootstrap-direct-write-raft-routing.test.js","attempt":1,"ok":true,"assertions":17,"durationMs":1053,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cdc/bootstrap-mode-routing.property.test.js","attempt":1,"ok":true,"assertions":11,"durationMs":2760,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cdc/cdc-shutdown-terminal-owner-write.test.js","attempt":1,"ok":false,"assertions":24,"durationMs":1899,"retriedOnce":false,"firstFailureLine":"not ok 2 - (ii-a) the write committed immediately before shutdown wins: the read-back that follows is refused terminal, the write is not re-issued"}
+{"file":"test/cdc/cdc-integration-service-execute-sql-and-delivery.test.js","attempt":1,"ok":true,"assertions":54,"durationMs":3388,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/control-plane-error-classification.test.js","attempt":1,"ok":true,"assertions":53,"durationMs":901,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cdc/cdc-integration-service-node-state-and-bootstrap.test.js","attempt":1,"ok":true,"assertions":130,"durationMs":3985,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/control-plane-mutation-outcome-classifier.test.js","attempt":1,"ok":true,"assertions":168,"durationMs":1355,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/control-plane-write-identity.test.js","attempt":1,"ok":true,"assertions":11,"durationMs":1051,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/endpoint-incarnation-authority.test.js","attempt":1,"ok":true,"assertions":53,"durationMs":1653,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/named-write-outcome-total.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":1218,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/constants/message-table-census.test.js","attempt":1,"ok":false,"assertions":1,"durationMs":4119,"retriedOnce":false,"firstFailureLine":"not ok 1 - every message-table member referenced under src is defined"}
+{"file":"test/control-plane/named-write-unknown-outcome-shape.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":1283,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/query/named-write-real-producer-applied.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":9542,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/membership-publication-native-ack-order.test.js","attempt":1,"ok":true,"assertions":19,"durationMs":11658,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/query/named-write-cdc-sticky-unknown.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":11803,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/query/named-write-real-producer-definite.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":11219,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/query/provisioning-deadline-error-message.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":2907,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/authoritative-row-mutation-outcome-classifier.test.js","attempt":1,"ok":true,"assertions":133,"durationMs":1837,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/rebalancer/placement-explicit-replica-refusal-code.test.js","attempt":1,"ok":false,"assertions":2,"durationMs":3209,"retriedOnce":false,"firstFailureLine":"not ok 1 - ADD naming a replica identity: refused with its own typed code, not the corrupt-bytes code"}
+{"file":"test/transport/router-in-process-address-in-use.test.js","attempt":1,"ok":false,"assertions":1,"durationMs":776,"retriedOnce":false,"firstFailureLine":"not ok 1 - an in-process port clash rejects with the address-in-use error"}
+{"file":"test/rebalancer/coordinator-reservation-lifecycle.test.js","attempt":1,"ok":true,"assertions":101,"durationMs":5960,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/query/write-exactly-once-property.test.js","attempt":1,"ok":false,"assertions":3,"durationMs":149963,"retriedOnce":false,"firstFailureLine":"not ok 1 - exactly-once property, seed 20261005: 40 logical writes under random faults"}
+{"file":"test/query/write-identity-instance.test.js","attempt":1,"ok":true,"assertions":19,"durationMs":247917,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/bootstrap-mode.test.js","attempt":1,"ok":true,"assertions":54,"durationMs":2837,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/durable-rejoin-incarnation-advance.test.js","attempt":1,"ok":true,"assertions":228,"durationMs":1780,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/node-registration-owner.test.js","attempt":1,"ok":true,"assertions":132,"durationMs":1557,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/register-service-retryable-refusal.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":3814,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/bootstrap-sequence.test.js","attempt":1,"ok":true,"assertions":68,"durationMs":20967,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/seed-bootstrap-lane-refusal.integration.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":14254,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/seed-bootstrap-direct-lane.integration.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":29282,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/bootstrap/seed-registration-phase.test.js","attempt":1,"ok":true,"assertions":61,"durationMs":7319,"retriedOnce":false,"firstFailureLine":null}

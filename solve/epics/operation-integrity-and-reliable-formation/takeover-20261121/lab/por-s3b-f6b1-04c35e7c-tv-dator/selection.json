@@ -1,0 +1,51 @@
+{
+  "sha": "04c35e7cd1c12c5b8bc637ae9883c4a85e556463",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js",
+    "test/rebalancer/timeout-triggers-failure.property.test.js",
+    "test/convergence/dt6-rebalancer-timeout-failure-virtual-clock.test.js",
+    "test/rebalancer/add-workflow-step-progression.property.test.js",
+    "test/rebalancer/remove-workflow-step-progression.property.test.js",
+    "test/rebalancer/operation-record-completeness.property.test.js",
+    "test/partition/placement-owner-construction-orders.test.js",
+    "test/bootstrap/node-ready-rebalance-trigger.test.js",
+    "test/bootstrap/runtime-service-rebalancer-owner.test.js",
+    "test/bootstrap/shared/service-installation-reconciler-setup.test.js",
+    "test/partition/partition-service-learner-promotion.test.js",
+    "test/control-plane/cl-036-local-leader-row-seed.test.js",
+    "test/partition/split-rebalance-trigger.test.js",
+    "test/rebalancer/placement-owner-authority-negatives.test.js",
+    "test/rebalancer/placement-owner-authority-wakes.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/partition/placement-owner-construction-orders.test.js",
+        "test/rebalancer/placement-owner-authority-negatives.test.js",
+        "test/rebalancer/placement-owner-authority-wakes.test.js",
+        "test/partition/partition-service-learner-promotion.test.js",
+        "test/rebalancer/operation-record-completeness.property.test.js",
+        "test/rebalancer/add-workflow-step-progression.property.test.js",
+        "test/rebalancer/remove-workflow-step-progression.property.test.js",
+        "test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js",
+        "test/convergence/dt6-rebalancer-timeout-failure-virtual-clock.test.js",
+        "test/rebalancer/timeout-triggers-failure.property.test.js",
+        "test/control-plane/cl-036-local-leader-row-seed.test.js",
+        "test/partition/split-rebalance-trigger.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/bootstrap/runtime-service-rebalancer-owner.test.js",
+        "test/bootstrap/shared/service-installation-reconciler-setup.test.js",
+        "test/bootstrap/node-ready-rebalance-trigger.test.js"
+      ],
+      "jobs": 2,
+      "resourceClass": "bootstrap"
+    }
+  ]
+}

@@ -1,0 +1,83 @@
+placement-shell=3414945
+placement-head=b76d50c683e8d39084781306198cb4850d8b60ab
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3416054
+# test-files planned=2
+classified lane ordinary: 2 file(s), jobs=4
+thermal: ok cpu 71C (coretemp/Package id 0) nvme 48C (nvme/Sensor 1)
+not ok test/query/query-executor-no-handler-quarantine-penalty.test.js (5 assertions, 720ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+Routing query to partition service {
+  partitionId: 'services-p1',
+  address: 'quarantine-leader-node/partition/services-p1-quarantine-leader-node'
+}
+Routing query to partition service {
+  partitionId: 'services-p1',
+  address: 'quarantine-leader-node/partition/services-p1-quarantine-leader-node'
+}
+# Subtest: a leader that answered no handler once and serves 200 ms later is reached by the next planner turn
+    # {"quarantineMs":30000,"turnIntervalMs":5000,"handlerServesAfterMs":200,"wastedTurns":5,"localRefusals":5,"firstSuccessAtMs":30000,"delayAfterServingMs":29800,"turns":[{"atMs":0,"success":false,"hopped":true,"error":"No handler registered for address quarantine-leader-node/partition/services-p1-quarantine-leader-node"},{"atMs":5000,"success":false,"hopped":false,"error":"Partition service not found"},{"atMs":10000,"success":false,"hopped":false,"error":"Partition service not found"},{"atMs":15000,"success":false,"hopped":false,"error":"Partition service not found"},{"atMs":20000,"success":false,"hopped":false,"error":"Partition service not found"},{"atMs":25000,"success":false,"hopped":false,"error":"Partition service not found"},{"atMs":30000,"success":true,"hopped":true,"error":null}]}
+    ok 1 - the first read reached the leader node and was answered no handler
+    ok 2 - every hop went to the leader: no fallback to the serving follower
+    ok 3 - the read is answered within the bound
+    not ok 4 - no planner turn after the handler serves is refused
+      ---
+      compare: ===
+      at:
+        fileName: test/query/query-executor-no-handler-quarantine-penalty.test.js
+        lineNumber: 56
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/query/query-executor-no-handler-quarantine-penalty.test.js:56:5)
+      source: |2
+            'every hop went to the leader: no fallback to the serving follower');
+          t.ok(firstSuccess, 'the read is answered within the bound');
+          t.equal(wasted.length, 0,
+        ----^
+            'no planner turn after the handler serves is refused');
+        });
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -0
+        +5
+      ...
+    
+    1..4
+not ok 1 - a leader that answered no handler once and serves 200 ms later is reached by the next planner turn # time=78.981ms
+  ---
+  at:
+    fileName: test/query/query-executor-no-handler-quarantine-penalty.test.js
+    lineNumber: 20
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    const MAX_PLANNER_TURNS = 13;
+  
+  
+    test('a leader that answered no handler once and serves 200 ms later is
+    reached ' +
+  
+    ^
+      'by the next planner turn', async (t) => {
+      const world = openQuarantineWorld();
+  ...
+
+1..1
+# { total: 4, pass: 3, fail: 1 }
+# time=87.537ms
+ok test/query/query-executor-no-handler-quarantine-clock.test.js (10 assertions, 752ms)
+# test-files total=2 pass=1 fail=1 assertions=15
+placement-results={"file":"test/query/query-executor-no-handler-quarantine-penalty.test.js","attempt":1,"ok":false,"assertions":5,"durationMs":720,"retriedOnce":false,"firstFailureLine":"not ok 4 - no planner turn after the handler serves is refused"}
+placement-results={"file":"test/query/query-executor-no-handler-quarantine-clock.test.js","attempt":1,"ok":true,"assertions":10,"durationMs":752,"retriedOnce":false,"firstFailureLine":null}

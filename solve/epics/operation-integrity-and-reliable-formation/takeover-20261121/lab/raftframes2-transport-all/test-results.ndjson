@@ -1,0 +1,67 @@
+{"file":"test/transport/bulk-channel-identify-incarnation.test.js","attempt":1,"ok":true,"assertions":17,"durationMs":408,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/message-router-cdc-custody.test.js","attempt":1,"ok":true,"assertions":9,"durationMs":664,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/exact-handler-identity-api.test.js","attempt":1,"ok":true,"assertions":19,"durationMs":702,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/message-router-cdc-encoding.test.js","attempt":1,"ok":true,"assertions":8,"durationMs":771,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/message-router-cdc-outcome-roundtrip.test.js","attempt":1,"ok":true,"assertions":78,"durationMs":725,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/message-router-cdc-response-boundary.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":613,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/message-router-cold-reconnect-delivery-grant.test.js","attempt":1,"ok":true,"assertions":25,"durationMs":1150,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/message-router-query-transport-failure-shape.test.js","attempt":1,"ok":true,"assertions":10,"durationMs":591,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/message-router-ping-wait-bound-spent.test.js","attempt":1,"ok":false,"assertions":30,"durationMs":842,"retriedOnce":false,"firstFailureLine":"not ok 5 - the INFO line carries its message"}
+{"file":"test/transport/message-router-delivery-deadline-liveness.test.js","attempt":1,"ok":true,"assertions":25,"durationMs":1482,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/message-router-superseded-delivery-completion.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":604,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/q7-node-transport-authenticated-encryption.test.js","attempt":1,"ok":true,"assertions":16,"durationMs":690,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/router-adopted-connection-reconnect-schedule.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1392,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/raft-frame-unacknowledged-delivery.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":1710,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/router-envelope-w-env-1-answer-cannot-rewrite-acknowledgement.test.js","attempt":1,"ok":true,"assertions":22,"durationMs":1945,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/router-envelope-w-env-3-handler-throw-symmetry.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":977,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/router-envelope-pre-send-failure.test.js","attempt":1,"ok":true,"assertions":37,"durationMs":2259,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/router-envelope-w-env-4-no-handler-frame.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":1093,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/router-envelope-w-env-6-full-field-rewrite-matrix.test.js","attempt":1,"ok":true,"assertions":13,"durationMs":1637,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/router-envelope-w-env-7-two-hop-transport-is-per-hop.test.js","attempt":1,"ok":true,"assertions":15,"durationMs":1756,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/router-envelope-w-env-8-verbatim-answer-and-wire-failure.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":899,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/router-envelope-w-env-2-lost-answer-after-ack.test.js","attempt":1,"ok":true,"assertions":42,"durationMs":2904,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/router-in-process-address-in-use.test.js","attempt":1,"ok":false,"assertions":1,"durationMs":269,"retriedOnce":false,"firstFailureLine":"not ok 1 - an in-process port clash rejects with the address-in-use error"}
+{"file":"test/transport/service-delivery-lifetime.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":685,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/transport-outcome-forwarding-hop.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":695,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/name-first-advertising-publication.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":821,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/message-router-endpoint-address-change-redial.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":1540,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/message-router-transport-cleanup.test.js","attempt":1,"ok":true,"assertions":16,"durationMs":847,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/handler-registration.property.test.js","attempt":1,"ok":true,"assertions":8,"durationMs":587,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/rpc-timeout-behavior.property.test.js","attempt":1,"ok":true,"assertions":137,"durationMs":3324,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/message-router-quarantine-liveness-guard.test.js","attempt":1,"ok":true,"assertions":27,"durationMs":1422,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/loopback-connection.property.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":612,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/rpc-correlation-correctness.property.test.js","attempt":1,"ok":true,"assertions":111,"durationMs":1433,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/uniform-message-routing.property.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":570,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/router-server-manager.test.js","attempt":1,"ok":true,"assertions":40,"durationMs":988,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/message-router.test.js","attempt":1,"ok":true,"assertions":499,"durationMs":5174,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/message-router-critical-source-reserve.test.js","attempt":1,"ok":true,"assertions":35,"durationMs":856,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/node-incarnation-websocket-fence.test.js","attempt":1,"ok":true,"assertions":88,"durationMs":1132,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/delivery-semantics.property.test.js","attempt":1,"ok":true,"assertions":17,"durationMs":1116,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/message-router-deliver-metrics.test.js","attempt":1,"ok":true,"assertions":46,"durationMs":1066,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/rpc-client.test.js","attempt":1,"ok":true,"assertions":77,"durationMs":1042,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/bulk-transfer-lane-isolation.test.js","attempt":1,"ok":true,"assertions":191,"durationMs":1393,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/location-transparent-communication.property.test.js","attempt":1,"ok":true,"assertions":13,"durationMs":1772,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/message-router-api.property.test.js","attempt":1,"ok":true,"assertions":21,"durationMs":1630,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/routing-correctness.property.test.js","attempt":1,"ok":true,"assertions":13,"durationMs":1429,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/message-router-readiness-inflight-reserve.test.js","attempt":1,"ok":true,"assertions":17,"durationMs":848,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/address-format-validation.property.test.js","attempt":1,"ok":true,"assertions":19,"durationMs":862,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/uniform-websocket-delivery.property.test.js","attempt":1,"ok":true,"assertions":11,"durationMs":907,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/error-response-correlation-id.property.test.js","attempt":1,"ok":true,"assertions":13,"durationMs":913,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/message-router-readiness-reserve.test.js","attempt":1,"ok":true,"assertions":18,"durationMs":703,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/immediate-ack-ordering.property.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":828,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/transport-semantic-outcome.test.js","attempt":1,"ok":true,"assertions":113,"durationMs":2616,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/local-delivery.property.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":787,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/message-router-join-request.test.js","attempt":1,"ok":true,"assertions":8,"durationMs":633,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/bulk-registry-bootstrap.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":733,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/message-router-late-response-classification.test.js","attempt":1,"ok":true,"assertions":8,"durationMs":702,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/service-response-correlation.property.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":836,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/node-address-resolution-contract.test.js","attempt":1,"ok":true,"assertions":21,"durationMs":461,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/node-address-resolution.test.js","attempt":1,"ok":true,"assertions":22,"durationMs":458,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/node-identity-separation.property.test.js","attempt":1,"ok":false,"assertions":11,"durationMs":9426,"retriedOnce":false,"firstFailureLine":"not ok 1 - Property failed after 1 tests { seed: -2105868913, path: \"0:0:0:0:0:0\", endOnFailure: true } Counterexample: [\"00000000-0000-1000-8000-000000000000\",8000] Shrunk 5 time(s) Got error: Failed to register node: The proposal was accepted int"}
+{"file":"test/transport/owner-retry-budget.test.js","attempt":1,"ok":true,"assertions":27,"durationMs":398,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/outbound-saturation-warn-rate-limit.test.js","attempt":1,"ok":true,"assertions":13,"durationMs":556,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/node-registration-creates-endpoint.property.test.js","attempt":1,"ok":false,"assertions":15,"durationMs":19569,"retriedOnce":false,"firstFailureLine":"not ok 1 - Property failed after 1 tests { seed: 402491105, path: \"0:0:0:0:0:0\", endOnFailure: true } Counterexample: [\"00000000-0000-1000-8000-000000000000\",8000] Shrunk 5 time(s) Got error: Failed to register node: The proposal was accepted into "}
+{"file":"test/transport/raft-frame-liveness-residual.integration.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1099,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/raft-frame-pair-coalescing.integration.test.js","attempt":1,"ok":false,"assertions":1,"durationMs":4961,"retriedOnce":false,"firstFailureLine":"not ok 1 - (c1) frames per node pair per second do not grow with the raft groups the pair shares"}
+{"file":"test/transport/raft-frame-reconnect-owner.integration.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":1810,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/transport/raft-frame-turn-not-held.integration.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1046,"retriedOnce":false,"firstFailureLine":null}

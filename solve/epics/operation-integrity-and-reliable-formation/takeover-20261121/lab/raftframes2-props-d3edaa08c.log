@@ -1,0 +1,745 @@
+lab test: tv-dator: ordinary (2 files) cores=12 mem=15.4GiB speed x1.48
+[tv-dator] placement-shell=3428865
+[tv-dator] placement-head=d3edaa08ca13dbe8039b1c92352fe79e91ec8690
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=3430371
+[tv-dator] # test-files planned=2
+[tv-dator] classified lane ordinary: 2 file(s), jobs=4
+[tv-dator] thermal: ok cpu 66C (coretemp/Package id 0) nvme 48C (nvme/Sensor 1)
+[tv-dator] not ok test/transport/node-identity-separation.property.test.js (11 assertions, 8774ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] # Subtest: Property 1: Node Identity Separation from Endpoints
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:01.144Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"31321142-0003-1000-b277-64b10000000e","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:01.353Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"31321142-0003-1000-b277-64b10000000e","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:01.356Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0003-1000-b277-64b10000000e","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:01.562Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0003-1000-b277-64b10000000e","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:01.564Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-b277-64b10000000e","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:01.772Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-b277-64b10000000e","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:01.774Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-00000000000e","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:01.981Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-00000000000e","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:01.985Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:02.193Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:02.195Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:02.401Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator]     # Subtest: node_id is a UUID with no transport information
+[tv-dator]         not ok 1 - Property failed after 1 tests { seed: -812601735, path: "0:0:0:0:0:0", endOnFailure: true } Counterexample: ["00000000-0000-1000-8000-000000000000",8000] Shrunk 5 time(s) Got error: Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent     at wrapNodeRegistrationError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/shared/node-registration-owner.js:106:24)     at NodeRegistrationOwner.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/shared/node-registration-owner.js:282:28)     at async QuerySystemStatePhase.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/phases/query-system-state-phase.js:607:16)     at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/test/transport/node-identity-separation.property.test.js:189:15     at async AsyncProperty.run (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:28)     at async asyncRunIt (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:21)     at async Test.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/test/transport/node-identity-separation.property.test.js:178:9)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+[tv-dator]           ---
+[tv-dator]           stack: |
+[tv-dator]             buildError (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+[tv-dator]             asyncThrowIfFailed (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+[tv-dator]           at:
+[tv-dator]             fileName: ../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+[tv-dator]             lineNumber: 126
+[tv-dator]             columnNumber: 15
+[tv-dator]             functionName: buildError
+[tv-dator]           tapCaught: returnedPromiseRejection
+[tv-dator]           source: |
+[tv-dator]             function buildError(errorMessage, out) {
+[tv-dator]                 if (!out.runConfiguration.errorWithCause) {
+[tv-dator]                     throw new Error(errorMessage);
+[tv-dator]             --------------^
+[tv-dator]                 }
+[tv-dator]                 const ErrorWithCause = Error;
+[tv-dator]           ...
+[tv-dator]         
+[tv-dator]         1..1
+[tv-dator]     not ok 1 - node_id is a UUID with no transport information # time=1292.771ms
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/transport/node-identity-separation.property.test.js
+[tv-dator]         lineNumber: 176
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       source: |2
+[tv-dator]            * Validates: Requirements 1.1
+[tv-dator]            */
+[tv-dator]             t.test('node_id is a UUID with no transport information',
+[tv-dator]         ------^
+[tv-dator]               async (t) => {
+[tv-dator]                 await fc.assert(
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:02.421Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"ffffffe0-a3ab-5af0-8000-00040000000c","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:02.626Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"ffffffe0-a3ab-5af0-8000-00040000000c","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:02.629Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-a3ab-5af0-8000-00040000000c","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:02.834Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-a3ab-5af0-8000-00040000000c","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:02.840Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-00040000000c","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:03.046Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-00040000000c","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:03.051Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-00000000000c","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:03.257Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-00000000000c","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:03.259Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:03.466Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:03.468Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:03.674Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:03.676Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:03.881Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator]     # Subtest: transport addresses stored only in node_endpoints table
+[tv-dator]         not ok 1 - Property failed after 1 tests { seed: 1446286420, path: "0:0:0:0:0:0:0", endOnFailure: true } Counterexample: ["00000000-0000-1000-8000-000000000000","ws","localhost",8000] Shrunk 6 time(s) Got error: Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent     at wrapNodeRegistrationError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/shared/node-registration-owner.js:106:24)     at NodeRegistrationOwner.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/shared/node-registration-owner.js:282:28)     at async QuerySystemStatePhase.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/phases/query-system-state-phase.js:607:16)     at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/test/transport/node-identity-separation.property.test.js:229:13     at async AsyncProperty.run (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:28)     at async asyncRunIt (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:21)     at async Test.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/test/transport/node-identity-separation.property.test.js:213:7)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+[tv-dator]           ---
+[tv-dator]           stack: |
+[tv-dator]             buildError (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+[tv-dator]             asyncThrowIfFailed (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+[tv-dator]           at:
+[tv-dator]             fileName: ../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+[tv-dator]             lineNumber: 126
+[tv-dator]             columnNumber: 15
+[tv-dator]             functionName: buildError
+[tv-dator]           tapCaught: returnedPromiseRejection
+[tv-dator]           source: |
+[tv-dator]             function buildError(errorMessage, out) {
+[tv-dator]                 if (!out.runConfiguration.errorWithCause) {
+[tv-dator]                     throw new Error(errorMessage);
+[tv-dator]             --------------^
+[tv-dator]                 }
+[tv-dator]                 const ErrorWithCause = Error;
+[tv-dator]           ...
+[tv-dator]         
+[tv-dator]         1..1
+[tv-dator]     not ok 2 - transport addresses stored only in node_endpoints table # time=1470.997ms
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/transport/node-identity-separation.property.test.js
+[tv-dator]         lineNumber: 211
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       source: |2
+[tv-dator]            * Validates: Requirements 1.2, 1.3
+[tv-dator]            */
+[tv-dator]             t.test('transport addresses stored only in ' +
+[tv-dator]         ------^
+[tv-dator]             'node_endpoints table', async (t) => {
+[tv-dator]               await fc.assert(
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:03.897Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000003-0018-1000-bfff-ffe5dc882516","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:04.103Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000003-0018-1000-bfff-ffe5dc882516","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:04.106Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0018-1000-bfff-ffe5dc882516","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:04.311Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0018-1000-bfff-ffe5dc882516","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:04.313Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-bfff-ffe5dc882516","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:04.519Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-bfff-ffe5dc882516","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:04.523Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-0000dc882516","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:04.730Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-0000dc882516","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:04.732Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:04.938Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:04.940Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:05.146Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator]     # Subtest: each node has at least one endpoint after registration
+[tv-dator]         not ok 1 - Property failed after 1 tests { seed: 2129784633, path: "0:0:0:0:0:0", endOnFailure: true } Counterexample: ["00000000-0000-1000-8000-000000000000",8000] Shrunk 5 time(s) Got error: Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent     at wrapNodeRegistrationError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/shared/node-registration-owner.js:106:24)     at NodeRegistrationOwner.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/shared/node-registration-owner.js:282:28)     at async QuerySystemStatePhase.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/phases/query-system-state-phase.js:607:16)     at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/test/transport/node-identity-separation.property.test.js:268:13     at async AsyncProperty.run (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:28)     at async asyncRunIt (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:21)     at async Test.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/test/transport/node-identity-separation.property.test.js:257:7)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+[tv-dator]           ---
+[tv-dator]           stack: |
+[tv-dator]             buildError (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+[tv-dator]             asyncThrowIfFailed (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+[tv-dator]           at:
+[tv-dator]             fileName: ../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+[tv-dator]             lineNumber: 126
+[tv-dator]             columnNumber: 15
+[tv-dator]             functionName: buildError
+[tv-dator]           tapCaught: returnedPromiseRejection
+[tv-dator]           source: |
+[tv-dator]             function buildError(errorMessage, out) {
+[tv-dator]                 if (!out.runConfiguration.errorWithCause) {
+[tv-dator]                     throw new Error(errorMessage);
+[tv-dator]             --------------^
+[tv-dator]                 }
+[tv-dator]                 const ErrorWithCause = Error;
+[tv-dator]           ...
+[tv-dator]         
+[tv-dator]         1..1
+[tv-dator]     not ok 3 - each node has at least one endpoint after registration # time=1256.43ms
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/transport/node-identity-separation.property.test.js
+[tv-dator]         lineNumber: 255
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       source: |2
+[tv-dator]            * Validates: Requirements 1.3, 1.4
+[tv-dator]            */
+[tv-dator]             t.test('each node has at least one endpoint after ' +
+[tv-dator]         ------^
+[tv-dator]             'registration', async (t) => {
+[tv-dator]               await fc.assert(
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:05.153Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"0118bb6a-ffe2-5fff-b9ef-31c564739e67","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:05.360Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"0118bb6a-ffe2-5fff-b9ef-31c564739e67","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:05.361Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-ffe2-5fff-b9ef-31c564739e67","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:05.567Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-ffe2-5fff-b9ef-31c564739e67","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:05.569Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-b9ef-31c564739e67","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:05.772Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-b9ef-31c564739e67","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:05.775Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000064739e67","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:05.981Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000064739e67","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:05.984Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:06.190Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:06.192Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:06.397Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator]     # Subtest: endpoint has correct structure with all required fields
+[tv-dator]         not ok 1 - Property failed after 1 tests { seed: -1146619193, path: "0:0:0:0:0:0", endOnFailure: true } Counterexample: ["00000000-0000-1000-8000-000000000000",8000] Shrunk 5 time(s) Got error: Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent     at wrapNodeRegistrationError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/shared/node-registration-owner.js:106:24)     at NodeRegistrationOwner.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/shared/node-registration-owner.js:282:28)     at async QuerySystemStatePhase.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/phases/query-system-state-phase.js:607:16)     at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/test/transport/node-identity-separation.property.test.js:301:13     at async AsyncProperty.run (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:28)     at async asyncRunIt (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:21)     at async Test.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/test/transport/node-identity-separation.property.test.js:290:7)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+[tv-dator]           ---
+[tv-dator]           stack: |
+[tv-dator]             buildError (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+[tv-dator]             asyncThrowIfFailed (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+[tv-dator]           at:
+[tv-dator]             fileName: ../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+[tv-dator]             lineNumber: 126
+[tv-dator]             columnNumber: 15
+[tv-dator]             functionName: buildError
+[tv-dator]           tapCaught: returnedPromiseRejection
+[tv-dator]           source: |
+[tv-dator]             function buildError(errorMessage, out) {
+[tv-dator]                 if (!out.runConfiguration.errorWithCause) {
+[tv-dator]                     throw new Error(errorMessage);
+[tv-dator]             --------------^
+[tv-dator]                 }
+[tv-dator]                 const ErrorWithCause = Error;
+[tv-dator]           ...
+[tv-dator]         
+[tv-dator]         1..1
+[tv-dator]     not ok 4 - endpoint has correct structure with all required fields # time=1249.757ms
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/transport/node-identity-separation.property.test.js
+[tv-dator]         lineNumber: 288
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       source: |2
+[tv-dator]            * Validates: Requirements 1.5
+[tv-dator]            */
+[tv-dator]             t.test('endpoint has correct structure with all ' +
+[tv-dator]         ------^
+[tv-dator]             'required fields', async (t) => {
+[tv-dator]               await fc.assert(
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:06.405Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"c6a333a3-0002-1000-95fb-c8802de0a245","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:06.610Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"c6a333a3-0002-1000-95fb-c8802de0a245","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:06.613Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0002-1000-95fb-c8802de0a245","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:06.819Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0002-1000-95fb-c8802de0a245","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:06.821Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-95fb-c8802de0a245","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:07.026Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-95fb-c8802de0a245","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:07.030Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-00002de0a245","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:07.236Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-00002de0a245","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:07.238Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:07.446Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:07.450Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:07.653Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:07.656Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:07.860Z","nodeId":"test-node","pid":3430392,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator]     # Subtest: node identity remains unchanged when endpoints change
+[tv-dator]         not ok 1 - Property failed after 1 tests { seed: -1840746900, path: "0:0:0:0:0:0:0", endOnFailure: true } Counterexample: ["00000000-0000-1000-8000-000000000000",[8000,8000]] Shrunk 6 time(s) Got error: Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent     at wrapNodeRegistrationError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/shared/node-registration-owner.js:106:24)     at NodeRegistrationOwner.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/shared/node-registration-owner.js:282:28)     at async QuerySystemStatePhase.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/phases/query-system-state-phase.js:607:16)     at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/test/transport/node-identity-separation.property.test.js:363:13     at async AsyncProperty.run (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:28)     at async asyncRunIt (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:21)     at async Test.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/test/transport/node-identity-separation.property.test.js:349:7)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+[tv-dator]           ---
+[tv-dator]           stack: |
+[tv-dator]             buildError (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+[tv-dator]             asyncThrowIfFailed (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+[tv-dator]           at:
+[tv-dator]             fileName: ../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+[tv-dator]             lineNumber: 126
+[tv-dator]             columnNumber: 15
+[tv-dator]             functionName: buildError
+[tv-dator]           tapCaught: returnedPromiseRejection
+[tv-dator]           source: |
+[tv-dator]             function buildError(errorMessage, out) {
+[tv-dator]                 if (!out.runConfiguration.errorWithCause) {
+[tv-dator]                     throw new Error(errorMessage);
+[tv-dator]             --------------^
+[tv-dator]                 }
+[tv-dator]                 const ErrorWithCause = Error;
+[tv-dator]           ...
+[tv-dator]         
+[tv-dator]         1..1
+[tv-dator]     not ok 5 - node identity remains unchanged when endpoints change # time=1461.683ms
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/transport/node-identity-separation.property.test.js
+[tv-dator]         lineNumber: 347
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       source: |2
+[tv-dator]            * Validates: Requirements 1.6
+[tv-dator]            */
+[tv-dator]             t.test('node identity remains unchanged when ' +
+[tv-dator]         ------^
+[tv-dator]             'endpoints change', async (t) => {
+[tv-dator]               await fc.assert(
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..5
+[tv-dator] not ok 1 - Property 1: Node Identity Separation from Endpoints # time=6747.086ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/transport/node-identity-separation.property.test.js
+[tv-dator]     lineNumber: 170
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |2
+[tv-dator]      * Validates: Requirements 1.1, 1.2, 1.3
+[tv-dator]      */
+[tv-dator]     test('Property 1: Node Identity Separation from Endpoints',
+[tv-dator]     ^
+[tv-dator]       async (t) => {
+[tv-dator]         /**
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] 1..1
+[tv-dator] # { total: 5, pass: 0, fail: 5 }
+[tv-dator] # time=6796.672ms
+[tv-dator] not ok test/transport/node-registration-creates-endpoint.property.test.js (15 assertions, 18511ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] # Subtest: Property 11: Node Registration Creates Endpoint
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:01.076Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000009-1a31-1c92-b2a2-a9dc00000011","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:01.286Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000009-1a31-1c92-b2a2-a9dc00000011","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:01.294Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-1a31-1c92-b2a2-a9dc00000011","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:01.500Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-1a31-1c92-b2a2-a9dc00000011","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:01.503Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-b2a2-a9dc00000011","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:01.710Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-b2a2-a9dc00000011","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:01.712Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000011","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:01.917Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000011","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:01.920Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:02.128Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:02.130Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:02.337Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator]     # Subtest: node registration creates WebSocket endpoint
+[tv-dator]         not ok 1 - Property failed after 1 tests { seed: 320212040, path: "0:0:0:0:0:0", endOnFailure: true } Counterexample: ["00000000-0000-1000-8000-000000000000",8000] Shrunk 5 time(s) Got error: Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent     at wrapNodeRegistrationError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/shared/node-registration-owner.js:106:24)     at NodeRegistrationOwner.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/shared/node-registration-owner.js:282:28)     at async QuerySystemStatePhase.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/phases/query-system-state-phase.js:607:16)     at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/test/transport/node-registration-creates-endpoint.property.test.js:145:15     at async AsyncProperty.run (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:28)     at async asyncRunIt (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:21)     at async Test.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/test/transport/node-registration-creates-endpoint.property.test.js:134:9)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+[tv-dator]           ---
+[tv-dator]           stack: |
+[tv-dator]             buildError (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+[tv-dator]             asyncThrowIfFailed (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+[tv-dator]           at:
+[tv-dator]             fileName: ../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+[tv-dator]             lineNumber: 126
+[tv-dator]             columnNumber: 15
+[tv-dator]             functionName: buildError
+[tv-dator]           tapCaught: returnedPromiseRejection
+[tv-dator]           source: |
+[tv-dator]             function buildError(errorMessage, out) {
+[tv-dator]                 if (!out.runConfiguration.errorWithCause) {
+[tv-dator]                     throw new Error(errorMessage);
+[tv-dator]             --------------^
+[tv-dator]                 }
+[tv-dator]                 const ErrorWithCause = Error;
+[tv-dator]           ...
+[tv-dator]         
+[tv-dator]         1..1
+[tv-dator]     not ok 1 - node registration creates WebSocket endpoint # time=1303.592ms
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/transport/node-registration-creates-endpoint.property.test.js
+[tv-dator]         lineNumber: 132
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       source: |2
+[tv-dator]            * Validates: Requirements 8.2
+[tv-dator]            */
+[tv-dator]             t.test('node registration creates WebSocket endpoint',
+[tv-dator]         ------^
+[tv-dator]               async (t) => {
+[tv-dator]                 await fc.assert(
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:02.364Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"ffffffe3-30c4-571c-8000-00050000001a","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:02.571Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"ffffffe3-30c4-571c-8000-00050000001a","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:02.573Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-30c4-571c-8000-00050000001a","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:02.779Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-30c4-571c-8000-00050000001a","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:02.782Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-00050000001a","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:02.988Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-00050000001a","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:02.993Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-00000000001a","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:03.200Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-00000000001a","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:03.203Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:03.409Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:03.411Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:03.617Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator]     # Subtest: endpoint is written via SQL query engine
+[tv-dator]         not ok 1 - Property failed after 1 tests { seed: 731967903, path: "0:0:0:0:0:0", endOnFailure: true } Counterexample: ["00000000-0000-1000-8000-000000000000",8000] Shrunk 5 time(s) Got error: Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent     at wrapNodeRegistrationError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/shared/node-registration-owner.js:106:24)     at NodeRegistrationOwner.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/shared/node-registration-owner.js:282:28)     at async QuerySystemStatePhase.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/phases/query-system-state-phase.js:607:16)     at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/test/transport/node-registration-creates-endpoint.property.test.js:214:15     at async AsyncProperty.run (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:28)     at async asyncRunIt (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:21)     at async Test.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/test/transport/node-registration-creates-endpoint.property.test.js:170:9)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+[tv-dator]           ---
+[tv-dator]           stack: |
+[tv-dator]             buildError (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+[tv-dator]             asyncThrowIfFailed (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+[tv-dator]           at:
+[tv-dator]             fileName: ../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+[tv-dator]             lineNumber: 126
+[tv-dator]             columnNumber: 15
+[tv-dator]             functionName: buildError
+[tv-dator]           tapCaught: returnedPromiseRejection
+[tv-dator]           source: |
+[tv-dator]             function buildError(errorMessage, out) {
+[tv-dator]                 if (!out.runConfiguration.errorWithCause) {
+[tv-dator]                     throw new Error(errorMessage);
+[tv-dator]             --------------^
+[tv-dator]                 }
+[tv-dator]                 const ErrorWithCause = Error;
+[tv-dator]           ...
+[tv-dator]         
+[tv-dator]         1..1
+[tv-dator]     not ok 2 - endpoint is written via SQL query engine # time=1263.066ms
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/transport/node-registration-creates-endpoint.property.test.js
+[tv-dator]         lineNumber: 168
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       source: |2
+[tv-dator]            * Validates: Requirements 8.2
+[tv-dator]            */
+[tv-dator]             t.test('endpoint is written via SQL query engine',
+[tv-dator]         ------^
+[tv-dator]               async (t) => {
+[tv-dator]                 await fc.assert(
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:03.632Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"d423bf43-e130-5080-8000-001a0000000c","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:03.838Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"d423bf43-e130-5080-8000-001a0000000c","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:03.841Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-e130-5080-8000-001a0000000c","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:04.046Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-e130-5080-8000-001a0000000c","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:04.048Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-001a0000000c","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:04.253Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-001a0000000c","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:04.255Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-00000000000c","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:04.457Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-00000000000c","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:04.460Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:04.666Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:04.668Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:04.873Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator]     # Subtest: endpoint references correct node_id
+[tv-dator]         not ok 1 - Property failed after 1 tests { seed: -1762252112, path: "0:0:0:0:0:0", endOnFailure: true } Counterexample: ["00000000-0000-1000-8000-000000000000",8000] Shrunk 5 time(s) Got error: Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent     at wrapNodeRegistrationError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/shared/node-registration-owner.js:106:24)     at NodeRegistrationOwner.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/shared/node-registration-owner.js:282:28)     at async QuerySystemStatePhase.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/phases/query-system-state-phase.js:607:16)     at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/test/transport/node-registration-creates-endpoint.property.test.js:240:15     at async AsyncProperty.run (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:28)     at async asyncRunIt (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:21)     at async Test.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/test/transport/node-registration-creates-endpoint.property.test.js:229:9)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+[tv-dator]           ---
+[tv-dator]           stack: |
+[tv-dator]             buildError (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+[tv-dator]             asyncThrowIfFailed (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+[tv-dator]           at:
+[tv-dator]             fileName: ../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+[tv-dator]             lineNumber: 126
+[tv-dator]             columnNumber: 15
+[tv-dator]             functionName: buildError
+[tv-dator]           tapCaught: returnedPromiseRejection
+[tv-dator]           source: |
+[tv-dator]             function buildError(errorMessage, out) {
+[tv-dator]                 if (!out.runConfiguration.errorWithCause) {
+[tv-dator]                     throw new Error(errorMessage);
+[tv-dator]             --------------^
+[tv-dator]                 }
+[tv-dator]                 const ErrorWithCause = Error;
+[tv-dator]           ...
+[tv-dator]         
+[tv-dator]         1..1
+[tv-dator]     not ok 3 - endpoint references correct node_id # time=1251.656ms
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/transport/node-registration-creates-endpoint.property.test.js
+[tv-dator]         lineNumber: 227
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       source: |2
+[tv-dator]            * Validates: Requirements 8.2
+[tv-dator]            */
+[tv-dator]             t.test('endpoint references correct node_id',
+[tv-dator]         ------^
+[tv-dator]               async (t) => {
+[tv-dator]                 await fc.assert(
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:04.886Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"f7aaabca-6ef2-41b0-8000-001d00000010","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:05.092Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"f7aaabca-6ef2-41b0-8000-001d00000010","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:05.094Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-6ef2-41b0-8000-001d00000010","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:05.299Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-6ef2-41b0-8000-001d00000010","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:05.303Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-001d00000010","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:05.508Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-001d00000010","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:05.511Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000010","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:05.717Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000010","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:05.721Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:05.926Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:05.928Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:06.133Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator]     # Subtest: endpoint has active status
+[tv-dator]         not ok 1 - Property failed after 1 tests { seed: -562633708, path: "0:0:0:0:0:0", endOnFailure: true } Counterexample: ["00000000-0000-1000-8000-000000000000",8000] Shrunk 5 time(s) Got error: Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent     at wrapNodeRegistrationError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/shared/node-registration-owner.js:106:24)     at NodeRegistrationOwner.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/shared/node-registration-owner.js:282:28)     at async QuerySystemStatePhase.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/phases/query-system-state-phase.js:607:16)     at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/test/transport/node-registration-creates-endpoint.property.test.js:273:13     at async AsyncProperty.run (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:28)     at async asyncRunIt (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:21)     at async Test.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/test/transport/node-registration-creates-endpoint.property.test.js:262:7)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+[tv-dator]           ---
+[tv-dator]           stack: |
+[tv-dator]             buildError (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+[tv-dator]             asyncThrowIfFailed (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+[tv-dator]           at:
+[tv-dator]             fileName: ../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+[tv-dator]             lineNumber: 126
+[tv-dator]             columnNumber: 15
+[tv-dator]             functionName: buildError
+[tv-dator]           tapCaught: returnedPromiseRejection
+[tv-dator]           source: |
+[tv-dator]             function buildError(errorMessage, out) {
+[tv-dator]                 if (!out.runConfiguration.errorWithCause) {
+[tv-dator]                     throw new Error(errorMessage);
+[tv-dator]             --------------^
+[tv-dator]                 }
+[tv-dator]                 const ErrorWithCause = Error;
+[tv-dator]           ...
+[tv-dator]         
+[tv-dator]         1..1
+[tv-dator]     not ok 4 - endpoint has active status # time=1254.583ms
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/transport/node-registration-creates-endpoint.property.test.js
+[tv-dator]         lineNumber: 261
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       source: |2
+[tv-dator]            * Validates: Requirements 8.2
+[tv-dator]            */
+[tv-dator]             t.test('endpoint has active status', async (t) => {
+[tv-dator]         ------^
+[tv-dator]               await fc.assert(
+[tv-dator]                 fc.asyncProperty(
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:06.140Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"0000001b-e6ae-3372-8498-9ad35795f7b0","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:06.346Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"0000001b-e6ae-3372-8498-9ad35795f7b0","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:06.349Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-e6ae-3372-8498-9ad35795f7b0","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:06.554Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-e6ae-3372-8498-9ad35795f7b0","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:06.556Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8498-9ad35795f7b0","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:06.762Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8498-9ad35795f7b0","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:06.766Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-00005795f7b0","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:06.971Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-00005795f7b0","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:06.973Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:07.179Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:07.181Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:07.388Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:07.390Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:07.594Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator]     # Subtest: endpoint address matches node address
+[tv-dator]         not ok 1 - Property failed after 1 tests { seed: 197382460, path: "0:0:0:0:0:0:0", endOnFailure: true } Counterexample: ["00000000-0000-1000-8000-000000000000","ws","localhost",8000] Shrunk 6 time(s) Got error: Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent     at wrapNodeRegistrationError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/shared/node-registration-owner.js:106:24)     at NodeRegistrationOwner.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/shared/node-registration-owner.js:282:28)     at async QuerySystemStatePhase.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/phases/query-system-state-phase.js:607:16)     at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/test/transport/node-registration-creates-endpoint.property.test.js:313:15     at async AsyncProperty.run (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:28)     at async asyncRunIt (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:21)     at async Test.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/test/transport/node-registration-creates-endpoint.property.test.js:297:9)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+[tv-dator]           ---
+[tv-dator]           stack: |
+[tv-dator]             buildError (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+[tv-dator]             asyncThrowIfFailed (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+[tv-dator]           at:
+[tv-dator]             fileName: ../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+[tv-dator]             lineNumber: 126
+[tv-dator]             columnNumber: 15
+[tv-dator]             functionName: buildError
+[tv-dator]           tapCaught: returnedPromiseRejection
+[tv-dator]           source: |
+[tv-dator]             function buildError(errorMessage, out) {
+[tv-dator]                 if (!out.runConfiguration.errorWithCause) {
+[tv-dator]                     throw new Error(errorMessage);
+[tv-dator]             --------------^
+[tv-dator]                 }
+[tv-dator]                 const ErrorWithCause = Error;
+[tv-dator]           ...
+[tv-dator]         
+[tv-dator]         1..1
+[tv-dator]     not ok 5 - endpoint address matches node address # time=1459.705ms
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/transport/node-registration-creates-endpoint.property.test.js
+[tv-dator]         lineNumber: 295
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       source: |2
+[tv-dator]            * Validates: Requirements 8.2
+[tv-dator]            */
+[tv-dator]             t.test('endpoint address matches node address',
+[tv-dator]         ------^
+[tv-dator]               async (t) => {
+[tv-dator]                 await fc.assert(
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:07.602Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"dabe08f8-d63c-5108-9885-40b4c753c861","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:07.806Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"dabe08f8-d63c-5108-9885-40b4c753c861","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:07.809Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"c22d3256-9307-1e41-a0f2-26a98d852170","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:08.013Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"c22d3256-9307-1e41-a0f2-26a98d852170","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:08.018Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-9307-1e41-a0f2-26a98d852170","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:08.224Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-9307-1e41-a0f2-26a98d852170","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:08.226Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-a0f2-26a98d852170","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:08.432Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-a0f2-26a98d852170","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:08.434Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-00008d852170","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:08.638Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-00008d852170","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:08.641Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:08.845Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:08.848Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:09.053Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:09.055Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:09.259Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:09.264Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:09.470Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:09.475Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:09.680Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:09.683Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:09.887Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:09.890Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:10.095Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:10.098Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:10.304Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:10.306Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:10.510Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:10.513Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:10.718Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:10.721Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:10.927Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:10.930Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:11.135Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:11.138Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:11.343Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:11.347Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:11.552Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:11.555Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:11.759Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:11.763Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:11.967Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:11.970Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:12.174Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:12.177Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:12.383Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:12.386Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:12.591Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:12.593Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:12.799Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:12.801Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:13.007Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:13.009Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:13.216Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:13.218Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:13.424Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:13.427Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:13.631Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:13.634Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:13.840Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:13.842Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:14.047Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:14.050Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:14.257Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:14.258Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:14.464Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:14.466Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:14.672Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:14.674Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:14.880Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:14.882Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:15.084Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:15.086Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:15.291Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:15.294Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:15.499Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:15.501Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:15.708Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:15.710Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:15.915Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:15.918Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:16.126Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:16.129Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:16.336Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator]     # Subtest: endpoint has unique endpoint_id
+[tv-dator]         not ok 1 - Property failed after 1 tests { seed: -874693299, path: "0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0", endOnFailure: true } Counterexample: [["00000000-0000-1000-8000-000000000000","00000000-0000-1000-8000-000000000001"],8000] Shrunk 41 time(s) Got error: Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent     at wrapNodeRegistrationError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/shared/node-registration-owner.js:106:24)     at NodeRegistrationOwner.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/shared/node-registration-owner.js:282:28)     at async QuerySystemStatePhase.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/phases/query-system-state-phase.js:607:16)     at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/test/transport/node-registration-creates-endpoint.property.test.js:356:15     at async AsyncProperty.run (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:28)     at async asyncRunIt (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:21)     at async Test.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/test/transport/node-registration-creates-endpoint.property.test.js:338:7)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+[tv-dator]           ---
+[tv-dator]           stack: |
+[tv-dator]             buildError (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+[tv-dator]             asyncThrowIfFailed (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+[tv-dator]           at:
+[tv-dator]             fileName: ../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+[tv-dator]             lineNumber: 126
+[tv-dator]             columnNumber: 15
+[tv-dator]             functionName: buildError
+[tv-dator]           tapCaught: returnedPromiseRejection
+[tv-dator]           source: |
+[tv-dator]             function buildError(errorMessage, out) {
+[tv-dator]                 if (!out.runConfiguration.errorWithCause) {
+[tv-dator]                     throw new Error(errorMessage);
+[tv-dator]             --------------^
+[tv-dator]                 }
+[tv-dator]                 const ErrorWithCause = Error;
+[tv-dator]           ...
+[tv-dator]         
+[tv-dator]         1..1
+[tv-dator]     not ok 6 - endpoint has unique endpoint_id # time=8740.777ms
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/transport/node-registration-creates-endpoint.property.test.js
+[tv-dator]         lineNumber: 337
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       source: |2
+[tv-dator]            * Validates: Requirements 8.2
+[tv-dator]            */
+[tv-dator]             t.test('endpoint has unique endpoint_id', async (t) => {
+[tv-dator]         ------^
+[tv-dator]               await fc.assert(
+[tv-dator]                 fc.asyncProperty(
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:16.344Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000003-65a4-5c12-8275-acc200000011","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:16.549Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000003-65a4-5c12-8275-acc200000011","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:16.551Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-65a4-5c12-8275-acc200000011","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:16.756Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-65a4-5c12-8275-acc200000011","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:16.759Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8275-acc200000011","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:16.964Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8275-acc200000011","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:16.966Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000011","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:17.172Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000011","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:17.176Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:17.381Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:17.384Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:54:17.589Z","nodeId":"test-node","pid":3430386,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+[tv-dator]     # Subtest: endpoint has priority 0 (highest)
+[tv-dator]         not ok 1 - Property failed after 1 tests { seed: 2114743019, path: "0:0:0:0:0:0", endOnFailure: true } Counterexample: ["00000000-0000-1000-8000-000000000000",8000] Shrunk 5 time(s) Got error: Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent     at wrapNodeRegistrationError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/shared/node-registration-owner.js:106:24)     at NodeRegistrationOwner.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/shared/node-registration-owner.js:282:28)     at async QuerySystemStatePhase.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/src/bootstrap/phases/query-system-state-phase.js:607:16)     at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/test/transport/node-registration-creates-endpoint.property.test.js:394:15     at async AsyncProperty.run (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:28)     at async asyncRunIt (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:21)     at async Test.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/d3edaa08ca13-mwr2dh6g-2554127/test/transport/node-registration-creates-endpoint.property.test.js:383:9)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+[tv-dator]           ---
+[tv-dator]           stack: |
+[tv-dator]             buildError (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+[tv-dator]             asyncThrowIfFailed (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+[tv-dator]           at:
+[tv-dator]             fileName: ../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+[tv-dator]             lineNumber: 126
+[tv-dator]             columnNumber: 15
+[tv-dator]             functionName: buildError
+[tv-dator]           tapCaught: returnedPromiseRejection
+[tv-dator]           source: |
+[tv-dator]             function buildError(errorMessage, out) {
+[tv-dator]                 if (!out.runConfiguration.errorWithCause) {
+[tv-dator]                     throw new Error(errorMessage);
+[tv-dator]             --------------^
+[tv-dator]                 }
+[tv-dator]                 const ErrorWithCause = Error;
+[tv-dator]           ...
+[tv-dator]         
+[tv-dator]         1..1
+[tv-dator]     not ok 7 - endpoint has priority 0 (highest) # time=1251.841ms
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/transport/node-registration-creates-endpoint.property.test.js
+[tv-dator]         lineNumber: 381
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       source: |2
+[tv-dator]            * Validates: Requirements 8.2
+[tv-dator]            */
+[tv-dator]             t.test('endpoint has priority 0 (highest)',
+[tv-dator]         ------^
+[tv-dator]               async (t) => {
+[tv-dator]                 await fc.assert(
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..7
+[tv-dator] not ok 1 - Property 11: Node Registration Creates Endpoint # time=16548.564ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/transport/node-registration-creates-endpoint.property.test.js
+[tv-dator]     lineNumber: 126
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |2
+[tv-dator]      * Validates: Requirements 8.2
+[tv-dator]      */
+[tv-dator]     test('Property 11: Node Registration Creates Endpoint',
+[tv-dator]     ^
+[tv-dator]       async (t) => {
+[tv-dator]         /**
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] 1..1
+[tv-dator] # { total: 7, pass: 0, fail: 7 }
+[tv-dator] # time=16601.761ms
+[tv-dator] # test-files total=2 pass=0 fail=2 assertions=26
+lab test: tv-dator: # test-files total=2 pass=0 fail=2 assertions=26
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=2 pass=0 fail=2 assertions=26

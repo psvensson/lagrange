@@ -1,0 +1,64 @@
+lab test: tv-dator: ordinary (1 files) cores=12 mem=15.4GiB speed x1.55
+[tv-dator] placement-shell=3455770
+[tv-dator] placement-head=f6be0db8f5fa90604f96e1adc0fa690472eccf54
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.6 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=3456221
+[tv-dator] # test-files planned=1
+[tv-dator] classified lane ordinary: 1 file(s), jobs=4
+[tv-dator] thermal: ok cpu 64C (coretemp/Package id 0) nvme 51C (nvme/Sensor 1)
+[tv-dator] not ok test/raft/raft-rs-inbound-queue-overflow.test.js (2 assertions, 1098ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 13
+[tv-dator] # Subtest: F-3: a full inbound queue drops the envelope, counted and visible; the group keeps its role and keeps processing
+[tv-dator] not ok 1 - F-3: a full inbound queue drops the envelope, counted and visible; the group keeps its role and keeps processing
+[tv-dator]   ---
+[tv-dator]   duration_ms: 154.326852
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/f6be0db8f5fa-mwr3kyel-2627077/test/raft/raft-rs-inbound-queue-overflow.test.js:149:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: "Cannot read properties of undefined (reading 'outcome')"
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   name: 'TypeError'
+[tv-dator]   stack: |-
+[tv-dator]     BurstScenario.authority (file:///home/peter/projects/lagrange/test-output/placement-worktrees/f6be0db8f5fa-mwr3kyel-2627077/test/raft/raft-rs-inbound-queue-overflow.test.js:119:31)
+[tv-dator]     async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/f6be0db8f5fa-mwr3kyel-2627077/test/raft/raft-rs-inbound-queue-overflow.test.js:154:20)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[tv-dator]   ...
+[tv-dator] # Subtest: F-3: the inbound queue counts the bytes its envelopes carry
+[tv-dator] not ok 2 - F-3: the inbound queue counts the bytes its envelopes carry
+[tv-dator]   ---
+[tv-dator]   duration_ms: 126.0524
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/f6be0db8f5fa-mwr3kyel-2627077/test/raft/raft-rs-inbound-queue-overflow.test.js:199:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: "Cannot read properties of undefined (reading 'outcome')"
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   name: 'TypeError'
+[tv-dator]   stack: |-
+[tv-dator]     BurstScenario.authority (file:///home/peter/projects/lagrange/test-output/placement-worktrees/f6be0db8f5fa-mwr3kyel-2627077/test/raft/raft-rs-inbound-queue-overflow.test.js:119:31)
+[tv-dator]     async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/f6be0db8f5fa-mwr3kyel-2627077/test/raft/raft-rs-inbound-queue-overflow.test.js:214:21)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] 1..2
+[tv-dator] # tests 2
+[tv-dator] # suites 0
+[tv-dator] # pass 0
+[tv-dator] # fail 2
+[tv-dator] # cancelled 0
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 304.589517
+[tv-dator] # time=1098ms
+[tv-dator] # test-files total=1 pass=0 fail=1 assertions=2
+lab test: tv-dator: # test-files total=1 pass=0 fail=1 assertions=2
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=1 pass=0 fail=1 assertions=2

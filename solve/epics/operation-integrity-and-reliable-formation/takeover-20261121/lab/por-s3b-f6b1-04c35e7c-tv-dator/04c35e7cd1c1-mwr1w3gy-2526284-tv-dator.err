@@ -1,0 +1,388 @@
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'pl-test-partition-3-0',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'pl-test-partition-3-0',
+    replica_id: 'replace-replica-e3c62b78a92226efeea9da2f221cd2b3',
+    status: 'pending',
+    workflow_step: 'SENDING',
+    updated_at: 1795304440651,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795304440655
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'pl-test-partition-3-0',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'pl-test-partition-3-0',
+    replica_id: 'replace-replica-e3c62b78a92226efeea9da2f221cd2b3',
+    status: 'creating',
+    workflow_step: 'CREATING',
+    updated_at: 1795304440700,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795304440701
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'REBALANCE_OPERATION_STEP_TIMEOUT',
+  awaited: 'replica operation progressed past its current workflow step',
+  boundMs: 1,
+  elapsedMs: 3,
+  lastObserved: {
+    type: 'ADD',
+    workflowStep: 'CREATING',
+    status: 'creating',
+    targetNodeId: 'test-node',
+    stepExceeded: true,
+    budgetExhausted: true,
+    timeoutClassification: {
+      classification: 'rebalance_operation_timeout',
+      configuredBudgetMs: 300000,
+      remainingBudgetMs: 299993,
+      boundaryHit: false,
+      nestedOperation: 'rebalance:creating',
+      operationName: 'rebalance',
+      originalClassification: null
+    }
+  },
+  scope: {
+    nodeId: 'test-node-1',
+    partitionId: 'test-partition',
+    operationId: 'pl-test-partition-3-0'
+  },
+  repeats: 0
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'pl-test-partition-3-0',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'pl-test-partition-3-0',
+    replica_id: 'replace-replica-e3c62b78a92226efeea9da2f221cd2b3',
+    status: 'failed',
+    workflow_step: 'FAILED',
+    updated_at: 1795304440706,
+    completed_at: 1795304440706,
+    error_message: 'Timeout in CREATING step after 3ms'
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795304440709
+}
+Operation failed {
+  operationId: 'pl-test-partition-3-0',
+  type: 'ADD',
+  partitionId: 'test-partition',
+  targetNodeId: 'test-node',
+  errorMessage: 'Timeout in CREATING step after 3ms'
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'pl-test-partition-3-0',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'pl-test-partition-3-0',
+    replica_id: 'replace-replica-e3c62b78a92226efeea9da2f221cd2b3',
+    status: 'syncing',
+    workflow_step: 'SYNCING',
+    updated_at: 1795304440742,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795304440743
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'REBALANCE_OPERATION_STEP_TIMEOUT',
+  awaited: 'replica operation progressed past its current workflow step',
+  boundMs: 1,
+  elapsedMs: 3,
+  lastObserved: {
+    type: 'ADD',
+    workflowStep: 'SYNCING',
+    status: 'syncing',
+    targetNodeId: 'test-node',
+    stepExceeded: true,
+    budgetExhausted: true,
+    timeoutClassification: {
+      classification: 'rebalance_operation_timeout',
+      configuredBudgetMs: 300000,
+      remainingBudgetMs: 299994,
+      boundaryHit: false,
+      nestedOperation: 'rebalance:syncing',
+      operationName: 'rebalance',
+      originalClassification: null
+    }
+  },
+  scope: {
+    nodeId: 'test-node-1',
+    partitionId: 'test-partition',
+    operationId: 'pl-test-partition-3-0'
+  },
+  repeats: 0
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'pl-test-partition-3-0',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'pl-test-partition-3-0',
+    replica_id: 'replace-replica-e3c62b78a92226efeea9da2f221cd2b3',
+    status: 'failed',
+    workflow_step: 'FAILED',
+    updated_at: 1795304440746,
+    completed_at: 1795304440746,
+    error_message: 'Timeout in SYNCING step after 3ms'
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795304440748
+}
+Operation failed {
+  operationId: 'pl-test-partition-3-0',
+  type: 'ADD',
+  partitionId: 'test-partition',
+  targetNodeId: 'test-node',
+  errorMessage: 'Timeout in SYNCING step after 3ms'
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'pl-test-partition-3-0',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'pl-test-partition-3-0',
+    replica_id: 'test-replica',
+    status: 'removing',
+    workflow_step: 'STOPPING',
+    updated_at: 1795304440779,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795304440781
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'pl-test-partition-3-0',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'pl-test-partition-3-0',
+    replica_id: 'test-replica',
+    status: 'removing',
+    workflow_step: 'STOPPING',
+    updated_at: 1795304440817,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795304440818
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'REBALANCE_OPERATION_STEP_TIMEOUT',
+  awaited: 'replica operation progressed past its current workflow step',
+  boundMs: 1,
+  elapsedMs: 102,
+  lastObserved: {
+    type: 'REMOVE',
+    workflowStep: 'STOPPING',
+    status: 'removing',
+    targetNodeId: 'test-node',
+    stepExceeded: true,
+    budgetExhausted: true,
+    timeoutClassification: {
+      classification: 'rebalance_operation_timeout',
+      configuredBudgetMs: 300000,
+      remainingBudgetMs: 299994,
+      boundaryHit: false,
+      nestedOperation: 'rebalance:stopping',
+      operationName: 'rebalance',
+      originalClassification: null
+    }
+  },
+  scope: {
+    nodeId: 'test-node-1',
+    partitionId: 'test-partition',
+    operationId: 'pl-test-partition-3-0'
+  },
+  repeats: 0
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'pl-test-partition-3-0',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'pl-test-partition-3-0',
+    replica_id: 'test-replica',
+    status: 'failed',
+    workflow_step: 'FAILED',
+    updated_at: 1795304440820,
+    completed_at: 1795304440820,
+    error_message: 'Timeout in STOPPING step after 102ms'
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795304440822
+}
+Operation failed {
+  operationId: 'pl-test-partition-3-0',
+  type: 'REMOVE',
+  partitionId: 'test-partition',
+  targetNodeId: 'test-node',
+  errorMessage: 'Timeout in STOPPING step after 102ms'
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'pl-test-partition-3-0',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'pl-test-partition-3-0',
+    replica_id: 'replace-replica-e3c62b78a92226efeea9da2f221cd2b3',
+    status: 'active',
+    workflow_step: 'ACTIVE',
+    updated_at: 1795304440852,
+    completed_at: 1795304440852,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795304440854
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'pl-test-partition-3-0',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'pl-test-partition-3-0',
+    replica_id: 'replace-replica-e3c62b78a92226efeea9da2f221cd2b3',
+    status: 'failed',
+    workflow_step: 'FAILED',
+    updated_at: 1795304440887,
+    completed_at: 1795304440887,
+    error_message: 'Initial failure'
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1795304440889
+}
+Operation failed {
+  operationId: 'pl-test-partition-3-0',
+  type: 'ADD',
+  partitionId: 'test-partition',
+  targetNodeId: 'test-node',
+  errorMessage: 'Initial failure'
+}

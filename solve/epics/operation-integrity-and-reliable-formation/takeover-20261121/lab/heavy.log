@@ -589,3 +589,78 @@ heavy.sh: end   23:21:39 rc=0: /mnt/data/peter/projects/lagrange/.git/worktrees/
 heavy.sh: start 23:21:39 load=1.92 availGB=11 cpu=53C: git commit
 heavy.sh: end   23:24:06 rc=1: git commit
 heavy.sh: start 23:24:06 load=1.74 availGB=11 cpu=48C: git commit
+heavy.sh: end   23:25:59 rc=1: git commit
+heavy.sh: start 23:25:59 load=1.62 availGB=11 cpu=60C: git commit
+heavy.sh: end   23:29:25 rc=0: git commit
+heavy.sh: start 23:29:25 load=1.67 availGB=11 cpu=47C: git commit
+heavy.sh: end   23:31:52 rc=0: git commit
+heavy.sh: start 23:31:52 load=1.50 availGB=11 cpu=49C: git commit
+heavy.sh: end   23:33:42 rc=0: git commit
+heavy.sh: start 23:33:42 load=2.01 availGB=11 cpu=54C: bash /tmp/claude-1000/-mnt-data-peter-projects-lagrange/9fc649c2-52dc-446a-bd53-fca59718b5ee/scratchpad/commit-ab.sh
+heavy.sh: end   23:39:35 rc=0: bash /tmp/claude-1000/-mnt-data-peter-projects-lagrange/9fc649c2-52dc-446a-bd53-fca59718b5ee/scratchpad/commit-ab.sh
+heavy.sh: start 23:39:35 load=2.17 availGB=11 cpu=55C: git commit
+heavy.sh: end   23:42:10 rc=0: git commit
+heavy.sh: start 23:42:10 load=2.13 availGB=11 cpu=44C: /mnt/data/peter/projects/lagrange/.git/worktrees/owner-fact-read-20261121/s0c-seal-mutants.sh c1b-both-checks-from-cached-status
+heavy.sh: end   23:43:59 rc=0: /mnt/data/peter/projects/lagrange/.git/worktrees/owner-fact-read-20261121/s0c-seal-mutants.sh c1b-both-checks-from-cached-status
+heavy.sh: start 23:43:59 load=1.88 availGB=11 cpu=46C: git commit
+heavy.sh: end   23:45:51 rc=0: git commit
+heavy.sh: start 23:45:51 load=1.53 availGB=11 cpu=45C: git commit
+heavy.sh: end   23:48:18 rc=0: git commit
+heavy.sh: start 23:48:18 load=1.92 availGB=11 cpu=61C: git commit
+heavy.sh: end   23:51:41 rc=0: git commit
+heavy.sh: start 23:51:41 load=1.35 availGB=11 cpu=45C: git commit
+heavy.sh: end   23:53:32 rc=0: git commit
+heavy.sh: start 23:53:32 load=1.47 availGB=11 cpu=47C: bash -c
+heavy.sh: end   23:53:53 rc=0: bash -c
+heavy.sh: start 23:53:53 load=1.40 availGB=11 cpu=48C: git commit
+heavy.sh: end   23:57:17 rc=1: git commit
+heavy.sh: start 23:57:17 load=1.62 availGB=11 cpu=49C: bash /tmp/claude-1000/-mnt-data-peter-projects-lagrange/9fc649c2-52dc-446a-bd53-fca59718b5ee/scratchpad/commit-234.sh
+heavy.sh: end   00:05:01 rc=0: bash /tmp/claude-1000/-mnt-data-peter-projects-lagrange/9fc649c2-52dc-446a-bd53-fca59718b5ee/scratchpad/commit-234.sh
+heavy.sh: start 00:05:01 load=1.55 availGB=11 cpu=60C: git commit
+heavy.sh: end   00:06:51 rc=0: git commit
+heavy.sh: start 00:06:51 load=1.36 availGB=11 cpu=58C: git commit
+heavy.sh: end   00:08:42 rc=0: git commit
+heavy.sh: start 00:08:42 load=2.26 availGB=11 cpu=51C: git commit
+heavy.sh: end   00:11:10 rc=0: git commit
+heavy.sh: start 00:11:10 load=1.59 availGB=11 cpu=53C: git commit
+heavy.sh: end   00:13:01 rc=0: git commit
+heavy.sh: start 00:13:01 load=1.48 availGB=11 cpu=62C: /mnt/data/peter/projects/lagrange/.git/worktrees/owner-fact-read-20261121/s0c-commit-3.sh 
+heavy.sh: end   00:19:46 rc=0: /mnt/data/peter/projects/lagrange/.git/worktrees/owner-fact-read-20261121/s0c-commit-3.sh 
+heavy.sh: start 00:19:46 load=1.91 availGB=11 cpu=65C: git commit
+heavy.sh: end   00:21:40 rc=0: git commit
+heavy.sh: start 00:21:40 load=1.99 availGB=11 cpu=48C: bash -c
+heavy.sh: end   00:22:01 rc=0: bash -c
+heavy.sh: start 00:22:01 load=2.14 availGB=11 cpu=51C: bash /tmp/claude-1000/-mnt-data-peter-projects-lagrange/9fc649c2-52dc-446a-bd53-fca59718b5ee/scratchpad/commit-5.sh
+heavy.sh: end   00:24:32 rc=0: bash /tmp/claude-1000/-mnt-data-peter-projects-lagrange/9fc649c2-52dc-446a-bd53-fca59718b5ee/scratchpad/commit-5.sh
+heavy.sh: start 00:24:32 load=1.40 availGB=11 cpu=45C: git commit
+heavy.sh: end   00:26:58 rc=0: git commit
+heavy.sh: start 00:26:58 load=2.79 availGB=11 cpu=62C: git commit
+heavy.sh: end   00:30:21 rc=0: git commit
+heavy.sh: start 00:30:21 load=1.77 availGB=11 cpu=52C: git commit
+heavy.sh: end   00:32:11 rc=0: git commit
+heavy.sh: start 00:32:11 load=2.22 availGB=11 cpu=45C: /mnt/data/peter/projects/lagrange/.git/worktrees/owner-fact-read-20261121/s0c-seal-mutants.sh c1b-role-from-cached-status
+heavy.sh: end   00:37:27 rc=0: /mnt/data/peter/projects/lagrange/.git/worktrees/owner-fact-read-20261121/s0c-seal-mutants.sh c1b-role-from-cached-status
+heavy.sh: start 00:37:27 load=2.02 availGB=11 cpu=60C: git commit
+heavy.sh: end   00:40:51 rc=0: git commit
+heavy.sh: start 00:40:51 load=1.49 availGB=11 cpu=49C: bash -c
+heavy.sh: end   00:41:01 rc=0: bash -c
+heavy.sh: start 00:41:01 load=1.42 availGB=11 cpu=53C: git commit
+heavy.sh: end   00:42:53 rc=0: git commit
+heavy.sh: start 00:42:53 load=2.16 availGB=11 cpu=46C: bash /tmp/claude-1000/-mnt-data-peter-projects-lagrange/9fc649c2-52dc-446a-bd53-fca59718b5ee/scratchpad/commit-6.sh
+heavy.sh: end   00:45:21 rc=0: bash /tmp/claude-1000/-mnt-data-peter-projects-lagrange/9fc649c2-52dc-446a-bd53-fca59718b5ee/scratchpad/commit-6.sh
+heavy.sh: start 00:45:21 load=1.68 availGB=11 cpu=44C: git commit
+heavy.sh: end   00:48:45 rc=0: git commit
+heavy.sh: start 00:48:45 load=1.60 availGB=11 cpu=45C: git commit
+heavy.sh: end   00:51:10 rc=0: git commit
+heavy.sh: start 00:51:10 load=1.51 availGB=11 cpu=45C: git commit
+heavy.sh: end   00:52:59 rc=0: git commit
+heavy.sh: start 00:52:59 load=1.83 availGB=11 cpu=48C: git commit
+heavy.sh: end   00:56:16 rc=0: git commit
+heavy.sh: start 00:56:16 load=1.51 availGB=11 cpu=48C: git commit
+heavy.sh: end   00:59:38 rc=0: git commit
+heavy.sh: start 00:59:38 load=1.31 availGB=11 cpu=56C: git commit
+heavy.sh: end   01:03:03 rc=0: git commit
+heavy.sh: start 01:03:03 load=2.22 availGB=11 cpu=44C: bash -c
+heavy.sh: end   01:06:29 rc=1: bash -c
+heavy.sh: start 08:13:14 load=1.62 availGB=11 cpu=51C: bash -c
+heavy.sh: end   08:16:41 rc=0: bash -c

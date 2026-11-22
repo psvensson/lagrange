@@ -912,3 +912,165 @@ system-metadata owner writes start after it.
   ((i), (ii-a): the released write's terminal answer through the bootstrap lane). Migration: each fake's
   bootstrap write lane becomes `executeQuery` (the raft lane), and assertions of per-replica direct writes
   become "no statement outside raft". Until then 097888f1a can be reverted on its own.
+
+---
+
+# Stage 3 follow-up, fixtures and timing (claude:named-write-3, 2026-11-21 ~21:55Z - 11-22)
+
+Single writer, worktree `/mnt/data/peter/projects/.worktrees/line-regression-causes-20261121`, branch
+`work/line-regression-causes-20261121`, taken over clean at 097888f1a. Sources: CLAUDE.md, `docs/steering/rules.md`,
+`test/guidelines/INDEX.md`, the lead's brief and two extensions (scope A-D after `reports/verify-named-write-stage3.md`;
+the fallback provenance check). Lab only; commits through heavy.sh; all commits pushed. [X] executed, [R] read.
+
+## Commits
+
+| Sha | Content | Lab |
+|---|---|---|
+| 48a1254a3 | four fixture files onto the raft lane + `test/test-helpers/bootstrap-lane-replica.js` | `nw3-after-48a1254a3-fixtures` (tv-dator): 5/5 green, 266 assertions |
+| eb3bda716 | red witness `test/query/named-write-cdc-sticky-unknown.test.js` (findings 1 and 2) | `nw3-red-eb3bda716`: case 2 red as intended; cases 1 and mirror red on SETUP (see below) |
+| b3c84c85a | witness setup follows the real CDC loop (property assertions unchanged) | `nw3-red-b3c84c85a` (tv-dator): case 1 red (thrown, definitely unapplied), case 2 red (returned, no code), mirror green |
+| 90e88cb16 | fix A: `src/cdc/cdc-routed-write-uncertainty.js` + 7 lines in the CDC loop | `nw3-after-90e88cb16`: case 1 + mirror green, case 2 red; named-write-real-producer-definite 7/7 |
+| 5dd32deb3 | fix B: `src/control-plane/control-plane-write-identity.js` | `nw3-final-5dd32deb3` (adam-laptop), below |
+
+## Fixtures: the deletion's debt is FOUR files, not five [X]
+
+Red-before map at the parent a203b2c36 (`nw3-parent-a203b2c36-units`): the four fixture files green,
+`cdc-shutdown-terminal-owner-write` already RED on (i), (ii-a), (iv) - the same three cases as at 097888f1a. Its failing
+cases run with `bootstrapMode = false` through the SQL engine; its one bootstrap-lane case (routing, #24) is green at
+both. Bisect of that file (`nw3-shutdown-bisect-<sha>`): 23344cddc green; ab3e4b9af red on (ii-a) only; baa2a2580 red on
+(i), (ii-a), (iv). It is not the deletion's debt and was not changed (coordinator ruling B). The previous writer's
+"writes go to local partitions when bootstrap enabled" is Property 6 of the property file; bootstrap-mode.test.js had
+five red cases (7, 8, 12, 13, 15), node-state-and-bootstrap three (28, 32, 33), execute-sql-and-delivery two (1, 3).
+
+Fake: `test/test-helpers/bootstrap-lane-replica.js`. The raft lane (`executeQuery`) answers what the partition answers
+its proposer, built by the partition's own code: `buildPartitionWriteEntry` (minted entryId, proposer replica + HLC),
+then `{success, changes, lastInsertRowid, ...PartitionServiceEntryApplyBase#buildCommittedWriteIdentity}` (position +
+durable commit witness, as `applyCommittedEntry` resolves it); a refusing replica answers
+`buildPartitionWriteLeadershipRefusal({role: FOLLOWER}, partitionId)` (the refusal the seed observer injects). The local
+lane (`executeLocalQuery`) is only counted. The shared helper `test/test-helpers/committed-write-answer.js` exists only
+on `origin/work/line-regression-receipt-fakes-20261121` (not merged): this replica's answer should move onto its
+`committedPartitionWriteAnswer` when the branches meet.
+
+Changed expectations (old -> new; reason):
+- execute-sql-and-delivery case 1, node-state case 33, bootstrap-mode cases 13 and 15: "the direct partition method was
+  called (once)" -> "the local partition's raft lane carried the write exactly once AND nothing executed outside raft"
+  (the restated contract; both counted). After bootstrap mode is cleared: "direct calls still 1" -> "raft-lane writes
+  still 1, outside raft 0".
+- node-state case 28: SQL/params checked inside the direct fake -> the same checks on the raft lane's one recorded
+  write + outside raft 0; `result.affectedRows === 1` -> `result.changes === 1` (the partition's own count field; the
+  lane returns the raft answer unchanged).
+- bootstrap-mode case 7: `executedSql === sql` -> raft lane writes deep-equal `[{sql, params}]` + outside raft 0.
+- node-state case 32, bootstrap-mode case 12 ("handles partition errors"): "throws an Error carrying the partition's
+  message" -> "answers the raft lane's own NOT_LEADER refusal unchanged (returned), raft lane once, outside raft 0". The
+  thrown wrapper was the deleted fan-out's own `throw`; not a broken property: every CDC write method throws on
+  `!result.success` (`cdc-integration-service-mutation-operations.js:264, :432`, `cdc-integration-service-mutations.js:106,
+  :228`) [R].
+- property file, Property 6.2: "target partition has direct writes (>0)" -> "target partition's raft lane exactly once,
+  no other partition written, nothing outside raft anywhere". Properties 6.1, 6.3, 6.4 ("no direct writes") -> "no
+  partition executed anything, through raft or outside it": the fake gained a raft lane, so counting only the local lane
+  would have weakened them (before, a call to the absent `executeQuery` threw).
+- Unchanged-expectation fake migrations: execute-sql case 3, node-state cases 30/31, bootstrap-mode case 8 and the
+  factory's other users. The property fake's `sqlite_master` branch was dead (no `sqlite_master` read in src/cdc [R]).
+
+## Timing [X]
+
+Witness `test/bootstrap/seed-bootstrap-direct-lane.integration.test.js` (real fresh seed through the public child), file
+duration, adam-laptop, back to back, interleaved, each started by the host's thermal gate (<75 C):
+
+| Run | a203b2c36 (before) | 097888f1a (after) |
+|---|---|---|
+| 1 | 26.7 s | 27.0 s |
+| 2 | 28.8 s | 28.1 s |
+| 3 | 28.1 s | 26.4 s |
+
+Before: mean 27.9 s, spread 2.1 s; after: mean 27.2 s, spread 1.7 s. The after-runs are not slower; the earlier single
+30.3 s was noise. (`wallMs` is printed only by failing files, so file duration is the measure, as before.) Item C (not
+landed) changes the start path; the coordinator asked for a repeat after it.
+
+## Fallback provenance: no seal, no recorded necessity [X]
+
+`git log -S BOOTSTRAP_RAFT_WRITE_LANE_FELL_BACK`: introduced by ccbbf586b (2026-08-16, "checkpoint(quest):
+lone-seed-formation-admission-livelock-closure"), which put the raft lane IN FRONT of the then-only per-replica direct
+loop and kept that loop "only for the genuinely leaderless earliest-bootstrap window where the raft lane itself fails"
+(code comment); 1aea11baf (rs-raft cutover) moved it into `cdc-bootstrap-direct-sql.js`. The quest
+(`solve/quests/lone-seed-formation-admission-livelock-closure/`): sealed `doneWhen` = the scenario-harness priority
+metric; sealed constraints name other suites (collision/retry, dt6 interlock); its livelock reason concerns intent
+collisions and macrotask yields. The arm appears only as a design hypothesis (log #7: "bootstrap-mode writes ride raft
+... with direct fan-out only for the leaderless window") and a verifier remark (log #13: "fall back to a byte-identical
+direct fan-out on any raft failure ... durability strictly stronger", i.e. no weaker than the old always-direct path). Its
+one pin was the unit case with a throwing fake. Nothing in `architecture/contracts/invariants.json` or
+`docs/specs/decision-tables/`; `architecture/bootstrap.md:85` ("Enable bootstrap mode (direct writes)") and
+`runtime-components.md:196` describe the pre-ccbbf586b design (doc drift, not changed). The necessity of the leaderless
+window was asserted, never executed: no stop.
+
+## A: unresolved is sticky across a CDC call (finding 1) [X]
+
+Witness (real producers): CDC engine attempt 1 held by a core trap past the executor budget (unknown, entry durable),
+later attempts answered the write kernel's NOT_LEADER refusal. Observed: the real loop re-sends the unknown once and ends
+on the first refusal (2 attempts of 3 allowed; the mirror ends after 1), so the schedule is [unknown, NOT_LEADER]
+(eb3bda716's exact-count setup was wrong; b3c84c85a). Red at b3c84c85a: the caller got the refusal THROWN, judged
+NOT_PROPOSED, `isControlPlaneWriteDefinitivelyUnappliedError` true. Repair 90e88cb16: `createRoutedWriteUncertainty`
+records the first hop answer (local leg, engine result, thrown error) that `isControlPlaneWriteOutcomeUnknown` calls
+unknown; every failing exit of the loop answers it in place of a later refusal/failure; a success (commit receipt,
+settled replay) still ends the write; the terminal SHUT_DOWN answer is never replaced; a handled local-leg failure after
+an unknown answers the unknown, decided (not re-sent). Green: the caller gets the named UNKNOWN, the instance stays held,
+the entry commits, the next delivery of the name settles APPLIED, one row, one entryId. Mirror: refusals alone stay
+definite. Authoritative resolution besides a receipt: the owner's existing re-delivery of the held instance under its own
+entry (`resolvePendingInstance`), no other.
+
+## B: the shut-down answer stays terminal (finding 2) [X]
+
+Repair 5dd32deb3: `isUnresolvedObservation` no longer converts a thrown answer that is the writer's terminal shut-down
+(`isControlPlaneWriterShutDown`) into the returned "pending, retry" unknown; it is thrown with its code; while an attempt
+may have been proposed it names its own pending instance (outcome unknown) and carries no settled receipt (never
+"definitively unapplied"); a shutdown before any proposal is unchanged (NOT_PROPOSED). Witness case 2 green;
+shutdown file (i) and (iv) green UNCHANGED. (ii-a) stays red: since ab3e4b9af (bisect) the file's fake engine
+`accept()` answers success WITHOUT a durable commit receipt, which the total judge calls UNKNOWN, so the owner re-sends
+after shutdown (retry delay [100]). That is the receipt-fake migration's debt (the engine-shaped producer answer is
+`engineCommittedWriteAnswer` on the receipt-fakes branch), not a conversion defect; assertions not changed.
+
+## Final run at 5dd32deb3 [X]
+
+`nw3-final-5dd32deb3` (adam-laptop): 31 files, 26 green, 5 red, 1376 assertions. Green: the four fixture files,
+bootstrap-direct-write-raft-routing, both fallback witnesses (refusal 14.3 s, normal start 29.3 s), bootstrap-sequence,
+seed-registration-phase, the new witness, real-producer definite/applied, and all named-write guards. Red, all with
+the same first failure as before: message-table-census and router-in-process-address-in-use (the three handed-over
+`src/constants/transport.js` members), placement-explicit-replica-refusal-code and write-exactly-once-property (as in
+`nw2-after-baa2a2580-1`), cdc-shutdown-terminal-owner-write on (ii-a) only (above). Compared with
+`nw2-after-097888f1a-1`: the four fixture files red -> green; shutdown 3 red cases -> 1; the rest unchanged.
+Durations: write-identity-instance 247.9 s (247.3), write-exactly-once 150.0 s (148.4).
+
+## D: "seeded 0, skipped 72" (report only) [R + X logs]
+
+`DynamicConfigService.seedConfiguration` (`src/config/dynamic-config-service.js:162-212`) counts a key "seeded" only
+when `classifyControlPlaneMutationResult(answer).applied` (`:200-204`, `:221-223`), else "skipped". On the fresh seed
+the write rides the bootstrap lane; the partition answers `{success, changes, lastInsertRowid, ...identity}`
+(`partition-service-entry-apply-base.js:767-772`, no `affectedRows`); the CDC insert answer copies
+`affectedRows: result?.affectedRows` - an OWN property whose value is undefined - beside `partitionResult`
+(`cdc-integration-service-mutation-operations.js:295-304`); the classifier reads that own property as a present,
+non-numeric count (`control-plane-mutation-outcome-classifier.js:236-253`) -> `valid:false` -> `applied:false`
+(`:353-360`). So every APPLIED config insert on a fresh seed is counted "skipped". "Skipped" today conflates: already
+present (INSERT OR IGNORE, 0 changes), applied-but-uncountable (the fresh-seed case), a returned refusal or failure,
+and unknown (a thrown failure fails the phase). The seed does NOT end without its rows: run 1 line 545 (12:14:39.885Z,
+config-p1, "Fetched inserted row for CDC") and line 585 (a CDC event for `node.heartbeatIntervalMs` from config-p1-r1);
+run 2 lines 548, 549 (`seeded:0, skipped:72`), 589 likewise. Truthful summary: applied (count > 0 or named APPLIED),
+already present (a proven zero with its receipt), refused (definite failure, with code), unknown - each counted; and the
+CDC answer should carry the partition's own count (`changes`) rather than copy an absent `affectedRows`. No change made.
+
+## Record corrections (coordinator)
+
+- The real bootstrap windows in the two GCP runs are 12:14:36.649Z -> 12:14:41.053Z (run 1) and 13:17:21 -> 13:17:26
+  (run 2), not "first log line -> CDC normal mode" as written above; the positive control still holds (the
+  `cdc-integration` logger writes info lines at both ends of each window).
+- "The seed failed even with the fallback" was shown only for the first `services` INSERT (a203b2c36 refusal witness).
+
+## Not done (remaining)
+
+- C (finding 6): not started. The window writes `message_groups`, `services`, `service_definitions` /
+  `service_endpoints` (meta-service definitions), `tables`, `partitions`, `config` and `control_plane_publications`
+  (`seed-registration-phase.js:126-137` callees [R]); the owned wait (`waitForRequiredPartitionLeadership`, `:160-164`,
+  table list `:74-84`) covers partitions, services, tables, message_groups only. Needed: red witness through the real seed
+  child (an observer mode delaying, resp. withholding, the `service_definitions` (and `config`) election), then extend
+  the owned wait's partition list (no new timer, inside the bootstrap deadline), negative case at the deadline, then the
+  six timing runs again.
+- (ii-a) of the shutdown file: receipt-fake migration (receipt-fakes branch).

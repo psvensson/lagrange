@@ -1,0 +1,14 @@
+placement-shell=3918953
+placement-head=c476ad4ceefaa37c63297e7a9c13b303f5570332
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:1.9 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3919412
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: hold cpu 77C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 77C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 40C (coretemp/Package id 0) nvme 17C (nvme/Composite)
+ok test/partition/placement-owner-construction-orders.test.js (11 assertions, 5723ms)
+# test-files total=1 pass=1 fail=0 assertions=11
+placement-results={"file":"test/partition/placement-owner-construction-orders.test.js","attempt":1,"ok":true,"assertions":11,"durationMs":5723,"retriedOnce":false,"firstFailureLine":null}

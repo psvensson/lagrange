@@ -1,0 +1,381 @@
+lab test: tv-dator: ordinary (2 files) cores=12 mem=15.4GiB speed x1.52
+[tv-dator] placement-shell=3443920
+[tv-dator] placement-head=121ea1408f47b9fa5f1451d381bad97cc844d452
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.6 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=3444899
+[tv-dator] # test-files planned=2
+[tv-dator] classified lane ordinary: 2 file(s), jobs=4
+[tv-dator] thermal: ok cpu 57C (coretemp/Package id 0) nvme 47C (nvme/Sensor 1)
+[tv-dator] not ok test/control-plane/readiness-owner-authority-contract.test.js (15 assertions, 705ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] Routing query to partition service {
+[tv-dator]   partitionId: 'services-p1',
+[tv-dator]   address: 'services-owner/partition/services-p1'
+[tv-dator] }
+[tv-dator] # Subtest: the readiness-owner API carries non-downgradable authority across owner RPC while ordinary recovery reads remain readiness-gated
+[tv-dator]     ok 1 - the named API reaches the pre-ready canonical services owner
+[tv-dator]     ok 2 - the named API returns only the witnessed owner answer
+[tv-dator]     ok 3 - the named API preserves readiness-owner purpose through the view and CDC
+[tv-dator]     ok 4 - the readiness-owned read does not re-enter readiness adjudication
+[tv-dator] Routing query to partition service {
+[tv-dator]   partitionId: 'services-p1',
+[tv-dator]   address: 'services-owner/partition/services-p1'
+[tv-dator] }
+[tv-dator]     ok 5 - the named readiness-owner API cannot be weakened by caller options
+[tv-dator]     ok 6 - the named API owns the complete authority and fallback contract
+[tv-dator] Routing query to partition service {
+[tv-dator]   partitionId: 'services-p1',
+[tv-dator]   address: 'services-owner/partition/services-p1'
+[tv-dator] }
+[tv-dator]     ok 7 - an ordinary read routes on the same structural route during recovery
+[tv-dator]     ok 8 - ordinary system-table routing does not consult readiness
+[tv-dator] Routing query to partition service {
+[tv-dator]   partitionId: 'services-p1',
+[tv-dator]   address: 'services-owner/partition/services-p1'
+[tv-dator] }
+[tv-dator]     ok 9 - an old follower session pin cannot displace the canonical leader
+[tv-dator]     ok 10 - leader-required routing ignores follower session affinity
+[tv-dator] Routing query to partition service {
+[tv-dator]   partitionId: 'services-p1',
+[tv-dator]   address: 'services-owner/partition/services-p1'
+[tv-dator] }
+[tv-dator]     not ok 11 - a live follower cannot replace missing canonical leader authority
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/control-plane/readiness-owner-authority-contract.test.js
+[tv-dator]         lineNumber: 294
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/control-plane/readiness-owner-authority-contract.test.js:294:5)
+[tv-dator]       source: |2
+[tv-dator]             {readAuthority: hostileReadAuthority},
+[tv-dator]           );
+[tv-dator]           t.equal(missingLeaderResult.success, false,
+[tv-dator]         ----^
+[tv-dator]             'a live follower cannot replace missing canonical leader authority');
+[tv-dator]           t.equal(ownerReadDeliveryCount, deliveriesBeforeMissingLeader,
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -false
+[tv-dator]         +true
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 12 - leader-required routing never sends the owner read to the follower
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/control-plane/readiness-owner-authority-contract.test.js
+[tv-dator]         lineNumber: 296
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/control-plane/readiness-owner-authority-contract.test.js:296:5)
+[tv-dator]       source: |2
+[tv-dator]           t.equal(missingLeaderResult.success, false,
+[tv-dator]             'a live follower cannot replace missing canonical leader authority');
+[tv-dator]           t.equal(ownerReadDeliveryCount, deliveriesBeforeMissingLeader,
+[tv-dator]         ----^
+[tv-dator]             'leader-required routing never sends the owner read to the follower');
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -4
+[tv-dator]         +5
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator] Routing query to partition service {
+[tv-dator]   partitionId: 'services-p1',
+[tv-dator]   address: 'services-owner/partition/services-p1'
+[tv-dator] }
+[tv-dator]     ok 13 - an ACK without a current Raft leader witness cannot release formation
+[tv-dator]     ok 14 - unwitnessed owner rows are discarded instead of becoming evidence
+[tv-dator]     1..14
+[tv-dator] not ok 1 - the readiness-owner API carries non-downgradable authority across owner RPC while ordinary recovery reads remain readiness-gated # time=92.805ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/control-plane/readiness-owner-authority-contract.test.js
+[tv-dator]     lineNumber: 45
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |
+[tv-dator]     }
+[tv-dator]   
+[tv-dator]     test('the readiness-owner API carries non-downgradable authority across ' +
+[tv-dator]     ^
+[tv-dator]       'owner RPC while ordinary recovery reads remain readiness-gated',
+[tv-dator]     async (t) => {
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] 1..1
+[tv-dator] # { total: 14, pass: 12, fail: 2 }
+[tv-dator] # time=111.781ms
+[tv-dator] Canonical partition leader service missing {
+[tv-dator]   partitionId: 'services-p1',
+[tv-dator]   leaderNodeId: 'missing-leader',
+[tv-dator]   routableNodeIds: [ 'services-owner', 'services-follower' ],
+[tv-dator]   staleLeaderNodeIds: [],
+[tv-dator]   routingSnapshot: {
+[tv-dator]     reasonCode: 'ok',
+[tv-dator]     routingReadinessDimension: 'controlPlaneRecoveryEligible',
+[tv-dator]     serviceRowCount: 2,
+[tv-dator]     activeAddressedServiceCount: 2,
+[tv-dator]     routableServiceCount: 2,
+[tv-dator]     canonicalLeaderServiceCount: 0,
+[tv-dator]     leaderKnown: true,
+[tv-dator]     canonicalLeaderNodeId: 'missing-leader',
+[tv-dator]     deniedByNodeId: {}
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] not ok test/cdc/cdc-owner-fact-receiver-read-point.test.js (98 assertions, 6907ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] # Subtest: readOwnerFact: a fresh leader that has not applied its election log refuses typed, in process and routed
+[tv-dator]     ok 1 - in process: never READY without the row
+[tv-dator]     ok 2 - should be equal
+[tv-dator]     ok 3 - should be equal
+[tv-dator]     ok 4 - routed: never READY without the row
+[tv-dator]     ok 5 - should be equal
+[tv-dator]     ok 6 - the fresh leader ships no rows
+[tv-dator]     1..6
+[tv-dator] ok 1 - readOwnerFact: a fresh leader that has not applied its election log refuses typed, in process and routed # time=2341.449ms
+[tv-dator] 
+[tv-dator] # Subtest: one receiver contract: the same owner-fact request gets the same typed answer in process and over the transport
+[tv-dator]     ok 1 - leader: same typed answer
+[tv-dator]     ok 2 - should be equal
+[tv-dator]     ok 3 - should be equal
+[tv-dator]     ok 4 - follower: same typed answer
+[tv-dator]     ok 5 - should be equal
+[tv-dator]     ok 6 - should be equal
+[tv-dator]     ok 7 - names the leader it knows
+[tv-dator]     ok 8 - insufficiently applied leader: same typed answer
+[tv-dator]     ok 9 - should be equal
+[tv-dator]     ok 10 - should be equal
+[tv-dator]     ok 11 - deposed leader: same typed answer
+[tv-dator]     ok 12 - should be equal
+[tv-dator]     ok 13 - should be equal
+[tv-dator]     ok 14 - names the leader that replaced it
+[tv-dator]     1..14
+[tv-dator] ok 2 - one receiver contract: the same owner-fact request gets the same typed answer in process and over the transport # time=393.293ms
+[tv-dator] 
+[tv-dator] # Subtest: readOwnerFact: leadership moving while the leader reads never yields the old leader's rows
+[tv-dator]     ok 1 - the read reaches the replica that leads now
+[tv-dator]     ok 2 - never the replica that stopped leading during its read
+[tv-dator]     ok 3 - should be equivalent
+[tv-dator]     ok 4 - the old leader refused after its read, shipping no rows
+[tv-dator]     1..4
+[tv-dator] ok 3 - readOwnerFact: leadership moving while the leader reads never yields the old leader's rows # time=307.792ms
+[tv-dator] 
+[tv-dator] # Subtest: readOwnerFact: an apply landing between the receiver's observation and its statement, or after the statement, is READY at the position the rows reflect, in process and remote
+[tv-dator]     ok 1 - in process, beforeRead: READY, the position is read, not inferred
+[tv-dator]     ok 2 - in process, beforeRead: the witness names the applied position the statement read at
+[tv-dator]     ok 3 - in process, beforeRead: the write applied before that position
+[tv-dator]     ok 4 - in process, beforeRead: the rows are those of that position
+[tv-dator]     ok 5 - in process, afterRead: READY, the position is read, not inferred
+[tv-dator]     ok 6 - in process, afterRead: the witness names the applied position the statement read at
+[tv-dator]     ok 7 - in process, afterRead: the write applied after that position
+[tv-dator]     ok 8 - in process, afterRead: the rows are those of that position
+[tv-dator]     ok 9 - remote, beforeRead: READY, the position is read, not inferred
+[tv-dator]     ok 10 - remote, beforeRead: the witness names the applied position the statement read at
+[tv-dator]     ok 11 - remote, beforeRead: the write applied before that position
+[tv-dator]     ok 12 - remote, beforeRead: the rows are those of that position
+[tv-dator]     ok 13 - remote, afterRead: READY, the position is read, not inferred
+[tv-dator]     ok 14 - remote, afterRead: the witness names the applied position the statement read at
+[tv-dator]     ok 15 - remote, afterRead: the write applied after that position
+[tv-dator]     ok 16 - remote, afterRead: the rows are those of that position
+[tv-dator]     1..16
+[tv-dator] ok 4 - readOwnerFact: an apply landing between the receiver's observation and its statement, or after the statement, is READY at the position the rows reflect, in process and remote # time=342.066ms
+[tv-dator] 
+[tv-dator] # Subtest: readOwnerFact: a leader whose core has stepped its successor's term while its own turn is pending refuses typed, in process and over the transport
+[tv-dator]     ok 1 - setup: the old leader's core answered the successor's term, and that send is pending
+[tv-dator]     ok 2 - setup: the status the old leader reports is still its last announced observation
+[tv-dator]     ok 3 - in process: its core no longer leads, so it refuses
+[tv-dator]     ok 4 - in process: no rows
+[tv-dator]     ok 5 - over the transport: the same typed answer
+[tv-dator]     ok 6 - it never executes the statement
+[tv-dator]     1..6
+[tv-dator] ok 5 - readOwnerFact: a leader whose core has stepped its successor's term while its own turn is pending refuses typed, in process and over the transport # time=248.802ms
+[tv-dator] 
+[tv-dator] # Subtest: readOwnerFact: an owner fact arriving while a plain strict read of the same statement is in flight gets its own decided answer
+[tv-dator]     ok 1 - it does not wait on the plain read's flight
+[tv-dator]     ok 2 - the leader received the owner-fact request and decided it
+[tv-dator]     ok 3 - should be equal
+[tv-dator]     ok 4 - the answer echoes an owner-fact decision
+[tv-dator]     ok 5 - the answer echoes exactly the request its receiver decided
+[tv-dator]     1..5
+[tv-dator] ok 6 - readOwnerFact: an owner fact arriving while a plain strict read of the same statement is in flight gets its own decided answer # time=241.431ms
+[tv-dator] 
+[tv-dator] # Subtest: readOwnerFact: a read on a connection inside a transaction the receiver did not open is refused typed, never answered with the staged rows
+[tv-dator]     ok 1 - in process: never the staged absence
+[tv-dator]     ok 2 - in process: typed
+[tv-dator]     ok 3 - in process: no rows
+[tv-dator]     ok 4 - remote: never the staged absence
+[tv-dator]     ok 5 - remote: typed
+[tv-dator]     ok 6 - remote: no rows
+[tv-dator]     ok 7 - with the transaction gone the leader answers
+[tv-dator]     ok 8 - should be equivalent
+[tv-dator]     1..8
+[tv-dator] ok 7 - readOwnerFact: a read on a connection inside a transaction the receiver did not open is refused typed, never answered with the staged rows # time=357.062ms
+[tv-dator] 
+[tv-dator] # Subtest: readOwnerFact: a floor is a position of one raft group; the receiver refuses a floor of another group
+[tv-dator]     ok 1 - the receiver refuses it typed
+[tv-dator]     ok 2 - with no rows
+[tv-dator]     ok 3 - should be equal
+[tv-dator]     ok 4 - readOwnerFact names it
+[tv-dator]     ok 5 - a floor of the read partition is answered
+[tv-dator]     1..5
+[tv-dator] ok 8 - readOwnerFact: a floor is a position of one raft group; the receiver refuses a floor of another group # time=355.259ms
+[tv-dator] 
+[tv-dator] # Subtest: readOwnerFact: the deadline and the routing class are required and travel to the query owner
+[tv-dator]     ok 1 - should be equal
+[tv-dator]     ok 2 - the caller's routing class reaches the query owner
+[tv-dator]     ok 3 - and its frozen read authority
+[tv-dator]     ok 4 - the caller's deadline bounds the query owner's
+[tv-dator]     ok 5 - a call without a deadline is refused
+[tv-dator]     ok 6 - and issues no read
+[tv-dator]     1..6
+[tv-dator] ok 9 - readOwnerFact: the deadline and the routing class are required and travel to the query owner # time=235.523ms
+[tv-dator] 
+[tv-dator] # Subtest: readOwnerFact: an answer decided for another floor is not this read's answer
+[tv-dator]     ok 1 - never READY on another request's decision
+[tv-dator]     ok 2 - should be equal
+[tv-dator]     ok 3 - the decision of exactly this request is its answer
+[tv-dator]     1..3
+[tv-dator] ok 10 - readOwnerFact: an answer decided for another floor is not this read's answer # time=224.545ms
+[tv-dator] 
+[tv-dator] # Subtest: readOwnerFact: a leader whose commit index has advanced past its applied position mid-turn refuses typed, never answering the committed row as absent
+[tv-dator]     ok 1 - setup: the row committed and the leader's turn pends before applying it
+[tv-dator]     ok 2 - refused typed: apply behind commit
+[tv-dator]     ok 3 - the committed row is never answered as absent
+[tv-dator]     ok 4 - setup: the write completes once the turn resumes
+[tv-dator]     ok 5 - READY once the leader applied what it committed
+[tv-dator]     1..5
+[tv-dator] ok 11 - readOwnerFact: a leader whose commit index has advanced past its applied position mid-turn refuses typed, never answering the committed row as absent # time=264.193ms
+[tv-dator] 
+[tv-dator] # Subtest: readOwnerFact: a published leader with no usable service is a named unavailable, and no other replica is asked
+[tv-dator]     not ok 1 - never an answer from a replica not published
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[tv-dator]         lineNumber: 414
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:414:5)
+[tv-dator]       source: >2
+[tv-dator]           const sentBefore = group.transit.length;
+[tv-dator]           const answer = await readOwnerFact(surface.readLeaderRequired, requestFor(OPERATION));
+[tv-dator]           t.equal(answer.state, STATE.UNAVAILABLE, 'never an answer from a replica not published');
+[tv-dator]         ----^
+[tv-dator]           t.equal(answer.reason, PUBLISHED_LEADER_UNUSABLE, 'typed: published leader unusable');
+[tv-dator]           t.equal(group.transit.length, sentBefore, 'no replica is asked');
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -unavailable
+[tv-dator]         +ready
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 2 - typed: published leader unusable
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[tv-dator]         lineNumber: 415
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:415:5)
+[tv-dator]       source: >2
+[tv-dator]           const answer = await readOwnerFact(surface.readLeaderRequired,
+[tv-dator]         requestFor(OPERATION));
+[tv-dator]           t.equal(answer.state, STATE.UNAVAILABLE, 'never an answer from a replica not published');
+[tv-dator]           t.equal(answer.reason, PUBLISHED_LEADER_UNUSABLE, 'typed: published leader unusable');
+[tv-dator]         ----^
+[tv-dator]           t.equal(group.transit.length, sentBefore, 'no replica is asked');
+[tv-dator]           surface.publishLeader(leader.nodeId);
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -owner_fact_published_leader_unusable
+[tv-dator]         +undefined
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 3 - no replica is asked
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[tv-dator]         lineNumber: 416
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:416:5)
+[tv-dator]       source: >2
+[tv-dator]           t.equal(answer.state, STATE.UNAVAILABLE, 'never an answer from a replica not
+[tv-dator]         published');
+[tv-dator]           t.equal(answer.reason, PUBLISHED_LEADER_UNUSABLE, 'typed: published leader unusable');
+[tv-dator]           t.equal(group.transit.length, sentBefore, 'no replica is asked');
+[tv-dator]         ----^
+[tv-dator]           surface.publishLeader(leader.nodeId);
+[tv-dator]           const after = await readOwnerFact(surface.readLeaderRequired, requestFor(OPERATION));
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -0
+[tv-dator]         +2
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     ok 4 - READY once the publication names a usable leader
+[tv-dator]     1..4
+[tv-dator] not ok 12 - readOwnerFact: a published leader with no usable service is a named unavailable, and no other replica is asked # time=253.314ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+[tv-dator]     lineNumber: 405
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     });
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('readOwnerFact: a published leader with no usable service is a named
+[tv-dator]     unavailable, and ' +
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       'no other replica is asked', {timeout: TEST_TIMEOUT_MS}, async (t) => {
+[tv-dator]       const group = await openLedgerGroupSurface(t, import.meta.url);
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: readOwnerFact: the caller verifies what it received; a successful empty answer carrying a follower's witness is not absence
+[tv-dator]     ok 1 - never READY with no rows
+[tv-dator]     ok 2 - should be equal
+[tv-dator]     ok 3 - should be equal
+[tv-dator]     1..3
+[tv-dator] ok 13 - readOwnerFact: the caller verifies what it received; a successful empty answer carrying a follower's witness is not absence # time=233.106ms
+[tv-dator] 
+[tv-dator] 1..13
+[tv-dator] # { total: 85, pass: 82, fail: 3 }
+[tv-dator] # time=5813.967ms
+[tv-dator] # test-files total=2 pass=0 fail=2 assertions=113
+lab test: tv-dator: # test-files total=2 pass=0 fail=2 assertions=113
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=2 pass=0 fail=2 assertions=113

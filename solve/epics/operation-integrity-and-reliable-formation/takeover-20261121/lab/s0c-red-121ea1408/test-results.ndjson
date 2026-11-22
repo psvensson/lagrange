@@ -1,0 +1,2 @@
+{"file":"test/control-plane/readiness-owner-authority-contract.test.js","attempt":1,"ok":false,"assertions":15,"durationMs":705,"retriedOnce":false,"firstFailureLine":"not ok 11 - a live follower cannot replace missing canonical leader authority"}
+{"file":"test/cdc/cdc-owner-fact-receiver-read-point.test.js","attempt":1,"ok":false,"assertions":98,"durationMs":6907,"retriedOnce":false,"firstFailureLine":"not ok 1 - never an answer from a replica not published"}

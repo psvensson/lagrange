@@ -1,0 +1,265 @@
+placement-shell=3459759
+placement-head=620640121a0744cbebf1a675050606d92d83e4ba
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3460210
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: ok cpu 53C (coretemp/Package id 0) nvme 48C (nvme/Sensor 1)
+not ok test/cdc/cdc-owner-fact-receiver-read-point.test.js (98 assertions, 6725ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: readOwnerFact: a fresh leader that has not applied its election log refuses typed, in process and routed
+    ok 1 - in process: never READY without the row
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - routed: never READY without the row
+    ok 5 - should be equal
+    ok 6 - the fresh leader ships no rows
+    1..6
+ok 1 - readOwnerFact: a fresh leader that has not applied its election log refuses typed, in process and routed # time=2189.524ms
+
+# Subtest: one receiver contract: the same owner-fact request gets the same typed answer in process and over the transport
+    ok 1 - leader: same typed answer
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - follower: same typed answer
+    ok 5 - should be equal
+    ok 6 - should be equal
+    ok 7 - names the leader it knows
+    ok 8 - insufficiently applied leader: same typed answer
+    ok 9 - should be equal
+    ok 10 - should be equal
+    ok 11 - deposed leader: same typed answer
+    ok 12 - should be equal
+    ok 13 - should be equal
+    ok 14 - names the leader that replaced it
+    1..14
+ok 2 - one receiver contract: the same owner-fact request gets the same typed answer in process and over the transport # time=371.201ms
+
+# Subtest: readOwnerFact: leadership moving while the leader reads never yields the old leader's rows
+    ok 1 - the read reaches the replica that leads now
+    ok 2 - never the replica that stopped leading during its read
+    ok 3 - should be equivalent
+    ok 4 - the old leader refused after its read, shipping no rows
+    1..4
+ok 3 - readOwnerFact: leadership moving while the leader reads never yields the old leader's rows # time=263.893ms
+
+# Subtest: readOwnerFact: an apply landing between the receiver's observation and its statement, or after the statement, is READY at the position the rows reflect, in process and remote
+    ok 1 - in process, beforeRead: READY, the position is read, not inferred
+    ok 2 - in process, beforeRead: the witness names the applied position the statement read at
+    ok 3 - in process, beforeRead: the write applied before that position
+    ok 4 - in process, beforeRead: the rows are those of that position
+    ok 5 - in process, afterRead: READY, the position is read, not inferred
+    ok 6 - in process, afterRead: the witness names the applied position the statement read at
+    ok 7 - in process, afterRead: the write applied after that position
+    ok 8 - in process, afterRead: the rows are those of that position
+    ok 9 - remote, beforeRead: READY, the position is read, not inferred
+    ok 10 - remote, beforeRead: the witness names the applied position the statement read at
+    ok 11 - remote, beforeRead: the write applied before that position
+    ok 12 - remote, beforeRead: the rows are those of that position
+    ok 13 - remote, afterRead: READY, the position is read, not inferred
+    ok 14 - remote, afterRead: the witness names the applied position the statement read at
+    ok 15 - remote, afterRead: the write applied after that position
+    ok 16 - remote, afterRead: the rows are those of that position
+    1..16
+ok 4 - readOwnerFact: an apply landing between the receiver's observation and its statement, or after the statement, is READY at the position the rows reflect, in process and remote # time=320.283ms
+
+# Subtest: readOwnerFact: a leader whose core has stepped its successor's term while its own turn is pending refuses typed, in process and over the transport
+    ok 1 - setup: the old leader's core answered the successor's term, and that send is pending
+    ok 2 - setup: the status the old leader reports is still its last announced observation
+    ok 3 - in process: its core no longer leads, so it refuses
+    ok 4 - in process: no rows
+    ok 5 - over the transport: the same typed answer
+    not ok 6 - it never executes the statement
+      ---
+      compare: ===
+      at:
+        fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+        lineNumber: 247
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:247:5)
+      source: |2
+          t.equal(local.shipsRows, false, 'in process: no rows');
+          t.same(remote, local, 'over the transport: the same typed answer');
+          t.equal(executed, 0, 'it never executes the statement');
+        ----^
+          held.release();
+        });
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -0
+        +2
+      ...
+    
+    1..6
+not ok 5 - readOwnerFact: a leader whose core has stepped its successor's term while its own turn is pending refuses typed, in process and over the transport # time=244.71ms
+  ---
+  at:
+    fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+    lineNumber: 213
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('readOwnerFact: a leader whose core has stepped its successor\'s term
+    while its own turn ' +
+  
+    ^
+      'is pending refuses typed, in process and over the transport',
+    {timeout: TEST_TIMEOUT_MS}, async (t) => {
+  ...
+
+# Subtest: readOwnerFact: an owner fact arriving while a plain strict read of the same statement is in flight gets its own decided answer
+    ok 1 - it does not wait on the plain read's flight
+    ok 2 - the leader received the owner-fact request and decided it
+    ok 3 - should be equal
+    ok 4 - the answer echoes an owner-fact decision
+    ok 5 - the answer echoes exactly the request its receiver decided
+    1..5
+ok 6 - readOwnerFact: an owner fact arriving while a plain strict read of the same statement is in flight gets its own decided answer # time=225.803ms
+
+# Subtest: readOwnerFact: a read on a connection inside a transaction the receiver did not open is refused typed, never answered with the staged rows
+    ok 1 - in process: never the staged absence
+    ok 2 - in process: typed
+    ok 3 - in process: no rows
+    ok 4 - remote: never the staged absence
+    ok 5 - remote: typed
+    ok 6 - remote: no rows
+    ok 7 - with the transaction gone the leader answers
+    ok 8 - should be equivalent
+    1..8
+ok 7 - readOwnerFact: a read on a connection inside a transaction the receiver did not open is refused typed, never answered with the staged rows # time=375.612ms
+
+# Subtest: readOwnerFact: a floor is a position of one raft group; the receiver refuses a floor of another group
+    ok 1 - the receiver refuses it typed
+    ok 2 - with no rows
+    ok 3 - should be equal
+    ok 4 - readOwnerFact names it
+    ok 5 - a floor of the read partition is answered
+    1..5
+ok 8 - readOwnerFact: a floor is a position of one raft group; the receiver refuses a floor of another group # time=361.71ms
+
+# Subtest: readOwnerFact: the deadline and the routing class are required and travel to the query owner
+    ok 1 - should be equal
+    ok 2 - the caller's routing class reaches the query owner
+    ok 3 - and its frozen read authority
+    ok 4 - the caller's deadline bounds the query owner's
+    ok 5 - a call without a deadline is refused
+    ok 6 - and issues no read
+    1..6
+ok 9 - readOwnerFact: the deadline and the routing class are required and travel to the query owner # time=220.629ms
+
+# Subtest: readOwnerFact: an answer decided for another floor is not this read's answer
+    ok 1 - never READY on another request's decision
+    ok 2 - should be equal
+    ok 3 - the decision of exactly this request is its answer
+    1..3
+ok 10 - readOwnerFact: an answer decided for another floor is not this read's answer # time=237.652ms
+
+# Subtest: readOwnerFact: a leader whose commit index has advanced past its applied position mid-turn refuses typed, never answering the committed row as absent
+    ok 1 - setup: the row committed and the leader's turn pends before applying it
+    not ok 2 - refused typed: apply behind commit
+      ---
+      compare: ===
+      at:
+        fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+        lineNumber: 396
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:396:5)
+      source: >2
+          'setup: the row committed and the leader\'s turn pends before applying it');
+          const answer = await leader.handleRemoteQuery(ownerFactRequestTo(leader, [operationId]));
+          t.equal(answer?.failureCode, REASON.APPLY_BEHIND_COMMIT, 'refused typed: apply behind commit');
+        ----^
+          t.equal(answer?.rowSet === undefined && answer?.rows === undefined, true,
+            'the committed row is never answered as absent');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -owner_fact_apply_behind_commit
+        +undefined
+      ...
+    
+    not ok 3 - the committed row is never answered as absent
+      ---
+      compare: ===
+      at:
+        fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+        lineNumber: 397
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/cdc/cdc-owner-fact-receiver-read-point.test.js:397:5)
+      source: >2
+          const answer = await leader.handleRemoteQuery(ownerFactRequestTo(leader,
+        [operationId]));
+          t.equal(answer?.failureCode, REASON.APPLY_BEHIND_COMMIT, 'refused typed: apply behind commit');
+          t.equal(answer?.rowSet === undefined && answer?.rows === undefined, true,
+        ----^
+            'the committed row is never answered as absent');
+          held.release();
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -true
+        +false
+      ...
+    
+    ok 4 - setup: the write completes once the turn resumes
+    ok 5 - READY once the leader applied what it committed
+    1..5
+not ok 11 - readOwnerFact: a leader whose commit index has advanced past its applied position mid-turn refuses typed, never answering the committed row as absent # time=261.333ms
+  ---
+  at:
+    fileName: test/cdc/cdc-owner-fact-receiver-read-point.test.js
+    lineNumber: 381
+    columnNumber: 1
+    isToplevel: true
+  source: >2
+      });
+  
+    test('readOwnerFact: a leader whose commit index has advanced past its applied
+    position ' +
+  
+    ^
+      'mid-turn refuses typed, never answering the committed row as absent',
+    {timeout: TEST_TIMEOUT_MS}, async (t) => {
+  ...
+
+# Subtest: readOwnerFact: a published leader with no usable service is a named unavailable, and no other replica is asked
+    ok 1 - never an answer from a replica not published
+    ok 2 - typed: published leader unusable
+    ok 3 - no replica is asked
+    ok 4 - READY once the publication names a usable leader
+    1..4
+ok 12 - readOwnerFact: a published leader with no usable service is a named unavailable, and no other replica is asked # time=358.821ms
+
+# Subtest: readOwnerFact: the caller verifies what it received; a successful empty answer carrying a follower's witness is not absence
+    ok 1 - never READY with no rows
+    ok 2 - should be equal
+    ok 3 - should be equal
+    1..3
+ok 13 - readOwnerFact: the caller verifies what it received; a successful empty answer carrying a follower's witness is not absence # time=240.781ms
+
+1..13
+# { total: 85, pass: 82, fail: 3 }
+# time=5691.622ms
+# test-files total=1 pass=0 fail=1 assertions=98
+placement-results={"file":"test/cdc/cdc-owner-fact-receiver-read-point.test.js","attempt":1,"ok":false,"assertions":98,"durationMs":6725,"retriedOnce":false,"firstFailureLine":"not ok 6 - it never executes the statement"}

@@ -1,0 +1,1 @@
+{"file":"test/raft/raft-rs-inbound-queue-overflow.test.js","attempt":1,"ok":false,"assertions":2,"durationMs":1098,"retriedOnce":false,"firstFailureLine":"not ok 1 - F-3: a full inbound queue drops the envelope, counted and visible; the group keeps its role and keeps processing"}

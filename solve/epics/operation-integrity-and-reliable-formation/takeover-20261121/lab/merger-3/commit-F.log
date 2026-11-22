@@ -1,0 +1,36 @@
+Source oversized-file ratchet: 1/21 over 800 lines.
+Test oversized-file ratchet: 0/21 over 1500 lines.
+
+Largest oversized files (25 max):
+809 src/rebalancer/replica-placement-owner.js (threshold 800)
+Per-file size comparison base: f971c13a9c8fb2d4090859055c1ad2b74ebf3707
+
+Previously compliant source file exceeds its threshold: src/rebalancer/replica-placement-owner.js: 809 lines (threshold 800)
+pre-commit: FAIL - file-size no-regression (staged files)
+Scanned 8 JavaScript files
+Found 0 hot-path diagnostics violations
+Matched 28 inherited hot-path diagnostics baseline violations
+Scanned 12 JavaScript files
+Found 0 new literal-guideline violations
+Matched 1 inherited literal-guideline baseline violations
+Scanned 12 JavaScript files
+Found 0 decision-boundary guideline violations
+Matched 1 inherited decision-boundary baseline violations
+Scanned 0 JavaScript files
+Found 0 ambient-intrinsic call violations
+Matched 0 inherited ambient-intrinsic baseline violations
+Scanned 12 JavaScript files
+Found 0 silent catch violations
+Matched 0 inherited silent-catch baseline violations
+Promoted to ESLint (audited there, not here): state_read_defaults, value_or_promise_then_checks
+Scanned 12 JavaScript files
+Found 0 navigability violations
+Matched 12 inherited navigability baseline violations
+Scoped complexity ratchet: 2 violation(s) in 12 target(s) (threshold: 12).
+src/partition/partition-service-raft-init-base.js:172:3 Async method 'initializeUnserialized' has a complexity of 29. Maximum allowed is 12.
+src/partition/partition-service-raft-init-base.js:558:3 Method 'applyRaftTimingConfig' has a complexity of 22. Maximum allowed is 12.
+Saved complexity report to test-output/analysis/complexity-scoped.json.
+pre-commit: import graph stale - refreshing inventories (~2 min; skip with LAGRANGE_SKIP_INVENTORY_REGEN=1)
+pre-commit: refreshing generated test metadata
+pre-commit: 1 staged check(s) failed - fix and re-commit
+pre-commit: (bypass for WIP: LAGRANGE_SKIP_PRECOMMIT=1 git commit)

@@ -1,0 +1,2 @@
+{"file":"test/query/query-executor-no-handler-quarantine-penalty.test.js","attempt":1,"ok":false,"assertions":5,"durationMs":720,"retriedOnce":false,"firstFailureLine":"not ok 4 - no planner turn after the handler serves is refused"}
+{"file":"test/query/query-executor-no-handler-quarantine-clock.test.js","attempt":1,"ok":true,"assertions":10,"durationMs":752,"retriedOnce":false,"firstFailureLine":null}

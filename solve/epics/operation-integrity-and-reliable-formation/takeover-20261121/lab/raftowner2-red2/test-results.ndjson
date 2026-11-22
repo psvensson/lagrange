@@ -1,0 +1,1 @@
+{"file":"test/raft/raft-rs-backend/proposal-submitting-leadership.test.js","attempt":1,"ok":false,"assertions":3,"durationMs":1564,"retriedOnce":false,"firstFailureLine":"not ok 1 - C-1: a proposal submitted under term T whose replica leads T+2 at the propose step is refused by name, and the deferral path re-proposes nothing"}

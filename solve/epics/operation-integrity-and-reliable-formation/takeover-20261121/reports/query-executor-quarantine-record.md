@@ -7,6 +7,13 @@ Worktree `/mnt/data/peter/projects/.worktrees/query-executor-quarantine-20261121
 10.4 and witness W2 on `work/topology-guard-owner-fact-20261121` (017921e17).
 Markers: [V] verified by reading at base, [X] executed, [I] inference not traced to the end.
 
+Commits (all pushed, branch tip `b76d50c68`): `d5698f225` red clock witnesses; `504e2c989` one-clock
+repair; `b76d50c68` red penalty witness (stays red until the lead rules on 7.2). Lab directories under
+`/mnt/data/peter/projects/lagrange-takeover-20261121/lab/`: `quarantine-clock-red-d5698f225-tv-dator`,
+`quarantine-head-504e2c989-tv-dator`, `quarantine-base-23344cddc-tv-dator`,
+`quarantine-penalty-b76d50c68-tv-dator` (other `quarantine-*` directories hold runner failures: host busy
+or not ready).
+
 ## 1. The contract as implemented [V]
 
 All paths are `src/query/` unless stated; line numbers at `23344cddc`.
@@ -225,7 +232,26 @@ Witnesses that can now drop their real-time waits (not edited here):
 
 ### 7.1 Witness (red; durations and causes unchanged)
 
-(numbers filled in below from the lab run)
+`test/query/query-executor-no-handler-quarantine-penalty.test.js` (commit `b76d50c68`, same fixture as
+section 6). The services-p1 leader's node is alive; it answers the leader-required owner-fact read "no
+handler" once and its handler serves 200 ms of node time later, with no change to its SERVICES row (so
+the fingerprint release cannot help). The planner reads every 5 s of node time (the runtime-service
+planner's priority cadence; 5.04-7.16 s observed in the PG-wire report). It asserts the wanted property:
+no turn after the handler serves is refused.
+
+Result at `b76d50c68` [X], tv-dator, `lab/quarantine-penalty-b76d50c68-tv-dator` (penalty file 3 ok, 1
+not ok; the clock witness 10/10 ok in the same run):
+
+| turn (node ms) | 0 | 5000 | 10000 | 15000 | 20000 | 25000 | 30000 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| outcome | hop, "No handler registered for address ..." | local refusal | local | local | local | local | hop, answered |
+
+- wasted turns after the handler serves: **5**, all **local refusals without a hop**, each reading
+  `"Partition service not found"`; first success at **30 000 ms**, i.e. **29 800 ms after the handler
+  serves**, against 4 800 ms (the next turn) without the mark. At the observed 5.04-7.16 s cadence that is
+  4-5 wasted turns and up to ~30 s plus one cadence of delay per episode.
+- held (ok): the first read reached the leader and was answered no handler; every hop went to the leader,
+  none to the serving follower (no fallback); the read is answered within the bound.
 
 ### 7.2 Proposal for the lead's ruling (not implemented)
 

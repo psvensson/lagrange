@@ -1,0 +1,1259 @@
+placement-shell=3432567
+placement-head=f7faf8b25fbb230e668d68a1439186958b88748d
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3433555
+# test-files planned=3
+classified lane ordinary: 3 file(s), jobs=4
+thermal: ok cpu 69C (coretemp/Package id 0) nvme 48C (nvme/Sensor 1)
+ok test/rebalancer/critical-spread-terminal-stall-repro.test.js (19 assertions, 1464ms)
+not ok test/rebalancer/rebalance-coordinator-topology-guard.test.js (105 assertions, 1839ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: RebalanceCoordinator blocks same-node duplicate topology creation
+    not ok 1 - createOperation should fail closed when the target node already hosts the partition
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 245
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:245:5)
+      source: |2
+          }));
+      
+          t.equal(
+        ----^
+            error?.admissionResult?.decisionType,
+            STORAGE_ADMISSION_DECISION_TYPE.BLOCKED,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -blocked
+        +undefined
+      ...
+    
+    not ok 2 - same-node duplicate adds should surface the occupied-target reason
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,3 +1,1 @@
+        -Array [
+        -  "target_node_already_occupied",
+        -]
+        +undefined
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 250
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:250:5)
+      source: >2
+            'createOperation should fail closed when the target node already hosts the partition',
+          );
+          t.same(
+        ----^
+            error?.admissionResult?.blockingReasons,
+            ['target_node_already_occupied'],
+      ...
+    
+    ok 3 - blocked topology creation should not persist a replica operation
+    1..3
+not ok 1 - RebalanceCoordinator blocks same-node duplicate topology creation # time=79.956ms
+  ---
+  at:
+    fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+    lineNumber: 227
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    }
+  
+  
+    test('RebalanceCoordinator blocks same-node duplicate topology creation',
+    async (t) => {
+  
+    ^
+      initializeTestEnvironment();
+  ...
+
+# Subtest: RebalanceCoordinator topology guard invokes the injected inventory owner
+    not ok 1 - create-time occupancy and target census share one canonical capture
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 287
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:287:7)
+      source: |2
+            }));
+      
+            t.equal(inventoryBuildCount, 1,
+        ------^
+              'create-time occupancy and target census share one canonical capture');
+            coordinator.shutdown();
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -1
+        +0
+      ...
+    
+    1..1
+not ok 2 - RebalanceCoordinator topology guard invokes the injected inventory owner # time=31.814ms
+  ---
+  at:
+    fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+    lineNumber: 265
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('RebalanceCoordinator topology guard invokes the injected inventory
+    owner',
+  
+    ^
+      async (t) => {
+        initializeTestEnvironment();
+  ...
+
+# Subtest: RebalanceCoordinator fails topology increase closed when service owner rows are unavailable
+    not ok 1 - cache presence cannot turn unavailable owner evidence into empty
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,3 +1,1 @@
+        -Array [
+        -  "replica_inventory_unusable",
+        -]
+        +undefined
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 322
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:322:7)
+      source: |2
+            );
+      
+            t.same(error?.admissionResult?.blockingReasons,
+        ------^
+              ['replica_inventory_unusable'],
+              'cache presence cannot turn unavailable owner evidence into empty');
+      ...
+    
+    1..1
+not ok 3 - RebalanceCoordinator fails topology increase closed when service owner rows are unavailable # time=31.002ms
+  ---
+  at:
+    fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+    lineNumber: 293
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    );
+  
+  
+    test('RebalanceCoordinator fails topology increase closed when service owner
+    rows are unavailable',
+  
+    ^
+      async (t) => {
+        initializeTestEnvironment();
+  ...
+
+# Subtest: RebalanceCoordinator does not fabricate inventory skew from slow successful reads without source timestamps
+    ok 1 - read duration alone cannot make a successful inventory unusable
+    ok 2 - the recovery REPLACE remains admissible
+    1..2
+ok 4 - RebalanceCoordinator does not fabricate inventory skew from slow successful reads without source timestamps # time=26.537ms
+
+# Subtest: RebalanceCoordinator admits only declared concentrated-ledger recovery moves when the services owner is circularly unavailable
+    ok 1 - unavailable target precedes the recovery-cure exception
+    ok 2 - should be equivalent
+    ok 3 - unavailable target precedes the recovery-cure exception
+    ok 4 - should be equivalent
+    ok 5 - the surplus REMOVE fence also has no target permission
+    ok 6 - unavailable target precedes the recovery-cure exception
+    ok 7 - should be equivalent
+    ok 8 - unavailable target precedes the recovery-cure exception
+    ok 9 - should be equivalent
+    ok 10 - the surplus REMOVE fence also has no target permission
+    ok 11 - unavailable target precedes the recovery-cure exception
+    ok 12 - should be equivalent
+    ok 13 - unavailable target precedes the recovery-cure exception
+    ok 14 - should be equivalent
+    ok 15 - the surplus REMOVE fence also has no target permission
+    ok 16 - unavailable target precedes the recovery-cure exception
+    ok 17 - should be equivalent
+    ok 18 - unavailable target precedes the recovery-cure exception
+    ok 19 - should be equivalent
+    ok 20 - the surplus REMOVE fence also has no target permission
+    ok 21 - unavailable target precedes the recovery-cure exception
+    ok 22 - should be equivalent
+    ok 23 - unavailable target precedes the recovery-cure exception
+    ok 24 - should be equivalent
+    ok 25 - the surplus REMOVE fence also has no target permission
+    ok 26 - unavailable target precedes the recovery-cure exception
+    ok 27 - should be equivalent
+    ok 28 - unavailable target precedes the recovery-cure exception
+    ok 29 - should be equivalent
+    ok 30 - the surplus REMOVE fence also has no target permission
+    ok 31 - unavailable target precedes the recovery-cure exception
+    ok 32 - should be equivalent
+    ok 33 - unavailable target precedes the recovery-cure exception
+    ok 34 - should be equivalent
+    ok 35 - the surplus REMOVE fence also has no target permission
+    ok 36 - unavailable target precedes the recovery-cure exception
+    ok 37 - should be equivalent
+    ok 38 - unavailable target precedes the recovery-cure exception
+    ok 39 - should be equivalent
+    ok 40 - the surplus REMOVE fence also has no target permission
+    not ok 41 - the count-neutral ledger spread cure breaks the owner-read circularity
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 497
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:497:7)
+      source: >2
+            coordinator.tablePolicyService = policyOwner;
+            const recovery = await coordinator.buildTopologyGuardSnapshot(context);
+            t.equal(recovery.state, 'allowed',
+        ------^
+              'the count-neutral ledger spread cure breaks the owner-read circularity');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -allowed
+        +inventory_unusable
+      ...
+    
+    not ok 42 - the exception never permits two replicas on one node
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 504
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:504:7)
+      source: |2
+              move: {...context.move, nodeId: spreadNode},
+            });
+            t.equal(occupied.state, 'target_node_occupied',
+        ------^
+              'the exception never permits two replicas on one node');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -target_node_occupied
+        +inventory_unusable
+      ...
+    
+    ok 43 - the recovery REPLACE must be anchored to an actual source row
+    ok 44 - a voter off the hottest node is not the quorum-spread cure
+    ok 45 - a pre-ready target is not placement-eligible without a ready lease
+    not ok 46 - the first ready unoccupied target remains a valid cure
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 538
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:538:7)
+      source: |2
+              },
+            });
+            t.equal(firstFeasibleAdd.state, 'allowed',
+        ------^
+              'the first ready unoccupied target remains a valid cure');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -allowed
+        +inventory_unusable
+      ...
+    
+    ok 47 - the circularity exception must not admit an unready target
+    ok 48 - startup authority cannot replace live transport evidence
+    ok 49 - live CONNECTED evidence cannot replace startup authority membership
+    1..49
+not ok 5 - RebalanceCoordinator admits only declared concentrated-ledger recovery moves when the services owner is circularly unavailable # time=46.316ms
+  ---
+  at:
+    fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+    lineNumber: 385
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    );
+  
+    test(
+    ^
+      'RebalanceCoordinator admits only declared concentrated-ledger recovery ' +
+        'moves when the services owner is circularly unavailable',
+  ...
+
+# Subtest: RebalanceCoordinator blocks stale ADD when authoritative topology already satisfies target
+    not ok 1 - createOperation should fail closed when authoritative topology already satisfies the target replica count
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 603
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:603:5)
+      source: |2
+          }));
+      
+          t.equal(
+        ----^
+            error?.admissionResult?.decisionType,
+            STORAGE_ADMISSION_DECISION_TYPE.BLOCKED,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -blocked
+        +undefined
+      ...
+    
+    not ok 2 - stale planner adds should surface the target-satisfied reason
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,3 +1,1 @@
+        -Array [
+        -  "target_replica_count_already_satisfied",
+        -]
+        +undefined
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 608
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:608:5)
+      source: >2
+            'createOperation should fail closed when authoritative topology already satisfies the target replica count',
+          );
+          t.same(
+        ----^
+            error?.admissionResult?.blockingReasons,
+            ['target_replica_count_already_satisfied'],
+      ...
+    
+    not ok 3 - topology guard should preserve the canonical distinct-node count in diagnostics
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 613
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:613:5)
+      source: |2
+            'stale planner adds should surface the target-satisfied reason',
+          );
+          t.equal(
+        ----^
+            error?.admissionResult?.topologySnapshot?.observedDistinctNodeCount,
+            3,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -3
+        +undefined
+      ...
+    
+    ok 4 - stale planner add should not persist a replica operation
+    1..4
+not ok 6 - RebalanceCoordinator blocks stale ADD when authoritative topology already satisfies target # time=31.383ms
+  ---
+  at:
+    fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+    lineNumber: 580
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    );
+  
+  
+    test('RebalanceCoordinator blocks stale ADD when authoritative topology
+    already satisfies target', async (t) => {
+  
+    ^
+      initializeTestEnvironment();
+  ...
+
+# Subtest: RebalanceCoordinator blocks REPLACE when target node already has partition topology
+    not ok 1 - createOperation should fail closed when REPLACE targets an occupied partition node
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 651
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:651:5)
+      source: |2
+          }));
+      
+          t.equal(
+        ----^
+            error?.admissionResult?.decisionType,
+            STORAGE_ADMISSION_DECISION_TYPE.BLOCKED,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -blocked
+        +undefined
+      ...
+    
+    not ok 2 - duplicate replacement target rows should surface the occupied-target reason
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,3 +1,1 @@
+        -Array [
+        -  "target_node_already_occupied",
+        -]
+        +undefined
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 656
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:656:5)
+      source: >2
+            'createOperation should fail closed when REPLACE targets an occupied partition node',
+          );
+          t.same(
+        ----^
+            error?.admissionResult?.blockingReasons,
+            ['target_node_already_occupied'],
+      ...
+    
+    ok 3 - blocked replacement topology creation should not persist a replica operation
+    1..3
+not ok 7 - RebalanceCoordinator blocks REPLACE when target node already has partition topology # time=26.572ms
+  ---
+  at:
+    fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+    lineNumber: 628
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('RebalanceCoordinator blocks REPLACE when target node already has
+    partition topology', async (t) => {
+  
+    ^
+      initializeTestEnvironment();
+  ...
+
+# Subtest: RebalanceCoordinator applies topology occupancy guard to message-group creates
+    not ok 1 - message-group ADD should use the shared topology occupancy guard
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 696
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:696:5)
+      source: |2
+          }));
+      
+          t.equal(
+        ----^
+            error?.admissionResult?.decisionType,
+            STORAGE_ADMISSION_DECISION_TYPE.BLOCKED,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -blocked
+        +undefined
+      ...
+    
+    not ok 2 - message-group duplicate topology should surface the occupied-target reason
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,3 +1,1 @@
+        -Array [
+        -  "target_node_already_occupied",
+        -]
+        +undefined
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 701
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:701:5)
+      source: |2
+            'message-group ADD should use the shared topology occupancy guard',
+          );
+          t.same(
+        ----^
+            error?.admissionResult?.blockingReasons,
+            ['target_node_already_occupied'],
+      ...
+    
+    ok 3 - blocked message-group topology creation should not persist a replica operation
+    1..3
+not ok 8 - RebalanceCoordinator applies topology occupancy guard to message-group creates # time=26.71ms
+  ---
+  at:
+    fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+    lineNumber: 671
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('RebalanceCoordinator applies topology occupancy guard to message-group
+    creates', async (t) => {
+  
+    ^
+      initializeTestEnvironment();
+  ...
+
+# Subtest: count-keyed lane HOLDS a REPLACE churn create while the critical partition is over target on alive replicas (red-on-revert: the rows-only ADD guard exempts REPLACE, so without the hold the churn is admitted)
+    ok 1 - over-target REPLACE churn is rejected by the count-keyed lane hold
+    ok 2 - the held REPLACE churn create persists no replica operation
+    1..2
+ok 9 - count-keyed lane HOLDS a REPLACE churn create while the critical partition is over target on alive replicas (red-on-revert: the rows-only ADD guard exempts REPLACE, so without the hold the churn is admitted) # time=20.365ms
+
+# Subtest: count-keyed lane consumes canonical identity deduplication
+    not ok 1 - Authoritative operation visibility deferred for partition:control_plane_publications-p1 (entity_operation_observation_incomplete)
+      ---
+      stack: |
+        FixtureCommittedReadCoordinator.createDeferredOperationVisibilityError (src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js:238:19)
+        FixtureCommittedReadCoordinator.requireEntityOperationRows (src/rebalancer/rebalance-coordinator-operation-read-methods.js:261:18)
+        FixtureCommittedReadCoordinator.getEntityRetiredReplaceSourceReplicaIds (src/rebalancer/rebalance-coordinator-replica-identity-methods.js:171:42)
+        async FixtureCommittedReadCoordinator.getRetiredReplaceSourceMoveSafetyError (src/rebalancer/rebalance-coordinator-replica-identity-methods.js:388:7)
+        async FixtureCommittedReadCoordinator.createOperationInternal (src/rebalancer/rebalance-coordinator-operation-creation.js:436:7)
+        async FixtureCommittedReadCoordinator.runOperationLedgerInterlockAccountedCreate (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)
+        async file:/home/peter/projects/lagrange/test-output/placement-worktrees/f7faf8b25fbb-mwr2fzca-2559877/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13
+        async FixtureCommittedReadCoordinator.runCreateOperationForIntent (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:263:22)
+        async Test.<anonymous> (test/rebalancer/rebalance-coordinator-topology-guard.test.js:779:21)
+      at:
+        fileName: src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js
+        lineNumber: 238
+        columnNumber: 19
+        typeName: FixtureCommittedReadCoordinator
+        methodName: createDeferredOperationVisibilityError
+        functionName: FixtureCommittedReadCoordinator.createDeferredOperationVisibilityError
+      rebalanceSkipReason: deferred_retry_pending
+      operationType: null
+      entityType: partition
+      entityId: control_plane_publications-p1
+      partitionId: null
+      replicaId: null
+      operationVisibilityState: deferred
+      completionState: operation_visibility_deferred
+      reasonCode: entity_operation_observation_incomplete
+      retryAfterMs: 100
+      tapCaught: returnedPromiseRejection
+      source: |2
+                deferredOutcome.reasonCode :
+                'authoritative_operation_visibility_deferred';
+            const error = new Error(
+        ------------------^
+              'Authoritative operation visibility deferred for ' +
+                entityType +
+      ...
+    
+    1..1
+not ok 10 - count-keyed lane consumes canonical identity deduplication # time=27.593ms
+  ---
+  at:
+    fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+    lineNumber: 764
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('count-keyed lane consumes canonical identity deduplication', async (t)
+    => {
+  
+    ^
+      initializeTestEnvironment();
+      const first = critRow(CRIT_PARTITION_ID + '-r1', 'node-1');
+  ...
+
+# Subtest: count-keyed lane ALIVE-GUARD: a FAILED replica does not count toward the alive occupancy, so a legitimate re-placement REPLACE is admitted (the hold never over-blocks a dead-replica fix)
+    not ok 1 - Authoritative operation visibility deferred for partition:control_plane_publications-p1 (entity_operation_observation_incomplete)
+      ---
+      stack: |
+        FixtureCommittedReadCoordinator.createDeferredOperationVisibilityError (src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js:238:19)
+        FixtureCommittedReadCoordinator.requireEntityOperationRows (src/rebalancer/rebalance-coordinator-operation-read-methods.js:261:18)
+        FixtureCommittedReadCoordinator.getEntityRetiredReplaceSourceReplicaIds (src/rebalancer/rebalance-coordinator-replica-identity-methods.js:171:42)
+        async FixtureCommittedReadCoordinator.getRetiredReplaceSourceMoveSafetyError (src/rebalancer/rebalance-coordinator-replica-identity-methods.js:388:7)
+        async FixtureCommittedReadCoordinator.createOperationInternal (src/rebalancer/rebalance-coordinator-operation-creation.js:436:7)
+        async FixtureCommittedReadCoordinator.runOperationLedgerInterlockAccountedCreate (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)
+        async file:/home/peter/projects/lagrange/test-output/placement-worktrees/f7faf8b25fbb-mwr2fzca-2559877/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13
+        async FixtureCommittedReadCoordinator.runCreateOperationForIntent (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:263:22)
+        async Test.<anonymous> (test/rebalancer/rebalance-coordinator-topology-guard.test.js:811:3)
+      at:
+        fileName: src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js
+        lineNumber: 238
+        columnNumber: 19
+        typeName: FixtureCommittedReadCoordinator
+        methodName: createDeferredOperationVisibilityError
+        functionName: FixtureCommittedReadCoordinator.createDeferredOperationVisibilityError
+      rebalanceSkipReason: deferred_retry_pending
+      operationType: null
+      entityType: partition
+      entityId: control_plane_publications-p1
+      partitionId: null
+      replicaId: null
+      operationVisibilityState: deferred
+      completionState: operation_visibility_deferred
+      reasonCode: entity_operation_observation_incomplete
+      retryAfterMs: 100
+      tapCaught: returnedPromiseRejection
+      source: |2
+                deferredOutcome.reasonCode :
+                'authoritative_operation_visibility_deferred';
+            const error = new Error(
+        ------------------^
+              'Authoritative operation visibility deferred for ' +
+                entityType +
+      ...
+    
+    1..1
+not ok 11 - count-keyed lane ALIVE-GUARD: a FAILED replica does not count toward the alive occupancy, so a legitimate re-placement REPLACE is admitted (the hold never over-blocks a dead-replica fix) # time=30.265ms
+  ---
+  at:
+    fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+    lineNumber: 795
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('count-keyed lane ALIVE-GUARD: a FAILED replica does not count toward the
+    alive occupancy, so ' +
+  
+    ^
+      'a legitimate re-placement REPLACE is admitted (the hold never over-blocks a dead-replica fix)',
+    async (t) => {
+  ...
+
+# Subtest: count-keyed lane HOLDS a REPLACE churn create when the surplus is a draining (REMOVING) source -- the real over-replication signature: 3 active + 1 removing source on ready nodes is over target
+    ok 1 - a draining (removing) source keeps the partition over target -> churn create is held
+    ok 2 - the held churn create persists no replica operation
+    1..2
+ok 12 - count-keyed lane HOLDS a REPLACE churn create when the surplus is a draining (REMOVING) source -- the real over-replication signature: 3 active + 1 removing source on ready nodes is over target # time=21.274ms
+
+# Subtest: count-keyed lane EXEMPTS the priority-spread cure ADD: over target on alive replicas but below distinct-node coverage, an ADD typed spread_replicas to an unoccupied node is ADMITTED (red-on-revert: the unconditional hold deadlocks the planner-yielded drain)
+    not ok 1 - Authoritative operation visibility deferred for partition:control_plane_publications-p1 (entity_operation_observation_incomplete)
+      ---
+      stack: |
+        FixtureCommittedReadCoordinator.createDeferredOperationVisibilityError (src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js:238:19)
+        FixtureCommittedReadCoordinator.ensureEntityAddLikeCreateLaneAvailable (src/rebalancer/rebalance-coordinator-priority-budget-admission.js:430:18)
+        async FixtureCommittedReadCoordinator.createOperationInternal (src/rebalancer/rebalance-coordinator-operation-creation.js:482:7)
+        async FixtureCommittedReadCoordinator.runOperationLedgerInterlockAccountedCreate (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)
+        async file:/home/peter/projects/lagrange/test-output/placement-worktrees/f7faf8b25fbb-mwr2fzca-2559877/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13
+        async FixtureCommittedReadCoordinator.runCreateOperationForIntent (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:263:22)
+        async Test.<anonymous> (test/rebalancer/rebalance-coordinator-topology-guard.test.js:881:3)
+      at:
+        fileName: src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js
+        lineNumber: 238
+        columnNumber: 19
+        typeName: FixtureCommittedReadCoordinator
+        methodName: createDeferredOperationVisibilityError
+        functionName: FixtureCommittedReadCoordinator.createDeferredOperationVisibilityError
+      rebalanceSkipReason: deferred_retry_pending
+      operationType: ADD
+      entityType: partition
+      entityId: control_plane_publications-p1
+      partitionId: control_plane_publications-p1
+      replicaId: null
+      operationVisibilityState: deferred
+      completionState: operation_visibility_deferred
+      reasonCode: entity_operation_observation_incomplete
+      retryAfterMs: 100
+      tapCaught: returnedPromiseRejection
+      source: |2
+                deferredOutcome.reasonCode :
+                'authoritative_operation_visibility_deferred';
+            const error = new Error(
+        ------------------^
+              'Authoritative operation visibility deferred for ' +
+                entityType +
+      ...
+    
+    1..1
+not ok 13 - count-keyed lane EXEMPTS the priority-spread cure ADD: over target on alive replicas but below distinct-node coverage, an ADD typed spread_replicas to an unoccupied node is ADMITTED (red-on-revert: the unconditional hold deadlocks the planner-yielded drain) # time=28.028ms
+  ---
+  at:
+    fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+    lineNumber: 864
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    // 2/3 all run). The hold must admit exactly the cure shape and nothing else.
+  
+  
+    test('count-keyed lane EXEMPTS the priority-spread cure ADD: over target on
+    alive ' +
+  
+    ^
+      'replicas but below distinct-node coverage, an ADD typed spread_replicas to an ' +
+      'unoccupied node is ADMITTED (red-on-revert: the unconditional hold deadlocks ' +
+  ...
+
+# Subtest: count-keyed lane STILL HOLDS an over-target ADD without the spread-cure typing (the exemption admits only the planner-retained cure shape)
+    ok 1 - an untyped over-target ADD stays held
+    ok 2 - no operation persists
+    1..2
+ok 14 - count-keyed lane STILL HOLDS an over-target ADD without the spread-cure typing (the exemption admits only the planner-retained cure shape) # time=20.831ms
+
+# Subtest: count-keyed lane STILL HOLDS a spread-typed over-target ADD once distinct-node coverage meets the target (spread satisfied -> the surplus must drain, not grow)
+    ok 1 - a spread-typed ADD with coverage at target stays held
+    ok 2 - no operation persists
+    1..2
+ok 15 - count-keyed lane STILL HOLDS a spread-typed over-target ADD once distinct-node coverage meets the target (spread satisfied -> the surplus must drain, not grow) # time=18.973ms
+
+# Subtest: count-keyed lane STILL HOLDS a spread-typed over-target ADD whose target node already hosts a replica (no coverage gain -> not the cure shape)
+    ok 1 - a spread-typed ADD to an already-hosting node stays held
+    ok 2 - no operation persists
+    1..2
+ok 16 - count-keyed lane STILL HOLDS a spread-typed over-target ADD whose target node already hosts a replica (no coverage gain -> not the cure shape) # time=21.669ms
+
+# Subtest: s14 orphan census: 2 voters + 1 ORPHAN (active, non-voter, no in-flight op) on 3 nodes does NOT satisfy target 3 — the spread ADD to a 4th node is ADMITTED (RED on the status-only-census head)
+    not ok 1 - Authoritative operation visibility deferred for partition:control_plane_publications-p1 (entity_operation_observation_incomplete)
+      ---
+      stack: |
+        FixtureCommittedReadCoordinator.createDeferredOperationVisibilityError (src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js:238:19)
+        FixtureCommittedReadCoordinator.ensureEntityAddLikeCreateLaneAvailable (src/rebalancer/rebalance-coordinator-priority-budget-admission.js:430:18)
+        async FixtureCommittedReadCoordinator.createOperationInternal (src/rebalancer/rebalance-coordinator-operation-creation.js:482:7)
+        async FixtureCommittedReadCoordinator.runOperationLedgerInterlockAccountedCreate (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)
+        async file:/home/peter/projects/lagrange/test-output/placement-worktrees/f7faf8b25fbb-mwr2fzca-2559877/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13
+        async FixtureCommittedReadCoordinator.runCreateOperationForIntent (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:263:22)
+        async Test.<anonymous> (test/rebalancer/rebalance-coordinator-topology-guard.test.js:1000:3)
+      at:
+        fileName: src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js
+        lineNumber: 238
+        columnNumber: 19
+        typeName: FixtureCommittedReadCoordinator
+        methodName: createDeferredOperationVisibilityError
+        functionName: FixtureCommittedReadCoordinator.createDeferredOperationVisibilityError
+      rebalanceSkipReason: deferred_retry_pending
+      operationType: ADD
+      entityType: partition
+      entityId: control_plane_publications-p1
+      partitionId: control_plane_publications-p1
+      replicaId: null
+      operationVisibilityState: deferred
+      completionState: operation_visibility_deferred
+      reasonCode: entity_operation_observation_incomplete
+      retryAfterMs: 100
+      tapCaught: returnedPromiseRejection
+      source: |2
+                deferredOutcome.reasonCode :
+                'authoritative_operation_visibility_deferred';
+            const error = new Error(
+        ------------------^
+              'Authoritative operation visibility deferred for ' +
+                entityType +
+      ...
+    
+    1..1
+not ok 17 - s14 orphan census: 2 voters + 1 ORPHAN (active, non-voter, no in-flight op) on 3 nodes does NOT satisfy target 3 — the spread ADD to a 4th node is ADMITTED (RED on the status-only-census head) # time=23.261ms
+  ---
+  at:
+    fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+    lineNumber: 986
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    }
+  
+  
+    test('s14 orphan census: 2 voters + 1 ORPHAN (active, non-voter, no in-flight
+    op) ' +
+  
+    ^
+      'on 3 nodes does NOT satisfy target 3 — the spread ADD to a 4th node is ADMITTED ' +
+      '(RED on the status-only-census head)', async (t) => {
+  ...
+
+# Subtest: s14 orphan census: a CATCHING-UP learner (status=creating) still counts, so a redundant 4th ADD is HELD — over-creation is not admitted
+    ok 1 - catching-up learner counts (3 nodes == target) -> redundant ADD held
+    ok 2 - no over-creating replica operation persisted
+    1..2
+ok 18 - s14 orphan census: a CATCHING-UP learner (status=creating) still counts, so a redundant 4th ADD is HELD — over-creation is not admitted # time=21.2ms
+
+# Subtest: s14 orphan census: the one-node-per-replica occupancy check is UNCHANGED — an add-like create targeting the ORPHAN's node is still blocked (no double-placement)
+    ok 1 - target node already occupied (full-occupancy check intact) -> blocked
+    ok 2 - no double-placement on the orphan node
+    1..2
+ok 19 - s14 orphan census: the one-node-per-replica occupancy check is UNCHANGED — an add-like create targeting the ORPHAN's node is still blocked (no double-placement) # time=17.973ms
+
+# Subtest: ADD and REPLACE refuse unavailable policy before persistence and recover through the same topology guard
+    not ok 1 - Cannot read properties of undefined (reading 'blockingReasons')
+      ---
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/rebalance-coordinator-topology-guard.test.js:1085:36)
+      at:
+        fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+        lineNumber: 1085
+        columnNumber: 36
+        typeName: Test
+        methodName: <anonymous>
+        functionName: Test.<anonymous>
+      type: TypeError
+      tapCaught: returnedPromiseRejection
+      source: >2
+                enforceConcurrentOperationBudget: true};
+              const error = await captureOperationCreateError(() => coordinator.createOperation(move));
+              t.same(error.admissionResult.blockingReasons, ['partition_target_unavailable']);
+        -----------------------------------^
+              t.equal(sqlEngine.getOperations().length, 0, 'no operation is recorded without its target');
+              coordinator.tablePolicyService = owner;
+      ...
+    
+    1..1
+not ok 20 - ADD and REPLACE refuse unavailable policy before persistence and recover through the same topology guard # time=22.743ms
+  ---
+  at:
+    fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+    lineNumber: 1067
+    columnNumber: 1
+    isToplevel: true
+  source: |
+  
+  
+    test('ADD and REPLACE refuse unavailable policy before persistence ' +
+    ^
+      'and recover through the same topology guard', async (t) => {
+      initializeTestEnvironment();
+  ...
+
+1..20
+# { total: 85, pass: 66, fail: 19 }
+# time=618.356ms
+not ok test/rebalancer/spread-cure-escape-schedules.test.js (60 assertions, 24559ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: E2 July world, services-p1 leader alive and reachable, planner on a follower: the spread cure of [A,A,B] is admitted within one evaluation cycle
+    ok 1 - setup: the planner node hosts a services-p1 replica that follows
+    ok 2 - setup: the planner observes the partition's replicas
+    # OBSERVATION E2 {"escapePresent":true,"cycle":{"label":"e2-cycle-1","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"9c23640f-36df-46fe-846e-e5fa2153abd2"}],"admitted":1,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"sql_write_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":true}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]}}
+    ok 3 - a spread-restoring add-like move is admitted in the first cycle
+    ok 4 - a spread-restoring operation row targets a free node: [{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]
+    1..4
+ok 1 - E2 July world, services-p1 leader alive and reachable, planner on a follower: the spread cure of [A,A,B] is admitted within one evaluation cycle # time=426.945ms
+
+# Subtest: E2 control (only where the escape exists): the same cycle with the escape answering false gives the July signature
+    ok 1 - setup: the planner node hosts a services-p1 replica that follows
+    ok 2 - setup: the planner observes the partition's replicas
+    # OBSERVATION E2-control {"cycle":{"label":"e2-control-cycle-1","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":true,"reason":"blocked","admissionReason":"replica_inventory_unusable","decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"operationId":null}],"admitted":0,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[]}}
+    ok 3 - without the escape nothing is admitted
+    ok 4 - the cure is denied replica_inventory_unusable (the July 17-40-24 signature)
+    1..4
+ok 2 - E2 control (only where the escape exists): the same cycle with the escape answering false gives the July signature # time=281.247ms
+
+# Subtest: E3 services-p1 without a leader, then a leader: nothing is admitted while no replica leads, and the cure is admitted within one cycle of the leader appearing
+    ok 1 - setup: the planner node hosts a services-p1 replica that follows
+    ok 2 - setup: the planner observes the partition's replicas
+    ok 3 - setup: no services-p1 replica leads: {"leaderless":true,"afterMs":1985,"roles":[{"nodeId":"peer-node-a","core":"follower","service":"follower","leaderId":null},{"nodeId":"planner-node","core":"follower","service":"follower","leaderId":"services-p1-r1"},{"nodeId":"peer-node-b","core":"follower","service":"follower","leaderId":"services-p1-r1"}]}
+    ok 4 - setup: a services-p1 leader appears: {"elected":true,"leaderNodeId":"peer-node-a","afterMs":1747}
+    # OBSERVATION E3 {"escapePresent":true,"outage":{"leaderless":true,"afterMs":1985,"roles":[{"nodeId":"peer-node-a","core":"follower","service":"follower","leaderId":null},{"nodeId":"planner-node","core":"follower","service":"follower","leaderId":"services-p1-r1"},{"nodeId":"peer-node-b","core":"follower","service":"follower","leaderId":"services-p1-r1"}]},"withoutLeader":[{"label":"e3-no-leader-1","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"6fcf0201-4021-4328-8cc1-0d5dfd7d1555"}],"admitted":1,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"sql_write_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":true}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]},{"label":"e3-no-leader-2","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"6fcf0201-4021-4328-8cc1-0d5dfd7d1555"}],"admitted":1,"reads":[],"escape":[],"hold":[],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]},{"label":"e3-no-leader-3","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"6fcf0201-4021-4328-8cc1-0d5dfd7d1555"}],"admitted":1,"reads":[],"escape":[],"hold":[],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]}],"leftBehind":{"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}],"reservations":[{"state":"active","partition_id":"sql_write_operations-p1","node_id":null,"operation_id":"6fcf0201-4021-4328-8cc1-0d5dfd7d1555"}],"slotProbe":{"admitted":false,"reason":null,"skip":"budget_exceeded","message":"Partition sql_write_operations-p1 already has a different create intent"}},"recovery":{"elected":true,"leaderNodeId":"peer-node-a","afterMs":1747},"afterLeader":[{"label":"e3-leader-1","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"6fcf0201-4021-4328-8cc1-0d5dfd7d1555"}],"admitted":1,"reads":[],"escape":[],"hold":[],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]}],"finalLedger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]}
+    not ok 5 - no cycle admits an add-like move while services-p1 has no leader
+      ---
+      at:
+        fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+        lineNumber: 411
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/rebalancer/spread-cure-escape-schedules.test.js:411:5)
+      source: >2
+            recovery, afterLeader, finalLedger: ledgerOf(scene)});
+      
+          t.ok(withoutLeader.every((cycle) => cycle.admitted === 0),
+        ----^
+            'no cycle admits an add-like move while services-p1 has no leader');
+          t.same(leftBehind.ledger, [], 'no operation exists while services-p1 has no leader');
+      ...
+    
+    not ok 6 - no operation exists while services-p1 has no leader
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,9 @@
+        -Array []
+        +Array [
+        +  Object {
+        +    "type": "ADD",
+        +    "status": "pending",
+        +    "target_node_id": "planner-node",
+        +    "replica_id": "sql_write_operations-p1-r4",
+        +    "source_replica_id": null,
+        +  },
+        +]
+      at:
+        fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+        lineNumber: 413
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/rebalancer/spread-cure-escape-schedules.test.js:413:5)
+      source: >2
+          t.ok(withoutLeader.every((cycle) => cycle.admitted === 0),
+            'no cycle admits an add-like move while services-p1 has no leader');
+          t.same(leftBehind.ledger, [], 'no operation exists while services-p1 has no leader');
+        ----^
+          t.equal(afterLeader.length, 1,
+            'the first cycle after the leader appears ends the wait (admits, or finds the cure made)');
+      ...
+    
+    ok 7 - the first cycle after the leader appears ends the wait (admits, or finds the cure made)
+    ok 8 - exactly one spread-restoring operation
+    ok 9 - that first cycle is the one that admits the cure
+    1..9
+not ok 3 - E3 services-p1 without a leader, then a leader: nothing is admitted while no replica leads, and the cure is admitted within one cycle of the leader appearing # time=4084.028ms
+  ---
+  at:
+    fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+    lineNumber: 379
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('E3 services-p1 without a leader, then a leader: nothing is admitted
+    while no replica ' +
+  
+    ^
+      'leads, and the cure is admitted within one cycle of the leader appearing',
+    {timeout: CASE_TIMEOUT_MS}, async (t) => {
+  ...
+
+# Subtest: E5 over-target [A,A,A,B]: the hold fails open and the guard behind it; across a bounded services-p1 gap the surplus drain's cure waits for the gap and no longer
+    ok 1 - setup: the planner node hosts a services-p1 replica that follows
+    ok 2 - setup: the planner observes the partition's replicas
+    ok 3 - setup: no services-p1 replica leads: {"leaderless":true,"afterMs":1985,"roles":[{"nodeId":"peer-node-a","core":"follower","service":"follower","leaderId":null},{"nodeId":"planner-node","core":"follower","service":"follower","leaderId":"services-p1-r1"},{"nodeId":"peer-node-b","core":"follower","service":"follower","leaderId":"services-p1-r1"}]}
+    ok 4 - setup: the gap ends: {"elected":true,"leaderNodeId":"peer-node-a","afterMs":2213}
+    # OBSERVATION E5 {"escapePresent":true,"outage":{"leaderless":true,"afterMs":1985,"roles":[{"nodeId":"peer-node-a","core":"follower","service":"follower","leaderId":null},{"nodeId":"planner-node","core":"follower","service":"follower","leaderId":"services-p1-r1"},{"nodeId":"peer-node-b","core":"follower","service":"follower","leaderId":"services-p1-r1"}]},"duringGap":[{"label":"e5-gap-1","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"94688f96-dec6-4095-ba76-a90a5dbd1235"}],"admitted":1,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":4,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":4,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":4,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":4,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"sql_write_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":true}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r5","source_replica_id":null}]},{"label":"e5-gap-2","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"94688f96-dec6-4095-ba76-a90a5dbd1235"}],"admitted":1,"reads":[],"escape":[],"hold":[],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r5","source_replica_id":null}]},{"label":"e5-gap-3","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"94688f96-dec6-4095-ba76-a90a5dbd1235"}],"admitted":1,"reads":[],"escape":[],"hold":[],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r5","source_replica_id":null}]}],"ledgerAtGapEnd":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r5","source_replica_id":null}],"recovery":{"elected":true,"leaderNodeId":"peer-node-a","afterMs":2213},"afterGap":[{"label":"e5-after-gap-1","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"94688f96-dec6-4095-ba76-a90a5dbd1235"}],"admitted":1,"reads":[],"escape":[],"hold":[],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r5","source_replica_id":null}]}],"finalLedger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r5","source_replica_id":null}]}
+    ok 5 - the over-target hold never holds on the gap (its sealed fail-open)
+    ok 6 - no surplus REMOVE executes during the gap
+    not ok 7 - no add-like move is admitted during the gap
+      ---
+      at:
+        fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+        lineNumber: 444
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/rebalancer/spread-cure-escape-schedules.test.js:444:5)
+      source: |2
+            move.operation !== MoveType.REMOVE || move.skipped === true)),
+          'no surplus REMOVE executes during the gap');
+          t.ok(duringGap.every((cycle) => cycle.admitted === 0),
+        ----^
+            'no add-like move is admitted during the gap');
+          t.same(ledgerAtGapEnd, [],
+      ...
+    
+    not ok 8 - the gap ended with the drain unmoved: its end does not depend on the drain
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,9 @@
+        -Array []
+        +Array [
+        +  Object {
+        +    "type": "ADD",
+        +    "status": "pending",
+        +    "target_node_id": "planner-node",
+        +    "replica_id": "sql_write_operations-p1-r5",
+        +    "source_replica_id": null,
+        +  },
+        +]
+      at:
+        fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+        lineNumber: 446
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/rebalancer/spread-cure-escape-schedules.test.js:446:5)
+      source: >2
+          t.ok(duringGap.every((cycle) => cycle.admitted === 0),
+            'no add-like move is admitted during the gap');
+          t.same(ledgerAtGapEnd, [],
+        ----^
+            'the gap ended with the drain unmoved: its end does not depend on the drain');
+          t.equal(afterGap.length, 1, 'the first cycle after the gap ends the wait');
+      ...
+    
+    ok 9 - the first cycle after the gap ends the wait
+    ok 10 - and admits the spread cure
+    ok 11 - exactly one spread-restoring operation
+    1..11
+not ok 4 - E5 over-target [A,A,A,B]: the hold fails open and the guard behind it; across a bounded services-p1 gap the surplus drain's cure waits for the gap and no longer # time=4498.658ms
+  ---
+  at:
+    fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+    lineNumber: 421
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('E5 over-target [A,A,A,B]: the hold fails open and the guard behind it;
+    across a ' +
+  
+    ^
+      'bounded services-p1 gap the surplus drain\'s cure waits for the gap and no longer',
+    {timeout: CASE_TIMEOUT_MS}, async (t) => {
+  ...
+
+# Subtest: E6 the planner cannot reach the services-p1 leader while services-p1 is healthy: nothing is admitted while the route is down, and the cure is admitted within one cycle of the route returning
+    ok 1 - setup: the planner node hosts a services-p1 replica that follows
+    ok 2 - setup: the planner observes the partition's replicas
+    # OBSERVATION E6 {"escapePresent":true,"routeDown":[{"label":"e6-route-down-1","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"20005450-90b5-45da-916c-23cf326e8230"}],"admitted":1,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"sql_write_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":true}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]},{"label":"e6-route-down-2","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"20005450-90b5-45da-916c-23cf326e8230"}],"admitted":1,"reads":[],"escape":[],"hold":[],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]},{"label":"e6-route-down-3","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"20005450-90b5-45da-916c-23cf326e8230"}],"admitted":1,"reads":[],"escape":[],"hold":[],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]}],"ledgerWhileDown":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}],"registration":{"committed":true,"appliedIndex":5,"error":null},"leaderWhileDown":"peer-node-a","hopsWhileDown":6,"afterRoute":[{"label":"e6-route-back-1","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"20005450-90b5-45da-916c-23cf326e8230"}],"admitted":1,"reads":[],"escape":[],"hold":[],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]}],"finalLedger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]}
+    ok 3 - setup: services-p1 keeps its leader throughout
+    ok 4 - setup: services-p1 commits a SERVICES write through that leader while the route is down
+    not ok 5 - no cycle admits an add-like move while the planner cannot reach the leader
+      ---
+      at:
+        fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+        lineNumber: 490
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/rebalancer/spread-cure-escape-schedules.test.js:490:5)
+      source: >2
+          t.equal(registration.error, null,
+            'setup: services-p1 commits a SERVICES write through that leader while the route is down');
+          t.ok(routeDown.every((cycle) => cycle.admitted === 0),
+        ----^
+            'no cycle admits an add-like move while the planner cannot reach the leader');
+          t.same(ledgerWhileDown, [], 'no operation exists while the route is down');
+      ...
+    
+    not ok 6 - no operation exists while the route is down
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,9 @@
+        -Array []
+        +Array [
+        +  Object {
+        +    "type": "ADD",
+        +    "status": "pending",
+        +    "target_node_id": "planner-node",
+        +    "replica_id": "sql_write_operations-p1-r4",
+        +    "source_replica_id": null,
+        +  },
+        +]
+      at:
+        fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+        lineNumber: 492
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/rebalancer/spread-cure-escape-schedules.test.js:492:5)
+      source: >2
+          t.ok(routeDown.every((cycle) => cycle.admitted === 0),
+            'no cycle admits an add-like move while the planner cannot reach the leader');
+          t.same(ledgerWhileDown, [], 'no operation exists while the route is down');
+        ----^
+          t.equal(afterRoute.length, 1, 'the first cycle after the route returns ends the wait');
+          t.equal(afterRoute[0]?.admitted, 1, 'and admits the spread cure');
+      ...
+    
+    ok 7 - the first cycle after the route returns ends the wait
+    ok 8 - and admits the spread cure
+    1..8
+not ok 5 - E6 the planner cannot reach the services-p1 leader while services-p1 is healthy: nothing is admitted while the route is down, and the cure is admitted within one cycle of the route returning # time=2274.417ms
+  ---
+  at:
+    fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+    lineNumber: 453
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('E6 the planner cannot reach the services-p1 leader while services-p1 is
+    healthy: ' +
+  
+    ^
+      'nothing is admitted while the route is down, and the cure is admitted within one cycle ' +
+      'of the route returning', {timeout: CASE_TIMEOUT_MS}, async (t) => {
+  ...
+
+# Subtest: E4(c) the operation ledger concentrated [A,A,B] (the July-11 schedule): what each commit does for the ledger's own cure with the services-p1 leader reachable, then without a leader
+    ok 1 - setup: the planner node hosts a services-p1 replica that follows
+    ok 2 - setup: the planner observes the partition's replicas
+    ok 3 - setup: no services-p1 replica leads: {"leaderless":true,"afterMs":2054,"roles":[{"nodeId":"peer-node-a","core":"follower","service":"follower","leaderId":null},{"nodeId":"planner-node","core":"follower","service":"follower","leaderId":"services-p1-r1"},{"nodeId":"peer-node-b","core":"follower","service":"follower","leaderId":"services-p1-r1"}]}
+    ok 4 - setup: a services-p1 leader appears: {"elected":true,"leaderNodeId":"peer-node-a","afterMs":1956}
+    # OBSERVATION E4c {"escapePresent":true,"outage":{"leaderless":true,"afterMs":2054,"roles":[{"nodeId":"peer-node-a","core":"follower","service":"follower","leaderId":null},{"nodeId":"planner-node","core":"follower","service":"follower","leaderId":"services-p1-r1"},{"nodeId":"peer-node-b","core":"follower","service":"follower","leaderId":"services-p1-r1"}]},"withoutLeader":[{"label":"e4c-no-leader-1","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":true,"reason":"blocked","admissionReason":"replica_inventory_unusable","decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"operationId":null}],"admitted":0,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"replica_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":false}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[]},{"label":"e4c-no-leader-2","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":true,"reason":"blocked","admissionReason":"replica_inventory_unusable","decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"operationId":null}],"admitted":0,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"replica_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":false}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[]},{"label":"e4c-no-leader-3","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":true,"reason":"blocked","admissionReason":"replica_inventory_unusable","decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"operationId":null}],"admitted":0,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"replica_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":false}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[]}],"ledgerWithoutLeader":[],"recovery":{"elected":true,"leaderNodeId":"peer-node-a","afterMs":1956},"afterLeader":[{"label":"e4c-leader-1","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":true,"reason":"blocked","admissionReason":"replica_inventory_unusable","decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"operationId":null}],"admitted":0,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"replica_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":false}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[]},{"label":"e4c-leader-2","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":true,"reason":"blocked","admissionReason":"replica_inventory_unusable","decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"operationId":null}],"admitted":0,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"replica_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":false}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[]},{"label":"e4c-leader-3","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":true,"reason":"blocked","admissionReason":"replica_inventory_unusable","decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"operationId":null}],"admitted":0,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"replica_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":false}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[]},{"label":"e4c-leader-4","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":true,"reason":"blocked","admissionReason":"replica_inventory_unusable","decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"operationId":null}],"admitted":0,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"replica_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":false}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[]},{"label":"e4c-leader-5","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":true,"reason":"blocked","admissionReason":"replica_inventory_unusable","decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"operationId":null}],"admitted":0,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"replica_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":false}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[]}],"finalLedger":[]}
+    ok 5 - nothing is admitted for the ledger while services-p1 has no leader
+    ok 6 - no ledger operation is written meanwhile
+    1..6
+ok 6 - E4(c) the operation ledger concentrated [A,A,B] (the July-11 schedule): what each commit does for the ledger's own cure with the services-p1 leader reachable, then without a leader # time=4327.948ms
+
+# Subtest: E4(a) services-p1 loses two of its three replicas: no leader is ever elected, and the guard grants nothing for a services-p1 cure, with or without the escape
+    ok 1 - setup: the planner node hosts a services-p1 replica that follows
+    ok 2 - setup: the planner observes the partition's replicas
+    ok 3 - setup: the old leader stepped down: [{"nodeId":"peer-node-a","core":"follower","service":"follower","leaderId":null},{"nodeId":"planner-node","core":"follower","service":"follower","leaderId":"services-p1-r1"},{"nodeId":"peer-node-b","core":"follower","service":"follower","leaderId":"services-p1-r1"}]
+    # OBSERVATION E4a {"escapePresent":true,"roles":[{"nodeId":"peer-node-a","core":"pre-candidate","service":"follower","leaderId":null},{"nodeId":"planner-node","core":"pre-candidate","service":"follower","leaderId":null},{"nodeId":"peer-node-b","core":"follower","service":"follower","leaderId":"services-p1-r1"}],"leaderSamples":0,"sampleCount":98,"escape":[{"partitionId":"services-p1","moveType":"ADD","targetNodeId":"free-node-c","authoritativeAvailable":false,"engaged":false}],"attempt":{"admitted":false,"reason":"replica_inventory_unusable","decisionType":"blocked","skip":null,"message":"Topology guard blocked for ADD on free-node-c: replica_inventory_unusable"},"servicesLedger":[]}
+    ok 4 - no services-p1 replica leads while two of three are gone (no quorum, no conf change)
+    ok 5 - services-p1 is outside the escape's partition scope at every commit
+    ok 6 - where the escape exists it does not engage for services-p1
+    ok 7 - the services-p1 cure is not admitted
+    ok 8 - no operation is written for services-p1
+    1..8
+ok 7 - E4(a) services-p1 loses two of its three replicas: no leader is ever elected, and the guard grants nothing for a services-p1 cure, with or without the escape # time=7285.3ms
+
+# Subtest: probe only: print the observations
+    not ok 1 - probe dump: observation output only
+      ---
+      at:
+        fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+        lineNumber: 570
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous> (test/rebalancer/spread-cure-escape-schedules.test.js:570:5)
+      
+        Test.[maybeEmitEnd] (../../../node_modules/minipass/dist/esm/index.js:704:18)
+        (../../../node_modules/minipass/src/index.ts:1022:12)
+      
+        Test.end (../../../node_modules/minipass/dist/esm/index.js:457:33)
+        (../../../node_modules/minipass/src/index.ts:745:61)
+      
+        Parser.emitComplete
+        (../../../node_modules/tap-parser/dist/esm/index.js:399:18)
+        (../../../node_modules/tap-parser/src/index.ts:520:12)
+      
+        Parser.end (../../../node_modules/tap-parser/dist/esm/index.js:384:14)
+        (../../../node_modules/tap-parser/src/index.ts:498:10)
+      source: |
+        // it fails, so this case makes the observations visible.
+        test('probe only: print the observations', (t) => {
+          t.fail('probe dump: observation output only');
+        ----^
+        });
+      ...
+    
+    not ok 2 - test unfinished
+      ---
+      at:
+        fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+        lineNumber: 569
+        columnNumber: 1
+        isToplevel: true
+      stack: |
+        test/rebalancer/spread-cure-escape-schedules.test.js:569:1
+      test: "probe only: print the observations"
+      source: |
+        // PROBE ONLY (never committed): the runner prints a file's output only when
+        // it fails, so this case makes the observations visible.
+        test('probe only: print the observations', (t) => {
+        ^
+          t.fail('probe dump: observation output only');
+        });
+      ...
+    
+    1..2
+not ok 8 - probe only: print the observations # time=16.999ms
+  ---
+  at:
+    fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+    lineNumber: 569
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    // PROBE ONLY (never committed): the runner prints a file's output only when
+    // it fails, so this case makes the observations visible.
+    test('probe only: print the observations', (t) => {
+    ^
+      t.fail('probe dump: observation output only');
+    });
+  ...
+
+1..8
+# { total: 52, pass: 44, fail: 8 }
+# time=23211.64ms
+# test-files total=3 pass=1 fail=2 assertions=184
+placement-results={"file":"test/rebalancer/critical-spread-terminal-stall-repro.test.js","attempt":1,"ok":true,"assertions":19,"durationMs":1464,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/rebalance-coordinator-topology-guard.test.js","attempt":1,"ok":false,"assertions":105,"durationMs":1839,"retriedOnce":false,"firstFailureLine":"not ok 1 - createOperation should fail closed when the target node already hosts the partition"}
+placement-results={"file":"test/rebalancer/spread-cure-escape-schedules.test.js","attempt":1,"ok":false,"assertions":60,"durationMs":24559,"retriedOnce":false,"firstFailureLine":"not ok 5 - no cycle admits an add-like move while services-p1 has no leader"}

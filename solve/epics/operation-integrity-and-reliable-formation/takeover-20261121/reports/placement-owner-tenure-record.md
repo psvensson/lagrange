@@ -1084,3 +1084,263 @@ Group W, the sealed property lives after creation (the old path only produced th
 | spread-cure-at-target-minting-gap | spread-cure-at-target-minting-gap (doneWhen) | the cure ADD as an owner candidate; check whether the cure's authorization is carried by the admission statement (gap to check before transfer) |
 | spread-cure-transition-authorization-row, -production-path | critical-spread-transition-authority-carry (receipt "authorization-rides-the-operation-row") | the authorization must ride the ADMISSION row: `operationOf` builds the first step from the statement only; if the statement cannot carry the authorization this is a product gap on the owner path, not a fixture question: report before transfer |
 | rebalance-coordinator-operation-ownership, replace-real-group-d2, replace-replica-workflow | failed-create-cleanup-settlement-separation (receipt) | rows from the admission applier (bound harness), same assertions |
+
+### 33.5 Attribution of the 19 files red before 3b (task item 6)
+Run at this line's base 974320ad3 (`lab/por-s3b-attr-974320ad-adam-laptop`, 19 files): all 19 RED with the
+IDENTICAL first failure line as at 536d024ac (`lab/por-s3b-before-536d024a`), so none is caused by this branch's
+stage 1-3a work: membership-publication-first-epoch-members (11), dt6-priority-surplus-remove-authoritative-placement-
+fence (2), admission-real-size-estimates (1, visibility deferred), coordinator-created-operation-progress (5),
+duplicate-operation-prevention.property (1), formation-runtime-service-create-lane-budget-starvation (20),
+message-group-membership-operation-lane (5), message-group-operation-routing.integration (1),
+placement-admission-cross-coordinator-target-census (1, W-T), placement-owner-authority-provisioner (1),
+quorum-conditioned-remove-safety (9), rebalance-coordinator-topology-guard (1), rebalancer-entity-interaction-contract
+(1), rebalancer-own-create-memory-duplicate-replace (2), replace-in-flight-blocks-planning (45),
+replace-named-handoff-attempt (1), replica-operation-membership-epoch-binding (8),
+storage-reservation-lost-outcome-idempotency (1), strict-operation-outcomes (7). At 23344cddc: see 33.9 (run
+pending at the time of writing; `placement-owner-authority-provisioner` does not exist there, so it is run on 18).
+At the merge c7991efa8 (`lab/por-s3b-merge-c7991efa-tv-dator`): the fixture line's 20 files: 17 GREEN; 3 now RED
+on R2 ("Placement waits for committed formation": admission-real-size-estimates, duplicate-operation-prevention.
+property, storage-reservation-lost-outcome-idempotency): the merge cleared their old fixture failures, so their
+first failure is now 3b's. With them the R2-red set is 52 files (49 + 3). Classified: admission-real-size-
+estimates (S, its own quest's doneWhen), storage-reservation-lost-outcome-idempotency (S, its own quest's doneWhen
+and receipt), duplicate-operation-prevention.property (O, manifest only). F7 files at the merge:
+cl-036-local-leader-row-seed, partition-service-learner-promotion, split-rebalance-trigger GREEN.
+
+### 33.6 The bound coordinator harness (`test/rebalancer/placement-bound-coordinator-fixture.js`)
+What it wires (as `ControlPlaneSetup.create` does): `bindReplicaPlacementOwnerFactory(ControlPlaneSetup.
+createReplicaPlacementOwnerFactory({nodeId, controlPlaneReadinessService, rebalanceCoordinator, systemTableCache,
+storageAccountingService}))`; this node's ledger replica = a real `replica_operations-p1` PartitionService leader
+(`startLeader`, production `REPLICA_OPERATIONS_SCHEMA`, file-backed temp db), registered with
+`registerLedgerPartitionService`; every proposal commits through `applyCommitted` (the partition's committed apply),
+so `requestPlacementAdmission` -> `applyPlacementCommand` -> `decidePlacementAdmission` (PARTITION_BUSY,
+LEDGER_TRANSITION_UNRESOLVED, capacity, claim) answers every creation; the coordinator's production-schema SQL store
+opens the SAME database file (`openLedgerDatabase`), so admitted rows and later workflow writes are one table, and
+the store mirrors rows the ledger committed into the fixture cache before each statement (as CDC would); the node
+authority (the mock readiness port) answers a latched committed formation (FORMED, latch 1). Variants:
+`createPlacementBoundTestCoordinator` (createTestCoordinator) and `createPlacementBoundTimeoutTestCoordinator`.
+`committedVoterWorld` gives a REMOVE the facts production scopes it by (the replica's SERVICES row from
+`PartitionServiceRowOwner.buildServiceRow`, its node's boot incarnation). The inert fresh-create arm of
+`createTestCoordinator` now also covers the admission path (a fresh create rests at PENDING, as it did on the record
+path). Not attached: the placement owner itself (the ledger replica is not handed the coordinator, so its attach
+precondition holds; no autonomous pass). Substituted: consensus (controllable port, one voter); the coordinator's
+own later writes are executed on the shared table by its store, not proposed (as in every coordinator fixture).
+No unbound creation path, flag or optional factory was added to src.
+Item 6 completed at 23344cddc (`lab/por-s3b-attr2-23344cdd-tv-dator`, 18 files, the provisioner witness does not
+exist there): 17 RED with the identical first failure as at 974320ad3; `replace-named-handoff-attempt` GREEN there
+(fixed on that line by df7be8270, which the merge brought here; here it now stops at R2 instead). Attribution: none
+of the 19 is caused by this branch; all 19 are base debt (18 present at 23344cddc too, the provisioner witness is
+this line's own and red since it was written).
+
+### 33.7 F6 repair and the other reads of the partition's `rebalancer` field (coordinator item 2 (b), (c); task item 5)
+Owner of the sink's leadership: the PartitionService sink driver (`partition-service-leader-activation-methods.js`;
+`runtime-service-rebalancer-setup.js:497-498` already names the partition service "the single owner of that
+decision"). One implementation: `resolveRebalancerLeadership` retains on `rebalancerLeadershipSinkHeld`, the
+leadership the partition last drove to its sink (written by `driveRebalancerLeadershipSink`; reset to false when a
+sink is attached/detached and on quiesce; initialised false in the constructor). Acquisition (background ready) and
+the drain/raft-loss demotions are unchanged. Witness restated (subject: the sink), assertions' values and messages
+unchanged; the one premise `t.ok(ps.rebalancer, 'rebalancer created')` restated as `t.equal(ps.rebalancerLeadership
+Sink, sink, 'leadership sink attached')` (the per-partition rebalancer no longer exists); new sixth case: both live
+sinks attached through `attachRuntimeServiceRebalancerOwner` / `attachServiceInstallationReconcilerOwner` on real
+`service_definitions-p1` / `service_installations-p1` PartitionServices; two non-draining dips through the readiness
+fan-out (`handleMetadataPublicationReadinessTransition`): zero demotions of either owner; a drain then demotes each
+exactly once (the counter is in the path).
+(c) The other reads, each re-examined (src at the F6 commit; "never taken" = no writer of the field remains: its
+only writers were `initializeRebalancer` (deleted at 3b) and the `= null` resets):
+| Site | What the branch did | Why it is unreachable / null changes nothing |
+|---|---|---|
+| core-base constructor `this.rebalancer = null` | declares the field | no reader left in the five files except `triggerRebalanceCheck` (kept, below), which reads it truthily: `undefined` behaves as `null` |
+| core-base `systemTableCache` setter `if (this.rebalancer) ...systemTableCache =` | propagated the cache | field never set: branch never taken |
+| core-base `cdcIntegrationService` setter | propagated CDC | same |
+| core-base `handleMetadataPublicationReadinessTransition` `maybeInitializeRebalancer({readinessTransitionOnly: true})` | argument for the deleted edge gate | `maybeInitializeRebalancer()` takes no argument since 3b: dead argument removed |
+| split-accessor `submitPartitionSizeMutation` `this.rebalancer?.controlPlaneSystemTableGateway \|\| this.controlPlaneSystemTableGateway` | preferred the rebalancer's gateway | optional chain on a never-set field always yields the partition's own gateway: now read directly |
+| split-accessor `setSystemTableCache` / `setCdcIntegrationService` / `setTablePolicyService` `if (this.rebalancer) ...` | propagated each dependency | never taken |
+| split-accessor `rebindCoordinator` `if (this.rebalancer) {assertCritical(setRebalanceCoordinator)...}` | rebound the rebalancer's coordinator | never taken; `assertCritical` import now unused there and removed |
+| lifecycle `quiesceRebalancing` `if (this.rebalancer) {setLeader(false); shutdown(); = null}` | ended the rebalancer | never taken |
+| leader-activation `updateRebalancerLeadership` `if (!this.rebalancer) {...; return}` + `this.rebalancer.setLeader(...)` | drove the rebalancer | the guard is always true: the method is now its former early branch (`maybeInitializeRebalancer(); driveRebalancerLeadershipSink();`), byte-identical behaviour |
+| leader-activation `resolveRebalancerLeadership` `const rebalancer = this.rebalancer ...` | the retention state | NOT dead (F6): replaced by the driver's own record (above), not deleted |
+NOT changed (finding, outside the five files' authority): `partition-service-metadata-delivery-methods.js`
+`triggerRebalanceCheck` reads the field and is now a no-op, but its caller
+`bootstrap-node-ready-rebalance-owner.js:92` (`triggerRebalancingOnAllPartitions`, every leader partition on node
+ready) is outside this scope: the method and the whole partition arm of the node-ready trigger are dead and need the
+caller's removal (owner: bootstrap). Also dead, outside scope: `entrypoint-runtime-admin-composition.js:337-341`
+(split-completed `recordStateChange` on child partitions' `rebalancer`), `PARTITION_SERVICE_SHARED.UnifiedRebalancer`
+(`partition-service-shared.js`), the `REBALANCER_*_REQUIRED` messages and `REBALANCER_DEPENDENCIES_APPLIED`
+(`partition-service-constants.js`). Branch overlap check (`git diff --stat 23344cddc origin/<branch> -- <five
+files>`): empty for write-kernel-tenure-fence (eb281f314), owner-fact-read (d358ab712), placement-outcome-format
+(dc7f80b7f), retained-ledger-observation-repair (f615921f5), raft-owner-authority (692336b45): no merge note needed.
+Tests that observed the field on a real PartitionService and would read `undefined` now: the construction-orders
+`schedulersOf` and `placement-owner-authority-negatives` (`target.rebalancer, null`): both restated to "absent or
+null is no per-partition scheduler" (`?? null` / `=== undefined`), meaning unchanged.
+
+### 33.8 Item 4: the delete group (each case checked against the preserved requirements first: none is about
+ownerless recovery, five-node operation, single-owner scheduling or duplicated placement work; the single-owner
+property is held by the construction-orders and negatives witnesses, which stay)
+- `test/partition/partition-rebalancer-readiness-edge-gate.test.js`: whole file deleted. Pins the
+  `readinessTransitionOnly` edge gate of the existing-rebalancer branch (dependency re-wiring only on a readiness
+  edge); the branch is deleted and `maybeInitializeRebalancer` re-wires nothing at all (verifier attack 1: property
+  kept trivially; the quest entry `rolling-restart-core-stability/log.ndjson:1150` is an attempt, not a seal).
+- `partition-service-role-metadata-publication`: case 8 (defers rebalancer initialization until traffic ready) and
+  case 9 (priority control-plane rebalancer starts once metadata publication opens): pin the retired construction;
+  the ledger's placement owner attaches independent of readiness (C2) and is covered by construction orders.
+  Cases 16, 17 (initializeRebalancer / maybeInitializeRebalancer pass sqlQueryEngine to the rebalancer's gateway): the
+  rebalancer's gateway no longer exists. Case 15 kept, restated: its stub rebalancer and the one assertion
+  "Should be set on rebalancer" deleted (pins the deleted propagation); partition and coordinator assertions kept.
+- `partition-rebalancer-dependency-wiring-characterization` (49 cases -> 23): deleted 26: initialization gate 1-8
+  (rebalancer not created when a dependency is missing) and 9 (created when all present); 10 (rebind routes through
+  rebalancer.setRebalanceCoordinator); 18 (active rebalancer leader RETAINED across a dip: the property now lives on
+  the sink and is witnessed by the restated hysteresis file, case 1); 19, 20 (rebalancer setLeader true/false: the
+  sink cases 21-22 hold the same gate); 25, 26 (maybeInitializeRebalancer updates/routes into an existing rebalancer);
+  30, 31 (initializeRebalancer throws on a missing dependency); 35-39 (applyRebalancerDependencies, deleted at 3b);
+  40 (maybeInitializeRebalancer uses the bundle for an existing rebalancer); 41 (initializeRebalancer accepts a
+  pre-built bundle); 43, 44 (rebind updates/routes the rebalancer's coordinator). Kept 23: 11-17 (coordinator
+  rebinding and UnifiedRebalancer dependency sync: the class lives on for message groups and runtime services),
+  21-24 (leadership sink), 27-29 (UnifiedRebalancer constructor gates), 32-34 (dependency bundle and coordinator
+  sync; case 34's two `ps.rebalancer === null` gate assertions deleted), 42, 45-49 (rebind path; the premise
+  `t.ok(ps.rebalancer, 'rebalancer created')` deleted in 42, 45, 46, 48, 49).
+
+### 33.9 Executed (tv-dator, check base 0dbed1718) and the 3b red count after each commit
+| Commit | What | Lab | Result |
+|---|---|---|---|
+| c7991efa8 | merge of the fixture line | `por-s3b-merge-c7991efa-tv-dator` (fixture line's 20 + F7 3) | 17/20 GREEN, 3 now on R2 (33.5); F7 files GREEN. R2-red: 52 |
+| 31fe55acf | F6 repair + restated hysteresis witness + production-sink case | `por-s3b-f6b1-04c35e7c-tv-dator` (at 04c35e7cd) | hysteresis GREEN (26 assertions; red at 376592b8b); construction orders, negatives, wakes, runtime-service-rebalancer-owner, service-installation-reconciler-setup, node-ready-rebalance-trigger, learner-promotion, cl-036, split-rebalance-trigger GREEN |
+| 04c35e7cd | harness + batch 1 | same run | add-workflow, remove-workflow, operation-record-completeness GREEN; timeout-triggers-failure RED at cases 1, 2, 9, 10, 12 and dt6-rebalancer-timeout-failure-virtual-clock RED at case 1 (CREATING, SYNCING, STOPPING, REMOVE, completed, failed cases GREEN): an admitted create at PENDING/SENDING awaits its bootstrap authority and its deadline is the operation budget (5 min from creation), not the step timeout (`isPlacementBootstrapAwaitingAuthority`, `operation-workflow-placement-bootstrap-phase.js`; `reconcileTimeoutOperation`): restated in the next batch. R2-red: 52 - 3 = 49 |
+
+### 33.10 Item 3 of the coordinator amendment (placement owner findings)
+- F1: witness added to construction orders ("re-entry during the attach"): join order; after initialize the ledger's
+  `raft.readStatus` delivers one `updateRebalancerLeadership()` while the factory is on the stack (anti-vacuity
+  asserted: the hook fired at depth > 0); expected RED before the fix (second factory call, typed refusal thrown into
+  the event). Fix: `ensureReplicaPlacementOwnerAttached` sets `replicaPlacementOwnerAttachInProgress` before calling
+  the coordinator and clears it in `finally`; re-entry is a precondition miss (no-op).
+- F2 (who handles the typed refusal): `REPLICA_PLACEMENT_OWNER_COLLABORATOR_INVALID` can arise in production only from
+  a wiring error: non-ledger caller (excluded: the attach checks the ledger id first), a non-function factory
+  (`ControlPlaneSetup.create` passes one), a missing timer pair (always passed), or an occupied ledger sink (no other
+  sink binds the ledger; the one reachable case was the F1 re-entry, fixed). Where it surfaces: inside
+  `ControlPlaneSetup.create` (the binding: startup fails, acceptable for a wiring error), `initialize`
+  (`partition-service-raft-init-base.js:438`: the ledger replica fails to open), the binder sweep (aborts mid-loop),
+  a leadership edge or the readiness fan-out (thrown into the event). After F1 no witness shows a throw into a
+  leadership event; no further change (owner rule).
+- F4: the teardown witness now also runs the binder sweep (`StartupRuntimeSurfaceOwner.bindControlPlaneServices`)
+  after the quiesce and asserts no attachment, no ledger attachment field, the old owner still ended.
+- F9: witness added to wakes (TWO_DEFICITS; SECOND inadmissible throughout, TARGET unblocked only for the resync;
+  the attempt-record delete faulted for that pass): expected RED (`placementResyncAdmissions` 0). Fix: the count is
+  taken once per pass when it ends (`resyncAdmissionsOf(pass, triggers)` in the pass-observation module: the
+  admissions a resync-only pass recorded, including one recorded on the local-failure path), replacing the
+  per-candidate increment; `planAndAdmit`/`runPassSteps` lose their now unused `triggers` parameter.
+- F10: characterization witness added to wakes (ruling pending, no source change): a submitter that throws
+  deterministically for TARGET; asserts the same retained entryId is re-submitted on every wake, every pass that
+  reaches TARGET aborts there, SECOND is not admitted (head of line for the tenure). Its lab result decides whether
+  the verifier's inference holds (33.11).
+- Record correction (26.1): a third `new UnifiedRebalancer` exists, `runtime-service-rebalancer-setup.js:124` (the
+  runtime-service owner's default `createRebalancer`), out of scope. Re-check of "the partition path can no longer
+  reach the class": `grep -rn 'new UnifiedRebalancer' src` gives `message-group-service-rebalancer-runtime-methods.js`
+  (message groups) and `runtime-service-rebalancer-setup.js` (runtime services) only; no file under `src/partition`
+  constructs or imports a constructor call of it (the remaining partition reference is the
+  `PARTITION_SERVICE_SHARED.UnifiedRebalancer` re-export, dead, listed in 33.7).
+
+### 33.11 The "decide per test" group (task item 3) and the per-file list
+Fact the decisions rest on: a creation-time storage reservation is inserted only on the record path
+(`createOperationRecordInternal`, `rebalance-coordinator-operation-creation.js` ~:794-799: message groups and every
+non-managed type); the admission path (`...-creation-support.js`) and the applier insert none (capacity for partition
+copies is the applier's K_SRC/K_TGT occupancy). Creation-time dedupe (`queryExistingInFlightOperation`, the intent
+single-flight) still runs before admission for managed types, and the applier adds PARTITION_BUSY.
+| File | Class | Property | Where it lives now | Decision |
+|---|---|---|---|---|
+| coordinator-dedup-gap | O | a move already in flight is never created twice | coordinator dedupe before admission (unchanged) + PARTITION_BUSY | property exists: restate on the bound harness (remaining; its ADDs name a physical replica, refused BYTES in production: inputs to restate) |
+| reservation-file-backed-restart | O | a lost strict-authority reservation answer leaves durable rows fail closed | record path only (message groups) | property exists for non-managed types: restate onto a message-group create, or delete for partitions: RULING (not deleted in doubt) |
+| formation-cure-reservation-progress-obligation | O | one durable reservation identity independent of INSERT spelling | record path only | as above: RULING |
+| formation-cure-reservation-progress-successor | O | the owned SQL boundary observes one reservation INSERT | record path only | as above: RULING |
+| coordinator-reservation-lifecycle | S | (sealed, 33.4) | record path only | proof transfer / supersession: RULING |
+| reservation-fail-closed-dispatch-gate | S | (sealed, 33.4) | creation-time insert: record path only; the dispatch gate's `ensureReservationForOperation` still repairs any row | proof transfer / supersession: RULING |
+
+Per-file state of the 52 R2-red files (S = sealed, not touched; see 33.4):
+- Migrated (O): timeout-triggers-failure.property, dt6-rebalancer-timeout-failure-virtual-clock (restated deadline,
+  next commit), add-workflow-step-progression.property, remove-workflow-step-progression.property,
+  operation-record-completeness.property (GREEN at 04c35e7cd), duplicate-operation-prevention.property (next commit).
+- Remaining O, with the restatement each needs: REPLACE tests that overwrite the admitted operation's target replica
+  by hand and build their world around a fixed target id (the admission mints `placementReplicaIdOf(operationId)`):
+  replace-owner-recovery-equivalence, replace-owner-wake, replace-source-removal-owner, replace-named-handoff-attempt,
+  replace-in-flight-blocks-planning, recent-completed-replace-target-visibility, dt-ledger-completion-continuity-
+  discriminator (ledger REPLACE); REMOVE tests whose worlds lack the scoped voter facts (registered SERVICES row with
+  created_at, node boot incarnation): replica-removal-deferral-dispatch-reconcile, coordinator-created-operation-
+  progress, quorum-conditioned-remove-safety (11 coordinators), partition-policy-remove-retry; own coordinator
+  builders: readiness-snapshot-persistence, operation-log-persistence.property (ADD with a physical replica id,
+  REMOVE unscoped); runtime-service-target-claim (runtime admission; its explicit-replica case asserts the record
+  path's refusal shape); critical-spread-terminal-stall-repro and replace-real-group-scheduling (harnessed planner and
+  real-group worlds: need the bound harness threaded through their builders); coordinator-dedup-gap and the three
+  reservation files above.
+- S (26, incl. admission-real-size-estimates and storage-reservation-lost-outcome-idempotency): untouched; transfer
+  plans in 33.4.
+
+### 33.12 Executed after batches 2-4 (tv-dator, check base 0dbed1718)
+- Red-first at 6aebc7389 (before the fixes; `lab/por-s3b-witnesses-6aebc738-tv-dator`): F9 RED for the predicted
+  reason (`resyncAdmissions` 0; passes LEADERSHIP_START, RESYNC (ABORTED, admitted `pl-sql_transactions-p1-3-0`),
+  RESYNC+LEDGER_COMMIT: the retained-trigger pass is not resync-only, as the verifier read). F10 characterization
+  GREEN: the verifier's inference holds (one retained entryId re-submitted on every wake, every pass reaching TARGET
+  aborts there, SECOND never admitted: head of line for the tenure; ruling needed). F1: the witness failed on a fixture
+  error (the opened port is frozen: `Cannot assign to read only property 'readStatus'`), fixed in the next commit
+  (delegating port). F4 extension RED: with the binder holding `node.coordinator` after the quiesce it attaches an
+  owner (actual 1); the cleanup's delegate had cleared only its own variable, so that schedule models a coordinator
+  re-bound after the quiesce (the startup's assignment after its `await ControlPlaneSetup.create`): split into its
+  own case (finding, schedule not traced), the teardown case now sweeps with the cleared coordinator.
+- Final selection at 4dbd6091c (`lab/por-s3b-final-4dbd6091-tv-dator`, 168 files = the 3b selection minus the
+  deleted edge-gate file plus the hysteresis witness and the F7/sink files): 107 GREEN, 61 RED.
+  - GREEN that were red at 3b: timeout-triggers-failure.property, dt6-rebalancer-timeout-failure-virtual-clock,
+    add-workflow-step-progression.property, remove-workflow-step-progression.property,
+    operation-record-completeness.property, duplicate-operation-prevention.property (also red before 3b),
+    message-group-operation-routing.integration (merge), partition-rebalancer-dependency-wiring-characterization
+    (23 cases), partition-service-role-metadata-publication, partition-rebalancer-leadership-readiness-hysteresis,
+    placement-owner-authority-wakes (F9 fixed, F10 characterization).
+  - RED caused by stage 3, by class: 46 files whose first failure is R2 (the remaining O list and the S files of
+    33.4/33.11); `partition-service-learner-promotion` case 3 (introduced by the dead-read deletion: it pinned the
+    deleted rebind arm; restated in the next commit); `placement-owner-construction-orders` (witness fixture, next
+    commit).
+  - RED in the known list (unchanged first failures): drain 4 (`dt-placement-owner-formation-drain`),
+    growth-promote 40, barrier 2, write-kernel 1, clearing-triggers F11, core 18, provisioner 1; base debt (33.5):
+    membership-publication-first-epoch-members 11, dt6-priority-surplus-remove-authoritative-placement-fence 2,
+    message-group-membership-operation-lane 5, placement-admission-cross-coordinator-target-census 1,
+    rebalance-coordinator-topology-guard 1, strict-operation-outcomes 7.
+  - R2-red count after each commit: 49 (3b) -> 52 (merge c7991efa8) -> 49 (04c35e7cd: three property files) -> 46
+    (4dbd6091c: the two timeout files and the dedupe property); plus the one file the dead-read deletion turned red
+    (restated next).
+
+### 33.13 Commits of this writer (all through tools/heavy.sh, pushed) and every changed expectation
+`c7991efa8` merge of the fixture producers; `31fe55acf` F6 (sink hysteresis in its driver + witness); `04c35e7cd`
+bound harness + batch 1; `6aebc7389` dead reads deleted, delete group, witnesses F1/F4/F9/F10 (red first);
+`85000364d` F1 and F9 fixes; `4dbd6091c` timeout restatement + dedupe property; `5986b79b7` F1 witness port by
+delegation, F4 schedules split, learner-promotion restatement.
+Changed expectations (old -> new, reason):
+1. hysteresis witness: subject `ps.rebalancer.isLeader` -> the driven sink's `isLeader` (values and messages
+   unchanged); premise `t.ok(ps.rebalancer, 'rebalancer created')` -> `t.equal(ps.rebalancerLeadershipSink, sink,
+   'leadership sink attached')`: the per-partition rebalancer is retired; the property is the sink's.
+2. timeout-triggers-failure cases PENDING, SENDING, statistics, multiple, event and
+   dt6-rebalancer-timeout-failure-virtual-clock cases 1 and 3: the deadline of an admitted create at PENDING/SENDING is
+   the operation budget from creation (`REBALANCE_OPERATION_BUDGET_MS`, 300 s; `isPlacementBootstrapAwaitingAuthority`)
+   instead of the step timeout: backdate of `updated_at` by 100 ms -> backdate of `created_at` by budget + 100 ms;
+   virtual advance 100 ms -> budget + 100 ms. Assertions (FAILED, message names Timeout and the step) unchanged.
+3. Inputs restated, no assertion changed: a REMOVE names a replica its world holds (`committedVoterWorld`: remove
+   property, record-completeness REMOVE cases and its "statistics" REMOVE now `replicaId 'test-replica-2'`, timeout
+   STOPPING cases' services rows from `buildServiceRow`); a partition ADD names no physical replica (record-completeness
+   generator: `replicaId: fc.option(...)` -> `fc.uuid()` used only by REMOVE).
+4. Assertions deleted with the mechanism they pinned: role-metadata case 15 "Should be set on rebalancer";
+   learner-promotion "Rebalancer should receive shared coordinator"; characterization case 34's two
+   `ps.rebalancer === null` gates and the premise `rebalancer created` in cases 42, 45, 46, 48, 49; the 26
+   characterization cases and role-metadata 8, 9, 16, 17 and the edge-gate file (33.8).
+5. Owner witnesses read an absent field as "no per-partition scheduler": construction-orders `schedulersOf`,
+   negatives `target.rebalancer ?? null`.
+Not executed red-first: F1 with the corrected witness (the 6aebc7389 run stopped on the frozen-port fixture error;
+the corrected witness exists only after the fix); its red is INFERRED from the factory/sink code (a second factory
+call refused typed), its green is executed (33.14).
+
+### 33.14 Executed at 5986b79b7 (`lab/por-s3b-b5-5986b79b-a1-adam-laptop`; tv-dator and adams-gamla not ready)
+partition-service-learner-promotion GREEN (46); placement-owner-authority-wakes GREEN (12: F9 counted, F10
+characterization holds); construction orders: cases 1-11 GREEN (teardown with the binder sweep on the cleared
+coordinator: F4 excluded for the production schedule; F1 re-entry: one factory call, no throw, one owner), then the
+split-out F4 case (sweep holding the node's coordinator after the quiesce) did not finish: the file was SIGKILLed
+(40 s). That case is removed in the next commit; its finding stands on the 6aebc7389 execution (the sweep attached an
+owner after the quiesce, actual 1).
+FINDING F4 (owner: bootstrap, not changed here): `StartupRuntimeSurfaceOwner.bindControlPlaneServices` has no
+shutting-down check, and the startup assigns the coordinator after `await ControlPlaneSetup.create`
+(`bootstrap-service-control-plane-runtime-methods.js:161`, `node-joining-publication-activation.js:462`): if a cleanup
+quiesces the node during that await and the assignment and sweep follow, the ledger gets a placement owner again
+after the quiesce (executed at fixture level; whether `settleInfrastructureAcquisitions` excludes this order in
+production was not traced).

@@ -1,0 +1,32 @@
+Source oversized-file ratchet: 1/21 over 800 lines.
+Test oversized-file ratchet: 0/21 over 1500 lines.
+
+Largest oversized files (25 max):
+2409 src/raft/raft-rs-runtime-owner.js (threshold 800)
+Per-file size comparison base: 4e18b4c1d7030baeb8d754765da9203048abc1bd
+Scanned 8 JavaScript files
+Found 0 hot-path diagnostics violations
+Matched 28 inherited hot-path diagnostics baseline violations
+Scanned 3 JavaScript files
+Found 0 new literal-guideline violations
+Matched 30 inherited literal-guideline baseline violations
+Scanned 3 JavaScript files
+Found 0 decision-boundary guideline violations
+Matched 0 inherited decision-boundary baseline violations
+Scanned 0 JavaScript files
+Found 0 ambient-intrinsic call violations
+Matched 0 inherited ambient-intrinsic baseline violations
+Scanned 3 JavaScript files
+Found 0 silent catch violations
+Matched 0 inherited silent-catch baseline violations
+Promoted to ESLint (audited there, not here): state_read_defaults, value_or_promise_then_checks
+Scanned 3 JavaScript files
+Found 0 navigability violations
+Matched 19 inherited navigability baseline violations
+Scoped complexity ratchet: 1 violation(s) in 3 target(s) (threshold: 12).
+src/raft/raft-rs-runtime-owner.js:2160:1 Function 'createRuntimeDispatcher' has a complexity of 17. Maximum allowed is 12.
+Saved complexity report to test-output/analysis/complexity-scoped.json.
+pre-commit: import graph stale - refreshing inventories (~2 min; skip with LAGRANGE_SKIP_INVENTORY_REGEN=1)
+pre-commit: refreshing generated test metadata
+[work/raft-owner-authority-20261121 e01b7ae8a] fix(raft): the submitting-leadership refusal is one named answer, never a transfer deferral
+ 8 files changed, 90 insertions(+), 52 deletions(-)

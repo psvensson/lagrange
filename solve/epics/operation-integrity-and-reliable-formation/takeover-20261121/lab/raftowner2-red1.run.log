@@ -1,0 +1,451 @@
+lab test: adam-laptop: ordinary (6 files) cores=8 mem=15.5GiB speed x2.00
+[adam-laptop] placement-shell=3879159
+[adam-laptop] placement-head=d5c02e1e2076fcf0b620885ac94befc0e4f1d402
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3879616
+[adam-laptop] # test-files planned=6
+[adam-laptop] classified lane ordinary: 6 file(s), jobs=4
+[adam-laptop] thermal: ok cpu 74C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] not ok test/raft/raft-rs-backend/forwarded-proposal-ingress-refusal.test.js (1 assertions, 2018ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: ingress: a peer's MsgPropose is refused by name, recorded against its sender, and never appended
+[adam-laptop] not ok 1 - ingress: a peer's MsgPropose is refused by name, recorded against its sender, and never appended
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 169.518736
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/d5c02e1e2076-mwr27fnn-2545116/test/raft/raft-rs-backend/forwarded-proposal-ingress-refusal.test.js:35:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     a forwarded proposal is refused at the ingress, counted, never appended: measured {"answer":{"outcome":"CORE_OK","reason":"inbound-enqueued"},"record":null,"role":"leader","applied":[{"replicaId":"fpi-a","command":"forwarded-by-a-defective-or-older-peer"},{"replicaId":"fpi-b","command":"forwarded-by-a-defective-or-older-peer"},{"replicaId":"fpi-c","command":"forwarded-by-a-defective-or-older-peer"}]}
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]       {
+[adam-laptop]     +   applied: 3,
+[adam-laptop]     +   outcome: 'CORE_OK',
+[adam-laptop]     +   reason: 'inbound-enqueued',
+[adam-laptop]     +   recorded: null
+[adam-laptop]     -   applied: 0,
+[adam-laptop]     -   outcome: 'CORE_REFUSED',
+[adam-laptop]     -   reason: undefined,
+[adam-laptop]     -   recorded: {
+[adam-laptop]     -     reason: undefined,
+[adam-laptop]     -     refusalCount: 1
+[adam-laptop]     -   }
+[adam-laptop]       }
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected:
+[adam-laptop]     outcome: 'CORE_REFUSED'
+[adam-laptop]     recorded:
+[adam-laptop]       refusalCount: 1
+[adam-laptop]     applied: 0
+[adam-laptop]   actual:
+[adam-laptop]     outcome: 'CORE_OK'
+[adam-laptop]     reason: 'inbound-enqueued'
+[adam-laptop]     recorded: ~
+[adam-laptop]     applied: 3
+[adam-laptop]   operator: 'deepStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/d5c02e1e2076-mwr27fnn-2545116/test/raft/raft-rs-backend/forwarded-proposal-ingress-refusal.test.js:60:12)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adam-laptop]   ...
+[adam-laptop] 1..1
+[adam-laptop] # tests 1
+[adam-laptop] # suites 0
+[adam-laptop] # pass 0
+[adam-laptop] # fail 1
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 192.596748
+[adam-laptop] # time=2018ms
+[adam-laptop] not ok test/raft/raft-rs-backend/proposal-submitting-leadership.test.js (3 assertions, 2300ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: C-1: a proposal submitted under term T whose replica leads T+2 at the propose step is refused by name, and the deferral path re-proposes nothing
+[adam-laptop] not ok 1 - C-1: a proposal submitted under term T whose replica leads T+2 at the propose step is refused by name, and the deferral path re-proposes nothing
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 191.707686
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/d5c02e1e2076-mwr27fnn-2545116/test/raft/raft-rs-backend/proposal-submitting-leadership.test.js:153:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     the submitting leadership ended: named refusal, nothing proposed: measured {"term":1,"first":{"outcome":"CORE_OK","reason":"drained"},"reproposed":0,"after":{"role":"leader","term":3},"nativeProposes":1}
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]       {
+[adam-laptop]         answer: {
+[adam-laptop]     +     outcome: 'CORE_OK',
+[adam-laptop]     +     reason: 'drained',
+[adam-laptop]     +     recoveryRequired: undefined,
+[adam-laptop]     +     retryable: undefined
+[adam-laptop]     -     outcome: 'CORE_REFUSED',
+[adam-laptop]     -     reason: undefined,
+[adam-laptop]     -     recoveryRequired: false,
+[adam-laptop]     -     retryable: false
+[adam-laptop]         },
+[adam-laptop]     +   nativeProposes: 1,
+[adam-laptop]     -   nativeProposes: 0,
+[adam-laptop]         reproposed: 0
+[adam-laptop]       }
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected:
+[adam-laptop]     answer:
+[adam-laptop]       outcome: 'CORE_REFUSED'
+[adam-laptop]       retryable: false
+[adam-laptop]       recoveryRequired: false
+[adam-laptop]     reproposed: 0
+[adam-laptop]     nativeProposes: 0
+[adam-laptop]   actual:
+[adam-laptop]     answer:
+[adam-laptop]       outcome: 'CORE_OK'
+[adam-laptop]       reason: 'drained'
+[adam-laptop]     reproposed: 0
+[adam-laptop]     nativeProposes: 1
+[adam-laptop]   operator: 'deepStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/d5c02e1e2076-mwr27fnn-2545116/test/raft/raft-rs-backend/proposal-submitting-leadership.test.js:172:12)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: C-2: a configuration change submitted under term T whose replica leads T+2 (its entry applied) at the step is refused by name, never proposed
+[adam-laptop] not ok 2 - C-2: a configuration change submitted under term T whose replica leads T+2 (its entry applied) at the step is refused by name, never proposed
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 140.414506
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/d5c02e1e2076-mwr27fnn-2545116/test/raft/raft-rs-backend/proposal-submitting-leadership.test.js:181:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     a configuration change enters only under its submitting leadership: measured {"term":1,"answer":{"outcome":"CORE_OK","reason":"drained"},"after":{"role":"leader","term":3,"currentTermApplied":true},"nativeConfChanges":1}
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]       {
+[adam-laptop]         answer: {
+[adam-laptop]     +     outcome: 'CORE_OK',
+[adam-laptop]     +     reason: 'drained',
+[adam-laptop]     +     recoveryRequired: undefined,
+[adam-laptop]     +     retryable: undefined
+[adam-laptop]     -     outcome: 'CORE_REFUSED',
+[adam-laptop]     -     reason: undefined,
+[adam-laptop]     -     recoveryRequired: false,
+[adam-laptop]     -     retryable: false
+[adam-laptop]         },
+[adam-laptop]     +   nativeConfChanges: 1
+[adam-laptop]     -   nativeConfChanges: 0
+[adam-laptop]       }
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected:
+[adam-laptop]     answer:
+[adam-laptop]       outcome: 'CORE_REFUSED'
+[adam-laptop]       retryable: false
+[adam-laptop]       recoveryRequired: false
+[adam-laptop]     nativeConfChanges: 0
+[adam-laptop]   actual:
+[adam-laptop]     answer:
+[adam-laptop]       outcome: 'CORE_OK'
+[adam-laptop]       reason: 'drained'
+[adam-laptop]     nativeConfChanges: 1
+[adam-laptop]   operator: 'deepStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/d5c02e1e2076-mwr27fnn-2545116/test/raft/raft-rs-backend/proposal-submitting-leadership.test.js:198:12)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: C-3: a proposal submitted while the replica is an announced candidate is refused by name when its turn wins the election
+[adam-laptop] not ok 3 - C-3: a proposal submitted while the replica is an announced candidate is refused by name when its turn wins the election
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 86.789631
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/d5c02e1e2076-mwr27fnn-2545116/test/raft/raft-rs-backend/proposal-submitting-leadership.test.js:207:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     a submission made under no leadership is never adopted: measured {"announced":{"role":"candidate","term":1},"answer":{"outcome":"CORE_OK","reason":"drained"},"after":{"role":"leader","term":1},"nativeProposes":1}
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]       {
+[adam-laptop]         answer: {
+[adam-laptop]     +     outcome: 'CORE_OK',
+[adam-laptop]     +     reason: 'drained',
+[adam-laptop]     +     recoveryRequired: undefined,
+[adam-laptop]     +     retryable: undefined
+[adam-laptop]     -     outcome: 'CORE_REFUSED',
+[adam-laptop]     -     reason: undefined,
+[adam-laptop]     -     recoveryRequired: false,
+[adam-laptop]     -     retryable: false
+[adam-laptop]         },
+[adam-laptop]     +   nativeProposes: 1
+[adam-laptop]     -   nativeProposes: 0
+[adam-laptop]       }
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected:
+[adam-laptop]     answer:
+[adam-laptop]       outcome: 'CORE_REFUSED'
+[adam-laptop]       retryable: false
+[adam-laptop]       recoveryRequired: false
+[adam-laptop]     nativeProposes: 0
+[adam-laptop]   actual:
+[adam-laptop]     answer:
+[adam-laptop]       outcome: 'CORE_OK'
+[adam-laptop]       reason: 'drained'
+[adam-laptop]     nativeProposes: 1
+[adam-laptop]   operator: 'deepStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/d5c02e1e2076-mwr27fnn-2545116/test/raft/raft-rs-backend/proposal-submitting-leadership.test.js:231:12)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] 1..3
+[adam-laptop] # tests 3
+[adam-laptop] # suites 0
+[adam-laptop] # pass 0
+[adam-laptop] # fail 3
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 445.090633
+[adam-laptop] # time=2300ms
+[adam-laptop] not ok test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js (4 assertions, 2511ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] {"subsystem":"raft-rs","report":"core-trapped","groupId":"w07-companion-pre-dequeue-guard","replicaIdentity":"w07-companion-b","peerId":"5993373093139411192","operation":"status","reason":"intentional final Ready announcement trap","runtimeGeneration":1,"level":"error","message":"raft-rs core trapped"}
+[adam-laptop] {"subsystem":"raft-rs","report":"runtime-replaced","groupId":"w07-companion-pre-dequeue-guard","replicaIdentity":"w07-companion-b","peerId":"5993373093139411192","runtimeGeneration":2,"groupsRestored":3,"failure":null,"level":"error","message":"raft-rs runtime replaced"}
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: runtime owner captures all preaccepted input when the queued turn is admitted
+[adam-laptop] ok 1 - runtime owner captures all preaccepted input when the queued turn is admitted
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 212.130296
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # {"w07Companion":"w07-companion-queued-capture","events":[{"kind":"core-entry","sequence":959,"operation":"status","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"core-entry","sequence":960,"operation":"propose","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"core-propose","sequence":960,"operation":"propose","groupId":"w07-companion-queued-capture","runtimeGeneration":1,"bytes":"7b22773037436f6d70616e696f6e223a22616c72656164792d617070656e64696e67227d"},{"kind":"core-entry","sequence":961,"operation":"has_ready","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"core-entry","sequence":962,"operation":"take_ready","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"core-entry","sequence":963,"operation":"persist_ready","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"native-send","hash":"2921311bc6c1b69cda1fd445001900e5e75e862e38f8181d6717eb695d398d72","message":{"from":"5993373093139411192","to":"1172225613776189336","term":"2","logTerm":"2","index":"3","msgType":3,"entries":[{"term":"2","index":"4","entryType":0,"data":"eyJ3MDdDb21wYW5pb24iOiJhbHJlYWR5LWFwcGVuZGluZyJ9"}],"commit":"3","reject":false,"rejectHint":"0"}},{"kind":"native-send-held","ordinal":1,"hash":"2921311bc6c1b69cda1fd445001900e5e75e862e38f8181d6717eb695d398d72","message":{"from":"5993373093139411192","to":"1172225613776189336","term":"2","logTerm":"2","index":"3","msgType":3,"entries":[{"term":"2","index":"4","entryType":0,"data":"eyJ3MDdDb21wYW5pb24iOiJhbHJlYWR5LWFwcGVuZGluZyJ9"}],"commit":"3","reject":false,"rejectHint":"0"}},{"kind":"selected-enqueued","selected":{"w07Companion":"capture-after-queued-turn-is-admitted"}},{"kind":"inbound-stage","groupId":"w07-companion-queued-capture","replicaIdentity":"w07-companion-b","stage":"accepted","queued":1,"scheduled":false},{"kind":"inbound-stage","groupId":"w07-companion-queued-capture","replicaIdentity":"w07-companion-b","stage":"request","queued":1,"scheduled":false},{"kind":"delivery","ordinal":1,"envelopeHash":"c3c7bcbe3ec899a4d70796c723d7601bbabf801804b8c15b6c35c5226e4bfdd7","result":{"outcome":"CORE_OK","reason":"inbound-enqueued"},"provenance":"captured-native-heartbeat"},{"kind":"inbound-stage","groupId":"w07-companion-queued-capture","replicaIdentity":"w07-companion-b","stage":"accepted","queued":2,"scheduled":true},{"kind":"inbound-stage","groupId":"w07-companion-queued-capture","replicaIdentity":"w07-companion-b","stage":"coalesced","queued":2,"scheduled":true},{"kind":"delivery","ordinal":2,"envelopeHash":"c3c7bcbe3ec899a4d70796c723d7601bbabf801804b8c15b6c35c5226e4bfdd7","result":{"outcome":"CORE_OK","reason":"inbound-enqueued"},"provenance":"exact-duplicate"},{"kind":"inbound-stage","groupId":"w07-companion-queued-capture","replicaIdentity":"w07-companion-b","stage":"callback","queued":2,"scheduled":false},{"kind":"inbound-stage","groupId":"w07-companion-queued-capture","replicaIdentity":"w07-companion-b","stage":"turn-request","queued":2,"scheduled":false},{"kind":"native-send-released","ordinal":1},{"kind":"native-send","hash":"07b32046ee8383c22d392308821694be99d0e31472e3cfa26812ad1354c05bf6","message":{"from":"5993373093139411192","to":"4408444140443770812","term":"2","logTerm":"2","index":"3","msgType":3,"entries":[{"term":"2","index":"4","entryType":0,"data":"eyJ3MDdDb21wYW5pb24iOiJhbHJlYWR5LWFwcGVuZGluZyJ9"}],"commit":"3","reject":false,"rejectHint":"0"}},{"kind":"core-entry","sequence":964,"operation":"advance_append","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"core-entry","sequence":965,"operation":"advance_apply","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"core-entry","sequence":966,"operation":"has_ready","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"core-entry","sequence":967,"operation":"status","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"core-entry","sequence":968,"operation":"conf_state","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"core-entry","sequence":969,"operation":"step","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"core-step","sequence":969,"operation":"step","groupId":"w07-companion-queued-capture","runtimeGeneration":1,"hash":"84e38d7ad20624da609237304532f4da3e4d1e860d44f39c76a55656f7600d41","message":{"from":"4408444140443770812","to":"5993373093139411192","term":"1","logTerm":"0","index":"0","msgType":8,"entries":[],"commit":"2","reject":false,"rejectHint":"0"}},{"kind":"core-entry","sequence":970,"operation":"has_ready","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"core-entry","sequence":971,"operation":"take_ready","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"core-entry","sequence":972,"operation":"persist_ready","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"native-send","hash":"8426f5d6f3780bb7b198654fefcb75251fbe54ca2f9f3f1bb0248632f6019b41","message":{"from":"5993373093139411192","to":"4408444140443770812","term":"2","logTerm":"0","index":"0","msgType":4,"entries":[],"commit":"0","reject":false,"rejectHint":"0"}},{"kind":"core-entry","sequence":973,"operation":"advance_append","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"core-entry","sequence":974,"operation":"advance_apply","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"core-entry","sequence":975,"operation":"has_ready","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"core-entry","sequence":976,"operation":"status","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"core-entry","sequence":977,"operation":"conf_state","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"core-entry","sequence":978,"operation":"step","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"core-step","sequence":978,"operation":"step","groupId":"w07-companion-queued-capture","runtimeGeneration":1,"hash":"84e38d7ad20624da609237304532f4da3e4d1e860d44f39c76a55656f7600d41","message":{"from":"4408444140443770812","to":"5993373093139411192","term":"1","logTerm":"0","index":"0","msgType":8,"entries":[],"commit":"2","reject":false,"rejectHint":"0"}},{"kind":"core-entry","sequence":979,"operation":"has_ready","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"core-entry","sequence":980,"operation":"take_ready","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"core-entry","sequence":981,"operation":"persist_ready","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"native-send","hash":"8426f5d6f3780bb7b198654fefcb75251fbe54ca2f9f3f1bb0248632f6019b41","message":{"from":"5993373093139411192","to":"4408444140443770812","term":"2","logTerm":"0","index":"0","msgType":4,"entries":[],"commit":"0","reject":false,"rejectHint":"0"}},{"kind":"core-entry","sequence":982,"operation":"advance_append","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"core-entry","sequence":983,"operation":"advance_apply","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"core-entry","sequence":984,"operation":"has_ready","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"core-entry","sequence":985,"operation":"status","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"core-entry","sequence":986,"operation":"conf_state","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"core-entry","sequence":987,"operation":"status","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"core-entry","sequence":988,"operation":"propose","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"core-propose","sequence":988,"operation":"propose","groupId":"w07-companion-queued-capture","runtimeGeneration":1,"bytes":"7b22773037436f6d70616e696f6e223a22636170747572652d61667465722d7175657565642d7475726e2d69732d61646d6974746564227d"},{"kind":"core-entry","sequence":989,"operation":"has_ready","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"core-entry","sequence":990,"operation":"take_ready","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"core-entry","sequence":991,"operation":"persist_ready","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"native-send","hash":"9ce68e184216bd4fd2b81c00b842b201609602505a4e02a2d70650d942365228","message":{"from":"5993373093139411192","to":"1172225613776189336","term":"2","logTerm":"2","index":"4","msgType":3,"entries":[{"term":"2","index":"5","entryType":0,"data":"eyJ3MDdDb21wYW5pb24iOiJjYXB0dXJlLWFmdGVyLXF1ZXVlZC10dXJuLWlzLWFkbWl0dGVkIn0="}],"commit":"3","reject":false,"rejectHint":"0"}},{"kind":"native-send","hash":"567d403975173927fa49dfecdab84b73318637dacb83b9ea985bf58c95609a7a","message":{"from":"5993373093139411192","to":"4408444140443770812","term":"2","logTerm":"2","index":"4","msgType":3,"entries":[{"term":"2","index":"5","entryType":0,"data":"eyJ3MDdDb21wYW5pb24iOiJjYXB0dXJlLWFmdGVyLXF1ZXVlZC10dXJuLWlzLWFkbWl0dGVkIn0="}],"commit":"3","reject":false,"rejectHint":"0"}},{"kind":"core-entry","sequence":992,"operation":"advance_append","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"core-entry","sequence":993,"operation":"advance_apply","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"core-entry","sequence":994,"operation":"has_ready","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"core-entry","sequence":995,"operation":"status","groupId":"w07-companion-queued-capture","runtimeGeneration":1},{"kind":"core-entry","sequence":996,"operation":"conf_state","groupId":"w07-companion-queued-capture","runtimeGeneration":1}]}
+[adam-laptop] # {"w07CompanionCleanup":"w07-companion-queued-capture","settled":true,"retainedDirectory":null,"error":null}
+[adam-laptop] # Subtest: runtime owner preserves remainder service after the owned wake already fired
+[adam-laptop] ok 2 - runtime owner preserves remainder service after the owned wake already fired
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 165.212229
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # {"w07Companion":"w07-companion-consumed-wake","events":[{"kind":"core-entry","sequence":1928,"operation":"status","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"core-entry","sequence":1929,"operation":"propose","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"core-propose","sequence":1929,"operation":"propose","groupId":"w07-companion-consumed-wake","runtimeGeneration":1,"bytes":"7b22773037436f6d70616e696f6e223a22616c72656164792d617070656e64696e67227d"},{"kind":"core-entry","sequence":1930,"operation":"has_ready","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"core-entry","sequence":1931,"operation":"take_ready","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"core-entry","sequence":1932,"operation":"persist_ready","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"native-send","hash":"76c4b57c18bc4f270fa5ad18c3ef7447017befb9c1eb8290d5e7ba503e3350dd","message":{"from":"5993373093139411192","to":"1172225613776189336","term":"2","logTerm":"2","index":"3","msgType":3,"entries":[{"term":"2","index":"4","entryType":0,"data":"eyJ3MDdDb21wYW5pb24iOiJhbHJlYWR5LWFwcGVuZGluZyJ9"}],"commit":"3","reject":false,"rejectHint":"0"}},{"kind":"native-send-held","ordinal":1,"hash":"76c4b57c18bc4f270fa5ad18c3ef7447017befb9c1eb8290d5e7ba503e3350dd","message":{"from":"5993373093139411192","to":"1172225613776189336","term":"2","logTerm":"2","index":"3","msgType":3,"entries":[{"term":"2","index":"4","entryType":0,"data":"eyJ3MDdDb21wYW5pb24iOiJhbHJlYWR5LWFwcGVuZGluZyJ9"}],"commit":"3","reject":false,"rejectHint":"0"}},{"kind":"selected-enqueued","selected":{"w07Companion":"remainder-owned-by-consumed-wake"}},{"kind":"inbound-stage","groupId":"w07-companion-consumed-wake","replicaIdentity":"w07-companion-b","stage":"accepted","queued":1,"scheduled":false},{"kind":"inbound-stage","groupId":"w07-companion-consumed-wake","replicaIdentity":"w07-companion-b","stage":"request","queued":1,"scheduled":false},{"kind":"delivery","ordinal":1,"envelopeHash":"09f6b372c278c2673c1df0001b26490ccc6e8df70bea93354363784d38c1b2bf","result":{"outcome":"CORE_OK","reason":"inbound-enqueued"},"provenance":"captured-native-heartbeat"},{"kind":"native-send-released","ordinal":1},{"kind":"native-send","hash":"d4805f8b05c1f528643b7a84b1151bd1d9cfb186626d8c40d78730fd69290fba","message":{"from":"5993373093139411192","to":"4408444140443770812","term":"2","logTerm":"2","index":"3","msgType":3,"entries":[{"term":"2","index":"4","entryType":0,"data":"eyJ3MDdDb21wYW5pb24iOiJhbHJlYWR5LWFwcGVuZGluZyJ9"}],"commit":"3","reject":false,"rejectHint":"0"}},{"kind":"core-entry","sequence":1933,"operation":"advance_append","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"core-entry","sequence":1934,"operation":"advance_apply","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"core-entry","sequence":1935,"operation":"has_ready","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"core-entry","sequence":1936,"operation":"status","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"core-entry","sequence":1937,"operation":"conf_state","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"core-entry","sequence":1938,"operation":"step","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"core-step","sequence":1938,"operation":"step","groupId":"w07-companion-consumed-wake","runtimeGeneration":1,"hash":"84e38d7ad20624da609237304532f4da3e4d1e860d44f39c76a55656f7600d41","message":{"from":"4408444140443770812","to":"5993373093139411192","term":"1","logTerm":"0","index":"0","msgType":8,"entries":[],"commit":"2","reject":false,"rejectHint":"0"}},{"kind":"core-entry","sequence":1939,"operation":"has_ready","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"core-entry","sequence":1940,"operation":"take_ready","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"core-entry","sequence":1941,"operation":"persist_ready","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"native-send","hash":"4d20244cb93e714b82f04ee422e988ad93050a5f3df87e057c8d5c37cc09876a","message":{"from":"5993373093139411192","to":"4408444140443770812","term":"2","logTerm":"0","index":"0","msgType":4,"entries":[],"commit":"0","reject":false,"rejectHint":"0"}},{"kind":"native-send-held","ordinal":2,"hash":"4d20244cb93e714b82f04ee422e988ad93050a5f3df87e057c8d5c37cc09876a","message":{"from":"5993373093139411192","to":"4408444140443770812","term":"2","logTerm":"0","index":"0","msgType":4,"entries":[],"commit":"0","reject":false,"rejectHint":"0"}},{"kind":"inbound-stage","groupId":"w07-companion-consumed-wake","replicaIdentity":"w07-companion-b","stage":"accepted","queued":1,"scheduled":true},{"kind":"inbound-stage","groupId":"w07-companion-consumed-wake","replicaIdentity":"w07-companion-b","stage":"coalesced","queued":1,"scheduled":true},{"kind":"delivery","ordinal":2,"envelopeHash":"09f6b372c278c2673c1df0001b26490ccc6e8df70bea93354363784d38c1b2bf","result":{"outcome":"CORE_OK","reason":"inbound-enqueued"},"provenance":"exact-duplicate"},{"kind":"inbound-stage","groupId":"w07-companion-consumed-wake","replicaIdentity":"w07-companion-b","stage":"callback","queued":1,"scheduled":false},{"kind":"inbound-stage","groupId":"w07-companion-consumed-wake","replicaIdentity":"w07-companion-b","stage":"turn-request","queued":1,"scheduled":false},{"kind":"last-external-progress-event","event":"release-first-ready-send"},{"kind":"native-send-released","ordinal":2},{"kind":"core-entry","sequence":1942,"operation":"advance_append","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"core-entry","sequence":1943,"operation":"advance_apply","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"core-entry","sequence":1944,"operation":"has_ready","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"core-entry","sequence":1945,"operation":"status","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"core-entry","sequence":1946,"operation":"conf_state","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"core-entry","sequence":1947,"operation":"status","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"core-entry","sequence":1948,"operation":"propose","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"core-propose","sequence":1948,"operation":"propose","groupId":"w07-companion-consumed-wake","runtimeGeneration":1,"bytes":"7b22773037436f6d70616e696f6e223a2272656d61696e6465722d6f776e65642d62792d636f6e73756d65642d77616b65227d"},{"kind":"core-entry","sequence":1949,"operation":"has_ready","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"core-entry","sequence":1950,"operation":"take_ready","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"core-entry","sequence":1951,"operation":"persist_ready","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"native-send","hash":"39d2d435f760ca73735f65f2a63214eaaa2bd6ce581b2b089cbc84288516793c","message":{"from":"5993373093139411192","to":"1172225613776189336","term":"2","logTerm":"2","index":"4","msgType":3,"entries":[{"term":"2","index":"5","entryType":0,"data":"eyJ3MDdDb21wYW5pb24iOiJyZW1haW5kZXItb3duZWQtYnktY29uc3VtZWQtd2FrZSJ9"}],"commit":"3","reject":false,"rejectHint":"0"}},{"kind":"native-send","hash":"d67d3daffc48d62b301ebeac2b38187423eba2268b10a6d43834a91b51559690","message":{"from":"5993373093139411192","to":"4408444140443770812","term":"2","logTerm":"2","index":"4","msgType":3,"entries":[{"term":"2","index":"5","entryType":0,"data":"eyJ3MDdDb21wYW5pb24iOiJyZW1haW5kZXItb3duZWQtYnktY29uc3VtZWQtd2FrZSJ9"}],"commit":"3","reject":false,"rejectHint":"0"}},{"kind":"core-entry","sequence":1952,"operation":"advance_append","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"core-entry","sequence":1953,"operation":"advance_apply","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"core-entry","sequence":1954,"operation":"has_ready","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"core-entry","sequence":1955,"operation":"status","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"core-entry","sequence":1956,"operation":"conf_state","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"core-entry","sequence":1957,"operation":"step","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"core-step","sequence":1957,"operation":"step","groupId":"w07-companion-consumed-wake","runtimeGeneration":1,"hash":"84e38d7ad20624da609237304532f4da3e4d1e860d44f39c76a55656f7600d41","message":{"from":"4408444140443770812","to":"5993373093139411192","term":"1","logTerm":"0","index":"0","msgType":8,"entries":[],"commit":"2","reject":false,"rejectHint":"0"}},{"kind":"core-entry","sequence":1958,"operation":"has_ready","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"core-entry","sequence":1959,"operation":"take_ready","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"core-entry","sequence":1960,"operation":"persist_ready","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"native-send","hash":"4d20244cb93e714b82f04ee422e988ad93050a5f3df87e057c8d5c37cc09876a","message":{"from":"5993373093139411192","to":"4408444140443770812","term":"2","logTerm":"0","index":"0","msgType":4,"entries":[],"commit":"0","reject":false,"rejectHint":"0"}},{"kind":"core-entry","sequence":1961,"operation":"advance_append","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"core-entry","sequence":1962,"operation":"advance_apply","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"core-entry","sequence":1963,"operation":"has_ready","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"core-entry","sequence":1964,"operation":"status","groupId":"w07-companion-consumed-wake","runtimeGeneration":1},{"kind":"core-entry","sequence":1965,"operation":"conf_state","groupId":"w07-companion-consumed-wake","runtimeGeneration":1}]}
+[adam-laptop] # {"w07CompanionCleanup":"w07-companion-consumed-wake","settled":true,"retainedDirectory":null,"error":null}
+[adam-laptop] # Subtest: runtime owner guards the generation before removing the next captured envelope
+[adam-laptop] ok 3 - runtime owner guards the generation before removing the next captured envelope
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 152.719899
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # {"w07Companion":"w07-companion-pre-dequeue-guard","events":[{"kind":"inbound-stage","groupId":"w07-companion-pre-dequeue-guard","replicaIdentity":"w07-companion-b","stage":"accepted","queued":1,"scheduled":false},{"kind":"inbound-stage","groupId":"w07-companion-pre-dequeue-guard","replicaIdentity":"w07-companion-b","stage":"request","queued":1,"scheduled":false},{"kind":"delivery","ordinal":1,"envelopeHash":"f34bbb34362650be7c58dfe9a9b4470ec6e7ad333fe3d54e2fb66e5ab470472c","result":{"outcome":"CORE_OK","reason":"inbound-enqueued"},"provenance":"captured-native-heartbeat"},{"kind":"inbound-stage","groupId":"w07-companion-pre-dequeue-guard","replicaIdentity":"w07-companion-b","stage":"accepted","queued":2,"scheduled":true},{"kind":"inbound-stage","groupId":"w07-companion-pre-dequeue-guard","replicaIdentity":"w07-companion-b","stage":"coalesced","queued":2,"scheduled":true},{"kind":"delivery","ordinal":2,"envelopeHash":"f34bbb34362650be7c58dfe9a9b4470ec6e7ad333fe3d54e2fb66e5ab470472c","result":{"outcome":"CORE_OK","reason":"inbound-enqueued"},"provenance":"exact-duplicate"},{"kind":"core-entry","sequence":2679,"operation":"step","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":1},{"kind":"core-step","sequence":2679,"operation":"step","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":1,"hash":"84e38d7ad20624da609237304532f4da3e4d1e860d44f39c76a55656f7600d41","message":{"from":"4408444140443770812","to":"5993373093139411192","term":"1","logTerm":"0","index":"0","msgType":8,"entries":[],"commit":"2","reject":false,"rejectHint":"0"}},{"kind":"core-entry","sequence":2680,"operation":"has_ready","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":1},{"kind":"core-entry","sequence":2681,"operation":"take_ready","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":1},{"kind":"core-entry","sequence":2682,"operation":"persist_ready","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":1},{"kind":"native-send","hash":"ee3c0300d9c3dc7f10f2139c2d75cc74007011db65e7df68125296a16986f20c","message":{"from":"5993373093139411192","to":"4408444140443770812","term":"1","logTerm":"0","index":"0","msgType":9,"entries":[],"commit":"2","reject":false,"rejectHint":"0"}},{"kind":"core-entry","sequence":2683,"operation":"advance_append","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":1},{"kind":"core-entry","sequence":2684,"operation":"advance_apply","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":1},{"kind":"core-entry","sequence":2685,"operation":"has_ready","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":1},{"kind":"core-entry","sequence":2686,"operation":"status","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":1},{"kind":"host-injected-final-announcement-trap"},{"kind":"recovery-phase-cut","initial":{"outcome":"HOST_FAILURE","reason":"execution generation changed while host work was pending","phase":"runtime-generation-changed","retryable":true,"recoveryRequired":true},"driver":"one explicit canonical B tick; this is preservation, not autonomous service"},{"kind":"core-entry","sequence":2687,"operation":"create_node","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2688,"operation":"create_node","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2689,"operation":"create_node","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2690,"operation":"has_ready","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2691,"operation":"status","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2692,"operation":"conf_state","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2693,"operation":"conf_state","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2694,"operation":"status","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2695,"operation":"conf_state","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2696,"operation":"has_ready","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2697,"operation":"status","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2698,"operation":"conf_state","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2699,"operation":"conf_state","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2700,"operation":"status","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2701,"operation":"conf_state","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2702,"operation":"has_ready","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2703,"operation":"status","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2704,"operation":"conf_state","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2705,"operation":"conf_state","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2706,"operation":"status","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2707,"operation":"conf_state","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2708,"operation":"step","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-step","sequence":2708,"operation":"step","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2,"hash":"84e38d7ad20624da609237304532f4da3e4d1e860d44f39c76a55656f7600d41","message":{"from":"4408444140443770812","to":"5993373093139411192","term":"1","logTerm":"0","index":"0","msgType":8,"entries":[],"commit":"2","reject":false,"rejectHint":"0"}},{"kind":"core-entry","sequence":2709,"operation":"has_ready","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2710,"operation":"take_ready","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2711,"operation":"persist_ready","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"native-send","hash":"ee3c0300d9c3dc7f10f2139c2d75cc74007011db65e7df68125296a16986f20c","message":{"from":"5993373093139411192","to":"4408444140443770812","term":"1","logTerm":"0","index":"0","msgType":9,"entries":[],"commit":"2","reject":false,"rejectHint":"0"}},{"kind":"core-entry","sequence":2712,"operation":"advance_append","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2713,"operation":"advance_apply","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2714,"operation":"has_ready","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2715,"operation":"status","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2716,"operation":"conf_state","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2717,"operation":"tick","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2718,"operation":"has_ready","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2719,"operation":"status","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2},{"kind":"core-entry","sequence":2720,"operation":"conf_state","groupId":"w07-companion-pre-dequeue-guard","runtimeGeneration":2}]}
+[adam-laptop] # {"w07CompanionCleanup":"w07-companion-pre-dequeue-guard","settled":true,"retainedDirectory":null,"error":null}
+[adam-laptop] # Subtest: runtime owner captures input after native ensureExecution reconstruction waits
+[adam-laptop] not ok 4 - runtime owner captures input after native ensureExecution reconstruction waits
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 125.77095
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/d5c02e1e2076-mwr27fnn-2545116/test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js:257:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     Expected values to be strictly equal:
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]     + 'CORE_REFUSED'
+[adam-laptop]     - 'CORE_OK'
+[adam-laptop]             ^
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: 'CORE_OK'
+[adam-laptop]   actual: 'CORE_REFUSED'
+[adam-laptop]   operator: 'strictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     reconstructedCapture (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/d5c02e1e2076-mwr27fnn-2545116/test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js:194:10)
+[adam-laptop]     async runCase (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/d5c02e1e2076-mwr27fnn-2545116/test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js:26:5)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] # {"w07Companion":"w07-companion-reconstruction-capture","events":[{"kind":"setup-application-failure","result":{"outcome":"HOST_FAILURE","reason":"intentional one-shot committed application host fault","phase":"application","retryable":true,"recoveryRequired":true},"progress":{"applied":2,"committed":3}},{"kind":"core-entry","sequence":3456,"operation":"free","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":3457,"operation":"create_node","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":3458,"operation":"has_ready","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":3459,"operation":"take_ready","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":3460,"operation":"persist_ready","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"host-transaction-opened-during-reconstruction"},{"kind":"ensure-execution-still-awaiting-persistence"},{"kind":"inbound-stage","groupId":"w07-companion-reconstruction-capture","replicaIdentity":"w07-companion-b","stage":"accepted","queued":1,"scheduled":true},{"kind":"inbound-stage","groupId":"w07-companion-reconstruction-capture","replicaIdentity":"w07-companion-b","stage":"coalesced","queued":1,"scheduled":true},{"kind":"delivery","ordinal":1,"envelopeHash":"86d180ba421fd5a4efeaa8dccf7f8487ea6731e2603730143f075aafa49bbb76","result":{"outcome":"CORE_OK","reason":"inbound-enqueued"},"provenance":"captured-native-heartbeat"},{"kind":"inbound-stage","groupId":"w07-companion-reconstruction-capture","replicaIdentity":"w07-companion-b","stage":"callback","queued":1,"scheduled":false},{"kind":"inbound-stage","groupId":"w07-companion-reconstruction-capture","replicaIdentity":"w07-companion-b","stage":"turn-request","queued":1,"scheduled":false},{"kind":"core-entry","sequence":3461,"operation":"conf_state","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":3462,"operation":"advance_append","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":3463,"operation":"advance_apply","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":3464,"operation":"has_ready","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":3465,"operation":"status","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":3466,"operation":"conf_state","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":3467,"operation":"conf_state","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":3468,"operation":"status","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":3469,"operation":"conf_state","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":3470,"operation":"step","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-step","sequence":3470,"operation":"step","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2,"hash":"84e38d7ad20624da609237304532f4da3e4d1e860d44f39c76a55656f7600d41","message":{"from":"4408444140443770812","to":"5993373093139411192","term":"1","logTerm":"0","index":"0","msgType":8,"entries":[],"commit":"2","reject":false,"rejectHint":"0"}},{"kind":"core-entry","sequence":3471,"operation":"has_ready","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":3472,"operation":"take_ready","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":3473,"operation":"persist_ready","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"native-send","hash":"1757788e9159c7ae5c64ba04ba65b3bbe8fcdc7b3b88fc18809c70103118791b","message":{"from":"5993373093139411192","to":"4408444140443770812","term":"1","logTerm":"0","index":"0","msgType":9,"entries":[],"commit":"3","reject":false,"rejectHint":"0"}},{"kind":"core-entry","sequence":3474,"operation":"advance_append","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":3475,"operation":"advance_apply","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":3476,"operation":"has_ready","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":3477,"operation":"status","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":3478,"operation":"conf_state","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":3479,"operation":"status","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":3480,"operation":"status","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"core-entry","sequence":3481,"operation":"conf_state","groupId":"w07-companion-reconstruction-capture","runtimeGeneration":2},{"kind":"selected-reconstruction-result","result":{"outcome":"CORE_REFUSED","reason":"propose: raft: proposal dropped","phase":"propose","retryable":false,"recoveryRequired":false},"progress":{"applied":3,"committed":3},"markerCount":1}]}
+[adam-laptop] # {"w07CompanionCleanup":"w07-companion-reconstruction-capture","settled":true,"retainedDirectory":null,"error":null}
+[adam-laptop] 1..4
+[adam-laptop] # tests 4
+[adam-laptop] # suites 0
+[adam-laptop] # pass 3
+[adam-laptop] # fail 1
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 686.263136
+[adam-laptop] # time=2511ms
+[adam-laptop] ok test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js (4 assertions, 2532ms)
+[adam-laptop] not ok test/raft/raft-rs-backend/runtime-turn-integrity.test.js (5 assertions, 2360ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: CA1: a pending response the core refuses (peer not found) never answers a named transfer; the transfer is decided on the drained state
+[adam-laptop] ok 1 - CA1: a pending response the core refuses (peer not found) never answers a named transfer; the transfer is decided on the drained state
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 240.474134
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: CA1: a pending response the core refuses never answers a proposal
+[adam-laptop] ok 2 - CA1: a pending response the core refuses never answers a proposal
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 231.73593
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: CA1: a forwarded proposal the transferring leader drops never answers the leader's own proposal, which is the retryable in-progress outcome
+[adam-laptop] not ok 3 - CA1: a forwarded proposal the transferring leader drops never answers the leader's own proposal, which is the retryable in-progress outcome
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 122.784936
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/d5c02e1e2076-mwr27fnn-2545116/test/raft/raft-rs-backend/runtime-turn-integrity.test.js:211:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     setup: B forwards its proposal to its leader
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]     + 'CORE_REFUSED'
+[adam-laptop]     - 'CORE_OK'
+[adam-laptop]             ^
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: 'CORE_OK'
+[adam-laptop]   actual: 'CORE_REFUSED'
+[adam-laptop]   operator: 'strictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     Object.pending (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/d5c02e1e2076-mwr27fnn-2545116/test/raft/raft-rs-backend/runtime-turn-integrity.test.js:225:14)
+[adam-laptop]     async pendingAgainstProcessed (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/d5c02e1e2076-mwr27fnn-2545116/test/raft/raft-rs-backend/runtime-turn-integrity.test.js:128:25)
+[adam-laptop]     async TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/d5c02e1e2076-mwr27fnn-2545116/test/raft/raft-rs-backend/runtime-turn-integrity.test.js:215:19)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: CA1 / M9: the envelopes after a refused one are stepped in the same turn, not stranded until the next tick
+[adam-laptop] ok 4 - CA1 / M9: the envelopes after a refused one are stepped in the same turn, not stranded until the next tick
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 170.15896
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: CA5: with [MsgRequestVote, MsgAppend] pending, the event stream after the turn matches the core, even when role listeners read status
+[adam-laptop] ok 5 - CA5: with [MsgRequestVote, MsgAppend] pending, the event stream after the turn matches the core, even when role listeners read status
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 147.657272
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] 1..5
+[adam-laptop] # tests 5
+[adam-laptop] # suites 0
+[adam-laptop] # pass 4
+[adam-laptop] # fail 1
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 954.296579
+[adam-laptop] # time=2360ms
+[adam-laptop] not ok test/raft/raft-rs-current-authority-deposition.test.js (3 assertions, 2585ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: B-1 (i): a leader whose turn is pending while the successor's higher-term envelope waits unstepped in its inbound is NOT_SETTLED
+[adam-laptop] not ok 1 - B-1 (i): a leader whose turn is pending while the successor's higher-term envelope waits unstepped in its inbound is NOT_SETTLED
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 221.79179
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/d5c02e1e2076-mwr27fnn-2545116/test/raft/raft-rs-current-authority-deposition.test.js:129:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     proof of deposition is queued in the process: measured {"before":{"term":1},"newerTerm":4,"queuedTerms":[4],"during":{"answer":{"outcome":"CORE_OK","groupId":"cad-p1","replicaIdentity":"cad-p1-r1","peerId":"2761120949871402383","settled":false,"turnPending":true,"readyHeld":true,"inboundQueued":1,"role":"leader","term":1,"leaderPeerId":"2761120949871402383","commitIndex":1,"appliedIndex":1,"appliedTerm":1,"currentTermApplied":true,"lifecycleIncarnation":"6a6723b1-285c-4395-87a9-b3be4bf1b1a4","runtimeGeneration":1,"runtimeHealth":"healthy","groupHealth":"usable"},"operations":["status","has_ready"]}}
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]       {
+[adam-laptop]     +   currentTermApplied: true,
+[adam-laptop]     +   leaderPeerId: '2761120949871402383',
+[adam-laptop]     +   role: 'leader',
+[adam-laptop]     -   currentTermApplied: false,
+[adam-laptop]     -   leaderPeerId: 'not-settled',
+[adam-laptop]     -   role: 'not-settled',
+[adam-laptop]         unsettledReason: undefined
+[adam-laptop]       }
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected:
+[adam-laptop]     role: 'not-settled'
+[adam-laptop]     leaderPeerId: 'not-settled'
+[adam-laptop]     currentTermApplied: false
+[adam-laptop]   actual:
+[adam-laptop]     role: 'leader'
+[adam-laptop]     leaderPeerId: '2761120949871402383'
+[adam-laptop]     currentTermApplied: true
+[adam-laptop]   operator: 'deepStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/d5c02e1e2076-mwr27fnn-2545116/test/raft/raft-rs-current-authority-deposition.test.js:165:12)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: B-1 (ii): a leader whose tick waits behind its pending turn is NOT_SETTLED, and the backlog is counted
+[adam-laptop] not ok 2 - B-1 (ii): a leader whose tick waits behind its pending turn is NOT_SETTLED, and the backlog is counted
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 101.741647
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/mnt/old/lab/lagrange-repo/test-output/placement-worktrees/d5c02e1e2076-mwr27fnn-2545116/test/raft/raft-rs-current-authority-deposition.test.js:175:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     the core has not been given a tick the process holds: measured {"beforeTick":{"outcome":"CORE_OK","groupId":"cad-p1","replicaIdentity":"cad-p1-r1","peerId":"2761120949871402383","settled":false,"turnPending":true,"readyHeld":true,"inboundQueued":0,"role":"leader","term":1,"leaderPeerId":"2761120949871402383","commitIndex":1,"appliedIndex":1,"appliedTerm":1,"currentTermApplied":true,"lifecycleIncarnation":"8c8f2d89-ce59-48b9-93f5-0679e3660d13","runtimeGeneration":1,"runtimeHealth":"healthy","groupHealth":"usable"},"during":{"answer":{"outcome":"CORE_OK","groupId":"cad-p1","replicaIdentity":"cad-p1-r1","peerId":"2761120949871402383","settled":false,"turnPending":true,"readyHeld":true,"inboundQueued":0,"role":"leader","term":1,"leaderPeerId":"2761120949871402383","commitIndex":1,"appliedIndex":1,"appliedTerm":1,"currentTermApplied":true,"lifecycleIncarnation":"8c8f2d89-ce59-48b9-93f5-0679e3660d13","runtimeGeneration":1,"runtimeHealth":"healthy","groupHealth":"usable"},"operations":["status","has_ready"]},"after":{"outcome":"CORE_OK","groupId":"cad-p1","replicaIdentity":"cad-p1-r1","peerId":"2761120949871402383","settled":true,"turnPending":false,"readyHeld":false,"inboundQueued":0,"role":"leader","term":1,"leaderPeerId":"2761120949871402383","commitIndex":1,"appliedIndex":1,"appliedTerm":1,"currentTermApplied":true,"lifecycleIncarnation":"8c8f2d89-ce59-48b9-93f5-0679e3660d13","runtimeGeneration":1,"runtimeHealth":"healthy","groupHealth":"usable"}}
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]       {
+[adam-laptop]     +   currentTermApplied: true,
+[adam-laptop]     +   leaderPeerId: '2761120949871402383',
+[adam-laptop]     +   role: 'leader',
+[adam-laptop]     +   tickBacklog: undefined,
+[adam-laptop]     -   currentTermApplied: false,
+[adam-laptop]     -   leaderPeerId: 'not-settled',
+[adam-laptop]     -   role: 'not-settled',
+[adam-laptop]     -   tickBacklog: 1,
+[adam-laptop]         unsettledReason: undefined
+[adam-laptop]       }
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected:
+[adam-laptop]     role: 'not-settled'
+[adam-laptop]     leaderPeerId: 'not-settled'
+[adam-laptop]     currentTermApplied: false
+[adam-laptop]     tickBacklog: 1
+[adam-laptop]   actual:
+[adam-laptop]     role: 'leader'
+[adam-laptop]     leaderPeerId: '2761120949871402383'
+[adam-laptop]     currentTermApplied: true
+[adam-laptop]   operator: 'deepStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///mnt/old/lab/lagrange-repo/test-output/placement-worktrees/d5c02e1e2076-mwr27fnn-2545116/test/raft/raft-rs-current-authority-deposition.test.js:196:12)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: B-1 (iii): a healthy busy leader is LEADER except while a tick waits behind a pending turn (not starved)
+[adam-laptop] ok 3 - B-1 (iii): a healthy busy leader is LEADER except while a tick waits behind a pending turn (not starved)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 813.616061
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # {"busyLeader":{"samples":90,"leader":90,"notSettled":0,"settledFlag":40}}
+[adam-laptop] 1..3
+[adam-laptop] # tests 3
+[adam-laptop] # suites 0
+[adam-laptop] # pass 1
+[adam-laptop] # fail 2
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 1173.509356
+[adam-laptop] # time=2585ms
+[adam-laptop] # test-files total=6 pass=1 fail=5 assertions=20
+lab test: adam-laptop: # test-files total=6 pass=1 fail=5 assertions=20
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=6 pass=1 fail=5 assertions=20

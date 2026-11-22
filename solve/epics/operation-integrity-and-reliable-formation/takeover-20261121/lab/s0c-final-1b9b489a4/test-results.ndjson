@@ -1,0 +1,16 @@
+{"file":"test/cache/system-table-cache-observation.test.js","attempt":1,"ok":true,"assertions":14,"durationMs":1449,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cdc/cdc-owner-fact-hosted-replica.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":2277,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cdc/cdc-owner-fact-non-leader-absence.test.js","attempt":1,"ok":false,"assertions":32,"durationMs":2528,"retriedOnce":false,"firstFailureLine":"not ok 2 - a named reason (owner_fact_published_leader_unusable)"}
+{"file":"test/cdc/cdc-leader-required-fresh-leader-absence.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":4409,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cdc/cdc-owner-fact-stale-published-leader.test.js","attempt":1,"ok":true,"assertions":18,"durationMs":1562,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cdc/cdc-owner-required-authoritative-routing.test.js","attempt":1,"ok":true,"assertions":107,"durationMs":1486,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/control-plane-owner-fact-read.test.js","attempt":1,"ok":true,"assertions":153,"durationMs":464,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cdc/cdc-owner-fact-queued-successor-acceptance.test.js","attempt":1,"ok":false,"assertions":7,"durationMs":7247,"retriedOnce":false,"firstFailureLine":"not ok 4 - in process: refused, no rows"}
+{"file":"test/cdc/cdc-owner-fact-redirect-deadline.test.js","attempt":1,"ok":true,"assertions":17,"durationMs":6448,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/cdc/cdc-owner-fact-receiver-read-point.test.js","attempt":1,"ok":true,"assertions":98,"durationMs":7771,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/query/system-table-ingress-boundary-adversarial.test.js","attempt":1,"ok":true,"assertions":3074,"durationMs":2207,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-current-authority-observation.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":1991,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/readiness-owner-authority-contract.test.js","attempt":1,"ok":true,"assertions":15,"durationMs":1308,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/query/parallel-query-coordinator.test.js","attempt":1,"ok":true,"assertions":121,"durationMs":2585,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/control-plane/control-plane-read-authority-token.test.js","attempt":1,"ok":true,"assertions":41,"durationMs":1704,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/query/query-executor-recovery-read-lifetime.test.js","attempt":1,"ok":true,"assertions":122,"durationMs":6766,"retriedOnce":false,"firstFailureLine":null}

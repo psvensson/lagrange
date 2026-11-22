@@ -1,0 +1,18 @@
+lab test: adams-gamla: ordinary (3 files) cores=4 mem=15.6GiB speed x2.07
+[adams-gamla] placement-shell=2226966
+[adams-gamla] placement-head=7039f9018f68fff668018c0d0b67e50b66ffe4da
+[adams-gamla] placement-link=node_modules
+[adams-gamla] placement-link=data/examples
+[adams-gamla] placement-prepared=import-graph
+[adams-gamla] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adams-gamla] placement-pid=2227422
+[adams-gamla] # test-files planned=3
+[adams-gamla] classified lane ordinary: 3 file(s), jobs=3
+[adams-gamla] thermal: ok cpu 44C (coretemp/Package id 0) nvme unmeasured
+[adams-gamla] ok test/transport/router-in-process-address-in-use.test.js (1 assertions, 400ms)
+[adams-gamla] ok test/transport/message-router-ping-wait-bound-spent.test.js (30 assertions, 1045ms)
+[adams-gamla] ok test/transport/router-server-manager.test.js (40 assertions, 1302ms)
+[adams-gamla] # test-files total=3 pass=3 fail=0 assertions=71
+lab test: adams-gamla: # test-files total=3 pass=3 fail=0 assertions=71
+lab test: adams-gamla: results copied to test-output/reports/test-results-adams-gamla.ndjson
+# test-files total=3 pass=3 fail=0 assertions=71

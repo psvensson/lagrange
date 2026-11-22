@@ -1,0 +1,1 @@
+{"file":"test/integration/membership-consistency.integration.test.js","attempt":1,"ok":false,"assertions":112,"durationMs":26249,"retriedOnce":false,"firstFailureLine":"not ok 9 - both rebalancers see the published members the readiness owner holds eligible"}

@@ -1,0 +1,19 @@
+{
+  "sha": "121ea1408f47b9fa5f1451d381bad97cc844d452",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/cdc/cdc-owner-fact-receiver-read-point.test.js",
+    "test/control-plane/readiness-owner-authority-contract.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/cdc/cdc-owner-fact-receiver-read-point.test.js",
+        "test/control-plane/readiness-owner-authority-contract.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

@@ -1,0 +1,103 @@
+lab test: adam-laptop: ordinary (3 files) cores=8 mem=15.5GiB speed x1.98
+[adam-laptop] placement-shell=3906647
+[adam-laptop] placement-head=5986b79b71712df0b592d490f1723aa56b1d1068
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3907104
+[adam-laptop] # test-files planned=3
+[adam-laptop] classified lane ordinary: 3 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 78C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 78C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 41C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] ok test/partition/partition-service-learner-promotion.test.js (46 assertions, 2652ms)
+[adam-laptop] not ok test/partition/placement-owner-construction-orders.test.js (11 assertions, 40386ms)
+[adam-laptop] # TAP assertions failed; test process received SIGKILL; test process exited without a status
+[adam-laptop] TAP version 13
+[adam-laptop] {"level":50,"time":"2026-11-22T00:26:31.152Z","nodeId":"test-node","pid":3907214,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[adam-laptop] # Subtest: P0 seed order: coordinator from ControlPlaneSetup.create handed to every partition service at construction
+[adam-laptop] ok 1 - P0 seed order: coordinator from ControlPlaneSetup.create handed to every partition service at construction
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 3816.982102
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] {"level":50,"time":"2026-11-22T00:26:31.353Z","nodeId":"test-node","pid":3907214,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[adam-laptop] {"level":50,"time":"2026-11-22T00:26:31.452Z","nodeId":"test-node","pid":3907214,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[adam-laptop] # Subtest: P0 join order: partition services initialised and leading before the coordinator exists, then bound by StartupRuntimeSurfaceOwner.bindControlPlaneServices
+[adam-laptop] ok 2 - P0 join order: partition services initialised and leading before the coordinator exists, then bound by StartupRuntimeSurfaceOwner.bindControlPlaneServices
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 132.235501
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] {"level":50,"time":"2026-11-22T00:26:31.642Z","nodeId":"test-node","pid":3907214,"subsystem":"control-plane-readiness","nodeId":"test-node","owner":"CDCGroupPropagationService","strictOwnerDependencies":true,"contextNodeId":"n1","msg":"ControlPlaneReadinessService missing CDC publication owner"}
+[adam-laptop] # Subtest: P0 late ledger replica: a joiner whose ledger replica is created after the coordinator was bound to its other partitions
+[adam-laptop] ok 3 - P0 late ledger replica: a joiner whose ledger replica is created after the coordinator was bound to its other partitions
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 179.439564
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] {"level":50,"time":"2026-11-22T00:26:31.645Z","nodeId":"test-node","pid":3907214,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"ControlPlaneReadinessService requires cdcGroupPropagationService for strict readiness evaluation","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[adam-laptop] {"level":50,"time":"2026-11-22T00:26:31.703Z","nodeId":"test-node","pid":3907214,"subsystem":"control-plane-readiness","nodeId":"test-node","owner":"CDCGroupPropagationService","strictOwnerDependencies":true,"contextNodeId":"n1","msg":"ControlPlaneReadinessService missing CDC publication owner"}
+[adam-laptop] # Subtest: P0 existing coordinator, user and priority partitions initialised before the ledger: a coordinator handed to leading partition services before ControlPlaneSetup.create binds its factory (the existing-rebalancer branch precedes the placement guard)
+[adam-laptop] ok 4 - P0 existing coordinator, user and priority partitions initialised before the ledger: a coordinator handed to leading partition services before ControlPlaneSetup.create binds its factory (the existing-rebalancer branch precedes the placement guard)
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 79.99406
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] {"level":50,"time":"2026-11-22T00:26:31.706Z","nodeId":"test-node","pid":3907214,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"ControlPlaneReadinessService requires cdcGroupPropagationService for strict readiness evaluation","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[adam-laptop] {"level":50,"time":"2026-11-22T00:26:31.762Z","nodeId":"test-node","pid":3907214,"subsystem":"control-plane-readiness","nodeId":"test-node","owner":"CDCGroupPropagationService","strictOwnerDependencies":true,"contextNodeId":"n1","msg":"ControlPlaneReadinessService missing CDC publication owner"}
+[adam-laptop] # Subtest: P0 existing coordinator, ledger initialised first: the ledger replica is handed the coordinator before any partition service of the node reached the placement guard
+[adam-laptop] ok 5 - P0 existing coordinator, ledger initialised first: the ledger replica is handed the coordinator before any partition service of the node reached the placement guard
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 57.313816
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] {"level":50,"time":"2026-11-22T00:26:31.765Z","nodeId":"test-node","pid":3907214,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"ControlPlaneReadinessService requires cdcGroupPropagationService for strict readiness evaluation","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[adam-laptop] {"level":50,"time":"2026-11-22T00:26:31.828Z","nodeId":"test-node","pid":3907214,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[adam-laptop] # Subtest: P0 late factory binding with no rebind: the ledger met the coordinator before its factory was bound and nothing hands it the coordinator again; the binding alone must give the node its one scheduler
+[adam-laptop] ok 6 - P0 late factory binding with no rebind: the ledger met the coordinator before its factory was bound and nothing hands it the coordinator again; the binding alone must give the node its one scheduler
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 60.266944
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] {"level":50,"time":"2026-11-22T00:26:31.983Z","nodeId":"test-node","pid":3907214,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[adam-laptop] # Subtest: P0 ledger leadership lost and regained: every leadership edge of every partition reaches maybeInitializeRebalancer; the node keeps its one owner (the same object) and builds no per-partition scheduler
+[adam-laptop] ok 7 - P0 ledger leadership lost and regained: every leadership edge of every partition reaches maybeInitializeRebalancer; the node keeps its one owner (the same object) and builds no per-partition scheduler
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 157.307311
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] {"level":50,"time":"2026-11-22T00:26:32.096Z","nodeId":"test-node","pid":3907214,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[adam-laptop] # Subtest: P0 ledger replica shut down and restarted on the node: zero owners while the node hosts no ledger replica, then exactly one, the new replica's
+[adam-laptop] ok 8 - P0 ledger replica shut down and restarted on the node: zero owners while the node hosts no ledger replica, then exactly one, the new replica's
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 105.13592
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: P0 teardown: after the cleanup quiesced the node's rebalancing, a later leadership edge or readiness transition on the still-running ledger replica attaches no placement owner and starts no custody
+[adam-laptop] ok 9 - P0 teardown: after the cleanup quiesced the node's rebalancing, a later leadership edge or readiness transition on the still-running ledger replica attaches no placement owner and starts no custody
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 119.442733
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] {"level":50,"time":"2026-11-22T00:26:32.222Z","nodeId":"test-node","pid":3907214,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[adam-laptop] # Subtest: P0 join while formation is in progress: the partition services are bound while not background-work ready; the readiness transition fan-out later reaches maybeInitializeRebalancer on every partition
+[adam-laptop] ok 10 - P0 join while formation is in progress: the partition services are bound while not background-work ready; the readiness transition fan-out later reaches maybeInitializeRebalancer on every partition
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 101.585865
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] {"level":50,"time":"2026-11-22T00:26:32.312Z","nodeId":"test-node","pid":3907214,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[adam-laptop] {"level":50,"time":"2026-11-22T00:26:32.393Z","nodeId":"test-node","pid":3907214,"subsystem":"rebalance-coordinator","recoveryOwner":"failed_create_cleanup_release","queryDurationMs":null,"rowCount":null,"backpressured":false,"error":"authoritative_read_owner_unavailable","nodeId":"test-node","code":null,"retryAfterMs":0,"tableName":null,"participantFailures":[],"firstFailedParticipant":null,"contextNodeId":"n1","msg":"Failed to query operations from system table"}
+[adam-laptop] # Subtest: P0 re-entry during the attach (F1): a leadership event delivered synchronously by the first pass's status read, while the coordinator's factory is still on the stack, is a no-op: one factory call, no throw, one owner
+[adam-laptop] ok 11 - P0 re-entry during the attach (F1): a leadership event delivered synchronously by the first pass's status read, while the coordinator's factory is still on the stack, is a no-op: one factory call, no throw, one owner
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 85.492333
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # time=40386ms
+[adam-laptop] ok test/rebalancer/placement-owner-authority-wakes.test.js (12 assertions, 74229ms)
+[adam-laptop] # test-files total=3 pass=2 fail=1 assertions=69
+lab test: adam-laptop: # test-files total=3 pass=2 fail=1 assertions=69
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=3 pass=2 fail=1 assertions=69

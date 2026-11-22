@@ -1,0 +1,19 @@
+{
+  "sha": "b76d50c683e8d39084781306198cb4850d8b60ab",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/query/query-executor-no-handler-quarantine-penalty.test.js",
+    "test/query/query-executor-no-handler-quarantine-clock.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/query/query-executor-no-handler-quarantine-clock.test.js",
+        "test/query/query-executor-no-handler-quarantine-penalty.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

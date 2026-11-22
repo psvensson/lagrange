@@ -1,0 +1,31 @@
+Source oversized-file ratchet: 0/21 over 800 lines.
+Test oversized-file ratchet: 0/21 over 1500 lines.
+Per-file size comparison base: 95dc6b2553c45a05fadbd555591ea501eef34f59
+Scanned 8 JavaScript files
+Found 0 hot-path diagnostics violations
+Matched 28 inherited hot-path diagnostics baseline violations
+Scanned 2 JavaScript files
+Found 0 new literal-guideline violations
+Matched 0 inherited literal-guideline baseline violations
+Scanned 2 JavaScript files
+Found 0 decision-boundary guideline violations
+Matched 2 inherited decision-boundary baseline violations
+Scanned 0 JavaScript files
+Found 0 ambient-intrinsic call violations
+Matched 0 inherited ambient-intrinsic baseline violations
+Scanned 2 JavaScript files
+Found 0 silent catch violations
+Matched 2 inherited silent-catch baseline violations
+Promoted to ESLint (audited there, not here): state_read_defaults, value_or_promise_then_checks
+Scanned 2 JavaScript files
+Found 0 navigability violations
+Matched 24 inherited navigability baseline violations
+Scoped complexity ratchet: 4 violation(s) in 2 target(s) (threshold: 12).
+src/query/query-executor-base.js:66:3 Constructor has a complexity of 18. Maximum allowed is 12.
+src/query/query-executor-base.js:286:3 Method 'prioritizeSessionPartitionAddress' has a complexity of 14. Maximum allowed is 12.
+src/query/query-executor-base.js:386:3 Async method 'executeSelect' has a complexity of 34. Maximum allowed is 12.
+src/query/query-executor-temporary-unroutable-addresses.js:91:3 Method 'isTemporarilyUnroutableAddress' has a complexity of 21. Maximum allowed is 12.
+Saved complexity report to test-output/analysis/complexity-scoped.json.
+pre-commit: import graph stale - refreshing inventories (~2 min; skip with LAGRANGE_SKIP_INVENTORY_REGEN=1)
+pre-commit: refreshing generated test metadata
+[work/integration-candidate-20261121 e35fc5a3d] Merge the query executor's one-clock repair (504e2c989) into the integration candidate

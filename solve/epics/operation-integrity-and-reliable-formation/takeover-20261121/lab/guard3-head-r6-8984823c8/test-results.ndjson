@@ -1,0 +1,1 @@
+{"file":"test/rebalancer/spread-cure-escape-schedules.test.js","attempt":1,"ok":false,"assertions":63,"durationMs":31611,"retriedOnce":false,"firstFailureLine":"not ok 5 - nothing is admitted for the ledger while services-p1 has no leader"}

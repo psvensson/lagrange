@@ -1,0 +1,17 @@
+placement-shell=2226966
+placement-head=7039f9018f68fff668018c0d0b67e50b66ffe4da
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:3 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=2227422
+# test-files planned=3
+classified lane ordinary: 3 file(s), jobs=3
+thermal: ok cpu 44C (coretemp/Package id 0) nvme unmeasured
+ok test/transport/router-in-process-address-in-use.test.js (1 assertions, 400ms)
+ok test/transport/message-router-ping-wait-bound-spent.test.js (30 assertions, 1045ms)
+ok test/transport/router-server-manager.test.js (40 assertions, 1302ms)
+# test-files total=3 pass=3 fail=0 assertions=71
+placement-results={"file":"test/transport/router-in-process-address-in-use.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":400,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/transport/message-router-ping-wait-bound-spent.test.js","attempt":1,"ok":true,"assertions":30,"durationMs":1045,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/transport/router-server-manager.test.js","attempt":1,"ok":true,"assertions":40,"durationMs":1302,"retriedOnce":false,"firstFailureLine":null}

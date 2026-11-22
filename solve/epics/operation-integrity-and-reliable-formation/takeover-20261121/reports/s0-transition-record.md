@@ -1428,3 +1428,56 @@ stale published leader, fresh-leader property + census (7), first routing file (
 read-authority-token (41), the three 8(i) fakes, and the raft owner's `raft-rs-current-authority-observation.test.js`
 (4): green. Red as expected: the B-1 acceptance witness (ii) ("in process: refused, no rows", "over the transport:
 refused, no rows") and the 8(ii) file (C).
+
+### 19.8 Mutants at the 1(b) head [X] (commit-tree children of d358ab712, sealed, never on a branch)
+
+| Mutant (sha) | Mechanism removed | Result | Killing witness | Lab directory |
+| --- | --- | --- | --- | --- |
+| c1b 8c2cfb6ad | role decision BEFORE the read from the cached status (`readOwnRaftStatus`) instead of the current observation; post-read check unchanged | SURVIVED: the post-read check on the current observation refuses the same `owner_fact_not_leader`, no rows (equivalent at the protocol level, as m05 of 18.3; only the statement executes) | none | `s0c-mutant-c1b-role-from-cached-status` (tv-dator) |
+| c1b-both 240b1f2e2 | both decisions (before and after the read) from the cached status | killed | read-point "a leader whose core has stepped its successor's term ...", "in process: its core no longer leads, so it refuses", "in process: no rows" | `s0c-mutant-c1b-both-checks-from-cached-status` (tv-dator) |
+| c2-echo 64e660232 | caller does not verify the echo | killed | read-point "an answer decided for another floor is not this read's answer", "never READY on another request's decision" | `s0c-mutant-c2-echo-not-verified` (tv-dator) |
+
+What c1b shows: the receiver still checks leadership twice (before, to execute nothing for a non-leader; after, for
+leadership lost during an awaited read); removing either alone is invisible to any witness that asserts only the
+answer. A witness that the deposed leader's statement never executed would kill c1b; not written this round.
+
+### 19.9 Change cone at 3d017a2b5 against b638284d1 [X] `lab/s0c-cone-3d017a2b5.log` (adams-gamla), attribution `lab/s0c-cone-3d017a2b5.attribution.tsv`
+
+2175 files, 2062 pass, 113 fail. Every red attributed (first failure at head vs `lab/s0-cone-fails-at-base-b638284d1`):
+- 103 red at base with the same first failure (pre-existing);
+- 6 red at base with a different first failure: three property tests that differ only by seed
+  (`replica-dispatch-routing`, `node-identity-separation`, `node-registration-creates-endpoint`), and
+  `service-instance-creation-cas`, `dt-formation-joint-admission-release-liveness`, `replace-owner-lease-verdict-property`
+  (another first case); none names this slice's symbols;
+- `readiness-owner-authority-contract.test.js`: passes at base; 8(ii), class C, stopped for a ruling (19.1);
+- `cdc-owner-fact-queued-successor-acceptance.test.js`: new, the B-1 acceptance witness, red on purpose;
+- `cdc-owner-fact-receiver-read-point.test.js`: 1(b)(i) at this head, green at d358ab712 (19.7);
+- `membership-consistency.integration.test.js`: not in the base list; run at b638284d1 RED with the same first failure
+  ("both rebalancers see the published members the readiness owner holds eligible",
+  `lab/s0c-attr-membership-base`), GREEN at d358ab712 (`lab/s0c-attr-membership-final`): pre-existing, intermittent.
+The four regressions of 18.5: the three "readOwnRaftStatus is not a function" files are green; the fourth is the 8(ii)
+file. The cone was not re-run at d358ab712; the delta (merge 0a9fa6d50 + d358ab712) was run as 16 focused files
+(19.7), including the raft owner's observation witness.
+
+### 19.10 Shas and what remains (end of this round)
+
+Branch `work/owner-fact-read-20261121`, pushed: 4a22aa6b4 (witnesses, red), 3d017a2b5 (repairs 1(a), 2, 3, 4, 5, 6,
+8(i); B-1 acceptance witness), 0a9fa6d50 (merge of the raft owner branch at 692336b45), d358ab712 (1(b)). Probe
+546b5158d (local ref `probe/s0-8ii-capture`); mutants f3582aef0, b28563ceb, 2c24df8a4, 8c2cfb6ad, 240b1f2e2, 64e660232
+(never on a branch).
+Remaining:
+1. 8(ii): ruling on the readiness-owner-authority test (19.1, C). "Published but unusable" as a named UNAVAILABLE
+   reason needs the delivery owner (`query-executor-partition-delivery.js`) to carry the routing gap reason; not done.
+2. Item 7 not done: `commit === applied` became `commit > applied` (forced by 1(a): the position is read after the
+   observation); the mid-turn schedule witness (commit advanced in a Ready whose send pends before apply, own term)
+   is not written, so keep-or-remove is undecided. Argument for removal: entries committed but not yet applied in the
+   leader's own term are not yet acknowledged to their writers (acknowledgement follows the synchronous apply).
+3. B-1: the acceptance witness turns green when the raft owner's correction lands; merge again when the lead says;
+   if it adds a separate flag rather than `role`/`leaderPeerId` NOT_SETTLED, the receiver needs one condition (19.7).
+4. Mutant c1b (pre-read check only) survives as equivalent; a witness that a deposed leader's statement never executes
+   would kill it.
+5. Census ratchet not wired into `npm run test:static` (package.json outside this round's set); its history reader
+   repeats the model's (the model's is bound to its own baseline path).
+6. Joiner deadline: guaranteed by the key as far as the shared flight honours its own deadline; a hard race against the
+   joiner's own timer belongs in `runSingleFlight` (coalescing file, outside this round's set).
+7. Cone at the final head d358ab712 not run (19.9).

@@ -1,0 +1,17 @@
+placement-shell=3423827
+placement-head=d358ab712f3c09f1d5d45ea627ca76d8f225d824
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3424269
+# test-files planned=1
+classified lane exclusive: 1 file(s), jobs=1
+thermal: ok cpu 70C (coretemp/Package id 0) nvme 46C (nvme/Sensor 1)
+ok test/integration/membership-consistency.integration.test.js (112 assertions, 25955ms)
+# test-files total=1 pass=1 fail=0 assertions=112
+placement-results={"file":"test/integration/membership-consistency.integration.test.js","attempt":1,"ok":true,"assertions":112,"durationMs":25955,"retriedOnce":false,"firstFailureLine":null}

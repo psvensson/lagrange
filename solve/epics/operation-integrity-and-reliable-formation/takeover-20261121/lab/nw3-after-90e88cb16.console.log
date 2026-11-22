@@ -1,0 +1,295 @@
+lab test: tv-dator: ordinary (3 files) cores=12 mem=15.4GiB speed x1.46
+[tv-dator] placement-shell=3421615
+[tv-dator] placement-head=90e88cb160031ae76e94028fd4391633b116f3b1
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=3422065
+[tv-dator] # test-files planned=3
+[tv-dator] classified lane ordinary: 3 file(s), jobs=4
+[tv-dator] thermal: ok cpu 57C (coretemp/Package id 0) nvme 48C (nvme/Sensor 1)
+[tv-dator] not ok test/cdc/cdc-shutdown-terminal-owner-write.test.js (24 assertions, 1134ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 13
+[tv-dator] # Subtest: (i) shutdown wins before the membership side continues: the released write ends terminal and stays OUTCOME_UNKNOWN
+[tv-dator] not ok 1 - (i) shutdown wins before the membership side continues: the released write ends terminal and stays OUTCOME_UNKNOWN
+[tv-dator]   ---
+[tv-dator]   duration_ms: 78.190248
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/90e88cb16003-mwr23uoq-2538702/test/cdc/cdc-shutdown-terminal-owner-write.test.js:373:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: "the answer is the CDC service's typed shut-down code"
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: true
+[tv-dator]   actual: false
+[tv-dator]   operator: '=='
+[tv-dator]   stack: |-
+[tv-dator]     assertTerminalAfterShutdown (file:///home/peter/projects/lagrange/test-output/placement-worktrees/90e88cb16003-mwr23uoq-2538702/test/cdc/cdc-shutdown-terminal-owner-write.test.js:344:10)
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/90e88cb16003-mwr23uoq-2538702/test/cdc/cdc-shutdown-terminal-owner-write.test.js:384:3)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[tv-dator]   ...
+[tv-dator] # Subtest: (ii-a) the write committed immediately before shutdown wins: the read-back that follows is refused terminal, the write is not re-issued
+[tv-dator] not ok 2 - (ii-a) the write committed immediately before shutdown wins: the read-back that follows is refused terminal, the write is not re-issued
+[tv-dator]   ---
+[tv-dator]   duration_ms: 19.149323
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/90e88cb16003-mwr23uoq-2538702/test/cdc/cdc-shutdown-terminal-owner-write.test.js:394:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     no retry delay is armed after shutdown began
+[tv-dator]     + actual - expected
+[tv-dator]     
+[tv-dator]     + [
+[tv-dator]     +   100
+[tv-dator]     + ]
+[tv-dator]     - []
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected:
+[tv-dator]   actual:
+[tv-dator]     0: 100
+[tv-dator]   operator: 'deepStrictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     assertTerminalAfterShutdown (file:///home/peter/projects/lagrange/test-output/placement-worktrees/90e88cb16003-mwr23uoq-2538702/test/cdc/cdc-shutdown-terminal-owner-write.test.js:334:10)
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/90e88cb16003-mwr23uoq-2538702/test/cdc/cdc-shutdown-terminal-owner-write.test.js:405:3)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: (iii) shutdown lands while the owner's retry loop sleeps: no further attempt, terminal
+[tv-dator] ok 3 - (iii) shutdown lands while the owner's retry loop sleeps: no further attempt, terminal
+[tv-dator]   ---
+[tv-dator]   duration_ms: 10.102058
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: (iv) shutdown lands while the CDC service holds its own retry delay: the delay ends at once, no further attempt
+[tv-dator] not ok 4 - (iv) shutdown lands while the CDC service holds its own retry delay: the delay ends at once, no further attempt
+[tv-dator]   ---
+[tv-dator]   duration_ms: 6.144686
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/90e88cb16003-mwr23uoq-2538702/test/cdc/cdc-shutdown-terminal-owner-write.test.js:444:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: "the answer is the CDC service's typed shut-down code"
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: true
+[tv-dator]   actual: false
+[tv-dator]   operator: '=='
+[tv-dator]   stack: |-
+[tv-dator]     assertTerminalAfterShutdown (file:///home/peter/projects/lagrange/test-output/placement-worktrees/90e88cb16003-mwr23uoq-2538702/test/cdc/cdc-shutdown-terminal-owner-write.test.js:344:10)
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/90e88cb16003-mwr23uoq-2538702/test/cdc/cdc-shutdown-terminal-owner-write.test.js:461:3)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: (v) shutdown lands while a write waits for an engine that never arrived: the delay ends at once, terminal
+[tv-dator] ok 5 - (v) shutdown lands while a write waits for an engine that never arrived: the delay ends at once, terminal
+[tv-dator]   ---
+[tv-dator]   duration_ms: 3.564525
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: (vi) a write that arrives after shutdown began is refused before any engine: definitely not applied
+[tv-dator] ok 6 - (vi) a write that arrives after shutdown began is refused before any engine: definitely not applied
+[tv-dator]   ---
+[tv-dator]   duration_ms: 2.110651
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the publication persist loop reads a failed write back, except through a torn-down writer
+[tv-dator] ok 7 - the publication persist loop reads a failed write back, except through a torn-down writer
+[tv-dator]   ---
+[tv-dator]   duration_ms: 1.101215
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: an ordinary failure while the service is live is still read back: a committed publication answered failed is a success
+[tv-dator] ok 8 - an ordinary failure while the service is live is still read back: a committed publication answered failed is a success
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0.669669
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: semantic: after the mark the delayed-work primitive arms nothing and resolves at once, and a hold is released at once
+[tv-dator] ok 9 - semantic: after the mark the delayed-work primitive arms nothing and resolves at once, and a hold is released at once
+[tv-dator]   ---
+[tv-dator]   duration_ms: 2.00047
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: catch-up: the mark lands while it sleeps between deferred reads: no further read, no pending timer, no retry runs
+[tv-dator] ok 10 - catch-up: the mark lands while it sleeps between deferred reads: no further read, no pending timer, no retry runs
+[tv-dator]   ---
+[tv-dator]   duration_ms: 3.115405
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: catch-up: started after the mark, it reads nothing and settles at once
+[tv-dator] ok 11 - catch-up: started after the mark, it reads nothing and settles at once
+[tv-dator]   ---
+[tv-dator]   duration_ms: 1.565295
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: real clock: the routed-mutation retry delay at the mark leaves no pending or referenced owner handle (P-Q, P-L)
+[tv-dator] ok 12 - real clock: the routed-mutation retry delay at the mark leaves no pending or referenced owner handle (P-Q, P-L)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 18.191776
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: real clock: the catch-up sleep at the mark leaves no pending or referenced owner handle (P-Q, P-L)
+[tv-dator] ok 13 - real clock: the catch-up sleep at the mark leaves no pending or referenced owner handle (P-Q, P-L)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 10.470923
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: census: every CDC delayed-work site is the primitive or classified, with no bypass route
+[tv-dator] ok 14 - census: every CDC delayed-work site is the primitive or classified, with no bypass route
+[tv-dator]   ---
+[tv-dator]   duration_ms: 7.223797
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: in flight (S1): the catch-up's owner-RPC read is in flight at the mark and answers table-not-found: no reseed, no re-read, an honest terminal summary
+[tv-dator] ok 15 - in flight (S1): the catch-up's owner-RPC read is in flight at the mark and answers table-not-found: no reseed, no re-read, an honest terminal summary
+[tv-dator]   ---
+[tv-dator]   duration_ms: 2.430327
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: in flight (K5): the catch-up's read is in flight at the mark and answers rows: nothing is applied or counted caught up
+[tv-dator] ok 16 - in flight (K5): the catch-up's read is in flight at the mark and answers rows: nothing is applied or counted caught up
+[tv-dator]   ---
+[tv-dator]   duration_ms: 1.184449
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: in flight (S2): the catch-up's local read is in flight at the mark and answers unusable: no owner-RPC read, no SQL fallback
+[tv-dator] ok 17 - in flight (S2): the catch-up's local read is in flight at the mark and answers unusable: no owner-RPC read, no SQL fallback
+[tv-dator]   ---
+[tv-dator]   duration_ms: 1.101815
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: in flight (S4): the first visibility-repair read is in flight at the mark: the repair is not applied
+[tv-dator] ok 18 - in flight (S4): the first visibility-repair read is in flight at the mark: the repair is not applied
+[tv-dator]   ---
+[tv-dator]   duration_ms: 1.641681
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: after the mark (S5, S6): the repair entry points read nothing and apply nothing
+[tv-dator] ok 19 - after the mark (S5, S6): the repair entry points read nothing and apply nothing
+[tv-dator]   ---
+[tv-dator]   duration_ms: 1.078476
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: in flight (S7): the local-leader leg answers a transient failure (thrown): no engine submission after the mark
+[tv-dator] ok 20 - in flight (S7): the local-leader leg answers a transient failure (thrown): no engine submission after the mark
+[tv-dator]   ---
+[tv-dator]   duration_ms: 1.592143
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: in flight (S7): the local-leader leg answers a reroutable failure (returned): no engine submission after the mark
+[tv-dator] ok 21 - in flight (S7): the local-leader leg answers a reroutable failure (returned): no engine submission after the mark
+[tv-dator]   ---
+[tv-dator]   duration_ms: 1.286797
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: in flight (S7, honesty): the local-leader leg answers an unknown outcome: the answer stays indeterminate, never not-applied
+[tv-dator] ok 22 - in flight (S7, honesty): the local-leader leg answers an unknown outcome: the answer stays indeterminate, never not-applied
+[tv-dator]   ---
+[tv-dator]   duration_ms: 1.522137
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: routing: with only the gate answering terminal, no read, repair apply or submission reaches its transport
+[tv-dator] ok 23 - routing: with only the gate answering terminal, no read, repair apply or submission reaches its transport
+[tv-dator]   ---
+[tv-dator]   duration_ms: 3.132768
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: routing: every read, reseed, repair apply and submission is gated in the same synchronous step
+[tv-dator] ok 24 - routing: every read, reseed, repair apply and submission is gated in the same synchronous step
+[tv-dator]   ---
+[tv-dator]   duration_ms: 14.065579
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] 1..24
+[tv-dator] # tests 24
+[tv-dator] # suites 0
+[tv-dator] # pass 21
+[tv-dator] # fail 3
+[tv-dator] # cancelled 0
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 203.527697
+[tv-dator] # time=1134ms
+[tv-dator] ok test/query/named-write-real-producer-definite.test.js (7 assertions, 4943ms)
+[tv-dator] not ok test/query/named-write-cdc-sticky-unknown.test.js (3 assertions, 5392ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 13
+[tv-dator] # Subtest: an unknown attempt, then a refusal, in one CDC call: the named write stays UNKNOWN, and its entry, once committed, settles APPLIED exactly once
+[tv-dator] ok 1 - an unknown attempt, then a refusal, in one CDC call: the named write stays UNKNOWN, and its entry, once committed, settles APPLIED exactly once
+[tv-dator]   ---
+[tv-dator]   duration_ms: 2954.657165
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: a shutdown after an attempt that may have been proposed answers terminal with the outcome unknown, never not applied
+[tv-dator] not ok 2 - a shutdown after an attempt that may have been proposed answers terminal with the outcome unknown, never not applied
+[tv-dator]   ---
+[tv-dator]   duration_ms: 474.327546
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/90e88cb16003-mwr23uoq-2538702/test/query/named-write-cdc-sticky-unknown.test.js:169:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     terminal, outcome unknown: {"success":false,"error":"CDCIntegrationService shut down before this write was confirmed: its outcome is not known here (see its cause), and no retry through the service can succeed","failureCode":"partition_write_outcome_unknown","outcome":"unknown","pendingInstance":{"writeIdentity":"storage_reservations:sticky-shutdown:birth","instance":"3c09c517-507e-45dc-8fb8-18ce0d6db60a","idempotencyKey":"cpw-67acd5682a8e22559a27ba631ffca81c","entryId":"dwrite-participant-16dd9f70f489bfdb","outcome":"unknown"}}
+[tv-dator]     + actual - expected
+[tv-dator]     
+[tv-dator]       {
+[tv-dator]     +   code: undefined,
+[tv-dator]     -   code: 'CDC_INTEGRATION_SERVICE_SHUT_DOWN',
+[tv-dator]         definitelyUnapplied: false,
+[tv-dator]         pendingInstance: 'unknown',
+[tv-dator]         retryable: false,
+[tv-dator]     +   thrown: false,
+[tv-dator]     -   thrown: true,
+[tv-dator]         unknown: true
+[tv-dator]       }
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected:
+[tv-dator]     thrown: true
+[tv-dator]     code: 'CDC_INTEGRATION_SERVICE_SHUT_DOWN'
+[tv-dator]     retryable: false
+[tv-dator]     unknown: true
+[tv-dator]     definitelyUnapplied: false
+[tv-dator]     pendingInstance: 'unknown'
+[tv-dator]   actual:
+[tv-dator]     thrown: false
+[tv-dator]     retryable: false
+[tv-dator]     unknown: true
+[tv-dator]     definitelyUnapplied: false
+[tv-dator]     pendingInstance: 'unknown'
+[tv-dator]   operator: 'deepStrictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     withSurface.cdc (file:///home/peter/projects/lagrange/test-output/placement-worktrees/90e88cb16003-mwr23uoq-2538702/test/query/named-write-cdc-sticky-unknown.test.js:177:12)
+[tv-dator]     async withSurface (file:///home/peter/projects/lagrange/test-output/placement-worktrees/90e88cb16003-mwr23uoq-2538702/test/query/unknown-outcome-surface-fixture.js:328:5)
+[tv-dator]     async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/90e88cb16003-mwr23uoq-2538702/test/query/named-write-cdc-sticky-unknown.test.js:171:3)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: mirror: every attempt of the CDC call refused before proposal is definite NOT_PROPOSED
+[tv-dator] ok 3 - mirror: every attempt of the CDC call refused before proposal is definite NOT_PROPOSED
+[tv-dator]   ---
+[tv-dator]   duration_ms: 657.018684
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] 1..3
+[tv-dator] # tests 3
+[tv-dator] # suites 0
+[tv-dator] # pass 2
+[tv-dator] # fail 1
+[tv-dator] # cancelled 0
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 4092.071516
+[tv-dator] # time=5392ms
+[tv-dator] # test-files total=3 pass=1 fail=2 assertions=34
+lab test: tv-dator: # test-files total=3 pass=1 fail=2 assertions=34
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=3 pass=1 fail=2 assertions=34

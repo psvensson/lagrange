@@ -1,0 +1,201 @@
+lab test: tv-dator: ordinary (16 files) cores=12 mem=15.4GiB speed x1.52
+[tv-dator] placement-shell=3445813
+[tv-dator] placement-head=1b9b489a4e2b68d107131c59851571e874db11ab
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.6 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=3446282
+[tv-dator] # test-files planned=16
+[tv-dator] classified lane ordinary: 16 file(s), jobs=4
+[tv-dator] thermal: ok cpu 65C (coretemp/Package id 0) nvme 47C (nvme/Sensor 1)
+[tv-dator] ok test/cache/system-table-cache-observation.test.js (14 assertions, 1449ms)
+[tv-dator] ok test/cdc/cdc-owner-fact-hosted-replica.test.js (5 assertions, 2277ms)
+[tv-dator] not ok test/cdc/cdc-owner-fact-non-leader-absence.test.js (32 assertions, 2528ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] # Subtest: readOwnerFact: an empty answer from a replica that does not lead is never absence
+[tv-dator]     # Subtest: the leader is unreachable; followers are local and reachable
+[tv-dator]         ok 1 - unavailable, never READY with no rows
+[tv-dator]         not ok 2 - a named reason (owner_fact_published_leader_unusable)
+[tv-dator]           ---
+[tv-dator]           at:
+[tv-dator]             fileName: test/cdc/cdc-owner-fact-non-leader-absence.test.js
+[tv-dator]             lineNumber: 59
+[tv-dator]             columnNumber: 9
+[tv-dator]             typeName: Test
+[tv-dator]           stack: |
+[tv-dator]             Test.<anonymous> (test/cdc/cdc-owner-fact-non-leader-absence.test.js:59:9)
+[tv-dator]           source: >2
+[tv-dator]                   const asked = group.transit.slice(sentBefore);
+[tv-dator]                   t.equal(answer.state, STATE.UNAVAILABLE, 'unavailable, never READY with no rows');
+[tv-dator]                   t.ok([REASON.READ_FAILED, REASON.NOT_LEADER].includes(answer.reason),
+[tv-dator]             --------^
+[tv-dator]                     `a named reason (${answer.reason})`);
+[tv-dator]                   t.equal(Object.hasOwn(answer, 'rows'), false, 'unavailability has no rows field');
+[tv-dator]           ...
+[tv-dator]         
+[tv-dator]         ok 3 - unavailability has no rows field
+[tv-dator]         ok 4 - should be equal
+[tv-dator]         ok 5 - unavailability yields no rows to a consumer
+[tv-dator]         ok 6 - no follower answers the owner-fact read successfully or ships rows
+[tv-dator]         1..6
+[tv-dator]     not ok 1 - the leader is unreachable; followers are local and reachable # time=152.577ms
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/cdc/cdc-owner-fact-non-leader-absence.test.js
+[tv-dator]         lineNumber: 52
+[tv-dator]         columnNumber: 13
+[tv-dator]         typeName: Test
+[tv-dator]       source: >2
+[tv-dator]             };
+[tv-dator]       
+[tv-dator]             await t.test('the leader is unreachable; followers are local and reachable', async (t) => {
+[tv-dator]         ------------^
+[tv-dator]               const read = await openReader();
+[tv-dator]               group.setReachable(leader.nodeId, false);
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     # Subtest: the leader is reachable again: the same read is READY
+[tv-dator]         ok 1 - progress once the authority is reachable
+[tv-dator]         ok 2 - should be equivalent
+[tv-dator]         ok 3 - should be equal
+[tv-dator]         ok 4 - should be equal
+[tv-dator]         ok 5 - should be equal
+[tv-dator]         ok 6 - should be equal
+[tv-dator]         ok 7 - should be equal
+[tv-dator]         ok 8 - the leader's own empty answer is absence
+[tv-dator]         ok 9 - should be equivalent
+[tv-dator]         ok 10 - absence carries the witness of the leader that asserted it
+[tv-dator]         ok 11 - the floors are inclusive
+[tv-dator]         ok 12 - a leader that has not applied the caller's index is not an answer
+[tv-dator]         ok 13 - should be equal
+[tv-dator]         ok 14 - should be equal
+[tv-dator]         ok 15 - a leader of an older term than the caller has seen is not an answer
+[tv-dator]         ok 16 - should be equal
+[tv-dator]         ok 17 - a caller-pinned serving replica is part of the witness predicate
+[tv-dator]         ok 18 - should be equal
+[tv-dator]         1..18
+[tv-dator]     ok 2 - the leader is reachable again: the same read is READY # time=245.5ms
+[tv-dator]     
+[tv-dator]     # Subtest: the node hosting the leader reads it in process, unreachable peers or not
+[tv-dator]         ok 1 - no published leader and no reachable peer needed
+[tv-dator]         ok 2 - should be equivalent
+[tv-dator]         ok 3 - should be equal
+[tv-dator]         ok 4 - no query transit was used
+[tv-dator]         1..4
+[tv-dator]     ok 3 - the node hosting the leader reads it in process, unreachable peers or not # time=7.001ms
+[tv-dator]     
+[tv-dator]     1..3
+[tv-dator] not ok 1 - readOwnerFact: an empty answer from a replica that does not lead is never absence # time=833.079ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/cdc/cdc-owner-fact-non-leader-absence.test.js
+[tv-dator]     lineNumber: 37
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     }
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('readOwnerFact: an empty answer from a replica that does not lead is
+[tv-dator]     never absence',
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       {timeout: TEST_TIMEOUT_MS}, async (t) => {
+[tv-dator]         const group = await openLedgerGroupSurface(t, import.meta.url);
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] 1..1
+[tv-dator] # { total: 28, pass: 27, fail: 1 }
+[tv-dator] # time=847.19ms
+[tv-dator] ok test/cdc/cdc-leader-required-fresh-leader-absence.test.js (7 assertions, 4409ms)
+[tv-dator] ok test/cdc/cdc-owner-fact-stale-published-leader.test.js (18 assertions, 1562ms)
+[tv-dator] ok test/cdc/cdc-owner-required-authoritative-routing.test.js (107 assertions, 1486ms)
+[tv-dator] ok test/control-plane/control-plane-owner-fact-read.test.js (153 assertions, 464ms)
+[tv-dator] not ok test/cdc/cdc-owner-fact-queued-successor-acceptance.test.js (7 assertions, 7247ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] # Subtest: B-1 ACCEPTANCE (red until the raft owner's correction): a leader whose successor's envelope is delivered but still queued behind its own pending turn refuses an owner fact
+[tv-dator]     ok 1 - setup: a successor leads a newer term and its envelope was delivered to the old leader
+[tv-dator]     ok 2 - setup: the old leader's turn is pending at a held send
+[tv-dator]     ok 3 - setup: the old leader has not stepped the newer term
+[tv-dator]     not ok 4 - in process: refused, no rows
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/cdc/cdc-owner-fact-queued-successor-acceptance.test.js
+[tv-dator]         lineNumber: 57
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/cdc/cdc-owner-fact-queued-successor-acceptance.test.js:57:5)
+[tv-dator]       source: >2
+[tv-dator]           const local = await old.handleRemoteQuery(structuredClone(request));
+[tv-dator]           const remote = await group.deliverOverTransport(second.nodeId, old, structuredClone(request));
+[tv-dator]           t.ok(refusedWithoutRows(local), 'in process: refused, no rows');
+[tv-dator]         ----^
+[tv-dator]           t.ok(refusedWithoutRows(remote), 'over the transport: refused, no rows');
+[tv-dator]           t.not(local?.failureCode, REASON.ELECTION_LOG_NOT_APPLIED,
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 5 - over the transport: refused, no rows
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/cdc/cdc-owner-fact-queued-successor-acceptance.test.js
+[tv-dator]         lineNumber: 58
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/cdc/cdc-owner-fact-queued-successor-acceptance.test.js:58:5)
+[tv-dator]       source: >2
+[tv-dator]           const remote = await group.deliverOverTransport(second.nodeId, old,
+[tv-dator]         structuredClone(request));
+[tv-dator]           t.ok(refusedWithoutRows(local), 'in process: refused, no rows');
+[tv-dator]           t.ok(refusedWithoutRows(remote), 'over the transport: refused, no rows');
+[tv-dator]         ----^
+[tv-dator]           t.not(local?.failureCode, REASON.ELECTION_LOG_NOT_APPLIED,
+[tv-dator]             'the refusal is about leadership, not the election log');
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     ok 6 - the refusal is about leadership, not the election log
+[tv-dator]     1..6
+[tv-dator] not ok 1 - B-1 ACCEPTANCE (red until the raft owner's correction): a leader whose successor's envelope is delivered but still queued behind its own pending turn refuses an owner fact # time=5704.415ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/cdc/cdc-owner-fact-queued-successor-acceptance.test.js
+[tv-dator]     lineNumber: 35
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     }
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('B-1 ACCEPTANCE (red until the raft owner\'s correction): a leader whose
+[tv-dator]     successor\'s ' +
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       'envelope is delivered but still queued behind its own pending turn refuses an owner fact',
+[tv-dator]     {timeout: TEST_TIMEOUT_MS}, async (t) => {
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] 1..1
+[tv-dator] # { total: 6, pass: 4, fail: 2 }
+[tv-dator] # time=5719.943ms
+[tv-dator] ok test/cdc/cdc-owner-fact-redirect-deadline.test.js (17 assertions, 6448ms)
+[tv-dator] ok test/cdc/cdc-owner-fact-receiver-read-point.test.js (98 assertions, 7771ms)
+[tv-dator] ok test/query/system-table-ingress-boundary-adversarial.test.js (3074 assertions, 2207ms)
+[tv-dator] ok test/raft/raft-rs-current-authority-observation.test.js (4 assertions, 1991ms)
+[tv-dator] ok test/control-plane/readiness-owner-authority-contract.test.js (15 assertions, 1308ms)
+[tv-dator] ok test/query/parallel-query-coordinator.test.js (121 assertions, 2585ms)
+[tv-dator] ok test/control-plane/control-plane-read-authority-token.test.js (41 assertions, 1704ms)
+[tv-dator] ok test/query/query-executor-recovery-read-lifetime.test.js (122 assertions, 6766ms)
+[tv-dator] # test-files total=16 pass=14 fail=2 assertions=3835
+lab test: tv-dator: # test-files total=16 pass=14 fail=2 assertions=3835
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=16 pass=14 fail=2 assertions=3835

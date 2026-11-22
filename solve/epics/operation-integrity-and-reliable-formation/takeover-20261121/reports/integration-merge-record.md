@@ -636,3 +636,87 @@ Still pending from section 5: the zero-row update arm fence (F8), the capability
 (W1 17.3; this run removed `createMockCache` only from the dispatch-gate harness's coordinator), the second merge of the
 retained branch's corrective commits (exact re-drive lines in 9.3), the outcome-format merge (W1b), the placement-owner
 merge.
+
+## 13. Task D (third merger, claude:merger-3): two persist-outage witnesses re-staged on virtual time
+
+Writer: claude:merger-3 (took over at 487d12c91, clean, pushed). Rule set R01-R27 and test/guidelines/INDEX.md read;
+lead-rulings entries read: W2 FINAL (:713-716, the ruling), first-merge rulings (:1579-1582), gate-probe rulings (:1714).
+Cause (read): the mutation merge removed the raw route's short-circuit of deferRetry failures; the structured path
+(`retryReplicaOperationGatewayMutation`) retries inside the repository's bounded loop (local 15 s,
+`OPERATION_PERSIST_RETRY_TIMEOUT_MS`, min the caller's timeoutBudget), measured and slept on the repository's
+TimeSource. Both witnesses injected ONE retryable failure, which the in-loop retry absorbed.
+Baseline `lab/merger-3/D0-base-487d12c91-tv-dator` (487d12c91): both red, first lines identical to 23344cddc
+(cl-029 `not ok 3 - a durable transition retry owner is retained ...` [case 4, assertion 3; the row went to STOPPING];
+pending-timeout-reentry `not ok 2 - priority SQL re-dispatch should persist the SENDING and CREATING transitions`
+[case 17: updateCount 3, row CREATING], 313 assertions).
+Commit `f971c13a9` (tests only; no assertion changed; through heavy.sh with the full hook, rc=0; pushed):
+- cl-029 (`cl-029-target-completion-cas-fixture.js`, `...-evidence-retry-owner.test.js`): the injected ACTIVE CAS
+  failure is now an outage: every CAS to that step fails until `healRetryableCasFailure()`, which the case calls just
+  before it fires the retained retry (where the old one-shot injection was already consumed). `createHarness` takes an
+  optional `{timeSource}` passed to the coordinator (its repository shares it); case 4 gives a VirtualTimeSource and,
+  from the ACTIVE emission until that reconcile settles, advances it by the failure's retryAfterMs (50 ms) per
+  macrotask turn ONLY while a timer waits on it (bounded drive, 20000 turns), so the repository spends its own budget.
+  The product constant is not duplicated in the test.
+- pending-timeout-reentry case 17 (`priority-recovery-sql-dispatch-timeout-reentry-test-cases.js`): the failing
+  participant answers after the write's per-attempt budget (`TEST_PRIORITY_DISPATCH_TRANSITION_MUTATION_BUDGET_MS`,
+  imported from the owner) has elapsed on a VirtualTimeSource that the coordinator and the case's Date.now mock share
+  (the mock stood at TEST_CAPTURED_AT_MS and still does until the outage), so the CREATING write is attempted exactly
+  once in the loop (the case asserts updateCount 2, then 3 after the deferred retry): the outage outlasts the budget.
+Lab `lab/merger-3/D1-f971c13a9-tv-dator`: BOTH GREEN. cl-029 ok 97 assertions (1913 ms; red baseline 1945 ms);
+pending-timeout-reentry ok 315 assertions (= f580579a5's 315; 1298 ms; red baseline 1316 ms). No wall-clock cost.
+Neither failed for a reason other than the in-loop retry.
+
+## 14. Task F: true merge of the placement outcome format (W1b) at dc7f80b7f -> `95dc6b255`
+
+Inputs: ours `f971c13a9`; theirs `work/placement-outcome-format-20261121` = `dc7f80b7faaa1950ff8e82c55f53b1c922e79c8e`
+(15 commits since the merge base `0993265e5`, the retained branch's last WIP draft; verified in verify-w1b-outcome-identity,
+-corrective, -round3; record w1b-transition-record.md 19-20). Since the base, ours changed only
+`partition-committed-statement-outcome.js` (+entryId on two STATEMENT_FAILED answers) and `replica-placement-owner.js`
+(the retained collaborator + both leadership edges); the candidate's `partition-placement-admission.js` EQUALS the base's.
+`git merge --no-ff --no-commit dc7f80b7f`: ONE textual conflict, `test/shards/impact-contracts.json` (hand-authored, two
+hunks): both sides appended a new entry at the end of `contracts` (ours: retained-placement-repair-leadership-publication;
+theirs: committed-outcome-command-identity) and of `coupledPairs` (ours: leadership-publication-and-retained-placement-
+repair; theirs: committed-outcome-owner-placement-admission, -formation-transition). Resolved as the union; JSON valid;
+vs ours +69 lines only, vs theirs +50 lines only (nothing dropped). Generated files: merge driver kept ours; hook regenerated.
+Checked against both parents (auto-merged):
+- `partition-placement-admission.js` = theirs. proposePlacementCommand (verified by reading both texts): ours did
+  leadership -> admission -> existence read of the outcome record (SETTLED answered by recordedRequestAnswer) -> cutover
+  pause -> pending join by fingerprint -> REMOVE_INTENT_UNSCOPED -> startPartitionRaftWriteCommit(park when reserved).
+  Theirs: `ownerCommandPrelude` (partition-committed-statement-outcome.js:325-347): leadership -> admission ->
+  readSettledOwnerCommandIn by command digest (SAME_COMMAND answered by recordedRequestAnswer; OTHER_RECORD = BYTES) ->
+  pause -> pending join by digest; then the same REMOVE_INTENT_UNSCOPED check and the same commit start with park. The
+  integration side's intent (a settled exact entry is a read, so the pause comes after the settled replay) is kept;
+  `observedLedgerAppliedIndex` is in theirs' recordedRequestAnswer for a FOUND admit (:79-84).
+- `partition-committed-statement-outcome.js` = theirs + ours' two `entryId: command.entryId` lines (diff vs theirs: exactly
+  those two lines).
+- `replica-placement-owner.js` = theirs' eight hunks (diff vs ours = theirs' 37-line diff vs the base) + ours' retained
+  hunks (diff vs theirs = exactly the RETAINED_REPAIR collaborator, its validation, the setLeader comment, retire on every
+  drive to false, observeRetainedLedgerLeadershipStart replacing the optional wake).
+- MERGE DEFECT found by the hook and repaired in the merge commit: the merged owner file was 809 lines (both parents
+  <= 800); the file-size check refused the first commit attempt (no bypass). Three calls (two resolveAttempt in
+  submitCandidateAdmission, reconcilePlacementAttempts) were written on fewer lines; formatting only; 797 lines.
+Semantic census: the one export theirs removed (PARTITION_COMMITTED_STATEMENT_RESULT_COLUMNS) has no importer. Retained
+consumers of the changed modules: `replica-operation-retained-repair-ingress.js:62` reads `readCommittedStatementOutcome`
+(existence) only to route the ingress to the native submission, whose prelude then decides by digest (no existence-only
+settlement remains on the decision path); `PLACEMENT_CLEARING_TRIGGER` (read by the retained owner :318, :406 and
+answer.js:132) is kept by theirs as the merged view (DEFINITE codes -> null, waiting map rows -> trigger), and
+`placement_admission_bytes_invalid` is in theirs' DEFINITE list.
+Commit `95dc6b255` (parents f971c13a9, dc7f80b7f), through heavy.sh, full hook, rc=0 (second attempt); pushed.
+
+Lab `lab/merger-3/F-95dc6b255-tv-dator` (tv-dator): 150 files = W1b's witnesses (w1b-r3-green-a1 12, w1b-r4-green-a1 4,
+w1b-corr-tip-a1 17: union 21) + the 132-file selection: 134 pass / 16 fail, 8477 assertions. Script `lab/merger-3/attr.cjs`,
+references C2-final132-tv, w1b-r3-green-a1, w1b-r4-green-a1, w1b-corr-tip-a1, D1-f971c13a9.
+- The W1b-dependent continuation witness `placement-retained-continuation` `not ok 23` (red on 78c40b57b, 7a9f52e64,
+  cd177cba8, 8d897772b) is GREEN: ok 23 assertions. (The mirror's case 8 was cured earlier by task C.)
+- Every W1b witness green with its reference count (blocked-release 5 = r4, attempts-exact-settlement 3 = r3/r4,
+  blocked-attempt, clearing-triggers incl. the DEFINITE pin, outcome-format, identity boundary, cutover pause, formation
+  replay, coordinator settlement, committed-statement-outcome, apply, found, copy-occupancy ...), except the two reds below.
+- The 16 reds: every one IDENTICAL (first failing line and assertion count) to C2-final132-tv: control-plane-rebalance.
+  integration 11, sql-query-engine-create-table-quorum 1, coordinator-created-operation-progress 5, formation-runtime-
+  service-create-lane-budget-starvation 20, growth-promote 40 (also identical on W1b's own runs), message-group-
+  membership-operation-lane 5, placement-admission-cross-coordinator-target-census 1, quorum-conditioned-remove-safety 9,
+  rebalance-coordinator-topology-guard 1, rebalancer-own-create-memory-duplicate-replace 2, replace-in-flight-blocks-
+  planning 45, replace-owner-lease-verdict-property 1, replica-operation-membership-epoch-binding 6,
+  replica-placement-owner-core 18 (W1b's own red there, #20 "requires a control-plane mutation ingress", is cured by the
+  integration line), replica-status-completeness.property 8, strict-operation-outcomes 7.
+- Versus C2-final132-tv (18 reds): cured cl-029 (task D) and placement-retained-continuation (this merge). NEW reds: none.

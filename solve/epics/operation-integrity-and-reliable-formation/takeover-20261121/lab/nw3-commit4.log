@@ -18,15 +18,15 @@ Found 0 silent catch violations
 Matched 1 inherited silent-catch baseline violations
 Promoted to ESLint (audited there, not here): state_read_defaults, value_or_promise_then_checks
 Scanned 2 JavaScript files
-Found 1 navigability violations
-Top files:
-- src/cdc/cdc-routed-write-uncertainty.js: 1
-src/cdc/cdc-routed-write-uncertainty.js:44 failure two_source_fallback_reads: one fact read from two sources; read the one authority for that fact
+Found 0 navigability violations
 Matched 10 inherited navigability baseline violations
-pre-commit: FAIL - navigability patterns (staged files)
 Scoped complexity ratchet: 3 violation(s) in 2 target(s) (threshold: 12).
 src/cdc/cdc-routed-mutation-readiness.js:160:3 Async method 'tryExecuteLocalSystemTableWrite' has a complexity of 23. Maximum allowed is 12.
 src/cdc/cdc-routed-mutation-readiness.js:356:3 Async method 'executeSQLViaQueryEngine' has a complexity of 70. Maximum allowed is 12.
 src/cdc/cdc-routed-mutation-readiness.js:697:3 Method 'isTransientCdcError' has a complexity of 16. Maximum allowed is 12.
 Saved complexity report to test-output/analysis/complexity-scoped.json.
 pre-commit: import graph stale - refreshing inventories (~2 min; skip with LAGRANGE_SKIP_INVENTORY_REGEN=1)
+pre-commit: refreshing generated test metadata
+[work/line-regression-causes-20261121 90e88cb16] fix(cdc): a routed write that may have been proposed stays unknown across its re-sends
+ 5 files changed, 100 insertions(+), 26 deletions(-)
+ create mode 100644 src/cdc/cdc-routed-write-uncertainty.js

@@ -1,0 +1,19 @@
+placement-shell=3419219
+placement-head=f971c13a9c8fb2d4090859055c1ad2b74ebf3707
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3419669
+# test-files planned=2
+classified lane ordinary: 2 file(s), jobs=4
+thermal: ok cpu 61C (coretemp/Package id 0) nvme 48C (nvme/Sensor 1)
+ok test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js (315 assertions, 1298ms)
+ok test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js (97 assertions, 1913ms)
+# test-files total=2 pass=2 fail=0 assertions=412
+placement-results={"file":"test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js","attempt":1,"ok":true,"assertions":315,"durationMs":1298,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js","attempt":1,"ok":true,"assertions":97,"durationMs":1913,"retriedOnce":false,"firstFailureLine":null}

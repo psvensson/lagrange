@@ -2188,3 +2188,90 @@ cleared when the gate passes; a verdict is handled by the same code path the gat
 re-evaluates once; a definite refusal ends the wait with the typed non-dispatchable outcome handed to the
 workflow's existing handling (no limbo); witnesses for the surviving mutants; the mirror and gate files run at the
 actual head. These are conditions for the three-node run.
+
+## 2026-11-22 — query executor quarantine (work/query-executor-quarantine-20261121; reports/query-executor-quarantine-record.md)
+Executed on tv-dator. MAIN RESULT: ZERO NO_HANDLER answers on all six node logs of the two retained GCP formations
+(the executor's warn channel was working there): the 30 s penalty did NOT contribute to the missed 420 s bound or
+to the PostgreSQL failure in those runs.
+Contract established: the only cause is NO_HANDLER (node alive, no handler for that replica's address);
+connection failures and timeouts never mark; 30 s for system tables, 5 s for user tables (the 5 s is a log-throttle
+constant reused); released early by a successful delivery or a change in that replica's SERVICES row where the
+caller passes the row; keyed by partition plus address (one replica's refusal does not block other partitions);
+leader-required reads fail typed with no hop ("Partition service not found" although the row exists); NO SAFETY
+FINDING: a leader-required read never goes to another replica. History: 28f413983 (2026-03-30) with NO_HANDLER as
+the only cause; 8f284ad8a (2026-04-13) added the 30 s control-plane window and the fingerprint release (reason:
+rows lingering after a replica is removed; no quest names it). On a fresh formation "handler not started yet"
+should not occur (a row becomes ACTIVE only after its handler is registered).
+One-clock repair: red d5698f225 -> green 504e2c989 (the executor resolves one clock for its HLC and the
+quarantine); head 12/12 files, base 11/11. Penalty witness b76d50c68 (handler serves 200 ms after the refusal,
+planner reads every 5 s: 5 wasted turns, first success at 30,000 ms): red, proposal not implemented.
+Rulings: the clock repair 504e2c989 is a merge candidate after a short verification (started:
+reports/verify-query-executor-one-clock.md). NO change to durations or causes: no real occurrence was found, so
+there is no demonstrated defect; the penalty witness and the backoff proposal stay on the branch as a recorded
+option and are NOT merged; marks per formation are to be counted on the three-node acceptance run (zero expected).
+Recorded for later: the misleading error text on a refused leader-required read; other host-clock reads in the
+executor, the SQL engine and one transport call. The guard fixture W2 models an unreachable node as NO_HANDLER,
+which production does not do: its writer was told to model unreachability as a transport failure.
+
+## 2026-11-22 — verification of the query executor one-clock repair (reports/verify-query-executor-one-clock.md): APPROVE-WITH-CONDITIONS for 504e2c989
+Verified: the quarantine's only two time reads go through the resolved clock; one clock object for the HLC and
+the quarantine; the executor's host-clock default is not reached in production (its one construction always passes
+engine.nowFn; all three production engines are on wall time in a real node); marks are per instance, in memory,
+never persisted or shared, and are not compared with any host-clock value; production behaviour unchanged; lab red
+at d5698f225 and green at head (12/12, 406; base 11/11, 396). Conditions: generated seals regenerated at the merge
+result; the candidate's gate runs the impact cone incl. multi-node harnesses that supply a node clock.
+Ruling: the candidate's merger received TASK J (merge exactly 504e2c989; the red penalty witness stays out).
+
+## 2026-11-22 — owner-fact read corrective round (work/owner-fact-read-20261121, head d358ab712; record section 19)
+Executed (lab/s0c-red-4a22aa6b4 -> lab/s0c-green-3d017a2b5 -> lab/s0c-final-d358ab712: 14 of 16 files green; the
+two reds are the B-1 acceptance witness, red until the raft owner's correction, and the 8(ii) file).
+Done: 1(a) the applied position is read from the store in the statement's transaction (read-point-moved deleted);
+1(b) the receiver decides on observeCurrentAuthority() before and after the read: role LEADER only (NOT_SETTLED,
+anything else or a missing role refuses) and currentTermApplied true (replaces !confChangePending); merge of the
+raft-owner branch 692336b45 without conflicts; 2 single-flight key with kind and floor, echoed request verified
+for owner facts; 3 floors typed {partitionId, index, term}; 4 synchronous foreign-transaction refusal (unreachable
+today); 5 final signature with required deadline and routing dimension; 6 the red finding converted to a green
+property plus a census ratchet (37); 8(i) three fakes migrated. Mutants killed: 1(a), key, floor, echo, role on
+the cached status at both checks; one survives (only the pre-read check on the cached status). Cone at 3d017a2b5:
+2175 files, 113 red, all attributed (103 identical at base, 6 different first failure at base, the expected ones,
+one intermittent pre-existing).
+8(ii) probe (lab/s0c-probe-8ii-capture): class C: under widening the stub answered success with a role-leader,
+term-1 witness naming itself and the caller accepted it through isValidLeaderReadAuthorityWitness.
+LEAD RULING on 8(ii): the test is not changed. An honest deposed leader answers like that stub, and widening newly
+exposes the caller to it. Rule from raft (at most one leader per term): an answer from replica R at witness term t
+is acceptable only if consistent with the published leadership (P at T): (R is P and t >= T) or (t > T); anything
+else is refused, typed. If the PARTITIONS leadership publication carries a term or ordering epoch, implement it in
+the one acceptance predicate (owner facts and plain leader-required reads), red-first with the existing two
+assertions plus deposed-at-T-1 refused, newer-at-T+1 accepted, P-at-T accepted; if it carries none, widening
+accepts nothing from a non-published replica and the read is typed unavailable ("published leader unusable")
+until publication changes. Also: item 7 witness or removal; a witness that makes the pre-read check load-bearing;
+the census ratchet wired into the static target; the cone at the final head. Re-verification follows.
+
+## 2026-11-22 — named-write branch: A and B repaired, fixtures, timing (work/line-regression-causes-20261121, head 5dd32deb3)
+Executed on adam-laptop. A (sticky unresolved): red lab/nw3-red-b3c84c85a (after an unknown attempt the caller
+got NOT_PROPOSED and "definitively unapplied") -> green from 90e88cb16 (new src/cdc/cdc-routed-write-uncertainty.js):
+the caller gets the named UNKNOWN, the instance stays held, a re-send after the entry commits settles APPLIED with
+one row; the refusals-only mirror stays definite. The real CDC loop's schedule is [unknown, NOT_LEADER] (it stops
+at the first NOT_LEADER). B (terminal shutdown answer): at 5dd32deb3 a shut-down answer stays thrown and terminal
+with the outcome "unknown" carried beside it; shutdown cases (i) and (iv) pass unchanged; (ii-a) still fails
+because the file's fake answers success without a commit receipt (fixture debt).
+Fixtures: four files migrated and green (lab/nw3-after-48a1254a3-fixtures); expectations restated to "raft lane
+exactly once, nothing executed outside raft"; cdc-shutdown-terminal-owner-write confirmed NOT deletion debt (it
+already fails at the parent; bisect: (ii-a) from ab3e4b9af, (i)/(iv) from baa2a2580).
+Timing, interleaved: before the deletion 26.7 / 28.8 / 28.1 s; after 27.0 / 28.1 / 26.4 s: no slowdown (the
+earlier 30.3 s was noise).
+Seal check on the fallback: none. Introduced by ccbbf586b (a checkpoint of quest
+lone-seed-formation-admission-livelock-closure), which put the raft lane in front of the old always-direct loop and
+kept the loop "for the leaderless window": an asserted reason, never executed; the quest's sealed doneWhen and
+constraints cover other suites; nothing in invariants.json or the decision tables.
+D (config seeding "seeded 0, skipped 72"): the 72 rows ARE written; the CDC copies a missing affectedRows from the
+partition's answer, which carries `changes`; the classifier treats the count as invalid and the write as not
+applied. Two names for one fact.
+Final run lab/nw3-final-5dd32deb3: 31 files, 26 green; the 5 reds each have their known first failure.
+Not started: C (the window writes service_definitions, service_endpoints, config, control_plane_publications
+without a leadership wait).
+Rulings (successor on the same worktree): C as ruled (wait for the leader of every partition the window writes,
+through the existing owned wait, witness through the real seed startup, timing repeated); D: a census of every
+count field by producer and consumer, witnesses for each wrong decision, ONE canonical count field with a single
+conversion point (no either-name reads), and whether "PG-wire row counts always 0" is the same defect; E: the
+shutdown fake answers with a real receipt; F: final run. Re-verification of this branch follows that report.

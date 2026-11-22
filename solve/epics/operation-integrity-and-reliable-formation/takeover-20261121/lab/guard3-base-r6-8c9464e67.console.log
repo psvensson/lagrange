@@ -1,0 +1,411 @@
+lab test: adam-laptop: ordinary (1 files) cores=8 mem=15.5GiB speed x2.01
+[adam-laptop] placement-shell=3902862
+[adam-laptop] placement-head=8c9464e67fcc6ce2be250046c90190879f96141e
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[adam-laptop] placement-pid=3903354
+[adam-laptop] # test-files planned=1
+[adam-laptop] classified lane ordinary: 1 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 79C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 79C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 44C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] not ok test/rebalancer/spread-cure-escape-schedules.test.js (64 assertions, 30183ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 14
+[adam-laptop] # Subtest: E2 July world, services-p1 leader alive and reachable, planner on a follower: the spread cure of [A,A,B] is admitted within one evaluation cycle
+[adam-laptop]     ok 1 - setup: the planner node hosts a services-p1 replica that follows
+[adam-laptop]     ok 2 - setup: the planner observes the partition's replicas
+[adam-laptop]     # OBSERVATION E2 {"escapePresent":true,"cycle":{"label":"e2-cycle-1","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"8df2272d-8a7e-4810-93ac-98bc872dad6a"}],"admitted":1,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"sql_write_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":true}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]}}
+[adam-laptop]     ok 3 - a spread-restoring add-like move is admitted in the first cycle
+[adam-laptop]     ok 4 - a spread-restoring operation row targets a free node: [{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]
+[adam-laptop]     1..4
+[adam-laptop] ok 1 - E2 July world, services-p1 leader alive and reachable, planner on a follower: the spread cure of [A,A,B] is admitted within one evaluation cycle # time=453.471ms
+[adam-laptop] 
+[adam-laptop] # Subtest: E2 control (only where the escape exists): the same cycle with the escape answering false gives the July signature
+[adam-laptop]     ok 1 - setup: the planner node hosts a services-p1 replica that follows
+[adam-laptop]     ok 2 - setup: the planner observes the partition's replicas
+[adam-laptop]     # OBSERVATION E2-control {"cycle":{"label":"e2-control-cycle-1","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":true,"reason":"blocked","admissionReason":"replica_inventory_unusable","decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"operationId":null}],"admitted":0,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[]}}
+[adam-laptop]     ok 3 - without the escape nothing is admitted
+[adam-laptop]     ok 4 - the cure is denied replica_inventory_unusable (the July 17-40-24 signature)
+[adam-laptop]     1..4
+[adam-laptop] ok 2 - E2 control (only where the escape exists): the same cycle with the escape answering false gives the July signature # time=273.798ms
+[adam-laptop] 
+[adam-laptop] # Subtest: E3 services-p1 without a leader, then a leader: nothing is admitted while no replica leads, and the cure is admitted within one cycle of the leader appearing
+[adam-laptop]     ok 1 - setup: the planner node hosts a services-p1 replica that follows
+[adam-laptop]     ok 2 - setup: the planner observes the partition's replicas
+[adam-laptop]     ok 3 - setup: no services-p1 replica leads: {"leaderless":true,"afterMs":1994,"roles":[{"nodeId":"peer-node-a","core":"follower","service":"follower","leaderId":null},{"nodeId":"planner-node","core":"follower","service":"follower","leaderId":"services-p1-r1"},{"nodeId":"peer-node-b","core":"follower","service":"follower","leaderId":"services-p1-r1"}]}
+[adam-laptop]     ok 4 - setup: a services-p1 leader appears: {"elected":true,"leaderNodeId":"peer-node-a","afterMs":3234}
+[adam-laptop]     # OBSERVATION E3 {"escapePresent":true,"outage":{"leaderless":true,"afterMs":1994,"roles":[{"nodeId":"peer-node-a","core":"follower","service":"follower","leaderId":null},{"nodeId":"planner-node","core":"follower","service":"follower","leaderId":"services-p1-r1"},{"nodeId":"peer-node-b","core":"follower","service":"follower","leaderId":"services-p1-r1"}]},"withoutLeader":[{"label":"e3-no-leader-1","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"5e015ca7-3b0a-44b8-969f-d9cbd009eea7"}],"admitted":1,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"sql_write_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":true}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]},{"label":"e3-no-leader-2","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"5e015ca7-3b0a-44b8-969f-d9cbd009eea7"}],"admitted":1,"reads":[],"escape":[],"hold":[],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]},{"label":"e3-no-leader-3","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"5e015ca7-3b0a-44b8-969f-d9cbd009eea7"}],"admitted":1,"reads":[],"escape":[],"hold":[],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]}],"leftBehind":{"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}],"reservations":[{"state":"active","partition_id":"sql_write_operations-p1","node_id":null,"operation_id":"5e015ca7-3b0a-44b8-969f-d9cbd009eea7"}],"slotProbe":{"admitted":false,"reason":null,"skip":"budget_exceeded","message":"Partition sql_write_operations-p1 already has a different create intent"}},"recovery":{"elected":true,"leaderNodeId":"peer-node-a","afterMs":3234},"afterLeader":[{"label":"e3-leader-1","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"5e015ca7-3b0a-44b8-969f-d9cbd009eea7"}],"admitted":1,"reads":[],"escape":[],"hold":[],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]}],"finalLedger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]}
+[adam-laptop]     not ok 5 - no cycle admits an add-like move while services-p1 has no leader
+[adam-laptop]       ---
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+[adam-laptop]         lineNumber: 411
+[adam-laptop]         columnNumber: 5
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: |
+[adam-laptop]         Test.<anonymous> (test/rebalancer/spread-cure-escape-schedules.test.js:411:5)
+[adam-laptop]       source: >2
+[adam-laptop]             recovery, afterLeader, finalLedger: ledgerOf(scene)});
+[adam-laptop]       
+[adam-laptop]           t.ok(withoutLeader.every((cycle) => cycle.admitted === 0),
+[adam-laptop]         ----^
+[adam-laptop]             'no cycle admits an add-like move while services-p1 has no leader');
+[adam-laptop]           t.same(leftBehind.ledger, [], 'no operation exists while services-p1 has no leader');
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     not ok 6 - no operation exists while services-p1 has no leader
+[adam-laptop]       ---
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,1 +1,9 @@
+[adam-laptop]         -Array []
+[adam-laptop]         +Array [
+[adam-laptop]         +  Object {
+[adam-laptop]         +    "type": "ADD",
+[adam-laptop]         +    "status": "pending",
+[adam-laptop]         +    "target_node_id": "planner-node",
+[adam-laptop]         +    "replica_id": "sql_write_operations-p1-r4",
+[adam-laptop]         +    "source_replica_id": null,
+[adam-laptop]         +  },
+[adam-laptop]         +]
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+[adam-laptop]         lineNumber: 413
+[adam-laptop]         columnNumber: 5
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: |
+[adam-laptop]         Test.<anonymous> (test/rebalancer/spread-cure-escape-schedules.test.js:413:5)
+[adam-laptop]       source: >2
+[adam-laptop]           t.ok(withoutLeader.every((cycle) => cycle.admitted === 0),
+[adam-laptop]             'no cycle admits an add-like move while services-p1 has no leader');
+[adam-laptop]           t.same(leftBehind.ledger, [], 'no operation exists while services-p1 has no leader');
+[adam-laptop]         ----^
+[adam-laptop]           t.equal(afterLeader.length, 1,
+[adam-laptop]             'the first cycle after the leader appears ends the wait (admits, or finds the cure made)');
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     ok 7 - the first cycle after the leader appears ends the wait (admits, or finds the cure made)
+[adam-laptop]     ok 8 - exactly one spread-restoring operation
+[adam-laptop]     ok 9 - that first cycle is the one that admits the cure
+[adam-laptop]     1..9
+[adam-laptop] not ok 3 - E3 services-p1 without a leader, then a leader: nothing is admitted while no replica leads, and the cure is admitted within one cycle of the leader appearing # time=5610.58ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+[adam-laptop]     lineNumber: 379
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: >
+[adam-laptop]     });
+[adam-laptop]   
+[adam-laptop]   
+[adam-laptop]     test('E3 services-p1 without a leader, then a leader: nothing is admitted
+[adam-laptop]     while no replica ' +
+[adam-laptop]   
+[adam-laptop]     ^
+[adam-laptop]       'leads, and the cure is admitted within one cycle of the leader appearing',
+[adam-laptop]     {timeout: CASE_TIMEOUT_MS}, async (t) => {
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] # Subtest: E5 over-target [A,A,A,B]: the hold fails open and the guard behind it; across a bounded services-p1 gap the surplus drain's cure waits for the gap and no longer
+[adam-laptop]     ok 1 - setup: the planner node hosts a services-p1 replica that follows
+[adam-laptop]     ok 2 - setup: the planner observes the partition's replicas
+[adam-laptop]     ok 3 - setup: no services-p1 replica leads: {"leaderless":true,"afterMs":1983,"roles":[{"nodeId":"peer-node-a","core":"follower","service":"follower","leaderId":null},{"nodeId":"planner-node","core":"follower","service":"follower","leaderId":"services-p1-r1"},{"nodeId":"peer-node-b","core":"follower","service":"follower","leaderId":"services-p1-r1"}]}
+[adam-laptop]     ok 4 - setup: the gap ends: {"elected":true,"leaderNodeId":"peer-node-a","afterMs":1815}
+[adam-laptop]     # OBSERVATION E5 {"escapePresent":true,"outage":{"leaderless":true,"afterMs":1983,"roles":[{"nodeId":"peer-node-a","core":"follower","service":"follower","leaderId":null},{"nodeId":"planner-node","core":"follower","service":"follower","leaderId":"services-p1-r1"},{"nodeId":"peer-node-b","core":"follower","service":"follower","leaderId":"services-p1-r1"}]},"duringGap":[{"label":"e5-gap-1","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"b8a44ac2-aa59-4cb8-ab36-a43eaf8ba433"}],"admitted":1,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":4,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":4,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":4,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":4,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"sql_write_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":true}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r5","source_replica_id":null}]},{"label":"e5-gap-2","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"b8a44ac2-aa59-4cb8-ab36-a43eaf8ba433"}],"admitted":1,"reads":[],"escape":[],"hold":[],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r5","source_replica_id":null}]},{"label":"e5-gap-3","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"b8a44ac2-aa59-4cb8-ab36-a43eaf8ba433"}],"admitted":1,"reads":[],"escape":[],"hold":[],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r5","source_replica_id":null}]}],"ledgerAtGapEnd":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r5","source_replica_id":null}],"recovery":{"elected":true,"leaderNodeId":"peer-node-a","afterMs":1815},"afterGap":[{"label":"e5-after-gap-1","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"b8a44ac2-aa59-4cb8-ab36-a43eaf8ba433"}],"admitted":1,"reads":[],"escape":[],"hold":[],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r5","source_replica_id":null}]}],"finalLedger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r5","source_replica_id":null}]}
+[adam-laptop]     ok 5 - the over-target hold never holds on the gap (its sealed fail-open)
+[adam-laptop]     ok 6 - no surplus REMOVE executes during the gap
+[adam-laptop]     not ok 7 - no add-like move is admitted during the gap
+[adam-laptop]       ---
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+[adam-laptop]         lineNumber: 444
+[adam-laptop]         columnNumber: 5
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: |
+[adam-laptop]         Test.<anonymous> (test/rebalancer/spread-cure-escape-schedules.test.js:444:5)
+[adam-laptop]       source: |2
+[adam-laptop]             move.operation !== MoveType.REMOVE || move.skipped === true)),
+[adam-laptop]           'no surplus REMOVE executes during the gap');
+[adam-laptop]           t.ok(duringGap.every((cycle) => cycle.admitted === 0),
+[adam-laptop]         ----^
+[adam-laptop]             'no add-like move is admitted during the gap');
+[adam-laptop]           t.same(ledgerAtGapEnd, [],
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     not ok 8 - the gap ended with the drain unmoved: its end does not depend on the drain
+[adam-laptop]       ---
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,1 +1,9 @@
+[adam-laptop]         -Array []
+[adam-laptop]         +Array [
+[adam-laptop]         +  Object {
+[adam-laptop]         +    "type": "ADD",
+[adam-laptop]         +    "status": "pending",
+[adam-laptop]         +    "target_node_id": "planner-node",
+[adam-laptop]         +    "replica_id": "sql_write_operations-p1-r5",
+[adam-laptop]         +    "source_replica_id": null,
+[adam-laptop]         +  },
+[adam-laptop]         +]
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+[adam-laptop]         lineNumber: 446
+[adam-laptop]         columnNumber: 5
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: |
+[adam-laptop]         Test.<anonymous> (test/rebalancer/spread-cure-escape-schedules.test.js:446:5)
+[adam-laptop]       source: >2
+[adam-laptop]           t.ok(duringGap.every((cycle) => cycle.admitted === 0),
+[adam-laptop]             'no add-like move is admitted during the gap');
+[adam-laptop]           t.same(ledgerAtGapEnd, [],
+[adam-laptop]         ----^
+[adam-laptop]             'the gap ended with the drain unmoved: its end does not depend on the drain');
+[adam-laptop]           t.equal(afterGap.length, 1, 'the first cycle after the gap ends the wait');
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     ok 9 - the first cycle after the gap ends the wait
+[adam-laptop]     ok 10 - and admits the spread cure
+[adam-laptop]     ok 11 - exactly one spread-restoring operation
+[adam-laptop]     1..11
+[adam-laptop] not ok 4 - E5 over-target [A,A,A,B]: the hold fails open and the guard behind it; across a bounded services-p1 gap the surplus drain's cure waits for the gap and no longer # time=4192.162ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+[adam-laptop]     lineNumber: 421
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: >
+[adam-laptop]     });
+[adam-laptop]   
+[adam-laptop]   
+[adam-laptop]     test('E5 over-target [A,A,A,B]: the hold fails open and the guard behind it;
+[adam-laptop]     across a ' +
+[adam-laptop]   
+[adam-laptop]     ^
+[adam-laptop]       'bounded services-p1 gap the surplus drain\'s cure waits for the gap and no longer',
+[adam-laptop]     {timeout: CASE_TIMEOUT_MS}, async (t) => {
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] # Subtest: E6 the planner cannot reach the services-p1 leader while services-p1 is healthy: nothing is admitted while the route is down, and the cure is admitted within one cycle of the route returning
+[adam-laptop]     ok 1 - setup: the planner node hosts a services-p1 replica that follows
+[adam-laptop]     ok 2 - setup: the planner observes the partition's replicas
+[adam-laptop]     # OBSERVATION E6 {"escapePresent":true,"routeDown":[{"label":"e6-route-down-1","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"abfd0471-f660-4cbd-b7bb-0acab6ec6926"}],"admitted":1,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"sql_write_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":true}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]},{"label":"e6-route-down-2","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"abfd0471-f660-4cbd-b7bb-0acab6ec6926"}],"admitted":1,"reads":[],"escape":[],"hold":[],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]},{"label":"e6-route-down-3","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"abfd0471-f660-4cbd-b7bb-0acab6ec6926"}],"admitted":1,"reads":[],"escape":[],"hold":[],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]}],"ledgerWhileDown":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}],"registration":{"committed":true,"appliedIndex":5,"error":null},"leaderWhileDown":"peer-node-a","hopsWhileDown":9,"afterRoute":[{"label":"e6-route-back-1","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"abfd0471-f660-4cbd-b7bb-0acab6ec6926"}],"admitted":1,"reads":[],"escape":[],"hold":[],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]}],"finalLedger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]}
+[adam-laptop]     ok 3 - setup: services-p1 keeps its leader throughout
+[adam-laptop]     ok 4 - setup: services-p1 commits a SERVICES write through that leader while the route is down
+[adam-laptop]     not ok 5 - no cycle admits an add-like move while the planner cannot reach the leader
+[adam-laptop]       ---
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+[adam-laptop]         lineNumber: 490
+[adam-laptop]         columnNumber: 5
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: |
+[adam-laptop]         Test.<anonymous> (test/rebalancer/spread-cure-escape-schedules.test.js:490:5)
+[adam-laptop]       source: >2
+[adam-laptop]           t.equal(registration.error, null,
+[adam-laptop]             'setup: services-p1 commits a SERVICES write through that leader while the route is down');
+[adam-laptop]           t.ok(routeDown.every((cycle) => cycle.admitted === 0),
+[adam-laptop]         ----^
+[adam-laptop]             'no cycle admits an add-like move while the planner cannot reach the leader');
+[adam-laptop]           t.same(ledgerWhileDown, [], 'no operation exists while the route is down');
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     not ok 6 - no operation exists while the route is down
+[adam-laptop]       ---
+[adam-laptop]       diff: |
+[adam-laptop]         --- expected
+[adam-laptop]         +++ actual
+[adam-laptop]         @@ -1,1 +1,9 @@
+[adam-laptop]         -Array []
+[adam-laptop]         +Array [
+[adam-laptop]         +  Object {
+[adam-laptop]         +    "type": "ADD",
+[adam-laptop]         +    "status": "pending",
+[adam-laptop]         +    "target_node_id": "planner-node",
+[adam-laptop]         +    "replica_id": "sql_write_operations-p1-r4",
+[adam-laptop]         +    "source_replica_id": null,
+[adam-laptop]         +  },
+[adam-laptop]         +]
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+[adam-laptop]         lineNumber: 492
+[adam-laptop]         columnNumber: 5
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: |
+[adam-laptop]         Test.<anonymous> (test/rebalancer/spread-cure-escape-schedules.test.js:492:5)
+[adam-laptop]       source: >2
+[adam-laptop]           t.ok(routeDown.every((cycle) => cycle.admitted === 0),
+[adam-laptop]             'no cycle admits an add-like move while the planner cannot reach the leader');
+[adam-laptop]           t.same(ledgerWhileDown, [], 'no operation exists while the route is down');
+[adam-laptop]         ----^
+[adam-laptop]           t.equal(afterRoute.length, 1, 'the first cycle after the route returns ends the wait');
+[adam-laptop]           t.equal(afterRoute[0]?.admitted, 1, 'and admits the spread cure');
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     ok 7 - the first cycle after the route returns ends the wait
+[adam-laptop]     ok 8 - and admits the spread cure
+[adam-laptop]     1..8
+[adam-laptop] not ok 5 - E6 the planner cannot reach the services-p1 leader while services-p1 is healthy: nothing is admitted while the route is down, and the cure is admitted within one cycle of the route returning # time=3850.188ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+[adam-laptop]     lineNumber: 453
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: >
+[adam-laptop]     });
+[adam-laptop]   
+[adam-laptop]   
+[adam-laptop]     test('E6 the planner cannot reach the services-p1 leader while services-p1 is
+[adam-laptop]     healthy: ' +
+[adam-laptop]   
+[adam-laptop]     ^
+[adam-laptop]       'nothing is admitted while the route is down, and the cure is admitted within one cycle ' +
+[adam-laptop]       'of the route returning', {timeout: CASE_TIMEOUT_MS}, async (t) => {
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] # Subtest: E4(c) the operation ledger concentrated [A,A,B] (the July-11 schedule): what each commit does for the ledger's own cure with the services-p1 leader reachable, then without a leader
+[adam-laptop]     ok 1 - setup: the planner node hosts a services-p1 replica that follows
+[adam-laptop]     ok 2 - setup: the planner observes the partition's replicas
+[adam-laptop]     ok 3 - setup: no services-p1 replica leads: {"leaderless":true,"afterMs":2080,"roles":[{"nodeId":"peer-node-a","core":"follower","service":"follower","leaderId":null},{"nodeId":"planner-node","core":"follower","service":"follower","leaderId":"services-p1-r1"},{"nodeId":"peer-node-b","core":"follower","service":"follower","leaderId":"services-p1-r1"}]}
+[adam-laptop]     ok 4 - setup: a services-p1 leader appears: {"elected":true,"leaderNodeId":"peer-node-a","afterMs":1880}
+[adam-laptop]     # OBSERVATION E4c {"escapePresent":true,"outage":{"leaderless":true,"afterMs":2080,"roles":[{"nodeId":"peer-node-a","core":"follower","service":"follower","leaderId":null},{"nodeId":"planner-node","core":"follower","service":"follower","leaderId":"services-p1-r1"},{"nodeId":"peer-node-b","core":"follower","service":"follower","leaderId":"services-p1-r1"}]},"withoutLeader":[{"label":"e4c-no-leader-1","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":true,"reason":"blocked","admissionReason":"replica_inventory_unusable","decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"operationId":null}],"admitted":0,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"replica_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":false}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[]},{"label":"e4c-no-leader-2","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":true,"reason":"blocked","admissionReason":"replica_inventory_unusable","decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"operationId":null}],"admitted":0,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"replica_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":false}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[]},{"label":"e4c-no-leader-3","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":true,"reason":"blocked","admissionReason":"replica_inventory_unusable","decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"operationId":null}],"admitted":0,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"replica_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":false}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[]}],"ledgerWithoutLeader":[],"recovery":{"elected":true,"leaderNodeId":"peer-node-a","afterMs":1880},"afterLeader":[{"label":"e4c-leader-1","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":true,"reason":"blocked","admissionReason":"replica_inventory_unusable","decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"operationId":null}],"admitted":0,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"replica_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":false}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[]},{"label":"e4c-leader-2","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":true,"reason":"blocked","admissionReason":"replica_inventory_unusable","decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"operationId":null}],"admitted":0,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"replica_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":false}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[]},{"label":"e4c-leader-3","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":true,"reason":"blocked","admissionReason":"replica_inventory_unusable","decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"operationId":null}],"admitted":0,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"replica_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":false}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[]},{"label":"e4c-leader-4","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":true,"reason":"blocked","admissionReason":"replica_inventory_unusable","decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"operationId":null}],"admitted":0,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"replica_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":false}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[]},{"label":"e4c-leader-5","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":true,"reason":"blocked","admissionReason":"replica_inventory_unusable","decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"operationId":null}],"admitted":0,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"replica_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":false}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[]}],"finalLedger":[]}
+[adam-laptop]     ok 5 - nothing is admitted for the ledger while services-p1 has no leader
+[adam-laptop]     ok 6 - no ledger operation is written meanwhile
+[adam-laptop]     1..6
+[adam-laptop] ok 6 - E4(c) the operation ledger concentrated [A,A,B] (the July-11 schedule): what each commit does for the ledger's own cure with the services-p1 leader reachable, then without a leader # time=4351.712ms
+[adam-laptop] 
+[adam-laptop] # Subtest: E4(a) services-p1 loses two of its three replicas: no leader is ever elected, and the guard grants nothing for a services-p1 cure, with or without the escape
+[adam-laptop]     ok 1 - setup: the planner node hosts a services-p1 replica that follows
+[adam-laptop]     ok 2 - setup: the planner observes the partition's replicas
+[adam-laptop]     ok 3 - setup: the old leader stepped down: [{"nodeId":"peer-node-a","core":"follower","service":"follower","leaderId":null},{"nodeId":"planner-node","core":"follower","service":"follower","leaderId":"services-p1-r1"},{"nodeId":"peer-node-b","core":"follower","service":"follower","leaderId":"services-p1-r1"}]
+[adam-laptop]     # OBSERVATION E4a {"escapePresent":true,"roles":[{"nodeId":"peer-node-a","core":"pre-candidate","service":"follower","leaderId":null},{"nodeId":"planner-node","core":"pre-candidate","service":"follower","leaderId":null},{"nodeId":"peer-node-b","core":"follower","service":"follower","leaderId":"services-p1-r1"}],"leaderSamples":0,"sampleCount":98,"escape":[{"partitionId":"services-p1","moveType":"ADD","targetNodeId":"free-node-c","authoritativeAvailable":false,"engaged":false}],"attempt":{"admitted":false,"reason":"replica_inventory_unusable","decisionType":"blocked","skip":null,"message":"Topology guard blocked for ADD on free-node-c: replica_inventory_unusable"},"servicesLedger":[]}
+[adam-laptop]     ok 4 - no services-p1 replica leads while two of three are gone (no quorum, no conf change)
+[adam-laptop]     ok 5 - services-p1 is outside the escape's partition scope at every commit
+[adam-laptop]     ok 6 - where the escape exists it does not engage for services-p1
+[adam-laptop]     ok 7 - the services-p1 cure is not admitted
+[adam-laptop]     ok 8 - no operation is written for services-p1
+[adam-laptop]     1..8
+[adam-laptop] ok 7 - E4(a) services-p1 loses two of its three replicas: no leader is ever elected, and the guard grants nothing for a services-p1 cure, with or without the escape # time=7369.501ms
+[adam-laptop] 
+[adam-laptop] # Subtest: probe only: trace the ledger cure's create path without a services-p1 leader
+[adam-laptop]     ok 1 - setup: the planner node hosts a services-p1 replica that follows
+[adam-laptop]     ok 2 - setup: the planner observes the partition's replicas
+[adam-laptop]     # OBSERVATION TRACE {"escapePresent":true,"leaderless":true,"cycle":{"admitted":0,"moves":[{"operation":"add","nodeId":"planner-node","skipped":true,"reason":"blocked","admissionReason":"replica_inventory_unusable","decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"operationId":null}],"ledger":[]},"calls":[{"name":"readEntityServiceOwnerFact","absent":true},{"name":"createOperation","type":"ADD","partitionId":"replica_operations-p1","nodeId":"planner-node","enforce":true,"admission":null,"moveKeys":["type","partitionId","entityType","entityId","nodeId","replicaId","sourceNodeId","moveReason","enforceConcurrentOperationBudget","failedCreateTargetLifecyclePrecondition"],"threw":"Topology guard blocked for ADD on planner-node: replica_inventory_unusable"},{"name":"runCreateOperationForIntent","type":null,"partitionId":null,"nodeId":null,"enforce":null,"admission":null,"moveKeys":["singleFlightKey","canonicalMove","moveForCreate","replaceIntentIdentity","dedupeKey","criticalAddLikeIntentKey","assertFreshCreationAllowed"],"threw":"Topology guard blocked for ADD on planner-node: replica_inventory_unusable"},{"name":"runOperationLedgerInterlockAccountedCreate","type":"ADD","partitionId":"replica_operations-p1","nodeId":"planner-node","enforce":true,"admission":null,"moveKeys":["type","partitionId","entityType","entityId","nodeId","replicaId","sourceNodeId","moveReason","enforceConcurrentOperationBudget","failedCreateTargetLifecyclePrecondition"],"threw":"Topology guard blocked for ADD on planner-node: replica_inventory_unusable"},{"name":"createOperationInternal","type":"ADD","partitionId":"replica_operations-p1","nodeId":"planner-node","enforce":true,"admission":null,"moveKeys":["type","partitionId","entityType","entityId","nodeId","replicaId","sourceNodeId","moveReason","enforceConcurrentOperationBudget","failedCreateTargetLifecyclePrecondition"],"threw":"Topology guard blocked for ADD on planner-node: replica_inventory_unusable"},{"name":"queryExistingInFlightOperation","type":null,"partitionId":null,"nodeId":null,"enforce":null,"admission":null,"moveKeys":["0","1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20"],"result":null},{"name":"ensureOperationLedgerSelfMoveSerialized","type":"ADD","partitionId":"replica_operations-p1","nodeId":"planner-node","enforce":true,"admission":null,"moveKeys":["type","partitionId","entityType","entityId","nodeId","replicaId","sourceNodeId","moveReason","enforceConcurrentOperationBudget","failedCreateTargetLifecyclePrecondition"],"result":null},{"name":"ensureEntityAddLikeCreateLaneAvailable","type":"ADD","partitionId":"replica_operations-p1","nodeId":"planner-node","enforce":true,"admission":null,"moveKeys":["type","partitionId","entityType","entityId","nodeId","replicaId","sourceNodeId","moveReason","enforceConcurrentOperationBudget","failedCreateTargetLifecyclePrecondition"],"result":null},{"name":"ensureCriticalPartitionCreateLaneAvailable","type":"ADD","partitionId":"replica_operations-p1","nodeId":"planner-node","enforce":true,"admission":null,"moveKeys":["type","partitionId","entityType","entityId","nodeId","replicaId","sourceNodeId","moveReason","enforceConcurrentOperationBudget","failedCreateTargetLifecyclePrecondition"],"result":null},{"name":"getAuthoritativeEntityServiceRowsObservation","type":null,"partitionId":"replica_operations-p1","nodeId":null,"enforce":null,"admission":null,"moveKeys":["partitionId","entityType","entityId"],"result":{"state":null,"operationId":null,"reason":null}},{"name":"ensureCreateTopologyGuardAllowed","type":"ADD","partitionId":"replica_operations-p1","nodeId":"planner-node","enforce":true,"admission":null,"moveKeys":["type","partitionId","entityType","entityId","nodeId","replicaId","sourceNodeId","moveReason","enforceConcurrentOperationBudget","failedCreateTargetLifecyclePrecondition"],"threw":"Topology guard blocked for ADD on planner-node: replica_inventory_unusable"},{"name":"buildTopologyGuardSnapshot","type":"ADD","partitionId":"replica_operations-p1","nodeId":"planner-node","enforce":true,"admission":null,"moveKeys":["type","partitionId","entityType","entityId","nodeId","replicaId","sourceNodeId","moveReason","enforceConcurrentOperationBudget","failedCreateTargetLifecyclePrecondition"],"result":{"state":"inventory_unusable","operationId":null,"reason":null}},{"name":"getAuthoritativeEntityServiceRowsObservation","type":null,"partitionId":"replica_operations-p1","nodeId":null,"enforce":null,"admission":null,"moveKeys":["partitionId","entityType","entityId"],"result":{"state":null,"operationId":null,"reason":null}},{"name":"createOperation","type":"ADD","partitionId":"replica_operations-p1","nodeId":"planner-node","enforce":true,"admission":null,"moveKeys":["type","partitionId","entityType","entityId","nodeId","replicaId","sourceNodeId","moveReason","enforceConcurrentOperationBudget","failedCreateTargetLifecyclePrecondition"],"threw":"Topology guard blocked for ADD on planner-node: replica_inventory_unusable"},{"name":"runCreateOperationForIntent","type":null,"partitionId":null,"nodeId":null,"enforce":null,"admission":null,"moveKeys":["singleFlightKey","canonicalMove","moveForCreate","replaceIntentIdentity","dedupeKey","criticalAddLikeIntentKey","assertFreshCreationAllowed"],"threw":"Topology guard blocked for ADD on planner-node: replica_inventory_unusable"},{"name":"runOperationLedgerInterlockAccountedCreate","type":"ADD","partitionId":"replica_operations-p1","nodeId":"planner-node","enforce":true,"admission":null,"moveKeys":["type","partitionId","entityType","entityId","nodeId","replicaId","sourceNodeId","moveReason","enforceConcurrentOperationBudget","failedCreateTargetLifecyclePrecondition"],"threw":"Topology guard blocked for ADD on planner-node: replica_inventory_unusable"},{"name":"createOperationInternal","type":"ADD","partitionId":"replica_operations-p1","nodeId":"planner-node","enforce":true,"admission":null,"moveKeys":["type","partitionId","entityType","entityId","nodeId","replicaId","sourceNodeId","moveReason","enforceConcurrentOperationBudget","failedCreateTargetLifecyclePrecondition"],"threw":"Topology guard blocked for ADD on planner-node: replica_inventory_unusable"},{"name":"queryExistingInFlightOperation","type":null,"partitionId":null,"nodeId":null,"enforce":null,"admission":null,"moveKeys":["0","1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20"],"result":null},{"name":"ensureOperationLedgerSelfMoveSerialized","type":"ADD","partitionId":"replica_operations-p1","nodeId":"planner-node","enforce":true,"admission":null,"moveKeys":["type","partitionId","entityType","entityId","nodeId","replicaId","sourceNodeId","moveReason","enforceConcurrentOperationBudget","failedCreateTargetLifecyclePrecondition"],"result":null},{"name":"ensureEntityAddLikeCreateLaneAvailable","type":"ADD","partitionId":"replica_operations-p1","nodeId":"planner-node","enforce":true,"admission":null,"moveKeys":["type","partitionId","entityType","entityId","nodeId","replicaId","sourceNodeId","moveReason","enforceConcurrentOperationBudget","failedCreateTargetLifecyclePrecondition"],"result":null},{"name":"ensureCriticalPartitionCreateLaneAvailable","type":"ADD","partitionId":"replica_operations-p1","nodeId":"planner-node","enforce":true,"admission":null,"moveKeys":["type","partitionId","entityType","entityId","nodeId","replicaId","sourceNodeId","moveReason","enforceConcurrentOperationBudget","failedCreateTargetLifecyclePrecondition"],"result":null},{"name":"getAuthoritativeEntityServiceRowsObservation","type":null,"partitionId":"replica_operations-p1","nodeId":null,"enforce":null,"admission":null,"moveKeys":["partitionId","entityType","entityId"],"result":{"state":null,"operationId":null,"reason":null}},{"name":"ensureCreateTopologyGuardAllowed","type":"ADD","partitionId":"replica_operations-p1","nodeId":"planner-node","enforce":true,"admission":null,"moveKeys":["type","partitionId","entityType","entityId","nodeId","replicaId","sourceNodeId","moveReason","enforceConcurrentOperationBudget","failedCreateTargetLifecyclePrecondition"],"threw":"Topology guard blocked for ADD on planner-node: replica_inventory_unusable"},{"name":"buildTopologyGuardSnapshot","type":"ADD","partitionId":"replica_operations-p1","nodeId":"planner-node","enforce":true,"admission":null,"moveKeys":["type","partitionId","entityType","entityId","nodeId","replicaId","sourceNodeId","moveReason","enforceConcurrentOperationBudget","failedCreateTargetLifecyclePrecondition"],"result":{"state":"inventory_unusable","operationId":null,"reason":null}},{"name":"getAuthoritativeEntityServiceRowsObservation","type":null,"partitionId":"replica_operations-p1","nodeId":null,"enforce":null,"admission":null,"moveKeys":["partitionId","entityType","entityId"],"result":{"state":null,"operationId":null,"reason":null}},{"name":"createOperation","type":"ADD","partitionId":"replica_operations-p1","nodeId":"planner-node","enforce":true,"admission":null,"moveKeys":["type","partitionId","entityType","entityId","nodeId","replicaId","sourceNodeId","moveReason","enforceConcurrentOperationBudget","failedCreateTargetLifecyclePrecondition"],"threw":"Topology guard blocked for ADD on planner-node: replica_inventory_unusable"},{"name":"runCreateOperationForIntent","type":null,"partitionId":null,"nodeId":null,"enforce":null,"admission":null,"moveKeys":["singleFlightKey","canonicalMove","moveForCreate","replaceIntentIdentity","dedupeKey","criticalAddLikeIntentKey","assertFreshCreationAllowed"],"threw":"Topology guard blocked for ADD on planner-node: replica_inventory_unusable"},{"name":"runOperationLedgerInterlockAccountedCreate","type":"ADD","partitionId":"replica_operations-p1","nodeId":"planner-node","enforce":true,"admission":null,"moveKeys":["type","partitionId","entityType","entityId","nodeId","replicaId","sourceNodeId","moveReason","enforceConcurrentOperationBudget","failedCreateTargetLifecyclePrecondition"],"threw":"Topology guard blocked for ADD on planner-node: replica_inventory_unusable"},{"name":"createOperationInternal","type":"ADD","partitionId":"replica_operations-p1","nodeId":"planner-node","enforce":true,"admission":null,"moveKeys":["type","partitionId","entityType","entityId","nodeId","replicaId","sourceNodeId","moveReason","enforceConcurrentOperationBudget","failedCreateTargetLifecyclePrecondition"],"threw":"Topology guard blocked for ADD on planner-node: replica_inventory_unusable"},{"name":"queryExistingInFlightOperation","type":null,"partitionId":null,"nodeId":null,"enforce":null,"admission":null,"moveKeys":["0","1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20"],"result":null},{"name":"ensureOperationLedgerSelfMoveSerialized","type":"ADD","partitionId":"replica_operations-p1","nodeId":"planner-node","enforce":true,"admission":null,"moveKeys":["type","partitionId","entityType","entityId","nodeId","replicaId","sourceNodeId","moveReason","enforceConcurrentOperationBudget","failedCreateTargetLifecyclePrecondition"],"result":null},{"name":"ensureEntityAddLikeCreateLaneAvailable","type":"ADD","partitionId":"replica_operations-p1","nodeId":"planner-node","enforce":true,"admission":null,"moveKeys":["type","partitionId","entityType","entityId","nodeId","replicaId","sourceNodeId","moveReason","enforceConcurrentOperationBudget","failedCreateTargetLifecyclePrecondition"],"result":null},{"name":"ensureCriticalPartitionCreateLaneAvailable","type":"ADD","partitionId":"replica_operations-p1","nodeId":"planner-node","enforce":true,"admission":null,"moveKeys":["type","partitionId","entityType","entityId","nodeId","replicaId","sourceNodeId","moveReason","enforceConcurrentOperationBudget","failedCreateTargetLifecyclePrecondition"],"result":null},{"name":"getAuthoritativeEntityServiceRowsObservation","type":null,"partitionId":"replica_operations-p1","nodeId":null,"enforce":null,"admission":null,"moveKeys":["partitionId","entityType","entityId"],"result":{"state":null,"operationId":null,"reason":null}},{"name":"ensureCreateTopologyGuardAllowed","type":"ADD","partitionId":"replica_operations-p1","nodeId":"planner-node","enforce":true,"admission":null,"moveKeys":["type","partitionId","entityType","entityId","nodeId","replicaId","sourceNodeId","moveReason","enforceConcurrentOperationBudget","failedCreateTargetLifecyclePrecondition"],"threw":"Topology guard blocked for ADD on planner-node: replica_inventory_unusable"},{"name":"buildTopologyGuardSnapshot","type":"ADD","partitionId":"replica_operations-p1","nodeId":"planner-node","enforce":true,"admission":null,"moveKeys":["type","partitionId","entityType","entityId","nodeId","replicaId","sourceNodeId","moveReason","enforceConcurrentOperationBudget","failedCreateTargetLifecyclePrecondition"],"result":{"state":"inventory_unusable","operationId":null,"reason":null}},{"name":"getAuthoritativeEntityServiceRowsObservation","type":null,"partitionId":"replica_operations-p1","nodeId":null,"enforce":null,"admission":null,"moveKeys":["partitionId","entityType","entityId"],"result":{"state":null,"operationId":null,"reason":null}}]}
+[adam-laptop]     not ok 3 - probe trace dump
+[adam-laptop]       ---
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+[adam-laptop]         lineNumber: 615
+[adam-laptop]         columnNumber: 7
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: |
+[adam-laptop]         Test.<anonymous> (test/rebalancer/spread-cure-escape-schedules.test.js:615:7)
+[adam-laptop]       source: >2
+[adam-laptop]             observe(t, 'TRACE', {escapePresent: scene.escape !== null, leaderless: outage.leaderless,
+[adam-laptop]               cycle: {admitted: cycle.admitted, moves: cycle.moves, ledger: cycle.ledger}, calls});
+[adam-laptop]             t.fail('probe trace dump');
+[adam-laptop]         ------^
+[adam-laptop]           });
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     1..3
+[adam-laptop] not ok 8 - probe only: trace the ledger cure's create path without a services-p1 leader # time=2369.77ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+[adam-laptop]     lineNumber: 568
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: >
+[adam-laptop]   
+[adam-laptop]     // PROBE ONLY (never committed): which create path the ledger's own cure
+[adam-laptop]     takes.
+[adam-laptop]   
+[adam-laptop]     test('probe only: trace the ledger cure\'s create path without a services-p1
+[adam-laptop]     leader',
+[adam-laptop]   
+[adam-laptop]     ^
+[adam-laptop]       {timeout: CASE_TIMEOUT_MS}, async (t) => {
+[adam-laptop]         const ledgerPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.REPLICA_OPERATIONS];
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] # Subtest: probe only: print the observations
+[adam-laptop]     not ok 1 - probe dump: observation output only
+[adam-laptop]       ---
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+[adam-laptop]         lineNumber: 621
+[adam-laptop]         columnNumber: 5
+[adam-laptop]         typeName: Test
+[adam-laptop]       stack: >
+[adam-laptop]         Test.<anonymous> (test/rebalancer/spread-cure-escape-schedules.test.js:621:5)
+[adam-laptop]       
+[adam-laptop]         Test.[maybeEmitEnd] (../../../node_modules/minipass/dist/esm/index.js:704:18)
+[adam-laptop]         (../../../node_modules/minipass/src/index.ts:1022:12)
+[adam-laptop]       
+[adam-laptop]         Test.end (../../../node_modules/minipass/dist/esm/index.js:457:33)
+[adam-laptop]         (../../../node_modules/minipass/src/index.ts:745:61)
+[adam-laptop]       
+[adam-laptop]         Parser.emitComplete
+[adam-laptop]         (../../../node_modules/tap-parser/dist/esm/index.js:399:18)
+[adam-laptop]         (../../../node_modules/tap-parser/src/index.ts:520:12)
+[adam-laptop]       
+[adam-laptop]         Parser.end (../../../node_modules/tap-parser/dist/esm/index.js:384:14)
+[adam-laptop]         (../../../node_modules/tap-parser/src/index.ts:498:10)
+[adam-laptop]       source: |
+[adam-laptop]         // it fails, so this case makes the observations visible.
+[adam-laptop]         test('probe only: print the observations', (t) => {
+[adam-laptop]           t.fail('probe dump: observation output only');
+[adam-laptop]         ----^
+[adam-laptop]         });
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     not ok 2 - test unfinished
+[adam-laptop]       ---
+[adam-laptop]       at:
+[adam-laptop]         fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+[adam-laptop]         lineNumber: 620
+[adam-laptop]         columnNumber: 1
+[adam-laptop]         isToplevel: true
+[adam-laptop]       stack: |
+[adam-laptop]         test/rebalancer/spread-cure-escape-schedules.test.js:620:1
+[adam-laptop]       test: "probe only: print the observations"
+[adam-laptop]       source: |
+[adam-laptop]         // PROBE ONLY (never committed): the runner prints a file's output only when
+[adam-laptop]         // it fails, so this case makes the observations visible.
+[adam-laptop]         test('probe only: print the observations', (t) => {
+[adam-laptop]         ^
+[adam-laptop]           t.fail('probe dump: observation output only');
+[adam-laptop]         });
+[adam-laptop]       ...
+[adam-laptop]     
+[adam-laptop]     1..2
+[adam-laptop] not ok 9 - probe only: print the observations # time=31.544ms
+[adam-laptop]   ---
+[adam-laptop]   at:
+[adam-laptop]     fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+[adam-laptop]     lineNumber: 620
+[adam-laptop]     columnNumber: 1
+[adam-laptop]     isToplevel: true
+[adam-laptop]   source: |
+[adam-laptop]     // PROBE ONLY (never committed): the runner prints a file's output only when
+[adam-laptop]     // it fails, so this case makes the observations visible.
+[adam-laptop]     test('probe only: print the observations', (t) => {
+[adam-laptop]     ^
+[adam-laptop]       t.fail('probe dump: observation output only');
+[adam-laptop]     });
+[adam-laptop]   ...
+[adam-laptop] 
+[adam-laptop] 1..9
+[adam-laptop] # { total: 55, pass: 46, fail: 9 }
+[adam-laptop] # time=28524.337ms
+[adam-laptop] # test-files total=1 pass=0 fail=1 assertions=64
+lab test: adam-laptop: # test-files total=1 pass=0 fail=1 assertions=64
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=1 pass=0 fail=1 assertions=64

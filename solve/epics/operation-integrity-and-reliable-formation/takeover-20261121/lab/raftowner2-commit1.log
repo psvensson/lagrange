@@ -4,13 +4,6 @@ Per-file size comparison base: 692336b456f32a78a0e45fee3c5e7e11c46a7534
 Scanned 8 JavaScript files
 Found 0 hot-path diagnostics violations
 Matched 28 inherited hot-path diagnostics baseline violations
-
-/mnt/data/peter/projects/.worktrees/raft-owner-authority-20261121/test/raft/raft-rs-backend/proposal-submitting-leadership.test.js
-  48:11  error  'B' is assigned a value but never used. Allowed unused vars must match /^_/u  no-unused-vars
-
-✖ 1 problem (1 error, 0 warnings)
-
-pre-commit: FAIL - eslint (staged files)
 Scanned 0 JavaScript files
 Found 0 new literal-guideline violations
 Matched 0 inherited literal-guideline baseline violations
@@ -29,5 +22,8 @@ Found 0 navigability violations
 Matched 0 inherited navigability baseline violations
 pre-commit: import graph stale - refreshing inventories (~2 min; skip with LAGRANGE_SKIP_INVENTORY_REGEN=1)
 pre-commit: refreshing generated test metadata
-pre-commit: 1 staged check(s) failed - fix and re-commit
-pre-commit: (bypass for WIP: LAGRANGE_SKIP_PRECOMMIT=1 git commit)
+[work/raft-owner-authority-20261121 d5c02e1e2] test: restage follower-forwarding setups; red witnesses for B-1, C-1..C-4
+ 12 files changed, 809 insertions(+), 117 deletions(-)
+ create mode 100644 test/raft/raft-rs-backend/forwarded-proposal-ingress-refusal.test.js
+ create mode 100644 test/raft/raft-rs-backend/proposal-submitting-leadership.test.js
+ create mode 100644 test/raft/raft-rs-current-authority-deposition.test.js

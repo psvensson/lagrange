@@ -1,0 +1,83 @@
+{
+  "sha": "5dd32deb31b765d6610823e4d53aa2b0209eeb6e",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/bootstrap/seed-bootstrap-lane-refusal.integration.test.js",
+    "test/bootstrap/seed-bootstrap-direct-lane.integration.test.js",
+    "test/cdc/bootstrap-direct-write-raft-routing.test.js",
+    "test/cdc/cdc-integration-service-execute-sql-and-delivery.test.js",
+    "test/cdc/cdc-integration-service-node-state-and-bootstrap.test.js",
+    "test/cdc/bootstrap-mode-routing.property.test.js",
+    "test/bootstrap/bootstrap-mode.test.js",
+    "test/cdc/cdc-shutdown-terminal-owner-write.test.js",
+    "test/bootstrap/seed-registration-phase.test.js",
+    "test/bootstrap/bootstrap-sequence.test.js",
+    "test/query/named-write-cdc-sticky-unknown.test.js",
+    "test/query/named-write-real-producer-definite.test.js",
+    "test/constants/message-table-census.test.js",
+    "test/query/provisioning-deadline-error-message.test.js",
+    "test/control-plane/named-write-outcome-total.test.js",
+    "test/control-plane/named-write-unknown-outcome-shape.test.js",
+    "test/control-plane/control-plane-mutation-outcome-classifier.test.js",
+    "test/raft/authoritative-row-mutation-outcome-classifier.test.js",
+    "test/query/named-write-real-producer-applied.test.js",
+    "test/bootstrap/register-service-retryable-refusal.test.js",
+    "test/rebalancer/placement-explicit-replica-refusal-code.test.js",
+    "test/control-plane/control-plane-write-identity.test.js",
+    "test/control-plane/endpoint-incarnation-authority.test.js",
+    "test/control-plane/control-plane-error-classification.test.js",
+    "test/rebalancer/coordinator-reservation-lifecycle.test.js",
+    "test/bootstrap/durable-rejoin-incarnation-advance.test.js",
+    "test/query/write-identity-instance.test.js",
+    "test/control-plane/membership-publication-native-ack-order.test.js",
+    "test/query/write-exactly-once-property.test.js",
+    "test/bootstrap/node-registration-owner.test.js",
+    "test/transport/router-in-process-address-in-use.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/constants/message-table-census.test.js",
+        "test/control-plane/membership-publication-native-ack-order.test.js",
+        "test/control-plane/named-write-outcome-total.test.js",
+        "test/control-plane/named-write-unknown-outcome-shape.test.js",
+        "test/query/named-write-cdc-sticky-unknown.test.js",
+        "test/query/named-write-real-producer-applied.test.js",
+        "test/query/named-write-real-producer-definite.test.js",
+        "test/query/provisioning-deadline-error-message.test.js",
+        "test/rebalancer/placement-explicit-replica-refusal-code.test.js",
+        "test/transport/router-in-process-address-in-use.test.js",
+        "test/query/write-identity-instance.test.js",
+        "test/query/write-exactly-once-property.test.js",
+        "test/cdc/cdc-integration-service-execute-sql-and-delivery.test.js",
+        "test/cdc/cdc-shutdown-terminal-owner-write.test.js",
+        "test/cdc/cdc-integration-service-node-state-and-bootstrap.test.js",
+        "test/rebalancer/coordinator-reservation-lifecycle.test.js",
+        "test/control-plane/control-plane-write-identity.test.js",
+        "test/cdc/bootstrap-mode-routing.property.test.js",
+        "test/control-plane/control-plane-mutation-outcome-classifier.test.js",
+        "test/control-plane/endpoint-incarnation-authority.test.js",
+        "test/raft/authoritative-row-mutation-outcome-classifier.test.js",
+        "test/control-plane/control-plane-error-classification.test.js",
+        "test/cdc/bootstrap-direct-write-raft-routing.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/bootstrap/register-service-retryable-refusal.test.js",
+        "test/bootstrap/seed-bootstrap-direct-lane.integration.test.js",
+        "test/bootstrap/seed-bootstrap-lane-refusal.integration.test.js",
+        "test/bootstrap/bootstrap-sequence.test.js",
+        "test/bootstrap/seed-registration-phase.test.js",
+        "test/bootstrap/bootstrap-mode.test.js",
+        "test/bootstrap/durable-rejoin-incarnation-advance.test.js",
+        "test/bootstrap/node-registration-owner.test.js"
+      ],
+      "jobs": 2,
+      "resourceClass": "bootstrap"
+    }
+  ]
+}

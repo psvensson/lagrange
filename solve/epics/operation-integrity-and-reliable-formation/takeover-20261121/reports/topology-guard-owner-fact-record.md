@@ -740,3 +740,304 @@ against the owner-fact guard.
 5. The invariant's evidence test still has no row for the surplus REMOVE fence, the ledger quorum-spread
    confirmation and the ledger self-move serialization hold, all named by the sealed sentence (a gap of the
    evidence test at 23344cddc already; its holdsWhen says "every enumerated admission predicate").
+
+---
+
+## 11. Sealed spread-cure escape: evidence (writer guard-3, appended 2026-11-22)
+
+Writer: guard-3 (opus), single writer, worktree and branch as above, taken over at 017921e17 (clean).
+Loaded: `CLAUDE.md`, `docs/steering/rules.md` (R09), the verification report
+(`reports/verify-topology-guard-migration.md`, findings 1-9), this record (9, 10), the sealed quest
+`solve/quests/spread-cure-union-escape-and-monotone-gate/` (quest.json, log.ndjson), the ledger-escape
+quests `formation-ledger-self-spread-services-owner-unavailable` and
+`formation-ledger-recovery-replace-source-specificity`, the supersession entries of
+`fresh-create-failure-after-committed-admission/log.ndjson` (form of a R09 record), the PG-wire report
+5a, and the coordinator's quarantine note (`reports/query-executor-quarantine-record.md`: only a
+`NO_HANDLER` answer quarantines an address; an unreachable node is a transport failure).
+Marking: [V] read in code, [X] executed on the lab, [I] inferred. Nothing in `src/` of the guard, the
+owner-fact read, the placement owner, `src/raft/**`, `invariants.json` or any quest record was edited.
+
+Probe refs (local, tests only, never landed; plumbing commits with the commit's own regenerated import
+graph seal, which the lab requires): `probe/guard-escape-head` (017921e17 + this round's files + a
+probe-only failing "dump" case so the runner prints the observations), `probe/guard-escape-base`
+(23344cddc + the same schedule file, the guard fixture and `partition-group-raft-controls.js`),
+`probe/guard-escape-f6red` (017921e17 + the F6 witness only).
+### 11.1 Two facts that change the question (read before the table)
+
+1. **The read-mode defect did not exist in July [V].** At 494c71ec1 (the sealed commit, 2026-07-18) the
+   coordinator computed `available: result.success === true && Array.isArray(result.rows)`
+   (`git show 494c71ec1:src/rebalancer/rebalance-coordinator-operation-read-methods.js`, :482): a local
+   follower's answer counted as AVAILABLE. A follower answer became "unavailable" only with c1c57b1d9
+   (2026-11-08, "enforce complete leader read provenance", PG-wire report 5a). So the July 17-40-24
+   stall (`authoritativeAvailable:false`, every spread ADD denied for 3 minutes) was a FAILED read
+   (`success !== true`), not branch B4. The first premise of hypothesis H ("in July the services read
+   was unavailable because of the read-mode defect this branch repairs") is refuted by the code of the
+   time. What failed in July is not recorded; the same day's residual catalogue names
+   `control_plane_pressure` (09:04) [quest log 2026-07-18T19:04:15Z]. And the live sample 18-48-02 of
+   the same quest records that the escape-admitted priority spread operations COMPLETED ("all
+   priority-partition spread ops completed cleanly by 18:44:46"): services-p1 accepted the cures'
+   registration writes while the planner's read was failing. The July schedule is therefore "the
+   planner's SERVICES read fails while services-p1 is healthy", which E6 below re-creates.
+2. **The sealed result has two pins, not one [V].** The sealed doneWhen runner
+   (`git show 494c71ec1:scripts/run-spread-cure-union-escape-scenarios.js` :54-63, culled 2026-09-13 by
+   8a6275a4d) pinned `critical-spread-terminal-stall-repro.test.js` AND
+   `rebalance-coordinator-topology-guard.test.js` (the quest log: "guard suite 38/38 ... scenario runner
+   (now also pinning the guard suite) 3x consecutive PASS"). The guard suite also carries the sealed
+   ledger-recovery pins of quests `formation-ledger-self-spread-services-owner-unavailable` and
+   `formation-ledger-recovery-replace-source-specificity` (case "admits only declared concentrated-ledger
+   recovery moves when the services owner is circularly unavailable") and the sealed verdict name
+   `replica_inventory_unusable` (case "fails topology increase closed when service owner rows are
+   unavailable"). 807652bae restated both. Both are restored to 23344cddc here (11.6), the guard suite with
+   only its doubles changed (F3).
+
+### 11.2 E1: the sealed test, byte-identical to 23344cddc, at the branch head
+
+What its fixture models [V]: `createTestCoordinator`'s gateway double answers every statement containing
+`FROM services` with `{success: false, error: 'authoritative services owner unavailable'}`
+(`TEST_AUTHORITATIVE_SERVICES_READ_UNAVAILABLE`, routed through `sqlQueryResults`), for every SERVICES
+read the coordinator makes (guard, hold, allocator, retired-source check), while the planner's cache keeps
+the rows. It is an abstract FAILED read at the gateway boundary: it does not say why (no leader, an
+unreachable leader, pressure), and it is not a follower's incomplete answer (that shape, B4, did not
+exist when the test was sealed; 11.1). Case 3 answers `{success: true, rows}`, which the head's double
+(`withAuthoritativeReadDefaults`) completes with a services-p1 leader witness, i.e. a READY owner fact.
+E1 result [X]: base (`lab/guard3-base-r5-f7faf8b25`, 23344cddc): GREEN, 3/3 cases, 19 assertions. Head
+(`lab/guard3-head-r3-f705ed7af`, 017921e17 + the restored file): RED, cases 1 and 2: the cure ADD to
+`node-spread-c` is skipped `deferred`, admission `replica_inventory_unavailable` DEFERRED, no operation row;
+case 3 (READY read) GREEN. Red by the branch's design (the guard decides nothing on a failed read), not by a
+defect of the fixture. The restored file stays red on the branch until the ruling.
+
+### 11.3 The schedules (E2-E6), one file at base and head
+
+`test/rebalancer/spread-cure-escape-schedules.test.js`. Composition: the sealed reproduction's real
+UnifiedRebalancer planning `sql_write_operations-p1` (or the ledger, E4c) and the real RebalanceCoordinator
+with its readiness/storage substitutions, on the guard fixture's world: services-p1 a real three-replica
+rs-raft group (PEER_A leads, the planner follows, PEER_B follows), production gateway, CDC read flow, query
+executor, routers and receivers; two further free active nodes in the planner's projection. "No leader":
+every services-p1 raft message held until no replica leads (2.0-2.2 s), then released (a leader in
+0.7-2.2 s). "Connection down" (E6): the planner's hop to PEER_A fails at the transport
+(`ROUTER_NO_CONNECTION`), per the coordinator's quarantine note: no `NO_HANDLER`, no quarantine, no
+real-time wait. One evaluation cycle = one `rebalance()`. Assertions state the head's claim; the same file
+runs at base. Runs [X]: head `lab/guard3-head-r5-e88d067f5` (adam-laptop), base `lab/guard3-base-r5-f7faf8b25`
+(tv-dator); observations decoded from the printed `OBSERVATION` lines.
+
+| Schedule | Base 23344cddc (escapes, default-mode read) | Head 017921e17 (owner fact, no escapes) | Can the cure complete during the condition? | Harm / what is lost |
+| --- | --- | --- | --- | --- |
+| E1 sealed test: abstract failed read (`success:false`) | admitted, 3/3 green | cases 1-2 deferred (red), case 3 green | not modelled (no cluster) | head: by design |
+| E2 July world, services-p1 leader alive and reachable, planner on a follower | admitted cycle 1, **by the escape**: the planner's read was answered by its own follower (`success:true, rowSetComplete:false`, no witness) = unavailable; escape engaged. Control (same commit, escape answering false): BLOCKED `replica_inventory_unusable`, `authoritativeAvailable:false`, `authoritativeReasonCode:null` = the July 17-40-24 signature, field for field | admitted cycle 1 from a READY owner fact (served by PEER_A, role leader, 3 rows) | yes | none either way; at base the escape is compensating the B4 read-mode defect |
+| E3 services-p1 without a leader, then a leader | admitted in the first leaderless cycle (escape engaged). Left behind: the ADD `pending` (r4 minted), an `active` storage reservation for it, and the partition's create slot: a second create is refused `budget_exceeded` ("already has a different create intent"). Re-planned cycles return the same operation | 3 leaderless cycles: DEFERRED `replica_inventory_unavailable`, reason `owner_fact_not_leader`, no row, no reservation; the first cycle after the leader appears admits (1 cycle) | **no** [V]: the target's create first reads its SERVICES row authoritatively and defers when it is unavailable (`replica-prior-existence.js:104-116`), then inserts its CREATING row into SERVICES (`replica-handler-create-methods.js:443-465`, `replica-state-machine-create-persistence.js:86-131`), both before the runtime is created (:539); a services-p1 write needs a leader | base: nothing gained (the admitted cure cannot pass its first SERVICES step), the slot and a reservation are held for the gap; head: nothing lost (admitted within one cycle of the leader) |
+| E5 over-target [A,A,A,B] + the same gap (hold and guard composed) | hold open; escape admits the cure ADD in gap cycle 1 (r5 minted) | every gap cycle: the hold fails OPEN (no hold), the guard DEFERS (`owner_fact_not_leader`); first cycle after the gap admits the cure | no (as E3) | the planner yields the surplus REMOVE to the retained cure in both commits (no REMOVE planned in any cycle); the drain waits exactly for the gap; the gap ended with the ledger empty, i.e. without any drain progress: its end does not depend on the drain, so no deadlock |
+| E6 the planner's connection to the services-p1 leader is down, services-p1 healthy | admitted cycle 1 (escape engaged; at this commit via the follower's answer) | 3 cycles DEFERRED `replica_inventory_unavailable`, reason `owner_fact_read_failed` (`ROUTER_NO_CONNECTION`, 18 refused hops); admitted on the first cycle after the connection returns | **yes**: during the outage PEER_A stayed leader and committed a SERVICES write (a CREATING registration row, applied index 5) through raft; the cure's later steps run on the target and through the leader, not over the planner's route [X for the write, V for the steps] | **head loses time**: the cure waits as long as the planner's route to the leader is down, and nothing in the system bounds that; at base it would have been admitted and could complete |
+| E4(a) services-p1 at [A,A,B], node A lost (two replicas cut off) | services-p1 cure BLOCKED `replica_inventory_unusable`; escape called, `engaged:false` | DEFERRED | **no**: no replica leads for 5 s after the old leader stepped down (no quorum, so no conf change and no SERVICES write) | none: the escape never covered services-p1 (`isNonLedgerPriorityPlacementCurePartition('services-p1') === false`: services-p1 is not a priority control-plane partition) |
+| E4(b) services-p1 at [A,A,B], leader on A slow | not executed; the guard's answer is decided by the same scope predicate as E4(a): base BLOCKED, head DEFERRED | | [I] reads and writes both go through the slow leader | circular in principle (the uncured layout keeps quorum on A) but NEITHER commit admits the cure: an open question for the owner of services-p1 placement, not for the escape |
+| E4(c) operation ledger [A,A,B] (July-11 schedule) | BLOCKED `replica_inventory_unusable` in every cycle, with and without a leader (the ledger escape did not engage for the planner's ADD; the priority escape excludes the ledger) | **admitted in leaderless cycle 1, with no SERVICES read and no call to the hold** (see 11.5) | (as E3) | see 11.5 |
+### 11.4 Hypothesis H: where it holds and where it does not
+
+H has three parts; each is answered by a row above.
+1. "In July the read was unavailable because of the read-mode defect": **refuted [V]** (11.1). The July
+   coordinator counted a follower's answer as available; the July failure was a failed read. E2's control
+   shows that the read-mode defect, which entered on 2026-11-08, produces today the same logged signature
+   (`authoritativeAvailable:false, authoritativeReasonCode:null`, `replica_inventory_unusable`), so the
+   signature cannot tell the two apart; the code of July can.
+2. "With the owner-fact read the same live situation gives READY and the cure is admitted within one
+   cycle": **holds for the B4 situation (E2) [X]**, i.e. for the situation at the integration base; it does
+   NOT hold for a failed read while services-p1 is healthy (E6), which is the July shape (a failed read,
+   and in the same quest's live sample 18-48-02 the escape-era cures completed, so services-p1 was taking
+   writes [quest log, I]).
+3. "When services-p1 truly has no leader the escape cannot help": **holds [X admission and leftovers, V the
+   stall point]**: E3, E5, E4(a). Early admission there holds the partition's create slot and a storage
+   reservation and gains nothing.
+
+So H does not hold on every schedule. **E6 is a schedule in which the services read is unavailable AND an
+admitted cure would make progress**: services-p1 keeps its leader and commits a SERVICES registration
+write while the planner cannot reach that leader; the head defers the cure for as long as the planner's
+route is down (nothing in the system bounds it), the base admits it in the first cycle. No executed
+schedule showed the other half of the criterion (a cure needed to END the unavailability): for the
+priority partitions the escape covers, nothing on the SERVICES read path depends on them [V]; the one
+circular layout found (services-p1 concentrated with a slow leader, E4(b)) is outside the escape's scope at
+every commit.
+
+### 11.5 E4(c): the operation ledger's own cure
+
+The July-11 escape (`isConcentratedLedgerRecoveryMove`) states "the operation ledger cannot make its own
+authoritative services owner readable until its concentrated quorum spreads". No recorded mechanism backs
+it (quest logs `formation-ledger-self-spread-services-owner-unavailable`,
+`formation-ledger-recovery-replace-source-specificity` record only harness passes); at head nothing on the
+owner-fact SERVICES read path reads `replica_operations` [V: `entity-service-row-read.js`
+`readEntityServiceRowsOwnerFact` -> `readOwnerFact` -> `gateway.readAuthoritativeRows(SERVICES, ...)`].
+A ledger without quorum cannot hold the cure's own operation row, so no cure for it exists at either
+commit.
+
+Executed [X]: base: the planner's spread ADD for the ledger is BLOCKED `replica_inventory_unusable` in
+every cycle, with and without a services-p1 leader (the ledger escape's relation did not engage for this
+ADD; the priority escape excludes the ledger): at the integration base the ledger's own spread ADD is
+stuck behind the read-mode defect. Head: admitted in the first leaderless cycle.
+
+**E4(c) at head: an unattributed READY [X, open].** The probe-only trace
+(`lab/guard3-head-r6-8984823c8`, `lab/guard3-head-r7b-e2e314a8f`, adam-laptop; method calls of the real
+coordinator wrapped, observation only) shows the head's ledger ADD going through every gate
+(`ensureOperationLedgerSelfMoveSerialized`, the add-like lane, the critical lane, the guard, the allocator),
+each `readEntityServiceOwnerFact` answering **READY with a witness `{servingNodeId: peer-node-a,
+servingReplicaId: services-p1-r1, role: leader, term: 1, appliedIndex: 3}` while every services-p1 replica
+reported role `follower` and PEER_A `leaderId: null`**; and no SERVICES read passed the fixture's tap on
+`gateway.readAuthoritativeRows`, no owner RPC and no hop was recorded for it. For `sql_write_operations-p1`
+in the same world (E3) the same read was tapped, hopped to PEER_A and was refused `owner_fact_not_leader`.
+So for the ledger entity an owner fact was issued from a stale leader witness without a read reaching a
+current leader. Not attributed in this round: it may be a fixture path (the fixture hosts a fake local
+"leader" replica of `replica_operations-p1` on the planner) or a production path that answers or reuses
+an owner fact without a read. Until the owner of the owner-fact read attributes it, the head row of E4(c)
+is not evidence for either side; the committed E4(c) case is red at head for exactly this reason.
+
+### 11.6 E5: the over-target hold composed with the guard (verification finding 1) [X]
+
+At head, in every gap cycle the hold fails open (its sealed fail-open, unchanged) and the guard behind it
+DEFERS the planner-retained spread-cure ADD; the planner yields the surplus REMOVE to that cure in both
+commits (no REMOVE is planned in any cycle). The first cycle after the gap admits the cure. The gap ended
+with the ledger empty, i.e. without any drain progress, so the gap's end does not depend on the drain:
+**bounded, not a deadlock**, for an exogenous gap. The wait equals the gap: seconds for an election (E5),
+but in an E6-type gap (the planner cut off from a healthy leader) it lasts as long as that outage. At base
+the escape admitted the cure ADD inside the gap; in a leaderless gap that operation cannot pass its first
+SERVICES step (E3). The REMOVE half of the drain sits behind the strict surplus REMOVE fence (leader
+REQUIRED, OWNER_RPC_REQUIRED) at both commits [V], so it waits for any gap at both. G1's sentence ("would
+strand the surplus drain") is therefore true at head only for the duration of the gap; whether that is
+acceptable is the same question as E6.
+### 11.7 F3 and F6
+
+**F3: the guard suite runs again [X].** `rebalance-coordinator-topology-guard.test.js` is a pin of the sealed
+scenario (11.1), so it is restored to 23344cddc and only its doubles change (no assertion, name or case
+changed): a successful authoritative read is answered as its owner answers it, through one helper
+`asOwnerAnswer` (SERVICES: the services-p1 leader's witness via the existing `withServicesLeaderWitness`;
+replica_operations: `rowSetComplete: true` and the ledger leader's witness via the existing
+`buildMockPolicyAuthorityWitness`); failed reads stay failed. Applied to the default gateway double and the
+three case-local gateways (`fails topology increase closed ...`, the slow-read case, the ledger case).
+Before: every `createOperation` case stopped at the add-like lane's `entity_operation_observation_incomplete`
+deferral (10.7). Run `lab/guard3-head-r3-f705ed7af` (tv-dator, probe on 017921e17 + this round's files):
+113 assertions, 20 top-level cases.
+
+| # | Case (abridged) | Verdict at head |
+| --- | --- | --- |
+| 1 | same-node duplicate ADD blocked `target_node_already_occupied` | green |
+| 2 | guard invokes the injected inventory owner once | green |
+| 3 | fails closed when service owner rows are unavailable: expects `['replica_inventory_unusable']` | **red**: head answers `['replica_inventory_unavailable']` (the sealed verdict name, finding 4 of the brief) |
+| 4 | no fabricated skew from slow successful reads (REPLACE admissible) | green |
+| 5 | concentrated-ledger recovery when the services owner is "circularly unavailable" (sealed ledger pins) | **red**: 41 of 49 assertions. (a) 32: "unavailable target precedes the recovery-cure exception" for eight unavailable policy owners x {REPLACE, ADD}: head answers `inventory_unavailable` / `replica_inventory_unavailable` where the pin wants `target_unavailable` / `partition_target_unavailable`: at head the SERVICES deferral is decided BEFORE the target row (a precedence change the branch made silently, not only the escape's deletion); (b) 9: the escape's own rows (cure allowed; occupied target; missing source; non-hot source; generic ADD; first ready target; unready target; stale transport; non-authority target): all `inventory_unavailable` at head. Green: the 8 "surplus REMOVE fence has no target permission" assertions |
+| 6 | stale ADD blocked `target_replica_count_already_satisfied` (count rule) | green |
+| 7 | REPLACE onto an occupied node blocked | green |
+| 8 | message-group occupancy guard | green |
+| 9 | count-keyed lane holds REPLACE churn over target | green |
+| 10 | count-keyed lane consumes identity dedupe | green |
+| 11 | hold alive-guard: a FAILED replica is not counted | green |
+| 12 | hold counts a draining REMOVING source | green |
+| 13 | hold EXEMPTS the spread-cure ADD | green |
+| 14-16 | hold still holds: untyped ADD; coverage met; target already hosting | green |
+| 17-19 | s14 orphan census (orphan does not satisfy; catching-up learner counts; occupancy unchanged) | green |
+| 20 | unavailable policy refused before persistence and recovered | green |
+
+So the decision table the verifier found unasserted (count rule, REPLACE-occupied, message-group occupancy,
+the hold's alive-guard, cure exemption and dedupe, the orphan census) is now asserted green at head; the
+two red cases are exactly the sealed pins the branch reverses (they stay red until the ruling).
+
+**F6 [X].** `buildCoordinatorCreationErrorResult` (`unified-rebalancer-move-execution.js`) now carries a
+typed refusal's `reasonCode` (and message) as the skipped result's `error` (helper `typedRefusalDetail`);
+the existing `MOVE_SKIPPED` line already prints `error: outcome.error`, so no new logging path. Only
+errors with both `rebalanceSkipReason` and `reasonCode` change shape (no consumer of a skipped result's
+`error` other than that log line: grep over `src/rebalancer/unified-rebalancer*.js`). Witness
+`test/rebalancer/move-skip-log-typed-refusal-reason.test.js` (production `executeMove` ->
+`executeMoveViaCoordinator` -> `buildCoordinatorCreationErrorResult` -> `logSkippedMoveOutcome`, the
+refusal built by the coordinator's own `buildServicesInventoryUnavailableError`; substituted: the
+throwing `createOperation`, the move-safety read, the target readiness gate): red at 017921e17
+(`lab/guard3-f6-red-6200cb482`: the record carries `reason: services_inventory_unavailable, error: null`),
+green with the change (`lab/guard3-head-r3-f705ed7af`, 6 assertions). The guard's own deferral already
+reached the line through `admissionTopologySnapshot.authoritativeReasonCode`.
+### 11.8 Drafts for the lead (not applied: no quest record, no invariants.json edit)
+
+**Draft A: restoration scope (if the lead restores).** Restore, from 23344cddc, exactly:
+`hasConservativeUnionInventoryProvenance`, `resolveConservativeUnionReplaceSource`,
+`isEngagedPrioritySpreadCureMove` and its decision-row conjunct, with ONE added precondition that names
+the arm's reason and confines it to the schedule E6 executes: the SERVICES owner fact is UNAVAILABLE for
+a reason that says a leader exists that this planner cannot reach (the leader's address refused or
+quarantined, a timeout or transport failure to it, `owner_fact_not_leader` from a replica that names a
+current leader), never for a reason that says no leader exists (no known leader, election log not
+applied: E3, E4a, where an admitted cure cannot pass the target's first SERVICES read/insert). Source of
+the arm's rows: the projection union, as sealed, with the sealed need/safety conjuncts; the
+occupied/target-count rows still run after it. `isConcentratedLedgerRecoveryMove`: restore only if the
+lead does not accept E4(c) below (the same reach/no-leader split applies). Sealed tests: both pins
+restored unchanged (done in this round; they turn green with the restoration). The invariant
+`failed-authoritative-read-admission-verdict` would then name the arm: "the topology guard's
+conservative-union spread-cure arm admits on a failed SERVICES read only when a services-p1 leader exists
+that the planner cannot reach (witness E6); every other failed read is a typed deferral
+`replica_inventory_unavailable`".
+
+**Draft B: supersession record (if the lead supersedes).** Two log entries in the form the repository
+uses (`fresh-create-failure-after-committed-admission/log.ndjson` 2026-11-02T11:24:38Z and
+11:59:20.585Z), to be appended by the lead to
+`solve/quests/spread-cure-union-escape-and-monotone-gate/log.ndjson`:
+
+```json
+{"ts":"<lead's time>","type":"finding","kind":"decision","status":"superseded","text":"R09 supersession of sealed text (quest.json statement, sealed at 7b48240da / commit 494c71ec1): the clause 'a priority control-plane partition at target replica count with co-located replicas, free active nodes, and an UNAVAILABLE authoritative services read receives an admitted spread-restoring operation within one evaluation cycle - the topology guard's conservative-union escape (...) admits the planner's cure-typed spread move' is superseded, not reinterpreted, by: 'a priority control-plane partition at target replica count with co-located replicas and free active nodes receives an admitted spread-restoring operation within one evaluation cycle of the services-p1 leader's SERVICES rows being readable by the planner (the owner fact); while they are not, nothing is granted from the node's projection, the cure is a typed deferral naming the read's reason (replica_inventory_unavailable), and the planner's own scheduled turn re-evaluates it'. Reason: <lead's ruling>; witnesses test/rebalancer/spread-cure-escape-schedules.test.js E2, E3, E5, E6 at <sha> (lab <dirs>). The conservative-union escapes (isEngagedPrioritySpreadCureMove, isConcentratedLedgerRecoveryMove, hasConservativeUnionInventoryProvenance, resolveConservativeUnionReplaceSource) are deleted as superseded. Pins: critical-spread-terminal-stall-repro.test.js and rebalance-coordinator-topology-guard.test.js (sealed scenario runner of 494c71ec1) are superseded by <new files>; the superseded cases are <list>.","evidence":"<record path> section 11; lab <dirs>"}
+{"ts":"<lead's time>","type":"finding","kind":"decision","text":"R09 note: the same supersession covers the ledger-recovery pins of formation-ledger-self-spread-services-owner-unavailable and formation-ledger-recovery-replace-source-specificity (rebalance-coordinator-topology-guard.test.js case 'admits only declared concentrated-ledger recovery moves when the services owner is circularly unavailable'), recorded in both quest logs; and the guard verdict name in invariant failed-authoritative-read-admission-verdict: a failed SERVICES read is the typed deferral replica_inventory_unavailable, replica_inventory_unusable stays the guard's denial when its authoritative operation read fails under a readable SERVICES fact.","evidence":"architecture/contracts/invariants.json failed-authoritative-read-admission-verdict"}
+```
+
+Precondition for Draft B under the brief's own criterion: E6 must be answered first. E6 is a schedule in
+which the read is unavailable and an admitted cure would make progress; R09 permits supersession only
+with a stronger executed proof, and "nothing is lost" is not true in E6 (11.4).
+
+### 11.8 Recommendation
+
+**RESTORE, narrowed to the schedule that needs it; do not supersede as drafted in the brief.** By the
+brief's own criterion E6 makes the escape required for that schedule: the read is unavailable, services-p1
+is healthy, and an admitted cure can make progress; the head waits for the planner's route instead, and
+the proposed superseding sentence ("while it is unreachable nothing is granted from the cache and nothing
+is lost") is false there. In every other executed schedule (E2, E3, E5, E4(a)) H holds and the escape is
+either compensation for the read-mode defect (E2) or useless-to-harmful (E3: holds the create slot and a
+reservation for an operation that cannot pass its first SERVICES step).
+
+Scope of the restoration (Draft A below): the priority spread-cure arm exactly as sealed (provenance,
+union-proven need and safety, occupied/target-count rows still enforced after it), engaging only when the
+SERVICES owner fact is UNAVAILABLE for a reason that says the planner cannot reach a leader that exists (in
+the runs: `owner_fact_read_failed` over a transport failure, `ROUTER_NO_CONNECTION`), never for a reason
+that says no replica leads (`owner_fact_not_leader`, election log not applied: E3/E5). The ledger escape:
+not restored on this evidence (it did not engage for the planner's ledger ADD at base, and the head's E4(c)
+row is unattributed, 11.5). Sealed pins: restored unchanged on the branch (11.10); with the arm restored
+the repro's cases 1-2 are expected green again (their abstract failed read has no "not leader" reason:
+[I], to be executed), the guard suite's case 3 still pins the verdict NAME `replica_inventory_unusable`
+for a failed read and needs the lead's ruling on finding 4 either way.
+
+Caveats the lead should weigh [I]: (1) the arm decides from the planner's projection; in E6 the planner
+hosts a services-p1 follower whose applied state feeds that projection, but finding 7's stale-complete
+residual and the guard's "projection only adds occupants" are the safety margin, as in July. (2) A transport
+failure to the published leader does not prove that leader is alive; if it is dead a successor is elected
+and published within seconds and the admitted cure then completes through the successor, so the arm is
+harmless there too. (3) An alternative that keeps "no cache grants" is to answer E6 authoritatively: reach
+the leader through another member, or a follower read-index, which the raft binding does not export today
+(`raft-rs-ingress-constants.js:43-45`: "it exports no read_index"; `src/raft/**` is outside this task).
+With that, the stronger sentence becomes true and a supersession (Draft B) is backed by E2, E3, E5 and a
+re-run E6.
+### 11.9 F-rec: recorded without change (verification findings 4, 5, 7)
+
+Recorded as open; nothing was edited for them in this round.
+- **Finding 4, cache-derived grants that predate this branch [V by the verifier, not re-read here].**
+  (a) `isEngagedLedgerQuorumSpreadCureReplace` (`rebalance-coordinator-replica-identity-methods.js`
+  ~:294-309) takes the source replica's node and the concentration from `cache.filter(SERVICES, ...)`
+  and exempts a ledger REPLACE from the recent-self-move lease (~:336-343): a projection row decides an
+  exemption inside a consumer this branch migrated. (b) The over-target hold's alive-guard
+  (`isNodeReadyForRouting`, ~:259) is the node's readiness projection; it removes replicas from the
+  owner-fact count and so can release the hold. (c) The guard's `mergeEntityServiceRows` keeps
+  cache-only rows: the projection can only add an occupant (refuse more), never admit more. (a) and (b)
+  are of the same kind as the deleted escapes (a cache-derived input that grants); if the ruling is
+  "a cache-derived declaration grants nothing", they are in its scope too and are not yet covered by any
+  ruling or witness.
+- **Finding 5, the hint adapter is not the production address-book path.** Placement-managed partition
+  creates leave `createOperationInternal` before `buildOperationBootstrapTopology`; the production
+  address book is `operation-workflow-replace-target-binding.js` `readServiceRowsForBootstrap`
+  (~:48-56, :131-136), a raw `systemTableCache.filter`, not `readHint`. Two readers of the same address
+  book remain; "one hint adapter serves the address book" holds only without the placement factory.
+- **Finding 7, stale-but-complete inventory at floor 0.** A current leader cannot miss a committed
+  registration; staleness needs a deposed leader that still answers (the read's own residual, 9.8:
+  not demonstrated, the F1 pending-turn window not exercised). Nothing re-checks SERVICES at apply
+  (placement admission checks PARTITION_BUSY only while the earlier operation is incomplete). Open,
+  bounded by the deposed-leader window; owners: the placement admission and workflow owners (9.4 design
+  candidate).
+
+### 11.10 Commit
+
+`6ca5e9031` on `work/topology-guard-owner-fact-20261121`: restored sealed pins (`critical-spread-terminal-stall-repro.test.js`, `rebalance-coordinator-topology-guard.test.js`), schedule witnesses (`spread-cure-escape-schedules.test.js`), and F6 skip-log reason witness (`move-skip-log-typed-refusal-reason.test.js`).

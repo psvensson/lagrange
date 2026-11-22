@@ -1,0 +1,685 @@
+placement-shell=3431504
+placement-head=23344cddc5f07a597b93f8cd0f4f69a69be937c3
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.6 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3431949
+# test-files planned=2
+classified lane ordinary: 2 file(s), jobs=4
+thermal: ok cpu 59C (coretemp/Package id 0) nvme 48C (nvme/Sensor 1)
+not ok test/transport/node-identity-separation.property.test.js (11 assertions, 8580ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: Property 1: Node Identity Separation from Endpoints
+{"level":50,"time":"2026-11-21T23:54:51.290Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"0000001d-92c3-4780-bfff-fff40828e9f7","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:51.499Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"0000001d-92c3-4780-bfff-fff40828e9f7","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:51.505Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-92c3-4780-bfff-fff40828e9f7","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:51.713Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-92c3-4780-bfff-fff40828e9f7","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:51.716Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-bfff-fff40828e9f7","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:51.922Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-bfff-fff40828e9f7","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:51.925Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-00000828e9f7","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:52.130Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-00000828e9f7","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:52.134Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:52.341Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:52.343Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:52.548Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+    # Subtest: node_id is a UUID with no transport information
+        not ok 1 - Property failed after 1 tests { seed: 925290928, path: "0:0:0:0:0:0", endOnFailure: true } Counterexample: ["00000000-0000-1000-8000-000000000000",8000] Shrunk 5 time(s) Got error: Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent     at wrapNodeRegistrationError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/shared/node-registration-owner.js:106:24)     at NodeRegistrationOwner.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/shared/node-registration-owner.js:282:28)     at async QuerySystemStatePhase.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/phases/query-system-state-phase.js:607:16)     at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/test/transport/node-identity-separation.property.test.js:189:15     at async AsyncProperty.run (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:28)     at async asyncRunIt (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:21)     at async Test.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/test/transport/node-identity-separation.property.test.js:178:9)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+          ---
+          stack: |
+            buildError (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+            asyncThrowIfFailed (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+          at:
+            fileName: ../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+            lineNumber: 126
+            columnNumber: 15
+            functionName: buildError
+          tapCaught: returnedPromiseRejection
+          source: |
+            function buildError(errorMessage, out) {
+                if (!out.runConfiguration.errorWithCause) {
+                    throw new Error(errorMessage);
+            --------------^
+                }
+                const ErrorWithCause = Error;
+          ...
+        
+        1..1
+    not ok 1 - node_id is a UUID with no transport information # time=1294.433ms
+      ---
+      at:
+        fileName: test/transport/node-identity-separation.property.test.js
+        lineNumber: 176
+        columnNumber: 7
+        typeName: Test
+      source: |2
+           * Validates: Requirements 1.1
+           */
+            t.test('node_id is a UUID with no transport information',
+        ------^
+              async (t) => {
+                await fc.assert(
+      ...
+    
+{"level":50,"time":"2026-11-21T23:54:52.569Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000015-000d-1000-80b6-719bfffffffc","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:52.774Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000015-000d-1000-80b6-719bfffffffc","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:52.777Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-000d-1000-80b6-719bfffffffc","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:52.983Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-000d-1000-80b6-719bfffffffc","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:52.986Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-80b6-719bfffffffc","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:53.192Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-80b6-719bfffffffc","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:53.195Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-0000fffffffc","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:53.401Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-0000fffffffc","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:53.404Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:53.609Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:53.612Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:53.816Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:53.820Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:54.026Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+    # Subtest: transport addresses stored only in node_endpoints table
+        not ok 1 - Property failed after 1 tests { seed: -1768359474, path: "0:0:0:0:0:0:0", endOnFailure: true } Counterexample: ["00000000-0000-1000-8000-000000000000","ws","localhost",8000] Shrunk 6 time(s) Got error: Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent     at wrapNodeRegistrationError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/shared/node-registration-owner.js:106:24)     at NodeRegistrationOwner.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/shared/node-registration-owner.js:282:28)     at async QuerySystemStatePhase.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/phases/query-system-state-phase.js:607:16)     at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/test/transport/node-identity-separation.property.test.js:229:13     at async AsyncProperty.run (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:28)     at async asyncRunIt (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:21)     at async Test.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/test/transport/node-identity-separation.property.test.js:213:7)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+          ---
+          stack: |
+            buildError (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+            asyncThrowIfFailed (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+          at:
+            fileName: ../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+            lineNumber: 126
+            columnNumber: 15
+            functionName: buildError
+          tapCaught: returnedPromiseRejection
+          source: |
+            function buildError(errorMessage, out) {
+                if (!out.runConfiguration.errorWithCause) {
+                    throw new Error(errorMessage);
+            --------------^
+                }
+                const ErrorWithCause = Error;
+          ...
+        
+        1..1
+    not ok 2 - transport addresses stored only in node_endpoints table # time=1463.331ms
+      ---
+      at:
+        fileName: test/transport/node-identity-separation.property.test.js
+        lineNumber: 211
+        columnNumber: 7
+        typeName: Test
+      source: |2
+           * Validates: Requirements 1.2, 1.3
+           */
+            t.test('transport addresses stored only in ' +
+        ------^
+            'node_endpoints table', async (t) => {
+              await fc.assert(
+      ...
+    
+{"level":50,"time":"2026-11-21T23:54:54.034Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"ffffffea-0003-1000-8000-0002b2773b46","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:54.239Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"ffffffea-0003-1000-8000-0002b2773b46","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:54.241Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0003-1000-8000-0002b2773b46","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:54.448Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0003-1000-8000-0002b2773b46","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:54.450Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-0002b2773b46","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:54.654Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-0002b2773b46","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:54.658Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-0000b2773b46","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:54.865Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-0000b2773b46","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:54.869Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:55.074Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:55.078Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:55.283Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+    # Subtest: each node has at least one endpoint after registration
+        not ok 1 - Property failed after 1 tests { seed: -685732804, path: "0:0:0:0:0:0", endOnFailure: true } Counterexample: ["00000000-0000-1000-8000-000000000000",8000] Shrunk 5 time(s) Got error: Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent     at wrapNodeRegistrationError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/shared/node-registration-owner.js:106:24)     at NodeRegistrationOwner.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/shared/node-registration-owner.js:282:28)     at async QuerySystemStatePhase.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/phases/query-system-state-phase.js:607:16)     at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/test/transport/node-identity-separation.property.test.js:268:13     at async AsyncProperty.run (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:28)     at async asyncRunIt (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:21)     at async Test.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/test/transport/node-identity-separation.property.test.js:257:7)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+          ---
+          stack: |
+            buildError (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+            asyncThrowIfFailed (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+          at:
+            fileName: ../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+            lineNumber: 126
+            columnNumber: 15
+            functionName: buildError
+          tapCaught: returnedPromiseRejection
+          source: |
+            function buildError(errorMessage, out) {
+                if (!out.runConfiguration.errorWithCause) {
+                    throw new Error(errorMessage);
+            --------------^
+                }
+                const ErrorWithCause = Error;
+          ...
+        
+        1..1
+    not ok 3 - each node has at least one endpoint after registration # time=1258.757ms
+      ---
+      at:
+        fileName: test/transport/node-identity-separation.property.test.js
+        lineNumber: 255
+        columnNumber: 7
+        typeName: Test
+      source: |2
+           * Validates: Requirements 1.3, 1.4
+           */
+            t.test('each node has at least one endpoint after ' +
+        ------^
+            'registration', async (t) => {
+              await fc.assert(
+      ...
+    
+{"level":50,"time":"2026-11-21T23:54:55.296Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"2b8638e8-ddeb-598c-8000-000c00000007","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:55.503Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"2b8638e8-ddeb-598c-8000-000c00000007","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:55.506Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-ddeb-598c-8000-000c00000007","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:55.712Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-ddeb-598c-8000-000c00000007","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:55.716Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000c00000007","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:55.921Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000c00000007","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:55.925Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000007","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:56.130Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000007","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:56.134Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:56.340Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:56.344Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:56.550Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+    # Subtest: endpoint has correct structure with all required fields
+        not ok 1 - Property failed after 1 tests { seed: -1116537274, path: "0:0:0:0:0:0", endOnFailure: true } Counterexample: ["00000000-0000-1000-8000-000000000000",8000] Shrunk 5 time(s) Got error: Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent     at wrapNodeRegistrationError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/shared/node-registration-owner.js:106:24)     at NodeRegistrationOwner.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/shared/node-registration-owner.js:282:28)     at async QuerySystemStatePhase.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/phases/query-system-state-phase.js:607:16)     at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/test/transport/node-identity-separation.property.test.js:301:13     at async AsyncProperty.run (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:28)     at async asyncRunIt (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:21)     at async Test.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/test/transport/node-identity-separation.property.test.js:290:7)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+          ---
+          stack: |
+            buildError (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+            asyncThrowIfFailed (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+          at:
+            fileName: ../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+            lineNumber: 126
+            columnNumber: 15
+            functionName: buildError
+          tapCaught: returnedPromiseRejection
+          source: |
+            function buildError(errorMessage, out) {
+                if (!out.runConfiguration.errorWithCause) {
+                    throw new Error(errorMessage);
+            --------------^
+                }
+                const ErrorWithCause = Error;
+          ...
+        
+        1..1
+    not ok 4 - endpoint has correct structure with all required fields # time=1264.492ms
+      ---
+      at:
+        fileName: test/transport/node-identity-separation.property.test.js
+        lineNumber: 288
+        columnNumber: 7
+        typeName: Test
+      source: |2
+           * Validates: Requirements 1.5
+           */
+            t.test('endpoint has correct structure with all ' +
+        ------^
+            'required fields', async (t) => {
+              await fc.assert(
+      ...
+    
+{"level":50,"time":"2026-11-21T23:54:56.564Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"e810eedc-0011-1000-bfff-ffe878ba6a8c","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:56.768Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"e810eedc-0011-1000-bfff-ffe878ba6a8c","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:56.772Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0011-1000-bfff-ffe878ba6a8c","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:56.978Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0011-1000-bfff-ffe878ba6a8c","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:56.981Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-bfff-ffe878ba6a8c","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:57.188Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-bfff-ffe878ba6a8c","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:57.189Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000078ba6a8c","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:57.395Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000078ba6a8c","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:57.399Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:57.604Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:57.609Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:57.814Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:57.819Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:58.024Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:58.028Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:58.232Z","nodeId":"test-node","pid":3431970,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+    # Subtest: node identity remains unchanged when endpoints change
+        not ok 1 - Property failed after 1 tests { seed: 750960189, path: "0:0:0:0:0:0:0:0", endOnFailure: true } Counterexample: ["00000000-0000-1000-8000-000000000000",[8000,8000]] Shrunk 7 time(s) Got error: Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent     at wrapNodeRegistrationError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/shared/node-registration-owner.js:106:24)     at NodeRegistrationOwner.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/shared/node-registration-owner.js:282:28)     at async QuerySystemStatePhase.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/phases/query-system-state-phase.js:607:16)     at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/test/transport/node-identity-separation.property.test.js:363:13     at async AsyncProperty.run (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:28)     at async asyncRunIt (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:21)     at async Test.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/test/transport/node-identity-separation.property.test.js:349:7)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+          ---
+          stack: |
+            buildError (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+            asyncThrowIfFailed (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+          at:
+            fileName: ../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+            lineNumber: 126
+            columnNumber: 15
+            functionName: buildError
+          tapCaught: returnedPromiseRejection
+          source: |
+            function buildError(errorMessage, out) {
+                if (!out.runConfiguration.errorWithCause) {
+                    throw new Error(errorMessage);
+            --------------^
+                }
+                const ErrorWithCause = Error;
+          ...
+        
+        1..1
+    not ok 5 - node identity remains unchanged when endpoints change # time=1679.12ms
+      ---
+      at:
+        fileName: test/transport/node-identity-separation.property.test.js
+        lineNumber: 347
+        columnNumber: 7
+        typeName: Test
+      source: |2
+           * Validates: Requirements 1.6
+           */
+            t.test('node identity remains unchanged when ' +
+        ------^
+            'endpoints change', async (t) => {
+              await fc.assert(
+      ...
+    
+    1..5
+not ok 1 - Property 1: Node Identity Separation from Endpoints # time=6978.911ms
+  ---
+  at:
+    fileName: test/transport/node-identity-separation.property.test.js
+    lineNumber: 170
+    columnNumber: 1
+    isToplevel: true
+  source: |2
+     * Validates: Requirements 1.1, 1.2, 1.3
+     */
+    test('Property 1: Node Identity Separation from Endpoints',
+    ^
+      async (t) => {
+        /**
+  ...
+
+1..1
+# { total: 5, pass: 0, fail: 5 }
+# time=7035.753ms
+not ok test/transport/node-registration-creates-endpoint.property.test.js (15 assertions, 12082ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: Property 11: Node Registration Creates Endpoint
+{"level":50,"time":"2026-11-21T23:54:51.431Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"ffffffe0-001c-1000-bfff-ffec74824182","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:51.640Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"ffffffe0-001c-1000-bfff-ffec74824182","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:51.643Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-001c-1000-bfff-ffec74824182","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:51.849Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-001c-1000-bfff-ffec74824182","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:51.852Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-bfff-ffec74824182","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:52.058Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-bfff-ffec74824182","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:52.060Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000074824182","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:52.267Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000074824182","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:52.270Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:52.477Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:52.480Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:52.686Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+    # Subtest: node registration creates WebSocket endpoint
+        not ok 1 - Property failed after 1 tests { seed: 1970689060, path: "0:0:0:0:0:0", endOnFailure: true } Counterexample: ["00000000-0000-1000-8000-000000000000",8000] Shrunk 5 time(s) Got error: Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent     at wrapNodeRegistrationError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/shared/node-registration-owner.js:106:24)     at NodeRegistrationOwner.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/shared/node-registration-owner.js:282:28)     at async QuerySystemStatePhase.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/phases/query-system-state-phase.js:607:16)     at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/test/transport/node-registration-creates-endpoint.property.test.js:145:15     at async AsyncProperty.run (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:28)     at async asyncRunIt (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:21)     at async Test.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/test/transport/node-registration-creates-endpoint.property.test.js:134:9)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+          ---
+          stack: |
+            buildError (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+            asyncThrowIfFailed (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+          at:
+            fileName: ../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+            lineNumber: 126
+            columnNumber: 15
+            functionName: buildError
+          tapCaught: returnedPromiseRejection
+          source: |
+            function buildError(errorMessage, out) {
+                if (!out.runConfiguration.errorWithCause) {
+                    throw new Error(errorMessage);
+            --------------^
+                }
+                const ErrorWithCause = Error;
+          ...
+        
+        1..1
+    not ok 1 - node registration creates WebSocket endpoint # time=1295.859ms
+      ---
+      at:
+        fileName: test/transport/node-registration-creates-endpoint.property.test.js
+        lineNumber: 132
+        columnNumber: 7
+        typeName: Test
+      source: |2
+           * Validates: Requirements 8.2
+           */
+            t.test('node registration creates WebSocket endpoint',
+        ------^
+              async (t) => {
+                await fc.assert(
+      ...
+    
+{"level":50,"time":"2026-11-21T23:54:52.714Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"fffffffe-a511-1e52-8000-000164156f77","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:52.919Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"fffffffe-a511-1e52-8000-000164156f77","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:52.922Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-a511-1e52-8000-000164156f77","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:53.127Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-a511-1e52-8000-000164156f77","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:53.131Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000164156f77","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:53.337Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000164156f77","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:53.344Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000064156f77","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:53.550Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000064156f77","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:53.555Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:53.761Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:53.763Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:53.969Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+    # Subtest: endpoint is written via SQL query engine
+        not ok 1 - Property failed after 1 tests { seed: 1692672315, path: "0:0:0:0:0:0", endOnFailure: true } Counterexample: ["00000000-0000-1000-8000-000000000000",8000] Shrunk 5 time(s) Got error: Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent     at wrapNodeRegistrationError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/shared/node-registration-owner.js:106:24)     at NodeRegistrationOwner.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/shared/node-registration-owner.js:282:28)     at async QuerySystemStatePhase.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/phases/query-system-state-phase.js:607:16)     at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/test/transport/node-registration-creates-endpoint.property.test.js:214:15     at async AsyncProperty.run (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:28)     at async asyncRunIt (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:21)     at async Test.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/test/transport/node-registration-creates-endpoint.property.test.js:170:9)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+          ---
+          stack: |
+            buildError (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+            asyncThrowIfFailed (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+          at:
+            fileName: ../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+            lineNumber: 126
+            columnNumber: 15
+            functionName: buildError
+          tapCaught: returnedPromiseRejection
+          source: |
+            function buildError(errorMessage, out) {
+                if (!out.runConfiguration.errorWithCause) {
+                    throw new Error(errorMessage);
+            --------------^
+                }
+                const ErrorWithCause = Error;
+          ...
+        
+        1..1
+    not ok 2 - endpoint is written via SQL query engine # time=1261.401ms
+      ---
+      at:
+        fileName: test/transport/node-registration-creates-endpoint.property.test.js
+        lineNumber: 168
+        columnNumber: 7
+        typeName: Test
+      source: |2
+           * Validates: Requirements 8.2
+           */
+            t.test('endpoint is written via SQL query engine',
+        ------^
+              async (t) => {
+                await fc.assert(
+      ...
+    
+{"level":50,"time":"2026-11-21T23:54:53.976Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000006-001d-1000-bfff-fff5fffffffd","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:54.183Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000006-001d-1000-bfff-fff5fffffffd","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:54.188Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-001d-1000-bfff-fff5fffffffd","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:54.394Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-001d-1000-bfff-fff5fffffffd","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:54.396Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-bfff-fff5fffffffd","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:54.600Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-bfff-fff5fffffffd","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:54.603Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-0000fffffffd","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:54.809Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-0000fffffffd","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:54.812Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:55.017Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:55.019Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:55.224Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+    # Subtest: endpoint references correct node_id
+        not ok 1 - Property failed after 1 tests { seed: 591850227, path: "0:0:0:0:0:0", endOnFailure: true } Counterexample: ["00000000-0000-1000-8000-000000000000",8000] Shrunk 5 time(s) Got error: Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent     at wrapNodeRegistrationError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/shared/node-registration-owner.js:106:24)     at NodeRegistrationOwner.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/shared/node-registration-owner.js:282:28)     at async QuerySystemStatePhase.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/phases/query-system-state-phase.js:607:16)     at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/test/transport/node-registration-creates-endpoint.property.test.js:240:15     at async AsyncProperty.run (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:28)     at async asyncRunIt (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:21)     at async Test.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/test/transport/node-registration-creates-endpoint.property.test.js:229:9)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+          ---
+          stack: |
+            buildError (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+            asyncThrowIfFailed (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+          at:
+            fileName: ../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+            lineNumber: 126
+            columnNumber: 15
+            functionName: buildError
+          tapCaught: returnedPromiseRejection
+          source: |
+            function buildError(errorMessage, out) {
+                if (!out.runConfiguration.errorWithCause) {
+                    throw new Error(errorMessage);
+            --------------^
+                }
+                const ErrorWithCause = Error;
+          ...
+        
+        1..1
+    not ok 3 - endpoint references correct node_id # time=1254.417ms
+      ---
+      at:
+        fileName: test/transport/node-registration-creates-endpoint.property.test.js
+        lineNumber: 227
+        columnNumber: 7
+        typeName: Test
+      source: |2
+           * Validates: Requirements 8.2
+           */
+            t.test('endpoint references correct node_id',
+        ------^
+              async (t) => {
+                await fc.assert(
+      ...
+    
+{"level":50,"time":"2026-11-21T23:54:55.232Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"7a5dc7fb-aff5-3b94-ad81-6ba0b8841b42","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:55.437Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"7a5dc7fb-aff5-3b94-ad81-6ba0b8841b42","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:55.439Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-aff5-3b94-ad81-6ba0b8841b42","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:55.646Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-aff5-3b94-ad81-6ba0b8841b42","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:55.648Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-ad81-6ba0b8841b42","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:55.854Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-ad81-6ba0b8841b42","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:55.856Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-0000b8841b42","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:56.063Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-0000b8841b42","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:56.065Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:56.269Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:56.273Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:56.478Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+    # Subtest: endpoint has active status
+        not ok 1 - Property failed after 1 tests { seed: -120212991, path: "0:0:0:0:0:0", endOnFailure: true } Counterexample: ["00000000-0000-1000-8000-000000000000",8000] Shrunk 5 time(s) Got error: Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent     at wrapNodeRegistrationError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/shared/node-registration-owner.js:106:24)     at NodeRegistrationOwner.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/shared/node-registration-owner.js:282:28)     at async QuerySystemStatePhase.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/phases/query-system-state-phase.js:607:16)     at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/test/transport/node-registration-creates-endpoint.property.test.js:273:13     at async AsyncProperty.run (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:28)     at async asyncRunIt (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:21)     at async Test.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/test/transport/node-registration-creates-endpoint.property.test.js:262:7)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+          ---
+          stack: |
+            buildError (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+            asyncThrowIfFailed (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+          at:
+            fileName: ../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+            lineNumber: 126
+            columnNumber: 15
+            functionName: buildError
+          tapCaught: returnedPromiseRejection
+          source: |
+            function buildError(errorMessage, out) {
+                if (!out.runConfiguration.errorWithCause) {
+                    throw new Error(errorMessage);
+            --------------^
+                }
+                const ErrorWithCause = Error;
+          ...
+        
+        1..1
+    not ok 4 - endpoint has active status # time=1252.112ms
+      ---
+      at:
+        fileName: test/transport/node-registration-creates-endpoint.property.test.js
+        lineNumber: 261
+        columnNumber: 7
+        typeName: Test
+      source: |2
+           * Validates: Requirements 8.2
+           */
+            t.test('endpoint has active status', async (t) => {
+        ------^
+              await fc.assert(
+                fc.asyncProperty(
+      ...
+    
+{"level":50,"time":"2026-11-21T23:54:56.485Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"0dc09c4f-06fd-4668-aaf8-65a7ffffffee","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:56.691Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"0dc09c4f-06fd-4668-aaf8-65a7ffffffee","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:56.694Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-06fd-4668-aaf8-65a7ffffffee","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:56.899Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-06fd-4668-aaf8-65a7ffffffee","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:56.901Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-aaf8-65a7ffffffee","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:57.107Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-aaf8-65a7ffffffee","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:57.111Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-0000ffffffee","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:57.317Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-0000ffffffee","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:57.319Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:57.525Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:57.528Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:57.732Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+    # Subtest: endpoint address matches node address
+        not ok 1 - Property failed after 1 tests { seed: -1579022191, path: "0:0:0:0:0:0", endOnFailure: true } Counterexample: ["00000000-0000-1000-8000-000000000000","ws","localhost",8000] Shrunk 5 time(s) Got error: Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent     at wrapNodeRegistrationError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/shared/node-registration-owner.js:106:24)     at NodeRegistrationOwner.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/shared/node-registration-owner.js:282:28)     at async QuerySystemStatePhase.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/phases/query-system-state-phase.js:607:16)     at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/test/transport/node-registration-creates-endpoint.property.test.js:313:15     at async AsyncProperty.run (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:28)     at async asyncRunIt (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:21)     at async Test.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/test/transport/node-registration-creates-endpoint.property.test.js:297:9)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+          ---
+          stack: |
+            buildError (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+            asyncThrowIfFailed (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+          at:
+            fileName: ../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+            lineNumber: 126
+            columnNumber: 15
+            functionName: buildError
+          tapCaught: returnedPromiseRejection
+          source: |
+            function buildError(errorMessage, out) {
+                if (!out.runConfiguration.errorWithCause) {
+                    throw new Error(errorMessage);
+            --------------^
+                }
+                const ErrorWithCause = Error;
+          ...
+        
+        1..1
+    not ok 5 - endpoint address matches node address # time=1252.722ms
+      ---
+      at:
+        fileName: test/transport/node-registration-creates-endpoint.property.test.js
+        lineNumber: 295
+        columnNumber: 7
+        typeName: Test
+      source: |2
+           * Validates: Requirements 8.2
+           */
+            t.test('endpoint address matches node address',
+        ------^
+              async (t) => {
+                await fc.assert(
+      ...
+    
+{"level":50,"time":"2026-11-21T23:54:57.740Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000002-000f-1000-8000-0006ffffffff","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:57.945Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000002-000f-1000-8000-0006ffffffff","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:57.948Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"ffffffef-0014-1000-8ad7-309400000009","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:58.152Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"ffffffef-0014-1000-8ad7-309400000009","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:58.156Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0014-1000-8ad7-309400000009","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:58.361Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0014-1000-8ad7-309400000009","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:58.365Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8ad7-309400000009","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:58.571Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8ad7-309400000009","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:58.574Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000009","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:58.779Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000009","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:58.781Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:58.985Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:58.987Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:59.193Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:59.196Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:59.401Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:59.405Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:59.611Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:59.614Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:59.821Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:54:59.823Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:55:00.027Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:55:00.031Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:55:00.237Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:55:00.240Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:55:00.447Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+    # Subtest: endpoint has unique endpoint_id
+        not ok 1 - Property failed after 1 tests { seed: 2079685902, path: "0:0:0:0:0:0:0:0:0:0:0:0:0", endOnFailure: true } Counterexample: [["00000000-0000-1000-8000-000000000000","00000000-0000-1000-8000-000000000001"],8000] Shrunk 12 time(s) Got error: Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent     at wrapNodeRegistrationError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/shared/node-registration-owner.js:106:24)     at NodeRegistrationOwner.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/shared/node-registration-owner.js:282:28)     at async QuerySystemStatePhase.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/phases/query-system-state-phase.js:607:16)     at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/test/transport/node-registration-creates-endpoint.property.test.js:356:15     at async AsyncProperty.run (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:28)     at async asyncRunIt (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:21)     at async Test.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/test/transport/node-registration-creates-endpoint.property.test.js:338:7)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+          ---
+          stack: |
+            buildError (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+            asyncThrowIfFailed (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+          at:
+            fileName: ../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+            lineNumber: 126
+            columnNumber: 15
+            functionName: buildError
+          tapCaught: returnedPromiseRejection
+          source: |
+            function buildError(errorMessage, out) {
+                if (!out.runConfiguration.errorWithCause) {
+                    throw new Error(errorMessage);
+            --------------^
+                }
+                const ErrorWithCause = Error;
+          ...
+        
+        1..1
+    not ok 6 - endpoint has unique endpoint_id # time=2714.172ms
+      ---
+      at:
+        fileName: test/transport/node-registration-creates-endpoint.property.test.js
+        lineNumber: 337
+        columnNumber: 7
+        typeName: Test
+      source: |2
+           * Validates: Requirements 8.2
+           */
+            t.test('endpoint has unique endpoint_id', async (t) => {
+        ------^
+              await fc.assert(
+                fc.asyncProperty(
+      ...
+    
+{"level":50,"time":"2026-11-21T23:55:00.458Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"ffffffe3-4ddd-1e5c-9cc1-42dffed23e9e","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:55:00.662Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"ffffffe3-4ddd-1e5c-9cc1-42dffed23e9e","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:55:00.665Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-4ddd-1e5c-9cc1-42dffed23e9e","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:55:00.871Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-4ddd-1e5c-9cc1-42dffed23e9e","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:55:00.874Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-9cc1-42dffed23e9e","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:55:01.080Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-9cc1-42dffed23e9e","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:55:01.083Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-0000fed23e9e","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:55:01.288Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-0000fed23e9e","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:55:01.291Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:55:01.497Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:55:01.501Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+{"level":50,"time":"2026-11-21T23:55:01.707Z","nodeId":"test-node","pid":3431964,"subsystem":"node-joining","nodeId":"test-node","error":"Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent","contextNodeId":"00000000-0000-1000-8000-000000000000","msg":"Failed to register node in cluster"}
+    # Subtest: endpoint has priority 0 (highest)
+        not ok 1 - Property failed after 1 tests { seed: -1743361694, path: "0:0:0:0:0:0", endOnFailure: true } Counterexample: ["00000000-0000-1000-8000-000000000000",8000] Shrunk 5 time(s) Got error: Failed to register node: The proposal was accepted into consensus and its outcome is not known to this replica; a retry with the same entryId is idempotent     at wrapNodeRegistrationError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/shared/node-registration-owner.js:106:24)     at NodeRegistrationOwner.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/shared/node-registration-owner.js:282:28)     at async QuerySystemStatePhase.registerNodeInCluster (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/src/bootstrap/phases/query-system-state-phase.js:607:16)     at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/test/transport/node-registration-creates-endpoint.property.test.js:394:15     at async AsyncProperty.run (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/property/AsyncProperty.generic.js:46:28)     at async asyncRunIt (file:///home/peter/projects/lagrange/node_modules/fast-check/lib/esm/check/runner/Runner.js:33:21)     at async Test.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/23344cddc5f0-mwr2ekdd-2557809/test/transport/node-registration-creates-endpoint.property.test.js:383:9)  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+          ---
+          stack: |
+            buildError (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+            asyncThrowIfFailed (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+          at:
+            fileName: ../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+            lineNumber: 126
+            columnNumber: 15
+            functionName: buildError
+          tapCaught: returnedPromiseRejection
+          source: |
+            function buildError(errorMessage, out) {
+                if (!out.runConfiguration.errorWithCause) {
+                    throw new Error(errorMessage);
+            --------------^
+                }
+                const ErrorWithCause = Error;
+          ...
+        
+        1..1
+    not ok 7 - endpoint has priority 0 (highest) # time=1256.198ms
+      ---
+      at:
+        fileName: test/transport/node-registration-creates-endpoint.property.test.js
+        lineNumber: 381
+        columnNumber: 7
+        typeName: Test
+      source: |2
+           * Validates: Requirements 8.2
+           */
+            t.test('endpoint has priority 0 (highest)',
+        ------^
+              async (t) => {
+                await fc.assert(
+      ...
+    
+    1..7
+not ok 1 - Property 11: Node Registration Creates Endpoint # time=10304.029ms
+  ---
+  at:
+    fileName: test/transport/node-registration-creates-endpoint.property.test.js
+    lineNumber: 126
+    columnNumber: 1
+    isToplevel: true
+  source: |2
+     * Validates: Requirements 8.2
+     */
+    test('Property 11: Node Registration Creates Endpoint',
+    ^
+      async (t) => {
+        /**
+  ...
+
+1..1
+# { total: 7, pass: 0, fail: 7 }
+# time=10349.072ms
+# test-files total=2 pass=0 fail=2 assertions=26
+placement-results={"file":"test/transport/node-identity-separation.property.test.js","attempt":1,"ok":false,"assertions":11,"durationMs":8580,"retriedOnce":false,"firstFailureLine":"not ok 1 - Property failed after 1 tests { seed: 925290928, path: \"0:0:0:0:0:0\", endOnFailure: true } Counterexample: [\"00000000-0000-1000-8000-000000000000\",8000] Shrunk 5 time(s) Got error: Failed to register node: The proposal was accepted into "}
+placement-results={"file":"test/transport/node-registration-creates-endpoint.property.test.js","attempt":1,"ok":false,"assertions":15,"durationMs":12082,"retriedOnce":false,"firstFailureLine":"not ok 1 - Property failed after 1 tests { seed: 1970689060, path: \"0:0:0:0:0:0\", endOnFailure: true } Counterexample: [\"00000000-0000-1000-8000-000000000000\",8000] Shrunk 5 time(s) Got error: Failed to register node: The proposal was accepted into"}

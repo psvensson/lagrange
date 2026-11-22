@@ -1,0 +1,6 @@
+{"file":"test/raft/raft-rs-backend/follower-proposal-refusal.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1299,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/queued-proposal-leadership-fence.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1430,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/proposal-submitting-leadership.test.js","attempt":1,"ok":false,"assertions":3,"durationMs":1715,"retriedOnce":false,"firstFailureLine":"not ok 2 - C-2: a configuration change submitted under term T whose replica leads T+2 (its entry applied) at the step is refused by name, never proposed"}
+{"file":"test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":2141,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":2194,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/raft/raft-rs-backend/transfer-leadership-drain-order.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":2440,"retriedOnce":false,"firstFailureLine":null}

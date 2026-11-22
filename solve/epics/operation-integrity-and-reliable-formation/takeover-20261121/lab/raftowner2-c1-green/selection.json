@@ -1,0 +1,27 @@
+{
+  "sha": "e01b7ae8a5a7dc4c2d6dbaa592a9d0674625ef98",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/raft/raft-rs-backend/proposal-submitting-leadership.test.js",
+    "test/raft/raft-rs-backend/follower-proposal-refusal.test.js",
+    "test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js",
+    "test/raft/raft-rs-backend/transfer-leadership-drain-order.test.js",
+    "test/raft/raft-rs-backend/queued-proposal-leadership-fence.test.js",
+    "test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/raft/raft-rs-backend/follower-proposal-refusal.test.js",
+        "test/raft/raft-rs-backend/proposal-submitting-leadership.test.js",
+        "test/raft/raft-rs-backend/queued-proposal-leadership-fence.test.js",
+        "test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js",
+        "test/raft/raft-rs-backend/transfer-leadership-drain-order.test.js",
+        "test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

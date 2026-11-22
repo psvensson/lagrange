@@ -1,0 +1,21 @@
+{
+  "sha": "90e88cb160031ae76e94028fd4391633b116f3b1",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/query/named-write-cdc-sticky-unknown.test.js",
+    "test/query/named-write-real-producer-definite.test.js",
+    "test/cdc/cdc-shutdown-terminal-owner-write.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/query/named-write-cdc-sticky-unknown.test.js",
+        "test/query/named-write-real-producer-definite.test.js",
+        "test/cdc/cdc-shutdown-terminal-owner-write.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

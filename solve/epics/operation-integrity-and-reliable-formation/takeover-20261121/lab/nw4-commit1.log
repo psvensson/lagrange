@@ -1,0 +1,29 @@
+Source oversized-file ratchet: 0/21 over 800 lines.
+Test oversized-file ratchet: 0/21 over 1500 lines.
+Per-file size comparison base: 5dd32deb31b765d6610823e4d53aa2b0209eeb6e
+Scanned 8 JavaScript files
+Found 0 hot-path diagnostics violations
+Matched 28 inherited hot-path diagnostics baseline violations
+Scanned 0 JavaScript files
+Found 0 new literal-guideline violations
+Matched 0 inherited literal-guideline baseline violations
+Scanned 0 JavaScript files
+Found 0 decision-boundary guideline violations
+Matched 0 inherited decision-boundary baseline violations
+Scanned 0 JavaScript files
+Found 0 ambient-intrinsic call violations
+Matched 0 inherited ambient-intrinsic baseline violations
+Scanned 0 JavaScript files
+Found 0 silent catch violations
+Matched 0 inherited silent-catch baseline violations
+Promoted to ESLint (audited there, not here): state_read_defaults, value_or_promise_then_checks
+Scanned 0 JavaScript files
+Found 0 navigability violations
+Matched 0 inherited navigability baseline violations
+pre-commit: import graph stale - refreshing inventories (~2 min; skip with LAGRANGE_SKIP_INVENTORY_REGEN=1)
+pre-commit: refreshing generated test metadata
+[work/line-regression-causes-20261121 f9ae5a36a] test: red witnesses - the bootstrap window writes partitions it never waited for; applied window inserts are counted skipped
+ 10 files changed, 467 insertions(+), 49 deletions(-)
+ create mode 100644 test/bootstrap/seed-config-seeding-count.integration.test.js
+ create mode 100644 test/bootstrap/seed-window-leadership-wait.integration.test.js
+ create mode 100644 test/cdc/cdc-bootstrap-lane-write-count.test.js

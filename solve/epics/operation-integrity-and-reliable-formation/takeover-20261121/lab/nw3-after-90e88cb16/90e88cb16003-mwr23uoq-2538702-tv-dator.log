@@ -1,0 +1,294 @@
+placement-shell=3421615
+placement-head=90e88cb160031ae76e94028fd4391633b116f3b1
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3422065
+# test-files planned=3
+classified lane ordinary: 3 file(s), jobs=4
+thermal: ok cpu 57C (coretemp/Package id 0) nvme 48C (nvme/Sensor 1)
+not ok test/cdc/cdc-shutdown-terminal-owner-write.test.js (24 assertions, 1134ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: (i) shutdown wins before the membership side continues: the released write ends terminal and stays OUTCOME_UNKNOWN
+not ok 1 - (i) shutdown wins before the membership side continues: the released write ends terminal and stays OUTCOME_UNKNOWN
+  ---
+  duration_ms: 78.190248
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/90e88cb16003-mwr23uoq-2538702/test/cdc/cdc-shutdown-terminal-owner-write.test.js:373:1'
+  failureType: 'testCodeFailure'
+  error: "the answer is the CDC service's typed shut-down code"
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    assertTerminalAfterShutdown (file:///home/peter/projects/lagrange/test-output/placement-worktrees/90e88cb16003-mwr23uoq-2538702/test/cdc/cdc-shutdown-terminal-owner-write.test.js:344:10)
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/90e88cb16003-mwr23uoq-2538702/test/cdc/cdc-shutdown-terminal-owner-write.test.js:384:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: (ii-a) the write committed immediately before shutdown wins: the read-back that follows is refused terminal, the write is not re-issued
+not ok 2 - (ii-a) the write committed immediately before shutdown wins: the read-back that follows is refused terminal, the write is not re-issued
+  ---
+  duration_ms: 19.149323
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/90e88cb16003-mwr23uoq-2538702/test/cdc/cdc-shutdown-terminal-owner-write.test.js:394:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    no retry delay is armed after shutdown began
+    + actual - expected
+    
+    + [
+    +   100
+    + ]
+    - []
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0: 100
+  operator: 'deepStrictEqual'
+  stack: |-
+    assertTerminalAfterShutdown (file:///home/peter/projects/lagrange/test-output/placement-worktrees/90e88cb16003-mwr23uoq-2538702/test/cdc/cdc-shutdown-terminal-owner-write.test.js:334:10)
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/90e88cb16003-mwr23uoq-2538702/test/cdc/cdc-shutdown-terminal-owner-write.test.js:405:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: (iii) shutdown lands while the owner's retry loop sleeps: no further attempt, terminal
+ok 3 - (iii) shutdown lands while the owner's retry loop sleeps: no further attempt, terminal
+  ---
+  duration_ms: 10.102058
+  type: 'test'
+  ...
+# Subtest: (iv) shutdown lands while the CDC service holds its own retry delay: the delay ends at once, no further attempt
+not ok 4 - (iv) shutdown lands while the CDC service holds its own retry delay: the delay ends at once, no further attempt
+  ---
+  duration_ms: 6.144686
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/90e88cb16003-mwr23uoq-2538702/test/cdc/cdc-shutdown-terminal-owner-write.test.js:444:1'
+  failureType: 'testCodeFailure'
+  error: "the answer is the CDC service's typed shut-down code"
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    assertTerminalAfterShutdown (file:///home/peter/projects/lagrange/test-output/placement-worktrees/90e88cb16003-mwr23uoq-2538702/test/cdc/cdc-shutdown-terminal-owner-write.test.js:344:10)
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/90e88cb16003-mwr23uoq-2538702/test/cdc/cdc-shutdown-terminal-owner-write.test.js:461:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: (v) shutdown lands while a write waits for an engine that never arrived: the delay ends at once, terminal
+ok 5 - (v) shutdown lands while a write waits for an engine that never arrived: the delay ends at once, terminal
+  ---
+  duration_ms: 3.564525
+  type: 'test'
+  ...
+# Subtest: (vi) a write that arrives after shutdown began is refused before any engine: definitely not applied
+ok 6 - (vi) a write that arrives after shutdown began is refused before any engine: definitely not applied
+  ---
+  duration_ms: 2.110651
+  type: 'test'
+  ...
+# Subtest: the publication persist loop reads a failed write back, except through a torn-down writer
+ok 7 - the publication persist loop reads a failed write back, except through a torn-down writer
+  ---
+  duration_ms: 1.101215
+  type: 'test'
+  ...
+# Subtest: an ordinary failure while the service is live is still read back: a committed publication answered failed is a success
+ok 8 - an ordinary failure while the service is live is still read back: a committed publication answered failed is a success
+  ---
+  duration_ms: 0.669669
+  type: 'test'
+  ...
+# Subtest: semantic: after the mark the delayed-work primitive arms nothing and resolves at once, and a hold is released at once
+ok 9 - semantic: after the mark the delayed-work primitive arms nothing and resolves at once, and a hold is released at once
+  ---
+  duration_ms: 2.00047
+  type: 'test'
+  ...
+# Subtest: catch-up: the mark lands while it sleeps between deferred reads: no further read, no pending timer, no retry runs
+ok 10 - catch-up: the mark lands while it sleeps between deferred reads: no further read, no pending timer, no retry runs
+  ---
+  duration_ms: 3.115405
+  type: 'test'
+  ...
+# Subtest: catch-up: started after the mark, it reads nothing and settles at once
+ok 11 - catch-up: started after the mark, it reads nothing and settles at once
+  ---
+  duration_ms: 1.565295
+  type: 'test'
+  ...
+# Subtest: real clock: the routed-mutation retry delay at the mark leaves no pending or referenced owner handle (P-Q, P-L)
+ok 12 - real clock: the routed-mutation retry delay at the mark leaves no pending or referenced owner handle (P-Q, P-L)
+  ---
+  duration_ms: 18.191776
+  type: 'test'
+  ...
+# Subtest: real clock: the catch-up sleep at the mark leaves no pending or referenced owner handle (P-Q, P-L)
+ok 13 - real clock: the catch-up sleep at the mark leaves no pending or referenced owner handle (P-Q, P-L)
+  ---
+  duration_ms: 10.470923
+  type: 'test'
+  ...
+# Subtest: census: every CDC delayed-work site is the primitive or classified, with no bypass route
+ok 14 - census: every CDC delayed-work site is the primitive or classified, with no bypass route
+  ---
+  duration_ms: 7.223797
+  type: 'test'
+  ...
+# Subtest: in flight (S1): the catch-up's owner-RPC read is in flight at the mark and answers table-not-found: no reseed, no re-read, an honest terminal summary
+ok 15 - in flight (S1): the catch-up's owner-RPC read is in flight at the mark and answers table-not-found: no reseed, no re-read, an honest terminal summary
+  ---
+  duration_ms: 2.430327
+  type: 'test'
+  ...
+# Subtest: in flight (K5): the catch-up's read is in flight at the mark and answers rows: nothing is applied or counted caught up
+ok 16 - in flight (K5): the catch-up's read is in flight at the mark and answers rows: nothing is applied or counted caught up
+  ---
+  duration_ms: 1.184449
+  type: 'test'
+  ...
+# Subtest: in flight (S2): the catch-up's local read is in flight at the mark and answers unusable: no owner-RPC read, no SQL fallback
+ok 17 - in flight (S2): the catch-up's local read is in flight at the mark and answers unusable: no owner-RPC read, no SQL fallback
+  ---
+  duration_ms: 1.101815
+  type: 'test'
+  ...
+# Subtest: in flight (S4): the first visibility-repair read is in flight at the mark: the repair is not applied
+ok 18 - in flight (S4): the first visibility-repair read is in flight at the mark: the repair is not applied
+  ---
+  duration_ms: 1.641681
+  type: 'test'
+  ...
+# Subtest: after the mark (S5, S6): the repair entry points read nothing and apply nothing
+ok 19 - after the mark (S5, S6): the repair entry points read nothing and apply nothing
+  ---
+  duration_ms: 1.078476
+  type: 'test'
+  ...
+# Subtest: in flight (S7): the local-leader leg answers a transient failure (thrown): no engine submission after the mark
+ok 20 - in flight (S7): the local-leader leg answers a transient failure (thrown): no engine submission after the mark
+  ---
+  duration_ms: 1.592143
+  type: 'test'
+  ...
+# Subtest: in flight (S7): the local-leader leg answers a reroutable failure (returned): no engine submission after the mark
+ok 21 - in flight (S7): the local-leader leg answers a reroutable failure (returned): no engine submission after the mark
+  ---
+  duration_ms: 1.286797
+  type: 'test'
+  ...
+# Subtest: in flight (S7, honesty): the local-leader leg answers an unknown outcome: the answer stays indeterminate, never not-applied
+ok 22 - in flight (S7, honesty): the local-leader leg answers an unknown outcome: the answer stays indeterminate, never not-applied
+  ---
+  duration_ms: 1.522137
+  type: 'test'
+  ...
+# Subtest: routing: with only the gate answering terminal, no read, repair apply or submission reaches its transport
+ok 23 - routing: with only the gate answering terminal, no read, repair apply or submission reaches its transport
+  ---
+  duration_ms: 3.132768
+  type: 'test'
+  ...
+# Subtest: routing: every read, reseed, repair apply and submission is gated in the same synchronous step
+ok 24 - routing: every read, reseed, repair apply and submission is gated in the same synchronous step
+  ---
+  duration_ms: 14.065579
+  type: 'test'
+  ...
+1..24
+# tests 24
+# suites 0
+# pass 21
+# fail 3
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 203.527697
+# time=1134ms
+ok test/query/named-write-real-producer-definite.test.js (7 assertions, 4943ms)
+not ok test/query/named-write-cdc-sticky-unknown.test.js (3 assertions, 5392ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: an unknown attempt, then a refusal, in one CDC call: the named write stays UNKNOWN, and its entry, once committed, settles APPLIED exactly once
+ok 1 - an unknown attempt, then a refusal, in one CDC call: the named write stays UNKNOWN, and its entry, once committed, settles APPLIED exactly once
+  ---
+  duration_ms: 2954.657165
+  type: 'test'
+  ...
+# Subtest: a shutdown after an attempt that may have been proposed answers terminal with the outcome unknown, never not applied
+not ok 2 - a shutdown after an attempt that may have been proposed answers terminal with the outcome unknown, never not applied
+  ---
+  duration_ms: 474.327546
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/90e88cb16003-mwr23uoq-2538702/test/query/named-write-cdc-sticky-unknown.test.js:169:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    terminal, outcome unknown: {"success":false,"error":"CDCIntegrationService shut down before this write was confirmed: its outcome is not known here (see its cause), and no retry through the service can succeed","failureCode":"partition_write_outcome_unknown","outcome":"unknown","pendingInstance":{"writeIdentity":"storage_reservations:sticky-shutdown:birth","instance":"3c09c517-507e-45dc-8fb8-18ce0d6db60a","idempotencyKey":"cpw-67acd5682a8e22559a27ba631ffca81c","entryId":"dwrite-participant-16dd9f70f489bfdb","outcome":"unknown"}}
+    + actual - expected
+    
+      {
+    +   code: undefined,
+    -   code: 'CDC_INTEGRATION_SERVICE_SHUT_DOWN',
+        definitelyUnapplied: false,
+        pendingInstance: 'unknown',
+        retryable: false,
+    +   thrown: false,
+    -   thrown: true,
+        unknown: true
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    thrown: true
+    code: 'CDC_INTEGRATION_SERVICE_SHUT_DOWN'
+    retryable: false
+    unknown: true
+    definitelyUnapplied: false
+    pendingInstance: 'unknown'
+  actual:
+    thrown: false
+    retryable: false
+    unknown: true
+    definitelyUnapplied: false
+    pendingInstance: 'unknown'
+  operator: 'deepStrictEqual'
+  stack: |-
+    withSurface.cdc (file:///home/peter/projects/lagrange/test-output/placement-worktrees/90e88cb16003-mwr23uoq-2538702/test/query/named-write-cdc-sticky-unknown.test.js:177:12)
+    async withSurface (file:///home/peter/projects/lagrange/test-output/placement-worktrees/90e88cb16003-mwr23uoq-2538702/test/query/unknown-outcome-surface-fixture.js:328:5)
+    async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/90e88cb16003-mwr23uoq-2538702/test/query/named-write-cdc-sticky-unknown.test.js:171:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: mirror: every attempt of the CDC call refused before proposal is definite NOT_PROPOSED
+ok 3 - mirror: every attempt of the CDC call refused before proposal is definite NOT_PROPOSED
+  ---
+  duration_ms: 657.018684
+  type: 'test'
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 2
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4092.071516
+# time=5392ms
+# test-files total=3 pass=1 fail=2 assertions=34
+placement-results={"file":"test/cdc/cdc-shutdown-terminal-owner-write.test.js","attempt":1,"ok":false,"assertions":24,"durationMs":1134,"retriedOnce":false,"firstFailureLine":"not ok 1 - (i) shutdown wins before the membership side continues: the released write ends terminal and stays OUTCOME_UNKNOWN"}
+placement-results={"file":"test/query/named-write-real-producer-definite.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":4943,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/query/named-write-cdc-sticky-unknown.test.js","attempt":1,"ok":false,"assertions":3,"durationMs":5392,"retriedOnce":false,"firstFailureLine":"not ok 2 - a shutdown after an attempt that may have been proposed answers terminal with the outcome unknown, never not applied"}

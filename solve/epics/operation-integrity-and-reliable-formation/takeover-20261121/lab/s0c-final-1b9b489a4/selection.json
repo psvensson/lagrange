@@ -1,0 +1,47 @@
+{
+  "sha": "1b9b489a4e2b68d107131c59851571e874db11ab",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/cdc/cdc-owner-fact-receiver-read-point.test.js",
+    "test/control-plane/control-plane-owner-fact-read.test.js",
+    "test/cdc/cdc-owner-fact-non-leader-absence.test.js",
+    "test/cdc/cdc-owner-fact-hosted-replica.test.js",
+    "test/cdc/cdc-owner-fact-redirect-deadline.test.js",
+    "test/cdc/cdc-owner-fact-stale-published-leader.test.js",
+    "test/cdc/cdc-leader-required-fresh-leader-absence.test.js",
+    "test/cdc/cdc-owner-required-authoritative-routing.test.js",
+    "test/query/query-executor-recovery-read-lifetime.test.js",
+    "test/cdc/cdc-owner-fact-queued-successor-acceptance.test.js",
+    "test/cache/system-table-cache-observation.test.js",
+    "test/query/parallel-query-coordinator.test.js",
+    "test/query/system-table-ingress-boundary-adversarial.test.js",
+    "test/control-plane/readiness-owner-authority-contract.test.js",
+    "test/control-plane/control-plane-read-authority-token.test.js",
+    "test/raft/raft-rs-current-authority-observation.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/cdc/cdc-leader-required-fresh-leader-absence.test.js",
+        "test/cdc/cdc-owner-fact-hosted-replica.test.js",
+        "test/cdc/cdc-owner-fact-non-leader-absence.test.js",
+        "test/cdc/cdc-owner-fact-queued-successor-acceptance.test.js",
+        "test/cdc/cdc-owner-fact-receiver-read-point.test.js",
+        "test/cdc/cdc-owner-fact-redirect-deadline.test.js",
+        "test/cdc/cdc-owner-fact-stale-published-leader.test.js",
+        "test/cdc/cdc-owner-required-authoritative-routing.test.js",
+        "test/control-plane/control-plane-owner-fact-read.test.js",
+        "test/query/query-executor-recovery-read-lifetime.test.js",
+        "test/raft/raft-rs-current-authority-observation.test.js",
+        "test/query/system-table-ingress-boundary-adversarial.test.js",
+        "test/query/parallel-query-coordinator.test.js",
+        "test/control-plane/readiness-owner-authority-contract.test.js",
+        "test/control-plane/control-plane-read-authority-token.test.js",
+        "test/cache/system-table-cache-observation.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

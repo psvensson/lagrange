@@ -1,0 +1,21 @@
+lab test: tv-dator: ordinary (2 files) cores=12 mem=15.4GiB speed x1.43
+[tv-dator] placement-shell=3419219
+[tv-dator] placement-head=f971c13a9c8fb2d4090859055c1ad2b74ebf3707
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=3419669
+[tv-dator] # test-files planned=2
+[tv-dator] classified lane ordinary: 2 file(s), jobs=4
+[tv-dator] thermal: ok cpu 61C (coretemp/Package id 0) nvme 48C (nvme/Sensor 1)
+[tv-dator] ok test/rebalancer/priority-recovery-dispatch-pending-timeout-reentry.test.js (315 assertions, 1298ms)
+[tv-dator] ok test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js (97 assertions, 1913ms)
+[tv-dator] # test-files total=2 pass=2 fail=0 assertions=412
+lab test: tv-dator: # test-files total=2 pass=2 fail=0 assertions=412
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=2 pass=2 fail=0 assertions=412

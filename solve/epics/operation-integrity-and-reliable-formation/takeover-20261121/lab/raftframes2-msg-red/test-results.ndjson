@@ -1,0 +1,2 @@
+{"file":"test/transport/router-in-process-address-in-use.test.js","attempt":1,"ok":false,"assertions":1,"durationMs":259,"retriedOnce":false,"firstFailureLine":"not ok 1 - an in-process port clash rejects with the address-in-use error"}
+{"file":"test/transport/message-router-ping-wait-bound-spent.test.js","attempt":1,"ok":false,"assertions":30,"durationMs":661,"retriedOnce":false,"firstFailureLine":"not ok 5 - the INFO line carries its message"}

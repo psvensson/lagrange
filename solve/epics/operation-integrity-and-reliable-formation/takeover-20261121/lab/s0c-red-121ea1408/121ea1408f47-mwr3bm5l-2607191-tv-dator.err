@@ -1,0 +1,17 @@
+Canonical partition leader service missing {
+  partitionId: 'services-p1',
+  leaderNodeId: 'missing-leader',
+  routableNodeIds: [ 'services-owner', 'services-follower' ],
+  staleLeaderNodeIds: [],
+  routingSnapshot: {
+    reasonCode: 'ok',
+    routingReadinessDimension: 'controlPlaneRecoveryEligible',
+    serviceRowCount: 2,
+    activeAddressedServiceCount: 2,
+    routableServiceCount: 2,
+    canonicalLeaderServiceCount: 0,
+    leaderKnown: true,
+    canonicalLeaderNodeId: 'missing-leader',
+    deniedByNodeId: {}
+  }
+}

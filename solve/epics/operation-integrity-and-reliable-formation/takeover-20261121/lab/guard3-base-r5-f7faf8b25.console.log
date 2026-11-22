@@ -1,0 +1,1260 @@
+lab test: tv-dator: ordinary (3 files) cores=12 mem=15.4GiB speed x1.44
+[tv-dator] placement-shell=3432567
+[tv-dator] placement-head=f7faf8b25fbb230e668d68a1439186958b88748d
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=3433555
+[tv-dator] # test-files planned=3
+[tv-dator] classified lane ordinary: 3 file(s), jobs=4
+[tv-dator] thermal: ok cpu 69C (coretemp/Package id 0) nvme 48C (nvme/Sensor 1)
+[tv-dator] ok test/rebalancer/critical-spread-terminal-stall-repro.test.js (19 assertions, 1464ms)
+[tv-dator] not ok test/rebalancer/rebalance-coordinator-topology-guard.test.js (105 assertions, 1839ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] # Subtest: RebalanceCoordinator blocks same-node duplicate topology creation
+[tv-dator]     not ok 1 - createOperation should fail closed when the target node already hosts the partition
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+[tv-dator]         lineNumber: 245
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/rebalance-coordinator-topology-guard.test.js:245:5)
+[tv-dator]       source: |2
+[tv-dator]           }));
+[tv-dator]       
+[tv-dator]           t.equal(
+[tv-dator]         ----^
+[tv-dator]             error?.admissionResult?.decisionType,
+[tv-dator]             STORAGE_ADMISSION_DECISION_TYPE.BLOCKED,
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -blocked
+[tv-dator]         +undefined
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 2 - same-node duplicate adds should surface the occupied-target reason
+[tv-dator]       ---
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,3 +1,1 @@
+[tv-dator]         -Array [
+[tv-dator]         -  "target_node_already_occupied",
+[tv-dator]         -]
+[tv-dator]         +undefined
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+[tv-dator]         lineNumber: 250
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/rebalance-coordinator-topology-guard.test.js:250:5)
+[tv-dator]       source: >2
+[tv-dator]             'createOperation should fail closed when the target node already hosts the partition',
+[tv-dator]           );
+[tv-dator]           t.same(
+[tv-dator]         ----^
+[tv-dator]             error?.admissionResult?.blockingReasons,
+[tv-dator]             ['target_node_already_occupied'],
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     ok 3 - blocked topology creation should not persist a replica operation
+[tv-dator]     1..3
+[tv-dator] not ok 1 - RebalanceCoordinator blocks same-node duplicate topology creation # time=79.956ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+[tv-dator]     lineNumber: 227
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     }
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('RebalanceCoordinator blocks same-node duplicate topology creation',
+[tv-dator]     async (t) => {
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       initializeTestEnvironment();
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: RebalanceCoordinator topology guard invokes the injected inventory owner
+[tv-dator]     not ok 1 - create-time occupancy and target census share one canonical capture
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+[tv-dator]         lineNumber: 287
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/rebalance-coordinator-topology-guard.test.js:287:7)
+[tv-dator]       source: |2
+[tv-dator]             }));
+[tv-dator]       
+[tv-dator]             t.equal(inventoryBuildCount, 1,
+[tv-dator]         ------^
+[tv-dator]               'create-time occupancy and target census share one canonical capture');
+[tv-dator]             coordinator.shutdown();
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -1
+[tv-dator]         +0
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..1
+[tv-dator] not ok 2 - RebalanceCoordinator topology guard invokes the injected inventory owner # time=31.814ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+[tv-dator]     lineNumber: 265
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     });
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('RebalanceCoordinator topology guard invokes the injected inventory
+[tv-dator]     owner',
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       async (t) => {
+[tv-dator]         initializeTestEnvironment();
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: RebalanceCoordinator fails topology increase closed when service owner rows are unavailable
+[tv-dator]     not ok 1 - cache presence cannot turn unavailable owner evidence into empty
+[tv-dator]       ---
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,3 +1,1 @@
+[tv-dator]         -Array [
+[tv-dator]         -  "replica_inventory_unusable",
+[tv-dator]         -]
+[tv-dator]         +undefined
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+[tv-dator]         lineNumber: 322
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/rebalance-coordinator-topology-guard.test.js:322:7)
+[tv-dator]       source: |2
+[tv-dator]             );
+[tv-dator]       
+[tv-dator]             t.same(error?.admissionResult?.blockingReasons,
+[tv-dator]         ------^
+[tv-dator]               ['replica_inventory_unusable'],
+[tv-dator]               'cache presence cannot turn unavailable owner evidence into empty');
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..1
+[tv-dator] not ok 3 - RebalanceCoordinator fails topology increase closed when service owner rows are unavailable # time=31.002ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+[tv-dator]     lineNumber: 293
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     );
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('RebalanceCoordinator fails topology increase closed when service owner
+[tv-dator]     rows are unavailable',
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       async (t) => {
+[tv-dator]         initializeTestEnvironment();
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: RebalanceCoordinator does not fabricate inventory skew from slow successful reads without source timestamps
+[tv-dator]     ok 1 - read duration alone cannot make a successful inventory unusable
+[tv-dator]     ok 2 - the recovery REPLACE remains admissible
+[tv-dator]     1..2
+[tv-dator] ok 4 - RebalanceCoordinator does not fabricate inventory skew from slow successful reads without source timestamps # time=26.537ms
+[tv-dator] 
+[tv-dator] # Subtest: RebalanceCoordinator admits only declared concentrated-ledger recovery moves when the services owner is circularly unavailable
+[tv-dator]     ok 1 - unavailable target precedes the recovery-cure exception
+[tv-dator]     ok 2 - should be equivalent
+[tv-dator]     ok 3 - unavailable target precedes the recovery-cure exception
+[tv-dator]     ok 4 - should be equivalent
+[tv-dator]     ok 5 - the surplus REMOVE fence also has no target permission
+[tv-dator]     ok 6 - unavailable target precedes the recovery-cure exception
+[tv-dator]     ok 7 - should be equivalent
+[tv-dator]     ok 8 - unavailable target precedes the recovery-cure exception
+[tv-dator]     ok 9 - should be equivalent
+[tv-dator]     ok 10 - the surplus REMOVE fence also has no target permission
+[tv-dator]     ok 11 - unavailable target precedes the recovery-cure exception
+[tv-dator]     ok 12 - should be equivalent
+[tv-dator]     ok 13 - unavailable target precedes the recovery-cure exception
+[tv-dator]     ok 14 - should be equivalent
+[tv-dator]     ok 15 - the surplus REMOVE fence also has no target permission
+[tv-dator]     ok 16 - unavailable target precedes the recovery-cure exception
+[tv-dator]     ok 17 - should be equivalent
+[tv-dator]     ok 18 - unavailable target precedes the recovery-cure exception
+[tv-dator]     ok 19 - should be equivalent
+[tv-dator]     ok 20 - the surplus REMOVE fence also has no target permission
+[tv-dator]     ok 21 - unavailable target precedes the recovery-cure exception
+[tv-dator]     ok 22 - should be equivalent
+[tv-dator]     ok 23 - unavailable target precedes the recovery-cure exception
+[tv-dator]     ok 24 - should be equivalent
+[tv-dator]     ok 25 - the surplus REMOVE fence also has no target permission
+[tv-dator]     ok 26 - unavailable target precedes the recovery-cure exception
+[tv-dator]     ok 27 - should be equivalent
+[tv-dator]     ok 28 - unavailable target precedes the recovery-cure exception
+[tv-dator]     ok 29 - should be equivalent
+[tv-dator]     ok 30 - the surplus REMOVE fence also has no target permission
+[tv-dator]     ok 31 - unavailable target precedes the recovery-cure exception
+[tv-dator]     ok 32 - should be equivalent
+[tv-dator]     ok 33 - unavailable target precedes the recovery-cure exception
+[tv-dator]     ok 34 - should be equivalent
+[tv-dator]     ok 35 - the surplus REMOVE fence also has no target permission
+[tv-dator]     ok 36 - unavailable target precedes the recovery-cure exception
+[tv-dator]     ok 37 - should be equivalent
+[tv-dator]     ok 38 - unavailable target precedes the recovery-cure exception
+[tv-dator]     ok 39 - should be equivalent
+[tv-dator]     ok 40 - the surplus REMOVE fence also has no target permission
+[tv-dator]     not ok 41 - the count-neutral ledger spread cure breaks the owner-read circularity
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+[tv-dator]         lineNumber: 497
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/rebalance-coordinator-topology-guard.test.js:497:7)
+[tv-dator]       source: >2
+[tv-dator]             coordinator.tablePolicyService = policyOwner;
+[tv-dator]             const recovery = await coordinator.buildTopologyGuardSnapshot(context);
+[tv-dator]             t.equal(recovery.state, 'allowed',
+[tv-dator]         ------^
+[tv-dator]               'the count-neutral ledger spread cure breaks the owner-read circularity');
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -allowed
+[tv-dator]         +inventory_unusable
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 42 - the exception never permits two replicas on one node
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+[tv-dator]         lineNumber: 504
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/rebalance-coordinator-topology-guard.test.js:504:7)
+[tv-dator]       source: |2
+[tv-dator]               move: {...context.move, nodeId: spreadNode},
+[tv-dator]             });
+[tv-dator]             t.equal(occupied.state, 'target_node_occupied',
+[tv-dator]         ------^
+[tv-dator]               'the exception never permits two replicas on one node');
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -target_node_occupied
+[tv-dator]         +inventory_unusable
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     ok 43 - the recovery REPLACE must be anchored to an actual source row
+[tv-dator]     ok 44 - a voter off the hottest node is not the quorum-spread cure
+[tv-dator]     ok 45 - a pre-ready target is not placement-eligible without a ready lease
+[tv-dator]     not ok 46 - the first ready unoccupied target remains a valid cure
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+[tv-dator]         lineNumber: 538
+[tv-dator]         columnNumber: 7
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/rebalance-coordinator-topology-guard.test.js:538:7)
+[tv-dator]       source: |2
+[tv-dator]               },
+[tv-dator]             });
+[tv-dator]             t.equal(firstFeasibleAdd.state, 'allowed',
+[tv-dator]         ------^
+[tv-dator]               'the first ready unoccupied target remains a valid cure');
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -allowed
+[tv-dator]         +inventory_unusable
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     ok 47 - the circularity exception must not admit an unready target
+[tv-dator]     ok 48 - startup authority cannot replace live transport evidence
+[tv-dator]     ok 49 - live CONNECTED evidence cannot replace startup authority membership
+[tv-dator]     1..49
+[tv-dator] not ok 5 - RebalanceCoordinator admits only declared concentrated-ledger recovery moves when the services owner is circularly unavailable # time=46.316ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+[tv-dator]     lineNumber: 385
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |
+[tv-dator]     );
+[tv-dator]   
+[tv-dator]     test(
+[tv-dator]     ^
+[tv-dator]       'RebalanceCoordinator admits only declared concentrated-ledger recovery ' +
+[tv-dator]         'moves when the services owner is circularly unavailable',
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: RebalanceCoordinator blocks stale ADD when authoritative topology already satisfies target
+[tv-dator]     not ok 1 - createOperation should fail closed when authoritative topology already satisfies the target replica count
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+[tv-dator]         lineNumber: 603
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/rebalance-coordinator-topology-guard.test.js:603:5)
+[tv-dator]       source: |2
+[tv-dator]           }));
+[tv-dator]       
+[tv-dator]           t.equal(
+[tv-dator]         ----^
+[tv-dator]             error?.admissionResult?.decisionType,
+[tv-dator]             STORAGE_ADMISSION_DECISION_TYPE.BLOCKED,
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -blocked
+[tv-dator]         +undefined
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 2 - stale planner adds should surface the target-satisfied reason
+[tv-dator]       ---
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,3 +1,1 @@
+[tv-dator]         -Array [
+[tv-dator]         -  "target_replica_count_already_satisfied",
+[tv-dator]         -]
+[tv-dator]         +undefined
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+[tv-dator]         lineNumber: 608
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/rebalance-coordinator-topology-guard.test.js:608:5)
+[tv-dator]       source: >2
+[tv-dator]             'createOperation should fail closed when authoritative topology already satisfies the target replica count',
+[tv-dator]           );
+[tv-dator]           t.same(
+[tv-dator]         ----^
+[tv-dator]             error?.admissionResult?.blockingReasons,
+[tv-dator]             ['target_replica_count_already_satisfied'],
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 3 - topology guard should preserve the canonical distinct-node count in diagnostics
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+[tv-dator]         lineNumber: 613
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/rebalance-coordinator-topology-guard.test.js:613:5)
+[tv-dator]       source: |2
+[tv-dator]             'stale planner adds should surface the target-satisfied reason',
+[tv-dator]           );
+[tv-dator]           t.equal(
+[tv-dator]         ----^
+[tv-dator]             error?.admissionResult?.topologySnapshot?.observedDistinctNodeCount,
+[tv-dator]             3,
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -3
+[tv-dator]         +undefined
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     ok 4 - stale planner add should not persist a replica operation
+[tv-dator]     1..4
+[tv-dator] not ok 6 - RebalanceCoordinator blocks stale ADD when authoritative topology already satisfies target # time=31.383ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+[tv-dator]     lineNumber: 580
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     );
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('RebalanceCoordinator blocks stale ADD when authoritative topology
+[tv-dator]     already satisfies target', async (t) => {
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       initializeTestEnvironment();
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: RebalanceCoordinator blocks REPLACE when target node already has partition topology
+[tv-dator]     not ok 1 - createOperation should fail closed when REPLACE targets an occupied partition node
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+[tv-dator]         lineNumber: 651
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/rebalance-coordinator-topology-guard.test.js:651:5)
+[tv-dator]       source: |2
+[tv-dator]           }));
+[tv-dator]       
+[tv-dator]           t.equal(
+[tv-dator]         ----^
+[tv-dator]             error?.admissionResult?.decisionType,
+[tv-dator]             STORAGE_ADMISSION_DECISION_TYPE.BLOCKED,
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -blocked
+[tv-dator]         +undefined
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 2 - duplicate replacement target rows should surface the occupied-target reason
+[tv-dator]       ---
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,3 +1,1 @@
+[tv-dator]         -Array [
+[tv-dator]         -  "target_node_already_occupied",
+[tv-dator]         -]
+[tv-dator]         +undefined
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+[tv-dator]         lineNumber: 656
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/rebalance-coordinator-topology-guard.test.js:656:5)
+[tv-dator]       source: >2
+[tv-dator]             'createOperation should fail closed when REPLACE targets an occupied partition node',
+[tv-dator]           );
+[tv-dator]           t.same(
+[tv-dator]         ----^
+[tv-dator]             error?.admissionResult?.blockingReasons,
+[tv-dator]             ['target_node_already_occupied'],
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     ok 3 - blocked replacement topology creation should not persist a replica operation
+[tv-dator]     1..3
+[tv-dator] not ok 7 - RebalanceCoordinator blocks REPLACE when target node already has partition topology # time=26.572ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+[tv-dator]     lineNumber: 628
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     });
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('RebalanceCoordinator blocks REPLACE when target node already has
+[tv-dator]     partition topology', async (t) => {
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       initializeTestEnvironment();
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: RebalanceCoordinator applies topology occupancy guard to message-group creates
+[tv-dator]     not ok 1 - message-group ADD should use the shared topology occupancy guard
+[tv-dator]       ---
+[tv-dator]       compare: ===
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+[tv-dator]         lineNumber: 696
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/rebalance-coordinator-topology-guard.test.js:696:5)
+[tv-dator]       source: |2
+[tv-dator]           }));
+[tv-dator]       
+[tv-dator]           t.equal(
+[tv-dator]         ----^
+[tv-dator]             error?.admissionResult?.decisionType,
+[tv-dator]             STORAGE_ADMISSION_DECISION_TYPE.BLOCKED,
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,1 @@
+[tv-dator]         -blocked
+[tv-dator]         +undefined
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 2 - message-group duplicate topology should surface the occupied-target reason
+[tv-dator]       ---
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,3 +1,1 @@
+[tv-dator]         -Array [
+[tv-dator]         -  "target_node_already_occupied",
+[tv-dator]         -]
+[tv-dator]         +undefined
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+[tv-dator]         lineNumber: 701
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/rebalance-coordinator-topology-guard.test.js:701:5)
+[tv-dator]       source: |2
+[tv-dator]             'message-group ADD should use the shared topology occupancy guard',
+[tv-dator]           );
+[tv-dator]           t.same(
+[tv-dator]         ----^
+[tv-dator]             error?.admissionResult?.blockingReasons,
+[tv-dator]             ['target_node_already_occupied'],
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     ok 3 - blocked message-group topology creation should not persist a replica operation
+[tv-dator]     1..3
+[tv-dator] not ok 8 - RebalanceCoordinator applies topology occupancy guard to message-group creates # time=26.71ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+[tv-dator]     lineNumber: 671
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     });
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('RebalanceCoordinator applies topology occupancy guard to message-group
+[tv-dator]     creates', async (t) => {
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       initializeTestEnvironment();
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: count-keyed lane HOLDS a REPLACE churn create while the critical partition is over target on alive replicas (red-on-revert: the rows-only ADD guard exempts REPLACE, so without the hold the churn is admitted)
+[tv-dator]     ok 1 - over-target REPLACE churn is rejected by the count-keyed lane hold
+[tv-dator]     ok 2 - the held REPLACE churn create persists no replica operation
+[tv-dator]     1..2
+[tv-dator] ok 9 - count-keyed lane HOLDS a REPLACE churn create while the critical partition is over target on alive replicas (red-on-revert: the rows-only ADD guard exempts REPLACE, so without the hold the churn is admitted) # time=20.365ms
+[tv-dator] 
+[tv-dator] # Subtest: count-keyed lane consumes canonical identity deduplication
+[tv-dator]     not ok 1 - Authoritative operation visibility deferred for partition:control_plane_publications-p1 (entity_operation_observation_incomplete)
+[tv-dator]       ---
+[tv-dator]       stack: |
+[tv-dator]         FixtureCommittedReadCoordinator.createDeferredOperationVisibilityError (src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js:238:19)
+[tv-dator]         FixtureCommittedReadCoordinator.requireEntityOperationRows (src/rebalancer/rebalance-coordinator-operation-read-methods.js:261:18)
+[tv-dator]         FixtureCommittedReadCoordinator.getEntityRetiredReplaceSourceReplicaIds (src/rebalancer/rebalance-coordinator-replica-identity-methods.js:171:42)
+[tv-dator]         async FixtureCommittedReadCoordinator.getRetiredReplaceSourceMoveSafetyError (src/rebalancer/rebalance-coordinator-replica-identity-methods.js:388:7)
+[tv-dator]         async FixtureCommittedReadCoordinator.createOperationInternal (src/rebalancer/rebalance-coordinator-operation-creation.js:436:7)
+[tv-dator]         async FixtureCommittedReadCoordinator.runOperationLedgerInterlockAccountedCreate (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)
+[tv-dator]         async file:/home/peter/projects/lagrange/test-output/placement-worktrees/f7faf8b25fbb-mwr2fzca-2559877/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13
+[tv-dator]         async FixtureCommittedReadCoordinator.runCreateOperationForIntent (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:263:22)
+[tv-dator]         async Test.<anonymous> (test/rebalancer/rebalance-coordinator-topology-guard.test.js:779:21)
+[tv-dator]       at:
+[tv-dator]         fileName: src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js
+[tv-dator]         lineNumber: 238
+[tv-dator]         columnNumber: 19
+[tv-dator]         typeName: FixtureCommittedReadCoordinator
+[tv-dator]         methodName: createDeferredOperationVisibilityError
+[tv-dator]         functionName: FixtureCommittedReadCoordinator.createDeferredOperationVisibilityError
+[tv-dator]       rebalanceSkipReason: deferred_retry_pending
+[tv-dator]       operationType: null
+[tv-dator]       entityType: partition
+[tv-dator]       entityId: control_plane_publications-p1
+[tv-dator]       partitionId: null
+[tv-dator]       replicaId: null
+[tv-dator]       operationVisibilityState: deferred
+[tv-dator]       completionState: operation_visibility_deferred
+[tv-dator]       reasonCode: entity_operation_observation_incomplete
+[tv-dator]       retryAfterMs: 100
+[tv-dator]       tapCaught: returnedPromiseRejection
+[tv-dator]       source: |2
+[tv-dator]                 deferredOutcome.reasonCode :
+[tv-dator]                 'authoritative_operation_visibility_deferred';
+[tv-dator]             const error = new Error(
+[tv-dator]         ------------------^
+[tv-dator]               'Authoritative operation visibility deferred for ' +
+[tv-dator]                 entityType +
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..1
+[tv-dator] not ok 10 - count-keyed lane consumes canonical identity deduplication # time=27.593ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+[tv-dator]     lineNumber: 764
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     });
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('count-keyed lane consumes canonical identity deduplication', async (t)
+[tv-dator]     => {
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       initializeTestEnvironment();
+[tv-dator]       const first = critRow(CRIT_PARTITION_ID + '-r1', 'node-1');
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: count-keyed lane ALIVE-GUARD: a FAILED replica does not count toward the alive occupancy, so a legitimate re-placement REPLACE is admitted (the hold never over-blocks a dead-replica fix)
+[tv-dator]     not ok 1 - Authoritative operation visibility deferred for partition:control_plane_publications-p1 (entity_operation_observation_incomplete)
+[tv-dator]       ---
+[tv-dator]       stack: |
+[tv-dator]         FixtureCommittedReadCoordinator.createDeferredOperationVisibilityError (src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js:238:19)
+[tv-dator]         FixtureCommittedReadCoordinator.requireEntityOperationRows (src/rebalancer/rebalance-coordinator-operation-read-methods.js:261:18)
+[tv-dator]         FixtureCommittedReadCoordinator.getEntityRetiredReplaceSourceReplicaIds (src/rebalancer/rebalance-coordinator-replica-identity-methods.js:171:42)
+[tv-dator]         async FixtureCommittedReadCoordinator.getRetiredReplaceSourceMoveSafetyError (src/rebalancer/rebalance-coordinator-replica-identity-methods.js:388:7)
+[tv-dator]         async FixtureCommittedReadCoordinator.createOperationInternal (src/rebalancer/rebalance-coordinator-operation-creation.js:436:7)
+[tv-dator]         async FixtureCommittedReadCoordinator.runOperationLedgerInterlockAccountedCreate (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)
+[tv-dator]         async file:/home/peter/projects/lagrange/test-output/placement-worktrees/f7faf8b25fbb-mwr2fzca-2559877/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13
+[tv-dator]         async FixtureCommittedReadCoordinator.runCreateOperationForIntent (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:263:22)
+[tv-dator]         async Test.<anonymous> (test/rebalancer/rebalance-coordinator-topology-guard.test.js:811:3)
+[tv-dator]       at:
+[tv-dator]         fileName: src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js
+[tv-dator]         lineNumber: 238
+[tv-dator]         columnNumber: 19
+[tv-dator]         typeName: FixtureCommittedReadCoordinator
+[tv-dator]         methodName: createDeferredOperationVisibilityError
+[tv-dator]         functionName: FixtureCommittedReadCoordinator.createDeferredOperationVisibilityError
+[tv-dator]       rebalanceSkipReason: deferred_retry_pending
+[tv-dator]       operationType: null
+[tv-dator]       entityType: partition
+[tv-dator]       entityId: control_plane_publications-p1
+[tv-dator]       partitionId: null
+[tv-dator]       replicaId: null
+[tv-dator]       operationVisibilityState: deferred
+[tv-dator]       completionState: operation_visibility_deferred
+[tv-dator]       reasonCode: entity_operation_observation_incomplete
+[tv-dator]       retryAfterMs: 100
+[tv-dator]       tapCaught: returnedPromiseRejection
+[tv-dator]       source: |2
+[tv-dator]                 deferredOutcome.reasonCode :
+[tv-dator]                 'authoritative_operation_visibility_deferred';
+[tv-dator]             const error = new Error(
+[tv-dator]         ------------------^
+[tv-dator]               'Authoritative operation visibility deferred for ' +
+[tv-dator]                 entityType +
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..1
+[tv-dator] not ok 11 - count-keyed lane ALIVE-GUARD: a FAILED replica does not count toward the alive occupancy, so a legitimate re-placement REPLACE is admitted (the hold never over-blocks a dead-replica fix) # time=30.265ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+[tv-dator]     lineNumber: 795
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     });
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('count-keyed lane ALIVE-GUARD: a FAILED replica does not count toward the
+[tv-dator]     alive occupancy, so ' +
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       'a legitimate re-placement REPLACE is admitted (the hold never over-blocks a dead-replica fix)',
+[tv-dator]     async (t) => {
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: count-keyed lane HOLDS a REPLACE churn create when the surplus is a draining (REMOVING) source -- the real over-replication signature: 3 active + 1 removing source on ready nodes is over target
+[tv-dator]     ok 1 - a draining (removing) source keeps the partition over target -> churn create is held
+[tv-dator]     ok 2 - the held churn create persists no replica operation
+[tv-dator]     1..2
+[tv-dator] ok 12 - count-keyed lane HOLDS a REPLACE churn create when the surplus is a draining (REMOVING) source -- the real over-replication signature: 3 active + 1 removing source on ready nodes is over target # time=21.274ms
+[tv-dator] 
+[tv-dator] # Subtest: count-keyed lane EXEMPTS the priority-spread cure ADD: over target on alive replicas but below distinct-node coverage, an ADD typed spread_replicas to an unoccupied node is ADMITTED (red-on-revert: the unconditional hold deadlocks the planner-yielded drain)
+[tv-dator]     not ok 1 - Authoritative operation visibility deferred for partition:control_plane_publications-p1 (entity_operation_observation_incomplete)
+[tv-dator]       ---
+[tv-dator]       stack: |
+[tv-dator]         FixtureCommittedReadCoordinator.createDeferredOperationVisibilityError (src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js:238:19)
+[tv-dator]         FixtureCommittedReadCoordinator.ensureEntityAddLikeCreateLaneAvailable (src/rebalancer/rebalance-coordinator-priority-budget-admission.js:430:18)
+[tv-dator]         async FixtureCommittedReadCoordinator.createOperationInternal (src/rebalancer/rebalance-coordinator-operation-creation.js:482:7)
+[tv-dator]         async FixtureCommittedReadCoordinator.runOperationLedgerInterlockAccountedCreate (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)
+[tv-dator]         async file:/home/peter/projects/lagrange/test-output/placement-worktrees/f7faf8b25fbb-mwr2fzca-2559877/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13
+[tv-dator]         async FixtureCommittedReadCoordinator.runCreateOperationForIntent (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:263:22)
+[tv-dator]         async Test.<anonymous> (test/rebalancer/rebalance-coordinator-topology-guard.test.js:881:3)
+[tv-dator]       at:
+[tv-dator]         fileName: src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js
+[tv-dator]         lineNumber: 238
+[tv-dator]         columnNumber: 19
+[tv-dator]         typeName: FixtureCommittedReadCoordinator
+[tv-dator]         methodName: createDeferredOperationVisibilityError
+[tv-dator]         functionName: FixtureCommittedReadCoordinator.createDeferredOperationVisibilityError
+[tv-dator]       rebalanceSkipReason: deferred_retry_pending
+[tv-dator]       operationType: ADD
+[tv-dator]       entityType: partition
+[tv-dator]       entityId: control_plane_publications-p1
+[tv-dator]       partitionId: control_plane_publications-p1
+[tv-dator]       replicaId: null
+[tv-dator]       operationVisibilityState: deferred
+[tv-dator]       completionState: operation_visibility_deferred
+[tv-dator]       reasonCode: entity_operation_observation_incomplete
+[tv-dator]       retryAfterMs: 100
+[tv-dator]       tapCaught: returnedPromiseRejection
+[tv-dator]       source: |2
+[tv-dator]                 deferredOutcome.reasonCode :
+[tv-dator]                 'authoritative_operation_visibility_deferred';
+[tv-dator]             const error = new Error(
+[tv-dator]         ------------------^
+[tv-dator]               'Authoritative operation visibility deferred for ' +
+[tv-dator]                 entityType +
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..1
+[tv-dator] not ok 13 - count-keyed lane EXEMPTS the priority-spread cure ADD: over target on alive replicas but below distinct-node coverage, an ADD typed spread_replicas to an unoccupied node is ADMITTED (red-on-revert: the unconditional hold deadlocks the planner-yielded drain) # time=28.028ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+[tv-dator]     lineNumber: 864
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     // 2/3 all run). The hold must admit exactly the cure shape and nothing else.
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('count-keyed lane EXEMPTS the priority-spread cure ADD: over target on
+[tv-dator]     alive ' +
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       'replicas but below distinct-node coverage, an ADD typed spread_replicas to an ' +
+[tv-dator]       'unoccupied node is ADMITTED (red-on-revert: the unconditional hold deadlocks ' +
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: count-keyed lane STILL HOLDS an over-target ADD without the spread-cure typing (the exemption admits only the planner-retained cure shape)
+[tv-dator]     ok 1 - an untyped over-target ADD stays held
+[tv-dator]     ok 2 - no operation persists
+[tv-dator]     1..2
+[tv-dator] ok 14 - count-keyed lane STILL HOLDS an over-target ADD without the spread-cure typing (the exemption admits only the planner-retained cure shape) # time=20.831ms
+[tv-dator] 
+[tv-dator] # Subtest: count-keyed lane STILL HOLDS a spread-typed over-target ADD once distinct-node coverage meets the target (spread satisfied -> the surplus must drain, not grow)
+[tv-dator]     ok 1 - a spread-typed ADD with coverage at target stays held
+[tv-dator]     ok 2 - no operation persists
+[tv-dator]     1..2
+[tv-dator] ok 15 - count-keyed lane STILL HOLDS a spread-typed over-target ADD once distinct-node coverage meets the target (spread satisfied -> the surplus must drain, not grow) # time=18.973ms
+[tv-dator] 
+[tv-dator] # Subtest: count-keyed lane STILL HOLDS a spread-typed over-target ADD whose target node already hosts a replica (no coverage gain -> not the cure shape)
+[tv-dator]     ok 1 - a spread-typed ADD to an already-hosting node stays held
+[tv-dator]     ok 2 - no operation persists
+[tv-dator]     1..2
+[tv-dator] ok 16 - count-keyed lane STILL HOLDS a spread-typed over-target ADD whose target node already hosts a replica (no coverage gain -> not the cure shape) # time=21.669ms
+[tv-dator] 
+[tv-dator] # Subtest: s14 orphan census: 2 voters + 1 ORPHAN (active, non-voter, no in-flight op) on 3 nodes does NOT satisfy target 3 — the spread ADD to a 4th node is ADMITTED (RED on the status-only-census head)
+[tv-dator]     not ok 1 - Authoritative operation visibility deferred for partition:control_plane_publications-p1 (entity_operation_observation_incomplete)
+[tv-dator]       ---
+[tv-dator]       stack: |
+[tv-dator]         FixtureCommittedReadCoordinator.createDeferredOperationVisibilityError (src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js:238:19)
+[tv-dator]         FixtureCommittedReadCoordinator.ensureEntityAddLikeCreateLaneAvailable (src/rebalancer/rebalance-coordinator-priority-budget-admission.js:430:18)
+[tv-dator]         async FixtureCommittedReadCoordinator.createOperationInternal (src/rebalancer/rebalance-coordinator-operation-creation.js:482:7)
+[tv-dator]         async FixtureCommittedReadCoordinator.runOperationLedgerInterlockAccountedCreate (src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js:736:14)
+[tv-dator]         async file:/home/peter/projects/lagrange/test-output/placement-worktrees/f7faf8b25fbb-mwr2fzca-2559877/src/rebalancer/rebalance-coordinator-operation-intent-methods.js:285:13
+[tv-dator]         async FixtureCommittedReadCoordinator.runCreateOperationForIntent (src/rebalancer/rebalance-coordinator-operation-intent-methods.js:263:22)
+[tv-dator]         async Test.<anonymous> (test/rebalancer/rebalance-coordinator-topology-guard.test.js:1000:3)
+[tv-dator]       at:
+[tv-dator]         fileName: src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js
+[tv-dator]         lineNumber: 238
+[tv-dator]         columnNumber: 19
+[tv-dator]         typeName: FixtureCommittedReadCoordinator
+[tv-dator]         methodName: createDeferredOperationVisibilityError
+[tv-dator]         functionName: FixtureCommittedReadCoordinator.createDeferredOperationVisibilityError
+[tv-dator]       rebalanceSkipReason: deferred_retry_pending
+[tv-dator]       operationType: ADD
+[tv-dator]       entityType: partition
+[tv-dator]       entityId: control_plane_publications-p1
+[tv-dator]       partitionId: control_plane_publications-p1
+[tv-dator]       replicaId: null
+[tv-dator]       operationVisibilityState: deferred
+[tv-dator]       completionState: operation_visibility_deferred
+[tv-dator]       reasonCode: entity_operation_observation_incomplete
+[tv-dator]       retryAfterMs: 100
+[tv-dator]       tapCaught: returnedPromiseRejection
+[tv-dator]       source: |2
+[tv-dator]                 deferredOutcome.reasonCode :
+[tv-dator]                 'authoritative_operation_visibility_deferred';
+[tv-dator]             const error = new Error(
+[tv-dator]         ------------------^
+[tv-dator]               'Authoritative operation visibility deferred for ' +
+[tv-dator]                 entityType +
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..1
+[tv-dator] not ok 17 - s14 orphan census: 2 voters + 1 ORPHAN (active, non-voter, no in-flight op) on 3 nodes does NOT satisfy target 3 — the spread ADD to a 4th node is ADMITTED (RED on the status-only-census head) # time=23.261ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+[tv-dator]     lineNumber: 986
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     }
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('s14 orphan census: 2 voters + 1 ORPHAN (active, non-voter, no in-flight
+[tv-dator]     op) ' +
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       'on 3 nodes does NOT satisfy target 3 — the spread ADD to a 4th node is ADMITTED ' +
+[tv-dator]       '(RED on the status-only-census head)', async (t) => {
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: s14 orphan census: a CATCHING-UP learner (status=creating) still counts, so a redundant 4th ADD is HELD — over-creation is not admitted
+[tv-dator]     ok 1 - catching-up learner counts (3 nodes == target) -> redundant ADD held
+[tv-dator]     ok 2 - no over-creating replica operation persisted
+[tv-dator]     1..2
+[tv-dator] ok 18 - s14 orphan census: a CATCHING-UP learner (status=creating) still counts, so a redundant 4th ADD is HELD — over-creation is not admitted # time=21.2ms
+[tv-dator] 
+[tv-dator] # Subtest: s14 orphan census: the one-node-per-replica occupancy check is UNCHANGED — an add-like create targeting the ORPHAN's node is still blocked (no double-placement)
+[tv-dator]     ok 1 - target node already occupied (full-occupancy check intact) -> blocked
+[tv-dator]     ok 2 - no double-placement on the orphan node
+[tv-dator]     1..2
+[tv-dator] ok 19 - s14 orphan census: the one-node-per-replica occupancy check is UNCHANGED — an add-like create targeting the ORPHAN's node is still blocked (no double-placement) # time=17.973ms
+[tv-dator] 
+[tv-dator] # Subtest: ADD and REPLACE refuse unavailable policy before persistence and recover through the same topology guard
+[tv-dator]     not ok 1 - Cannot read properties of undefined (reading 'blockingReasons')
+[tv-dator]       ---
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous>
+[tv-dator]         (test/rebalancer/rebalance-coordinator-topology-guard.test.js:1085:36)
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+[tv-dator]         lineNumber: 1085
+[tv-dator]         columnNumber: 36
+[tv-dator]         typeName: Test
+[tv-dator]         methodName: <anonymous>
+[tv-dator]         functionName: Test.<anonymous>
+[tv-dator]       type: TypeError
+[tv-dator]       tapCaught: returnedPromiseRejection
+[tv-dator]       source: >2
+[tv-dator]                 enforceConcurrentOperationBudget: true};
+[tv-dator]               const error = await captureOperationCreateError(() => coordinator.createOperation(move));
+[tv-dator]               t.same(error.admissionResult.blockingReasons, ['partition_target_unavailable']);
+[tv-dator]         -----------------------------------^
+[tv-dator]               t.equal(sqlEngine.getOperations().length, 0, 'no operation is recorded without its target');
+[tv-dator]               coordinator.tablePolicyService = owner;
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..1
+[tv-dator] not ok 20 - ADD and REPLACE refuse unavailable policy before persistence and recover through the same topology guard # time=22.743ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/rebalance-coordinator-topology-guard.test.js
+[tv-dator]     lineNumber: 1067
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('ADD and REPLACE refuse unavailable policy before persistence ' +
+[tv-dator]     ^
+[tv-dator]       'and recover through the same topology guard', async (t) => {
+[tv-dator]       initializeTestEnvironment();
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] 1..20
+[tv-dator] # { total: 85, pass: 66, fail: 19 }
+[tv-dator] # time=618.356ms
+[tv-dator] not ok test/rebalancer/spread-cure-escape-schedules.test.js (60 assertions, 24559ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] # Subtest: E2 July world, services-p1 leader alive and reachable, planner on a follower: the spread cure of [A,A,B] is admitted within one evaluation cycle
+[tv-dator]     ok 1 - setup: the planner node hosts a services-p1 replica that follows
+[tv-dator]     ok 2 - setup: the planner observes the partition's replicas
+[tv-dator]     # OBSERVATION E2 {"escapePresent":true,"cycle":{"label":"e2-cycle-1","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"9c23640f-36df-46fe-846e-e5fa2153abd2"}],"admitted":1,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"sql_write_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":true}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]}}
+[tv-dator]     ok 3 - a spread-restoring add-like move is admitted in the first cycle
+[tv-dator]     ok 4 - a spread-restoring operation row targets a free node: [{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]
+[tv-dator]     1..4
+[tv-dator] ok 1 - E2 July world, services-p1 leader alive and reachable, planner on a follower: the spread cure of [A,A,B] is admitted within one evaluation cycle # time=426.945ms
+[tv-dator] 
+[tv-dator] # Subtest: E2 control (only where the escape exists): the same cycle with the escape answering false gives the July signature
+[tv-dator]     ok 1 - setup: the planner node hosts a services-p1 replica that follows
+[tv-dator]     ok 2 - setup: the planner observes the partition's replicas
+[tv-dator]     # OBSERVATION E2-control {"cycle":{"label":"e2-control-cycle-1","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":true,"reason":"blocked","admissionReason":"replica_inventory_unusable","decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"operationId":null}],"admitted":0,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[]}}
+[tv-dator]     ok 3 - without the escape nothing is admitted
+[tv-dator]     ok 4 - the cure is denied replica_inventory_unusable (the July 17-40-24 signature)
+[tv-dator]     1..4
+[tv-dator] ok 2 - E2 control (only where the escape exists): the same cycle with the escape answering false gives the July signature # time=281.247ms
+[tv-dator] 
+[tv-dator] # Subtest: E3 services-p1 without a leader, then a leader: nothing is admitted while no replica leads, and the cure is admitted within one cycle of the leader appearing
+[tv-dator]     ok 1 - setup: the planner node hosts a services-p1 replica that follows
+[tv-dator]     ok 2 - setup: the planner observes the partition's replicas
+[tv-dator]     ok 3 - setup: no services-p1 replica leads: {"leaderless":true,"afterMs":1985,"roles":[{"nodeId":"peer-node-a","core":"follower","service":"follower","leaderId":null},{"nodeId":"planner-node","core":"follower","service":"follower","leaderId":"services-p1-r1"},{"nodeId":"peer-node-b","core":"follower","service":"follower","leaderId":"services-p1-r1"}]}
+[tv-dator]     ok 4 - setup: a services-p1 leader appears: {"elected":true,"leaderNodeId":"peer-node-a","afterMs":1747}
+[tv-dator]     # OBSERVATION E3 {"escapePresent":true,"outage":{"leaderless":true,"afterMs":1985,"roles":[{"nodeId":"peer-node-a","core":"follower","service":"follower","leaderId":null},{"nodeId":"planner-node","core":"follower","service":"follower","leaderId":"services-p1-r1"},{"nodeId":"peer-node-b","core":"follower","service":"follower","leaderId":"services-p1-r1"}]},"withoutLeader":[{"label":"e3-no-leader-1","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"6fcf0201-4021-4328-8cc1-0d5dfd7d1555"}],"admitted":1,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"sql_write_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":true}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]},{"label":"e3-no-leader-2","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"6fcf0201-4021-4328-8cc1-0d5dfd7d1555"}],"admitted":1,"reads":[],"escape":[],"hold":[],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]},{"label":"e3-no-leader-3","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"6fcf0201-4021-4328-8cc1-0d5dfd7d1555"}],"admitted":1,"reads":[],"escape":[],"hold":[],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]}],"leftBehind":{"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}],"reservations":[{"state":"active","partition_id":"sql_write_operations-p1","node_id":null,"operation_id":"6fcf0201-4021-4328-8cc1-0d5dfd7d1555"}],"slotProbe":{"admitted":false,"reason":null,"skip":"budget_exceeded","message":"Partition sql_write_operations-p1 already has a different create intent"}},"recovery":{"elected":true,"leaderNodeId":"peer-node-a","afterMs":1747},"afterLeader":[{"label":"e3-leader-1","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"6fcf0201-4021-4328-8cc1-0d5dfd7d1555"}],"admitted":1,"reads":[],"escape":[],"hold":[],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]}],"finalLedger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]}
+[tv-dator]     not ok 5 - no cycle admits an add-like move while services-p1 has no leader
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+[tv-dator]         lineNumber: 411
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/spread-cure-escape-schedules.test.js:411:5)
+[tv-dator]       source: >2
+[tv-dator]             recovery, afterLeader, finalLedger: ledgerOf(scene)});
+[tv-dator]       
+[tv-dator]           t.ok(withoutLeader.every((cycle) => cycle.admitted === 0),
+[tv-dator]         ----^
+[tv-dator]             'no cycle admits an add-like move while services-p1 has no leader');
+[tv-dator]           t.same(leftBehind.ledger, [], 'no operation exists while services-p1 has no leader');
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 6 - no operation exists while services-p1 has no leader
+[tv-dator]       ---
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,9 @@
+[tv-dator]         -Array []
+[tv-dator]         +Array [
+[tv-dator]         +  Object {
+[tv-dator]         +    "type": "ADD",
+[tv-dator]         +    "status": "pending",
+[tv-dator]         +    "target_node_id": "planner-node",
+[tv-dator]         +    "replica_id": "sql_write_operations-p1-r4",
+[tv-dator]         +    "source_replica_id": null,
+[tv-dator]         +  },
+[tv-dator]         +]
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+[tv-dator]         lineNumber: 413
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/spread-cure-escape-schedules.test.js:413:5)
+[tv-dator]       source: >2
+[tv-dator]           t.ok(withoutLeader.every((cycle) => cycle.admitted === 0),
+[tv-dator]             'no cycle admits an add-like move while services-p1 has no leader');
+[tv-dator]           t.same(leftBehind.ledger, [], 'no operation exists while services-p1 has no leader');
+[tv-dator]         ----^
+[tv-dator]           t.equal(afterLeader.length, 1,
+[tv-dator]             'the first cycle after the leader appears ends the wait (admits, or finds the cure made)');
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     ok 7 - the first cycle after the leader appears ends the wait (admits, or finds the cure made)
+[tv-dator]     ok 8 - exactly one spread-restoring operation
+[tv-dator]     ok 9 - that first cycle is the one that admits the cure
+[tv-dator]     1..9
+[tv-dator] not ok 3 - E3 services-p1 without a leader, then a leader: nothing is admitted while no replica leads, and the cure is admitted within one cycle of the leader appearing # time=4084.028ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+[tv-dator]     lineNumber: 379
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     });
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('E3 services-p1 without a leader, then a leader: nothing is admitted
+[tv-dator]     while no replica ' +
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       'leads, and the cure is admitted within one cycle of the leader appearing',
+[tv-dator]     {timeout: CASE_TIMEOUT_MS}, async (t) => {
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: E5 over-target [A,A,A,B]: the hold fails open and the guard behind it; across a bounded services-p1 gap the surplus drain's cure waits for the gap and no longer
+[tv-dator]     ok 1 - setup: the planner node hosts a services-p1 replica that follows
+[tv-dator]     ok 2 - setup: the planner observes the partition's replicas
+[tv-dator]     ok 3 - setup: no services-p1 replica leads: {"leaderless":true,"afterMs":1985,"roles":[{"nodeId":"peer-node-a","core":"follower","service":"follower","leaderId":null},{"nodeId":"planner-node","core":"follower","service":"follower","leaderId":"services-p1-r1"},{"nodeId":"peer-node-b","core":"follower","service":"follower","leaderId":"services-p1-r1"}]}
+[tv-dator]     ok 4 - setup: the gap ends: {"elected":true,"leaderNodeId":"peer-node-a","afterMs":2213}
+[tv-dator]     # OBSERVATION E5 {"escapePresent":true,"outage":{"leaderless":true,"afterMs":1985,"roles":[{"nodeId":"peer-node-a","core":"follower","service":"follower","leaderId":null},{"nodeId":"planner-node","core":"follower","service":"follower","leaderId":"services-p1-r1"},{"nodeId":"peer-node-b","core":"follower","service":"follower","leaderId":"services-p1-r1"}]},"duringGap":[{"label":"e5-gap-1","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"94688f96-dec6-4095-ba76-a90a5dbd1235"}],"admitted":1,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":4,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":4,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":4,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":4,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"sql_write_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":true}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r5","source_replica_id":null}]},{"label":"e5-gap-2","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"94688f96-dec6-4095-ba76-a90a5dbd1235"}],"admitted":1,"reads":[],"escape":[],"hold":[],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r5","source_replica_id":null}]},{"label":"e5-gap-3","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"94688f96-dec6-4095-ba76-a90a5dbd1235"}],"admitted":1,"reads":[],"escape":[],"hold":[],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r5","source_replica_id":null}]}],"ledgerAtGapEnd":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r5","source_replica_id":null}],"recovery":{"elected":true,"leaderNodeId":"peer-node-a","afterMs":2213},"afterGap":[{"label":"e5-after-gap-1","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"94688f96-dec6-4095-ba76-a90a5dbd1235"}],"admitted":1,"reads":[],"escape":[],"hold":[],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r5","source_replica_id":null}]}],"finalLedger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r5","source_replica_id":null}]}
+[tv-dator]     ok 5 - the over-target hold never holds on the gap (its sealed fail-open)
+[tv-dator]     ok 6 - no surplus REMOVE executes during the gap
+[tv-dator]     not ok 7 - no add-like move is admitted during the gap
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+[tv-dator]         lineNumber: 444
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/spread-cure-escape-schedules.test.js:444:5)
+[tv-dator]       source: |2
+[tv-dator]             move.operation !== MoveType.REMOVE || move.skipped === true)),
+[tv-dator]           'no surplus REMOVE executes during the gap');
+[tv-dator]           t.ok(duringGap.every((cycle) => cycle.admitted === 0),
+[tv-dator]         ----^
+[tv-dator]             'no add-like move is admitted during the gap');
+[tv-dator]           t.same(ledgerAtGapEnd, [],
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 8 - the gap ended with the drain unmoved: its end does not depend on the drain
+[tv-dator]       ---
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,9 @@
+[tv-dator]         -Array []
+[tv-dator]         +Array [
+[tv-dator]         +  Object {
+[tv-dator]         +    "type": "ADD",
+[tv-dator]         +    "status": "pending",
+[tv-dator]         +    "target_node_id": "planner-node",
+[tv-dator]         +    "replica_id": "sql_write_operations-p1-r5",
+[tv-dator]         +    "source_replica_id": null,
+[tv-dator]         +  },
+[tv-dator]         +]
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+[tv-dator]         lineNumber: 446
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/spread-cure-escape-schedules.test.js:446:5)
+[tv-dator]       source: >2
+[tv-dator]           t.ok(duringGap.every((cycle) => cycle.admitted === 0),
+[tv-dator]             'no add-like move is admitted during the gap');
+[tv-dator]           t.same(ledgerAtGapEnd, [],
+[tv-dator]         ----^
+[tv-dator]             'the gap ended with the drain unmoved: its end does not depend on the drain');
+[tv-dator]           t.equal(afterGap.length, 1, 'the first cycle after the gap ends the wait');
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     ok 9 - the first cycle after the gap ends the wait
+[tv-dator]     ok 10 - and admits the spread cure
+[tv-dator]     ok 11 - exactly one spread-restoring operation
+[tv-dator]     1..11
+[tv-dator] not ok 4 - E5 over-target [A,A,A,B]: the hold fails open and the guard behind it; across a bounded services-p1 gap the surplus drain's cure waits for the gap and no longer # time=4498.658ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+[tv-dator]     lineNumber: 421
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     });
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('E5 over-target [A,A,A,B]: the hold fails open and the guard behind it;
+[tv-dator]     across a ' +
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       'bounded services-p1 gap the surplus drain\'s cure waits for the gap and no longer',
+[tv-dator]     {timeout: CASE_TIMEOUT_MS}, async (t) => {
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: E6 the planner cannot reach the services-p1 leader while services-p1 is healthy: nothing is admitted while the route is down, and the cure is admitted within one cycle of the route returning
+[tv-dator]     ok 1 - setup: the planner node hosts a services-p1 replica that follows
+[tv-dator]     ok 2 - setup: the planner observes the partition's replicas
+[tv-dator]     # OBSERVATION E6 {"escapePresent":true,"routeDown":[{"label":"e6-route-down-1","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"20005450-90b5-45da-916c-23cf326e8230"}],"admitted":1,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"sql_write_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":true}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]},{"label":"e6-route-down-2","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"20005450-90b5-45da-916c-23cf326e8230"}],"admitted":1,"reads":[],"escape":[],"hold":[],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]},{"label":"e6-route-down-3","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"20005450-90b5-45da-916c-23cf326e8230"}],"admitted":1,"reads":[],"escape":[],"hold":[],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]}],"ledgerWhileDown":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}],"registration":{"committed":true,"appliedIndex":5,"error":null},"leaderWhileDown":"peer-node-a","hopsWhileDown":6,"afterRoute":[{"label":"e6-route-back-1","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":false,"reason":null,"admissionReason":null,"decisionType":null,"authoritativeAvailable":null,"authoritativeReasonCode":null,"operationId":"20005450-90b5-45da-916c-23cf326e8230"}],"admitted":1,"reads":[],"escape":[],"hold":[],"ledger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]}],"finalLedger":[{"type":"ADD","status":"pending","target_node_id":"planner-node","replica_id":"sql_write_operations-p1-r4","source_replica_id":null}]}
+[tv-dator]     ok 3 - setup: services-p1 keeps its leader throughout
+[tv-dator]     ok 4 - setup: services-p1 commits a SERVICES write through that leader while the route is down
+[tv-dator]     not ok 5 - no cycle admits an add-like move while the planner cannot reach the leader
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+[tv-dator]         lineNumber: 490
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/spread-cure-escape-schedules.test.js:490:5)
+[tv-dator]       source: >2
+[tv-dator]           t.equal(registration.error, null,
+[tv-dator]             'setup: services-p1 commits a SERVICES write through that leader while the route is down');
+[tv-dator]           t.ok(routeDown.every((cycle) => cycle.admitted === 0),
+[tv-dator]         ----^
+[tv-dator]             'no cycle admits an add-like move while the planner cannot reach the leader');
+[tv-dator]           t.same(ledgerWhileDown, [], 'no operation exists while the route is down');
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 6 - no operation exists while the route is down
+[tv-dator]       ---
+[tv-dator]       diff: |
+[tv-dator]         --- expected
+[tv-dator]         +++ actual
+[tv-dator]         @@ -1,1 +1,9 @@
+[tv-dator]         -Array []
+[tv-dator]         +Array [
+[tv-dator]         +  Object {
+[tv-dator]         +    "type": "ADD",
+[tv-dator]         +    "status": "pending",
+[tv-dator]         +    "target_node_id": "planner-node",
+[tv-dator]         +    "replica_id": "sql_write_operations-p1-r4",
+[tv-dator]         +    "source_replica_id": null,
+[tv-dator]         +  },
+[tv-dator]         +]
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+[tv-dator]         lineNumber: 492
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: |
+[tv-dator]         Test.<anonymous> (test/rebalancer/spread-cure-escape-schedules.test.js:492:5)
+[tv-dator]       source: >2
+[tv-dator]           t.ok(routeDown.every((cycle) => cycle.admitted === 0),
+[tv-dator]             'no cycle admits an add-like move while the planner cannot reach the leader');
+[tv-dator]           t.same(ledgerWhileDown, [], 'no operation exists while the route is down');
+[tv-dator]         ----^
+[tv-dator]           t.equal(afterRoute.length, 1, 'the first cycle after the route returns ends the wait');
+[tv-dator]           t.equal(afterRoute[0]?.admitted, 1, 'and admits the spread cure');
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     ok 7 - the first cycle after the route returns ends the wait
+[tv-dator]     ok 8 - and admits the spread cure
+[tv-dator]     1..8
+[tv-dator] not ok 5 - E6 the planner cannot reach the services-p1 leader while services-p1 is healthy: nothing is admitted while the route is down, and the cure is admitted within one cycle of the route returning # time=2274.417ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+[tv-dator]     lineNumber: 453
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     });
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test('E6 the planner cannot reach the services-p1 leader while services-p1 is
+[tv-dator]     healthy: ' +
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       'nothing is admitted while the route is down, and the cure is admitted within one cycle ' +
+[tv-dator]       'of the route returning', {timeout: CASE_TIMEOUT_MS}, async (t) => {
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] # Subtest: E4(c) the operation ledger concentrated [A,A,B] (the July-11 schedule): what each commit does for the ledger's own cure with the services-p1 leader reachable, then without a leader
+[tv-dator]     ok 1 - setup: the planner node hosts a services-p1 replica that follows
+[tv-dator]     ok 2 - setup: the planner observes the partition's replicas
+[tv-dator]     ok 3 - setup: no services-p1 replica leads: {"leaderless":true,"afterMs":2054,"roles":[{"nodeId":"peer-node-a","core":"follower","service":"follower","leaderId":null},{"nodeId":"planner-node","core":"follower","service":"follower","leaderId":"services-p1-r1"},{"nodeId":"peer-node-b","core":"follower","service":"follower","leaderId":"services-p1-r1"}]}
+[tv-dator]     ok 4 - setup: a services-p1 leader appears: {"elected":true,"leaderNodeId":"peer-node-a","afterMs":1956}
+[tv-dator]     # OBSERVATION E4c {"escapePresent":true,"outage":{"leaderless":true,"afterMs":2054,"roles":[{"nodeId":"peer-node-a","core":"follower","service":"follower","leaderId":null},{"nodeId":"planner-node","core":"follower","service":"follower","leaderId":"services-p1-r1"},{"nodeId":"peer-node-b","core":"follower","service":"follower","leaderId":"services-p1-r1"}]},"withoutLeader":[{"label":"e4c-no-leader-1","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":true,"reason":"blocked","admissionReason":"replica_inventory_unusable","decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"operationId":null}],"admitted":0,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"replica_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":false}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[]},{"label":"e4c-no-leader-2","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":true,"reason":"blocked","admissionReason":"replica_inventory_unusable","decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"operationId":null}],"admitted":0,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"replica_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":false}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[]},{"label":"e4c-no-leader-3","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":true,"reason":"blocked","admissionReason":"replica_inventory_unusable","decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"operationId":null}],"admitted":0,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"replica_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":false}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[]}],"ledgerWithoutLeader":[],"recovery":{"elected":true,"leaderNodeId":"peer-node-a","afterMs":1956},"afterLeader":[{"label":"e4c-leader-1","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":true,"reason":"blocked","admissionReason":"replica_inventory_unusable","decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"operationId":null}],"admitted":0,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"replica_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":false}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[]},{"label":"e4c-leader-2","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":true,"reason":"blocked","admissionReason":"replica_inventory_unusable","decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"operationId":null}],"admitted":0,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"replica_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":false}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[]},{"label":"e4c-leader-3","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":true,"reason":"blocked","admissionReason":"replica_inventory_unusable","decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"operationId":null}],"admitted":0,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"replica_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":false}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[]},{"label":"e4c-leader-4","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":true,"reason":"blocked","admissionReason":"replica_inventory_unusable","decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"operationId":null}],"admitted":0,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"replica_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":false}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[]},{"label":"e4c-leader-5","success":true,"thrown":null,"moves":[{"operation":"add","nodeId":"planner-node","skipped":true,"reason":"blocked","admissionReason":"replica_inventory_unusable","decisionType":"blocked","authoritativeAvailable":false,"authoritativeReasonCode":null,"operationId":null}],"admitted":0,"reads":[{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null},{"mode":null,"leaderMode":null,"success":true,"rowSetComplete":false,"rows":3,"servingNodeId":null,"witnessRole":null,"reasonCode":null,"error":null}],"escape":[{"partitionId":"replica_operations-p1","moveType":"ADD","targetNodeId":"planner-node","authoritativeAvailable":false,"engaged":false}],"hold":[{"targetNodeId":"planner-node","held":false}],"ledger":[]}],"finalLedger":[]}
+[tv-dator]     ok 5 - nothing is admitted for the ledger while services-p1 has no leader
+[tv-dator]     ok 6 - no ledger operation is written meanwhile
+[tv-dator]     1..6
+[tv-dator] ok 6 - E4(c) the operation ledger concentrated [A,A,B] (the July-11 schedule): what each commit does for the ledger's own cure with the services-p1 leader reachable, then without a leader # time=4327.948ms
+[tv-dator] 
+[tv-dator] # Subtest: E4(a) services-p1 loses two of its three replicas: no leader is ever elected, and the guard grants nothing for a services-p1 cure, with or without the escape
+[tv-dator]     ok 1 - setup: the planner node hosts a services-p1 replica that follows
+[tv-dator]     ok 2 - setup: the planner observes the partition's replicas
+[tv-dator]     ok 3 - setup: the old leader stepped down: [{"nodeId":"peer-node-a","core":"follower","service":"follower","leaderId":null},{"nodeId":"planner-node","core":"follower","service":"follower","leaderId":"services-p1-r1"},{"nodeId":"peer-node-b","core":"follower","service":"follower","leaderId":"services-p1-r1"}]
+[tv-dator]     # OBSERVATION E4a {"escapePresent":true,"roles":[{"nodeId":"peer-node-a","core":"pre-candidate","service":"follower","leaderId":null},{"nodeId":"planner-node","core":"pre-candidate","service":"follower","leaderId":null},{"nodeId":"peer-node-b","core":"follower","service":"follower","leaderId":"services-p1-r1"}],"leaderSamples":0,"sampleCount":98,"escape":[{"partitionId":"services-p1","moveType":"ADD","targetNodeId":"free-node-c","authoritativeAvailable":false,"engaged":false}],"attempt":{"admitted":false,"reason":"replica_inventory_unusable","decisionType":"blocked","skip":null,"message":"Topology guard blocked for ADD on free-node-c: replica_inventory_unusable"},"servicesLedger":[]}
+[tv-dator]     ok 4 - no services-p1 replica leads while two of three are gone (no quorum, no conf change)
+[tv-dator]     ok 5 - services-p1 is outside the escape's partition scope at every commit
+[tv-dator]     ok 6 - where the escape exists it does not engage for services-p1
+[tv-dator]     ok 7 - the services-p1 cure is not admitted
+[tv-dator]     ok 8 - no operation is written for services-p1
+[tv-dator]     1..8
+[tv-dator] ok 7 - E4(a) services-p1 loses two of its three replicas: no leader is ever elected, and the guard grants nothing for a services-p1 cure, with or without the escape # time=7285.3ms
+[tv-dator] 
+[tv-dator] # Subtest: probe only: print the observations
+[tv-dator]     not ok 1 - probe dump: observation output only
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+[tv-dator]         lineNumber: 570
+[tv-dator]         columnNumber: 5
+[tv-dator]         typeName: Test
+[tv-dator]       stack: >
+[tv-dator]         Test.<anonymous> (test/rebalancer/spread-cure-escape-schedules.test.js:570:5)
+[tv-dator]       
+[tv-dator]         Test.[maybeEmitEnd] (../../../node_modules/minipass/dist/esm/index.js:704:18)
+[tv-dator]         (../../../node_modules/minipass/src/index.ts:1022:12)
+[tv-dator]       
+[tv-dator]         Test.end (../../../node_modules/minipass/dist/esm/index.js:457:33)
+[tv-dator]         (../../../node_modules/minipass/src/index.ts:745:61)
+[tv-dator]       
+[tv-dator]         Parser.emitComplete
+[tv-dator]         (../../../node_modules/tap-parser/dist/esm/index.js:399:18)
+[tv-dator]         (../../../node_modules/tap-parser/src/index.ts:520:12)
+[tv-dator]       
+[tv-dator]         Parser.end (../../../node_modules/tap-parser/dist/esm/index.js:384:14)
+[tv-dator]         (../../../node_modules/tap-parser/src/index.ts:498:10)
+[tv-dator]       source: |
+[tv-dator]         // it fails, so this case makes the observations visible.
+[tv-dator]         test('probe only: print the observations', (t) => {
+[tv-dator]           t.fail('probe dump: observation output only');
+[tv-dator]         ----^
+[tv-dator]         });
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     not ok 2 - test unfinished
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+[tv-dator]         lineNumber: 569
+[tv-dator]         columnNumber: 1
+[tv-dator]         isToplevel: true
+[tv-dator]       stack: |
+[tv-dator]         test/rebalancer/spread-cure-escape-schedules.test.js:569:1
+[tv-dator]       test: "probe only: print the observations"
+[tv-dator]       source: |
+[tv-dator]         // PROBE ONLY (never committed): the runner prints a file's output only when
+[tv-dator]         // it fails, so this case makes the observations visible.
+[tv-dator]         test('probe only: print the observations', (t) => {
+[tv-dator]         ^
+[tv-dator]           t.fail('probe dump: observation output only');
+[tv-dator]         });
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..2
+[tv-dator] not ok 8 - probe only: print the observations # time=16.999ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/spread-cure-escape-schedules.test.js
+[tv-dator]     lineNumber: 569
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |
+[tv-dator]     // PROBE ONLY (never committed): the runner prints a file's output only when
+[tv-dator]     // it fails, so this case makes the observations visible.
+[tv-dator]     test('probe only: print the observations', (t) => {
+[tv-dator]     ^
+[tv-dator]       t.fail('probe dump: observation output only');
+[tv-dator]     });
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] 1..8
+[tv-dator] # { total: 52, pass: 44, fail: 8 }
+[tv-dator] # time=23211.64ms
+[tv-dator] # test-files total=3 pass=1 fail=2 assertions=184
+lab test: tv-dator: # test-files total=3 pass=1 fail=2 assertions=184
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=3 pass=1 fail=2 assertions=184

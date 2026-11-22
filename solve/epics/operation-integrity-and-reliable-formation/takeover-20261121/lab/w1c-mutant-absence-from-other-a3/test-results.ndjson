@@ -1,0 +1,7 @@
+{"file":"test/partition/placement-retained-post-copy.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":4139,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-create-dispatch-execution-mirror.test.js","attempt":1,"ok":false,"assertions":10,"durationMs":4280,"retriedOnce":false,"firstFailureLine":"not ok 6 - an absence served by another replica than the cached ledger route settles nothing: nothing is prepared or presented, the route publication owns the reconsideration"}
+{"file":"test/partition/placement-retained-leadership.test.js","attempt":1,"ok":true,"assertions":5,"durationMs":4536,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-retained-continuation.test.js","attempt":1,"ok":false,"assertions":26,"durationMs":6341,"retriedOnce":false,"firstFailureLine":"not ok 23 - a definite native refusal of the pinned entry retires the record, visibly, with nothing armed"}
+{"file":"test/partition/placement-retained-real-publication.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":3597,"retriedOnce":false,"firstFailureLine":null}
+{"file":"test/partition/placement-retained-publication.test.js","attempt":1,"ok":false,"assertions":12,"durationMs":4507,"retriedOnce":false,"firstFailureLine":"not ok 11 - V1 a route-owed wait without a binding is a named, visible state: one log line per transition; the publication ends it"}
+{"file":"test/partition/placement-retained-row-repair.test.js","attempt":1,"ok":true,"assertions":45,"durationMs":5817,"retriedOnce":false,"firstFailureLine":null}

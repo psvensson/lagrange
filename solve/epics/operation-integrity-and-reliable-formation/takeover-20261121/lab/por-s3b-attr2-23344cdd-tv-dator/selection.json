@@ -1,0 +1,57 @@
+{
+  "sha": "23344cddc5f07a597b93f8cd0f4f69a69be937c3",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/control-plane/membership-publication-first-epoch-members.test.js",
+    "test/convergence/dt6-priority-surplus-remove-authoritative-placement-fence.test.js",
+    "test/rebalancer/admission-real-size-estimates.test.js",
+    "test/rebalancer/coordinator-created-operation-progress.test.js",
+    "test/rebalancer/duplicate-operation-prevention.property.test.js",
+    "test/rebalancer/formation-runtime-service-create-lane-budget-starvation.test.js",
+    "test/rebalancer/message-group-membership-operation-lane.test.js",
+    "test/rebalancer/message-group-operation-routing.integration.test.js",
+    "test/rebalancer/placement-admission-cross-coordinator-target-census.test.js",
+    "test/rebalancer/quorum-conditioned-remove-safety.test.js",
+    "test/rebalancer/rebalance-coordinator-topology-guard.test.js",
+    "test/rebalancer/rebalancer-entity-interaction-contract.test.js",
+    "test/rebalancer/rebalancer-own-create-memory-duplicate-replace.test.js",
+    "test/rebalancer/replace-in-flight-blocks-planning.test.js",
+    "test/rebalancer/replace-named-handoff-attempt.test.js",
+    "test/rebalancer/replica-operation-membership-epoch-binding.test.js",
+    "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js",
+    "test/rebalancer/strict-operation-outcomes.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/rebalancer/quorum-conditioned-remove-safety.test.js",
+        "test/rebalancer/strict-operation-outcomes.test.js",
+        "test/rebalancer/admission-real-size-estimates.test.js",
+        "test/rebalancer/rebalance-coordinator-topology-guard.test.js",
+        "test/rebalancer/placement-admission-cross-coordinator-target-census.test.js",
+        "test/rebalancer/message-group-membership-operation-lane.test.js",
+        "test/rebalancer/duplicate-operation-prevention.property.test.js",
+        "test/control-plane/membership-publication-first-epoch-members.test.js",
+        "test/rebalancer/storage-reservation-lost-outcome-idempotency.test.js",
+        "test/rebalancer/replica-operation-membership-epoch-binding.test.js",
+        "test/rebalancer/replace-named-handoff-attempt.test.js",
+        "test/rebalancer/replace-in-flight-blocks-planning.test.js",
+        "test/convergence/dt6-priority-surplus-remove-authoritative-placement-fence.test.js",
+        "test/rebalancer/formation-runtime-service-create-lane-budget-starvation.test.js",
+        "test/rebalancer/coordinator-created-operation-progress.test.js",
+        "test/rebalancer/rebalancer-own-create-memory-duplicate-replace.test.js",
+        "test/rebalancer/rebalancer-entity-interaction-contract.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/rebalancer/message-group-operation-routing.integration.test.js"
+      ],
+      "jobs": 1,
+      "resourceClass": "exclusive"
+    }
+  ]
+}

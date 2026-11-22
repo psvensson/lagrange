@@ -1,0 +1,187 @@
+placement-shell=3413821
+placement-head=f5bcbe8576268b0074f71aef11f955df4afb5df8
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3414273
+# test-files planned=2
+classified lane ordinary: 2 file(s), jobs=4
+thermal: ok cpu 61C (coretemp/Package id 0) nvme 47C (nvme/Sensor 1)
+not ok test/transport/router-in-process-address-in-use.test.js (1 assertions, 259ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: an in-process port clash rejects with the address-in-use error
+not ok 1 - an in-process port clash rejects with the address-in-use error
+  ---
+  duration_ms: 1.698167
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/f5bcbe857626-mwr1ive5-2505817/test/transport/router-in-process-address-in-use.test.js:24:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    not a TypeError: ROUTER_ERROR_MSG.addressInUse is not a function
+    + actual - expected
+    
+    + 'TypeError'
+    - 'Error'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'Error'
+  actual: 'TypeError'
+  operator: 'strictEqual'
+  stack: |-
+    Object.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/f5bcbe857626-mwr1ive5-2505817/test/transport/router-in-process-address-in-use.test.js:29:14)
+    expectedException (node:assert:576:17)
+    expectsError (node:assert:701:21)
+    Function.rejects (node:assert:767:3)
+    async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/f5bcbe857626-mwr1ive5-2505817/test/transport/router-in-process-address-in-use.test.js:28:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 11.567775
+# time=259ms
+not ok test/transport/message-router-ping-wait-bound-spent.test.js (30 assertions, 661ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: a ping with no PONG and no recent traffic spends its bound: one wait_bound_spent ERROR and the same false answer
+    ok 1 - the post-expiry answer is unchanged
+    ok 2 - exactly one wait_bound_spent ERROR
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - lastObserved says what the router saw of the peer at expiry
+    ok 6 - should match pattern
+    1..6
+ok 1 - a ping with no PONG and no recent traffic spends its bound: one wait_bound_spent ERROR and the same false answer # time=81.348ms
+
+# Subtest: a ping answered by a PONG logs no spent wait
+    ok 1 - should be equal
+    ok 2 - no spent wait on normal completion
+    1..2
+ok 2 - a ping answered by a PONG logs no spent wait # time=32.43ms
+
+# Subtest: a ping whose timer expires but whose peer sent recent inbound traffic is answered alive: INFO, no wait_bound_spent
+    ok 1 - the post-expiry answer is unchanged (alive)
+    ok 2 - no wait_bound_spent for an alive peer
+    ok 3 - no ERROR for an alive peer
+    ok 4 - the alive-by-inbound INFO line is logged
+    not ok 5 - the INFO line carries its message
+      ---
+      compare: ===
+      at:
+        fileName: test/transport/message-router-ping-wait-bound-spent.test.js
+        lineNumber: 129
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/transport/message-router-ping-wait-bound-spent.test.js:129:5)
+      source: >2
+          // Red while the member is undefined: the filter above then matched a line
+          // logged with no message at all.
+          t.equal(typeof info[0].message, 'string', 'the INFO line carries its message');
+        ----^
+          t.equal(info[0].context.nodeId, 'node-busy');
+          t.equal(info[0].context.livenessWindowMs, 30000);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -string
+        +undefined
+      ...
+    
+    ok 6 - should be equal
+    ok 7 - should be equal
+    1..7
+not ok 3 - a ping whose timer expires but whose peer sent recent inbound traffic is answered alive: INFO, no wait_bound_spent # time=44.977ms
+  ---
+  at:
+    fileName: test/transport/message-router-ping-wait-bound-spent.test.js
+    lineNumber: 111
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    });
+  
+    test('a ping whose timer expires but whose peer sent recent inbound ' +
+    ^
+      'traffic is answered alive: INFO, no wait_bound_spent', async (t) => {
+      initializeEnvironment();
+  ...
+
+# Subtest: a keepalive whose peer sent recent inbound traffic keeps the connection: INFO, no wait_bound_spent
+    ok 1 - the alive connection is kept
+    ok 2 - no wait_bound_spent for an alive peer
+    ok 3 - no ERROR for an alive peer
+    ok 4 - the skipped-alive INFO line is logged
+    not ok 5 - the INFO line carries its message
+      ---
+      compare: ===
+      at:
+        fileName: test/transport/message-router-ping-wait-bound-spent.test.js
+        lineNumber: 156
+        columnNumber: 5
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/transport/message-router-ping-wait-bound-spent.test.js:156:5)
+      source: >2
+            line.message === ROUTER_LOG_MSG.CONNECTION_PING_TIMEOUT_SKIPPED_ALIVE);
+          t.equal(info.length, 1, 'the skipped-alive INFO line is logged');
+          t.equal(typeof info[0].message, 'string', 'the INFO line carries its message');
+        ----^
+          t.match(info[0].context, {
+            nodeId: 'node-busy',
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -string
+        +undefined
+      ...
+    
+    ok 6 - should match pattern
+    1..6
+not ok 4 - a keepalive whose peer sent recent inbound traffic keeps the connection: INFO, no wait_bound_spent # time=25.506ms
+  ---
+  at:
+    fileName: test/transport/message-router-ping-wait-bound-spent.test.js
+    lineNumber: 134
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    });
+  
+    test('a keepalive whose peer sent recent inbound traffic keeps the ' +
+    ^
+      'connection: INFO, no wait_bound_spent', async (t) => {
+      initializeEnvironment();
+  ...
+
+# Subtest: a keepalive whose peer is silent severs the socket: one wait_bound_spent ERROR
+    ok 1 - the stale socket is severed as before
+    ok 2 - exactly one wait_bound_spent ERROR
+    ok 3 - should be equal
+    ok 4 - should be equivalent
+    1..4
+ok 5 - a keepalive whose peer is silent severs the socket: one wait_bound_spent ERROR # time=23.301ms
+
+1..5
+# { total: 25, pass: 23, fail: 2 }
+# time=223.283ms
+# test-files total=2 pass=0 fail=2 assertions=31
+placement-results={"file":"test/transport/router-in-process-address-in-use.test.js","attempt":1,"ok":false,"assertions":1,"durationMs":259,"retriedOnce":false,"firstFailureLine":"not ok 1 - an in-process port clash rejects with the address-in-use error"}
+placement-results={"file":"test/transport/message-router-ping-wait-bound-spent.test.js","attempt":1,"ok":false,"assertions":30,"durationMs":661,"retriedOnce":false,"firstFailureLine":"not ok 5 - the INFO line carries its message"}

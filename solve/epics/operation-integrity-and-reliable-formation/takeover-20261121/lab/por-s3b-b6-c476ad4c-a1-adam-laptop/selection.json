@@ -1,0 +1,17 @@
+{
+  "sha": "c476ad4ceefaa37c63297e7a9c13b303f5570332",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/partition/placement-owner-construction-orders.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/partition/placement-owner-construction-orders.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

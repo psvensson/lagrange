@@ -1,0 +1,310 @@
+lab test: tv-dator: exclusive (1 files) cores=12 mem=15.4GiB speed x1.49
+[tv-dator] placement-shell=3422683
+[tv-dator] placement-head=b638284d110d2a6b7cd55ebf902a63cb262fa25a
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=3423125
+[tv-dator] # test-files planned=1
+[tv-dator] classified lane exclusive: 1 file(s), jobs=1
+[tv-dator] thermal: ok cpu 62C (coretemp/Package id 0) nvme 46C (nvme/Sensor 1)
+[tv-dator] not ok test/integration/membership-consistency.integration.test.js (112 assertions, 26249ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] # Subtest: Membership Consistency Integration Tests
+[tv-dator]     # Subtest: CDC latency causes temporary membership divergence
+[tv-dator]         ok 1 - leader cache should have node immediately
+[tv-dator]         ok 2 - follower cache should not have node yet
+[tv-dator]         ok 3 - follower cache should have node after propagation
+[tv-dator]         ok 4 - node data should match
+[tv-dator]         1..4
+[tv-dator]     ok 1 - CDC latency causes temporary membership divergence # time=9.517ms
+[tv-dator]     
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:41.974Z","nodeId":"test-node-stale","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"partitions","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-stale","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:41.976Z","nodeId":"test-node-stale","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"services","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-stale","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:41.977Z","nodeId":"test-node-stale","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"tables","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-stale","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:41.978Z","nodeId":"test-node-stale","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"service_definitions","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-stale","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:41.979Z","nodeId":"test-node-stale","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"service_endpoints","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-stale","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:41.980Z","nodeId":"test-node-stale","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"config","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-stale","msg":"Raft CDC command failed"}
+[tv-dator]     # Subtest: rebalancer sees stale membership during CDC propagation
+[tv-dator]         ok 1 - bootstrap should succeed
+[tv-dator]         ok 2 - seed should publish itself on the real path
+[tv-dator]         ok 3 - follower should hold the seed node row before the publication arrives
+[tv-dator]         ok 4 - follower should hold no publication yet
+[tv-dator]         ok 5 - rebalancer should see no published membership while the publication is in flight (seed row present, not yet published)
+[tv-dator]         ok 6 - rebalancer should have no member to place on before the publication
+[tv-dator]         ok 7 - follower should hold the seed publication after propagation
+[tv-dator]         ok 8 - rebalancer should see the published membership after propagation
+[tv-dator]         1..8
+[tv-dator]     ok 2 - rebalancer sees stale membership during CDC propagation # time=4746.643ms
+[tv-dator]     
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:44.640Z","nodeId":"test-node-lease","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"partitions","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-lease","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:44.641Z","nodeId":"test-node-lease","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"services","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-lease","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:44.642Z","nodeId":"test-node-lease","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"tables","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-lease","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:44.642Z","nodeId":"test-node-lease","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"service_definitions","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-lease","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:44.643Z","nodeId":"test-node-lease","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"service_endpoints","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-lease","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:44.644Z","nodeId":"test-node-lease","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"config","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-lease","msg":"Raft CDC command failed"}
+[tv-dator]     # Subtest: lease expires during rebalancer stabilization period
+[tv-dator]         ok 1 - bootstrap should succeed
+[tv-dator]         ok 2 - seed should publish itself on the real path
+[tv-dator]         ok 3 - readiness owner should hold the seed placement-eligible
+[tv-dator]         ok 4 - the publication owner publishes the row it witnessed READY on a live lease
+[tv-dator]         ok 5 - stabilization check should return a boolean
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:45.320Z","nodeId":"test-node-lease","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"nodes","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-lease","msg":"Raft CDC command failed"}
+[tv-dator]         1..5
+[tv-dator]     ok 3 - lease expires during rebalancer stabilization period # time=2551.265ms
+[tv-dator]     
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:47.168Z","nodeId":"test-node-oscillation","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"partitions","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-oscillation","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:47.169Z","nodeId":"test-node-oscillation","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"services","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-oscillation","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:47.170Z","nodeId":"test-node-oscillation","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"tables","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-oscillation","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:47.171Z","nodeId":"test-node-oscillation","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"service_definitions","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-oscillation","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:47.171Z","nodeId":"test-node-oscillation","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"service_endpoints","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-oscillation","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:47.172Z","nodeId":"test-node-oscillation","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"config","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-oscillation","msg":"Raft CDC command failed"}
+[tv-dator]     # Subtest: rapid node state changes cause membership oscillation
+[tv-dator]         ok 1 - bootstrap should succeed
+[tv-dator]         ok 2 - state changes should be recorded
+[tv-dator]         ok 3 - should observe disconnected state during oscillation
+[tv-dator]         ok 4 - should observe ready state during oscillation
+[tv-dator]         ok 5 - final state should be disconnected or reconciled ready
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:47.751Z","nodeId":"test-node-oscillation","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"nodes","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-oscillation","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:47.752Z","nodeId":"test-node-oscillation","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"control_plane_publications","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-oscillation","msg":"Raft CDC command failed"}
+[tv-dator]         1..5
+[tv-dator]     ok 4 - rapid node state changes cause membership oscillation # time=2409.05ms
+[tv-dator]     
+[tv-dator]     # Subtest: failure detector may see stale heartbeat due to CDC latency
+[tv-dator]         ok 1 - detector should see stale heartbeat before CDC propagation
+[tv-dator]         ok 2 - detector should see updated heartbeat after CDC propagation
+[tv-dator]         1..2
+[tv-dator]     ok 5 - failure detector may see stale heartbeat due to CDC latency # time=3.373ms
+[tv-dator]     
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:49.722Z","nodeId":"test-node-sweep","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"partitions","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-sweep","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:49.723Z","nodeId":"test-node-sweep","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"services","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-sweep","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:49.724Z","nodeId":"test-node-sweep","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"tables","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-sweep","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:49.725Z","nodeId":"test-node-sweep","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"service_definitions","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-sweep","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:49.725Z","nodeId":"test-node-sweep","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"service_endpoints","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-sweep","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:49.726Z","nodeId":"test-node-sweep","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"config","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-sweep","msg":"Raft CDC command failed"}
+[tv-dator]     # Subtest: lease sweep may miss nodes due to CDC propagation delay
+[tv-dator]         ok 1 - bootstrap should succeed
+[tv-dator]         ok 2 - follower should replicate the expired-lease row as ready
+[tv-dator]         ok 3 - lease sweep should process the expired node
+[tv-dator]         ok 4 - leader should mark node as disconnected
+[tv-dator]         ok 5 - follower should still see ready before CDC propagation
+[tv-dator]         ok 6 - follower should see disconnected after CDC propagation
+[tv-dator]         1..6
+[tv-dator]     ok 6 - lease sweep may miss nodes due to CDC propagation delay # time=2519.459ms
+[tv-dator]     
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:52.225Z","nodeId":"test-node-concurrent","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"partitions","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-concurrent","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:52.226Z","nodeId":"test-node-concurrent","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"services","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-concurrent","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:52.227Z","nodeId":"test-node-concurrent","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"tables","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-concurrent","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:52.228Z","nodeId":"test-node-concurrent","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"service_definitions","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-concurrent","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:52.228Z","nodeId":"test-node-concurrent","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"service_endpoints","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-concurrent","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:52.229Z","nodeId":"test-node-concurrent","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"config","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-concurrent","msg":"Raft CDC command failed"}
+[tv-dator]     # Subtest: concurrent rebalancers may make conflicting decisions
+[tv-dator]         ok 1 - bootstrap should succeed
+[tv-dator]         ok 2 - seed should publish itself on the real path
+[tv-dator]         ok 3 - readiness owner should hold the seed placement-eligible
+[tv-dator]         ok 4 - the publication owner publishes the node rows it witnessed READY
+[tv-dator]         ok 5 - bootstrap declares the first concurrent planning entity
+[tv-dator]         ok 6 - bootstrap declares the second concurrent planning entity
+[tv-dator]         ok 7 - the published epoch settles with the seed eligible for both rebalancers
+[tv-dator]         ok 8 - both rebalancers should see same node count
+[tv-dator]         not ok 9 - both rebalancers see the published members the readiness owner holds eligible
+[tv-dator]           ---
+[tv-dator]           diff: |
+[tv-dator]             --- expected
+[tv-dator]             +++ actual
+[tv-dator]             @@ -1,5 +1,3 @@
+[tv-dator]              Array [
+[tv-dator]                "550e8400-e29b-41d4-a716-446655440007",
+[tv-dator]             -  "node-2",
+[tv-dator]             -  "node-3",
+[tv-dator]              ]
+[tv-dator]           at:
+[tv-dator]             fileName: test/integration/membership-consistency.integration.test.js
+[tv-dator]             lineNumber: 673
+[tv-dator]             columnNumber: 9
+[tv-dator]             typeName: Test
+[tv-dator]           stack: >
+[tv-dator]             Test.<anonymous>
+[tv-dator]             (test/integration/membership-consistency.integration.test.js:673:9)
+[tv-dator]           source: |2
+[tv-dator]                   t.equal(nodes1.length, nodes2.length,
+[tv-dator]                     'both rebalancers should see same node count');
+[tv-dator]                   t.same(nodes1.map((node) => node.node_id), publishedNodeIds,
+[tv-dator]             --------^
+[tv-dator]                     'both rebalancers see the published members the readiness owner ' +
+[tv-dator]                     'holds eligible');
+[tv-dator]           ...
+[tv-dator]         
+[tv-dator]         ok 10 - rebalancer1 should succeed
+[tv-dator]         ok 11 - rebalancer2 should succeed
+[tv-dator]         ok 12 - should have moves array
+[tv-dator]         1..12
+[tv-dator]     not ok 7 - concurrent rebalancers may make conflicting decisions # time=2739.727ms
+[tv-dator]       ---
+[tv-dator]       at:
+[tv-dator]         fileName: test/integration/membership-consistency.integration.test.js
+[tv-dator]         lineNumber: 572
+[tv-dator]         columnNumber: 11
+[tv-dator]         typeName: Test
+[tv-dator]       source: >2
+[tv-dator]           // rebalancer decisions.
+[tv-dator]           // --------------------------------------------------------------------------
+[tv-dator]           await t.test('concurrent rebalancers may make conflicting decisions', async (t) => {
+[tv-dator]         ----------^
+[tv-dator]             // Initialize with fast Raft elections
+[tv-dator]             initTestEnv({nodeId: 'test-node-concurrent'});
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     # Subtest: WebSocket disconnection not reflected in cache
+[tv-dator]         ok 1 - cache should show node as ready
+[tv-dator]         ok 2 - isNodeReady should be false when transport is disconnected
+[tv-dator]         1..2
+[tv-dator]     ok 8 - WebSocket disconnection not reflected in cache # time=10.657ms
+[tv-dator]     
+[tv-dator]     # Subtest: timing parameters are properly coordinated
+[tv-dator]         ok 1 - heartbeat interval should be less than lease duration
+[tv-dator]         ok 2 - lease duration should be less than failure threshold
+[tv-dator]         ok 3 - suspicion threshold should be less than failure threshold
+[tv-dator]         ok 4 - should have safety margin for CDC propagation in lease refresh
+[tv-dator]         ok 5 - heartbeat + CDC delay should be less than lease duration
+[tv-dator]         1..5
+[tv-dator]     ok 9 - timing parameters are properly coordinated # time=0.643ms
+[tv-dator]     
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:55.075Z","nodeId":"test-node-bootstrap","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"partitions","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-bootstrap","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:55.076Z","nodeId":"test-node-bootstrap","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"services","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-bootstrap","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:55.076Z","nodeId":"test-node-bootstrap","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"tables","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-bootstrap","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:55.077Z","nodeId":"test-node-bootstrap","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"service_definitions","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-bootstrap","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:55.078Z","nodeId":"test-node-bootstrap","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"service_endpoints","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-bootstrap","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:55.078Z","nodeId":"test-node-bootstrap","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"config","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-bootstrap","msg":"Raft CDC command failed"}
+[tv-dator]     # Subtest: bootstrap data is consistent after mode transition
+[tv-dator]         ok 1 - bootstrap should succeed
+[tv-dator]         ok 2 - should have system table cache
+[tv-dator]         ok 3 - bootstrap mode should be disabled after bootstrap
+[tv-dator]         ok 4 - nodes table should be in cache
+[tv-dator]         ok 5 - nodes table should have entries
+[tv-dator]         ok 6 - seed node should be in nodes table
+[tv-dator]         ok 7 - seed node ID should match
+[tv-dator]         ok 8 - partitions table should be in cache
+[tv-dator]         ok 9 - partitions table should have entries
+[tv-dator]         ok 10 - services table should be in cache
+[tv-dator]         ok 11 - services table should have entries
+[tv-dator]         ok 12 - tables table should be in cache
+[tv-dator]         ok 13 - tables table should have entries
+[tv-dator]         ok 14 - nodes should be registered in tables table
+[tv-dator]         ok 15 - partitions should be registered in tables table
+[tv-dator]         ok 16 - services should be registered in tables table
+[tv-dator]         ok 17 - tables should be registered in tables table
+[tv-dator]         ok 18 - message_groups should be registered in tables table
+[tv-dator]         ok 19 - write after bootstrap should succeed
+[tv-dator]         ok 20 - new node should be in cache after write
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:55.567Z","nodeId":"test-node-bootstrap","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"nodes","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-bootstrap","msg":"Raft CDC command failed"}
+[tv-dator]         1..20
+[tv-dator]     ok 10 - bootstrap data is consistent after mode transition # time=2371.939ms
+[tv-dator]     
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:57.334Z","nodeId":"test-node-join-fail","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"partitions","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-join-fail","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:57.334Z","nodeId":"test-node-join-fail","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"services","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-join-fail","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:57.335Z","nodeId":"test-node-join-fail","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"tables","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-join-fail","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:57.336Z","nodeId":"test-node-join-fail","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"service_definitions","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-join-fail","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:57.336Z","nodeId":"test-node-join-fail","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"service_endpoints","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-join-fail","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:57.337Z","nodeId":"test-node-join-fail","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"config","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-join-fail","msg":"Raft CDC command failed"}
+[tv-dator]     # Subtest: node join and failure occur simultaneously
+[tv-dator]         ok 1 - bootstrap should succeed
+[tv-dator]         ok 2 - failing node should be visible in cache before detector runs
+[tv-dator]         ok 3 - detector should see failing node before concurrent health check starts
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:57.817Z","nodeId":"test-node-join-fail","pid":3423140,"subsystem":"failure-detector","nodeId":"test-node-join-fail","lastHeartbeat":"2026-11-21T23:47:57.252Z","threshold":450,"contextNodeId":"failing-node","msg":"Node failure detected"}
+[tv-dator]         ok 4 - join write should succeed on the real path
+[tv-dator]         ok 5 - joining node should be in the authoritative nodes table
+[tv-dator]         ok 6 - health check should have advanced the failing node past suspected
+[tv-dator]         ok 7 - joining node should be in cache
+[tv-dator]         ok 8 - failing node should be marked as failed; row={"node_id":"failing-node","node_address":"ws://failing-node:9000","cpu_cores":4,"memory_mb":1024,"disk_gb":10,"cpu_usage_percent":10,"memory_usage_percent":20,"disk_usage_percent":30,"status":"failed","connection_state":"ready","capabilities":"[]","last_heartbeat":1795304877252,"boot_incarnation":0,"ready_lease_expires_at":1795304878102,"storage_budget_bytes":null,"storage_budget_source":null,"storage_budget_updated_at":null,"latency_group_id":null,"last_latency_check_at":null,"latency_assignment_state":"unassigned","created_at":1795304877802,"host_id":null}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:57.877Z","nodeId":"test-node-join-fail","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"nodes","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-join-fail","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:57.878Z","nodeId":"test-node-join-fail","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"control_plane_publications","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-join-fail","msg":"Raft CDC command failed"}
+[tv-dator]         1..8
+[tv-dator]     ok 11 - node join and failure occur simultaneously # time=2287.972ms
+[tv-dator]     
+[tv-dator]     # Subtest: out-of-order CDC events are handled correctly
+[tv-dator]         ok 1 - should have 3 events buffered
+[tv-dator]         ok 2 - node should exist in cache
+[tv-dator]         ok 3 - final status should be from latest timestamp event
+[tv-dator]         1..3
+[tv-dator]     ok 12 - out-of-order CDC events are handled correctly # time=1.35ms
+[tv-dator]     
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:59.738Z","nodeId":"test-node-timer","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"partitions","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-timer","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:59.738Z","nodeId":"test-node-timer","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"services","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-timer","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:59.739Z","nodeId":"test-node-timer","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"tables","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-timer","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:59.740Z","nodeId":"test-node-timer","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"service_definitions","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-timer","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:59.740Z","nodeId":"test-node-timer","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"service_endpoints","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-timer","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:47:59.741Z","nodeId":"test-node-timer","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"config","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-timer","msg":"Raft CDC command failed"}
+[tv-dator]     # Subtest: stabilization timer resets on each state change
+[tv-dator]         ok 1 - bootstrap should succeed
+[tv-dator]         ok 2 - should not be stabilized immediately after state change
+[tv-dator]         ok 3 - should not be stabilized after timer reset
+[tv-dator]         ok 4 - time until stable should be reset to near full period
+[tv-dator]         1..4
+[tv-dator]     ok 13 - stabilization timer resets on each state change # time=2352.059ms
+[tv-dator]     
+[tv-dator]     # Subtest: getReadyNodes returns consistent results across caches
+[tv-dator]         ok 1 - cache1 should have 2 ready nodes
+[tv-dator]         ok 2 - cache2 should have 2 ready nodes
+[tv-dator]         ok 3 - both caches should return same ready nodes
+[tv-dator]         ok 4 - ready-node-1 should be ready
+[tv-dator]         ok 5 - ready-node-2 should be ready
+[tv-dator]         ok 6 - not-ready-node should not be ready
+[tv-dator]         ok 7 - expired-lease-node should not be ready
+[tv-dator]         1..7
+[tv-dator]     ok 14 - getReadyNodes returns consistent results across caches # time=1.34ms
+[tv-dator]     
+[tv-dator] {"level":50,"time":"2026-11-21T23:48:02.169Z","nodeId":"test-node-flapping","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"partitions","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-flapping","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:48:02.170Z","nodeId":"test-node-flapping","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"services","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-flapping","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:48:02.170Z","nodeId":"test-node-flapping","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"tables","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-flapping","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:48:02.171Z","nodeId":"test-node-flapping","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"service_definitions","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-flapping","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:48:02.172Z","nodeId":"test-node-flapping","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"service_endpoints","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-flapping","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:48:02.172Z","nodeId":"test-node-flapping","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"config","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-flapping","msg":"Raft CDC command failed"}
+[tv-dator]     # Subtest: failure detector increases threshold on flapping
+[tv-dator]         ok 1 - bootstrap should succeed
+[tv-dator] {"level":50,"time":"2026-11-21T23:48:02.673Z","nodeId":"test-node-flapping","pid":3423140,"subsystem":"failure-detector","nodeId":"test-node-flapping","failureCount":3,"window":30000,"action":"Increasing failure threshold adaptively","contextNodeId":"flapping-node","msg":"Node flapping detected"}
+[tv-dator]         ok 2 - threshold should increase after flapping detection
+[tv-dator] {"level":50,"time":"2026-11-21T23:48:02.716Z","nodeId":"test-node-flapping","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"nodes","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-flapping","msg":"Raft CDC command failed"}
+[tv-dator] {"level":50,"time":"2026-11-21T23:48:02.717Z","nodeId":"test-node-flapping","pid":3423140,"subsystem":"message-group","groupId":"mg-1","replicaId":"mg-1-r1","tableName":"control_plane_publications","causeId":null,"attempts":3,"configuredRetryBudget":3,"proposeTimeoutMs":1500,"isCurrentRaftLeader":true,"raftState":"leader","leaderTargetSource":"forward_to_leader","error":"cdc_committed_acceptance_unknown","nodeId":"test-node-flapping","msg":"Raft CDC command failed"}
+[tv-dator]         1..2
+[tv-dator]     ok 15 - failure detector increases threshold on flapping # time=2353.047ms
+[tv-dator]     
+[tv-dator]     # Subtest: non-leader forwards control messages to leader
+[tv-dator]         ok 1 - follower should forward message to leader
+[tv-dator]         ok 2 - forwarded message should have forwardedBy field
+[tv-dator]         1..2
+[tv-dator]     ok 16 - non-leader forwards control messages to leader # time=23.065ms
+[tv-dator]     
+[tv-dator]     1..16
+[tv-dator] not ok 1 - Membership Consistency Integration Tests # time=24866.378ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/integration/membership-consistency.integration.test.js
+[tv-dator]     lineNumber: 82
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: >
+[tv-dator]     const SUITE_TIMEOUT_MS = 240000;
+[tv-dator]   
+[tv-dator]   
+[tv-dator]     test(SUITE_NAME, {timeout: scaleByMachineFactor(SUITE_TIMEOUT_MS)}, async (t)
+[tv-dator]     => {
+[tv-dator]   
+[tv-dator]     ^
+[tv-dator]       t.beforeEach(() => {
+[tv-dator]         initializeTestEnvironment();
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] 1..1
+[tv-dator] # { total: 95, pass: 94, fail: 1 }
+[tv-dator] # time=24875.692ms
+[tv-dator] # test-files total=1 pass=0 fail=1 assertions=112
+lab test: tv-dator: # test-files total=1 pass=0 fail=1 assertions=112
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=1 pass=0 fail=1 assertions=112

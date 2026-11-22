@@ -1,0 +1,21 @@
+{
+  "sha": "5986b79b71712df0b592d490f1723aa56b1d1068",
+  "host": "tv-dator",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/partition/placement-owner-construction-orders.test.js",
+    "test/partition/partition-service-learner-promotion.test.js",
+    "test/rebalancer/placement-owner-authority-wakes.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/partition/placement-owner-construction-orders.test.js",
+        "test/rebalancer/placement-owner-authority-wakes.test.js",
+        "test/partition/partition-service-learner-promotion.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

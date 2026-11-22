@@ -1510,7 +1510,24 @@ verifier's section 8, adopted as the specification):
 
 ### 18.6 Mutation table at the corrective head **[lab]**
 
-Pending (built and run in progress; this section is updated as each completes).
+Every mutant is built on a detached HEAD from `f615921f5` through the normal pre-commit hook
+(`heavy.sh git commit`), kept only under a local ref `probe/w1c-mutant-<name>`, never pushed.
+Patches: `scratchpad/w1c/mutants/apply.py` (exact old/new text per mechanism). Each run: tv-dator,
+seven files (publication, continuation, leadership, row-repair, real-publication, mirror,
+post-copy), directory `lab/w1c-mutant-<name>-a<try>`. "Killed by" lists the tests that fail
+beyond the head's own reds (mirror 8, continuation 23, publication 12 T2).
+
+| Mechanism | Mutant (src change) | Commit (local ref) | Lab run | Killed by |
+| --- | --- | --- | --- | --- |
+| lost wake | `routePublication`: a ledger PARTITIONS/SERVICES row wakes ROUTE only if `raft_role === leader` | `24fb30c9a` | `w1c-mutant-lost-wake-a1` | KILLED (13): W2 partition-first and endpoint-first, real-publication, leadership 1-5, W5 restart, ... |
+| stale custody | `recordRetainedRepairCustody`: an answer without matching custody keeps the previous custody | `371e76a60` | `w1c-mutant-stale-custody-a1` | KILLED: W5 not-leader disclaim (continuation 1), W5 disclaim mid-decision (continuation 3) |
+| blind handoff | HANDOFF reads SUBJECT scope also at the local leader | `63a6e9044` | `w1c-mutant-blind-handoff-a1` | KILLED: W3 (publication 5), W9 (publication 6) |
+| reused unavailable | an ingress with no decision in flight is answered from an UNAVAILABLE `lastDecision` | `14def3518` | `w1c-mutant-reused-unavailable-a1` | KILLED (9): W5 mid-decision, C1 overlapping and sequential x8 |
+| overwritten trigger | a failed read sets `clearingTrigger = LEADERSHIP_START` | `e96239f06` | `w1c-mutant-overwritten-trigger-a1` | KILLED: W7 ingress (6), W7 post-resolution (8), F4 (25) |
+| uncancelled timer | `retireRetainedRepair` no longer cancels the continuation | `6c87ad8ad` | `w1c-mutant-uncancelled-timer-a1` | KILLED (5): W8 retirement (10, now killed too: a qualified read no longer cancels), B5 (21), Q8 lost answer (19), W5 mid-decision (3), row-repair 44 |
+| presence from another replica | `unboundPresence = row !== undefined` (presence settles from any qualified leader) | `371eba243` | `w1c-mutant-presence-from-other-a1` | KILLED: mirror 5 (served by another replica), mirror 7 (deposed leader negative) |
+| absence from another replica | `unboundPresence = row === undefined \|\| NO_BINDING` | `a9e73d6e9` | `w1c-mutant-absence-from-other-a3` (a1, a2: "tv-dator is not a ready lab machine", runner failures, not results) | KILLED: mirror 6, mirror 9, V1 (publication 11) |
+MUTANT_ROWS_PENDING
 
 ### 18.7 Stopped / open
 

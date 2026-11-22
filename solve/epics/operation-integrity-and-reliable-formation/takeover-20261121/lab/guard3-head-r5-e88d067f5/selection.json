@@ -1,0 +1,17 @@
+{
+  "sha": "e88d067f57d748bd2a0f13225b6838e5c6be69c0",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/rebalancer/spread-cure-escape-schedules.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/rebalancer/spread-cure-escape-schedules.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

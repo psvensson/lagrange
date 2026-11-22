@@ -1,0 +1,2361 @@
+lab test: tv-dator: ordinary (7 files) cores=12 mem=15.4GiB speed x1.45
+[tv-dator] placement-shell=3458531
+[tv-dator] placement-head=4e7f4d99c56b4f4a74ffd43944f431deb7ab2ddf
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+[tv-dator] placement-pid=3458980
+[tv-dator] # test-files planned=7
+[tv-dator] classified lane ordinary: 7 file(s), jobs=4
+[tv-dator] thermal: ok cpu 66C (coretemp/Package id 0) nvme 49C (nvme/Sensor 1)
+[tv-dator] ok test/partition/placement-retained-post-copy.test.js (2 assertions, 3973ms)
+[tv-dator] not ok test/partition/placement-create-dispatch-execution-mirror.test.js (10 assertions, 4154ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] Initializing partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   tableId: 'replica_operations',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   nodeId: 'test-node',
+[tv-dator]   replicaCount: 3,
+[tv-dator]   dbPath: ':memory:'
+[tv-dator] }
+[tv-dator] Created table {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Joining peer with fully qualified address {
+[tv-dator]   peerId: 'tx1-v3-r2',
+[tv-dator]   peerAddress: null,
+[tv-dator]   addressStatus: 'unavailable',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Joining peer with fully qualified address {
+[tv-dator]   peerId: 'tx1-v3-r3',
+[tv-dator]   peerAddress: null,
+[tv-dator]   addressStatus: 'unavailable',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Partition size updated {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   sizeBytes: 118784,
+[tv-dator]   sizeMB: '0.11'
+[tv-dator] }
+[tv-dator] Partition service initialized {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   sizeBytes: 118784
+[tv-dator] }
+[tv-dator] Applying committed entry {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+[tv-dator] }
+[tv-dator] Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+[tv-dator] Raft leadership transition evidence {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   nodeId: 'test-node',
+[tv-dator]   peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+[tv-dator]   eventType: 'role_transition',
+[tv-dator]   role: 'leader',
+[tv-dator]   trigger: 'quorum_elected',
+[tv-dator]   term: 1
+[tv-dator] }
+[tv-dator] TAP version 13
+[tv-dator] Became leader {
+[tv-dator]   term: 1,
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   rebalancerActive: true
+[tv-dator] }
+[tv-dator] Applying committed entry {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   commandType: 'PLACEMENT_ADMIT'
+[tv-dator] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:placement',
+[tv-dator]   logIndex: 3,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-a',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[tv-dator] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+[tv-dator] Extracted table name from SQL { tableName: 'replica_operations' }
+[tv-dator] Extracted data from parameterized UPDATE {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   dataKeys: [
+[tv-dator]     'type',
+[tv-dator]     'partition_id',
+[tv-dator]     'source_node_id',
+[tv-dator]     'target_node_id',
+[tv-dator]     'entity_type',
+[tv-dator]     'entity_id',
+[tv-dator]     'membership_publication_epoch',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'lease_expires_at',
+[tv-dator]     'error_message',
+[tv-dator]     'steps_history',
+[tv-dator]     'replica_id',
+[tv-dator]     'target_claim_key',
+[tv-dator]     'operation_id'
+[tv-dator]   ]
+[tv-dator] }
+[tv-dator] Fetching updated row for CDC {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   keyColumn: 'operation_id',
+[tv-dator]   keyValue: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   cdcPartitionId: 'replica_operations-p1',
+[tv-dator]   cdcReplicaId: 'tx1-v3-r1',
+[tv-dator]   suppressedSinceLastEmit: 0
+[tv-dator] }
+[tv-dator] Fetched updated row for CDC {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   rowKeys: [
+[tv-dator]     'operation_id',
+[tv-dator]     'type',
+[tv-dator]     'partition_id',
+[tv-dator]     'entity_type',
+[tv-dator]     'entity_id',
+[tv-dator]     'membership_publication_epoch',
+[tv-dator]     'message_group_membership_owner_claim',
+[tv-dator]     'message_group_membership_permit',
+[tv-dator]     'source_replica_id',
+[tv-dator]     'message_group_membership_lane_key',
+[tv-dator]     'message_group_membership_phase',
+[tv-dator]     'message_group_membership_obligation_state',
+[tv-dator]     'message_group_membership_identity',
+[tv-dator]     'message_group_learner_stamp',
+[tv-dator]     'message_group_voter_stamp',
+[tv-dator]     'message_group_removal_stamp',
+[tv-dator]     'message_group_source_lifecycle_claim',
+[tv-dator]     'create_admission_state',
+[tv-dator]     'create_admission_token',
+[tv-dator]     'create_admission_replica_created_at',
+[tv-dator]     'create_admission_attempt_token',
+[tv-dator]     'create_admission_previous_attempt_token',
+[tv-dator]     'create_admission_attempt_seq',
+[tv-dator]     'create_admission_workflow_updated_at',
+[tv-dator]     'create_admission_owner_incarnation',
+[tv-dator]     'replica_id',
+[tv-dator]     'target_claim_key',
+[tv-dator]     'source_node_id',
+[tv-dator]     'target_node_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'created_at',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'lease_expires_at',
+[tv-dator]     'error_message',
+[tv-dator]     'steps_history',
+[tv-dator]     'copy_source_node_id'
+[tv-dator]   ],
+[tv-dator]   cdcPartitionId: 'replica_operations-p1',
+[tv-dator]   cdcReplicaId: 'tx1-v3-r1',
+[tv-dator]   suppressedSinceLastEmit: 0
+[tv-dator] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:write:1',
+[tv-dator]   logIndex: 4,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] Operation step changed {
+[tv-dator]   operationId: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   previousStep: 'PENDING',
+[tv-dator]   newStep: 'SENDING',
+[tv-dator]   reason: 'dispatch_sending',
+[tv-dator]   status: 'pending',
+[tv-dator]   partitionId: 'sql_transactions-p1'
+[tv-dator] }
+[tv-dator] Sending replica operation {
+[tv-dator]   operationId: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   target: 'node-b/service/replica-handler',
+[tv-dator]   type: 'CREATE_REPLICA',
+[tv-dator]   entityType: 'partition',
+[tv-dator]   entityId: 'sql_transactions-p1',
+[tv-dator]   replaceRemovePhase: false,
+[tv-dator]   firstAttemptForStep: true
+[tv-dator] }
+[tv-dator] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[tv-dator] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+[tv-dator] Extracted table name from SQL { tableName: 'replica_operations' }
+[tv-dator] Extracted data from parameterized UPDATE {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   dataKeys: [
+[tv-dator]     'type',
+[tv-dator]     'partition_id',
+[tv-dator]     'source_node_id',
+[tv-dator]     'target_node_id',
+[tv-dator]     'entity_type',
+[tv-dator]     'entity_id',
+[tv-dator]     'membership_publication_epoch',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'lease_expires_at',
+[tv-dator]     'error_message',
+[tv-dator]     'steps_history',
+[tv-dator]     'replica_id',
+[tv-dator]     'target_claim_key',
+[tv-dator]     'operation_id'
+[tv-dator]   ]
+[tv-dator] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:write:2',
+[tv-dator]   logIndex: 5,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] Operation step changed {
+[tv-dator]   operationId: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   previousStep: 'SENDING',
+[tv-dator]   newStep: 'CREATING',
+[tv-dator]   reason: 'dispatch_creating',
+[tv-dator]   status: 'creating',
+[tv-dator]   partitionId: 'sql_transactions-p1'
+[tv-dator] }
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+[tv-dator] Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+[tv-dator] Initializing partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   tableId: 'replica_operations',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   nodeId: 'test-node',
+[tv-dator]   replicaCount: 3,
+[tv-dator]   dbPath: ':memory:'
+[tv-dator] }
+[tv-dator] Created table {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Joining peer with fully qualified address {
+[tv-dator]   peerId: 'tx1-v3-r2',
+[tv-dator]   peerAddress: null,
+[tv-dator]   addressStatus: 'unavailable',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Joining peer with fully qualified address {
+[tv-dator]   peerId: 'tx1-v3-r3',
+[tv-dator]   peerAddress: null,
+[tv-dator]   addressStatus: 'unavailable',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Partition size updated {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   sizeBytes: 118784,
+[tv-dator]   sizeMB: '0.11'
+[tv-dator] }
+[tv-dator] Partition service initialized {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   sizeBytes: 118784
+[tv-dator] }
+[tv-dator] Applying committed entry {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+[tv-dator] }
+[tv-dator] Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+[tv-dator] Raft leadership transition evidence {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   nodeId: 'test-node',
+[tv-dator]   peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+[tv-dator]   eventType: 'role_transition',
+[tv-dator]   role: 'leader',
+[tv-dator]   trigger: 'quorum_elected',
+[tv-dator]   term: 1
+[tv-dator] }
+[tv-dator] Applying committed entry {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   commandType: 'PLACEMENT_ADMIT'
+[tv-dator] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:placement',
+[tv-dator]   logIndex: 3,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-a',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[tv-dator] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+[tv-dator] Extracted table name from SQL { tableName: 'replica_operations' }
+[tv-dator] Extracted data from parameterized UPDATE {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   dataKeys: [
+[tv-dator]     'type',
+[tv-dator]     'partition_id',
+[tv-dator]     'source_node_id',
+[tv-dator]     'target_node_id',
+[tv-dator]     'entity_type',
+[tv-dator]     'entity_id',
+[tv-dator]     'membership_publication_epoch',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'lease_expires_at',
+[tv-dator]     'error_message',
+[tv-dator]     'steps_history',
+[tv-dator]     'replica_id',
+[tv-dator]     'target_claim_key',
+[tv-dator]     'operation_id'
+[tv-dator]   ]
+[tv-dator] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:write:1',
+[tv-dator]   logIndex: 4,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] Operation step changed {
+[tv-dator]   operationId: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   previousStep: 'PENDING',
+[tv-dator]   newStep: 'SENDING',
+[tv-dator]   reason: 'dispatch_sending',
+[tv-dator]   status: 'pending',
+[tv-dator]   partitionId: 'sql_transactions-p1'
+[tv-dator] }
+[tv-dator] Storage reservation created with operation {
+[tv-dator]   reservationId: 'res-pl-sql_transactions-p1-3-0',
+[tv-dator]   operationId: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   targetNodeId: 'node-b',
+[tv-dator]   estimatedBytes: 1,
+[tv-dator]   expiresAt: 1795307863602
+[tv-dator] }
+[tv-dator] Sending replica operation {
+[tv-dator]   operationId: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   target: 'node-b/service/replica-handler',
+[tv-dator]   type: 'CREATE_REPLICA',
+[tv-dator]   entityType: 'partition',
+[tv-dator]   entityId: 'sql_transactions-p1',
+[tv-dator]   replaceRemovePhase: false,
+[tv-dator]   firstAttemptForStep: true
+[tv-dator] }
+[tv-dator] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[tv-dator] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+[tv-dator] Extracted table name from SQL { tableName: 'replica_operations' }
+[tv-dator] Extracted data from parameterized UPDATE {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   dataKeys: [
+[tv-dator]     'type',
+[tv-dator]     'partition_id',
+[tv-dator]     'source_node_id',
+[tv-dator]     'target_node_id',
+[tv-dator]     'entity_type',
+[tv-dator]     'entity_id',
+[tv-dator]     'membership_publication_epoch',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'lease_expires_at',
+[tv-dator]     'error_message',
+[tv-dator]     'steps_history',
+[tv-dator]     'replica_id',
+[tv-dator]     'target_claim_key',
+[tv-dator]     'operation_id'
+[tv-dator]   ]
+[tv-dator] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:write:2',
+[tv-dator]   logIndex: 5,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] Operation step changed {
+[tv-dator]   operationId: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   previousStep: 'SENDING',
+[tv-dator]   newStep: 'CREATING',
+[tv-dator]   reason: 'dispatch_creating',
+[tv-dator]   status: 'creating',
+[tv-dator]   partitionId: 'sql_transactions-p1'
+[tv-dator] }
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+[tv-dator] Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+[tv-dator] Initializing partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   tableId: 'replica_operations',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   nodeId: 'test-node',
+[tv-dator]   replicaCount: 3,
+[tv-dator]   dbPath: ':memory:'
+[tv-dator] }
+[tv-dator] Created table {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Joining peer with fully qualified address {
+[tv-dator]   peerId: 'tx1-v3-r2',
+[tv-dator]   peerAddress: null,
+[tv-dator]   addressStatus: 'unavailable',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Joining peer with fully qualified address {
+[tv-dator]   peerId: 'tx1-v3-r3',
+[tv-dator]   peerAddress: null,
+[tv-dator]   addressStatus: 'unavailable',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Partition size updated {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   sizeBytes: 118784,
+[tv-dator]   sizeMB: '0.11'
+[tv-dator] }
+[tv-dator] Partition service initialized {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   sizeBytes: 118784
+[tv-dator] }
+[tv-dator] Applying committed entry {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+[tv-dator] }
+[tv-dator] Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+[tv-dator] Raft leadership transition evidence {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   nodeId: 'test-node',
+[tv-dator]   peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+[tv-dator]   eventType: 'role_transition',
+[tv-dator]   role: 'leader',
+[tv-dator]   trigger: 'quorum_elected',
+[tv-dator]   term: 1
+[tv-dator] }
+[tv-dator] Applying committed entry {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   commandType: 'PLACEMENT_ADMIT'
+[tv-dator] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:placement',
+[tv-dator]   logIndex: 3,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-a',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[tv-dator] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+[tv-dator] Extracted table name from SQL { tableName: 'replica_operations' }
+[tv-dator] Extracted data from parameterized UPDATE {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   dataKeys: [
+[tv-dator]     'type',
+[tv-dator]     'partition_id',
+[tv-dator]     'source_node_id',
+[tv-dator]     'target_node_id',
+[tv-dator]     'entity_type',
+[tv-dator]     'entity_id',
+[tv-dator]     'membership_publication_epoch',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'lease_expires_at',
+[tv-dator]     'error_message',
+[tv-dator]     'steps_history',
+[tv-dator]     'replica_id',
+[tv-dator]     'target_claim_key',
+[tv-dator]     'operation_id'
+[tv-dator]   ]
+[tv-dator] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:write:1',
+[tv-dator]   logIndex: 4,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] Operation step changed {
+[tv-dator]   operationId: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   previousStep: 'PENDING',
+[tv-dator]   newStep: 'SENDING',
+[tv-dator]   reason: 'dispatch_sending',
+[tv-dator]   status: 'pending',
+[tv-dator]   partitionId: 'sql_transactions-p1'
+[tv-dator] }
+[tv-dator] Storage reservation created with operation {
+[tv-dator]   reservationId: 'res-pl-sql_transactions-p1-3-0',
+[tv-dator]   operationId: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   targetNodeId: 'node-b',
+[tv-dator]   estimatedBytes: 1,
+[tv-dator]   expiresAt: 1795307863629
+[tv-dator] }
+[tv-dator] Sending replica operation {
+[tv-dator]   operationId: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   target: 'node-b/service/replica-handler',
+[tv-dator]   type: 'CREATE_REPLICA',
+[tv-dator]   entityType: 'partition',
+[tv-dator]   entityId: 'sql_transactions-p1',
+[tv-dator]   replaceRemovePhase: false,
+[tv-dator]   firstAttemptForStep: true
+[tv-dator] }
+[tv-dator] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[tv-dator] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+[tv-dator] Extracted table name from SQL { tableName: 'replica_operations' }
+[tv-dator] Extracted data from parameterized UPDATE {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   dataKeys: [
+[tv-dator]     'type',
+[tv-dator]     'partition_id',
+[tv-dator]     'source_node_id',
+[tv-dator]     'target_node_id',
+[tv-dator]     'entity_type',
+[tv-dator]     'entity_id',
+[tv-dator]     'membership_publication_epoch',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'lease_expires_at',
+[tv-dator]     'error_message',
+[tv-dator]     'steps_history',
+[tv-dator]     'replica_id',
+[tv-dator]     'target_claim_key',
+[tv-dator]     'operation_id'
+[tv-dator]   ]
+[tv-dator] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:write:2',
+[tv-dator]   logIndex: 5,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] Operation step changed {
+[tv-dator]   operationId: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   previousStep: 'SENDING',
+[tv-dator]   newStep: 'CREATING',
+[tv-dator]   reason: 'dispatch_creating',
+[tv-dator]   status: 'creating',
+[tv-dator]   partitionId: 'sql_transactions-p1'
+[tv-dator] }
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+[tv-dator] Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+[tv-dator] Initializing partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   tableId: 'replica_operations',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   nodeId: 'test-node',
+[tv-dator]   replicaCount: 3,
+[tv-dator]   dbPath: ':memory:'
+[tv-dator] }
+[tv-dator] Created table {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Joining peer with fully qualified address {
+[tv-dator]   peerId: 'tx1-v3-r2',
+[tv-dator]   peerAddress: null,
+[tv-dator]   addressStatus: 'unavailable',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Joining peer with fully qualified address {
+[tv-dator]   peerId: 'tx1-v3-r3',
+[tv-dator]   peerAddress: null,
+[tv-dator]   addressStatus: 'unavailable',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Partition size updated {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   sizeBytes: 118784,
+[tv-dator]   sizeMB: '0.11'
+[tv-dator] }
+[tv-dator] Partition service initialized {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   sizeBytes: 118784
+[tv-dator] }
+[tv-dator] Applying committed entry {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+[tv-dator] }
+[tv-dator] Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+[tv-dator] Raft leadership transition evidence {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   nodeId: 'test-node',
+[tv-dator]   peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+[tv-dator]   eventType: 'role_transition',
+[tv-dator]   role: 'leader',
+[tv-dator]   trigger: 'quorum_elected',
+[tv-dator]   term: 1
+[tv-dator] }
+[tv-dator] Applying committed entry {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   commandType: 'PLACEMENT_ADMIT'
+[tv-dator] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:placement',
+[tv-dator]   logIndex: 3,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-a',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[tv-dator] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+[tv-dator] Extracted table name from SQL { tableName: 'replica_operations' }
+[tv-dator] Extracted data from parameterized UPDATE {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   dataKeys: [
+[tv-dator]     'type',
+[tv-dator]     'partition_id',
+[tv-dator]     'source_node_id',
+[tv-dator]     'target_node_id',
+[tv-dator]     'entity_type',
+[tv-dator]     'entity_id',
+[tv-dator]     'membership_publication_epoch',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'lease_expires_at',
+[tv-dator]     'error_message',
+[tv-dator]     'steps_history',
+[tv-dator]     'replica_id',
+[tv-dator]     'target_claim_key',
+[tv-dator]     'operation_id'
+[tv-dator]   ]
+[tv-dator] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:write:1',
+[tv-dator]   logIndex: 4,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] Operation step changed {
+[tv-dator]   operationId: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   previousStep: 'PENDING',
+[tv-dator]   newStep: 'SENDING',
+[tv-dator]   reason: 'dispatch_sending',
+[tv-dator]   status: 'pending',
+[tv-dator]   partitionId: 'sql_transactions-p1'
+[tv-dator] }
+[tv-dator] Storage reservation created with operation {
+[tv-dator]   reservationId: 'res-pl-sql_transactions-p1-3-0',
+[tv-dator]   operationId: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   targetNodeId: 'node-b',
+[tv-dator]   estimatedBytes: 1,
+[tv-dator]   expiresAt: 1795307863656
+[tv-dator] }
+[tv-dator] Sending replica operation {
+[tv-dator]   operationId: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   target: 'node-b/service/replica-handler',
+[tv-dator]   type: 'CREATE_REPLICA',
+[tv-dator]   entityType: 'partition',
+[tv-dator]   entityId: 'sql_transactions-p1',
+[tv-dator]   replaceRemovePhase: false,
+[tv-dator]   firstAttemptForStep: true
+[tv-dator] }
+[tv-dator] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[tv-dator] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+[tv-dator] Extracted table name from SQL { tableName: 'replica_operations' }
+[tv-dator] Extracted data from parameterized UPDATE {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   dataKeys: [
+[tv-dator]     'type',
+[tv-dator]     'partition_id',
+[tv-dator]     'source_node_id',
+[tv-dator]     'target_node_id',
+[tv-dator]     'entity_type',
+[tv-dator]     'entity_id',
+[tv-dator]     'membership_publication_epoch',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'lease_expires_at',
+[tv-dator]     'error_message',
+[tv-dator]     'steps_history',
+[tv-dator]     'replica_id',
+[tv-dator]     'target_claim_key',
+[tv-dator]     'operation_id'
+[tv-dator]   ]
+[tv-dator] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:write:2',
+[tv-dator]   logIndex: 5,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] Operation step changed {
+[tv-dator]   operationId: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   previousStep: 'SENDING',
+[tv-dator]   newStep: 'CREATING',
+[tv-dator]   reason: 'dispatch_creating',
+[tv-dator]   status: 'creating',
+[tv-dator]   partitionId: 'sql_transactions-p1'
+[tv-dator] }
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+[tv-dator] Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+[tv-dator] Initializing partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   tableId: 'replica_operations',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   nodeId: 'test-node',
+[tv-dator]   replicaCount: 3,
+[tv-dator]   dbPath: ':memory:'
+[tv-dator] }
+[tv-dator] Created table {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Joining peer with fully qualified address {
+[tv-dator]   peerId: 'tx1-v3-r2',
+[tv-dator]   peerAddress: null,
+[tv-dator]   addressStatus: 'unavailable',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Joining peer with fully qualified address {
+[tv-dator]   peerId: 'tx1-v3-r3',
+[tv-dator]   peerAddress: null,
+[tv-dator]   addressStatus: 'unavailable',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Partition size updated {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   sizeBytes: 118784,
+[tv-dator]   sizeMB: '0.11'
+[tv-dator] }
+[tv-dator] Partition service initialized {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   sizeBytes: 118784
+[tv-dator] }
+[tv-dator] Applying committed entry {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+[tv-dator] }
+[tv-dator] Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+[tv-dator] Raft leadership transition evidence {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   nodeId: 'test-node',
+[tv-dator]   peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+[tv-dator]   eventType: 'role_transition',
+[tv-dator]   role: 'leader',
+[tv-dator]   trigger: 'quorum_elected',
+[tv-dator]   term: 1
+[tv-dator] }
+[tv-dator] Applying committed entry {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   commandType: 'PLACEMENT_ADMIT'
+[tv-dator] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:placement',
+[tv-dator]   logIndex: 3,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-a',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[tv-dator] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+[tv-dator] Extracted table name from SQL { tableName: 'replica_operations' }
+[tv-dator] Extracted data from parameterized UPDATE {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   dataKeys: [
+[tv-dator]     'type',
+[tv-dator]     'partition_id',
+[tv-dator]     'source_node_id',
+[tv-dator]     'target_node_id',
+[tv-dator]     'entity_type',
+[tv-dator]     'entity_id',
+[tv-dator]     'membership_publication_epoch',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'lease_expires_at',
+[tv-dator]     'error_message',
+[tv-dator]     'steps_history',
+[tv-dator]     'replica_id',
+[tv-dator]     'target_claim_key',
+[tv-dator]     'operation_id'
+[tv-dator]   ]
+[tv-dator] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:write:1',
+[tv-dator]   logIndex: 4,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] Operation step changed {
+[tv-dator]   operationId: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   previousStep: 'PENDING',
+[tv-dator]   newStep: 'SENDING',
+[tv-dator]   reason: 'dispatch_sending',
+[tv-dator]   status: 'pending',
+[tv-dator]   partitionId: 'sql_transactions-p1'
+[tv-dator] }
+[tv-dator] Storage reservation created with operation {
+[tv-dator]   reservationId: 'res-pl-sql_transactions-p1-3-0',
+[tv-dator]   operationId: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   targetNodeId: 'node-b',
+[tv-dator]   estimatedBytes: 1,
+[tv-dator]   expiresAt: 1795307863680
+[tv-dator] }
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+[tv-dator] Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+[tv-dator] Initializing partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   tableId: 'replica_operations',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   nodeId: 'test-node',
+[tv-dator]   replicaCount: 3,
+[tv-dator]   dbPath: ':memory:'
+[tv-dator] }
+[tv-dator] Created table {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Joining peer with fully qualified address {
+[tv-dator]   peerId: 'tx1-v3-r2',
+[tv-dator]   peerAddress: null,
+[tv-dator]   addressStatus: 'unavailable',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Joining peer with fully qualified address {
+[tv-dator]   peerId: 'tx1-v3-r3',
+[tv-dator]   peerAddress: null,
+[tv-dator]   addressStatus: 'unavailable',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Partition size updated {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   sizeBytes: 118784,
+[tv-dator]   sizeMB: '0.11'
+[tv-dator] }
+[tv-dator] Partition service initialized {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   sizeBytes: 118784
+[tv-dator] }
+[tv-dator] Applying committed entry {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+[tv-dator] }
+[tv-dator] Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+[tv-dator] Raft leadership transition evidence {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   nodeId: 'test-node',
+[tv-dator]   peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+[tv-dator]   eventType: 'role_transition',
+[tv-dator]   role: 'leader',
+[tv-dator]   trigger: 'quorum_elected',
+[tv-dator]   term: 1
+[tv-dator] }
+[tv-dator] Applying committed entry {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   commandType: 'PLACEMENT_ADMIT'
+[tv-dator] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:placement',
+[tv-dator]   logIndex: 3,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-a',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[tv-dator] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'DELETE' }
+[tv-dator] Extracted table name from SQL { tableName: 'replica_operations' }
+[tv-dator] Extracted data from parameterized DELETE { tableName: 'replica_operations', dataKeys: [ 'operation_id' ] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:absent-elsewhere',
+[tv-dator]   logIndex: 4,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+[tv-dator] Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+[tv-dator] Initializing partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   tableId: 'replica_operations',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   nodeId: 'test-node',
+[tv-dator]   replicaCount: 3,
+[tv-dator]   dbPath: ':memory:'
+[tv-dator] }
+[tv-dator] Created table {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Joining peer with fully qualified address {
+[tv-dator]   peerId: 'tx1-v3-r2',
+[tv-dator]   peerAddress: null,
+[tv-dator]   addressStatus: 'unavailable',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Joining peer with fully qualified address {
+[tv-dator]   peerId: 'tx1-v3-r3',
+[tv-dator]   peerAddress: null,
+[tv-dator]   addressStatus: 'unavailable',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Partition size updated {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   sizeBytes: 118784,
+[tv-dator]   sizeMB: '0.11'
+[tv-dator] }
+[tv-dator] Partition service initialized {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   sizeBytes: 118784
+[tv-dator] }
+[tv-dator] Applying committed entry {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+[tv-dator] }
+[tv-dator] Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+[tv-dator] Raft leadership transition evidence {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   nodeId: 'test-node',
+[tv-dator]   peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+[tv-dator]   eventType: 'role_transition',
+[tv-dator]   role: 'leader',
+[tv-dator]   trigger: 'quorum_elected',
+[tv-dator]   term: 1
+[tv-dator] }
+[tv-dator] Applying committed entry {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   commandType: 'PLACEMENT_ADMIT'
+[tv-dator] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:placement',
+[tv-dator]   logIndex: 3,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-a',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Initializing partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   tableId: 'replica_operations',
+[tv-dator]   replicaId: 'tx1-v3-r2',
+[tv-dator]   nodeId: 'node-c',
+[tv-dator]   replicaCount: 3,
+[tv-dator]   dbPath: ':memory:'
+[tv-dator] }
+[tv-dator] Created table {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Joining peer with fully qualified address {
+[tv-dator]   peerId: 'tx1-v3-r1',
+[tv-dator]   peerAddress: null,
+[tv-dator]   addressStatus: 'unavailable',
+[tv-dator]   replicaId: 'tx1-v3-r2',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Joining peer with fully qualified address {
+[tv-dator]   peerId: 'tx1-v3-r3',
+[tv-dator]   peerAddress: null,
+[tv-dator]   addressStatus: 'unavailable',
+[tv-dator]   replicaId: 'tx1-v3-r2',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Partition size updated {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   sizeBytes: 118784,
+[tv-dator]   sizeMB: '0.11'
+[tv-dator] }
+[tv-dator] Partition service initialized {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   replicaId: 'tx1-v3-r2',
+[tv-dator]   sizeBytes: 118784
+[tv-dator] }
+[tv-dator] Applying committed entry {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+[tv-dator] }
+[tv-dator] Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+[tv-dator] Raft leadership transition evidence {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   replicaId: 'tx1-v3-r2',
+[tv-dator]   nodeId: 'node-c',
+[tv-dator]   peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+[tv-dator]   eventType: 'role_transition',
+[tv-dator]   role: 'leader',
+[tv-dator]   trigger: 'quorum_elected',
+[tv-dator]   term: 1
+[tv-dator] }
+[tv-dator] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[tv-dator] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'INSERT' }
+[tv-dator] Extracted table name from SQL { tableName: 'replica_operations' }
+[tv-dator] Extracted data from parameterized INSERT {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   dataKeys: [
+[tv-dator]     'operation_id',
+[tv-dator]     'type',
+[tv-dator]     'partition_id',
+[tv-dator]     'entity_type',
+[tv-dator]     'entity_id',
+[tv-dator]     'membership_publication_epoch',
+[tv-dator]     'message_group_membership_owner_claim',
+[tv-dator]     'message_group_membership_permit',
+[tv-dator]     'source_replica_id',
+[tv-dator]     'message_group_membership_lane_key',
+[tv-dator]     'message_group_membership_phase',
+[tv-dator]     'message_group_membership_obligation_state',
+[tv-dator]     'message_group_membership_identity',
+[tv-dator]     'message_group_learner_stamp',
+[tv-dator]     'message_group_voter_stamp',
+[tv-dator]     'message_group_removal_stamp',
+[tv-dator]     'message_group_source_lifecycle_claim',
+[tv-dator]     'create_admission_state',
+[tv-dator]     'create_admission_token',
+[tv-dator]     'create_admission_replica_created_at',
+[tv-dator]     'create_admission_attempt_token',
+[tv-dator]     'create_admission_previous_attempt_token',
+[tv-dator]     'create_admission_attempt_seq',
+[tv-dator]     'create_admission_workflow_updated_at',
+[tv-dator]     'create_admission_owner_incarnation',
+[tv-dator]     'replica_id',
+[tv-dator]     'target_claim_key',
+[tv-dator]     'source_node_id',
+[tv-dator]     'target_node_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'created_at',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'lease_expires_at',
+[tv-dator]     'error_message',
+[tv-dator]     'steps_history',
+[tv-dator]     'copy_source_node_id'
+[tv-dator]   ]
+[tv-dator] }
+[tv-dator] Fetched inserted row for CDC {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   rowKeys: [
+[tv-dator]     'operation_id',
+[tv-dator]     'type',
+[tv-dator]     'partition_id',
+[tv-dator]     'entity_type',
+[tv-dator]     'entity_id',
+[tv-dator]     'membership_publication_epoch',
+[tv-dator]     'message_group_membership_owner_claim',
+[tv-dator]     'message_group_membership_permit',
+[tv-dator]     'source_replica_id',
+[tv-dator]     'message_group_membership_lane_key',
+[tv-dator]     'message_group_membership_phase',
+[tv-dator]     'message_group_membership_obligation_state',
+[tv-dator]     'message_group_membership_identity',
+[tv-dator]     'message_group_learner_stamp',
+[tv-dator]     'message_group_voter_stamp',
+[tv-dator]     'message_group_removal_stamp',
+[tv-dator]     'message_group_source_lifecycle_claim',
+[tv-dator]     'create_admission_state',
+[tv-dator]     'create_admission_token',
+[tv-dator]     'create_admission_replica_created_at',
+[tv-dator]     'create_admission_attempt_token',
+[tv-dator]     'create_admission_previous_attempt_token',
+[tv-dator]     'create_admission_attempt_seq',
+[tv-dator]     'create_admission_workflow_updated_at',
+[tv-dator]     'create_admission_owner_incarnation',
+[tv-dator]     'replica_id',
+[tv-dator]     'target_claim_key',
+[tv-dator]     'source_node_id',
+[tv-dator]     'target_node_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'created_at',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'lease_expires_at',
+[tv-dator]     'error_message',
+[tv-dator]     'steps_history',
+[tv-dator]     'copy_source_node_id'
+[tv-dator]   ],
+[tv-dator]   cdcPartitionId: 'replica_operations-p1',
+[tv-dator]   cdcReplicaId: 'tx1-v3-r2',
+[tv-dator]   suppressedSinceLastEmit: 0
+[tv-dator] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:deposed-copy',
+[tv-dator]   logIndex: 3,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[tv-dator] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'DELETE' }
+[tv-dator] Extracted table name from SQL { tableName: 'replica_operations' }
+[tv-dator] Extracted data from parameterized DELETE { tableName: 'replica_operations', dataKeys: [ 'operation_id' ] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:retired',
+[tv-dator]   logIndex: 4,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r2' }
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+[tv-dator] Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+[tv-dator] Initializing partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   tableId: 'replica_operations',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   nodeId: 'test-node',
+[tv-dator]   replicaCount: 3,
+[tv-dator]   dbPath: ':memory:'
+[tv-dator] }
+[tv-dator] Created table {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Joining peer with fully qualified address {
+[tv-dator]   peerId: 'tx1-v3-r2',
+[tv-dator]   peerAddress: null,
+[tv-dator]   addressStatus: 'unavailable',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Joining peer with fully qualified address {
+[tv-dator]   peerId: 'tx1-v3-r3',
+[tv-dator]   peerAddress: null,
+[tv-dator]   addressStatus: 'unavailable',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Partition size updated {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   sizeBytes: 118784,
+[tv-dator]   sizeMB: '0.11'
+[tv-dator] }
+[tv-dator] Partition service initialized {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   sizeBytes: 118784
+[tv-dator] }
+[tv-dator] Applying committed entry {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+[tv-dator] }
+[tv-dator] Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+[tv-dator] Raft leadership transition evidence {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   nodeId: 'test-node',
+[tv-dator]   peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+[tv-dator]   eventType: 'role_transition',
+[tv-dator]   role: 'leader',
+[tv-dator]   trigger: 'quorum_elected',
+[tv-dator]   term: 1
+[tv-dator] }
+[tv-dator] Applying committed entry {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   commandType: 'PLACEMENT_ADMIT'
+[tv-dator] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:placement',
+[tv-dator]   logIndex: 3,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-a',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[tv-dator] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+[tv-dator] Extracted table name from SQL { tableName: 'replica_operations' }
+[tv-dator] Extracted data from parameterized UPDATE {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   dataKeys: [
+[tv-dator]     'type',
+[tv-dator]     'partition_id',
+[tv-dator]     'source_node_id',
+[tv-dator]     'target_node_id',
+[tv-dator]     'entity_type',
+[tv-dator]     'entity_id',
+[tv-dator]     'membership_publication_epoch',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'lease_expires_at',
+[tv-dator]     'error_message',
+[tv-dator]     'steps_history',
+[tv-dator]     'replica_id',
+[tv-dator]     'target_claim_key',
+[tv-dator]     'operation_id'
+[tv-dator]   ]
+[tv-dator] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:write:1',
+[tv-dator]   logIndex: 4,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] Operation step changed {
+[tv-dator]   operationId: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   previousStep: 'PENDING',
+[tv-dator]   newStep: 'SENDING',
+[tv-dator]   reason: 'dispatch_sending',
+[tv-dator]   status: 'pending',
+[tv-dator]   partitionId: 'sql_transactions-p1'
+[tv-dator] }
+[tv-dator] Storage reservation created with operation {
+[tv-dator]   reservationId: 'res-pl-sql_transactions-p1-3-0',
+[tv-dator]   operationId: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   targetNodeId: 'node-b',
+[tv-dator]   estimatedBytes: 1,
+[tv-dator]   expiresAt: 1795307863725
+[tv-dator] }
+[tv-dator] # Subtest: fresh placement CREATE binds its topology and advances through actual dispatch transitions
+[tv-dator] ok 1 - fresh placement CREATE binds its topology and advances through actual dispatch transitions
+[tv-dator]   ---
+[tv-dator]   duration_ms: 2415.178386
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: a SENDING placement CREATE re-entered by ledger CDC advances through real acknowledgement
+[tv-dator] ok 2 - a SENDING placement CREATE re-entered by ledger CDC advances through real acknowledgement
+[tv-dator]   ---
+[tv-dator]   duration_ms: 36.922865
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: a present placement row dispatches its CREATE once, without delay, through the retained owner's confirmation (cached ledger route: published)
+[tv-dator] ok 3 - a present placement row dispatches its CREATE once, without delay, through the retained owner's confirmation (cached ledger route: published)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 28.951545
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: a present placement row dispatches its CREATE once, without delay, through the retained owner's confirmation (cached ledger route: unpublished)
+[tv-dator] ok 4 - a present placement row dispatches its CREATE once, without delay, through the retained owner's confirmation (cached ledger route: unpublished)
+[tv-dator]   ---
+[tv-dator]   duration_ms: 23.414962
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: a read served by another replica than the cached ledger route settles nothing: the CREATE dispatch is withheld and owed to the route publication
+[tv-dator] ok 5 - a read served by another replica than the cached ledger route settles nothing: the CREATE dispatch is withheld and owed to the route publication
+[tv-dator]   ---
+[tv-dator]   duration_ms: 19.823622
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: an absence served by another replica than the cached ledger route settles nothing: nothing is prepared or presented, the route publication owns the reconsideration
+[tv-dator] ok 6 - an absence served by another replica than the cached ledger route settles nothing: nothing is prepared or presented, the route publication owns the reconsideration
+[tv-dator]   ---
+[tv-dator]   duration_ms: 9.529272
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: a row still present on a deposed ledger leader but retired on the current one is not confirmed for dispatch
+[tv-dator] ok 7 - a row still present on a deposed ledger leader but retired on the current one is not confirmed for dispatch
+[tv-dator]   ---
+[tv-dator]   duration_ms: 19.75045
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+[tv-dator] Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+[tv-dator] Initializing partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   tableId: 'replica_operations',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   nodeId: 'test-node',
+[tv-dator]   replicaCount: 3,
+[tv-dator]   dbPath: ':memory:'
+[tv-dator] }
+[tv-dator] Created table {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Joining peer with fully qualified address {
+[tv-dator]   peerId: 'tx1-v3-r2',
+[tv-dator]   peerAddress: null,
+[tv-dator]   addressStatus: 'unavailable',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Joining peer with fully qualified address {
+[tv-dator]   peerId: 'tx1-v3-r3',
+[tv-dator]   peerAddress: null,
+[tv-dator]   addressStatus: 'unavailable',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Partition size updated {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   sizeBytes: 118784,
+[tv-dator]   sizeMB: '0.11'
+[tv-dator] }
+[tv-dator] Partition service initialized {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   sizeBytes: 118784
+[tv-dator] }
+[tv-dator] Applying committed entry {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+[tv-dator] }
+[tv-dator] Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+[tv-dator] Raft leadership transition evidence {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   nodeId: 'test-node',
+[tv-dator]   peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+[tv-dator]   eventType: 'role_transition',
+[tv-dator]   role: 'leader',
+[tv-dator]   trigger: 'quorum_elected',
+[tv-dator]   term: 1
+[tv-dator] }
+[tv-dator] Applying committed entry {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   commandType: 'PLACEMENT_ADMIT'
+[tv-dator] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:placement',
+[tv-dator]   logIndex: 3,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-a',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[tv-dator] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'DELETE' }
+[tv-dator] Extracted table name from SQL { tableName: 'replica_operations' }
+[tv-dator] Extracted data from parameterized DELETE { tableName: 'replica_operations', dataKeys: [ 'operation_id' ] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:lost-row',
+[tv-dator]   logIndex: 4,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+[tv-dator] Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+[tv-dator] Initializing partition service {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   tableId: 'replica_operations',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   nodeId: 'test-node',
+[tv-dator]   replicaCount: 3,
+[tv-dator]   dbPath: ':memory:'
+[tv-dator] }
+[tv-dator] Created table {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Joining peer with fully qualified address {
+[tv-dator]   peerId: 'tx1-v3-r2',
+[tv-dator]   peerAddress: null,
+[tv-dator]   addressStatus: 'unavailable',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Joining peer with fully qualified address {
+[tv-dator]   peerId: 'tx1-v3-r3',
+[tv-dator]   peerAddress: null,
+[tv-dator]   addressStatus: 'unavailable',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   partitionId: 'replica_operations-p1'
+[tv-dator] }
+[tv-dator] Partition size updated {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   sizeBytes: 118784,
+[tv-dator]   sizeMB: '0.11'
+[tv-dator] }
+[tv-dator] Partition service initialized {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   sizeBytes: 118784
+[tv-dator] }
+[tv-dator] Applying committed entry {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   commandType: 'PARTICIPANT_GENERATION_ORIGIN'
+[tv-dator] }
+[tv-dator] Partition write generation origin recorded { partitionId: 'replica_operations-p1', originIndex: 2, originTerm: 1 }
+[tv-dator] Raft leadership transition evidence {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   replicaId: 'tx1-v3-r1',
+[tv-dator]   nodeId: 'test-node',
+[tv-dator]   peerCohort: [ 'tx1-v3-r1', 'tx1-v3-r2', 'tx1-v3-r3' ],
+[tv-dator]   eventType: 'role_transition',
+[tv-dator]   role: 'leader',
+[tv-dator]   trigger: 'quorum_elected',
+[tv-dator]   term: 1
+[tv-dator] }
+[tv-dator] Applying committed entry {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   commandType: 'PLACEMENT_ADMIT'
+[tv-dator] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:placement',
+[tv-dator]   logIndex: 3,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-a',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[tv-dator] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+[tv-dator] Extracted table name from SQL { tableName: 'replica_operations' }
+[tv-dator] Extracted data from parameterized UPDATE {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   dataKeys: [
+[tv-dator]     'type',
+[tv-dator]     'partition_id',
+[tv-dator]     'source_node_id',
+[tv-dator]     'target_node_id',
+[tv-dator]     'entity_type',
+[tv-dator]     'entity_id',
+[tv-dator]     'membership_publication_epoch',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'lease_expires_at',
+[tv-dator]     'error_message',
+[tv-dator]     'steps_history',
+[tv-dator]     'replica_id',
+[tv-dator]     'target_claim_key',
+[tv-dator]     'operation_id'
+[tv-dator]   ]
+[tv-dator] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:write:1',
+[tv-dator]   logIndex: 4,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[tv-dator] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+[tv-dator] Extracted table name from SQL { tableName: 'replica_operations' }
+[tv-dator] Extracted data from parameterized UPDATE {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   dataKeys: [
+[tv-dator]     'type',
+[tv-dator]     'partition_id',
+[tv-dator]     'source_node_id',
+[tv-dator]     'target_node_id',
+[tv-dator]     'entity_type',
+[tv-dator]     'entity_id',
+[tv-dator]     'membership_publication_epoch',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'lease_expires_at',
+[tv-dator]     'error_message',
+[tv-dator]     'steps_history',
+[tv-dator]     'replica_id',
+[tv-dator]     'target_claim_key',
+[tv-dator]     'operation_id'
+[tv-dator]   ]
+[tv-dator] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:write:2',
+[tv-dator]   logIndex: 5,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] Operation step changed {
+[tv-dator]   operationId: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   previousStep: 'PENDING',
+[tv-dator]   newStep: 'SENDING',
+[tv-dator]   reason: 'dispatch_sending',
+[tv-dator]   status: 'pending',
+[tv-dator]   partitionId: 'sql_transactions-p1'
+[tv-dator] }
+[tv-dator] Sending replica operation {
+[tv-dator]   operationId: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   target: 'node-b/service/replica-handler',
+[tv-dator]   type: 'CREATE_REPLICA',
+[tv-dator]   entityType: 'partition',
+[tv-dator]   entityId: 'sql_transactions-p1',
+[tv-dator]   replaceRemovePhase: false,
+[tv-dator]   firstAttemptForStep: true
+[tv-dator] }
+[tv-dator] Applying committed entry { partitionId: 'replica_operations-p1', commandType: 'QUERY' }
+[tv-dator] Detected operation type from SQL { originalType: 'QUERY', detectedType: 'UPDATE' }
+[tv-dator] Extracted table name from SQL { tableName: 'replica_operations' }
+[tv-dator] Extracted data from parameterized UPDATE {
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   dataKeys: [
+[tv-dator]     'workflow_step',
+[tv-dator]     'status',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message',
+[tv-dator]     'steps_history',
+[tv-dator]     'operation_id'
+[tv-dator]   ]
+[tv-dator] }
+[tv-dator] CDC obligations recorded with the committed decision {
+[tv-dator]   partitionId: 'replica_operations-p1',
+[tv-dator]   entryId: 'execution-mirror:competing-terminal',
+[tv-dator]   logIndex: 6,
+[tv-dator]   obligations: 1
+[tv-dator] }
+[tv-dator] Durable terminal release obligations registered {
+[tv-dator]   operationId: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   workflowStep: 'FAILED',
+[tv-dator]   partitionId: 'sql_transactions-p1',
+[tv-dator]   cause: 'terminal_release_pending',
+[tv-dator]   attempt: 0,
+[tv-dator]   delayMs: 500
+[tv-dator] }
+[tv-dator] Shutting down RebalanceCoordinator { nodeId: 'node-a', inFlightOperations: 0 }
+[tv-dator] Shutting down partition service { partitionId: 'replica_operations-p1', replicaId: 'tx1-v3-r1' }
+[tv-dator] # Subtest: a CREATE dispatch withheld at the gate is dispatched exactly once after the retained owner confirms the row
+[tv-dator] not ok 8 - a CREATE dispatch withheld at the gate is dispatched exactly once after the retained owner confirms the row
+[tv-dator]   ---
+[tv-dator]   duration_ms: 18.88093
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4e7f4d99c56b-mwr3r6gx-2637090/test/partition/placement-create-dispatch-execution-mirror.test.js:302:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     the withheld CREATE dispatch is re-driven exactly once
+[tv-dator]     
+[tv-dator]     0 !== 1
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 1
+[tv-dator]   actual: 0
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     withPlacementExecution.ledgerRoute (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4e7f4d99c56b-mwr3r6gx-2637090/test/partition/placement-create-dispatch-execution-mirror.test.js:323:12)
+[tv-dator]     async file:///home/peter/projects/lagrange/test-output/placement-worktrees/4e7f4d99c56b-mwr3r6gx-2637090/test/partition/placement-create-dispatch-execution-mirror.test.js:142:7
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4e7f4d99c56b-mwr3r6gx-2637090/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withPlacementExecution (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4e7f4d99c56b-mwr3r6gx-2637090/test/partition/placement-create-dispatch-execution-mirror.test.js:77:3)
+[tv-dator]     async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4e7f4d99c56b-mwr3r6gx-2637090/test/partition/placement-create-dispatch-execution-mirror.test.js:304:3)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: an absent placement row is withheld from dispatch while no ledger route is published; the retained owner keeps the obligation, owed to the route publication
+[tv-dator] ok 9 - an absent placement row is withheld from dispatch while no ledger route is published; the retained owner keeps the obligation, owed to the route publication
+[tv-dator]   ---
+[tv-dator]   duration_ms: 12.402678
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: a competing terminal result survives acknowledgement of a previously stamped CREATE
+[tv-dator] ok 10 - a competing terminal result survives acknowledgement of a previously stamped CREATE
+[tv-dator]   ---
+[tv-dator]   duration_ms: 23.615952
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] 1..10
+[tv-dator] # tests 10
+[tv-dator] # suites 0
+[tv-dator] # pass 9
+[tv-dator] # fail 1
+[tv-dator] # cancelled 0
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 2617.017045
+[tv-dator] # time=4154ms
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'pl-sql_transactions-p1-3-0',
+[tv-dator]     replica_id: 'replace-replica-3632c6d856f4a51d34069381e711949b',
+[tv-dator]     status: 'pending',
+[tv-dator]     workflow_step: 'SENDING',
+[tv-dator]     updated_at: 1795307563550,
+[tv-dator]     completed_at: null,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795307563559
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'pl-sql_transactions-p1-3-0',
+[tv-dator]     replica_id: 'replace-replica-3632c6d856f4a51d34069381e711949b',
+[tv-dator]     status: 'creating',
+[tv-dator]     workflow_step: 'CREATING',
+[tv-dator]     updated_at: 1795307563565,
+[tv-dator]     completed_at: null,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795307563569
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'pl-sql_transactions-p1-3-0',
+[tv-dator]     replica_id: 'replace-replica-3632c6d856f4a51d34069381e711949b',
+[tv-dator]     status: 'pending',
+[tv-dator]     workflow_step: 'SENDING',
+[tv-dator]     updated_at: 1795307563590,
+[tv-dator]     completed_at: null,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795307563593
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'pl-sql_transactions-p1-3-0',
+[tv-dator]     replica_id: 'replace-replica-3632c6d856f4a51d34069381e711949b',
+[tv-dator]     status: 'creating',
+[tv-dator]     workflow_step: 'CREATING',
+[tv-dator]     updated_at: 1795307563606,
+[tv-dator]     completed_at: null,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795307563608
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'pl-sql_transactions-p1-3-0',
+[tv-dator]     replica_id: 'replace-replica-3632c6d856f4a51d34069381e711949b',
+[tv-dator]     status: 'pending',
+[tv-dator]     workflow_step: 'SENDING',
+[tv-dator]     updated_at: 1795307563622,
+[tv-dator]     completed_at: null,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795307563626
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'pl-sql_transactions-p1-3-0',
+[tv-dator]     replica_id: 'replace-replica-3632c6d856f4a51d34069381e711949b',
+[tv-dator]     status: 'creating',
+[tv-dator]     workflow_step: 'CREATING',
+[tv-dator]     updated_at: 1795307563632,
+[tv-dator]     completed_at: null,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795307563636
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'pl-sql_transactions-p1-3-0',
+[tv-dator]     replica_id: 'replace-replica-3632c6d856f4a51d34069381e711949b',
+[tv-dator]     status: 'pending',
+[tv-dator]     workflow_step: 'SENDING',
+[tv-dator]     updated_at: 1795307563649,
+[tv-dator]     completed_at: null,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795307563652
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'pl-sql_transactions-p1-3-0',
+[tv-dator]     replica_id: 'replace-replica-3632c6d856f4a51d34069381e711949b',
+[tv-dator]     status: 'creating',
+[tv-dator]     workflow_step: 'CREATING',
+[tv-dator]     updated_at: 1795307563658,
+[tv-dator]     completed_at: null,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795307563661
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'pl-sql_transactions-p1-3-0',
+[tv-dator]     replica_id: 'replace-replica-3632c6d856f4a51d34069381e711949b',
+[tv-dator]     status: 'pending',
+[tv-dator]     workflow_step: 'SENDING',
+[tv-dator]     updated_at: 1795307563673,
+[tv-dator]     completed_at: null,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795307563676
+[tv-dator] }
+[tv-dator] Retained placement repair waiting {
+[tv-dator]   operationId: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   waiting: 'route_publication',
+[tv-dator]   reason: 'unqualified_binding'
+[tv-dator] }
+[tv-dator] Retained placement repair waiting {
+[tv-dator]   operationId: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   waiting: 'route_publication',
+[tv-dator]   reason: 'unqualified_binding'
+[tv-dator] }
+[tv-dator] Retained placement repair waiting {
+[tv-dator]   operationId: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   waiting: 'route_publication',
+[tv-dator]   reason: 'unqualified_binding'
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'pl-sql_transactions-p1-3-0',
+[tv-dator]     replica_id: 'replace-replica-3632c6d856f4a51d34069381e711949b',
+[tv-dator]     status: 'pending',
+[tv-dator]     workflow_step: 'SENDING',
+[tv-dator]     updated_at: 1795307563720,
+[tv-dator]     completed_at: null,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795307563722
+[tv-dator] }
+[tv-dator] Retained placement repair waiting {
+[tv-dator]   operationId: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   waiting: 'continuation',
+[tv-dator]   reason: 'owner_read_failed'
+[tv-dator] }
+[tv-dator] Retained placement repair waiting {
+[tv-dator]   operationId: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   waiting: 'route_publication',
+[tv-dator]   reason: 'unqualified_binding'
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'pl-sql_transactions-p1-3-0',
+[tv-dator]     replica_id: 'replace-replica-3632c6d856f4a51d34069381e711949b',
+[tv-dator]     status: 'pending',
+[tv-dator]     workflow_step: 'PENDING',
+[tv-dator]     updated_at: 1795307563752,
+[tv-dator]     completed_at: null,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795307563757
+[tv-dator] }
+[tv-dator] Cache/authoritative divergence detected during reconciliation {
+[tv-dator]   divergenceType: 'cache_missing',
+[tv-dator]   tableName: 'replica_operations',
+[tv-dator]   ownerComponent: 'RebalanceCoordinator',
+[tv-dator]   reconciliationReason: 'recovery_operation_persist_confirmation',
+[tv-dator]   rowKey: 'pl-sql_transactions-p1-3-0',
+[tv-dator]   cacheValue: null,
+[tv-dator]   authoritativeValue: {
+[tv-dator]     operation_id: 'pl-sql_transactions-p1-3-0',
+[tv-dator]     replica_id: 'replace-replica-3632c6d856f4a51d34069381e711949b',
+[tv-dator]     status: 'pending',
+[tv-dator]     workflow_step: 'SENDING',
+[tv-dator]     updated_at: 1795307563758,
+[tv-dator]     completed_at: null,
+[tv-dator]     error_message: null
+[tv-dator]   },
+[tv-dator]   divergentFields: [
+[tv-dator]     'operation_id',
+[tv-dator]     'replica_id',
+[tv-dator]     'status',
+[tv-dator]     'workflow_step',
+[tv-dator]     'updated_at',
+[tv-dator]     'completed_at',
+[tv-dator]     'error_message'
+[tv-dator]   ],
+[tv-dator]   detectedAt: 1795307563760
+[tv-dator] }
+[tv-dator] ok test/partition/placement-retained-leadership.test.js (5 assertions, 4397ms)
+[tv-dator] not ok test/partition/placement-retained-continuation.test.js (26 assertions, 5925ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 13
+[tv-dator] # Subtest: W5 a not-leader disclaim under an unchanged route tuple returns the obligation to the sender
+[tv-dator] ok 1 - W5 a not-leader disclaim under an unchanged route tuple returns the obligation to the sender
+[tv-dator]   ---
+[tv-dator]   duration_ms: 2457.005618
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: W5 a receiver restart on the same node, replica and address returns the obligation to the sender
+[tv-dator] ok 2 - W5 a receiver restart on the same node, replica and address returns the obligation to the sender
+[tv-dator]   ---
+[tv-dator]   duration_ms: 86.772608
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: W5 a disclaim without custody from a receiver whose tenure ended mid-decision returns the obligation to the sender
+[tv-dator] ok 3 - W5 a disclaim without custody from a receiver whose tenure ended mid-decision returns the obligation to the sender
+[tv-dator]   ---
+[tv-dator]   duration_ms: 60.778081
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: W6 one real release and one transient read failure complete the original repair exactly once
+[tv-dator] ok 4 - W6 one real release and one transient read failure complete the original repair exactly once
+[tv-dator]   ---
+[tv-dator]   duration_ms: 79.445963
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-22T00:32:43.827Z","nodeId":"test-node","pid":3459002,"subsystem":"rebalance-coordinator","event":"wait_bound_spent","wait":"TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS","awaited":"a qualified retained placement repair authority read","boundMs":300000,"elapsedMs":300000,"lastObserved":{"reason":"owner_read_failed","attempts":300},"scope":{"operationId":"retained-continuation-remove"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+[tv-dator] # Subtest: W6 a permanent read failure is bounded, keeps the obligation and proposes nothing
+[tv-dator] ok 5 - W6 a permanent read failure is bounded, keeps the obligation and proposes nothing
+[tv-dator]   ---
+[tv-dator]   duration_ms: 150.651733
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: W7 an unavailable read on the ingress path leaves the committed blocker trigger unchanged
+[tv-dator] ok 6 - W7 an unavailable read on the ingress path leaves the committed blocker trigger unchanged
+[tv-dator]   ---
+[tv-dator]   duration_ms: 82.203978
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: W7 an unavailable observation consumed by the sender leaves its blocker trigger unchanged
+[tv-dator] ok 7 - W7 an unavailable observation consumed by the sender leaves its blocker trigger unchanged
+[tv-dator]   ---
+[tv-dator]   duration_ms: 64.86085
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: W7 an unavailable read after the pinned entry resolved leaves the committed blocker trigger unchanged
+[tv-dator] ok 8 - W7 an unavailable read after the pinned entry resolved leaves the committed blocker trigger unchanged
+[tv-dator]   ---
+[tv-dator]   duration_ms: 77.841932
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: W8 shutdown with an armed continuation leaves nothing to fire
+[tv-dator] ok 9 - W8 shutdown with an armed continuation leaves nothing to fire
+[tv-dator]   ---
+[tv-dator]   duration_ms: 69.728215
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: W8 retirement with an armed continuation leaves nothing to fire
+[tv-dator] ok 10 - W8 retirement with an armed continuation leaves nothing to fire
+[tv-dator]   ---
+[tv-dator]   duration_ms: 73.400607
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-22T00:32:44.267Z","nodeId":"test-node","pid":3459002,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","waiting":"row_change","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+[tv-dator] {"level":50,"time":"2026-11-22T00:32:44.268Z","nodeId":"test-node","pid":3459002,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","waiting":"row_change","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+[tv-dator] {"level":50,"time":"2026-11-22T00:32:44.366Z","nodeId":"test-node","pid":3459002,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","waiting":"row_change","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+[tv-dator] # Subtest: partial authority, overlapping arrivals: one owned decision and one qualified read
+[tv-dator] ok 11 - partial authority, overlapping arrivals: one owned decision and one qualified read
+[tv-dator]   ---
+[tv-dator]   duration_ms: 86.379937
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-22T00:32:44.369Z","nodeId":"test-node","pid":3459002,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","waiting":"row_change","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+[tv-dator] # Subtest: partial authority, sequential arrivals: a bounded later decision with a fresh read
+[tv-dator] ok 12 - partial authority, sequential arrivals: a bounded later decision with a fresh read
+[tv-dator]   ---
+[tv-dator]   duration_ms: 90.772765
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: failed authority, overlapping arrivals: one owned decision and one qualified read
+[tv-dator] ok 13 - failed authority, overlapping arrivals: one owned decision and one qualified read
+[tv-dator]   ---
+[tv-dator]   duration_ms: 77.443129
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: failed authority, sequential arrivals: a bounded later decision with a fresh read
+[tv-dator] ok 14 - failed authority, sequential arrivals: a bounded later decision with a fresh read
+[tv-dator]   ---
+[tv-dator]   duration_ms: 75.24587
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: stale authority, overlapping arrivals: one owned decision and one qualified read
+[tv-dator] ok 15 - stale authority, overlapping arrivals: one owned decision and one qualified read
+[tv-dator]   ---
+[tv-dator]   duration_ms: 61.047895
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: stale authority, sequential arrivals: a bounded later decision with a fresh read
+[tv-dator] ok 16 - stale authority, sequential arrivals: a bounded later decision with a fresh read
+[tv-dator]   ---
+[tv-dator]   duration_ms: 80.07685
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-22T00:32:44.745Z","nodeId":"test-node","pid":3459002,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","waiting":"row_change","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+[tv-dator] {"level":50,"time":"2026-11-22T00:32:44.745Z","nodeId":"test-node","pid":3459002,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","waiting":"row_change","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+[tv-dator] {"level":50,"time":"2026-11-22T00:32:44.802Z","nodeId":"test-node","pid":3459002,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","waiting":"row_change","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+[tv-dator] # Subtest: wrong-partition authority, overlapping arrivals: one owned decision and one qualified read
+[tv-dator] ok 17 - wrong-partition authority, overlapping arrivals: one owned decision and one qualified read
+[tv-dator]   ---
+[tv-dator]   duration_ms: 81.129827
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-22T00:32:44.810Z","nodeId":"test-node","pid":3459002,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","waiting":"row_change","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+[tv-dator] # Subtest: wrong-partition authority, sequential arrivals: a bounded later decision with a fresh read
+[tv-dator] ok 18 - wrong-partition authority, sequential arrivals: a bounded later decision with a fresh read
+[tv-dator]   ---
+[tv-dator]   duration_ms: 67.290691
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: Q8 a lost answer after the pinned entry committed on an idle ledger settles with no further proposal
+[tv-dator] ok 19 - Q8 a lost answer after the pinned entry committed on an idle ledger settles with no further proposal
+[tv-dator]   ---
+[tv-dator]   duration_ms: 60.212776
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: Q8 an uncommitted BACKPRESSURE answer on an idle ledger re-presents the exact entry once
+[tv-dator] ok 20 - Q8 an uncommitted BACKPRESSURE answer on an idle ledger re-presents the exact entry once
+[tv-dator]   ---
+[tv-dator]   duration_ms: 51.914962
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: B5 a custodian record released at its tenure end, without a read, cancels its continuation
+[tv-dator] ok 21 - B5 a custodian record released at its tenure end, without a read, cancels its continuation
+[tv-dator]   ---
+[tv-dator]   duration_ms: 59.429673
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: Q9 an event storm during an outage reads once in flight plus once owed
+[tv-dator] ok 22 - Q9 an event storm during an outage reads once in flight plus once owed
+[tv-dator]   ---
+[tv-dator]   duration_ms: 53.604068
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: a definite native refusal of the pinned entry retires the record, visibly, with nothing armed
+[tv-dator] not ok 23 - a definite native refusal of the pinned entry retires the record, visibly, with nothing armed
+[tv-dator]   ---
+[tv-dator]   duration_ms: 54.0002
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4e7f4d99c56b-mwr3r6gx-2637090/test/partition/placement-retained-continuation.test.js:668:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: 'the native answer placement_admission_bytes_invalid is a definite refusal row of the clearing table (W1b 38708b6fa)'
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: true
+[tv-dator]   actual: false
+[tv-dator]   operator: '=='
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/4e7f4d99c56b-mwr3r6gx-2637090/test/partition/placement-retained-continuation.test.js:700:14
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4e7f4d99c56b-mwr3r6gx-2637090/test/partition/placement-retained-row-repair-fixture.js:78:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4e7f4d99c56b-mwr3r6gx-2637090/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4e7f4d99c56b-mwr3r6gx-2637090/test/partition/placement-retained-row-repair-fixture.js:26:5)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: F2 a presentation that keeps failing after qualified reads is bounded: one window, one report, zero proposals, obligation kept
+[tv-dator] not ok 24 - F2 a presentation that keeps failing after qualified reads is bounded: one window, one report, zero proposals, obligation kept
+[tv-dator]   ---
+[tv-dator]   duration_ms: 312.428538
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4e7f4d99c56b-mwr3r6gx-2637090/test/partition/placement-retained-continuation.test.js:728:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     a presentation that keeps failing after qualified reads reaches the bounded stop (still armed after 720 continuation turns, 723 qualified reads and 723 presentations)
+[tv-dator]     
+[tv-dator]     1 !== 0
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: 0
+[tv-dator]   actual: 1
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/4e7f4d99c56b-mwr3r6gx-2637090/test/partition/placement-retained-continuation.test.js:751:14
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4e7f4d99c56b-mwr3r6gx-2637090/test/partition/placement-retained-row-repair-fixture.js:78:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4e7f4d99c56b-mwr3r6gx-2637090/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4e7f4d99c56b-mwr3r6gx-2637090/test/partition/placement-retained-row-repair-fixture.js:26:5)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-22T00:32:45.477Z","nodeId":"test-node","pid":3459002,"subsystem":"rebalance-coordinator","operationId":"retained-continuation-remove","waiting":"row_change","reason":"unqualified_shape","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+[tv-dator] # Subtest: F4 a window left by an earlier episode does not spend a later independent failure: it gets its own bounded retries
+[tv-dator] ok 25 - F4 a window left by an earlier episode does not spend a later independent failure: it gets its own bounded retries
+[tv-dator]   ---
+[tv-dator]   duration_ms: 70.666787
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: T1 one obligation has one continuation owner: an uncommitted answer carrying custody arms only the custodian
+[tv-dator] ok 26 - T1 one obligation has one continuation owner: an uncommitted answer carrying custody arms only the custodian
+[tv-dator]   ---
+[tv-dator]   duration_ms: 59.630937
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] 1..26
+[tv-dator] # tests 26
+[tv-dator] # suites 0
+[tv-dator] # pass 24
+[tv-dator] # fail 2
+[tv-dator] # cancelled 0
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 4552.147711
+[tv-dator] # time=5925ms
+[tv-dator] ok test/partition/placement-retained-real-publication.test.js (1 assertions, 3606ms)
+[tv-dator] not ok test/partition/placement-retained-publication.test.js (12 assertions, 4588ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 13
+[tv-dator] # Subtest: W1 a delayed stale B notification after the cache advanced A-B-A leaves the attempt on A
+[tv-dator] ok 1 - W1 a delayed stale B notification after the cache advanced A-B-A leaves the attempt on A
+[tv-dator]   ---
+[tv-dator]   duration_ms: 2210.203876
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: W2 partition-first: a truly missing endpoint retains the obligation until the publication completes
+[tv-dator] ok 2 - W2 partition-first: a truly missing endpoint retains the obligation until the publication completes
+[tv-dator]   ---
+[tv-dator]   duration_ms: 105.077324
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: W2 endpoint-first: a truly missing endpoint retains the obligation until the publication completes
+[tv-dator] ok 3 - W2 endpoint-first: a truly missing endpoint retains the obligation until the publication completes
+[tv-dator]   ---
+[tv-dator]   duration_ms: 74.87997
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: W2 two ACTIVE endpoints for the leader node are ambiguous: retained, then reachable
+[tv-dator] ok 4 - W2 two ACTIVE endpoints for the leader node are ambiguous: retained, then reachable
+[tv-dator]   ---
+[tv-dator]   duration_ms: 70.310485
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: W3 the origin becoming ledger leader with unchanged BUSY proposes nothing
+[tv-dator] ok 5 - W3 the origin becoming ledger leader with unchanged BUSY proposes nothing
+[tv-dator]   ---
+[tv-dator]   duration_ms: 87.664537
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: W9 a route publication during an in-flight read is queued and applied after that decision
+[tv-dator] ok 6 - W9 a route publication during an in-flight read is queued and applied after that decision
+[tv-dator]   ---
+[tv-dator]   duration_ms: 101.279952
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: F1 a route change, a transient read failure and no other event: the owed reconsideration completes the original repair once
+[tv-dator] ok 7 - F1 a route change, a transient read failure and no other event: the owed reconsideration completes the original repair once
+[tv-dator]   ---
+[tv-dator]   duration_ms: 80.682663
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: F3 a delegated origin that becomes ledger leader with unchanged BUSY makes zero native proposals before its leadership-start wake
+[tv-dator] ok 8 - F3 a delegated origin that becomes ledger leader with unchanged BUSY makes zero native proposals before its leadership-start wake
+[tv-dator]   ---
+[tv-dator]   duration_ms: 84.926835
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: F5 a failed read with no binding keeps its own reason and its continuation; the present row settles with no other event
+[tv-dator] ok 9 - F5 a failed read with no binding keeps its own reason and its continuation; the present row settles with no other event
+[tv-dator]   ---
+[tv-dator]   duration_ms: 71.39413
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] {"level":50,"time":"2026-11-22T00:32:48.016Z","nodeId":"test-node","pid":3459047,"subsystem":"rebalance-coordinator","operationId":"retained-publication-remove","waiting":"row_change","reason":"invalid_operation_row","nodeId":"test-node","msg":"Retained placement repair authority refused"}
+[tv-dator] # Subtest: F5 an invalid row with no binding is a typed, visible refusal: its own reason, one error, no timer, no proposal
+[tv-dator] ok 10 - F5 an invalid row with no binding is a typed, visible refusal: its own reason, one error, no timer, no proposal
+[tv-dator]   ---
+[tv-dator]   duration_ms: 64.675112
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: V1 a route-owed wait without a binding is a named, visible state: one log line per transition; the publication ends it
+[tv-dator] ok 11 - V1 a route-owed wait without a binding is a named, visible state: one log line per transition; the publication ends it
+[tv-dator]   ---
+[tv-dator]   duration_ms: 87.038982
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: T2 a receiver tenure renewed by term only, with no caller, row or route change: the delegated sender resumes
+[tv-dator] not ok 12 - T2 a receiver tenure renewed by term only, with no caller, row or route change: the delegated sender resumes
+[tv-dator]   ---
+[tv-dator]   duration_ms: 107.067278
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/4e7f4d99c56b-mwr3r6gx-2637090/test/partition/placement-retained-publication.test.js:442:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: 'the delegated sender resumes after a term-only tenure end, with no caller, row or route change (sender custody delegated, term 1)'
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: true
+[tv-dator]   operator: '=='
+[tv-dator]   stack: |-
+[tv-dator]     file:///home/peter/projects/lagrange/test-output/placement-worktrees/4e7f4d99c56b-mwr3r6gx-2637090/test/partition/placement-retained-publication.test.js:473:12
+[tv-dator]     async withRepairLedger.nodeId (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4e7f4d99c56b-mwr3r6gx-2637090/test/partition/placement-retained-leadership-fixture.js:185:7)
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4e7f4d99c56b-mwr3r6gx-2637090/test/partition/placement-retained-row-repair-fixture.js:78:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4e7f4d99c56b-mwr3r6gx-2637090/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4e7f4d99c56b-mwr3r6gx-2637090/test/partition/placement-retained-row-repair-fixture.js:26:5)
+[tv-dator]     async onLedgerLeader.dbPath (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4e7f4d99c56b-mwr3r6gx-2637090/test/partition/placement-retained-row-repair-fixture.js:78:9)
+[tv-dator]     async onLedgerLeader (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4e7f4d99c56b-mwr3r6gx-2637090/test/partition/placement-admission-fixture.js:40:12)
+[tv-dator]     async withRepairLedger (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4e7f4d99c56b-mwr3r6gx-2637090/test/partition/placement-retained-row-repair-fixture.js:26:5)
+[tv-dator]     async withRetainedLeadershipPair (file:///home/peter/projects/lagrange/test-output/placement-worktrees/4e7f4d99c56b-mwr3r6gx-2637090/test/partition/placement-retained-leadership-fixture.js:74:3)
+[tv-dator]     async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]   ...
+[tv-dator] 1..12
+[tv-dator] # tests 12
+[tv-dator] # suites 0
+[tv-dator] # pass 11
+[tv-dator] # fail 1
+[tv-dator] # cancelled 0
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 3151.190705
+[tv-dator] # time=4588ms
+[tv-dator] ok test/partition/placement-retained-row-repair.test.js (45 assertions, 5849ms)
+[tv-dator] # test-files total=7 pass=4 fail=3 assertions=101
+lab test: tv-dator: # test-files total=7 pass=4 fail=3 assertions=101
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=7 pass=4 fail=3 assertions=101

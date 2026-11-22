@@ -1,0 +1,27 @@
+{
+  "sha": "d5c02e1e2076fcf0b620885ac94befc0e4f1d402",
+  "host": "adam-laptop",
+  "checkBase": "0dbed1718c2d07c1fcb8bbe56b87ac41763c262c",
+  "files": [
+    "test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js",
+    "test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js",
+    "test/raft/raft-rs-backend/runtime-turn-integrity.test.js",
+    "test/raft/raft-rs-current-authority-deposition.test.js",
+    "test/raft/raft-rs-backend/proposal-submitting-leadership.test.js",
+    "test/raft/raft-rs-backend/forwarded-proposal-ingress-refusal.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/raft/raft-rs-backend/forwarded-proposal-ingress-refusal.test.js",
+        "test/raft/raft-rs-backend/proposal-submitting-leadership.test.js",
+        "test/raft/raft-rs-current-authority-deposition.test.js",
+        "test/raft/raft-rs-backend/runtime-turn-integrity.test.js",
+        "test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js",
+        "test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    }
+  ]
+}

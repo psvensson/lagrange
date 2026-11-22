@@ -1,0 +1,137 @@
+placement-shell=3457395
+placement-head=e01b7ae8a5a7dc4c2d6dbaa592a9d0674625ef98
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.5 mode:local retry:0 timeout: lanecap:11 base:0dbed1718c2d07c1fcb8bbe56b87ac41763c262c
+placement-pid=3457847
+# test-files planned=6
+classified lane ordinary: 6 file(s), jobs=4
+thermal: ok cpu 61C (coretemp/Package id 0) nvme 50C (nvme/Sensor 1)
+ok test/raft/raft-rs-backend/follower-proposal-refusal.test.js (1 assertions, 1299ms)
+ok test/raft/raft-rs-backend/queued-proposal-leadership-fence.test.js (1 assertions, 1430ms)
+not ok test/raft/raft-rs-backend/proposal-submitting-leadership.test.js (3 assertions, 1715ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: C-1: a proposal submitted under term T whose replica leads T+2 at the propose step is refused by name, and the deferral path re-proposes nothing
+ok 1 - C-1: a proposal submitted under term T whose replica leads T+2 at the propose step is refused by name, and the deferral path re-proposes nothing
+  ---
+  duration_ms: 223.618276
+  type: 'test'
+  ...
+# Subtest: C-2: a configuration change submitted under term T whose replica leads T+2 (its entry applied) at the step is refused by name, never proposed
+not ok 2 - C-2: a configuration change submitted under term T whose replica leads T+2 (its entry applied) at the step is refused by name, never proposed
+  ---
+  duration_ms: 196.377224
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/e01b7ae8a5a7-mwr3p9e9-2634096/test/raft/raft-rs-backend/proposal-submitting-leadership.test.js:187:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    a configuration change enters only under its submitting leadership: measured {"term":1,"answer":{"outcome":"CORE_OK","reason":"drained"},"after":{"role":"leader","term":3,"currentTermApplied":true},"nativeConfChanges":1}
+    + actual - expected
+    
+      {
+        answer: {
+    +     outcome: 'CORE_OK',
+    +     reason: 'drained',
+    +     recoveryRequired: undefined,
+    +     retryable: undefined
+    -     outcome: 'CORE_REFUSED',
+    -     reason: 'proposal-submitting-leadership-ended',
+    -     recoveryRequired: false,
+    -     retryable: false
+        },
+    +   nativeConfChanges: 1
+    -   nativeConfChanges: 0
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    answer:
+      outcome: 'CORE_REFUSED'
+      reason: 'proposal-submitting-leadership-ended'
+      retryable: false
+      recoveryRequired: false
+    nativeConfChanges: 0
+  actual:
+    answer:
+      outcome: 'CORE_OK'
+      reason: 'drained'
+    nativeConfChanges: 1
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/e01b7ae8a5a7-mwr3p9e9-2634096/test/raft/raft-rs-backend/proposal-submitting-leadership.test.js:204:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: C-3: a proposal submitted while the replica is an announced candidate is refused by name when its turn wins the election
+not ok 3 - C-3: a proposal submitted while the replica is an announced candidate is refused by name when its turn wins the election
+  ---
+  duration_ms: 127.793177
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/e01b7ae8a5a7-mwr3p9e9-2634096/test/raft/raft-rs-backend/proposal-submitting-leadership.test.js:213:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    a submission made under no leadership is never adopted: measured {"announced":{"role":"candidate","term":1},"answer":{"outcome":"CORE_OK","reason":"drained"},"after":{"role":"leader","term":1},"nativeProposes":1}
+    + actual - expected
+    
+      {
+        answer: {
+    +     outcome: 'CORE_OK',
+    +     reason: 'drained',
+    +     recoveryRequired: undefined,
+    +     retryable: undefined
+    -     outcome: 'CORE_REFUSED',
+    -     reason: 'proposal-submitting-leadership-ended',
+    -     recoveryRequired: false,
+    -     retryable: false
+        },
+    +   nativeProposes: 1
+    -   nativeProposes: 0
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    answer:
+      outcome: 'CORE_REFUSED'
+      reason: 'proposal-submitting-leadership-ended'
+      retryable: false
+      recoveryRequired: false
+    nativeProposes: 0
+  actual:
+    answer:
+      outcome: 'CORE_OK'
+      reason: 'drained'
+    nativeProposes: 1
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/e01b7ae8a5a7-mwr3p9e9-2634096/test/raft/raft-rs-backend/proposal-submitting-leadership.test.js:237:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 1
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 571.76757
+# time=1715ms
+ok test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js (1 assertions, 2141ms)
+ok test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js (3 assertions, 2194ms)
+ok test/raft/raft-rs-backend/transfer-leadership-drain-order.test.js (7 assertions, 2440ms)
+# test-files total=6 pass=5 fail=1 assertions=16
+placement-results={"file":"test/raft/raft-rs-backend/follower-proposal-refusal.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1299,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/queued-proposal-leadership-fence.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1430,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/proposal-submitting-leadership.test.js","attempt":1,"ok":false,"assertions":3,"durationMs":1715,"retriedOnce":false,"firstFailureLine":"not ok 2 - C-2: a configuration change submitted under term T whose replica leads T+2 (its entry applied) at the step is refused by name, never proposed"}
+placement-results={"file":"test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":2141,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":2194,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/transfer-leadership-drain-order.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":2440,"retriedOnce":false,"firstFailureLine":null}
