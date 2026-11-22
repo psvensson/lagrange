@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2711,
+    "ordinary": 2712,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2737,
-  "digest": "fnv1a32-7b302ed2",
+  "censusSize": 2738,
+  "digest": "fnv1a32-143f3a1b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -2628,6 +2628,7 @@
     "test/transport/raft-frame-liveness-residual.integration.test.js": "ordinary",
     "test/transport/raft-frame-pair-coalescing.integration.test.js": "ordinary",
     "test/transport/raft-frame-reconnect-owner.integration.test.js": "ordinary",
+    "test/transport/raft-frame-slow-peer-bounded-coalescing.test.js": "ordinary",
     "test/transport/raft-frame-turn-not-held.integration.test.js": "ordinary",
     "test/transport/raft-frame-unacknowledged-delivery.test.js": "ordinary",
     "test/transport/router-adopted-connection-reconnect-schedule.test.js": "ordinary",

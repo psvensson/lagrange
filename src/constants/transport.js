@@ -60,11 +60,18 @@ const TRANSPORT_CONFIG_KEY = Object.freeze({
   CONNECTION_POOL_CLEANUP_INTERVAL_MS: 'transport.connectionPoolCleanupIntervalMs',
 });
 
+const BULK_CHANNEL_KIB = 1024;
+const BULK_CHANNEL_MIB = BULK_CHANNEL_KIB * BULK_CHANNEL_KIB;
+
 const TRANSPORT_DEFAULT = Object.freeze({
   WS_PORT: LISTENER_PORT_DEFAULT.TRANSPORT_WEBSOCKET,
   WS_HOST: HOST.LOCALHOST,
   WS_PROTOCOL: PROTOCOL.WS,
   LOCAL_ADDRESS_PREFIX: 'ws-',
+  // Per-peer and cross-peer byte bounds for the consensus delivery lane
+  // (pending application batches + ws.bufferedAmount + new encoded batch).
+  CONSENSUS_MAX_PEER_BUFFERED_BYTES: 8 * BULK_CHANNEL_MIB,
+  CONSENSUS_MAX_TOTAL_BUFFERED_BYTES: 32 * BULK_CHANNEL_MIB,
   // ends-on: the peer acknowledges or answers the message
   MESSAGE_TIMEOUT_MS: 5000,
   ACK_TIMEOUT_QUARANTINE_THRESHOLD: 2,
@@ -213,8 +220,6 @@ const ROUTER_IDENTIFY_CHANNEL = Object.freeze({
 
 // Bulk transfer channel defaults (byte-denominated controls; the channel
 // never touches the primary router outbound queues or their reserves).
-const BULK_CHANNEL_KIB = 1024;
-const BULK_CHANNEL_MIB = BULK_CHANNEL_KIB * BULK_CHANNEL_KIB;
 const BULK_TRANSFER_CHANNEL_DEFAULT = Object.freeze({
   MAX_PENDING_SENDS: 8,
   TOKEN_BUCKET_BYTES_PER_SECOND: 8 * BULK_CHANNEL_MIB,
@@ -307,6 +312,18 @@ const ROUTER_LOG_MSG = Object.freeze({
     'Closing bulk-channel socket: no bulk channel registry attached',
 });
 
+// Why a sending router refused or dropped an unsent consensus envelope or
+// batch before writing it to the peer's socket.
+const CONSENSUS_SEND_REFUSAL = Object.freeze({
+  SHUTDOWN: 'shutdown',
+  INVALID_ADDRESS: 'invalid-address',
+  NO_CONNECTION: 'no-connection',
+  CONNECTION_CLOSED: 'connection-closed',
+  CONNECTION_REPLACED: 'connection-replaced',
+  PEER_BUFFER_EXCEEDED: 'peer-buffer-exceeded',
+  TOTAL_BUFFER_EXCEEDED: 'total-buffer-exceeded',
+});
+
 // Why a receiving router took no step for a consensus envelope: the record
 // stays with the receiver, since nothing is answered to the sender.
 const CONSENSUS_RECEIPT_REFUSAL = Object.freeze({
@@ -394,6 +411,7 @@ export {
   BULK_TRANSFER_CHANNEL_DEFAULT,
   CONNECTION_STATE,
   CONSENSUS_RECEIPT_REFUSAL,
+  CONSENSUS_SEND_REFUSAL,
   OUTBOUND_DELIVERY_PRIORITY,
   ROUTER_IDENTIFY_CHANNEL,
   ROUTER_MESSAGE_TYPE,

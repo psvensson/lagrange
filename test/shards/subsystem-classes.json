@@ -22,13 +22,13 @@
     "storage-raft": 166,
     "test-infrastructure": 167,
     "transactions": 17,
-    "transport-messaging": 122,
+    "transport-messaging": 123,
     "wasm-toolchain": 74
   },
-  "censusSize": 2737,
-  "digest": "fnv1a32-038415b7",
+  "censusSize": 2738,
+  "digest": "fnv1a32-6f8d1248",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-1be1258e",
+  "observationDigest": "fnv1a32-e6dcbef5",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2648,6 +2648,7 @@
     "test/transport/raft-frame-liveness-residual.integration.test.js": "transport-messaging",
     "test/transport/raft-frame-pair-coalescing.integration.test.js": "transport-messaging",
     "test/transport/raft-frame-reconnect-owner.integration.test.js": "transport-messaging",
+    "test/transport/raft-frame-slow-peer-bounded-coalescing.test.js": "transport-messaging",
     "test/transport/raft-frame-turn-not-held.integration.test.js": "transport-messaging",
     "test/transport/raft-frame-unacknowledged-delivery.test.js": "transport-messaging",
     "test/transport/router-adopted-connection-reconnect-schedule.test.js": "transport-messaging",
@@ -25139,6 +25140,16 @@
         "src/transport/transport-semantic-outcome.js",
         "test/distributed/harness/virtual-connection-environment.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
+      ]
+    },
+    "test/transport/raft-frame-slow-peer-bounded-coalescing.test.js": {
+      "files": [
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-peer-identity.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/transport/transport-semantic-outcome.js"
       ]
     },
     "test/transport/raft-frame-turn-not-held.integration.test.js": {
