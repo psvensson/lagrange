@@ -158,7 +158,11 @@ function captureCommittedOperationCdc(service, committed, {operation, result, or
   if (!partitionOwesCdc(service)) {
     if (!partitionHasTransientCdcSubscribers(service)) return null;
     return Object.freeze({
-      transientEntry: operationEntryOf(committed.command, operation, result),
+      transientEntry: {
+        ...operationEntryOf(committed.command, operation, result),
+        logIndex: committed.index,
+        term: committed.term,
+      },
     });
   }
   const {command, index, term} = committed;
@@ -197,7 +201,12 @@ function recordCommittedStatementCdc(service, committed, {entryKey, result}) {
       committed.afterCommit(() => {
         if (!service.isShutdown && (service.cdcSubscribers?.size ?? 0) > 0) {
           service.trackPendingCDCEvent(
-            service.generateCDCEvent({...command, changes: result.changes}).catch(() => {}));
+            service.generateCDCEvent({
+              ...command,
+              changes: result.changes,
+              logIndex: index,
+              term,
+            }).catch(() => {}));
         }
       });
     }

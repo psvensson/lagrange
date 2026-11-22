@@ -159,6 +159,7 @@ function createAdminAPIWithLiveQuery(options) {
     systemTableCache: options.systemTableCache,
     sqlQueryEngine: options.sqlQueryEngine || null,
     partitionServicesProvider: options.partitionServicesProvider,
+    messageRouter: options.messageRouter || null,
   });
   const liveQueryManager = assertCritical(
     liveQueryWiring.liveQueryManager,

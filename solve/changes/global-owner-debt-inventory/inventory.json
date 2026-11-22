@@ -7,13 +7,13 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "07de135796a74cc42e12434bf09385af77980e0908e913ad52c73025324beea0"
+        "sha256": "e6f664447a8ae8625ad96e28b3df8e8218625ea27cf89df947993df774616b7d"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "e4016aa49483ef5a96dd0c05684e4dab8895321427f638d7f0da7eb2a3874332"
+        "sha256": "3fe616189e3d13b5d9c99bb7bbbd7ae42394b3ce44eb95a0c98a6d466b2a0acc"
       },
       {
         "path": "test-output/analysis/madge-circular-src-scripts-test.json",
@@ -23,8 +23,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3861303,
-        "sha256": "bf301f6857c68833f1752edec54f15b8433eebd16fd59b6ecae8235463463494"
+        "bytes": 3862179,
+        "sha256": "c6ed8133ec7218968f6ce83a27c78c5c842824dacb6ea36ce62d2fa0a74232cd"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -33,7 +33,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "9c03119eb57543383a49df8d5e4a6b50b1e35c3ba40ba3c79777778acbbd2ce7"
+        "sha256": "e281cb515cd7d3d95546bff68657ea17d78da0f44798ffd00389d09c6917e15f"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "a5ca7c49c77f81dbc5d7cddd8bc20a9f867d074024da2e60352f8d3ff4e0ffdf"
+    "inputDigest": "492f5818bfee79e86c2cb9977ad02cb544b2ccdd6233713097aa51096f7dc392"
   },
   "reconciliation": {
     "complexity": {
@@ -73,18 +73,18 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "07de135796a74cc42e12434bf09385af77980e0908e913ad52c73025324beea0"
+        "sha256": "e6f664447a8ae8625ad96e28b3df8e8218625ea27cf89df947993df774616b7d"
       },
-      "declaredCount": 1743,
-      "observedCount": 1743,
-      "assignedCount": 1743
+      "declaredCount": 1744,
+      "observedCount": 1744,
+      "assignedCount": 1744
     },
     "cognitive": {
       "identity": {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "e4016aa49483ef5a96dd0c05684e4dab8895321427f638d7f0da7eb2a3874332"
+        "sha256": "3fe616189e3d13b5d9c99bb7bbbd7ae42394b3ce44eb95a0c98a6d466b2a0acc"
       },
       "declaredCount": 149,
       "observedCount": 149,
@@ -117,7 +117,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "9c03119eb57543383a49df8d5e4a6b50b1e35c3ba40ba3c79777778acbbd2ce7"
+          "sha256": "e281cb515cd7d3d95546bff68657ea17d78da0f44798ffd00389d09c6917e15f"
         },
         "cloneGroups": 36,
         "duplicatedLines": 1139,
@@ -173,29 +173,29 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3861303,
-        "sha256": "bf301f6857c68833f1752edec54f15b8433eebd16fd59b6ecae8235463463494"
+        "bytes": 3862179,
+        "sha256": "c6ed8133ec7218968f6ce83a27c78c5c842824dacb6ea36ce62d2fa0a74232cd"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 7871,
         "sha256": "c74ac7531e8a59a48fcee584fa7767c7d6188e6489f4104eb404ded8e1400372"
       },
-      "sourceDigest": "7a44719d056a5c3669302a5345d1eb738ed0afbafcd90cf91e8e9fdb2480a8f6",
-      "moduleCount": 6483,
-      "edgeCount": 39060,
+      "sourceDigest": "d91d8758e6cdfc7c0fcc33c953546b8762bce18952683f804edcc11a439ece78",
+      "moduleCount": 6485,
+      "edgeCount": 39069,
       "unresolvedCount": 39
     }
   },
   "assignment": {
-    "sourceSignalCount": 2418,
-    "assignedSignalCount": 2418,
-    "uniqueAssignmentCount": 2418,
-    "digest": "2cfaad529a0b4a495893c225c133c6a0e9011ed4fbd6455bb7f952820845abad"
+    "sourceSignalCount": 2419,
+    "assignedSignalCount": 2419,
+    "uniqueAssignmentCount": 2419,
+    "digest": "4ba9b0473d39408ef73abaea0420735d32eba2701bb7cc5b4a584969b3acd4fd"
   },
   "signalCounts": {
     "cognitive": 149,
-    "complexity": 1743,
+    "complexity": 1744,
     "duplication": 450,
     "fileSize": 36,
     "lintExclusion": 40
@@ -1968,6 +1968,30 @@
       ]
     },
     {
+      "key": "area:src/entrypoint-runtime-admin-composition.js",
+      "owner": null,
+      "boundary": "src/entrypoint-runtime-admin-composition.js",
+      "classification": "owner-area-fallback",
+      "ownerAreas": [
+        "src/entrypoint-runtime-admin-composition.js"
+      ],
+      "fileCount": 1,
+      "signalCount": 4,
+      "complexity": 4,
+      "cognitive": 0,
+      "oversizedFiles": 0,
+      "duplicatedLines": 0,
+      "cloneTouches": 0,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 7,
+      "importOut": 26,
+      "score": 16,
+      "topPaths": [
+        "src/entrypoint-runtime-admin-composition.js"
+      ]
+    },
+    {
       "key": "area:test/wasm-service",
       "owner": null,
       "boundary": "test/wasm-service",
@@ -2043,30 +2067,6 @@
         "test/distributed/reference-client/lagrange-delivery-observer.js",
         "test/distributed/reference-client/lagrange-oltp-state-snapshot.js",
         "test/distributed/reference-client/lagrange-payment-observer.js"
-      ]
-    },
-    {
-      "key": "area:src/entrypoint-runtime-admin-composition.js",
-      "owner": null,
-      "boundary": "src/entrypoint-runtime-admin-composition.js",
-      "classification": "owner-area-fallback",
-      "ownerAreas": [
-        "src/entrypoint-runtime-admin-composition.js"
-      ],
-      "fileCount": 1,
-      "signalCount": 3,
-      "complexity": 3,
-      "cognitive": 0,
-      "oversizedFiles": 0,
-      "duplicatedLines": 0,
-      "cloneTouches": 0,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 7,
-      "importOut": 26,
-      "score": 12,
-      "topPaths": [
-        "src/entrypoint-runtime-admin-composition.js"
       ]
     },
     {

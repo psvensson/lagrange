@@ -11,6 +11,8 @@ import {
 import {endReplicaLeadershipTenure} from '../raft/replica-leadership-state.js';
 import {assertRaftOperationSucceeded} from '../raft/raft-operation-port.js';
 import {stopReplicaAdmission} from './partition-replica-admission.js';
+import {clearRemoteLiveQueryCdcSubscribers} from
+  './partition-live-query-cdc-remote.js';
 
 const {
   PARTITION_SERVICE_DEFAULT,
@@ -220,6 +222,7 @@ class PartitionServiceLifecycleMethods {
       this.cdcSubscribers.clear();
       this.cdcSubscriberWrappers.clear();
       this.cdcSubscriberStates.clear();
+      clearRemoteLiveQueryCdcSubscribers(this);
       this.cdcSubscriptionEpoch = 0;
       this.cdcEventSequenceNumber = 0;
       this.cdcBufferReplayDelayMs =

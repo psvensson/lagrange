@@ -11,5 +11,6 @@ documentClass: generated
 - [live-query-group-helpers.js](live-query-group-helpers.js) - Helper utilities and extracted functions for Live Query Group. (importers: few)
 - [live-query-group.js](live-query-group.js) - QueryGroup manages clients with identical queries sharing CDC subscriptions. (importers: many)
 - [live-query-manager.js](live-query-manager.js) - Live Query Manager - Manages live query subscriptions and query grouping. (importers: few)
+- [live-query-remote-cdc.js](live-query-remote-cdc.js) - Remote PartitionService CDC subscription and failover helpers for live query startup wiring. (importers: one)
 - [live-query-service.js](live-query-service.js) - Live Query Service - Core service for real-time streaming queries. (importers: many)
 - [live-query-startup-wiring.js](live-query-startup-wiring.js) - Live query startup wiring helpers. (importers: few)

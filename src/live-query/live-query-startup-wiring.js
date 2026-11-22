@@ -9,6 +9,7 @@ import {LoggingService} from '../logging/logging-service.js';
 import {CDC_OPERATION, TABLES} from '../constants/index.js';
 import {LiveQueryManager} from './live-query-manager.js';
 import {LIVE_QUERY_SUBSYSTEM} from './live-query-constants.js';
+import {createRemoteLiveQueryCdcCoordinator} from './live-query-remote-cdc.js';
 
 const PARTITION_ID_FIELD = 'partition_id';
 const TABLE_NAME_FIELD = 'table_name';
@@ -342,10 +343,22 @@ function normalizePartitionCDCEvent(rawEvent, partitionId) {
   };
 }
 
+function findPartitionInCollection(container, partitionId) {
+  const direct = container?.get?.(partitionId);
+  if (direct) return direct;
+  if (!container?.values) return null;
+  let followerMatch = null;
+  for (const service of container.values()) {
+    if (service?.partitionId !== partitionId || service.isShutdown) continue;
+    if (service.isLeader !== false) return service;
+    if (!followerMatch) followerMatch = service;
+  }
+  return followerMatch;
+}
+
 function getFromProvider(provider, partitionId) {
   if (typeof provider !== 'function') return null;
-  const container = provider();
-  return container?.get?.(partitionId) || null;
+  return findPartitionInCollection(provider(), partitionId);
 }
 
 /**
@@ -382,36 +395,26 @@ async function trySubscribeViaPartition(partition, queryId, handler, subOptions)
   return {handled: false};
 }
 
-/**
- * Create startup-owned live query wiring for one node.
- * @param {Object} [options]
- * @param {string} [options.nodeId]
- * @param {Object|null} [options.systemTableCache]
- * @param {Object|null} [options.sqlQueryEngine]
- * @return {{liveQueryManager: LiveQueryManager, shutdown: Function}}
- */
-function createLiveQueryStartupWiring(options = {}) {
-  const liveQueryManager = new LiveQueryManager({
-    nodeId: options.nodeId,
-    systemCache: options.systemTableCache || null,
-    sqlQueryEngine: options.sqlQueryEngine || null,
-  });
+function createWrappedCdcHandler(handler, partitionId) {
+  return async (events) => {
+    let answer;
+    for (const rawEvent of events) {
+      answer = await handler(normalizePartitionCDCEvent(rawEvent, partitionId));
+    }
+    return answer;
+  };
+}
 
-  const cacheSubscriptionAdapter = createLiveQueryCacheSubscriptionAdapter({
-    systemTableCache: options.systemTableCache || null,
-    onPartitionTopologyChange: (change) => {
-      return liveQueryManager.handlePartitionTopologyChange(change);
-    },
-  });
-
-  /** @type {Map<string, Function>} */
-  const partitionSubscribers = new Map();
-
-  const subscribeToPartition = async (partitionId, queryId, handler, subOptions = {}) => {
-    if (typeof options.subscribeToPartition === 'function') {
+function subscribePartitionWithOptions(options, {
+  partitionSubscribers,
+  subscriptionAdapter,
+  getRemoteCdc,
+}) {
+  return async (partitionId, queryId, handler, subOptions = {}) => {
+    if (options.subscribeToPartition) {
       return await options.subscribeToPartition(partitionId, queryId, handler, subOptions);
     }
-    if (typeof options.partitionService?.subscribeToPartition === 'function') {
+    if (options.partitionService?.subscribeToPartition) {
       return await options.partitionService.subscribeToPartition(
         partitionId, queryId, handler, subOptions,
       );
@@ -421,48 +424,111 @@ function createLiveQueryStartupWiring(options = {}) {
     // events an ordered vector: every member reaches the query's handler in
     // order, and the answer is the handler's for the last member (a vector of
     // one, as the non-durable producer hands it, keeps its answer).
-    const wrappedHandler = async (events) => {
-      let answer;
-      for (const rawEvent of events) {
-        answer = await handler(normalizePartitionCDCEvent(rawEvent, partitionId));
-      }
-      return answer;
-    };
+    const wrappedHandler = createWrappedCdcHandler(handler, partitionId);
     partitionSubscribers.set(subKey, wrappedHandler);
 
+    const remoteCdc = getRemoteCdc();
     const partition = resolvePartition(options, partitionId);
-    const subResult = await trySubscribeViaPartition(
-      partition, queryId, wrappedHandler, subOptions,
-    );
-    if (subResult.handled) {
-      return subResult.result;
+    const remoteTarget = remoteCdc.resolveRemoteTarget(partitionId);
+    if (partition && (partition.isLeader !== false || !remoteTarget)) {
+      const subResult = await trySubscribeViaPartition(
+        partition, queryId, wrappedHandler, subOptions,
+      );
+      if (subResult.handled) {
+        remoteCdc.trackLocal(
+          partitionId, queryId, partition, handler, wrappedHandler, subOptions,
+        );
+        return subResult.result;
+      }
     }
-    return cacheSubscriptionAdapter.subscribeToPartition(partitionId, queryId, handler);
+    const remoteResult = await remoteCdc.subscribeRemote(
+      partitionId, queryId, handler, wrappedHandler, subOptions, remoteTarget,
+    );
+    if (remoteResult.handled) {
+      return remoteResult.result;
+    }
+    return subscriptionAdapter.subscribeToPartition(partitionId, queryId, handler);
   };
+}
 
-  const unsubscribeFromPartition = async (partitionId, queryId) => {
-    if (typeof options.unsubscribeFromPartition === 'function') {
+function unsubscribePartitionWithOptions(options, {
+  partitionSubscribers,
+  subscriptionAdapter,
+  getRemoteCdc,
+}) {
+  return async (partitionId, queryId) => {
+    if (options.unsubscribeFromPartition) {
       return await options.unsubscribeFromPartition(partitionId, queryId);
     }
-    if (typeof options.partitionService?.unsubscribeFromPartition === 'function') {
+    if (options.partitionService?.unsubscribeFromPartition) {
       return await options.partitionService.unsubscribeFromPartition(partitionId, queryId);
     }
     const subKey = `${queryId}:${partitionId}`;
     const wrappedHandler = partitionSubscribers.get(subKey);
     partitionSubscribers.delete(subKey);
 
-    const partition = resolvePartition(options, partitionId);
-    if (partition && typeof partition.unsubscribeFromCDC === 'function') {
+    const {localSub} = getRemoteCdc().unsubscribeTracked(partitionId, queryId);
+    const partition = localSub?.partition || resolvePartition(options, partitionId);
+    if (partition?.unsubscribeFromCDC) {
       partition.unsubscribeFromCDC(wrappedHandler || queryId);
     }
-    return cacheSubscriptionAdapter.unsubscribeFromPartition(partitionId, queryId);
+    return subscriptionAdapter.unsubscribeFromPartition(partitionId, queryId);
   };
+}
+
+/**
+ * Create startup-owned live query wiring for one node.
+ * @param {Object} [options]
+ * @param {string} [options.nodeId]
+ * @param {Object|null} [options.systemTableCache]
+ * @param {Object|null} [options.sqlQueryEngine]
+ * @return {{liveQueryManager: LiveQueryManager, shutdown: Function}}
+ */
+function createLiveQueryStartupWiring(options = {}) {
+  const logger = initLogger();
+  const liveQueryManager = new LiveQueryManager({
+    nodeId: options.nodeId,
+    systemCache: options.systemTableCache,
+    sqlQueryEngine: options.sqlQueryEngine,
+  });
+
+  /** @type {Map<string, Function>} */
+  const partitionSubscribers = new Map();
+  let remoteCdc = null;
+
+  const cacheSubscriptionAdapter = createLiveQueryCacheSubscriptionAdapter({
+    systemTableCache: options.systemTableCache,
+    onPartitionTopologyChange: async (change) => {
+      await liveQueryManager.handlePartitionTopologyChange(change);
+      await remoteCdc?.reconcileSubscriptionsOnTopologyChange(change);
+    },
+  });
+
+  const handlerContext = {
+    partitionSubscribers,
+    subscriptionAdapter: cacheSubscriptionAdapter,
+    getRemoteCdc: () => remoteCdc,
+  };
+  const subscribeToPartition = subscribePartitionWithOptions(options, handlerContext);
+  const unsubscribeFromPartition = unsubscribePartitionWithOptions(options, handlerContext);
+
+  remoteCdc = createRemoteLiveQueryCdcCoordinator({
+    nodeId: options.nodeId,
+    metadataStore: options.systemTableCache,
+    messageRouter: options.messageRouter,
+    findGroupById: (id) => liveQueryManager.findGroupByQueryId(id),
+    partitionSubscribers,
+    resolveLocalPartition: (partitionId) => resolvePartition(options, partitionId),
+    subscribeToPartition,
+    unsubscribeFromPartition,
+    logger,
+  });
 
   liveQueryManager.initialize({
-    systemCache: options.systemTableCache || null,
-    sqlQueryEngine: options.sqlQueryEngine || null,
-    partitionService: options.partitionService || null,
-    partitionServicesProvider: options.partitionServicesProvider || null,
+    systemCache: options.systemTableCache,
+    sqlQueryEngine: options.sqlQueryEngine,
+    partitionService: options.partitionService,
+    partitionServicesProvider: options.partitionServicesProvider,
     subscribeToPartition,
     unsubscribeFromPartition,
   });
@@ -473,6 +539,7 @@ function createLiveQueryStartupWiring(options = {}) {
       return;
     }
     shutdownCompleted = true;
+    remoteCdc.shutdown();
     partitionSubscribers.clear();
     cacheSubscriptionAdapter.shutdown();
     liveQueryManager.shutdown();
