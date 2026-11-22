@@ -8,6 +8,7 @@ import {
   PARTITION_COMMITTED_COMMAND_ERROR_CODE,
   PARTITION_COMMITTED_COMMAND_HOST_FAILURE_REASON,
   PARTITION_COMMITTED_COMMAND_OUTCOME,
+  PARTITION_SERVICE_MESSAGE_TYPE as SERVICE_MSG_TYPE,
 } from './partition-service-constants.js';
 import {
   REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMNS,
@@ -42,6 +43,10 @@ import {applyCommittedTransactionCommand, settleReservedCommittedStatement} from
   './partition-participant-transaction-apply.js';
 import {requestCoordinatorSettlement, applyCoordinatorSettlement} from
   './partition-coordinator-settlement.js';
+import {
+  handleRemoteLiveQueryCdcSubscribe,
+  handleRemoteLiveQueryCdcUnsubscribe,
+} from './partition-live-query-cdc-remote.js';
 import {COORDINATOR_SETTLEMENT_TYPE} from './partition-coordinator-settlement-constants.js';
 import {requestPlacementRepair, applyPlacementCommand, requestPlacementAdmission} from
   './partition-placement-admission.js';
@@ -93,6 +98,8 @@ const OWNER_COMMITTED_COMMAND_HANDLERS = Object.freeze({
   [PLACEMENT_REPAIR_TYPE]: requestPlacementRepair,
   [PLACEMENT_REPAIR_PREPARE_TYPE]: requestPlacementRepairPreparation,
   [FORMATION_TRANSITION_TYPE]: requestFormationTransition,
+  [SERVICE_MSG_TYPE.LIVE_QUERY_CDC_SUBSCRIBE]: handleRemoteLiveQueryCdcSubscribe,
+  [SERVICE_MSG_TYPE.LIVE_QUERY_CDC_UNSUBSCRIBE]: handleRemoteLiveQueryCdcUnsubscribe,
 });
 
 const NON_SQL_COMMITTED_APPLIERS = Object.freeze([

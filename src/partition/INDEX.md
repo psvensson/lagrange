@@ -79,6 +79,7 @@ documentClass: generated
 - [partition-leader-publication-criticality.js](partition-leader-publication-criticality.js) - The single owner of the "does this partitions.leader_node_id publication ride the critical delivery lane?" decision... (importers: few)
 - [partition-legacy-consensus-state-constants.js](partition-legacy-consensus-state-constants.js) - Vocabulary of the legacy partition consensus-state detector (partition-legacy-consensus-state.js). (importers: few)
 - [partition-legacy-consensus-state.js](partition-legacy-consensus-state.js) - Legacy partition consensus-state detector. (importers: few)
+- [partition-live-query-cdc-remote.js](partition-live-query-cdc-remote.js) - Remote live-query CDC subscription handlers for PartitionService. (importers: few)
 - [partition-local-mutation-admission.js](partition-local-mutation-admission.js) - Direct local mutation has no replicated outcome. (importers: one)
 - [partition-local-service-status-contract.js](partition-local-service-status-contract.js) - Canonical producer contract and runtime conformance validator for PartitionLocalServiceStatusRecord. (importers: few)
 - [partition-locking-read-reservation.js](partition-locking-read-reservation.js) - Participant write-intent reservation and fail-fast lock conflict handling for PostgreSQL SELECT ... (importers: many)

@@ -217,6 +217,8 @@ class PartitionCDCGenerator {
         timestamp: entry.timestamp,
         sourcePartition: this.partitionId,
         sourceReplica: options.sourceReplica ?? this.replicaId,
+        ...(Number.isFinite(entry.logIndex) ? {logIndex: entry.logIndex} : {}),
+        ...(Number.isFinite(entry.term) ? {term: entry.term} : {}),
       }),
     });
   }

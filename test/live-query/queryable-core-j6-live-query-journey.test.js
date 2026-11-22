@@ -17,9 +17,12 @@ import Database from 'better-sqlite3';
 import {createLiveQueryStartupWiring} from '../../src/live-query/live-query-startup-wiring.js';
 import {QueryGroup} from '../../src/live-query/live-query-group.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+import {MessageRouter} from '../../src/transport/message-router.js';
+import {TABLES} from '../../src/constants/index.js';
 import {
   compilePredicate,
 } from '../../src/live-query/live-query-service.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 import {
   startLeader,
   applyCommitted,
@@ -393,5 +396,273 @@ describe('Unit J6: Live query results committed CDC delivery and lifecycle', () 
 
     assert.equal(sqlEngine.callCount, initialQueryCount, 'ZERO background SELECT reads while idle');
     wiring.liveQueryManager.unregisterLiveQuery(reg.queryId, client.id);
+  });
+});
+
+function createRemoteTopologyCache(tables, getPartitions, getReplicas) {
+  const listeners = new Set();
+  const tableMap = new Map(tables.map((t) => [t.table_name, t]));
+  return {
+    onCacheChange: (listener) => listeners.add(listener),
+    offCacheChange: (listener) => listeners.delete(listener),
+    emitCacheChange: (tableName, operation, record) => {
+      for (const listener of listeners) {
+        listener(tableName, operation, record);
+      }
+    },
+    get: (table, key) => {
+      if (table === TABLES.TABLES) return tableMap.get(key) || null;
+      if (table === TABLES.PARTITIONS) {
+        return getPartitions().find((p) => p.partition_id === key) || null;
+      }
+      return null;
+    },
+    find: (table, pred) => {
+      if (table === TABLES.TABLES) return tables.find(pred) || null;
+      if (table === TABLES.PARTITIONS) return getPartitions().find(pred) || null;
+      return null;
+    },
+    filter: (table, pred) => {
+      if (table === TABLES.PARTITIONS) return getPartitions().filter(pred || (() => true));
+      if (table === TABLES.PARTITION_REPLICAS) return getReplicas().filter(pred || (() => true));
+      return [];
+    },
+  };
+}
+
+async function createBridgedRouters(nodeIds, capturedCdcDeliveries) {
+  const routers = new Map();
+  for (const nodeId of nodeIds) {
+    const router = new MessageRouter({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      nodeId,
+      inProcess: true,
+    });
+    await router.initialize({startServer: false});
+    routers.set(nodeId, router);
+  }
+  for (const router of routers.values()) {
+    router.deliverRemote = async (
+      targetAddress, messageId, payload, targetNodeId, correlationId, opts,
+    ) => {
+      if (payload?.type === 'LIVE_QUERY_CDC_EVENT') {
+        capturedCdcDeliveries.push(payload);
+      }
+      const peer = routers.get(targetNodeId);
+      if (!peer || !peer.initialized) {
+        return {result: {messageId, correlationId, acknowledged: false, error: 'offline'}, queueWaitMs: 0};
+      }
+      if (!peer.handlers.get(targetAddress)) {
+        return {result: {messageId, correlationId, acknowledged: false, noHandler: true, error: 'noHandler'}, queueWaitMs: 0};
+      }
+      return peer.deliverLocal(
+        targetAddress,
+        messageId,
+        payload,
+        correlationId,
+        {timeoutMs: opts?.timeoutMs},
+      );
+    };
+  }
+  return routers;
+}
+
+function applyClientMessageToView(rowMap, msg) {
+  if (msg.type === 'snapshot' || msg.type === 'reset') {
+    rowMap.clear();
+    for (const row of msg.rows || []) rowMap.set(row.id, row);
+    return;
+  }
+  if (msg.type === 'insert') {
+    rowMap.set(msg.row.id, msg.row);
+    return;
+  }
+  if (msg.type === 'update') {
+    rowMap.set(msg.new.id, msg.new);
+    return;
+  }
+  if (msg.type === 'delete') {
+    rowMap.delete(msg.row.id);
+  }
+}
+
+async function waitForMessageMatch(predicate, timeoutMs = 1500) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate()) return true;
+    await new Promise((r) => setTimeout(r, 15));
+  }
+  return predicate();
+}
+
+describe('Unit J6: Multi-node remote producer CDC delivery and leader failover', () => {
+  let oracleDb;
+  let routers;
+  let leaderB;
+  let leaderC;
+  let wiringA;
+
+  beforeEach(() => {
+    resetFixtureSingletons();
+    oracleDb = new Database(':memory:');
+    oracleDb.exec(`
+      CREATE TABLE live_orders (
+        id INTEGER PRIMARY KEY,
+        customer TEXT,
+        status TEXT,
+        total INTEGER,
+        secret_note TEXT
+      );
+    `);
+  });
+
+  afterEach(async () => {
+    wiringA?.shutdown();
+    if (leaderB) await leaderB.shutdown();
+    if (leaderC) await leaderC.shutdown();
+    if (routers) {
+      for (const router of routers.values()) {
+        if (router.initialized) await router.shutdown();
+      }
+    }
+    oracleDb?.close();
+    clearFixtureSingletons();
+  });
+
+  it('pushes remote PartitionService CDC over MessageRouter, survives leader failover, and unsubscribes cleanly', async () => {
+    const capturedCdcDeliveries = [];
+    routers = await createBridgedRouters(['node-a', 'node-b', 'node-c'], capturedCdcDeliveries);
+    const routerA = routers.get('node-a');
+    const routerB = routers.get('node-b');
+    const routerC = routers.get('node-c');
+
+    ({leader: leaderB} = await startLeader({
+      tableName: 'live_orders',
+      schema: TABLE_SCHEMA,
+      nodeId: 'node-b',
+      replicaId: 'p1',
+      transport: routerB,
+    }, 'p1'));
+    ({leader: leaderC} = await startLeader({
+      tableName: 'live_orders',
+      schema: TABLE_SCHEMA,
+      nodeId: 'node-c',
+      replicaId: 'p1',
+      transport: routerC,
+    }, 'p1'));
+
+    let currentPartitions = [{
+      partition_id: 'p1',
+      table_name: 'live_orders',
+      partition_key_start: null,
+      partition_key_end: null,
+      partition_key_type: 'INTEGER',
+      leader_node_id: 'node-b',
+    }];
+    let currentReplicas = [{partition_id: 'p1', node_id: 'node-b'}];
+    const systemCache = createRemoteTopologyCache(
+      TABLES_METADATA,
+      () => currentPartitions,
+      () => currentReplicas,
+    );
+
+    const parserEngine = new SQLQueryEngine();
+    const sqlEngine = {
+      callCount: 0,
+      parse: (sql) => parserEngine.parse(sql),
+      executeQuery: async (sql, params = []) => {
+        sqlEngine.callCount += 1;
+        const rows = oracleDb.prepare(sql).all(...params);
+        return {rows, results: rows, count: rows.length};
+      },
+    };
+
+    wiringA = createLiveQueryStartupWiring({
+      nodeId: 'node-a',
+      systemTableCache: systemCache,
+      sqlQueryEngine: sqlEngine,
+      partitionServicesProvider: () => new Map(),
+      messageRouter: routerA,
+    });
+
+    const client = createMockClient('remote-client');
+    const observedRows = new Map();
+    const origSend = client.send;
+    client.send = (msg) => {
+      origSend(msg);
+      applyClientMessageToView(observedRows, client.messages[client.messages.length - 1]);
+    };
+
+    const sql = 'SELECT id, customer, total FROM live_orders WHERE status = \'OPEN\'';
+    const reg = await wiringA.liveQueryManager.registerLiveQuery(sql, client);
+    assert.equal(sqlEngine.callCount, 1, 'initial snapshot executes once');
+    assert.equal(leaderB.cdcSubscribers.size, 1, 'Node B partition has remote subscriber');
+    assert.equal(leaderC.cdcSubscribers.size, 0, 'Node C partition has no subscriber yet');
+
+    const commitOnLeader = async (leader, entryId, statementSql, params, expectedMsgCount) => {
+      oracleDb.prepare(statementSql).run(...params);
+      applyCommitted(leader, {...committedQueryOf(entryId, statementSql), params});
+      const delivered = await waitForMessageMatch(() => client.messages.length >= expectedMsgCount);
+      assert.ok(delivered, `expected client message ${expectedMsgCount} for ${entryId}`);
+      const sortedObserved = Array.from(observedRows.values()).sort((a, b) => a.id - b.id);
+      assert.deepEqual(sortedObserved, oracleDb.prepare(`${sql} ORDER BY id`).all());
+    };
+
+    await commitOnLeader(
+      leaderB,
+      'rw1',
+      'INSERT INTO live_orders (id, customer, status, total, secret_note) VALUES (?, ?, ?, ?, ?)',
+      [1, 'Alice', 'OPEN', 100, 's1'],
+      2,
+    );
+    await commitOnLeader(
+      leaderB, 'rw2', 'UPDATE live_orders SET total = ? WHERE id = ?', [250, 1], 3,
+    );
+    await commitOnLeader(
+      leaderB,
+      'rw3',
+      'INSERT INTO live_orders (id, customer, status, total, secret_note) VALUES (?, ?, ?, ?, ?)',
+      [2, 'Bob', 'OPEN', 300, 's2'],
+      4,
+    );
+    await commitOnLeader(
+      leaderB, 'rw4', 'DELETE FROM live_orders WHERE id = ?', [2], 5,
+    );
+
+    assert.equal(sqlEngine.callCount, 1, 'incremental remote CDC updates perform zero polling reads');
+    assert.equal(capturedCdcDeliveries.length, 4, 'all 4 mutations pushed over MessageRouter');
+    for (const delivery of capturedCdcDeliveries) {
+      assert.ok(delivery.events.length > 0, 'delivered CDC vector non-empty');
+      for (const evt of delivery.events) {
+        assert.ok(Number.isFinite(evt.logIndex), 'CDC event carries committed Raft logIndex');
+      }
+    }
+
+    const idleBaselineCalls = sqlEngine.callCount;
+    await new Promise((r) => setTimeout(r, 80));
+    assert.equal(sqlEngine.callCount, idleBaselineCalls, 'zero background polling reads during idle');
+
+    // Fail over p1 leadership from node-b to node-c.
+    currentPartitions = [{...currentPartitions[0], leader_node_id: 'node-c'}];
+    currentReplicas = [{partition_id: 'p1', node_id: 'node-c'}];
+    systemCache.emitCacheChange(TABLES.PARTITIONS, 'UPDATE', currentPartitions[0]);
+
+    const rebound = await waitForMessageMatch(
+      () => leaderB.cdcSubscribers.size === 0 && leaderC.cdcSubscribers.size === 1,
+    );
+    assert.ok(rebound, 'wiringA re-binds remote CDC subscription from node-b to node-c');
+
+    const msgCountBeforeFailoverWrite = client.messages.length;
+    await commitOnLeader(
+      leaderC,
+      'rw5',
+      'INSERT INTO live_orders (id, customer, status, total, secret_note) VALUES (?, ?, ?, ?, ?)',
+      [3, 'Carol', 'OPEN', 400, 's3'],
+      msgCountBeforeFailoverWrite + 1,
+    );
+
+    wiringA.liveQueryManager.unregisterLiveQuery(reg.queryId, client.id);
+    const unsubscribed = await waitForMessageMatch(() => leaderC.cdcSubscribers.size === 0);
+    assert.ok(unsubscribed, 'Node A sent LIVE_QUERY_CDC_UNSUBSCRIBE to Node C on unregister');
   });
 });
