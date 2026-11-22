@@ -98,8 +98,8 @@ import {
   stagePreparedParticipantRowKeys,
 } from './partition-participant-transaction-session.js';
 import {
-  releaseDbTransactionReservations,
-  releaseTransactionReservations,
+  clearPartitionTransactionMemoryReservations,
+  releaseDbPartitionTransactionReservations,
 } from './partition-locking-read-reservation.js';
 
 // The private value that ends a PREPARE's dry run: thrown inside its
@@ -250,9 +250,16 @@ function preparedRowOf(committed, fields) {
 // Steps 3, 6 and 7: a REFUSED row, a control row that never moves g.
 function refusePrepare(service, committed, {cause, detail}) {
   clearPreparedParticipantRowKeys(service, committed.command.participantId);
-  releaseDbTransactionReservations(service.db, committed.command.transactionId);
+  releaseDbPartitionTransactionReservations(
+    service.db,
+    service.partitionId,
+    committed.command.transactionId,
+  );
   committed.afterCommit(() =>
-    releaseTransactionReservations(committed.command.transactionId, {db: null}));
+    clearPartitionTransactionMemoryReservations(
+      service.partitionId,
+      committed.command.transactionId,
+    ));
   committed.afterRollback(() => resetParticipantRowKeyHistory(service));
   insertParticipantTransactionRow(service.db, preparedRowOf(committed,
     {state: STATE.REFUSED, refusalCause: cause, refusalDetail: detail}));
@@ -418,9 +425,16 @@ function scheduleCommitEffects(service, committed, operations, events) {
 // The reservation is released with the row's move out of PREPARED: the
 // writes the leader parked meanwhile are re-admitted after the commit.
 function releaseReservation(service, committed) {
-  releaseDbTransactionReservations(service.db, committed.command.transactionId);
+  releaseDbPartitionTransactionReservations(
+    service.db,
+    service.partitionId,
+    committed.command.transactionId,
+  );
   committed.afterCommit(() => {
-    releaseTransactionReservations(committed.command.transactionId, {db: null});
+    clearPartitionTransactionMemoryReservations(
+      service.partitionId,
+      committed.command.transactionId,
+    );
     if (!isPartitionReserved(service.db)) {
       readmitReservedWrites(service);
     }
@@ -592,9 +606,9 @@ function decideAbsent(service, committed) {
       participantOutcomeOf(null));
   }
   clearPreparedParticipantRowKeys(service, command.participantId);
-  releaseDbTransactionReservations(service.db, command.transactionId);
+  releaseDbPartitionTransactionReservations(service.db, service.partitionId, command.transactionId);
   committed.afterCommit(() =>
-    releaseTransactionReservations(command.transactionId, {db: null}));
+    clearPartitionTransactionMemoryReservations(service.partitionId, command.transactionId));
   committed.afterRollback(() => resetParticipantRowKeyHistory(service));
   insertParticipantTransactionRow(service.db, {
     transactionId: command.transactionId,

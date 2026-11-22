@@ -27,8 +27,11 @@ import {
   deleteExpiredDbReservations,
   deleteOwnedDbRowReservation,
   ensureLockingReadTableInitialized,
+  hasDbSessionReservations,
   hasDbTransactionReservations,
   listDbTableReservationConflicts,
+  releaseDbPartitionSessionReservations,
+  releaseDbPartitionTransactionReservations,
   releaseDbSessionReservations,
   releaseDbTransactionReservations,
   truncateDbReservations,
@@ -40,8 +43,11 @@ const STORE_OPTION_DB_FIELD = 'db';
 export {
   LOCKING_READ_RESERVATION_KIND,
   ensureLockingReadTableInitialized,
+  hasDbSessionReservations,
   hasDbTransactionReservations,
   listDbTableReservationConflicts,
+  releaseDbPartitionSessionReservations,
+  releaseDbPartitionTransactionReservations,
   releaseDbSessionReservations,
   releaseDbTransactionReservations,
 };
@@ -289,6 +295,91 @@ function handleReentrantUpgrade(options) {
   return conflictOutcome;
 }
 
+/**
+ * Record an observation mirror entry in process-local maps after authoritative
+ * durable SQLite persistence has already committed.
+ *
+ * @param {Object|null} record - Reservation record.
+ */
+export function recordCommittedReservationMirror(record) {
+  if (record?.transactionId && record?.rowKey) {
+    trackMemoryReservation(record.transactionId, record.rowKey, record);
+  }
+}
+
+function acquireDbOnlyForUpdateInTx(store, options, record) {
+  const storeOutcome = checkStoreReservation(store, {
+    partitionId: options.partitionId,
+    tableName: options.tableName,
+    rowKey: record.rowKey,
+    transactionId: options.transactionId,
+  });
+  if (storeOutcome !== null) {
+    return storeOutcome;
+  }
+  const write = upsertDbReservation(store, record);
+  if (!write.ok) {
+    return createReservationUnavailableResult({
+      rowKey: record.rowKey,
+      partitionId: options.partitionId,
+      tableName: options.tableName,
+      transactionId: options.transactionId,
+      message: write.error,
+    });
+  }
+  return {
+    success: true,
+    outcome: LOCKING_READ_RESERVATION_OUTCOME.ACQUIRED,
+    rowKey: record.rowKey,
+    record,
+  };
+}
+
+function acquireAuthoritativeForUpdateInTx(store, options, record) {
+  if (options.authoritativeDbOnly === true) {
+    return acquireDbOnlyForUpdateInTx(store, options, record);
+  }
+  const storeOutcome = checkStoreReservation(store, {
+    partitionId: options.partitionId,
+    tableName: options.tableName,
+    rowKey: record.rowKey,
+    transactionId: options.transactionId,
+  });
+  const existing = RESERVATIONS.get(record.rowKey) || null;
+  const conflictOutcome = evaluateReservationConflict(
+    storeOutcome,
+    existing,
+    options.transactionId,
+    record.rowKey,
+  );
+  if (conflictOutcome !== null) {
+    return handleReentrantUpgrade({
+      conflictOutcome,
+      storeOutcome,
+      existing,
+      record,
+      kind: LOCKING_READ_RESERVATION_KIND.FOR_UPDATE,
+      store,
+    });
+  }
+  const write = upsertDbReservation(store, record);
+  if (!write.ok) {
+    return createReservationUnavailableResult({
+      rowKey: record.rowKey,
+      partitionId: options.partitionId,
+      tableName: options.tableName,
+      transactionId: options.transactionId,
+      message: write.error,
+    });
+  }
+  trackMemoryReservation(options.transactionId, record.rowKey, record);
+  return {
+    success: true,
+    outcome: LOCKING_READ_RESERVATION_OUTCOME.ACQUIRED,
+    rowKey: record.rowKey,
+  };
+}
+
 function acquireAuthoritativeForUpdate(store, options, record) {
   if (!store || store.open === false) {
     return createReservationUnavailableResult({
@@ -299,47 +390,7 @@ function acquireAuthoritativeForUpdate(store, options, record) {
     });
   }
   try {
-    return store.transaction(() => {
-      const storeOutcome = checkStoreReservation(store, {
-        partitionId: options.partitionId,
-        tableName: options.tableName,
-        rowKey: record.rowKey,
-        transactionId: options.transactionId,
-      });
-      const existing = RESERVATIONS.get(record.rowKey) || null;
-      const conflictOutcome = evaluateReservationConflict(
-        storeOutcome,
-        existing,
-        options.transactionId,
-        record.rowKey,
-      );
-      if (conflictOutcome !== null) {
-        return handleReentrantUpgrade({
-          conflictOutcome,
-          storeOutcome,
-          existing,
-          record,
-          kind: LOCKING_READ_RESERVATION_KIND.FOR_UPDATE,
-          store,
-        });
-      }
-      const write = upsertDbReservation(store, record);
-      if (!write.ok) {
-        return createReservationUnavailableResult({
-          rowKey: record.rowKey,
-          partitionId: options.partitionId,
-          tableName: options.tableName,
-          transactionId: options.transactionId,
-          message: write.error,
-        });
-      }
-      trackMemoryReservation(options.transactionId, record.rowKey, record);
-      return {
-        success: true,
-        outcome: LOCKING_READ_RESERVATION_OUTCOME.ACQUIRED,
-        rowKey: record.rowKey,
-      };
-    })();
+    return store.transaction(() => acquireAuthoritativeForUpdateInTx(store, options, record))();
   } catch (err) {
     return createReservationUnavailableResult({
       rowKey: record.rowKey,
@@ -489,6 +540,62 @@ export function releaseSpecificRowReservations(entries) {
   }
 }
 
+/**
+ * Clear ONLY process-local in-memory reservations for one partition and transaction.
+ * Never touches PARTITION_DBS or any other partition.
+ *
+ * @param {string} partitionId - Partition identifier.
+ * @param {string} transactionId - Transaction identifier.
+ * @return {number} Count of released in-memory reservations.
+ */
+export function clearPartitionTransactionMemoryReservations(partitionId, transactionId) {
+  if (!partitionId || !transactionId) {
+    return 0;
+  }
+  let released = 0;
+  const txSet = TRANSACTION_RESERVATIONS.get(transactionId);
+  if (!txSet) {
+    return 0;
+  }
+  for (const rowKey of [...txSet]) {
+    const existing = RESERVATIONS.get(rowKey);
+    const ownedInPartition = existing &&
+      existing.partitionId === partitionId &&
+      existing.transactionId === transactionId;
+    if (ownedInPartition) {
+      RESERVATIONS.delete(rowKey);
+      txSet.delete(rowKey);
+      released += 1;
+    }
+  }
+  if (txSet.size === 0) {
+    TRANSACTION_RESERVATIONS.delete(transactionId);
+  }
+  return released;
+}
+
+/**
+ * Clear ONLY process-local in-memory reservations for one partition and session.
+ * Never touches PARTITION_DBS or any other partition.
+ *
+ * @param {string} partitionId - Partition identifier.
+ * @param {string} sessionId - Session identifier.
+ * @return {number} Count of released in-memory reservations.
+ */
+export function clearPartitionSessionMemoryReservations(partitionId, sessionId) {
+  if (!partitionId || !sessionId) {
+    return 0;
+  }
+  let released = 0;
+  for (const [rowKey, rec] of [...RESERVATIONS.entries()]) {
+    if (rec.partitionId === partitionId && rec.sessionId === sessionId) {
+      untrackMemoryRow(rowKey, rec.transactionId);
+      released += 1;
+    }
+  }
+  return released;
+}
+
 function releaseMemoryTransactionReservations(transactionId) {
   let released = 0;
   const txSet = TRANSACTION_RESERVATIONS.get(transactionId);
@@ -505,9 +612,12 @@ function releaseMemoryTransactionReservations(transactionId) {
   return released;
 }
 
-function releaseStoreTransactionReservations(transactionId, explicitDb) {
+function releaseStoreTransactionReservations(transactionId, explicitDb, hasExplicitDbProp) {
   if (explicitDb && explicitDb.open !== false) {
     releaseDbTransactionReservations(explicitDb, transactionId);
+  }
+  if (hasExplicitDbProp && explicitDb === null) {
+    return;
   }
   for (const store of PARTITION_DBS.values()) {
     if (store && store.open !== false && store !== explicitDb) {
@@ -528,32 +638,40 @@ export function releaseTransactionReservations(transactionId, options = {}) {
   if (!transactionId) {
     return 0;
   }
+  const partitionId = options.partitionId || null;
+  if (partitionId) {
+    const released = clearPartitionTransactionMemoryReservations(partitionId, transactionId);
+    if (options.db && options.db.open !== false) {
+      releaseDbPartitionTransactionReservations(options.db, partitionId, transactionId);
+    }
+    return released;
+  }
   const released = releaseMemoryTransactionReservations(transactionId);
-  releaseStoreTransactionReservations(transactionId, options.db || null);
+  releaseStoreTransactionReservations(
+    transactionId,
+    options.db || null,
+    Object.hasOwn(options, STORE_OPTION_DB_FIELD),
+  );
   return released;
 }
 
 function releaseMemorySessionReservations(sessionId) {
   let released = 0;
-  for (const [rowKey, rec] of RESERVATIONS.entries()) {
+  for (const [rowKey, rec] of [...RESERVATIONS.entries()]) {
     if (rec.sessionId === sessionId) {
-      RESERVATIONS.delete(rowKey);
-      const txSet = TRANSACTION_RESERVATIONS.get(rec.transactionId);
-      if (txSet) {
-        txSet.delete(rowKey);
-        if (txSet.size === 0) {
-          TRANSACTION_RESERVATIONS.delete(rec.transactionId);
-        }
-      }
+      untrackMemoryRow(rowKey, rec.transactionId);
       released += 1;
     }
   }
   return released;
 }
 
-function releaseStoreSessionReservations(sessionId, explicitDb) {
+function releaseStoreSessionReservations(sessionId, explicitDb, hasExplicitDbProp) {
   if (explicitDb && explicitDb.open !== false) {
     releaseDbSessionReservations(explicitDb, sessionId);
+  }
+  if (hasExplicitDbProp && explicitDb === null) {
+    return;
   }
   for (const store of PARTITION_DBS.values()) {
     if (store && store.open !== false && store !== explicitDb) {
@@ -574,8 +692,20 @@ export function releaseSessionReservations(sessionId, options = {}) {
   if (!sessionId) {
     return 0;
   }
+  const partitionId = options.partitionId || null;
+  if (partitionId) {
+    const released = clearPartitionSessionMemoryReservations(partitionId, sessionId);
+    if (options.db && options.db.open !== false) {
+      releaseDbPartitionSessionReservations(options.db, partitionId, sessionId);
+    }
+    return released;
+  }
   const released = releaseMemorySessionReservations(sessionId);
-  releaseStoreSessionReservations(sessionId, options.db || null);
+  releaseStoreSessionReservations(
+    sessionId,
+    options.db || null,
+    Object.hasOwn(options, STORE_OPTION_DB_FIELD),
+  );
   return released;
 }
 

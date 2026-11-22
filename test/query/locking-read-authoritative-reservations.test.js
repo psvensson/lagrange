@@ -1212,6 +1212,36 @@ test('Witness 2: per-participant release clears ONLY target partition reservatio
     });
     assert.equal(rel2.success, true);
     assert.equal(countDbReservations(p2.db), 0);
+
+    // Also verify partition-scoped release inside a shared SQLite DB only deletes the target partition.
+    const sharedDb = new Database(':memory:');
+    try {
+      acquireRowReservation({
+        tableName: ACCOUNTS_TABLE,
+        partitionId: 'accounts-p1',
+        pkValues: [1],
+        transactionId: txId,
+        sessionId,
+        kind: 'FOR_UPDATE',
+        db: sharedDb,
+      });
+      acquireRowReservation({
+        tableName: ACCOUNTS_TABLE,
+        partitionId: 'accounts-p2',
+        pkValues: [150],
+        transactionId: txId,
+        sessionId,
+        kind: 'FOR_UPDATE',
+        db: sharedDb,
+      });
+      assert.equal(countDbReservations(sharedDb), 2);
+      releaseTransactionReservations(txId, {db: sharedDb, partitionId: 'accounts-p1'});
+      assert.equal(countDbReservations(sharedDb), 1);
+      releaseTransactionReservations(txId, {db: sharedDb, partitionId: 'accounts-p2'});
+      assert.equal(countDbReservations(sharedDb), 0);
+    } finally {
+      sharedDb.close();
+    }
   } finally {
     await groupP1.dispose().catch(() => {});
     await groupP2.dispose().catch(() => {});

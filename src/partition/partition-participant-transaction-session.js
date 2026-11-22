@@ -674,7 +674,8 @@ function openParticipantSession(service, identity, base) {
   const schemaVersionBase = resolveTablePkMetadata(service).schemaVersion;
   const session = {
     identity: Object.freeze({...identity}), operations: [], compiledOperations: [],
-    touchedRowKeys: new Set(), hasUnscopedWrite: false, bytes: 0,
+    touchedRowKeys: new Set(), hasUnscopedWrite: false,
+    stagedLockClaims: {rowKeys: new Set(), hasUnscopedWrite: false}, bytes: 0,
     generationBase: base.generationBase, lastValidatedGeneration: base.generationBase,
     lastValidatedSchemaVersion: null, schemaVersionBase, originIndex: base.originIndex,
     startedAt: service.timeSource.now(), phase: PHASE.ACTIVE, sealed: null,
@@ -703,6 +704,7 @@ function participantRoutingSessionCollision(service, sessionId) {
       isParticipantSessionPrepared(service.db, sessionId));
 }
 
+const listActiveParticipantSessions = (service) => SESSIONS.get(service)?.values() ?? [];
 const hasParticipantSession = (service) => (SESSIONS.get(service)?.size ?? 0) > 0;
 const participantTransactionActive = (service) =>
   hasParticipantSession(service) || isPartitionReserved(service.db);
@@ -784,15 +786,13 @@ function sweepParticipantTransactionHolds(service, nowMs) {
 
 export {
   canAdmitConcurrentParticipantSession, canAdvanceCommittedValidationText,
-  canAdvanceRowKeySessionGeneration, checkAndRecordSessionRowKey,
-  clearPreparedParticipantRowKeys, discardParticipantSessions,
-  endParticipantSession, extractOperationsRowKeyFootprint,
-  findParticipantSession, getRetainedRowKeyHistoryStats,
-  hasParticipantSession, inspectRetainedPreparedObligations,
-  isPartitionReservedForPrepare, isRowKeyConcurrencyEnabled,
-  openParticipantSession, participantRoutingSessionCollision,
+  canAdvanceRowKeySessionGeneration, checkAndRecordSessionRowKey, clearPreparedParticipantRowKeys,
+  discardParticipantSessions, endParticipantSession, extractOperationsRowKeyFootprint,
+  findParticipantSession, getRetainedRowKeyHistoryStats, hasParticipantSession,
+  inspectRetainedPreparedObligations, isPartitionReservedForPrepare, isRowKeyConcurrencyEnabled,
+  listActiveParticipantSessions, openParticipantSession, participantRoutingSessionCollision,
   participantTransactionActive, recordCommittedAutocommitRowKeys,
-  recordCommittedParticipantRowKeys, resetParticipantRowKeyHistory,
-  revertSessionRowKeyCheck, stagePreparedParticipantRowKeys,
-  sweepParticipantTransactionHolds, waitForConflictingRowKeyHolderToSettle,
+  recordCommittedParticipantRowKeys, resetParticipantRowKeyHistory, revertSessionRowKeyCheck,
+  stagePreparedParticipantRowKeys, sweepParticipantTransactionHolds,
+  waitForConflictingRowKeyHolderToSettle,
 };
