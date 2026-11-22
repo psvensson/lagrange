@@ -87,6 +87,11 @@ registerFormationPartitionApplyHooks({
   startPartitionRaftWriteCommit,
 });
 import {recordCommittedWriteTraffic} from './partition-write-traffic.js';
+import {
+  applyLockingReadReservationCommand,
+  requestLockingReadReservation,
+} from './partition-locking-read-service.js';
+import {LOCKING_READ_RESERVATION_TYPE} from './partition-locking-read-command-constants.js';
 const COMMIT_APPLY_EFFECT_PHASE = Object.freeze({
   COMMIT: 'afterCommit',
   ROLLBACK: 'afterRollback',
@@ -100,12 +105,14 @@ const OWNER_COMMITTED_COMMAND_HANDLERS = Object.freeze({
   [FORMATION_TRANSITION_TYPE]: requestFormationTransition,
   [SERVICE_MSG_TYPE.LIVE_QUERY_CDC_SUBSCRIBE]: handleRemoteLiveQueryCdcSubscribe,
   [SERVICE_MSG_TYPE.LIVE_QUERY_CDC_UNSUBSCRIBE]: handleRemoteLiveQueryCdcUnsubscribe,
+  [LOCKING_READ_RESERVATION_TYPE]: requestLockingReadReservation,
 });
 
 const NON_SQL_COMMITTED_APPLIERS = Object.freeze([
   [(type) => type === COORDINATOR_SETTLEMENT_TYPE, applyCoordinatorSettlement],
   [(type) => PLACEMENT_COMMAND_TYPES.includes(type), applyPlacementCommand],
   [(type) => type === FORMATION_TRANSITION_TYPE, applyFormationTransitionCommand],
+  [(type) => type === LOCKING_READ_RESERVATION_TYPE, applyLockingReadReservationCommand],
   [isCdcCommandType, applyCdcAcknowledgementCommand],
   [(type) => !isCommittedSqlCommandType(type), applyCommittedTransactionCommand],
 ]);
@@ -445,20 +452,16 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
    * @private
    */
   isRemovalServingRequestType(type) {
-    switch (type) {
-    case PARTITION_SERVICE_MESSAGE_TYPE.FORWARD_WRITE:
-    case PARTITION_SERVICE_MESSAGE_TYPE.SYSTEM_TABLE_WRITE:
-    case PARTITION_SERVICE_MESSAGE_TYPE.QUERY:
-    case PARTITION_SERVICE_MESSAGE_TYPE.TRANSACTION:
-    case COORDINATOR_SETTLEMENT_TYPE:
-    case PLACEMENT_REPAIR_PREPARE_TYPE:
-    case PLACEMENT_REPAIR_TYPE:
-    case PLACEMENT_ADMIT_TYPE:
-    case FORMATION_TRANSITION_TYPE:
-      return true;
-    default:
-      return false;
-    }
+    return type === PARTITION_SERVICE_MESSAGE_TYPE.FORWARD_WRITE ||
+      type === PARTITION_SERVICE_MESSAGE_TYPE.SYSTEM_TABLE_WRITE ||
+      type === PARTITION_SERVICE_MESSAGE_TYPE.QUERY ||
+      type === PARTITION_SERVICE_MESSAGE_TYPE.TRANSACTION ||
+      type === COORDINATOR_SETTLEMENT_TYPE ||
+      type === PLACEMENT_REPAIR_PREPARE_TYPE ||
+      type === PLACEMENT_REPAIR_TYPE ||
+      type === PLACEMENT_ADMIT_TYPE ||
+      type === FORMATION_TRANSITION_TYPE ||
+      type === LOCKING_READ_RESERVATION_TYPE;
   }
 
   /**

@@ -1,36 +1,54 @@
 /**
  * Participant write-intent reservation and fail-fast lock conflict handling
- * for PostgreSQL SELECT ... FOR UPDATE (Stages B3–B5, J4).
+ * for PostgreSQL SELECT ... FOR UPDATE (Stages B3–B5, J4, 0.4.1 authoritative).
  *
- * Implements Phase 0.3 locking read policy:
+ * Implements authoritative locking read policy:
  * - Deterministic fail-fast row key reservations (${tableName}:${partitionId}:${JSON.stringify(pkValues)})
  * - No wait queues (waitQueue: false)
  * - Conflict refusal with sqlState: 55P03 (LOCK_NOT_AVAILABLE)
- * - Durable/replicated reservations until transaction resolution (localExpiry: forbidden)
+ * - Authoritative SQLite persistence required for FOR_UPDATE (fail closed if unavailable)
  * - Re-entrant reservation by the same transaction
  * - Automatic release on COMMIT, ROLLBACK, timeout, cancellation, or recovery
- * - Durable participant SQLite mirroring via _lagrange_locking_read_reservations
  *
  * @module partition/partition-locking-read-reservation
  */
 
 import {
   LOCKING_READ_ERROR_CODE,
-  LOCKING_READ_SQL_STATE,
-  LOCKING_READ_RESERVATION_KIND,
+  LOCKING_READ_ERROR_MSG,
   LOCKING_READ_LOCAL_EXPIRY,
+  LOCKING_READ_RESERVATION_KIND,
   LOCKING_READ_RESERVATION_OUTCOME,
+  LOCKING_READ_SQL_STATE,
 } from '../query/sql-locking-read-constants.js';
-import {sqliteConnectionState} from '../storage/sqlite-connection-state.js';
 import {encodeCanonicalPkTupleKey} from './partition-write-footprint-contract.js';
+import {
+  checkDbRowReservation,
+  deleteExpiredDbReservations,
+  deleteOwnedDbRowReservation,
+  ensureLockingReadTableInitialized,
+  hasDbTransactionReservations,
+  listDbTableReservationConflicts,
+  releaseDbSessionReservations,
+  releaseDbTransactionReservations,
+  truncateDbReservations,
+  upsertDbReservation,
+} from './partition-locking-read-store.js';
+
+const STORE_OPTION_DB_FIELD = 'db';
 
 export {
   LOCKING_READ_RESERVATION_KIND,
+  ensureLockingReadTableInitialized,
+  hasDbTransactionReservations,
+  listDbTableReservationConflicts,
+  releaseDbSessionReservations,
+  releaseDbTransactionReservations,
 };
 
 const DEFAULT_UNKNOWN_ROW_KEY = 'unknown';
 
-// Map<rowKey, ReservationRecord>
+// Map<rowKey, ReservationRecord> (process-local mirror cache; SQLite is authoritative)
 const RESERVATIONS = new Map();
 
 // Map<transactionId, Set<rowKey>>
@@ -38,69 +56,6 @@ const TRANSACTION_RESERVATIONS = new Map();
 
 // Map<partitionId, Database>
 const PARTITION_DBS = new Map();
-
-// WeakSet<Database>
-const INITIALIZED_DBS = new WeakSet();
-
-const RESERVATION_SQL = Object.freeze({
-  DDL: `
-    CREATE TABLE IF NOT EXISTS _lagrange_locking_read_reservations (
-      partition_id TEXT NOT NULL,
-      table_name TEXT NOT NULL,
-      row_key TEXT NOT NULL,
-      transaction_id TEXT NOT NULL,
-      session_id TEXT,
-      epoch INTEGER DEFAULT 0,
-      reserved_at INTEGER NOT NULL,
-      expires_at INTEGER,
-      PRIMARY KEY (partition_id, table_name, row_key)
-    );
-    CREATE INDEX IF NOT EXISTS idx_lagrange_locking_tx
-      ON _lagrange_locking_read_reservations (transaction_id);
-    CREATE INDEX IF NOT EXISTS idx_lagrange_locking_session
-      ON _lagrange_locking_read_reservations (session_id);
-  `,
-  SELECT_ROW:
-    'SELECT transaction_id, expires_at FROM _lagrange_locking_read_reservations WHERE partition_id = ? AND table_name = ? AND row_key = ?',
-  DELETE_ROW:
-    'DELETE FROM _lagrange_locking_read_reservations WHERE partition_id = ? AND table_name = ? AND row_key = ?',
-  DELETE_EXPIRED:
-    'DELETE FROM _lagrange_locking_read_reservations WHERE expires_at IS NOT NULL AND expires_at <= ?',
-  DELETE_BY_TRANSACTION:
-    'DELETE FROM _lagrange_locking_read_reservations WHERE transaction_id = ?',
-  DELETE_BY_SESSION:
-    'DELETE FROM _lagrange_locking_read_reservations WHERE session_id = ?',
-  DELETE_ALL:
-    'DELETE FROM _lagrange_locking_read_reservations',
-  UPSERT_ROW: `
-    INSERT INTO _lagrange_locking_read_reservations
-      (partition_id, table_name, row_key, transaction_id, session_id, epoch, reserved_at, expires_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT (partition_id, table_name, row_key)
-      DO UPDATE SET
-        transaction_id = excluded.transaction_id,
-        session_id = excluded.session_id,
-        epoch = excluded.epoch,
-        reserved_at = excluded.reserved_at,
-        expires_at = excluded.expires_at
-  `,
-});
-
-/**
- * Ensure the reservation table exists on a partition database.
- *
- * @param {Object} db - SQLite database instance.
- */
-function ensureTableInitialized(db) {
-  if (!db || db.open === false || INITIALIZED_DBS.has(db)) return false;
-  try {
-    db.exec(RESERVATION_SQL.DDL);
-    INITIALIZED_DBS.add(db);
-    return true;
-  } catch (_err) {
-    return false;
-  }
-}
 
 /**
  * Derive the canonical row lock key for a primary-key tuple on a partition.
@@ -110,7 +65,7 @@ function ensureTableInitialized(db) {
  * @param {Array<*>|*} pkValues - Declared primary-key values tuple.
  * @return {string} Canonical row lock key.
  */
-function deriveRowLockKey(tableName, partitionId, pkValues) {
+export function deriveRowLockKey(tableName, partitionId, pkValues) {
   return `${tableName}:${partitionId}:${encodeCanonicalPkTupleKey(pkValues)}`;
 }
 
@@ -136,13 +91,27 @@ export function createLockConflictResult(details = {}) {
 }
 
 /**
- * Resolve conflict or reentrancy outcome for an existing reservation record.
+ * Create a typed reservation-unavailable failure object when the authoritative
+ * reservation store or leader path cannot admit/persist a lock.
  *
- * @param {Object} existing - Existing reservation record.
- * @param {string} transactionId - Current transaction ID.
- * @param {string} rowKey - Canonical row lock key.
- * @return {Object} Outcome result.
+ * @param {Object} [details={}] - Failure details.
+ * @return {Object} Fail-closed reservation failure result.
  */
+export function createReservationUnavailableResult(details = {}) {
+  const hasMessage = typeof details.message === 'string' && details.message.length > 0;
+  const error = hasMessage ? details.message : LOCKING_READ_ERROR_MSG.RESERVATION_STORE_UNAVAILABLE;
+  return {
+    success: false,
+    unavailable: true,
+    outcome: LOCKING_READ_RESERVATION_OUTCOME.UNAVAILABLE,
+    error,
+    errorCode: LOCKING_READ_ERROR_CODE.RESERVATION_UNAVAILABLE,
+    code: LOCKING_READ_ERROR_CODE.RESERVATION_UNAVAILABLE,
+    sqlState: LOCKING_READ_SQL_STATE.INTERNAL_ERROR,
+    ...details,
+  };
+}
+
 function resolveExistingReservationOutcome(existing, transactionId, rowKey) {
   if (existing.transactionId === transactionId) {
     return {
@@ -162,75 +131,6 @@ function resolveExistingReservationOutcome(existing, transactionId, rowKey) {
 }
 
 /**
- * Check if a reservation exists and conflicts in the partition database.
- *
- * @param {Object} db - SQLite database instance.
- * @param {Object} options - Match options.
- * @return {Object|null}
- */
-function checkDbReservation(db, {partitionId, tableName, rowKey, transactionId}) {
-  ensureTableInitialized(db);
-  const now = Date.now();
-  let existing;
-  try {
-    existing = sqliteConnectionState(db).statement(RESERVATION_SQL.SELECT_ROW).get(
-      partitionId,
-      tableName,
-      rowKey,
-    );
-  } catch (_err) {
-    return null;
-  }
-
-  if (!existing) return null;
-
-  if (typeof existing.expires_at === 'number' &&
-      existing.expires_at > 0 &&
-      existing.expires_at <= now) {
-    try {
-      sqliteConnectionState(db).statement(RESERVATION_SQL.DELETE_ROW).run(
-        partitionId,
-        tableName,
-        rowKey,
-      );
-    } catch (_err) {
-      return null;
-    }
-    return null;
-  }
-
-  if (existing.transaction_id === transactionId) {
-    return {conflict: false, reentrant: true, rowKey};
-  }
-  return {conflict: true, rowKey, conflictingTransactionId: existing.transaction_id};
-}
-
-/**
- * Insert or update a reservation in the partition database.
- *
- * @param {Object} db - SQLite database instance.
- * @param {Object} record - Reservation record.
- */
-function insertDbReservation(db, record) {
-  ensureTableInitialized(db);
-  try {
-    sqliteConnectionState(db).statement(RESERVATION_SQL.UPSERT_ROW).run(
-      record.partitionId,
-      record.tableName,
-      record.rowKey,
-      record.transactionId,
-      record.sessionId,
-      record.epoch || 0,
-      record.acquiredAt,
-      record.expiresAt || null,
-    );
-    return true;
-  } catch (_err) {
-    return false;
-  }
-}
-
-/**
  * Register a partition SQLite database for reservation persistence and sweeping.
  *
  * @param {string} partitionId - Partition identifier.
@@ -239,37 +139,39 @@ function insertDbReservation(db, record) {
 export function registerPartitionDatabase(partitionId, db) {
   if (partitionId && db && typeof db.prepare === 'function') {
     PARTITION_DBS.set(partitionId, db);
-    ensureTableInitialized(db);
+    ensureLockingReadTableInitialized(db, {readOnly: false});
   }
 }
 
-/**
- * Resolve active partition store if available.
- *
- * @param {string} partitionId - Partition identifier.
- * @param {Object|null} explicitDb - Optional explicit database.
- * @return {Object|null}
- */
-function resolvePartitionStore(partitionId, explicitDb) {
+function resolvePartitionStore(partitionId, explicitDb, hasExplicitDbProp) {
+  if (hasExplicitDbProp && explicitDb === null) {
+    return null;
+  }
   const store = explicitDb || PARTITION_DBS.get(partitionId) || null;
   if (store && store.open !== false) {
-    registerPartitionDatabase(partitionId, store);
+    PARTITION_DBS.set(partitionId, store);
     return store;
   }
   return null;
 }
 
-/**
- * Evaluate store check result into a reservation outcome.
- *
- * @param {Object|null} dbCheck - Raw database check.
- * @param {string} rowKey - Canonical row lock key.
- * @return {Object|null}
- */
+function formatReentrantOutcome(rowKey) {
+  return {
+    success: true,
+    outcome: LOCKING_READ_RESERVATION_OUTCOME.ALREADY_OWNED,
+    rowKey,
+    reentrant: true,
+  };
+}
+
 function evaluateStoreDbCheck(dbCheck, rowKey) {
   if (!dbCheck) {
     return null;
-  } else if (dbCheck.conflict) {
+  }
+  if (dbCheck.error) {
+    return createReservationUnavailableResult({rowKey, message: dbCheck.message});
+  }
+  if (dbCheck.conflict) {
     return {
       success: false,
       conflict: true,
@@ -277,38 +179,17 @@ function evaluateStoreDbCheck(dbCheck, rowKey) {
       rowKey,
       conflictingTransactionId: dbCheck.conflictingTransactionId,
     };
-  } else if (dbCheck.reentrant) {
-    return {
-      success: true,
-      outcome: LOCKING_READ_RESERVATION_OUTCOME.ALREADY_OWNED,
-      rowKey,
-      reentrant: true,
-    };
   }
-  return null;
+  return dbCheck.reentrant ? formatReentrantOutcome(rowKey) : null;
 }
 
-/**
- * Check partition store for conflict or reentrancy.
- *
- * @param {Object|null} store - Partition database.
- * @param {Object} query - Query parameters.
- * @return {Object|null}
- */
 function checkStoreReservation(store, query) {
   if (!store) {
     return null;
   }
-  return evaluateStoreDbCheck(checkDbReservation(store, query), query.rowKey);
+  return evaluateStoreDbCheck(checkDbRowReservation(store, query), query.rowKey);
 }
 
-/**
- * Track an acquired reservation in memory.
- *
- * @param {string} transactionId - Owning transaction ID.
- * @param {string} rowKey - Canonical row lock key.
- * @param {Object} record - Reservation record.
- */
 function trackMemoryReservation(transactionId, rowKey, record) {
   RESERVATIONS.set(rowKey, record);
   let txSet = TRANSACTION_RESERVATIONS.get(transactionId);
@@ -319,15 +200,20 @@ function trackMemoryReservation(transactionId, rowKey, record) {
   txSet.add(rowKey);
 }
 
-/**
- * Build a canonical reservation record object.
- *
- * @param {Object} options - Acquisition options.
- * @param {string} rowKey - Canonical row lock key.
- * @param {number} now - Acquisition timestamp.
- * @param {number|null} expiresAt - Expiry timestamp.
- * @return {Object} Record.
- */
+function untrackMemoryRow(rowKey, transactionId) {
+  const existing = RESERVATIONS.get(rowKey);
+  if (existing && existing.transactionId === transactionId) {
+    RESERVATIONS.delete(rowKey);
+  }
+  const txSet = TRANSACTION_RESERVATIONS.get(transactionId);
+  if (txSet) {
+    txSet.delete(rowKey);
+    if (txSet.size === 0) {
+      TRANSACTION_RESERVATIONS.delete(transactionId);
+    }
+  }
+}
+
 function buildReservationRecord(options, rowKey, now, expiresAt) {
   const {
     tableName,
@@ -355,61 +241,123 @@ function buildReservationRecord(options, rowKey, now, expiresAt) {
   };
 }
 
-/**
- * Evaluate conflict against existing partition store or memory reservation.
- * Uses if-else-if structure to maintain single decision boundary.
- *
- * @param {Object|null} storeOutcome - Conflict check from store.
- * @param {Object|null} existing - In-memory existing reservation.
- * @param {string} transactionId - Current transaction ID.
- * @param {string} rowKey - Canonical row lock key.
- * @return {Object|null}
- */
 function evaluateReservationConflict(storeOutcome, existing, transactionId, rowKey) {
   if (storeOutcome) {
     return storeOutcome;
-  } else if (existing) {
+  }
+  if (existing) {
     return resolveExistingReservationOutcome(existing, transactionId, rowKey);
   }
   return null;
 }
 
-function upgradeReentrantReservationIfNeeded(
-  conflictOutcome,
-  existing,
-  requestedKind,
-  store,
-  expiresAt,
-) {
-  if (conflictOutcome.reentrant === true &&
-      existing &&
-      requestedKind === LOCKING_READ_RESERVATION_KIND.FOR_UPDATE &&
-      existing.kind !== LOCKING_READ_RESERVATION_KIND.FOR_UPDATE) {
+function handleReentrantUpgrade(options) {
+  const {conflictOutcome, storeOutcome, existing, record, kind, store} = options;
+  if (conflictOutcome.unavailable) {
+    return conflictOutcome;
+  }
+  const missingFromStoreOrNonForUpdate = !storeOutcome ||
+    !existing ||
+    existing.kind !== LOCKING_READ_RESERVATION_KIND.FOR_UPDATE;
+  const needsUpgrade = conflictOutcome.reentrant === true &&
+    kind === LOCKING_READ_RESERVATION_KIND.FOR_UPDATE &&
+    missingFromStoreOrNonForUpdate;
+  if (!needsUpgrade) {
+    return conflictOutcome;
+  }
+  if (!store || store.open === false) {
+    return createReservationUnavailableResult({rowKey: record.rowKey});
+  }
+  const write = upsertDbReservation(store, {
+    ...record,
+    kind: LOCKING_READ_RESERVATION_KIND.FOR_UPDATE,
+  });
+  if (!write.ok) {
+    return createReservationUnavailableResult({rowKey: record.rowKey, message: write.error});
+  }
+  if (existing) {
     existing.kind = LOCKING_READ_RESERVATION_KIND.FOR_UPDATE;
-    if (expiresAt !== null) {
-      existing.expiresAt = expiresAt;
+    if (record.expiresAt !== null) {
+      existing.expiresAt = record.expiresAt;
     }
-    if (store) {
-      insertDbReservation(store, existing);
-    }
+  } else {
+    trackMemoryReservation(record.transactionId, record.rowKey, {
+      ...record,
+      kind: LOCKING_READ_RESERVATION_KIND.FOR_UPDATE,
+    });
+  }
+  return conflictOutcome;
+}
+
+function acquireAuthoritativeForUpdate(store, options, record) {
+  if (!store || store.open === false) {
+    return createReservationUnavailableResult({
+      rowKey: record.rowKey,
+      partitionId: options.partitionId,
+      tableName: options.tableName,
+      transactionId: options.transactionId,
+    });
+  }
+  try {
+    return store.transaction(() => {
+      const storeOutcome = checkStoreReservation(store, {
+        partitionId: options.partitionId,
+        tableName: options.tableName,
+        rowKey: record.rowKey,
+        transactionId: options.transactionId,
+      });
+      const existing = RESERVATIONS.get(record.rowKey) || null;
+      const conflictOutcome = evaluateReservationConflict(
+        storeOutcome,
+        existing,
+        options.transactionId,
+        record.rowKey,
+      );
+      if (conflictOutcome !== null) {
+        return handleReentrantUpgrade({
+          conflictOutcome,
+          storeOutcome,
+          existing,
+          record,
+          kind: LOCKING_READ_RESERVATION_KIND.FOR_UPDATE,
+          store,
+        });
+      }
+      const write = upsertDbReservation(store, record);
+      if (!write.ok) {
+        return createReservationUnavailableResult({
+          rowKey: record.rowKey,
+          partitionId: options.partitionId,
+          tableName: options.tableName,
+          transactionId: options.transactionId,
+          message: write.error,
+        });
+      }
+      trackMemoryReservation(options.transactionId, record.rowKey, record);
+      return {
+        success: true,
+        outcome: LOCKING_READ_RESERVATION_OUTCOME.ACQUIRED,
+        rowKey: record.rowKey,
+      };
+    })();
+  } catch (err) {
+    return createReservationUnavailableResult({
+      rowKey: record.rowKey,
+      partitionId: options.partitionId,
+      tableName: options.tableName,
+      transactionId: options.transactionId,
+      message: err?.message || String(err),
+    });
   }
 }
 
 /**
  * Attempt to acquire a row write-intent reservation for a transaction.
- * Fail-fast without waiting (waitQueue: false).
+ * Fail-fast without waiting (waitQueue: false). For FOR_UPDATE, authoritative
+ * SQLite persistence is mandatory and failures fail closed without phantom
+ * in-memory state.
  *
  * @param {Object} options - Acquisition options.
- * @param {string} options.tableName - Table name.
- * @param {string} options.partitionId - Partition identifier.
- * @param {Array<*>|*} options.pkValues - Declared primary key tuple.
- * @param {string} options.transactionId - Owning transaction ID.
- * @param {string} [options.sessionId] - Owning session ID.
- * @param {string} [options.participantId] - Enlisted participant ID.
- * @param {string} [options.kind] - FOR_UPDATE or WRITE_STAGED.
- * @param {Object} [options.db] - Partition SQLite database.
- * @param {number} [options.holdTimeoutMs] - Hold timeout in ms.
- * @param {number} [options.epoch] - Transaction epoch.
  * @return {Object} Acquisition outcome.
  */
 export function acquireRowReservation(options) {
@@ -421,19 +369,28 @@ export function acquireRowReservation(options) {
     kind = LOCKING_READ_RESERVATION_KIND.FOR_UPDATE,
   } = options;
   const rowKey = deriveRowLockKey(tableName, partitionId, pkValues);
-  const store = resolvePartitionStore(partitionId, options.db);
+  const store = resolvePartitionStore(
+    partitionId,
+    options.db,
+    Object.hasOwn(options, STORE_OPTION_DB_FIELD),
+  );
+  const now = Date.now();
+  const expiresAt = typeof options.holdTimeoutMs === 'number' && options.holdTimeoutMs > 0 ?
+    now + options.holdTimeoutMs :
+    null;
+  const record = buildReservationRecord(options, rowKey, now, expiresAt);
+
+  if (kind === LOCKING_READ_RESERVATION_KIND.FOR_UPDATE) {
+    return acquireAuthoritativeForUpdate(store, options, record);
+  }
+
   const storeOutcome = checkStoreReservation(store, {
     partitionId,
     tableName,
     rowKey,
     transactionId,
   });
-  const existing = RESERVATIONS.get(rowKey);
-  const now = Date.now();
-  const expiresAt = typeof options.holdTimeoutMs === 'number' && options.holdTimeoutMs > 0 ?
-    now + options.holdTimeoutMs :
-    null;
-
+  const existing = RESERVATIONS.get(rowKey) || null;
   const conflictOutcome = evaluateReservationConflict(
     storeOutcome,
     existing,
@@ -441,17 +398,9 @@ export function acquireRowReservation(options) {
     rowKey,
   );
   if (conflictOutcome !== null) {
-    upgradeReentrantReservationIfNeeded(conflictOutcome, existing, kind, store, expiresAt);
     return conflictOutcome;
   }
-
-  const record = buildReservationRecord(options, rowKey, now, expiresAt);
-
   trackMemoryReservation(transactionId, rowKey, record);
-  if (store && record.kind === LOCKING_READ_RESERVATION_KIND.FOR_UPDATE) {
-    insertDbReservation(store, record);
-  }
-
   return {
     success: true,
     outcome: LOCKING_READ_RESERVATION_OUTCOME.ACQUIRED,
@@ -459,17 +408,26 @@ export function acquireRowReservation(options) {
   };
 }
 
+function checkMemoryReservationConflict(rowKey, transactionId, onlyForUpdate) {
+  const existing = RESERVATIONS.get(rowKey);
+  if (!existing || existing.transactionId === transactionId) {
+    return null;
+  }
+  if (onlyForUpdate && existing.kind !== LOCKING_READ_RESERVATION_KIND.FOR_UPDATE) {
+    return null;
+  }
+  return {
+    conflict: true,
+    rowKey,
+    conflictingTransactionId: existing.transactionId,
+  };
+}
+
 /**
  * Check whether a row lock key conflicts with another active transaction.
  *
  * @param {Object} options - Check options.
- * @param {string} options.tableName - Table name.
- * @param {string} options.partitionId - Partition identifier.
- * @param {Array<*>|*} options.pkValues - Declared primary key tuple.
- * @param {string|null} [options.transactionId] - Current transaction ID (if any).
- * @param {Object|null} [options.db] - Partition SQLite database.
- * @param {boolean} [options.onlyForUpdate] - Only conflict on FOR_UPDATE reservations.
- * @return {{conflict: boolean, rowKey: string, conflictingTransactionId?: string}}
+ * @return {{conflict: boolean, rowKey: string, conflictingTransactionId?: string, unavailable?: boolean}}
  */
 export function checkRowReservationConflict({
   tableName,
@@ -480,9 +438,12 @@ export function checkRowReservationConflict({
   onlyForUpdate = false,
 }) {
   const rowKey = deriveRowLockKey(tableName, partitionId, pkValues);
-  const store = resolvePartitionStore(partitionId, db);
+  const store = resolvePartitionStore(partitionId, db, db !== null);
   if (store) {
-    const dbCheck = checkDbReservation(store, {partitionId, tableName, rowKey, transactionId});
+    const dbCheck = checkDbRowReservation(store, {partitionId, tableName, rowKey, transactionId});
+    if (dbCheck?.error) {
+      return {conflict: false, unavailable: true, error: dbCheck.message, rowKey};
+    }
     if (dbCheck?.conflict) {
       return {
         conflict: true,
@@ -491,46 +452,43 @@ export function checkRowReservationConflict({
       };
     }
   }
-
-  const existing = RESERVATIONS.get(rowKey);
-  if (existing &&
-      existing.transactionId !== transactionId &&
-      (!onlyForUpdate || existing.kind === LOCKING_READ_RESERVATION_KIND.FOR_UPDATE)) {
-    return {
-      conflict: true,
-      rowKey,
-      conflictingTransactionId: existing.transactionId,
-    };
-  }
-
-  return {conflict: false, rowKey};
+  return checkMemoryReservationConflict(rowKey, transactionId, onlyForUpdate) ||
+    {conflict: false, rowKey};
 }
 
 /**
- * Release reservations on a SQLite database for a transaction.
+ * Find the first conflicting FOR_UPDATE reservation on a table/partition in SQLite.
  *
- * @param {Object} db - SQLite database.
- * @param {string} transactionId - Transaction identifier.
- * @return {number} Count of deleted rows.
+ * @param {Object} db - SQLite database instance.
+ * @param {Object} options - {partitionId, tableName, transactionId}.
+ * @return {Object|null}
  */
-function releaseDbTransactionReservations(db, transactionId) {
-  try {
-    ensureTableInitialized(db);
-    const info = sqliteConnectionState(db).statement(RESERVATION_SQL.DELETE_BY_TRANSACTION).run(
-      transactionId,
-    );
-    return info.changes;
-  } catch (_err) {
-    return 0;
+export function findTableDbReservationConflict(db, {partitionId, tableName, transactionId}) {
+  const listed = listDbTableReservationConflicts(db, {partitionId, tableName, transactionId});
+  if (!listed.ok) {
+    return {error: true, message: listed.error};
   }
+  return listed.rows[0] || null;
 }
 
 /**
- * Release reservations in memory for a transaction.
+ * Release specific row reservations in memory and optional local DB.
  *
- * @param {string} transactionId - Transaction identifier.
- * @return {number} Count of released in-memory records.
+ * @param {Array<{partitionId: string, tableName: string, rowKey: string, transactionId: string, db?: Object}>} entries
  */
+export function releaseSpecificRowReservations(entries) {
+  if (!Array.isArray(entries)) {
+    return;
+  }
+  for (const entry of entries) {
+    untrackMemoryRow(entry.rowKey, entry.transactionId);
+    const store = entry.db || PARTITION_DBS.get(entry.partitionId) || null;
+    if (store && store.open !== false) {
+      deleteOwnedDbRowReservation(store, entry);
+    }
+  }
+}
+
 function releaseMemoryTransactionReservations(transactionId) {
   let released = 0;
   const txSet = TRANSACTION_RESERVATIONS.get(transactionId);
@@ -547,12 +505,6 @@ function releaseMemoryTransactionReservations(transactionId) {
   return released;
 }
 
-/**
- * Release reservations across all registered partition databases for a transaction.
- *
- * @param {string} transactionId - Transaction identifier.
- * @param {Object|null} explicitDb - Optional explicit database.
- */
 function releaseStoreTransactionReservations(transactionId, explicitDb) {
   if (explicitDb && explicitDb.open !== false) {
     releaseDbTransactionReservations(explicitDb, transactionId);
@@ -570,41 +522,17 @@ function releaseStoreTransactionReservations(transactionId, explicitDb) {
  *
  * @param {string} transactionId - Transaction identifier.
  * @param {Object} [options] - Release options.
- * @param {Object} [options.db] - Partition database.
- * @return {number} Count of released reservations.
+ * @return {number} Count of released in-memory reservations.
  */
 export function releaseTransactionReservations(transactionId, options = {}) {
-  if (!transactionId) return 0;
+  if (!transactionId) {
+    return 0;
+  }
   const released = releaseMemoryTransactionReservations(transactionId);
   releaseStoreTransactionReservations(transactionId, options.db || null);
   return released;
 }
 
-/**
- * Release reservations on a SQLite database for a session.
- *
- * @param {Object} db - SQLite database.
- * @param {string} sessionId - Session identifier.
- * @return {number} Count of deleted rows.
- */
-function releaseDbSessionReservations(db, sessionId) {
-  try {
-    ensureTableInitialized(db);
-    const info = sqliteConnectionState(db).statement(RESERVATION_SQL.DELETE_BY_SESSION).run(
-      sessionId,
-    );
-    return info.changes;
-  } catch (_err) {
-    return 0;
-  }
-}
-
-/**
- * Release reservations in memory for a session.
- *
- * @param {string} sessionId - Session identifier.
- * @return {number} Count of released in-memory records.
- */
 function releaseMemorySessionReservations(sessionId) {
   let released = 0;
   for (const [rowKey, rec] of RESERVATIONS.entries()) {
@@ -613,7 +541,9 @@ function releaseMemorySessionReservations(sessionId) {
       const txSet = TRANSACTION_RESERVATIONS.get(rec.transactionId);
       if (txSet) {
         txSet.delete(rowKey);
-        if (txSet.size === 0) TRANSACTION_RESERVATIONS.delete(rec.transactionId);
+        if (txSet.size === 0) {
+          TRANSACTION_RESERVATIONS.delete(rec.transactionId);
+        }
       }
       released += 1;
     }
@@ -621,12 +551,6 @@ function releaseMemorySessionReservations(sessionId) {
   return released;
 }
 
-/**
- * Release reservations across all registered partition databases for a session.
- *
- * @param {string} sessionId - Session identifier.
- * @param {Object|null} explicitDb - Optional explicit database.
- */
 function releaseStoreSessionReservations(sessionId, explicitDb) {
   if (explicitDb && explicitDb.open !== false) {
     releaseDbSessionReservations(explicitDb, sessionId);
@@ -644,11 +568,12 @@ function releaseStoreSessionReservations(sessionId, explicitDb) {
  *
  * @param {string} sessionId - Session identifier.
  * @param {Object} [options] - Release options.
- * @param {Object} [options.db] - Partition database.
  * @return {number} Count of released reservations.
  */
 export function releaseSessionReservations(sessionId, options = {}) {
-  if (!sessionId) return 0;
+  if (!sessionId) {
+    return 0;
+  }
   const released = releaseMemorySessionReservations(sessionId);
   releaseStoreSessionReservations(sessionId, options.db || null);
   return released;
@@ -661,16 +586,7 @@ export function releaseSessionReservations(sessionId, options = {}) {
  * @return {number} Count of swept reservations.
  */
 export function sweepExpiredReservations(db) {
-  if (!db || db.open === false) return 0;
-  try {
-    ensureTableInitialized(db);
-    const info = sqliteConnectionState(db).statement(RESERVATION_SQL.DELETE_EXPIRED).run(
-      Date.now(),
-    );
-    return info.changes;
-  } catch (_err) {
-    return 0;
-  }
+  return deleteExpiredDbReservations(db, Date.now());
 }
 
 /**
@@ -680,51 +596,62 @@ export function sweepExpiredReservations(db) {
  * @return {Array<Object>} List of reservation records.
  */
 export function getTransactionReservations(transactionId) {
-  if (!transactionId) return [];
+  if (!transactionId) {
+    return [];
+  }
   const txSet = TRANSACTION_RESERVATIONS.get(transactionId);
-  if (!txSet) return [];
+  if (!txSet) {
+    return [];
+  }
   const results = [];
   for (const rowKey of txSet) {
     const rec = RESERVATIONS.get(rowKey);
-    if (rec) results.push(rec);
+    if (rec) {
+      results.push(rec);
+    }
   }
   return results;
 }
 
 /**
- * Whether a transaction currently holds any reservations.
+ * Whether a transaction currently holds any FOR_UPDATE reservations (in memory or optional DB).
  *
  * @param {string} transactionId - Transaction identifier.
+ * @param {Object|null} [db=null] - Optional partition SQLite DB.
  * @return {boolean}
  */
-export function hasLockingReadReservations(transactionId) {
-  if (!transactionId) return false;
+export function hasLockingReadReservations(transactionId, db = null) {
+  if (!transactionId) {
+    return false;
+  }
   const txSet = TRANSACTION_RESERVATIONS.get(transactionId);
-  if (!txSet || txSet.size === 0) return false;
-  for (const rowKey of txSet) {
-    const rec = RESERVATIONS.get(rowKey);
-    if (rec && rec.kind === LOCKING_READ_RESERVATION_KIND.FOR_UPDATE) {
-      return true;
+  if (txSet && txSet.size > 0) {
+    for (const rowKey of txSet) {
+      const rec = RESERVATIONS.get(rowKey);
+      if (rec && rec.kind === LOCKING_READ_RESERVATION_KIND.FOR_UPDATE) {
+        return true;
+      }
     }
   }
-  return false;
+  return db ? hasDbTransactionReservations(db, transactionId) : false;
+}
+
+/**
+ * Clear ONLY process-local in-memory reservation maps, preserving all SQLite rows
+ * and registered partition DB handles. Useful for restart/leader-failover tests.
+ */
+export function clearMemoryReservations() {
+  RESERVATIONS.clear();
+  TRANSACTION_RESERVATIONS.clear();
 }
 
 /**
  * Clear all reservations across all transactions and partition databases. Test support only.
  */
 export function clearAllReservations() {
-  RESERVATIONS.clear();
-  TRANSACTION_RESERVATIONS.clear();
+  clearMemoryReservations();
   for (const store of PARTITION_DBS.values()) {
-    if (store && store.open !== false) {
-      try {
-        ensureTableInitialized(store);
-        sqliteConnectionState(store).statement(RESERVATION_SQL.DELETE_ALL).run();
-      } catch (_err) {
-        INITIALIZED_DBS.delete(store);
-      }
-    }
+    truncateDbReservations(store);
   }
   PARTITION_DBS.clear();
 }

@@ -53,6 +53,11 @@ import {COORDINATOR_SETTLEMENT_TYPE, COORDINATOR_SETTLEMENT_ERROR} from
 import {isPinnedPlacementCommand} from './partition-placement-admission-command.js';
 import {PLACEMENT_ADMISSION_ERROR, PLACEMENT_COMMAND_TYPES} from
   './partition-placement-admission-constants.js';
+import {isPinnedLockingReadCommand} from './partition-locking-read-command.js';
+import {
+  LOCKING_READ_RESERVATION_COMMAND_ERROR,
+  LOCKING_READ_RESERVATION_TYPE,
+} from './partition-locking-read-command-constants.js';
 
 const FORMATION_ORIGIN_REFUSED_CODE = 'formation_transition_origin_refused';
 const FORMATION_INVALID_COMMAND_CODE = 'formation_transition_command_invalid';
@@ -72,6 +77,7 @@ const PARTITION_COMMITTED_COMMAND_ORIGIN = Object.freeze({
   COORDINATOR_OWNER: 'coordinator-owner',
   PLACEMENT_OWNER: 'placement-owner',
   FORMATION_OWNER: 'formation-owner',
+  LOCKING_READ_OWNER: 'locking-read-owner',
 });
 
 // What a refused write is answered with.
@@ -161,7 +167,25 @@ function formationCommandRefusal(command, origin) {
     refused(FORMATION_INVALID_COMMAND_CODE, FORMATION_INVALID_COMMAND_CODE);
 }
 
+function lockingReadCommandRefusal(command, origin) {
+  if (origin !== PARTITION_COMMITTED_COMMAND_ORIGIN.LOCKING_READ_OWNER) {
+    return refused(
+      LOCKING_READ_RESERVATION_COMMAND_ERROR.ORIGIN,
+      LOCKING_READ_RESERVATION_COMMAND_ERROR.ORIGIN,
+    );
+  }
+  return isPinnedLockingReadCommand(command) ?
+    ADMITTED :
+    refused(
+      LOCKING_READ_RESERVATION_COMMAND_ERROR.BYTES,
+      LOCKING_READ_RESERVATION_COMMAND_ERROR.BYTES,
+    );
+}
+
 function commandRefusalByKind(command, origin) {
+  if (command.type === LOCKING_READ_RESERVATION_TYPE) {
+    return lockingReadCommandRefusal(command, origin);
+  }
   if (command.type === PARTITION_SERVICE_OPERATION.FORMATION_TRANSITION) {
     return formationCommandRefusal(command, origin);
   }

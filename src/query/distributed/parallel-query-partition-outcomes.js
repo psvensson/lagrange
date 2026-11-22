@@ -124,6 +124,8 @@ function buildPartitionExecutionSuccessOutcome(
       {durableCommitWitness: result.durableCommitWitness}),
     ...(result.authoritativeObservation === undefined ? {} :
       {authoritativeObservation: result.authoritativeObservation}),
+    ...(Number.isSafeInteger(result.readGeneration) ?
+      {readGeneration: result.readGeneration} : {}),
     // A settled replay's named state travels with its count (or in place of
     // a count it does not know).
     ...(result.settledReplay === undefined ? {} :

@@ -369,11 +369,14 @@ test('Counterexample 4: PostgreSQL $N _paramMapping is applied exactly once acro
   ];
   const systemCache = createMockSystemCache(tables, partitions);
   const gateway = createTransactionPersistenceGateway();
+  const ordersDb = new Database(':memory:');
+  const partitionServices = new Map([['orders-p1', {db: ordersDb, partitionId: 'orders-p1'}]]);
 
   const engine = new SQLQueryEngine({
     controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache,
     controlPlaneSystemTableGateway: gateway,
+    partitionServicesProvider: () => partitionServices,
     messageRouter: {
       async deliver(_address, message) {
         if (message.type === 'TRANSACTION') {
@@ -435,6 +438,7 @@ test('Counterexample 4: PostgreSQL $N _paramMapping is applied exactly once acro
     await engine.transactionCoordinator.commit('s-writer-disjoint');
   } finally {
     clearAllReservations();
+    ordersDb.close();
     gateway.db.close();
   }
 });

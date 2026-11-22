@@ -9,6 +9,7 @@ import {
 } from './sql-query-engine-instance-initializer.js';
 import {releaseTransactionReservations} from
   '../partition/partition-locking-read-reservation.js';
+import {listCandidatePartitionDbs} from './sql-locking-read-remote.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const RUNTIME_ACCESS_POLICY_DENIED_STATUS = 'denied';
@@ -247,6 +248,10 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
     if (!transactions) return;
     for (const tx of transactions.values()) {
       releaseTransactionReservations(tx.transactionId);
+      const localDbs = listCandidatePartitionDbs(this, Array.from(tx.participants?.keys?.() || []));
+      for (const {db} of localDbs) {
+        releaseTransactionReservations(tx.transactionId, {db});
+      }
     }
   }
 

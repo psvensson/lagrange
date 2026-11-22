@@ -26,6 +26,10 @@ import {
   resolveSchemaColumnDefinition,
 } from './distributed-write-constraint-helpers.js';
 import {resolveDeclaredPrimaryKeyColumns} from '../../partition/partition-boundary-representation.js';
+import {
+  LOCKING_READ_ERROR_CODE,
+  LOCKING_READ_SQL_STATE,
+} from '../sql-locking-read-constants.js';
 
 const LOCAL_STR_STRING = 'string';
 
@@ -98,6 +102,37 @@ function buildRejectedParticipantResult(partitionId, participant, reason) {
 /**
  * Canonical owner for distributed INSERT/UPDATE/DELETE execution.
  */
+const NO_LOCKING_READ_FAILURE_OVERLAY = Object.freeze({});
+
+function resolveLockingReadFailureOverlay(participantFailures) {
+  const lockFailure = participantFailures.find((failure) =>
+    failure?.errorCode === QUERY_ERROR_CODE.LOCK_NOT_AVAILABLE ||
+    failure?.errorCode === LOCKING_READ_ERROR_CODE.RESERVATION_UNAVAILABLE ||
+    failure?.sqlState === LOCKING_READ_SQL_STATE.LOCK_NOT_AVAILABLE);
+  if (!lockFailure) {
+    return NO_LOCKING_READ_FAILURE_OVERLAY;
+  }
+  const errorCode =
+    lockFailure.errorCode === LOCKING_READ_ERROR_CODE.RESERVATION_UNAVAILABLE ?
+      LOCKING_READ_ERROR_CODE.RESERVATION_UNAVAILABLE :
+      QUERY_ERROR_CODE.LOCK_NOT_AVAILABLE;
+  const errorMsg = typeof lockFailure.error === 'string' && lockFailure.error.length > 0 ?
+    lockFailure.error :
+    QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE;
+  return {
+    errorCode,
+    error: errorMsg,
+    ...(lockFailure.sqlState ? {sqlState: lockFailure.sqlState} : {}),
+    ...(lockFailure.conflict === true ? {conflict: true} : {}),
+    ...(typeof lockFailure.retryable === 'boolean' ?
+      {retryable: lockFailure.retryable} : {}),
+    ...(lockFailure.conflictingTransactionId ?
+      {conflictingTransactionId: lockFailure.conflictingTransactionId} : {}),
+    ...(lockFailure.rowKey ? {rowKey: lockFailure.rowKey} : {}),
+    ...(lockFailure.code ? {code: lockFailure.code} : {}),
+  };
+}
+
 class DistributedWriteCoordinator {
   /**
    * @param {Object} options - Coordinator options.
@@ -361,6 +396,7 @@ class DistributedWriteCoordinator {
         },
         0,
       );
+      const lockOverlay = resolveLockingReadFailureOverlay(participantFailures);
       return {
         success: false,
         operation: plan.statementType,
@@ -377,6 +413,7 @@ class DistributedWriteCoordinator {
         participantResults,
         errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
         error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
+        ...lockOverlay,
         idempotencyKey: plan.idempotencyKey,
         operationId: plan.operationId,
         retryCount,

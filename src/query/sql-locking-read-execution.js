@@ -20,6 +20,8 @@ import {
   acquireRowReservation,
   checkRowReservationConflict,
   createLockConflictResult,
+  createReservationUnavailableResult,
+  findTableDbReservationConflict,
   getTransactionReservations,
   LOCKING_READ_RESERVATION_KIND,
 } from '../partition/partition-locking-read-reservation.js';
@@ -29,6 +31,11 @@ import {
   LOCKING_READ_AST_TYPE, LOCKING_READ_CLAUSE, LOCKING_READ_STRENGTH,
   LOCKING_READ_TX_OWNERSHIP, LOCKING_READ_UNKNOWN_PARTITION,
 } from './sql-locking-read-constants.js';
+import {
+  acquireAllRowReservations,
+  listCandidatePartitionDbs,
+  resolvePartitionDb,
+} from './sql-locking-read-remote.js';
 import {EXPR_TYPE} from './parser-constants.js';
 import {QUERY_AST_NODE, QUERY_ERROR_CODE} from './query-constants.js';
 import {PG_ERROR_CODE} from '../runtime/pgwire-protocol-constants.js';
@@ -49,25 +56,6 @@ export function isLockingReadAst(ast) {
     ast.forUpdate === true ||
     ast.locking,
   );
-}
-
-/**
- * Resolve partition SQLite database instance if available.
- * @param {Object} engine - SQL query engine.
- * @param {string} partitionId - Partition ID.
- * @return {Object|null}
- */
-function resolvePartitionDb(engine, partitionId) {
-  if (!engine || !partitionId) return null;
-  try {
-    const services = typeof engine.partitionServicesProvider === 'function' ?
-      engine.partitionServicesProvider() :
-      (engine.queryExecutor?.partitionServices || engine.partitionServices);
-    const service = services?.get ? services.get(partitionId) : null;
-    return service?.db || null;
-  } catch (_err) {
-    return null;
-  }
 }
 
 /**
@@ -237,30 +225,6 @@ async function rollbackConflictingSession(engine, sessionId, transactionId) {
   }
 }
 
-async function acquireAllRowReservations(ctx) {
-  const {
-    engine, tableName, canonicalTuples, candidatePartitions,
-    transactionId, sessionId, holdTimeoutMs,
-  } = ctx;
-  for (const pkValues of canonicalTuples) {
-    const partitionId = resolveRowPartitionId(engine, tableName, pkValues, candidatePartitions);
-    const acq = acquireRowReservation({
-      tableName, partitionId, pkValues, transactionId, sessionId,
-      participantId: `${transactionId}:${partitionId}`,
-      kind: LOCKING_READ_RESERVATION_KIND.FOR_UPDATE,
-      db: resolvePartitionDb(engine, partitionId), holdTimeoutMs,
-    });
-    if (acq.conflict) {
-      await rollbackConflictingSession(engine, sessionId, transactionId);
-      return createLockConflictResult({
-        rowKey: acq.rowKey, transactionId,
-        conflictingTransactionId: acq.conflictingTransactionId,
-      });
-    }
-  }
-  return null;
-}
-
 async function tryResolveCanonicalPkTuples(engine, ctx) {
   try {
     const tuples = await resolveCanonicalPkTuples(engine, ctx);
@@ -295,12 +259,17 @@ export async function executeLockingReadReservations(options) {
   });
   if (resolution.failure) return resolution.failure;
 
-  const conflict = await acquireAllRowReservations({
+  const failure = await acquireAllRowReservations({
     engine, tableName: target.tableName, canonicalTuples: resolution.tuples,
-    candidatePartitions, transactionId: transactionRead.identity.transactionId,
+    resolvePartitionId: (pkValues) =>
+      resolveRowPartitionId(engine, target.tableName, pkValues, candidatePartitions),
+    transactionId: transactionRead.identity.transactionId,
     sessionId, holdTimeoutMs: options.holdTimeoutMs,
+    readGenerationsByPartition: selectResult.readGenerationsByPartition || {},
+    onConflict: () =>
+      rollbackConflictingSession(engine, sessionId, transactionRead.identity.transactionId),
   });
-  return conflict || selectResult;
+  return failure || selectResult;
 }
 
 function extractLiteralOrParamValue(node, params) {
@@ -372,9 +341,18 @@ async function failConflict(engine, statement, writeTransaction, transactionId, 
 function findUnscopedInsertConflict(engine, tableName, transactionId, candidatePartitions) {
   const conflicting = getConflictingReservations(engine, tableName, transactionId);
   if (Array.isArray(candidatePartitions) && candidatePartitions.length > 0) {
-    return conflicting.find((rec) => candidatePartitions.includes(rec.partitionId)) || null;
+    const memMatch = conflicting.find((rec) => candidatePartitions.includes(rec.partitionId));
+    if (memMatch) return memMatch;
+  } else if (conflicting[0]) {
+    return conflicting[0];
   }
-  return conflicting[0] || null;
+  for (const {partitionId, db} of listCandidatePartitionDbs(engine, candidatePartitions)) {
+    const dbMatch = findTableDbReservationConflict(db, {partitionId, tableName, transactionId});
+    if (dbMatch) {
+      return dbMatch;
+    }
+  }
+  return null;
 }
 
 /**
@@ -408,6 +386,9 @@ async function checkInsertReservations(ctx) {
       transactionId,
       candidatePartitions,
     );
+    if (match?.error) {
+      return createReservationUnavailableResult({tableName, message: match.message});
+    }
     if (match) {
       return failConflict(engine, statement, writeTransaction, transactionId, {
         conflict: true,
@@ -436,6 +417,14 @@ async function checkSinglePkConflict(ctx, wherePk) {
     db: resolvePartitionDb(engine, partitionId),
     onlyForUpdate: true,
   });
+  if (check.unavailable) {
+    return createReservationUnavailableResult({
+      partitionId,
+      tableName,
+      rowKey: check.rowKey,
+      message: check.error,
+    });
+  }
   return check.conflict ?
     failConflict(engine, statement, writeTransaction, transactionId, check) :
     null;
@@ -484,11 +473,47 @@ async function checkQueriedCandidatesConflict(ctx) {
       db: resolvePartitionDb(engine, partitionId),
       onlyForUpdate: true,
     });
+    if (check.unavailable) {
+      return createReservationUnavailableResult({
+        partitionId,
+        tableName,
+        rowKey: check.rowKey,
+        message: check.error,
+      });
+    }
     if (check.conflict) {
       return failConflict(engine, statement, writeTransaction, transactionId, check);
     }
   }
   return null;
+}
+
+function inspectLocalLockCandidates(ctx) {
+  const memConflicts = getConflictingReservations(ctx.engine, ctx.tableName, ctx.transactionId);
+  if (memConflicts.length > 0) {
+    return {hasCandidate: true, error: null};
+  }
+  for (const {partitionId, db} of listCandidatePartitionDbs(ctx.engine, ctx.candidatePartitions)) {
+    const dbMatch = findTableDbReservationConflict(db, {
+      partitionId,
+      tableName: ctx.tableName,
+      transactionId: ctx.transactionId,
+    });
+    if (dbMatch?.error) {
+      return {
+        hasCandidate: false,
+        error: createReservationUnavailableResult({
+          partitionId,
+          tableName: ctx.tableName,
+          message: dbMatch.message,
+        }),
+      };
+    }
+    if (dbMatch) {
+      return {hasCandidate: true, error: null};
+    }
+  }
+  return {hasCandidate: false, error: null};
 }
 
 /**
@@ -497,8 +522,9 @@ async function checkQueriedCandidatesConflict(ctx) {
  * @return {Promise<Object|null>} Conflict refusal result, or null if permitted.
  */
 async function checkUpdateOrDeleteReservations(ctx) {
-  const conflicting = getConflictingReservations(ctx.engine, ctx.tableName, ctx.transactionId);
-  if (conflicting.length === 0) return null;
+  const candidateState = inspectLocalLockCandidates(ctx);
+  if (candidateState.error) return candidateState.error;
+  if (!candidateState.hasCandidate) return null;
 
   const ast = ctx.statement.writePlan?.ast || ctx.statement.ast;
   const footprint = extractStatementWriteFootprint({

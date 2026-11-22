@@ -11,6 +11,7 @@ import {
   clearAllReservations,
   getTransactionReservations,
   hasLockingReadReservations,
+  registerPartitionDatabase,
 } from '../../src/partition/partition-locking-read-reservation.js';
 import {resolveFailureSqlState} from '../../src/runtime/pgwire-result-mapper.js';
 import {
@@ -68,10 +69,20 @@ function createTestHarness(options = {}) {
     ...(options.rowsByTable || {}),
   };
 
+  const partitionServices = new Map();
+  const partitionDbs = [];
+  for (const part of partitions) {
+    const db = new Database(':memory:');
+    partitionDbs.push(db);
+    partitionServices.set(part.partition_id, {db, partitionId: part.partition_id});
+    registerPartitionDatabase(part.partition_id, db);
+  }
+
   const engine = new SQLQueryEngine({
     controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache,
     controlPlaneSystemTableGateway: gateway,
+    partitionServicesProvider: () => partitionServices,
     messageRouter: {
       async deliver(address, message) {
         deliveredMessages.push({address, ...message});
@@ -107,6 +118,9 @@ function createTestHarness(options = {}) {
     mockRowsByTable,
     cleanup() {
       clearAllReservations();
+      for (const db of partitionDbs) {
+        db.close();
+      }
       gateway.db.close();
     },
   };
@@ -552,6 +566,7 @@ test('B4: participant session sweep respects localExpiry: "forbidden" for lockin
     {generationBase: 1, originIndex: 1},
   );
 
+  const db = new Database(':memory:');
   acquireRowReservation({
     tableName: 'orders',
     partitionId: 'orders-p1',
@@ -559,15 +574,17 @@ test('B4: participant session sweep respects localExpiry: "forbidden" for lockin
     transactionId: 'tx-with-lock',
     sessionId: 's1',
     kind: 'FOR_UPDATE',
+    db,
   });
 
-  assert.equal(hasLockingReadReservations('tx-with-lock'), true);
+  assert.equal(hasLockingReadReservations('tx-with-lock', db), true);
 
   // Sweep after holdTimeoutMs has elapsed
   const discarded = sweepParticipantTransactionHolds(mockService, 100000, 1000);
   assert.equal(discarded, 0, 'session with locking read reservations must not be expired');
-  assert.equal(hasLockingReadReservations('tx-with-lock'), true);
+  assert.equal(hasLockingReadReservations('tx-with-lock', db), true);
   clearAllReservations();
+  db.close();
 });
 
 test('B3: prohibited query shapes fail closed with 0A000 or 25P01', async () => {

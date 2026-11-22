@@ -249,6 +249,8 @@ const PARTICIPANT_TRANSACTION_SQL = Object.freeze({
   SELECT_GENERATION:
     'SELECT generation, origin_index, origin_term ' +
     'FROM _partition_write_generation WHERE singleton = 1',
+  GENERATION_TABLE_EXISTS:
+    'SELECT 1 AS present FROM sqlite_master WHERE type = \'table\' AND name = ?',
   SELECT_ALL_PARTICIPANTS:
     'SELECT transaction_id, participant_id, session_id, commit_mode, ' +
     'transaction_epoch, state, operations_text, validation_text, ' +

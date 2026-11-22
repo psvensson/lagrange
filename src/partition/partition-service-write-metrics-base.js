@@ -29,7 +29,7 @@ import {
   admitCommittedCommand,
   committedCommandRefusalResult,
 } from './partition-committed-command-admission.js';
-import {readPartitionWriteOrigin} from './partition-participant-transaction-store.js';
+import {readOptionalPartitionWriteGeneration, readPartitionWriteOrigin} from './partition-participant-transaction-store.js';
 import {deliveryTransportOf, forwardedDeliveryAnswer, isDeliveredTransportDeliveryOutcome} from
   '../transport/transport-semantic-outcome.js';
 import {transactionSchemaWriteRefusal} from
@@ -149,14 +149,11 @@ function executeAdmittedReadQuery(service, admission, params, options) {
     void metricsErr;
   }
   const executionEnvelope = executionEnvelopeOf(service.db);
+  const readGeneration = readOptionalPartitionWriteGeneration(service.db);
   if (options?.wireRead === true) {
     return {
-      success: true,
-      rowSet: collected.rowSet,
-      count: collected.rawRows.length,
-      rowSetComplete: true,
-      partitionId: service.partitionId,
-      executionEnvelope,
+      success: true, rowSet: collected.rowSet, count: collected.rawRows.length,
+      rowSetComplete: true, partitionId: service.partitionId, executionEnvelope, readGeneration,
     };
   }
   const visibleRows = materializeAndPresentRowObjects(
@@ -165,13 +162,8 @@ function executeAdmittedReadQuery(service, admission, params, options) {
     {safeIntegers: options?.safeIntegers === true},
   );
   return {
-    success: true,
-    rows: visibleRows,
-    rowSet: collected.rowSet,
-    count: visibleRows.length,
-    rowSetComplete: true,
-    partitionId: service.partitionId,
-    executionEnvelope,
+    success: true, rows: visibleRows, rowSet: collected.rowSet, count: visibleRows.length,
+    rowSetComplete: true, partitionId: service.partitionId, executionEnvelope, readGeneration,
   };
 }
 

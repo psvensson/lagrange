@@ -18,6 +18,10 @@ import {
   checkWriteStatementReservations,
   stageWriteReservationsAfterExecution,
 } from './sql-locking-read-execution.js';
+import {
+  LOCKING_READ_ERROR_CODE,
+  LOCKING_READ_SQL_STATE,
+} from './sql-locking-read-constants.js';
 import {releaseTransactionReservations} from
   '../partition/partition-locking-read-reservation.js';
 import {
@@ -88,6 +92,22 @@ function isDefinitiveStatementConflict(transaction, result) {
     result[COMMIT_POINT_REACHED_FIELD] === false &&
     Array.isArray(result.rollbackFailedParticipants) &&
     result.rollbackFailedParticipants.length === 0;
+}
+
+async function rollbackOnExplicitLockConflict(engine, writeTransaction, finalResult, sessionId) {
+  if (writeTransaction.ownership !== WRITE_TRANSACTION_OWNERSHIP.EXPLICIT ||
+      finalResult?.success !== false) {
+    return;
+  }
+  const isLockConflict =
+    finalResult.errorCode === LOCKING_READ_ERROR_CODE.LOCK_NOT_AVAILABLE ||
+    finalResult.sqlState === LOCKING_READ_SQL_STATE.LOCK_NOT_AVAILABLE;
+  if (isLockConflict) {
+    await engine.transactionCoordinator.rollbackOwned?.(
+      sessionId,
+      writeTransaction.transactionState?.transactionId,
+    );
+  }
 }
 
 class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMethods {
@@ -672,6 +692,7 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
     }
     const executionDurationMs = Date.now() - executionStartTimeMs;
     const finalResult = await this.finishWriteTransaction(writeTransaction, result);
+    await rollbackOnExplicitLockConflict(this, writeTransaction, finalResult, sessionId);
     stageWriteReservationsAfterExecution({
       engine: this,
       statement,

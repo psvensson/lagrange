@@ -5,6 +5,7 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
+import Database from 'better-sqlite3';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {extractWireErrorDetail, resolveFailureSqlState} from
@@ -1409,15 +1410,17 @@ async (t) => {
 test('volatile readOnly fast-path and zero-write commit safety', async (t) => {
   const ops = [];
   const gateway = createTransactionPersistenceGateway();
-  t.after(() => gateway.db.close());
+  const ack = {acknowledged: true};
+  const partDbs = [new Database(':memory:'), new Database(':memory:')];
+  t.after(() => [gateway.db, ...partDbs].forEach((db) => db.close()));
   const cache = createMockSystemCache(
     [{table_name: 'warehouse', primaryKey: 'id'}, {table_name: 'district', primaryKey: 'id'}],
     [{table_name: 'warehouse', partition_id: 'w-p1'}, {table_name: 'district', partition_id: 'd-p1'}]
       .map((p) => ({...p, partition_key_start: null, partition_key_end: null})));
-  const ack = {acknowledged: true};
+  const partitionServices = new Map([['w-p1', {db: partDbs[0]}], ['d-p1', {db: partDbs[1]}]]);
   const engine = new SQLQueryEngine({
-    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
-    systemCache: cache, controlPlaneSystemTableGateway: gateway,
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(), systemCache: cache,
+    controlPlaneSystemTableGateway: gateway, partitionServicesProvider: () => partitionServices,
     autoStartDistributedTransactionRecovery: false,
     messageRouter: {async deliver(address, msg) {
       const pid = address.split('/').at(-1);

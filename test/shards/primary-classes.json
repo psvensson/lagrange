@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2433,
+    "unit": 2434,
     "integration": 131,
     "bootstrap": 231,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2802,
-  "digest": "fnv1a32-6bf5847f",
+  "censusSize": 2803,
+  "digest": "fnv1a32-87f9d498",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1653,6 +1653,7 @@
     "test/query/internal-sql-adapter.test.js": "unit",
     "test/query/lineage-integration.test.js": "unit",
     "test/query/lineage-tracker.test.js": "unit",
+    "test/query/locking-read-authoritative-reservations.test.js": "unit",
     "test/query/locking-read-canonical-ast.test.js": "unit",
     "test/query/locking-read-execution-lifecycle.test.js": "unit",
     "test/query/lookup-primitive.test.js": "unit",
