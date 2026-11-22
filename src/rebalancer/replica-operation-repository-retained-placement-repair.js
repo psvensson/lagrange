@@ -227,12 +227,14 @@ function assignRetainedPlacementRepairMethods(Repository) {
       return this.settleRetainedRepairDecision(attempt, decision);
     },
 
-    // The local ledger committed the pinned entry: present that exact entry
+    // The ledger committed the pinned entry: present that exact entry
     // again, and native replay answers its committed result with no proposal.
     async resolveCommittedPinnedEntry(attempt) {
       if (attempt.entry.state !== ENTRY.PINNED) return false;
       const {binding} = this.bindRetainedRepairDecision(attempt);
-      if (binding.state !== BINDING.LOCAL) return false;
+      if (binding.state === BINDING.UNAVAILABLE) {
+        return this.confirmUnboundRetainedRepair(attempt, OBSERVATION.OWN_ROW, binding);
+      }
       return this.submitRetainedPlacementRepairAttempt(attempt, UNFENCED, binding);
     },
 
