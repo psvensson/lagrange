@@ -40,18 +40,45 @@ function createHeldRaftNetwork() {
   const network = createLoopbackTransport();
   const deliver = network.deliver.bind(network);
   let holds = NO_HOLD;
-  network.deliver = async (address, payload, options) => (holds(address, payload) ?
-    buildDeliveryEnvelope({acknowledged: false, noHandler: true}) :
-    deliver(address, payload, options));
+  let pends = NO_HOLD;
+  const pending = [];
+  const delivered = [];
+  network.deliver = async (address, payload, options) => {
+    if (holds(address, payload)) {
+      return buildDeliveryEnvelope({acknowledged: false, noHandler: true});
+    }
+    if (pends(address, payload)) {
+      const released = Promise.withResolvers();
+      pending.push(released);
+      await released.promise;
+    }
+    delivered.push({to: String(payload?.to), message: payload?.message ?? {}});
+    return deliver(address, payload, options);
+  };
+  const releasePending = () => {
+    pends = NO_HOLD;
+    for (const released of pending.splice(0)) released.resolve();
+  };
   return {
     network,
     hold(predicate) {
       const previous = holds;
       holds = (address, payload) => previous(address, payload) || predicate(address, payload);
     },
+    // Matching sends are delivered only when released (held, not dropped):
+    // the sender's core turn stays pending at that peer send meanwhile.
+    holdPending(predicate) {
+      pends = predicate;
+      return {held: () => pending.length, release: releasePending};
+    },
+    releasePending,
     release() {
       holds = NO_HOLD;
+      releasePending();
     },
+    // How many raft messages reached `peer` that `predicate` accepts.
+    deliveredTo: (peer, predicate) =>
+      delivered.filter(({to, message}) => to === peer && predicate(message)).length,
   };
 }
 
@@ -118,6 +145,14 @@ async function writeThroughLeader(group, leader, {sql, params, entryId}) {
   return leader.raft.readStatus().appliedIndex;
 }
 
+async function requestGroupLeadershipTransfer(from, to) {
+  const requested = await turnChainValue(from.requestLeadershipTransfer({
+    successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED, replicaIdentity: to.replicaId,
+  }));
+  assert.equal(requested.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+    `setup: the transfer was accepted (${JSON.stringify(requested)})`);
+}
+
 /**
  * Move actual raft leadership to a named replica and wait until the new
  * leader has applied its commit.
@@ -126,11 +161,7 @@ async function writeThroughLeader(group, leader, {sql, params, entryId}) {
  * @param {Object} to - The successor.
  */
 async function transferGroupLeadership(group, from, to) {
-  const requested = await turnChainValue(from.requestLeadershipTransfer({
-    successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED, replicaIdentity: to.replicaId,
-  }));
-  assert.equal(requested.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
-    `setup: the transfer was accepted (${JSON.stringify(requested)})`);
+  await requestGroupLeadershipTransfer(from, to);
   assert.equal(await group.waitFor(() =>
     from.raft.readStatus().role === RAFT_ROLE.FOLLOWER &&
     to.raft.readStatus().role === RAFT_ROLE.LEADER &&
@@ -212,11 +243,15 @@ async function isolateFromConsensus(group, raft, service) {
 }
 
 export {
+  COMMIT_CARRYING,
   awaitKnownLeader,
   createHeldRaftNetwork,
   cutOffFromConsensus,
   freshLeaderBehindCommit,
   isolateFromConsensus,
+  openGroupWriteAdmission,
+  peerOf,
+  requestGroupLeadershipTransfer,
   settleGroupLeader,
   transferGroupLeadership,
   writeThroughLeader,

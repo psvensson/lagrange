@@ -3,9 +3,9 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
-import {RAFT_OPERATION_OUTCOME} from '../../../src/raft/raft-operation-port-constants.js';
+import {RAFT_OPERATION_OUTCOME, RAFT_PROPOSAL_REFUSAL} from
+  '../../../src/raft/raft-operation-port-constants.js';
 import {RAFT_RS_MESSAGE_TYPE} from '../../../src/raft/raft-rs-ingress-constants.js';
-import {RAFT_RS_CORE_REFUSAL_TEXT} from '../../../src/raft/raft-rs-core-constants.js';
 import {RUNTIME_PHASE, RUNTIME_REASON} from
   '../../../src/raft/raft-rs-runtime-owner-constants.js';
 import {encodeProposal} from '../../../src/raft/raft-rs-proposal-codec.js';
@@ -113,18 +113,25 @@ function assertBeforeOrder(result, cell) {
   assert.ok(acceptedVote.order < call.order, 'V is accepted before the selected turn begins');
   const selected = selectedEntries(result, cell);
   if (cell.decision === 'D3') {
-    assert.equal(selected.length, 1, 'the pre-capture proposal reaches its native refusal');
-    assert.ok(vote.order < selected[0].order, 'V enters native before the proposal');
+    // A core that no longer leads never proposes (raft-rs-proposal-term.js):
+    // the proposal is refused, with the core's own answer, before any native
+    // propose.
+    assert.deepEqual(selected, [], 'the proposal after V never reaches native propose');
   } else {
     assert.deepEqual(selected, [], 'refused transfers never invoke a native transfer step');
   }
   const reasons = {D1: RUNTIME_REASON.NO_KNOWN_LEADER,
     D2: RUNTIME_REASON.NOT_LEADER,
-    D3: `propose: ${RAFT_RS_CORE_REFUSAL_TEXT.PROPOSAL_DROPPED}`};
-  assert.deepEqual(result.returned.answer, {outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+    D3: RAFT_PROPOSAL_REFUSAL.SUBMITTING_LEADERSHIP_ENDED};
+  const {answer} = result.returned;
+  // D3 is the port's named refusal: nothing proposed, with the submitted
+  // term and the core's term and role at the step.
+  const named = cell.decision === 'D3' ? {proposed: false,
+    submittedTerm: answer.submittedTerm, term: answer.term, role: answer.role} : {};
+  assert.deepEqual(answer, {outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,
     reason: reasons[cell.decision],
     phase: cell.decision === 'D3' ? 'propose' : RUNTIME_PHASE.LEADERSHIP_TRANSFER,
-    retryable: cell.decision === 'D1', recoveryRequired: false});
+    retryable: cell.decision === 'D1', recoveryRequired: false, ...named});
 }
 
 function assertAnchors(result) {

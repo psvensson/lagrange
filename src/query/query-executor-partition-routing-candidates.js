@@ -177,16 +177,24 @@ const queryExecutorPartitionRoutingCandidateMethods = {
     if (requireCanonicalLeader) {
       // Redirect-first (S0 ruling Q1): the published leader's replicas when
       // it is published and usable; a replica that does not lead refuses typed
-      // and names the leader it knows. Only with no usable published leader
-      // is every routable replica asked, this node's first.
+      // and names the leader it knows. A published leader with no usable
+      // service asks nobody else (the delivery answers it typed,
+      // publishedLeaderGapOf): the publication carries no term, so another
+      // replica's claim to lead cannot be ordered against it (at most one
+      // leader per term) and an honest deposed leader would be accepted. Only
+      // with no leader published is every routable replica asked, this
+      // node's first.
       canonicalLeaderServices.forEach(addService);
-      if (candidates.length > 0) {
+      if (candidates.length > 0 || canonicalLeaderNodeId) {
+        if (candidates.length === 0) {
+          this.logCanonicalLeaderRoutingGap(partitionId, {
+            reason: LEADER_GAP_REASON_SERVICE_MISSING, canonicalLeaderNodeId,
+            services: orderedServices, routingSnapshot});
+        }
         return {candidates, routingSnapshot};
       }
       this.logCanonicalLeaderRoutingGap(partitionId, {
-        reason: canonicalLeaderNodeId ? LEADER_GAP_REASON_SERVICE_MISSING :
-          LEADER_GAP_REASON_OWNER_MISSING,
-        canonicalLeaderNodeId,
+        reason: LEADER_GAP_REASON_OWNER_MISSING,
         services: orderedServices,
         routingSnapshot,
       });

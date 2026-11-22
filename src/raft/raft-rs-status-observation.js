@@ -96,20 +96,16 @@ function followerProgressSnapshot(group, status) {
   return snapshot;
 }
 
-// This replica leads and its core has applied past its pending configuration
-// index. raft-rs sets that index to the last log index when the replica becomes
-// leader and only raises it while leading (raft-0.7.0 src/raft.rs:1227-1232,
-// 2077), and every entry after that index is the leader's own: an entry of the
-// current term has committed and been applied here, so no entry of an earlier
-// term that this replica has not applied can commit any more. A replica that
-// does not lead, or a status missing either index, answers false.
-function currentTermApplied(status) {
-  if (ROLE[status.raftState] !== ROLE_LEADER ||
-      status.applied === undefined || status.applied === null ||
-      status.pendingConfIndex === undefined || status.pendingConfIndex === null) {
-    return false;
-  }
-  return BigInt(status.applied) > BigInt(status.pendingConfIndex);
+// This replica leads and has applied an entry of its own term: the term of
+// the last entry it applied (appliedTerm: the runtime owner's record, kept on
+// every applied slice and installed snapshot and restored from the durable
+// record when the group opens) is its current term. Monotone within a term;
+// a configuration change the leader applied is such an entry. Once it holds,
+// no entry of an earlier term that this replica has not applied can commit
+// any more. A replica that does not lead answers false.
+function currentTermApplied(status, appliedTerm) {
+  return ROLE[status.raftState] === ROLE_LEADER &&
+    BigInt(appliedTerm) === BigInt(status.term);
 }
 
 /**
@@ -144,7 +140,7 @@ function shapeGroupObservation(group, observation, leaderIdentityUnresolved) {
     // (the conf-change admission's own pending check).
     confChangePending:
       BigInt(status.pendingConfIndex ?? 0) > BigInt(status.applied ?? 0),
-    currentTermApplied: currentTermApplied(status),
+    currentTermApplied: currentTermApplied(status, observation.appliedTerm),
     // The runtime's applied index of this same observation (the one its
     // confState came from), and the persisted last index of the log it
     // applies from: equal when every entry this replica holds has applied.
@@ -177,4 +173,4 @@ function shapeGroupObservation(group, observation, leaderIdentityUnresolved) {
   return result;
 }
 
-export {shapeGroupObservation, setNativeStatusObserver};
+export {currentTermApplied, shapeGroupObservation, setNativeStatusObserver};

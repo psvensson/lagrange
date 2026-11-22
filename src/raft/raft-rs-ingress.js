@@ -21,7 +21,6 @@
 import {
   RAFT_RS_ENTRY_TYPE,
 } from './raft-rs-ready-loop-constants.js';
-import {decodeCommittedProposal} from './raft-rs-proposal-codec.js';
 import {
   RAFT_RS_ENTRY_POSITION_FIELDS,
   RAFT_RS_INGRESS_OUTCOME,
@@ -36,17 +35,12 @@ import {
 const DECIMAL_DIGITS = /^\d+$/u;
 const ENTRY_TYPES = Object.freeze(Object.values(RAFT_RS_ENTRY_TYPE));
 const NO_TERM = '0';
-const ENTRY_DATA_ENCODING = 'base64';
 // The type-specific shape checks, after the entries decode.
 const TYPE_SHAPE_CHECKS = Object.freeze({
   [RAFT_RS_MESSAGE_TYPE.APPEND]: (message) =>
     appendContiguityRefusal(message),
-  [RAFT_RS_MESSAGE_TYPE.PROPOSE]: (message) =>
-    forwardedProposalRefusal(message),
 });
-// raft-rs send(): a forwarded proposal never carries a term; every message
-// below always carries the sender's (non-zero) term.
-const TERMLESS_TYPES = new Set([RAFT_RS_MESSAGE_TYPE.PROPOSE]);
+// Every peer message below always carries the sender's (non-zero) term.
 const TERMED_TYPES = new Set([
   RAFT_RS_MESSAGE_TYPE.APPEND,
   RAFT_RS_MESSAGE_TYPE.APPEND_RESPONSE,
@@ -152,48 +146,19 @@ function positionOf(value) {
  */
 function producerShapeRefusal(message) {
   const type = message.msgType;
+  if (type === RAFT_RS_MESSAGE_TYPE.PROPOSE) {
+    return refused(RAFT_RS_INGRESS_REFUSAL.FORWARDED_PROPOSAL, type);
+  }
   if (TYPES_WITHOUT_PRODUCER.has(type)) {
     return refused(
       RAFT_RS_INGRESS_REFUSAL.MESSAGE_TYPE_WITHOUT_PRODUCER, type);
   }
   const termed = (message.term ?? NO_TERM) !== NO_TERM;
-  if ((TERMED_TYPES.has(type) && !termed) ||
-      (TERMLESS_TYPES.has(type) && termed)) {
+  if (TERMED_TYPES.has(type) && !termed) {
     return refused(RAFT_RS_INGRESS_REFUSAL.TERM_PRESENCE_MISMATCH,
       `msgType=${type} term=${message.term}`);
   }
   return null;
-}
-
-// Whether a forwarded entry is what a port proposes (the leader appends it
-// as it is, and every replica applies it).
-function isPortProposal(entry) {
-  if (entry.entryType !== RAFT_RS_ENTRY_TYPE.NORMAL ||
-      typeof entry.data !== 'string') {
-    return false;
-  }
-  const bytes = Buffer.from(entry.data, ENTRY_DATA_ENCODING);
-  if (bytes.toString(ENTRY_DATA_ENCODING) !== entry.data) {
-    return false;
-  }
-  try {
-    decodeCommittedProposal(bytes);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * A forwarded proposal's entries are each what a port proposes.
- * @param {Object} message - A forwarded proposal whose entries decode.
- * @return {Object|null} A refusal, or null.
- */
-function forwardedProposalRefusal(message) {
-  const entry = (message.entries || []).find((each) => !isPortProposal(each));
-  return entry === undefined ? null : refused(
-    RAFT_RS_INGRESS_REFUSAL.FORWARDED_ENTRY_NOT_A_PROPOSAL,
-    `entryType=${entry.entryType}`);
 }
 
 /**

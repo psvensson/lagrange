@@ -14,6 +14,7 @@ import {
 } from '../../src/raft/raft-operation-port.js';
 import {
   RAFT_MEMBERSHIP_TRANSITION_REASON,
+  RAFT_OPERATION,
   RAFT_OPERATION_OUTCOME,
 } from
   '../../src/raft/raft-operation-port-constants.js';
@@ -411,6 +412,35 @@ export class ControllableConsensusPort {
           confChangePending: this.confChangePending,
         });
       },
+      // The double's facts in the current authority observation's shape:
+      // it never has a turn pending or a Ready held, and it applies every
+      // command it commits, so a double that leads has applied its term.
+      [RAFT_OPERATION.OBSERVE_CURRENT_AUTHORITY]: () => deepFreeze({
+        outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+        groupId: this.groupId ??
+          this.request?.[RAFT_OPERATION_PORT_REQUEST.GROUP_ID] ?? null,
+        replicaIdentity: this.replicaIdentity ??
+          this.request?.[RAFT_OPERATION_PORT_REQUEST.PEER_ID] ?? null,
+        peerId: this.peerId,
+        settled: true,
+        turnPending: false,
+        readyHeld: false,
+        inboundQueued: 0,
+        tickBacklog: 0,
+        role: this.role,
+        unsettledReason: null,
+        term: this.term,
+        leaderPeerId: this.role === RAFT_ROLE.LEADER ? String(this.peerId) :
+          null,
+        commitIndex: this.committedIndex,
+        appliedIndex: this.committedIndex,
+        appliedTerm: this.term,
+        currentTermApplied: this.role === RAFT_ROLE.LEADER,
+        lifecycleIncarnation: this.lifecycleIncarnation,
+        runtimeGeneration: this.runtimeGeneration,
+        runtimeHealth: this.runtimeHealth,
+        groupHealth: this.groupHealth,
+      }),
       // The fake holds no committed configuration; a test that needs one
       // answers through committedMembershipHandler.
       readCommittedMembership: (request) => this.committedMembershipHandler ?

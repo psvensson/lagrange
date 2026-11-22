@@ -25,6 +25,7 @@ import {
   ownerFactFailureReasonOf,
   ownerFactReadOf,
 } from './control-plane-owner-fact-read-contract.js';
+import {CONTROL_PLANE_READINESS_DIMENSION} from './control-plane-readiness-constants.js';
 import {INITIAL_PARTITION_IDS} from '../bootstrap/system-table-schemas-constants.js';
 
 const OWNER_FACT_STATE = Object.freeze({
@@ -34,6 +35,8 @@ const OWNER_FACT_STATE = Object.freeze({
 const OWNER_FACT_REQUEST_REFUSAL = Object.freeze({
   UNKNOWN_FIELD: 'owner_fact_unknown_field',
   FLOOR_REQUIRED: 'owner_fact_floor_required',
+  DEADLINE_REQUIRED: 'owner_fact_deadline_required',
+  ROUTING_CLASS_REQUIRED: 'owner_fact_routing_class_required',
   STATEMENT_REQUIRED: 'owner_fact_statement_required',
   TABLE_NOT_OWNER_READABLE: 'owner_fact_table_not_owner_readable',
   EXPECTED_REPLICA_MALFORMED: 'owner_fact_expected_replica_malformed',
@@ -49,16 +52,18 @@ const FIELD = Object.freeze({
   TABLE_NAME: 'tableName',
   SQL: 'sql',
   PARAMS: 'params',
-  MINIMUM_INDEX: 'minimumIndex',
-  MINIMUM_TERM: 'minimumTerm',
+  FLOOR: 'floor',
+  DEADLINE: 'deadline',
+  ROUTING_CLASS: 'routingReadinessDimension',
   EXPECTED_REPLICA: 'expectedReplica',
-  TIMEOUT_BUDGET: 'timeoutBudget',
   CACHE_PREDICATE: 'cachePredicate',
   READ_LEADER_ROWS: 'readLeaderRows',
   READ_PROJECTION_ROWS: 'readProjectionRows',
 });
 const OWNER_FACT_REQUEST_FIELDS = new Set([FIELD.TABLE_NAME, FIELD.SQL, FIELD.PARAMS,
-  FIELD.MINIMUM_INDEX, FIELD.MINIMUM_TERM, FIELD.EXPECTED_REPLICA, FIELD.TIMEOUT_BUDGET]);
+  FIELD.FLOOR, FIELD.DEADLINE, FIELD.ROUTING_CLASS, FIELD.EXPECTED_REPLICA]);
+const DEADLINE_FIELD_COUNT = 1;
+const ROUTING_CLASSES = new Set(Object.values(CONTROL_PLANE_READINESS_DIMENSION));
 const HINT_REQUEST_FIELDS = new Set([FIELD.TABLE_NAME, FIELD.CACHE_PREDICATE]);
 const EXPECTED_REPLICA_FIELD_COUNT = 2;
 const REFUSAL_ERROR_NAME = 'OwnerFactRequestRefusal';
@@ -121,10 +126,34 @@ function requireStatement(sql, params) {
   }
 }
 
-function requireFloor(draft, field) {
-  if (!Number.isSafeInteger(draft[field]) || draft[field] < 0) {
-    throw new OwnerFactRequestRefusal(OWNER_FACT_REQUEST_REFUSAL.FLOOR_REQUIRED, field);
+// The floor is a position {partitionId, index, term} of one raft group; 0 / 0
+// says "no prior knowledge" explicitly. Whether it is a position of the group
+// read is decided by the receiver (FLOOR_OTHER_PARTITION).
+function requireFloor(draft) {
+  const read = ownerFactReadOf(draft.floor);
+  if (read === null) {
+    throw new OwnerFactRequestRefusal(OWNER_FACT_REQUEST_REFUSAL.FLOOR_REQUIRED, FIELD.FLOOR);
   }
+  return read.floor;
+}
+
+function requireDeadline(draft) {
+  const {deadline} = draft;
+  if (deadline === null || typeof deadline !== 'object' ||
+      Object.keys(deadline).length !== DEADLINE_FIELD_COUNT ||
+      !Number.isSafeInteger(deadline.timeoutMs) || deadline.timeoutMs <= 0) {
+    throw new OwnerFactRequestRefusal(
+      OWNER_FACT_REQUEST_REFUSAL.DEADLINE_REQUIRED, FIELD.DEADLINE);
+  }
+  return Object.freeze({timeoutMs: deadline.timeoutMs});
+}
+
+function requireRoutingClass(draft) {
+  if (!ROUTING_CLASSES.has(draft.routingReadinessDimension)) {
+    throw new OwnerFactRequestRefusal(
+      OWNER_FACT_REQUEST_REFUSAL.ROUTING_CLASS_REQUIRED, FIELD.ROUTING_CLASS);
+  }
+  return draft.routingReadinessDimension;
 }
 
 function expectedReplicaOf(draft) {
@@ -142,10 +171,10 @@ function expectedReplicaOf(draft) {
 
 /**
  * Build the one owner-fact request shape. It has no mode field: a caller
- * cannot name, omit into a default, or misspell a weaker read. Floors are
- * required (0 says "no prior knowledge" explicitly), never defaulted.
- * @param {Object} draft - {tableName, sql, params, minimumIndex, minimumTerm,
- *   expectedReplica?, timeoutBudget?}.
+ * cannot name, omit into a default, or misspell a weaker read. The floor, the
+ * deadline and the routing class are required, never defaulted.
+ * @param {Object} draft - {tableName, sql, params, floor: {partitionId, index,
+ *   term}, deadline: {timeoutMs}, routingReadinessDimension, expectedReplica?}.
  * @return {Object} The frozen request, with the table's owner partitionId.
  * @throws {OwnerFactRequestRefusal} For any other key or a malformed field.
  */
@@ -153,16 +182,15 @@ function buildOwnerFactRequest(draft) {
   refuseUnknownFields(draft, OWNER_FACT_REQUEST_FIELDS);
   const partitionId = requireOwnerReadableTable(draft.tableName);
   requireStatement(draft.sql, draft.params);
-  requireFloor(draft, FIELD.MINIMUM_INDEX);
-  requireFloor(draft, FIELD.MINIMUM_TERM);
+  const floor = requireFloor(draft);
+  const deadline = requireDeadline(draft);
+  const routingReadinessDimension = requireRoutingClass(draft);
   const expectedReplica = expectedReplicaOf(draft);
   return Object.freeze({
     tableName: draft.tableName, partitionId, sql: draft.sql,
     params: Object.freeze([...draft.params]),
-    minimumIndex: draft.minimumIndex, minimumTerm: draft.minimumTerm,
+    floor, deadline, routingReadinessDimension,
     ...(expectedReplica === undefined ? {} : {expectedReplica}),
-    ...(Object.hasOwn(draft, FIELD.TIMEOUT_BUDGET) ?
-      {timeoutBudget: draft.timeoutBudget} : {}),
   });
 }
 
@@ -176,14 +204,16 @@ function unavailable(reason, retryAfterMs = null) {
       {retryAfterMs} : {})});
 }
 
+// The deadline and the routing class travel as the gateway's own read
+// options (timeoutMs, routingReadinessDimension); the floor as the owner-fact
+// read point the request builder sends to the receiver.
 function readOptionsOf(request) {
   return Object.freeze({
     authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
     leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
-    ownerFactFloor: Object.freeze({minimumIndex: request.minimumIndex,
-      minimumTerm: request.minimumTerm}),
-    ...(Object.hasOwn(request, FIELD.TIMEOUT_BUDGET) ?
-      {timeoutBudget: request.timeoutBudget} : {}),
+    ownerFactFloor: request.floor,
+    timeoutMs: request.deadline.timeoutMs,
+    routingReadinessDimension: request.routingReadinessDimension,
   });
 }
 
@@ -191,7 +221,7 @@ function ownerFactAnswerOf(answer, request) {
   if (answer?.success !== true) {
     return unavailable(ownerFactFailureReasonOf(answer), answer?.retryAfterMs);
   }
-  const read = Object.freeze({...ownerFactReadOf(request),
+  const read = Object.freeze({...ownerFactReadOf(request.floor),
     ...(request.expectedReplica === undefined ? {} :
       {expectedReplica: request.expectedReplica})});
   const witness = answer.readAuthorityWitness;
@@ -201,8 +231,10 @@ function ownerFactAnswerOf(answer, request) {
   if (!isCompleteAuthoritativeReadResult(answer)) {
     return unavailable(OWNER_FACT_UNAVAILABLE_REASON.INCOMPLETE_ROW_SET);
   }
+  // Each answer owns its rows: a copy of every row, frozen.
   return issue({state: OWNER_FACT_STATE.READY,
-    rows: Object.freeze([...answer.rows]), witness: Object.freeze({...witness})});
+    rows: Object.freeze(answer.rows.map((row) => Object.freeze({...row}))),
+    witness: Object.freeze({...witness})});
 }
 
 /**
@@ -212,13 +244,15 @@ function ownerFactAnswerOf(answer, request) {
  * never from caller input; the function never retries and never sleeps (the
  * caller's existing continuation owns the next attempt).
  *
- * READY is a leader-local read point: the serving replica's core said, in one
- * observation taken in the same synchronous step as the row read, that it
- * leads, has applied its commit index, has applied every entry its log held
- * when it was elected (so every entry an earlier leader committed), and meets
- * the floors; after the read it still led in that term with an unmoved
- * applied index. It is not linearizable: the leader may already have
- * been deposed (stale by at most its check_quorum bound plus transit).
+ * READY is a leader-local read point: the serving replica decided, on its
+ * raft core's current observation, that it leads, has applied an entry of
+ * its own term (so every entry an earlier leader committed) and
+ * that the floor is a position of its group it has reached; the rows and the
+ * applied position the witness names were read in one read transaction of
+ * its connection, which no foreign transaction held; after the read it still
+ * led in that term; and the answer echoes this request. It is not
+ * linearizable: the leader may already have been deposed (stale by at most
+ * its check_quorum bound plus transit).
  *
  * PRECONDITION for consumers: an empty READY is absence only because the
  * receiver refuses an insufficient read point (apply behind commit, election
@@ -229,7 +263,9 @@ function ownerFactAnswerOf(answer, request) {
  * insufficient read point: test/cdc/cdc-leader-required-fresh-leader-absence.test.js).
  * @param {Function} readLeaderRows - (tableName, sql, params, readOptions) ->
  *   Promise<gateway read result>.
- * @param {Object} draft - See buildOwnerFactRequest.
+ * @param {Object} draft - {tableName, sql, params, floor: {partitionId, index,
+ *   term}, deadline: {timeoutMs}, routingReadinessDimension, expectedReplica?}
+ *   (see buildOwnerFactRequest); every field but expectedReplica is required.
  * @return {Promise<Object>} {state: READY, rows, witness} |
  *   {state: UNAVAILABLE, reason, retryAfterMs?}.
  * @throws {OwnerFactRequestRefusal} Before any read, for a malformed request.

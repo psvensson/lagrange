@@ -21,14 +21,21 @@ import {
   readHint,
   readOwnerFact,
 } from '../../src/control-plane/control-plane-owner-fact-read.js';
-import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {INITIAL_PARTITION_IDS, SYSTEM_TABLE_NAME} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
+import {CONTROL_PLANE_READINESS_DIMENSION as DIMENSION} from
+  '../../src/control-plane/control-plane-readiness-constants.js';
 import {test} from '../../src/test-helpers/tap.js';
 
 const TABLE = SYSTEM_TABLE_NAME.REPLICA_OPERATIONS;
 const SQL = 'SELECT * FROM replica_operations WHERE operation_id = ?';
+// The final request shape (S0 corrective, items 3 and 5): a floor typed by
+// partition, and a deadline and routing class the caller must state.
 const VALID = Object.freeze({
   tableName: TABLE, sql: SQL, params: Object.freeze(['operation-1']),
-  minimumIndex: 7, minimumTerm: 3,
+  floor: Object.freeze({partitionId: INITIAL_PARTITION_IDS[TABLE], index: 7, term: 3}),
+  deadline: Object.freeze({timeoutMs: 1500}),
+  routingReadinessDimension: DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
 });
 
 function recordingReader() {
@@ -63,8 +70,9 @@ test('readOwnerFact: a request that names no mode reaches the reader leader-requ
     t.equal(readOptions.authoritativeReadMode, MODE.OWNER_RPC_REQUIRED,
       'never a weaker default mode');
     t.equal(readOptions.leaderMode, LEADER.REQUIRED, 'never a weaker default leader mode');
-    t.same(readOptions.ownerFactFloor, {minimumIndex: 7, minimumTerm: 3},
-      'the caller\'s floors travel with the read');
+    t.same(readOptions.ownerFactFloor,
+      {partitionId: INITIAL_PARTITION_IDS[TABLE], index: 7, term: 3},
+      'the caller\'s floor travels with the read');
     t.equal(Object.isFrozen(readOptions), true, 'the token cannot be weakened downstream');
     t.same(answer, {state: STATE.UNAVAILABLE, reason: REASON.READ_FAILED},
       'a failed read is typed unavailability, with no rows field');
@@ -101,19 +109,13 @@ test('buildOwnerFactRequest: a caller-chosen, unknown or undefined mode is refus
     }
   });
 
-test('buildOwnerFactRequest: floors, statement, table and reader are required, never defaulted',
+test('buildOwnerFactRequest: statement, table and reader are required, never defaulted',
   async (t) => {
-    const {minimumIndex: _index, ...withoutIndex} = VALID;
-    const {minimumTerm: _term, ...withoutTerm} = VALID;
     const cases = [
-      ['no index floor', withoutIndex, REFUSAL.FLOOR_REQUIRED, 'minimumIndex'],
-      ['no term floor', withoutTerm, REFUSAL.FLOOR_REQUIRED, 'minimumTerm'],
-      ['negative index floor', {...VALID, minimumIndex: -1}, REFUSAL.FLOOR_REQUIRED,
-        'minimumIndex'],
-      ['fractional term floor', {...VALID, minimumTerm: 1.5}, REFUSAL.FLOOR_REQUIRED,
-        'minimumTerm'],
-      ['text index floor', {...VALID, minimumIndex: '7'}, REFUSAL.FLOOR_REQUIRED,
-        'minimumIndex'],
+      ['negative index floor', {...VALID, floor: {...VALID.floor, index: -1}},
+        REFUSAL.FLOOR_REQUIRED, 'floor'],
+      ['fractional term floor', {...VALID, floor: {...VALID.floor, term: 1.5}},
+        REFUSAL.FLOOR_REQUIRED, 'floor'],
       ['no statement', {...VALID, sql: ''}, REFUSAL.STATEMENT_REQUIRED, 'sql'],
       ['params not a list', {...VALID, params: null}, REFUSAL.STATEMENT_REQUIRED, 'params'],
       ['a table with no owner partition', {...VALID, tableName: 'no_such_table'},
@@ -133,6 +135,53 @@ test('buildOwnerFactRequest: floors, statement, table and reader are required, n
     t.ok(noReader instanceof OwnerFactRequestRefusal, 'a missing reader port: typed refusal');
     t.equal(noReader?.code, REFUSAL.READER_REQUIRED);
   });
+
+const FINAL = VALID;
+
+test('readOwnerFact: the floor is a typed partition position, and the deadline and the routing ' +
+  'class are required and travel with the read', async (t) => {
+  const reader = recordingReader();
+  await readOwnerFact(reader.read, FINAL);
+  t.equal(reader.calls.length, 1, 'the final request shape is read');
+  const readOptions = reader.calls[0]?.readOptions;
+  t.same(readOptions?.ownerFactFloor,
+    {partitionId: INITIAL_PARTITION_IDS[TABLE], index: 7, term: 3},
+    'the typed floor travels with the read');
+  t.equal(readOptions?.timeoutMs, 1500, 'the deadline travels explicitly');
+  t.equal(readOptions?.routingReadinessDimension, DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    'the routing class travels explicitly');
+  const {deadline: _deadline, ...withoutDeadline} = FINAL;
+  const {routingReadinessDimension: _routing, ...withoutRouting} = FINAL;
+  const {floor: _floor, ...withoutFloor} = FINAL;
+  const cases = [
+    ['no deadline', withoutDeadline, 'owner_fact_deadline_required', 'deadline'],
+    ['a deadline with no timeout', {...FINAL, deadline: {}}, 'owner_fact_deadline_required',
+      'deadline'],
+    ['a zero deadline', {...FINAL, deadline: {timeoutMs: 0}}, 'owner_fact_deadline_required',
+      'deadline'],
+    ['a deadline with another field', {...FINAL, deadline: {timeoutMs: 1500, budget: 1}},
+      'owner_fact_deadline_required', 'deadline'],
+    ['no routing class', withoutRouting, 'owner_fact_routing_class_required',
+      'routingReadinessDimension'],
+    ['an unknown routing class', {...FINAL, routingReadinessDimension: 'no_such_dimension'},
+      'owner_fact_routing_class_required', 'routingReadinessDimension'],
+    ['no floor', withoutFloor, REFUSAL.FLOOR_REQUIRED, 'floor'],
+    ['a floor naming no partition', {...FINAL, floor: {index: 7, term: 3}},
+      REFUSAL.FLOOR_REQUIRED, 'floor'],
+    ['a floor with a text index', {...FINAL, floor: {partitionId: 'p', index: '7', term: 3}},
+      REFUSAL.FLOOR_REQUIRED, 'floor'],
+    ['the bare floors of the stage-2 shape', {...withoutFloor, minimumIndex: 7, minimumTerm: 3},
+      REFUSAL.UNKNOWN_FIELD, 'minimumIndex'],
+  ];
+  for (const [label, draft, code, field] of cases) {
+    const refused = recordingReader();
+    const refusal = await refusalOf(refused, draft);
+    t.ok(refusal instanceof OwnerFactRequestRefusal, `${label}: typed refusal`);
+    t.equal(refusal?.code, code, `${label}: refusal code`);
+    t.equal(refusal?.field, field, `${label}: the refused field is named`);
+    t.equal(refused.calls.length, 0, `${label}: no read was issued`);
+  }
+});
 
 test('readHint: a hint is not an owner fact and cannot be read as one', async (t) => {
   const rows = [{operation_id: 'operation-1'}];

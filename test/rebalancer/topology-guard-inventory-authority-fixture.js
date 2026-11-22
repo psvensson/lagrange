@@ -222,18 +222,18 @@ function insertTableRow(db, row) {
   db.prepare(sql).run(...params);
 }
 
-// Hold the next statement a replica executes, after it ran, until released
-// (an event can then land while the read is in flight).
+// Hold the next statement a replica executes, after its receiver observed its
+// consensus core and before the statement reads, until released (an event can
+// then land while the read is in flight).
 function holdNextStatementAfterRead(replica) {
   const original = replica.executeQuery;
   const entered = Promise.withResolvers();
   const released = Promise.withResolvers();
   replica.executeQuery = async function heldOnce(...args) {
     replica.executeQuery = original;
-    const result = await original.apply(replica, args);
     entered.resolve();
     await released.promise;
-    return result;
+    return original.apply(replica, args);
   };
   return {entered: entered.promise, release: () => released.resolve()};
 }

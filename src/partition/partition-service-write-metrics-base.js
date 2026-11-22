@@ -6,6 +6,7 @@ import {
 } from './partition-service-raft-write-commit.js';
 import {executionEnvelopeOf} from './partition-transaction-execution-envelope.js';
 import {collectBoundedTypedRowSet} from '../query/query-result-budget.js';
+import {readPartitionAppliedIndex} from './partition-committed-log.js';
 import {materializeAndPresentRowObjects} from '../query/sql-value-presentation.js';
 import {
   admitPartitionStatement,
@@ -174,6 +175,16 @@ function executeAdmittedReadQuery(service, admission, params, options) {
   };
 }
 
+// An owner-fact read: the statement and the raft store's applied index (its
+// owner's reader) in ONE read transaction, so appliedPosition is the position
+// of the snapshot read. The receiver refuses a connection already in one.
+function executeReadAtAppliedPosition(service, admission, params, options) {
+  return service.db.transaction(() => {
+    const appliedPosition = readPartitionAppliedIndex(service);
+    return {...executeAdmittedReadQuery(service, admission, params, options), appliedPosition};
+  })();
+}
+
 class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
   async executeQuery(sql, params = [], options = {}) {
     if (!this.initialized) {
@@ -205,9 +216,9 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
       if (!admission.admitted) {
         return partitionStatementRefusalAnswer(this, sql, admission);
       }
-      return admission.kind === PARTITION_STATEMENT_KIND.READ ?
-        executeAdmittedReadQuery(this, admission, params, options) :
-        this.proposeWrite(operation);
+      if (admission.kind !== PARTITION_STATEMENT_KIND.READ) return this.proposeWrite(operation);
+      return (options.appliedPositionRead === true ? executeReadAtAppliedPosition :
+        executeAdmittedReadQuery)(this, admission, params, options);
     } catch (error) {
       this.logger.error(PARTITION_SERVICE_ERROR_MSG.QUERY_FAILED, {
         partitionId: this.partitionId,

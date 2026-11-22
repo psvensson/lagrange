@@ -93,9 +93,16 @@ async function createVerdictCoordinator(t, overrides) {
 // The services-p1 owner fact the hold reads, issued by the production read
 // over a reader that answers as the leader (or fails).
 function servicesOwnerFact(answer) {
-  return () => readOwnerFact(async () => answer, {tableName: 'services',
+  return () => readOwnerFact(async () => answer, {
+    tableName: 'services',
     sql: 'SELECT * FROM services WHERE service_type = ? AND partition_id = ?',
-    params: ['partition', TEST_PARTITION_ID], minimumIndex: 0, minimumTerm: 0});
+    params: ['partition', TEST_PARTITION_ID],
+    floor: {partitionId: 'services-p1', index: 0, term: 0},
+    deadline: {timeoutMs: 5000},
+    routingReadinessDimension:
+      REBALANCE_COORDINATOR_SHARED.CONTROL_PLANE_READINESS_DIMENSION
+        .CONTROL_PLANE_RECOVERY_ELIGIBLE,
+  });
 }
 
 function servicesOwnerRows(rows) {

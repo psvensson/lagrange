@@ -8,6 +8,8 @@ import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import Database from 'better-sqlite3';
 import {test} from '../../src/test-helpers/tap.js';
+import {PartitionServiceCoreBase} from '../../src/partition/partition-service-core-base.js';
+import {RAFT_OPERATION_OUTCOME} from '../../src/raft/raft-operation-port-constants.js';
 import {TABLES} from '../../src/constants/tables.js';
 import {
   SYSTEM_TABLE_NAME,
@@ -754,6 +756,12 @@ test('Surface 6: PartitionService.handleRemoteQuery, executeMigrationAlterQuery,
         db,
         partitionId: `${tableName}-p1`,
         replicaId: `${tableName}-p1-r1`,
+        // The witness producer reads the replica's raft status through the
+        // service's seam, as the real PartitionService does.
+        readOwnRaftStatus: PartitionServiceCoreBase.prototype.readOwnRaftStatus,
+        raft: {readStatus: () => ({outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+          groupId: `${tableName}-p1`, replicaIdentity: `${tableName}-p1-r1`,
+          role: 'leader', term: 1})},
         timeSource: {now: () => 1000},
         logger: {debug() {}, error() {}, warn() {}, info() {}},
         resolveLeaderAddress() {

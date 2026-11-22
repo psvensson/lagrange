@@ -7,8 +7,10 @@
  * groups are keyed by group_id and partitions by partition_id.
  */
 
-import {SYSTEM_TABLE_NAME} from
-  '../bootstrap/system-table-schemas-constants.js';
+import {
+  INITIAL_PARTITION_IDS,
+  SYSTEM_TABLE_NAME,
+} from '../bootstrap/system-table-schemas-constants.js';
 import {SERVICE_TYPE} from '../constants/service.js';
 import {UNIFIED_SERVICE_TYPE} from
   '../constants/unified-service-lifecycle.js';
@@ -38,7 +40,11 @@ const UNSUPPORTED_REBALANCER_ENTITY_TYPE_REASON =
 // owner-fact reads ask for none: a leader that has applied its election log
 // and its commit. A SERVICES position carried on the ledger's last terminal
 // operation is the design candidate for this floor (stage-2 record).
-const NO_SERVICES_POSITION = Object.freeze({minimumIndex: 0, minimumTerm: 0});
+const NO_SERVICES_POSITION = Object.freeze({
+  partitionId: INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES],
+  index: 0,
+  term: 0,
+});
 
 function buildEntityServiceRowRead({entityType, entityId}) {
   if (entityType === SERVICE_TYPE.PARTITION) {
@@ -130,9 +136,7 @@ function requireEntityServiceRowRead(identity) {
  * the coordinator's inventory consumers onto readOwnerFact, so a change of
  * the read's call shape is made here only. The answer is READY or
  * UNAVAILABLE with a reason; its rows are taken with
- * ownerFactEntityServiceRows. The caller's deadline and recovery routing
- * dimension are carried under the read's own options (which win), because
- * the read does not take them yet.
+ * ownerFactEntityServiceRows.
  * @param {Object} gateway - The control-plane system-table gateway.
  * @param {Object} identity - {entityType, entityId}.
  * @param {Object} queryOptions - The caller's deadline and routing options.
@@ -143,10 +147,16 @@ async function readEntityServiceRowsOwnerFact(gateway, identity, queryOptions) {
   const read = requireEntityServiceRowRead(identity);
   return readOwnerFact(
     (tableName, sql, params, readOptions) =>
-      gateway.readAuthoritativeRows(tableName, sql, params,
-        {...queryOptions, ...readOptions}),
-    {tableName: SYSTEM_TABLE_NAME.SERVICES, sql: read.sql, params: read.params,
-      ...NO_SERVICES_POSITION});
+      gateway.readAuthoritativeRows(tableName, sql, params, readOptions),
+    {
+      tableName: SYSTEM_TABLE_NAME.SERVICES,
+      sql: read.sql,
+      params: read.params,
+      floor: NO_SERVICES_POSITION,
+      deadline: {timeoutMs: queryOptions.timeoutMs},
+      routingReadinessDimension: queryOptions.routingReadinessDimension,
+    },
+  );
 }
 
 /**

@@ -15,14 +15,13 @@ import {
   readOwnerFact,
 } from '../../src/control-plane/control-plane-owner-fact-read.js';
 import {test} from '../../src/test-helpers/tap.js';
-import {READ_SQL, TABLE, openLedgerGroupSurface} from './cdc-owner-fact-group-fixture.js';
+import {openLedgerGroupSurface, ownerFactDraft} from './cdc-owner-fact-group-fixture.js';
 
 const OPERATION = 'hosted-replica-operation';
 const TEST_TIMEOUT_MS = 120000;
 
 function requestFor(operationId) {
-  return {tableName: TABLE, sql: READ_SQL, params: [operationId],
-    minimumIndex: 0, minimumTerm: 0};
+  return ownerFactDraft([operationId]);
 }
 
 test('readOwnerFact: a replica the handler hosts after the node joined, once elected, is ' +

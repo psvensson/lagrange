@@ -518,16 +518,11 @@ function withServicesLeaderWitness(tableName, answer) {
 
 function buildMockPolicyAuthorityWitness(partitionId) {
   return Object.freeze({
-    state: 'observed',
-    partitionId,
-    servingNodeId: 'test-node-1',
-    servingReplicaId: `${partitionId}-r1`,
-    role: 'leader',
-    leaderNodeId: 'test-node-1',
-    term: 1,
-    commitIndex: 1,
-    appliedIndex: 1,
-    electionLogApplied: true,
+    state: 'observed', partitionId, servingNodeId: 'test-node-1',
+    servingReplicaId: `${partitionId}-r1`, role: 'leader', leaderNodeId: 'test-node-1',
+    term: 1, commitIndex: 1, appliedIndex: 1, currentTermApplied: true, electionLogApplied: true,
+    leaderRead: Object.freeze({kind: 'owner_fact',
+      floor: Object.freeze({partitionId, index: 0, term: 0})}),
     observedAtMs: 1_000_000,
   });
 }

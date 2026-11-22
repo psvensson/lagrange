@@ -16,7 +16,7 @@ import {
   readOwnerFact,
 } from '../../src/control-plane/control-plane-owner-fact-read.js';
 import {test} from '../../src/test-helpers/tap.js';
-import {READ_SQL, READ_TIMEOUT_MS, TABLE, openLedgerGroupSurface} from
+import {READ_TIMEOUT_MS, openLedgerGroupSurface, ownerFactDraft} from
   './cdc-owner-fact-group-fixture.js';
 
 const OPERATION = 'redirect-deadline-operation';
@@ -25,8 +25,7 @@ const TEST_TIMEOUT_MS = 120000;
 const CLOCK_SLACK_MS = 250;
 
 function requestFor(operationId) {
-  return {tableName: TABLE, sql: READ_SQL, params: [operationId],
-    minimumIndex: 0, minimumTerm: 0};
+  return ownerFactDraft([operationId]);
 }
 
 test('readOwnerFact: a redirect inside the deadline succeeds without extending it',

@@ -13,7 +13,7 @@
 // routing projection, which the test writes as rows of a SystemTableCache
 // (that projection is the subject: a published leader that is right, stale
 // or absent); and, where a case names it, raft traffic held back on the
-// group's loopback transport.
+// group's loopback transport (dropped, or left pending until released).
 // Ceiling: one process; rows are seeded straight into a replica's database
 // (`workflow_step` names the replica, so an answer shows whose data it
 // carries) unless a case writes through raft; a raft write first opens the
@@ -35,6 +35,8 @@ import {ControlPlaneSystemTableGateway} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
 import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../../src/control-plane/control-plane-system-table-gateway-constants.js';
+import {CONTROL_PLANE_READINESS_DIMENSION} from
+  '../../src/control-plane/control-plane-readiness-constants.js';
 import {OWNER_FACT_UNAVAILABLE_REASON} from
   '../../src/control-plane/control-plane-owner-fact-read-contract.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -51,10 +53,14 @@ import {createCommittedServeEligibilityOwner} from
   '../control-plane/serve-eligibility-test-support.js';
 import {formAdmittedGroup} from '../partition/partition-admitted-group-fixture.js';
 import {
+  COMMIT_CARRYING,
   awaitKnownLeader,
   createHeldRaftNetwork,
   freshLeaderBehindCommit,
   isolateFromConsensus,
+  openGroupWriteAdmission,
+  peerOf,
+  requestGroupLeadershipTransfer,
   settleGroupLeader,
   transferGroupLeadership,
   writeThroughLeader,
@@ -97,18 +103,34 @@ const REFUSES_CREATION = () => {
  * owner's request builder.
  * @param {Object} service - The receiving replica.
  * @param {Array} params - READ_SQL parameters.
+ * @param {Object} [ownerFactFloor] - The read point floor it carries.
  * @return {Object} The QUERY request.
  */
-function ownerFactRequestTo(service, params) {
+function ownerFactRequestTo(service, params,
+  ownerFactFloor = {partitionId: PARTITION, index: 0, term: 0}) {
   return createDefaultPartitionRequestBuilder({
     executionOptions: {
       readAuthority: Object.freeze({leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED}),
-      ownerFactFloor: Object.freeze({minimumIndex: 0, minimumTerm: 0}),
+      ownerFactFloor: Object.freeze({...ownerFactFloor}),
     },
     forRead: true, params, partitionId: service.partitionId, sql: READ_SQL,
   })();
 }
 
+/**
+ * The final readOwnerFact request of this group's ledger table: a floor typed
+ * by this partition, an explicit deadline and routing class.
+ * @param {Array} params - READ_SQL parameters.
+ * @param {Object} [overrides] - Fields replaced for a named case.
+ * @return {Object} The request draft.
+ */
+function ownerFactDraft(params, overrides = {}) {
+  return {tableName: TABLE, sql: READ_SQL, params,
+    floor: {partitionId: PARTITION, index: 0, term: 0},
+    deadline: {timeoutMs: READ_TIMEOUT_MS},
+    routingReadinessDimension: CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    ...overrides};
+}
 /**
  * Open the three-node ledger surface; everything is torn down with `t`.
  * @param {Object} t - The tap test.
@@ -128,6 +150,7 @@ async function openLedgerGroupSurface(t, testFileUrl) {
   const raft = createHeldRaftNetwork();
   let group = null;
   t.teardown(async () => {
+    raft.releasePending();
     try {
       await Promise.all([...routers.values()].map((router) => router.shutdown()));
     } finally {
@@ -208,6 +231,7 @@ async function openLedgerGroupSurface(t, testFileUrl) {
         const remainingMs = lifetime.deliveryLifetime.remainingMs();
         const delivery = await transitDelivery(targetNodeId, address, message, lifetime);
         transit.push({callerNodeId, targetNodeId, address, sentAtMs, remainingMs,
+          leaderRead: message?.leaderRead ?? null,
           reached: !unreachable.has(targetNodeId), answer: deliveryAnswerOf(delivery) ?? null});
         return {delivery};
       },
@@ -269,6 +293,7 @@ async function openLedgerGroupSurface(t, testFileUrl) {
     return {
       gateway,
       handler,
+      queryExecutor: sqlQueryEngine.queryExecutor,
       publishLeader(publishedNodeId) {
         cache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.UPDATE, {
           partition_id: PARTITION, table_id: TABLE, leader_node_id: publishedNodeId,
@@ -286,7 +311,9 @@ async function openLedgerGroupSurface(t, testFileUrl) {
     };
   }
 
+  const requestLeadershipTransfer = (from, to) => requestGroupLeadershipTransfer(from, to);
   const transferLeadership = (from, to) => transferGroupLeadership(group, from, to);
+  const openWriteAdmission = (leader) => openGroupWriteAdmission(group, leader);
 
   // A raft write through the leader; answers the applied index it reached.
   const writeRow = (leader, operationId) => writeThroughLeader(group, leader, {
@@ -299,8 +326,37 @@ async function openLedgerGroupSurface(t, testFileUrl) {
     serviceOfNode,
     surfaceOf,
     transit,
+    requestLeadershipTransfer,
     transferLeadership,
     writeRow,
+    waitFor: (predicate) => group.waitFor(predicate),
+    deliveredTo: (service, predicate) => raft.deliveredTo(peerOf(service), predicate),
+    // The log index the leader's next write takes, its write path open.
+    async nextWriteIndex(leader) {
+      await openWriteAdmission(leader);
+      return Number(leader.raft.readStatus().lastIndex) + 1;
+    },
+    // A raft write through the leader, not awaited: its pending answer.
+    issueWrite(leader, operationId) {
+      return leader.executeQuery(INSERT_SQL, [operationId, leader.replicaId],
+        {entryId: `owner-fact-write-${operationId}`});
+    },
+    // Hold, pending, the leader's sends that tell a follower the commit
+    // index reached `index`: the turn that advanced its commit pends at that
+    // send, before it applies the entries it committed.
+    holdCommitAdvanceOf(service, index) {
+      const peer = peerOf(service);
+      return raft.holdPending((_address, packet) => String(packet?.from) === peer &&
+        COMMIT_CARRYING.has(packet?.message?.msgType) &&
+        Number(packet.message.commit) >= index);
+    },
+    // Hold, pending, every raft message `service` sends that `predicate`
+    // accepts ({msgType, term, commit, ...}).
+    holdPendingSendsOf(service, predicate) {
+      const peer = peerOf(service);
+      return raft.holdPending((_address, packet) =>
+        String(packet?.from) === peer && predicate(packet?.message ?? {}));
+    },
     // The row as one replica holds it: `workflow_step` names that replica.
     seedRow(service, operationId) {
       service.db.prepare(INSERT_SQL).run(operationId, service.replicaId);
@@ -333,4 +389,4 @@ async function openLedgerGroupSurface(t, testFileUrl) {
 }
 
 export {PARTITION, READ_SQL, READ_TIMEOUT_MS, TABLE, openLedgerGroupSurface,
-  ownerFactRequestTo};
+  ownerFactDraft, ownerFactRequestTo};

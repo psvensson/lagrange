@@ -27,9 +27,8 @@ import {
   resolveNoCandidateErrorMessage,
   resolveRedirectParticipantNodeId,
 } from './query-executor-partition-failure.js';
-import {
-  resolvePartitionExecutionBuilders,
-} from './query-executor-partition-request-builders.js';
+import {resolvePartitionExecutionBuilders} from './query-executor-partition-request-builders.js';
+import {publishedLeaderGapOf} from '../control-plane/control-plane-owner-fact-read-contract.js';
 import {
   UNKNOWN_OUTCOME_DECISION,
   createUnknownOutcomeRedelivery,
@@ -305,7 +304,8 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             continue;
           }
           this.logNoServiceForPartition(partitionId, routingSnapshot);
-          return {...buildFailureResult(lastError, lastFailureDetails)};
+          return {...buildFailureResult(lastError, lastFailureDetails),
+            ...publishedLeaderGapOf(requireCanonicalLeader, routingSnapshot)};
         }
         const candidateState = createPartitionCandidateDeliveryState({
           allowReadinessAuthoritativeRefresh,

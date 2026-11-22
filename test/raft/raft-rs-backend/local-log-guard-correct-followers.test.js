@@ -1,8 +1,9 @@
 // Witness W4 of the local-log guard: no envelope a correct replica sends is
 // ever refused. One scripted sequence of normal operation on real rs-raft
 // ports and the real WASM core - an election, appends, a lagging follower
-// caught up, a follower restarted from its durable log, a proposal
-// forwarded by a follower (a peer MsgPropose with entries), a named
+// caught up, a follower restarted from its durable log, a proposal made at
+// a follower (refused there: a core that does not lead never proposes, so
+// no peer MsgPropose is ever sent - raft-rs-proposal-term.js), a named
 // transfer requested at a follower (forwarded to the leader as a peer
 // MsgTransferLeader - the path a P7 refusal would have broken), a transfer
 // the leader makes through MsgTimeoutNow to a caught-up follower whose gate
@@ -22,6 +23,7 @@ import {durableLog} from './committed-membership-oracles.js';
 import {
   RAFT_LEADERSHIP_TRANSFER_REASON,
   RAFT_LEADERSHIP_TRANSFER_SUCCESSOR,
+  RAFT_OPERATION_OUTCOME,
 } from '../../../src/raft/raft-operation-port-constants.js';
 import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 import {RUNTIME_PHASE} from
@@ -95,8 +97,10 @@ async () => {
       'a heartbeat to a follower restarted from its durable log was refused');
     proposeAndCommit(cluster, 'cf-a', 'after-b-restarted');
 
-    // A proposal forwarded by a follower to the leader.
-    proposeAndCommit(cluster, 'cf-b', 'forwarded-by-b');
+    // A proposal made at a follower is refused there, never forwarded.
+    const atFollower = await turnChainValue(cluster.node('cf-b').propose({op: 'at-b'}));
+    assert.equal(atFollower.outcome, RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+      `a follower refuses a proposal: ${JSON.stringify(atFollower)}`);
 
     // A named transfer requested at a follower: forwarded to the leader.
     const forwarded = await turnChainValue(cluster.node('cf-b').transferLeadership({
