@@ -64,7 +64,9 @@ const VIRTUAL_AGE_LIMIT_MS = 400;
 const VIRTUAL_IDLE_LIMIT_MS = 200;
 const VIRTUAL_STEP_REFRESH_MS = 150;
 const VIRTUAL_STEP_EXPIRE_IDLE_MS = 100;
-const VIRTUAL_STEP_EXPIRE_AGE_MS = 200;
+const VIRTUAL_STEP_RE_REFRESH_MS = 50;
+const VIRTUAL_STEP_EXPIRE_AGE_MS = 150;
+const VIRTUAL_STEP_EXPIRE_DEADLINE_MS = 100;
 const VIRTUAL_LARGE_BOUND_MS = 5000;
 const DEADLINE_WINDOW_MS = 30000;
 const PAGE_ROW_BOUND_SMALL = 2;
@@ -859,9 +861,10 @@ describe(`Retained read-view generation custody (${QUEST_ID})`, () => {
           'readPage past maxIdleMs before reap must throw READ_VIEW_EXPIRED',
         );
 
-        // Keep ageLimitView active wrt idle (150ms since last read) while crossing maxViewAgeMs (400ms)
-        // and crossing deadlineView's deadlineMs (500ms) at +550ms.
-        virtualNowMs += VIRTUAL_STEP_REFRESH_MS;
+        // At +300ms (150ms since last read, < 200ms maxIdleMs and < 400ms maxViewAgeMs),
+        // refresh ageLimitView again, then advance +150ms to +450ms (idle=150ms < 200ms,
+        // age=450ms >= 400ms maxViewAgeMs).
+        virtualNowMs += VIRTUAL_STEP_RE_REFRESH_MS;
         expiryManager.readPage({
           boundParameters: [],
           deadlineMs: virtualNowMs + DEADLINE_WINDOW_MS,
@@ -875,24 +878,6 @@ describe(`Retained read-view generation custody (${QUEST_ID})`, () => {
           statement: SELECTOR_SQL,
         });
         virtualNowMs += VIRTUAL_STEP_EXPIRE_AGE_MS;
-
-        assert.throws(
-          () =>
-            deadlineOnlyManager.readPage({
-              boundParameters: [],
-              deadlineMs: virtualNowMs + DEADLINE_WINDOW_MS,
-              keyColumns: KEY_COLUMNS,
-              pageByteBound: PAGE_BYTE_BOUND,
-              pageIndex: 0,
-              pageRowBound: PAGE_ROW_BOUND_SMALL,
-              partitionService,
-              partitionVersion: 1,
-              readViewId: deadlineView.readViewId,
-              statement: SELECTOR_SQL,
-            }),
-          (err) => err.pagedCode === PAGED_EXECUTION_ERROR_CODE.READ_VIEW_EXPIRED,
-          'readPage past deadlineMs before reap must throw READ_VIEW_EXPIRED',
-        );
 
         // Explicitly run reapExpiredViews() on ageLimitView before calling readPage.
         const reapOutcome = expiryManager.reapExpiredViews(virtualNowMs);
@@ -913,6 +898,26 @@ describe(`Retained read-view generation custody (${QUEST_ID})`, () => {
             }),
           (err) => err.pagedCode === PAGED_EXECUTION_ERROR_CODE.READ_VIEW_EXPIRED,
           'readPage past maxViewAgeMs after reapExpiredViews must still throw READ_VIEW_EXPIRED',
+        );
+
+        // Advance +100ms to +550ms (past deadlineView's 500ms deadlineMs) before reap.
+        virtualNowMs += VIRTUAL_STEP_EXPIRE_DEADLINE_MS;
+        assert.throws(
+          () =>
+            deadlineOnlyManager.readPage({
+              boundParameters: [],
+              deadlineMs: virtualNowMs + DEADLINE_WINDOW_MS,
+              keyColumns: KEY_COLUMNS,
+              pageByteBound: PAGE_BYTE_BOUND,
+              pageIndex: 0,
+              pageRowBound: PAGE_ROW_BOUND_SMALL,
+              partitionService,
+              partitionVersion: 1,
+              readViewId: deadlineView.readViewId,
+              statement: SELECTOR_SQL,
+            }),
+          (err) => err.pagedCode === PAGED_EXECUTION_ERROR_CODE.READ_VIEW_EXPIRED,
+          'readPage past deadlineMs before reap must throw READ_VIEW_EXPIRED',
         );
       } finally {
         deadlineOnlyManager.shutdown();
