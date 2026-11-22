@@ -111,6 +111,20 @@ Recovery retains obligations and progresses; startup and shutdown own their
 resources. The authoring and proof workflow must catch invented contracts and
 invalid evidence before integration.
 
+## Usable alpha completion (approved 22 November 2026)
+
+The user approved the [twelve-package completion plan](operation-integrity-and-reliable-formation/usable-alpha-completion.md)
+for making the implemented SQL and WASI product usable through its public
+interfaces, retained-storage recovery and measured resource limits. It is a
+delivery sequence within this epic and the existing feature owners; their
+acceptance, release allocation and original evidence remain authoritative.
+The [implementing-agent start note](operation-integrity-and-reliable-formation/usable-alpha-start-here.md)
+connects that plan to the ongoing takeover and the currently observed
+withheld-dispatch repair. Resolve live refs and active assignments before using
+its dated source checkpoint. Continue the current bounded unit and preserve its
+writer; this adoption does not replace the integration owner's current summary,
+start a runtime task or lab run, change a sealed predicate, or establish a pass.
+
 ## Current integration summary (12 November 2026)
 
 - **Governing rules and source:** rule-set revision 5, inspected at
