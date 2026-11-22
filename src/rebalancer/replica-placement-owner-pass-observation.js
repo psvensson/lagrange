@@ -14,7 +14,7 @@
 // proposals and admitted operations.
 import {PLACEMENT_RESULT_FIELD} from '../partition/partition-placement-admission-constants.js';
 import {isWriteOutcomeUnknown} from '../partition/partition-write-kernel.js';
-import {PLACEMENT_OUTCOME} from './replica-placement-owner-constants.js';
+import {PLACEMENT_OUTCOME, PLACEMENT_TRIGGER} from './replica-placement-owner-constants.js';
 import {PLACEMENT_DEFICIT_STATE} from './replica-placement-owner-deficits.js';
 
 // Where a pass stopped (lastPassSnapshot.stoppedAt): a tenure checkpoint (the
@@ -67,6 +67,13 @@ function newPassRecord(observation, custody, sequence, triggers) {
 // An operation the pass admitted (kept also when the pass aborts later).
 function recordAdmittedOperation(pass, operationId) {
   pass.operationIds.push(operationId);
+}
+
+// The admissions a pass woken by the resync alone recorded, also one whose
+// later local step aborted the pass: what placementResyncAdmissions counts.
+function resyncAdmissionsOf(pass, triggers) {
+  return triggers.size === 1 && triggers.has(PLACEMENT_TRIGGER.RESYNC) ?
+    pass.operationIds.length : 0;
 }
 
 // An admitted candidate whose later local step failed: the admission stands;
@@ -263,6 +270,7 @@ export {
   completePass,
   recordAdmittedOperation,
   recordCandidateFailure,
+  resyncAdmissionsOf,
   recordLocalFailureAfterAdmission,
   recordUncertainCandidate,
   createPlacementObservation,

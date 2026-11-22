@@ -50,7 +50,7 @@ import {
   createPlacementObservation, directSubmissionRecord, markPassStale, markPassWaiting,
   placementPassSnapshot, recordCapacityCheck, recordFenced,
   recordAdmittedOperation, recordNodeAuthorityWait, recordPassEvaluations,
-  recordPassFailure, recordProposal, recordSubmissionAnswer,
+  recordPassFailure, recordProposal, recordSubmissionAnswer, resyncAdmissionsOf,
 } from './replica-placement-owner-pass-observation.js';
 import {
   CANDIDATE_FAILED, classifyCandidateFailure, createProposalProgress, recordProposalAnswer,
@@ -654,7 +654,7 @@ class ReplicaPlacementOwner {
   }
 
   async admitOrderedCandidates(context) {
-    const {ordered, busyPartitions, occupancy, saturatedTargets, resyncOnly, pass} = context;
+    const {ordered, busyPartitions, occupancy, saturatedTargets, pass} = context;
     const state = {
       incompleteCount: context.incompleteCount,
       copyCount: context.copyCount,
@@ -668,7 +668,6 @@ class ReplicaPlacementOwner {
       const proposal = await this.proposeCandidateIsolated(rawCandidate, context);
       if (proposal === null || proposal === CANDIDATE_FAILED) continue;
       const {candidate, operationId} = proposal;
-      if (resyncOnly) this.placementResyncAdmissions += 1;
       recordAdmittedOperation(pass, operationId);
       busyPartitions.add(candidate.partitionId);
       state.incompleteCount += 1;
@@ -705,7 +704,7 @@ class ReplicaPlacementOwner {
     return this.checkpoint(pass, CHECKPOINT.TERM_START_BARRIER);
   }
 
-  async planAndAdmit(pass, census, nodeInput, nowMs, triggers) {
+  async planAndAdmit(pass, census, nodeInput, nowMs) {
     const busyPartitions = new Set(
       census.filter((r) => r.incomplete && r.entityType === UNIFIED_SERVICE_TYPE.PARTITION)
         .map((r) => r.entityId),
@@ -723,7 +722,6 @@ class ReplicaPlacementOwner {
       ordered: prepared.ordered, inputsByPartition: prepared.inputsByPartition,
       repairWaitingSourceNodeIds: prepared.repairWaitingSourceNodeIds, nodeInput,
       busyPartitions, occupancy, saturatedTargets, storageExcludedTargets, pass,
-      resyncOnly: triggers.size === 1 && triggers.has(PLACEMENT_TRIGGER.RESYNC),
       incompleteCount: census.filter((r) => r.incomplete).length,
       copyCount: occupancy.copies.length,
       ledgerIncomplete: census.some((r) =>
@@ -732,7 +730,7 @@ class ReplicaPlacementOwner {
     });
   }
 
-  async runPassSteps(pass, triggers) {
+  async runPassSteps(pass) {
     if (!this.checkpoint(pass, CHECKPOINT.PASS_START) || !this.passTermStartBarrier(pass)) return;
     const census = await this.readPassCensus(pass);
     if (census === null || !this.checkpoint(pass, CHECKPOINT.AFTER_CENSUS)) return;
@@ -743,7 +741,7 @@ class ReplicaPlacementOwner {
       recordNodeAuthorityWait(pass, nodeInput);
       return;
     }
-    await this.planAndAdmit(pass, census, nodeInput, nowMs, triggers);
+    await this.planAndAdmit(pass, census, nodeInput, nowMs);
     completePass(pass, SERVE_ELIGIBILITY_STATE.READY);
   }
 
@@ -751,12 +749,13 @@ class ReplicaPlacementOwner {
   async runPass(triggers) {
     const pass = beginPlacementPass(this.observation, this.custody, triggers);
     try {
-      await this.runPassSteps(pass, triggers);
+      await this.runPassSteps(pass);
     } catch (error) {
       recordPassFailure(pass, error);
       throw error;
     } finally {
       if (pass.stoppedAt === CHECKPOINT.RUNNING) pass.stoppedAt = CHECKPOINT.ABORTED;
+      this.placementResyncAdmissions += resyncAdmissionsOf(pass, triggers);
       if (pass.custody === this.custody || this.custody === null) {
         this.lastPassSnapshot = placementPassSnapshot(pass, PLACEMENT_CLEARING_TRIGGER);
       }

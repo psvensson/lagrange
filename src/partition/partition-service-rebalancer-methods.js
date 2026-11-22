@@ -46,20 +46,30 @@ class PartitionServiceRebalancerMethods {
   // setSystemTableCache (cache), setRebalanceCoordinator /
   // rebindCoordinator (coordinator); the coordinator's factory binding attaches
   // every registered ledger still waiting. The attachment, once made, is kept
-  // until quiesce: no order attaches twice.
+  // until quiesce: no order attaches twice. The attach is marked in progress
+  // before the coordinator is called: an event that re-enters during the
+  // factory's synchronous prefix (on a leading ledger the first pass's status
+  // read can run a consensus turn and notify) is a no-op, not a second factory
+  // call.
   ensureReplicaPlacementOwnerAttached() {
     if (
       this.partitionId !== LEDGER_PARTITION_ID ||
       this.isShutdown ||
       this.replicaPlacementOwnerAttachment ||
+      this.replicaPlacementOwnerAttachInProgress === true ||
       !this.raft ||
       !this.systemTableCache ||
       !this.rebalanceCoordinator
     ) {
       return;
     }
-    this.replicaPlacementOwnerAttachment =
-      this.rebalanceCoordinator.attachLedgerReplicaPlacementOwner(this);
+    this.replicaPlacementOwnerAttachInProgress = true;
+    try {
+      this.replicaPlacementOwnerAttachment =
+        this.rebalanceCoordinator.attachLedgerReplicaPlacementOwner(this);
+    } finally {
+      this.replicaPlacementOwnerAttachInProgress = false;
+    }
   }
 
   // Every dependency, leadership and readiness event of a partition reaches
