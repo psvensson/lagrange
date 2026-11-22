@@ -9,13 +9,12 @@
  */
 
 import {sqliteConnectionState} from '../storage/sqlite-connection-state.js';
+import {DB_LOCKING_READ_ACQUIRE_STATUS} from './partition-locking-read-command-constants.js';
 
 const RESERVATION_TABLE_NAME = '_lagrange_locking_read_reservations';
 const STORE_UNAVAILABLE_MSG = 'Partition database is closed or unavailable';
 const RELEASE_ERROR_MSG = Object.freeze({
-  TX: 'Failed to release transaction reservations',
   PARTITION_TX: 'Failed to release partition transaction reservations',
-  SESSION: 'Failed to release session reservations',
   PARTITION_SESSION: 'Failed to release partition session reservations',
 });
 
@@ -58,20 +57,10 @@ const RESERVATION_SQL = Object.freeze({
   SELECT_PARTITION_SESSION_EXISTS:
     'SELECT 1 AS held FROM _lagrange_locking_read_reservations ' +
     'WHERE partition_id = ? AND session_id = ? LIMIT 1',
-  DELETE_ROW:
-    'DELETE FROM _lagrange_locking_read_reservations ' +
-    'WHERE partition_id = ? AND table_name = ? AND row_key = ?',
-  DELETE_OWNED_ROW:
-    'DELETE FROM _lagrange_locking_read_reservations ' +
-    'WHERE partition_id = ? AND table_name = ? AND row_key = ? AND transaction_id = ?',
   DELETE_EXPIRED:
     'DELETE FROM _lagrange_locking_read_reservations WHERE expires_at IS NOT NULL AND expires_at <= ?',
-  DELETE_BY_TRANSACTION:
-    'DELETE FROM _lagrange_locking_read_reservations WHERE transaction_id = ?',
   DELETE_BY_PARTITION_TRANSACTION:
     'DELETE FROM _lagrange_locking_read_reservations WHERE partition_id = ? AND transaction_id = ?',
-  DELETE_BY_SESSION:
-    'DELETE FROM _lagrange_locking_read_reservations WHERE session_id = ?',
   DELETE_BY_PARTITION_SESSION:
     'DELETE FROM _lagrange_locking_read_reservations WHERE partition_id = ? AND session_id = ?',
   DELETE_ALL:
@@ -98,11 +87,11 @@ function dbErrorMessage(error) {
 }
 
 function dbFailure(error, extra = {}) {
-  return {ok: false, error: dbErrorMessage(error), ...extra};
+  return {ok: false, error: dbErrorMessage(error), cause: error, ...extra};
 }
 
 function dbCheckFailure(error) {
-  return {error: true, conflict: false, message: dbErrorMessage(error)};
+  return {error: true, conflict: false, message: dbErrorMessage(error), cause: error};
 }
 
 /**
@@ -153,41 +142,26 @@ export function ensureLockingReadTableInitialized(db, options = {}) {
   }
 }
 
-function isRowExpired(expiresAt, now) {
-  return typeof expiresAt === 'number' && expiresAt > 0 && expiresAt <= now;
-}
-
-function deleteRowFailure(error) {
-  return {deleted: false, error: dbErrorMessage(error)};
-}
-
-function deleteExpiredDbRow(db, {partitionId, tableName, rowKey}) {
-  try {
-    sqliteConnectionState(db)
-      .statement(RESERVATION_SQL.DELETE_ROW)
-      .run(partitionId, tableName, rowKey);
-    return {deleted: true};
-  } catch (error) {
-    return deleteRowFailure(error);
-  }
-}
-
 /**
- * Check a single row reservation in the partition SQLite database.
+ * Pure read-only check of a single row reservation in the partition SQLite database.
+ * Never consults wall-clock time or mutates SQLite rows on read so every Raft
+ * replica observes identical durable state.
  *
  * @param {Object} db - SQLite database instance.
  * @param {Object} query - Query options.
  * @return {Object|null} Conflict/reentrant/error descriptor or null if unreserved.
  */
-export function checkDbRowReservation(db, {partitionId, tableName, rowKey, transactionId}) {
+export function checkDbRowReservation(
+  db,
+  {partitionId, tableName, rowKey, transactionId},
+) {
   const init = ensureLockingReadTableInitialized(db, {readOnly: true});
   if (!init.ok) {
-    return {error: true, conflict: false, message: init.error};
+    return {error: true, conflict: false, message: init.error, cause: init.cause};
   }
   if (!init.exists) {
     return null;
   }
-  const now = Date.now();
   let existing;
   try {
     existing = sqliteConnectionState(db)
@@ -199,10 +173,6 @@ export function checkDbRowReservation(db, {partitionId, tableName, rowKey, trans
   if (!existing) {
     return null;
   }
-  if (isRowExpired(existing.expires_at, now)) {
-    const clean = deleteExpiredDbRow(db, {partitionId, tableName, rowKey});
-    return clean.deleted ? null : {error: true, conflict: false, message: clean.error};
-  }
   if (existing.transaction_id === transactionId) {
     return {conflict: false, reentrant: true, rowKey};
   }
@@ -213,61 +183,60 @@ export function checkDbRowReservation(db, {partitionId, tableName, rowKey, trans
   };
 }
 
+function queryTableReservationRows(db, {partitionId, tableName, transactionId}) {
+  return typeof transactionId === 'string' && transactionId.length > 0 ?
+    sqliteConnectionState(db)
+      .statement(RESERVATION_SQL.SELECT_TABLE_OTHER_TX)
+      .all(partitionId, tableName, transactionId) :
+    sqliteConnectionState(db)
+      .statement(RESERVATION_SQL.SELECT_TABLE_ALL)
+      .all(partitionId, tableName);
+}
+
 /**
- * List active conflicting FOR_UPDATE reservations held on a table/partition in SQLite.
+ * Pure read-only listing of active conflicting FOR_UPDATE reservations held on
+ * a table/partition in SQLite. Never consults wall-clock time or deletes on read.
  *
  * @param {Object} db - SQLite database instance.
  * @param {Object} query - Query options.
  * @return {{ok: boolean, rows?: Array<Object>, error?: string}}
  */
-export function listDbTableReservationConflicts(db, {partitionId, tableName, transactionId}) {
+export function listDbTableReservationConflicts(
+  db,
+  {partitionId, tableName, transactionId, throwOnError = false},
+) {
   const init = ensureLockingReadTableInitialized(db, {readOnly: true});
   if (!init.ok) {
-    return {ok: false, error: init.error};
+    if (throwOnError === true) {
+      throw init.cause ?? new Error(init.error);
+    }
+    return {ok: false, error: init.error, cause: init.cause};
   }
   if (!init.exists) {
     return {ok: true, rows: []};
   }
-  const now = Date.now();
   let rawRows;
   try {
-    rawRows = typeof transactionId === 'string' && transactionId.length > 0 ?
-      sqliteConnectionState(db)
-        .statement(RESERVATION_SQL.SELECT_TABLE_OTHER_TX)
-        .all(partitionId, tableName, transactionId) :
-      sqliteConnectionState(db)
-        .statement(RESERVATION_SQL.SELECT_TABLE_ALL)
-        .all(partitionId, tableName);
+    rawRows = queryTableReservationRows(db, {partitionId, tableName, transactionId});
   } catch (error) {
+    if (throwOnError === true) {
+      throw error;
+    }
     return dbFailure(error);
   }
-  const active = [];
-  for (const row of rawRows) {
-    if (isRowExpired(row.expires_at, now)) {
-      deleteExpiredDbRow(db, {partitionId, tableName, rowKey: row.row_key});
-      continue;
-    }
-    active.push({
-      partitionId,
-      tableName,
-      rowKey: row.row_key,
-      transactionId: row.transaction_id,
-    });
-  }
+  const active = rawRows.map((row) => ({
+    partitionId,
+    tableName,
+    rowKey: row.row_key,
+    transactionId: row.transaction_id,
+  }));
   return {ok: true, rows: active};
 }
 
-/**
- * Insert or update a reservation row in SQLite. Returns structured outcome.
- *
- * @param {Object} db - SQLite database instance.
- * @param {Object} record - Reservation record.
- * @return {{ok: boolean, error?: string}}
- */
-export function upsertDbReservation(db, record) {
+function upsertDbReservation(db, record) {
   const init = ensureLockingReadTableInitialized(db, {readOnly: false});
   if (!init.ok) {
-    return {ok: false, error: init.error};
+    return {ok: false, error: init.error, cause: init.cause};
   }
   try {
     sqliteConnectionState(db)
@@ -288,25 +257,54 @@ export function upsertDbReservation(db, record) {
   }
 }
 
+function unavailableAcquireOutcome(rowKey, error, cause) {
+  return {
+    status: DB_LOCKING_READ_ACQUIRE_STATUS.UNAVAILABLE,
+    rowKey,
+    error,
+    ...(cause !== undefined ? {cause} : {}),
+  };
+}
+
+function acquireDbForUpdateInTx(db, record) {
+  const existing = checkDbRowReservation(db, record);
+  if (existing?.error) {
+    return unavailableAcquireOutcome(record.rowKey, existing.message, existing.cause);
+  } else if (existing?.conflict) {
+    return {
+      status: DB_LOCKING_READ_ACQUIRE_STATUS.CONFLICT,
+      rowKey: record.rowKey,
+      conflictingTransactionId: existing.conflictingTransactionId,
+    };
+  } else if (existing?.reentrant) {
+    return {
+      status: DB_LOCKING_READ_ACQUIRE_STATUS.ALREADY_OWNED,
+      rowKey: record.rowKey,
+    };
+  }
+  const write = upsertDbReservation(db, record);
+  return write.ok ?
+    {status: DB_LOCKING_READ_ACQUIRE_STATUS.ACQUIRED, rowKey: record.rowKey} :
+    unavailableAcquireOutcome(record.rowKey, write.error, write.cause);
+}
+
 /**
- * Delete a specific row reservation owned by a transaction in SQLite.
+ * Atomically acquire one authoritative durable FOR_UPDATE reservation in SQLite.
+ * Depends solely on the supplied partition SQLite connection and record — never
+ * consults process-local mirrors, PARTITION_DBS, or authority-switching flags.
  *
- * @param {Object} db - SQLite database instance.
- * @param {Object} target - {partitionId, tableName, rowKey, transactionId}.
- * @return {number} Deleted row count.
+ * @param {Object|null} db - Partition SQLite database instance.
+ * @param {Object} record - Canonical reservation record.
+ * @return {Object} Structured acquisition outcome keyed by DB_LOCKING_READ_ACQUIRE_STATUS.
  */
-export function deleteOwnedDbRowReservation(db, {partitionId, tableName, rowKey, transactionId}) {
-  const init = ensureLockingReadTableInitialized(db, {readOnly: true});
-  if (!init.ok || !init.exists) {
-    return 0;
+export function acquireDbForUpdateReservation(db, record) {
+  if (!db || db.open === false) {
+    return unavailableAcquireOutcome(record.rowKey, STORE_UNAVAILABLE_MSG);
   }
   try {
-    const info = sqliteConnectionState(db)
-      .statement(RESERVATION_SQL.DELETE_OWNED_ROW)
-      .run(partitionId, tableName, rowKey, transactionId);
-    return info.changes;
+    return db.transaction(() => acquireDbForUpdateInTx(db, record))();
   } catch (error) {
-    throw new Error(`Failed to release locking-read row reservation: ${dbErrorMessage(error)}`);
+    return unavailableAcquireOutcome(record.rowKey, dbErrorMessage(error), error);
   }
 }
 
@@ -335,34 +333,6 @@ function hasScopedReservationRow(db, sql, params) {
 }
 
 /**
- * Release all reservations on a SQLite database for a transaction (optionally partition-scoped).
- *
- * @param {Object} db - SQLite database instance.
- * @param {string} transactionId - Transaction identifier.
- * @param {string|null} [partitionId=null] - Optional partition scope filter.
- * @return {number} Count of deleted rows.
- */
-export function releaseDbTransactionReservations(db, transactionId, partitionId = null) {
-  if (!transactionId) {
-    return 0;
-  }
-  if (isNonEmptyId(partitionId)) {
-    return runScopedDelete(
-      db,
-      RESERVATION_SQL.DELETE_BY_PARTITION_TRANSACTION,
-      [partitionId, transactionId],
-      RELEASE_ERROR_MSG.PARTITION_TX,
-    );
-  }
-  return runScopedDelete(
-    db,
-    RESERVATION_SQL.DELETE_BY_TRANSACTION,
-    [transactionId],
-    RELEASE_ERROR_MSG.TX,
-  );
-}
-
-/**
  * Release durable SQLite reservations strictly scoped to one partition and transaction.
  *
  * @param {Object} db - SQLite database instance.
@@ -379,34 +349,6 @@ export function releaseDbPartitionTransactionReservations(db, partitionId, trans
     RESERVATION_SQL.DELETE_BY_PARTITION_TRANSACTION,
     [partitionId, transactionId],
     RELEASE_ERROR_MSG.PARTITION_TX,
-  );
-}
-
-/**
- * Release all reservations on a SQLite database for a session (optionally partition-scoped).
- *
- * @param {Object} db - SQLite database instance.
- * @param {string} sessionId - Session identifier.
- * @param {string|null} [partitionId=null] - Optional partition scope filter.
- * @return {number} Count of deleted rows.
- */
-export function releaseDbSessionReservations(db, sessionId, partitionId = null) {
-  if (!sessionId) {
-    return 0;
-  }
-  if (isNonEmptyId(partitionId)) {
-    return runScopedDelete(
-      db,
-      RESERVATION_SQL.DELETE_BY_PARTITION_SESSION,
-      [partitionId, sessionId],
-      RELEASE_ERROR_MSG.PARTITION_SESSION,
-    );
-  }
-  return runScopedDelete(
-    db,
-    RESERVATION_SQL.DELETE_BY_SESSION,
-    [sessionId],
-    RELEASE_ERROR_MSG.SESSION,
   );
 }
 

@@ -7,9 +7,8 @@ import {
   detachAuthoritativeRoutingOverlayCacheApplyListener,
   initializeSqlQueryEngineInstance,
 } from './sql-query-engine-instance-initializer.js';
-import {releaseTransactionReservations} from
+import {clearTransactionMemoryReservations} from
   '../partition/partition-locking-read-reservation.js';
-import {listCandidatePartitionDbs} from './sql-locking-read-remote.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const RUNTIME_ACCESS_POLICY_DENIED_STATUS = 'denied';
@@ -241,17 +240,15 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
   }
 
   /**
-   * Release remaining transaction reservations on shutdown.
+   * Clear process-local gateway reservation bookkeeping on shutdown.
+   * Durable participant reservations remain under canonical participant
+   * settlement and recovery and are never deleted out-of-log here.
    */
   releasePendingReservations() {
     const transactions = this.transactionCoordinator?.transactionsBySession;
     if (!transactions) return;
     for (const tx of transactions.values()) {
-      releaseTransactionReservations(tx.transactionId);
-      const localDbs = listCandidatePartitionDbs(this, Array.from(tx.participants?.keys?.() || []));
-      for (const {db} of localDbs) {
-        releaseTransactionReservations(tx.transactionId, {db});
-      }
+      clearTransactionMemoryReservations(tx.transactionId);
     }
   }
 

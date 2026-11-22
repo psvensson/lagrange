@@ -8,6 +8,7 @@ const DEPENDENCY_RULE = Object.freeze({
     'partition-decision-and-store-no-indirect-nondeterministic-capabilities',
   PURE_SQL_RENDER_AND_PLACEMENT_DECISION_NO_NONDETERMINISTIC_CAPABILITIES:
     'pure-sql-render-and-placement-decision-no-nondeterministic-capabilities',
+  QUERY_NO_DURABLE_LOCKING_READ_STORE: 'query-no-durable-locking-read-store',
 });
 const DEPENDENCY_RULE_COMMENT = Object.freeze({
   NO_CIRCULAR: 'Disallow circular dependencies.',
@@ -27,6 +28,10 @@ const DEPENDENCY_RULE_COMMENT = Object.freeze({
     'Pure SQL AST/rendering and pure placement/reconciliation decision modules ' +
     'must not directly or transitively import transport, mutable caches, ' +
     'wall-clock timers, or worker/process managers.',
+  QUERY_NO_DURABLE_LOCKING_READ_STORE:
+    'Query/gateway modules must never import the partition-private durable ' +
+    'locking-read SQLite store; durable acquisition and release belong solely ' +
+    'to the partition owners.',
 });
 const DEPENDENCY_RULE_SEVERITY = Object.freeze({
   ERROR: 'error',
@@ -43,12 +48,17 @@ const DEPENDENCY_PATH = Object.freeze({
   NODE_MODULES: 'node_modules',
   PARTITION_APPLY_AND_DECISION_MODULES:
     '(^|/)src/(partition/(partition-participant-transaction-(apply|store|bytes)|' +
+    'partition-locking-read-(service|store|command)|' +
     'partition-placement-admission-(decision|command|identity))|' +
     'rebalancer/replica-placement-owner-admission-statement)\\.js$',
   PARTITION_PURE_DECISION_AND_STORE_MODULES:
     '(^|/)src/(partition/(partition-participant-transaction-(store|bytes)|' +
+    'partition-locking-read-(store|command)|' +
     'partition-placement-admission-(decision|command|identity))|' +
     'rebalancer/replica-placement-owner-admission-statement)\\.js$',
+  QUERY_LAYER_MODULES: '(^|/)src/query/',
+  DURABLE_LOCKING_READ_STORE_MODULE:
+    '(^|/)src/partition/partition-locking-read-store\\.js$',
   PARTITION_APPLY_FORBIDDEN_DIRECT:
     '(^|/)(src/(transport|cache|control-plane|api|cli|admin|time)/|' +
     'src/bootstrap/(bootstrap-)?readiness-|' +
@@ -142,6 +152,17 @@ module.exports = {
         reachable: true,
         path: DEPENDENCY_PATH
           .PURE_SQL_RENDER_AND_PLACEMENT_DECISION_FORBIDDEN_REACHABLE,
+      },
+    },
+    {
+      name: DEPENDENCY_RULE.QUERY_NO_DURABLE_LOCKING_READ_STORE,
+      comment: DEPENDENCY_RULE_COMMENT.QUERY_NO_DURABLE_LOCKING_READ_STORE,
+      severity: DEPENDENCY_RULE_SEVERITY.ERROR,
+      from: {
+        path: DEPENDENCY_PATH.QUERY_LAYER_MODULES,
+      },
+      to: {
+        path: DEPENDENCY_PATH.DURABLE_LOCKING_READ_STORE_MODULE,
       },
     },
     {

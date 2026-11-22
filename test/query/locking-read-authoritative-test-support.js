@@ -19,13 +19,22 @@ import {
 } from '../../src/constants/index.js';
 import {META_SERVICE_ID} from '../../src/constants/wasm-meta.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {clearAllReservations} from '../../src/partition/partition-locking-read-reservation.js';
+import {
+  clearAllReservations,
+  clearMemoryReservations,
+  stageLocalWriteReservation,
+} from '../../src/partition/partition-locking-read-reservation.js';
 import {
   PARTICIPANT_CONCURRENCY_GRANULARITY,
+  PARTICIPANT_TRANSACTION_COMMAND,
 } from '../../src/partition/partition-participant-transaction-constants.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {isRaftRsTransportEnvelope} from '../../src/raft/raft-packet-utils.js';
+import {RAFT_RS_MESSAGE_TYPE} from '../../src/raft/raft-rs-ingress-constants.js';
+import {decodeCommittedProposal} from '../../src/raft/raft-rs-proposal-codec.js';
 import {PostgresWireRuntimeModule} from '../../src/runtime/pgwire-runtime-module.js';
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 import {formAdmittedGroup} from '../partition/partition-admitted-group-fixture.js';
 import {attachPartitionReleaseOwners} from '../partition/partition-release-fixture.js';
@@ -338,4 +347,140 @@ export function assertNumericRowValues(rows, expectedRows) {
       assert.equal(Number(actual[k]), v, `Mismatch on column ${k}`);
     }
   }
+}
+
+export function readAccountBalance(db, id) {
+  return Number(db.prepare('SELECT balance FROM accounts WHERE id = ?').get(id)?.balance);
+}
+
+function decodeAppendCommands(entries) {
+  const commands = [];
+  for (const entry of entries || []) {
+    if (!entry?.data || entry.data.length === 0) continue;
+    try {
+      const bytes = typeof entry.data === 'string' ?
+        Buffer.from(entry.data, 'base64') :
+        entry.data;
+      commands.push(decodeCommittedProposal(bytes));
+    } catch (_err) {
+      // Non-proposal entry (e.g. conf change or empty noop).
+    }
+  }
+  return commands;
+}
+
+export function installAppendEntriesRaceHarness([r1, r2, r3]) {
+  const network = r1.transport;
+  const origDeliver = network.deliver.bind(network);
+  const origR1Apply = r1.applyCommittedEntry.bind(r1);
+  const origR2Apply = r2.applyCommittedEntry.bind(r2);
+  const origR3Apply = r3.applyCommittedEntry.bind(r3);
+
+  const state = {
+    armMatch: null,
+    holding: false,
+    heldDeliveries: [],
+    triggeredCommand: null,
+    capturedPrepareTxId: null,
+    poisonR2: false,
+    wipeR3: false,
+  };
+
+  const flush = () => {
+    state.holding = false;
+    state.armMatch = null;
+    const queued = state.heldDeliveries.splice(0, state.heldDeliveries.length);
+    for (const deliverNow of queued) {
+      void deliverNow().catch(() => {});
+    }
+  };
+
+  const isLockingOrPrepare = (cmd) =>
+    cmd?.type === 'LOCKING_READ_RESERVATION' ||
+    cmd?.type === PARTICIPANT_TRANSACTION_COMMAND.PREPARE;
+
+  network.deliver = (address, payload) => {
+    if ((state.armMatch || state.holding) &&
+        isRaftRsTransportEnvelope(payload) &&
+        payload.groupId === ACCOUNTS_PARTITION_ID &&
+        payload.message?.msgType === RAFT_RS_MESSAGE_TYPE.APPEND &&
+        Array.isArray(payload.message.entries) &&
+        payload.message.entries.length > 0) {
+      const commands = decodeAppendCommands(payload.message.entries);
+      if (state.armMatch) {
+        const matched = commands.find(state.armMatch);
+        if (matched) {
+          state.armMatch = null;
+          state.holding = true;
+          state.triggeredCommand = matched;
+        }
+      }
+      if (state.holding) {
+        const prepCmd = commands.find(
+          (cmd) => cmd?.type === PARTICIPANT_TRANSACTION_COMMAND.PREPARE,
+        );
+        if (prepCmd?.transactionId) {
+          state.capturedPrepareTxId = prepCmd.transactionId;
+        }
+        state.heldDeliveries.push(() => origDeliver(address, payload));
+        return Promise.resolve(buildDeliveryEnvelope({acknowledged: true}, undefined));
+      }
+    }
+    return origDeliver(address, payload);
+  };
+
+  r1.applyCommittedEntry = (committedArg) => {
+    if (committedArg?.command?.type === PARTICIPANT_TRANSACTION_COMMAND.PREPARE &&
+        committedArg?.command?.transactionId) {
+      state.capturedPrepareTxId = committedArg.command.transactionId;
+    }
+    return origR1Apply(committedArg);
+  };
+
+  r2.applyCommittedEntry = (committedArg) => {
+    if (committedArg?.command?.type === PARTICIPANT_TRANSACTION_COMMAND.PREPARE &&
+        committedArg?.command?.transactionId) {
+      state.capturedPrepareTxId = committedArg.command.transactionId;
+    }
+    if (state.poisonR2 && isLockingOrPrepare(committedArg?.command)) {
+      clearMemoryReservations();
+      stageLocalWriteReservation({
+        tableName: ACCOUNTS_TABLE,
+        partitionId: ACCOUNTS_PARTITION_ID,
+        pkValues: [1],
+        transactionId: 'tx-divergent-memory-r2',
+        sessionId: 's-divergent-memory-r2',
+        db: null,
+      });
+    }
+    return origR2Apply(committedArg);
+  };
+
+  r3.applyCommittedEntry = (committedArg) => {
+    if (state.wipeR3 && isLockingOrPrepare(committedArg?.command)) {
+      clearMemoryReservations();
+    }
+    return origR3Apply(committedArg);
+  };
+
+  return {
+    state,
+    armHoldOn(matchFn) {
+      state.triggeredCommand = null;
+      state.capturedPrepareTxId = null;
+      state.armMatch = matchFn;
+    },
+    setMemoryDivergence(enabled) {
+      state.poisonR2 = enabled;
+      state.wipeR3 = enabled;
+    },
+    flush,
+    restore() {
+      flush();
+      network.deliver = origDeliver;
+      r1.applyCommittedEntry = origR1Apply;
+      r2.applyCommittedEntry = origR2Apply;
+      r3.applyCommittedEntry = origR3Apply;
+    },
+  };
 }

@@ -86,6 +86,8 @@ export const LOCKING_READ_ERROR_MSG = Object.freeze({
     'FOR UPDATE requires a FROM table',
   REQUIRES_ACTIVE_EXPLICIT_TRANSACTION:
     'SELECT FOR UPDATE requires an active explicit transaction',
+  LOCK_CONFLICT:
+    'could not obtain lock on row due to concurrent transaction conflict',
   RESERVATION_STORE_UNAVAILABLE:
     'Authoritative locking-read reservation store is unavailable',
 });

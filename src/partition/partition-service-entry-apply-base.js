@@ -5,37 +5,27 @@ import {assertReplicaHandlerServing} from '../node/replica-transport-handler-ide
 import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
 import {PartitionServiceSchemaMigrationBase} from './partition-service-schema-migration-base.js';
 import {
-  PARTITION_COMMITTED_COMMAND_ERROR_CODE,
-  PARTITION_COMMITTED_COMMAND_HOST_FAILURE_REASON,
+  PARTITION_COMMITTED_COMMAND_ERROR_CODE, PARTITION_COMMITTED_COMMAND_HOST_FAILURE_REASON,
   PARTITION_COMMITTED_COMMAND_OUTCOME,
 } from './partition-service-constants.js';
-import {
-  REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMNS,
-} from '../bootstrap/replica-operation-message-group-membership-schema-constants.js';
-import {
-  isCommittedCommandType,
-  isCommittedSqlCommandType,
-} from './partition-committed-command-admission.js';
+import {REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMNS} from
+  '../bootstrap/replica-operation-message-group-membership-schema-constants.js';
+import {isCommittedCommandType, isCommittedSqlCommandType} from
+  './partition-committed-command-admission.js';
 import {PARTITION_COMMITTED_STATEMENT_RECORD_STATE} from
   './partition-committed-statement-outcome-constants.js';
 import {
-  isCommittedStatementKeyed,
-  readCommittedStatementOutcome,
-  recordCommittedStatementOutcome,
-  settleFailedCommittedStatement,
+  isCommittedStatementKeyed, readCommittedStatementOutcome, recordCommittedStatementOutcome,
+  settleFailedCommittedStatement, settleLockingReadRefusedCommittedStatement,
   settleRecordedCommittedStatement,
 } from './partition-committed-statement-outcome.js';
 import {runCommittedPartitionStatement} from './partition-statement-admission.js';
 import {
-  advancePartitionWriteGeneration,
-  isPartitionReserved,
-  readPartitionWriteGeneration,
-  readPartitionWriteOrigin,
+  advancePartitionWriteGeneration, isPartitionReserved,
+  readPartitionWriteGeneration, readPartitionWriteOrigin,
 } from './partition-participant-transaction-store.js';
-import {
-  recordCommittedAutocommitRowKeys,
-  resetParticipantRowKeyHistory,
-} from './partition-participant-transaction-session.js';
+import {recordCommittedAutocommitRowKeys, resetParticipantRowKeyHistory} from
+  './partition-participant-transaction-session.js';
 import {assertTransactionSchemaWriteEnforced} from
   '../query/distributed/distributed-transaction-schema-enforcement.js';
 import {applyCommittedTransactionCommand, settleReservedCommittedStatement} from
@@ -45,49 +35,37 @@ import {requestCoordinatorSettlement, applyCoordinatorSettlement} from
 import {COORDINATOR_SETTLEMENT_TYPE} from './partition-coordinator-settlement-constants.js';
 import {requestPlacementRepair, applyPlacementCommand, requestPlacementAdmission} from
   './partition-placement-admission.js';
-import {PLACEMENT_REPAIR_PREPARE_TYPE, PLACEMENT_REPAIR_TYPE, PLACEMENT_ADMIT_TYPE, PLACEMENT_COMMAND_TYPES} from
-  './partition-placement-admission-constants.js';
 import {
-  FORMATION_TRANSITION_TYPE,
-  requestFormationTransition,
-} from '../control-plane/membership-publication-formation-record.js';
-import {
-  applyFormationTransitionCommand,
-  registerFormationPartitionApplyHooks,
-} from '../control-plane/membership-publication-formation-transition-command.js';
-import {ensureSqlTransactionsDecisionColumns} from
-  './partition-coordinator-table-columns.js';
-import {admitsParticipantSessionQueryDuringRemoval,
-  routeParticipantTransactionRequest} from
+  PLACEMENT_REPAIR_PREPARE_TYPE, PLACEMENT_REPAIR_TYPE, PLACEMENT_ADMIT_TYPE,
+  PLACEMENT_COMMAND_TYPES,
+} from './partition-placement-admission-constants.js';
+import {FORMATION_TRANSITION_TYPE, requestFormationTransition} from
+  '../control-plane/membership-publication-formation-record.js';
+import {applyFormationTransitionCommand, registerFormationPartitionApplyHooks} from
+  '../control-plane/membership-publication-formation-transition-command.js';
+import {ensureSqlTransactionsDecisionColumns} from './partition-coordinator-table-columns.js';
+import {admitsParticipantSessionQueryDuringRemoval, routeParticipantTransactionRequest} from
   './partition-participant-transaction-request.js';
 import {
-  applyCdcAcknowledgementCommand,
-  isCdcCommandType,
-  recordCommittedOperationCdc,
-  recordCommittedStatementCdc,
+  applyCdcAcknowledgementCommand, isCdcCommandType,
+  recordCommittedOperationCdc, recordCommittedStatementCdc,
 } from './partition-cdc-obligation.js';
 import {PARTITION_CDC_ADMISSION_STATE, admitCdcOwedWork, settleCdcOwedRefusal} from
   './partition-cdc-owed-admission.js';
-import {
-  partitionWriteLeadershipRefusalOf,
-  startPartitionRaftWriteCommit,
-} from './partition-service-raft-write-commit.js';
+import {partitionWriteLeadershipRefusalOf, startPartitionRaftWriteCommit} from
+  './partition-service-raft-write-commit.js';
 import {pausedWriteAnswerOf} from './partition-participant-transaction-pause.js';
-
-registerFormationPartitionApplyHooks({
-  partitionWriteLeadershipRefusalOf,
-  pausedWriteAnswerOf,
-  recordCommittedOperationCdc,
-  settleReservedCommittedStatement,
-  startPartitionRaftWriteCommit,
-});
 import {recordCommittedWriteTraffic} from './partition-write-traffic.js';
-import {
-  applyLockingReadReservationCommand,
-  requestLockingReadReservation,
-} from './partition-locking-read-service.js';
+import {applyLockingReadReservationCommand, requestLockingReadReservation} from
+  './partition-locking-read-service.js';
+import {checkOperationsLockingReadConflict} from './partition-locking-read-write-check.js';
 import {LOCKING_READ_RESERVATION_TYPE} from './partition-locking-read-command-constants.js';
 import {turnChainValue} from '../raft/raft-rs-turn-answer.js';
+
+registerFormationPartitionApplyHooks({
+  partitionWriteLeadershipRefusalOf, pausedWriteAnswerOf, recordCommittedOperationCdc,
+  settleReservedCommittedStatement, startPartitionRaftWriteCommit,
+});
 const COMMIT_APPLY_EFFECT_PHASE = Object.freeze({
   COMMIT: 'afterCommit',
   ROLLBACK: 'afterRollback',
@@ -737,6 +715,15 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       const cdcAdmission = admitCdcOwedWork(this, command);
       if (cdcAdmission.state === PARTITION_CDC_ADMISSION_STATE.REFUSED) {
         return settleCdcOwedRefusal(this, {command, afterCommit}, cdcAdmission.answer);
+      }
+      const lockConflict = checkOperationsLockingReadConflict(this, {
+        operations: [{sql: command.sql, params: command.params || []}],
+        transactionId: command.transactionId ?? null,
+        deterministic: true,
+      });
+      if (lockConflict !== null) {
+        return settleLockingReadRefusedCommittedStatement(
+          this, {lockConflict, command, entryKey, index, term, identity, afterCommit});
       }
       let info;
       try {

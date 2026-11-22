@@ -15,6 +15,7 @@ import {
 import {
   readSettledOwnerCommandIn,
   recordCommittedStatementOutcome,
+  statementEnvironmentFailure,
 } from './partition-committed-statement-outcome.js';
 import {PARTITION_SETTLED_COMMAND_STATE as SETTLED} from
   './partition-committed-statement-outcome-constants.js';
@@ -23,6 +24,7 @@ import {
   startPartitionRaftWriteCommit,
 } from './partition-service-raft-write-commit.js';
 import {
+  DB_LOCKING_READ_ACQUIRE_STATUS,
   LOCKING_READ_PARTITION_OP,
   LOCKING_READ_RESERVATION_COMMAND_ERROR as CMD_ERROR,
   LOCKING_READ_RESERVATION_TYPE,
@@ -32,24 +34,26 @@ import {
   isPinnedLockingReadCommand,
 } from './partition-locking-read-command.js';
 import {
+  LOCKING_READ_LOCAL_EXPIRY,
   LOCKING_READ_RESERVATION_KIND,
+  LOCKING_READ_RESERVATION_OUTCOME,
 } from '../query/sql-locking-read-constants.js';
 import {
-  acquireRowReservation,
   clearPartitionSessionMemoryReservations,
   clearPartitionTransactionMemoryReservations,
   createLockConflictResult,
   createReservationUnavailableResult,
   deriveRowLockKey,
+  recordCommittedReservationMirror,
+} from './partition-locking-read-reservation.js';
+import {
+  acquireDbForUpdateReservation,
+  checkDbRowReservation,
   hasDbSessionReservations,
   hasDbTransactionReservations,
-  recordCommittedReservationMirror,
   releaseDbPartitionSessionReservations,
   releaseDbPartitionTransactionReservations,
-  releaseSessionReservations,
-  releaseTransactionReservations,
-} from './partition-locking-read-reservation.js';
-import {checkDbRowReservation} from './partition-locking-read-store.js';
+} from './partition-locking-read-store.js';
 import {
   buildStaleReadLockConflict,
   checkPartitionWriteLockingReadConflict,
@@ -155,21 +159,67 @@ function precheckAcquire(service, payload) {
   return {rowKey, settled: null};
 }
 
-function formatAcquisitionAnswer(service, transactionId, acquired) {
-  if (acquired.conflict) {
+function buildForUpdateRecord(service, payload, rowKey, nowMs) {
+  const expiresAt = typeof payload.holdTimeoutMs === 'number' && payload.holdTimeoutMs > 0 ?
+    nowMs + payload.holdTimeoutMs :
+    null;
+  return {
+    rowKey,
+    tableName: payload.tableName,
+    partitionId: service.partitionId,
+    pkValues: Array.isArray(payload.pkValues) ? payload.pkValues : [payload.pkValues],
+    transactionId: payload.transactionId,
+    sessionId: payload.sessionId || null,
+    participantId: payload.participantId || `${payload.transactionId}:${service.partitionId}`,
+    kind: LOCKING_READ_RESERVATION_KIND.FOR_UPDATE,
+    epoch: payload.epoch || 0,
+    acquiredAt: nowMs,
+    expiresAt,
+    localExpiry: LOCKING_READ_LOCAL_EXPIRY.FORBIDDEN,
+  };
+}
+
+function formatDbAcquisitionAnswer(service, payload, dbOutcome, {deterministic}) {
+  if (dbOutcome.status === DB_LOCKING_READ_ACQUIRE_STATUS.UNAVAILABLE) {
+    if (deterministic) {
+      throw statementEnvironmentFailure(dbOutcome.cause ?? new Error(dbOutcome.error));
+    }
     return {
-      ...createLockConflictResult({
-        rowKey: acquired.rowKey,
+      ...createReservationUnavailableResult({
+        rowKey: dbOutcome.rowKey,
         partitionId: service.partitionId,
-        transactionId,
-        conflictingTransactionId: acquired.conflictingTransactionId,
+        tableName: payload.tableName,
+        transactionId: payload.transactionId,
+        message: dbOutcome.error,
       }),
       authoritativeReservationAnswer: true,
     };
   }
-  const {record: _omittedRecord, ...publicFields} = acquired;
+  if (dbOutcome.status === DB_LOCKING_READ_ACQUIRE_STATUS.CONFLICT) {
+    return {
+      ...createLockConflictResult({
+        rowKey: dbOutcome.rowKey,
+        partitionId: service.partitionId,
+        transactionId: payload.transactionId,
+        conflictingTransactionId: dbOutcome.conflictingTransactionId,
+      }),
+      authoritativeReservationAnswer: true,
+    };
+  }
+  if (dbOutcome.status === DB_LOCKING_READ_ACQUIRE_STATUS.ALREADY_OWNED) {
+    return {
+      success: true,
+      outcome: LOCKING_READ_RESERVATION_OUTCOME.ALREADY_OWNED,
+      rowKey: dbOutcome.rowKey,
+      reentrant: true,
+      partitionId: service.partitionId,
+      authoritativeReservationAnswer: true,
+    };
+  }
   return {
-    ...publicFields,
+    success: true,
+    outcome: LOCKING_READ_RESERVATION_OUTCOME.ACQUIRED,
+    rowKey: dbOutcome.rowKey,
     partitionId: service.partitionId,
     authoritativeReservationAnswer: true,
   };
@@ -181,29 +231,20 @@ function executeDirectLockingReadOp(service, payload) {
     if (pre.settled) {
       return pre.settled;
     }
-    const acquired = acquireRowReservation({
-      tableName: payload.tableName,
-      partitionId: service.partitionId,
-      pkValues: payload.pkValues,
-      transactionId: payload.transactionId,
-      sessionId: payload.sessionId,
-      participantId: payload.participantId,
-      kind: LOCKING_READ_RESERVATION_KIND.FOR_UPDATE,
-      db: service.db,
-      authoritativeDbOnly: true,
-      holdTimeoutMs: payload.holdTimeoutMs,
-      epoch: payload.epoch,
-    });
-    if (acquired.success && acquired.record) {
-      recordCommittedReservationMirror(acquired.record);
+    const record = buildForUpdateRecord(service, payload, pre.rowKey, Date.now());
+    const dbOutcome = acquireDbForUpdateReservation(service.db, record);
+    if (dbOutcome.status === DB_LOCKING_READ_ACQUIRE_STATUS.ACQUIRED) {
+      recordCommittedReservationMirror(record);
     }
-    return formatAcquisitionAnswer(service, payload.transactionId, acquired);
+    return formatDbAcquisitionAnswer(service, payload, dbOutcome, {deterministic: false});
   }
   if (payload.op === LOCKING_READ_PARTITION_OP.RELEASE_TRANSACTION) {
-    const released = releaseTransactionReservations(payload.transactionId, {
-      db: service.db,
-      partitionId: service.partitionId,
-    });
+    const released = releaseDbPartitionTransactionReservations(
+      service.db,
+      service.partitionId,
+      payload.transactionId,
+    );
+    clearPartitionTransactionMemoryReservations(service.partitionId, payload.transactionId);
     return {
       success: true,
       released,
@@ -211,10 +252,12 @@ function executeDirectLockingReadOp(service, payload) {
       authoritativeReservationAnswer: true,
     };
   }
-  const released = releaseSessionReservations(payload.sessionId, {
-    db: service.db,
-    partitionId: service.partitionId,
-  });
+  const released = releaseDbPartitionSessionReservations(
+    service.db,
+    service.partitionId,
+    payload.sessionId,
+  );
+  clearPartitionSessionMemoryReservations(service.partitionId, payload.sessionId);
   return {
     success: true,
     released,
@@ -333,14 +376,7 @@ function checkCommittedAcquirePreconditions(service, reservation, rowKey) {
     transactionId: reservation.transactionId,
   });
   if (dbCheck?.error) {
-    return {
-      ...createReservationUnavailableResult({
-        rowKey,
-        partitionId: service.partitionId,
-        message: dbCheck.message,
-      }),
-      authoritativeReservationAnswer: true,
-    };
+    throw statementEnvironmentFailure(dbCheck.cause ?? new Error(dbCheck.message));
   }
   if (dbCheck?.reentrant === true) {
     return null;
@@ -372,7 +408,7 @@ function checkCommittedAcquirePreconditions(service, reservation, rowKey) {
     ).settled;
 }
 
-function applyCommittedAcquire(service, reservation, afterCommit) {
+function applyCommittedAcquire(service, reservation, proposedAt, afterCommit) {
   const rowKey = deriveRowLockKey(
     reservation.tableName,
     service.partitionId,
@@ -382,29 +418,17 @@ function applyCommittedAcquire(service, reservation, afterCommit) {
   if (preconditionRefusal !== null) {
     return preconditionRefusal;
   }
-  const acquired = acquireRowReservation({
-    tableName: reservation.tableName,
-    partitionId: service.partitionId,
-    pkValues: reservation.pkValues,
-    transactionId: reservation.transactionId,
-    sessionId: reservation.sessionId,
-    participantId: reservation.participantId,
-    kind: LOCKING_READ_RESERVATION_KIND.FOR_UPDATE,
-    db: service.db,
-    authoritativeDbOnly: true,
-    holdTimeoutMs: reservation.holdTimeoutMs,
-    epoch: reservation.epoch,
-  });
-  if (acquired.success && acquired.record) {
-    const mirrorRecord = acquired.record;
-    afterCommit(() => recordCommittedReservationMirror(mirrorRecord));
+  const record = buildForUpdateRecord(service, reservation, rowKey, proposedAt);
+  const dbOutcome = acquireDbForUpdateReservation(service.db, record);
+  if (dbOutcome.status === DB_LOCKING_READ_ACQUIRE_STATUS.ACQUIRED) {
+    afterCommit(() => recordCommittedReservationMirror(record));
   }
-  return formatAcquisitionAnswer(service, reservation.transactionId, acquired);
+  return formatDbAcquisitionAnswer(service, reservation, dbOutcome, {deterministic: true});
 }
 
-function applyCommittedReservationEffect(service, reservation, afterCommit) {
+function applyCommittedReservationEffect(service, reservation, proposedAt, afterCommit) {
   if (reservation.op === LOCKING_READ_PARTITION_OP.ACQUIRE) {
-    return applyCommittedAcquire(service, reservation, afterCommit);
+    return applyCommittedAcquire(service, reservation, proposedAt, afterCommit);
   }
   if (reservation.op === LOCKING_READ_PARTITION_OP.RELEASE_TRANSACTION) {
     const released = releaseDbPartitionTransactionReservations(
@@ -471,7 +495,9 @@ export function applyLockingReadReservationCommand(service, committed) {
     return APPLY.REPLAYED;
   }
   try {
-    const answer = applyCommittedReservationEffect(service, command.reservation, afterCommit);
+    const answer = applyCommittedReservationEffect(
+      service, command.reservation, command.proposedAt, afterCommit,
+    );
     recordCommittedStatementOutcome(service, {
       entryKey,
       outcome: APPLY.APPLIED,
@@ -509,19 +535,27 @@ function hasDbReservationsForTransaction(db, partitionId, transactionId) {
  */
 export async function releaseUnboundTransactionLockingRead(service, payload) {
   const transactionId = payload?.transactionId;
-  if (!transactionId) return;
+  if (!transactionId) return null;
   const db = service?.db ?? null;
   const partitionId = service?.partitionId ?? null;
-  if (!service?.raft || !hasDbReservationsForTransaction(db, partitionId, transactionId)) {
-    releaseTransactionReservations(transactionId, {db, partitionId});
-    return;
+  if (!service?.raft) {
+    if (db && db.open !== false && partitionId) {
+      releaseDbPartitionTransactionReservations(db, partitionId, transactionId);
+    }
+    clearPartitionTransactionMemoryReservations(partitionId, transactionId);
+    return null;
   }
-  await requestLockingReadReservation(service, {
+  if (!hasDbReservationsForTransaction(db, partitionId, transactionId)) {
+    clearPartitionTransactionMemoryReservations(partitionId, transactionId);
+    return null;
+  }
+  const releaseAnswer = await requestLockingReadReservation(service, {
     op: LOCKING_READ_PARTITION_OP.RELEASE_TRANSACTION,
     transactionId,
     sessionId: payload.sessionId ?? null,
     participantId: payload.participantId ?? null,
   });
+  return releaseAnswer?.success === true ? null : releaseAnswer;
 }
 
 export {checkPartitionWriteLockingReadConflict};

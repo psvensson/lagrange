@@ -22,19 +22,33 @@ import Database from 'better-sqlite3';
 import {
   readSettledOwnerCommandIn,
 } from '../../src/partition/partition-committed-statement-outcome.js';
+import * as reservationSurface from '../../src/partition/partition-locking-read-reservation.js';
 import {
-  acquireRowReservation,
   clearAllReservations,
   clearMemoryReservations,
+  clearPartitionTransactionMemoryReservations,
+  clearSessionMemoryReservations,
+  clearTransactionMemoryReservations,
+  deriveRowLockKey,
   getTransactionReservations,
   hasLockingReadReservations,
   registerPartitionDatabase,
-  releaseSessionReservations,
-  releaseTransactionReservations,
+  stageLocalWriteReservation,
 } from '../../src/partition/partition-locking-read-reservation.js';
+import {
+  acquireDbForUpdateReservation,
+  releaseDbPartitionTransactionReservations,
+} from '../../src/partition/partition-locking-read-store.js';
+import {
+  DB_LOCKING_READ_ACQUIRE_STATUS,
+} from '../../src/partition/partition-locking-read-command-constants.js';
+import {buildLockingReadCommand} from '../../src/partition/partition-locking-read-command.js';
 import {
   requestLockingReadReservation,
 } from '../../src/partition/partition-locking-read-service.js';
+import {
+  startPartitionRaftWriteCommit,
+} from '../../src/partition/partition-service-raft-write-commit.js';
 import {
   PARTICIPANT_CONCURRENCY_GRANULARITY,
   PARTICIPANT_TRANSACTION_COMMAND,
@@ -45,9 +59,6 @@ import {
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
-import {isRaftRsTransportEnvelope} from '../../src/raft/raft-packet-utils.js';
-import {RAFT_RS_MESSAGE_TYPE} from '../../src/raft/raft-rs-ingress-constants.js';
-import {decodeCommittedProposal} from '../../src/raft/raft-rs-proposal-codec.js';
 import {
   RAFT_LEADERSHIP_TRANSFER_SUCCESSOR,
   RAFT_OPERATION_OUTCOME,
@@ -71,6 +82,8 @@ import {
   countDbReservations,
   expectSqlState,
   initEnvironment,
+  installAppendEntriesRaceHarness,
+  readAccountBalance,
   setupTwoNodeCluster,
 } from './locking-read-authoritative-test-support.js';
 
@@ -236,17 +249,30 @@ test('Receipt 2: admission and persistence failures fail closed with zero phanto
   clearAllReservations();
   initEnvironment('fail-closed-node');
 
-  // 2a: Direct acquireRowReservation with store === null must fail closed for FOR_UPDATE.
-  const noStoreRes = acquireRowReservation({
+  // 2a: Direct authoritative store acquire with db === null must fail closed for FOR_UPDATE.
+  const noStoreRes = acquireDbForUpdateReservation(null, {
     tableName: ACCOUNTS_TABLE,
     partitionId: ACCOUNTS_PARTITION_ID,
-    pkValues: [1],
+    rowKey: deriveRowLockKey(ACCOUNTS_TABLE, ACCOUNTS_PARTITION_ID, [1]),
     transactionId: 'tx-no-store',
     sessionId: 's-no-store',
-    kind: 'FOR_UPDATE',
-    db: null,
+    epoch: 0,
+    acquiredAt: Date.now(),
+    expiresAt: null,
   });
-  assert.equal(noStoreRes.success, false);
+  assert.equal(noStoreRes.status, DB_LOCKING_READ_ACQUIRE_STATUS.UNAVAILABLE);
+  const serviceNoStore = await requestLockingReadReservation(
+    {db: null, partitionId: ACCOUNTS_PARTITION_ID},
+    {
+      op: 'ACQUIRE',
+      tableName: ACCOUNTS_TABLE,
+      pkValues: [1],
+      transactionId: 'tx-no-store',
+      sessionId: 's-no-store',
+    },
+  );
+  assert.equal(serviceNoStore.success, false);
+  assert.equal(serviceNoStore.unavailable, true);
   assert.equal(hasLockingReadReservations('tx-no-store'), false);
   assert.equal(getTransactionReservations('tx-no-store').length, 0);
 
@@ -425,7 +451,8 @@ test('Receipt 3: participant restart on disk and Raft leader change preserve and
     assert.equal(conflictSelect.sqlState, LOCK_NOT_AVAILABLE_SQLSTATE);
 
     // Terminal release of the survived durable transaction releases the SQLite lock.
-    releaseTransactionReservations(holdTxId, {db: db2});
+    releaseDbPartitionTransactionReservations(db2, ACCOUNTS_PARTITION_ID, holdTxId);
+    clearPartitionTransactionMemoryReservations(ACCOUNTS_PARTITION_ID, holdTxId);
     assert.equal(countDbReservations(db2), 0);
 
     await s2.engine.transactionCoordinator.begin('s-successor');
@@ -763,13 +790,12 @@ test('Witness 1b: committed Raft apply of ACQUIRE is 100% deterministic across r
           committedArg?.command?.reservation?.op === 'ACQUIRE') {
         capturedAcquireCommand = committedArg.command;
         clearMemoryReservations();
-        acquireRowReservation({
+        stageLocalWriteReservation({
           tableName: ACCOUNTS_TABLE,
           partitionId: ACCOUNTS_PARTITION_ID,
           pkValues: [1],
           transactionId: 'tx-divergent-gateway-b',
           sessionId: 's-divergent-gateway-b',
-          kind: 'WRITE_STAGED',
           db: null,
         });
       }
@@ -912,28 +938,31 @@ test('Witness 2: per-participant release clears ONLY target partition reservatio
     // Also verify partition-scoped release inside a shared SQLite DB only deletes the target partition.
     const sharedDb = new Database(':memory:');
     try {
-      acquireRowReservation({
+      const now = Date.now();
+      acquireDbForUpdateReservation(sharedDb, {
         tableName: ACCOUNTS_TABLE,
         partitionId: 'accounts-p1',
-        pkValues: [1],
+        rowKey: deriveRowLockKey(ACCOUNTS_TABLE, 'accounts-p1', [1]),
         transactionId: txId,
         sessionId,
-        kind: 'FOR_UPDATE',
-        db: sharedDb,
+        epoch: 0,
+        acquiredAt: now,
+        expiresAt: null,
       });
-      acquireRowReservation({
+      acquireDbForUpdateReservation(sharedDb, {
         tableName: ACCOUNTS_TABLE,
         partitionId: 'accounts-p2',
-        pkValues: [150],
+        rowKey: deriveRowLockKey(ACCOUNTS_TABLE, 'accounts-p2', [150]),
         transactionId: txId,
         sessionId,
-        kind: 'FOR_UPDATE',
-        db: sharedDb,
+        epoch: 0,
+        acquiredAt: now,
+        expiresAt: null,
       });
       assert.equal(countDbReservations(sharedDb), 2);
-      releaseTransactionReservations(txId, {db: sharedDb, partitionId: 'accounts-p1'});
+      releaseDbPartitionTransactionReservations(sharedDb, 'accounts-p1', txId);
       assert.equal(countDbReservations(sharedDb), 1);
-      releaseTransactionReservations(txId, {db: sharedDb, partitionId: 'accounts-p2'});
+      releaseDbPartitionTransactionReservations(sharedDb, 'accounts-p2', txId);
       assert.equal(countDbReservations(sharedDb), 0);
     } finally {
       sharedDb.close();
@@ -945,7 +974,7 @@ test('Witness 2: per-participant release clears ONLY target partition reservatio
   }
 });
 
-test('Witness 3: writer staged while ACQUIRE awaits consensus cannot prepare or commit under live lock (deterministic, disjoint progresses)', {timeout: 30000}, async () => {
+test('Witness 3: reciprocal committed exclusion across ACQUIRE-first and PREPARE-first orders (deterministic, reentrant, disjoint progresses)', {timeout: 30000}, async () => {
   const cluster = await setupTwoNodeCluster({
     tempPrefix: 'lock-w3-race-',
     concurrencyGranularity: PARTICIPANT_CONCURRENCY_GRANULARITY.ROW_KEY,
@@ -955,166 +984,61 @@ test('Witness 3: writer staged while ACQUIRE awaits consensus cannot prepare or 
   const clientDisjoint = await cluster.pg2.connectClient();
   const clientW2 = await cluster.pg2.connectClient();
   const [r1, r2, r3] = cluster.group.services;
-  const network = r1.transport;
-  const origDeliver = network.deliver.bind(network);
-  const origR2Apply = r2.applyCommittedEntry.bind(r2);
-  const origR3Apply = r3.applyCommittedEntry.bind(r3);
-
-  let armHoldOnAcquire = false;
-  let holdAppendEntries = false;
-  const heldDeliveries = [];
-  let proposedAcquireCmd = null;
-  let capturedPrepare2TxId = null;
-  let poisonOnR2Apply = false;
-  let wipeOnR3Apply = false;
-
-  const decodeAppendCommands = (entries) => {
-    const commands = [];
-    for (const entry of entries || []) {
-      if (!entry?.data || entry.data.length === 0) continue;
-      try {
-        const bytes = typeof entry.data === 'string' ?
-          Buffer.from(entry.data, 'base64') :
-          entry.data;
-        commands.push(decodeCommittedProposal(bytes));
-      } catch (_err) {
-        // Non-proposal entry (e.g. conf change or empty noop).
-      }
-    }
-    return commands;
-  };
-
-  const flushHeldDeliveries = () => {
-    holdAppendEntries = false;
-    armHoldOnAcquire = false;
-    const queued = heldDeliveries.splice(0, heldDeliveries.length);
-    for (const deliverNow of queued) {
-      void deliverNow().catch(() => {});
-    }
-  };
-
-  network.deliver = (address, payload) => {
-    if ((armHoldOnAcquire || holdAppendEntries) &&
-        isRaftRsTransportEnvelope(payload) &&
-        payload.groupId === ACCOUNTS_PARTITION_ID &&
-        payload.message?.msgType === RAFT_RS_MESSAGE_TYPE.APPEND &&
-        Array.isArray(payload.message.entries) &&
-        payload.message.entries.length > 0) {
-      const commands = decodeAppendCommands(payload.message.entries);
-      if (armHoldOnAcquire) {
-        const acquireCmd = commands.find(
-          (cmd) => cmd?.type === 'LOCKING_READ_RESERVATION' &&
-            cmd?.reservation?.op === 'ACQUIRE',
-        );
-        if (acquireCmd) {
-          armHoldOnAcquire = false;
-          holdAppendEntries = true;
-          proposedAcquireCmd = acquireCmd;
-        }
-      }
-      if (holdAppendEntries) {
-        const prepCmd = commands.find(
-          (cmd) => cmd?.type === PARTICIPANT_TRANSACTION_COMMAND.PREPARE,
-        );
-        if (prepCmd?.transactionId) {
-          capturedPrepare2TxId = prepCmd.transactionId;
-        }
-        heldDeliveries.push(() => origDeliver(address, payload));
-        // Return immediately like an async wire send so r1.raft's turn chain stays unblocked
-        // while the AppendEntries packets remain held before quorum delivery to r2/r3.
-        return Promise.resolve(buildDeliveryEnvelope({acknowledged: true}, undefined));
-      }
-    }
-    return origDeliver(address, payload);
-  };
-
-  r2.applyCommittedEntry = (committedArg) => {
-    if (committedArg?.command?.type === PARTICIPANT_TRANSACTION_COMMAND.PREPARE &&
-        committedArg?.command?.transactionId) {
-      capturedPrepare2TxId = committedArg.command.transactionId;
-    }
-    if (poisonOnR2Apply &&
-        (committedArg?.command?.type === 'LOCKING_READ_RESERVATION' ||
-         committedArg?.command?.type === PARTICIPANT_TRANSACTION_COMMAND.PREPARE)) {
-      clearMemoryReservations();
-      acquireRowReservation({
-        tableName: ACCOUNTS_TABLE,
-        partitionId: ACCOUNTS_PARTITION_ID,
-        pkValues: [1],
-        transactionId: 'tx-divergent-memory-r2',
-        sessionId: 's-divergent-memory-r2',
-        kind: 'WRITE_STAGED',
-        db: null,
-      });
-    }
-    return origR2Apply(committedArg);
-  };
-
-  r3.applyCommittedEntry = (committedArg) => {
-    if (wipeOnR3Apply &&
-        (committedArg?.command?.type === 'LOCKING_READ_RESERVATION' ||
-         committedArg?.command?.type === PARTICIPANT_TRANSACTION_COMMAND.PREPARE)) {
-      clearMemoryReservations();
-    }
-    return origR3Apply(committedArg);
-  };
-
-  const readAccountBalance = (db, id) =>
-    Number(db.prepare('SELECT balance FROM accounts WHERE id = ?').get(id)?.balance);
+  const race = installAppendEntriesRaceHarness([r1, r2, r3]);
+  const isAcquireCmd = (cmd) =>
+    cmd?.type === 'LOCKING_READ_RESERVATION' && cmd?.reservation?.op === 'ACQUIRE';
+  const isPrepareCmd = (cmd) => cmd?.type === PARTICIPANT_TRANSACTION_COMMAND.PREPARE;
 
   try {
-    // --- Schedule 3a: ACQUIRE held after precheck/proposal, W & W_disjoint stage in already-open sessions,
-    // ACQUIRE commits/applies & acknowledges lock, then W attempts PREPARE/COMMIT while W_disjoint commits. ---
+    // --- Schedule 3a (ACQUIRE-first): ACQUIRE held after precheck/proposal, W & W_disjoint stage
+    // in already-open sessions, ACQUIRE applies first, then W attempts PREPARE/COMMIT. ---
     await clientW.query('BEGIN');
-    const wSeedRead = await clientW.query('SELECT balance FROM accounts WHERE id = 2');
-    assertNumericRowValues(wSeedRead.rows, [{balance: 200}]);
-
+    assertNumericRowValues(
+      (await clientW.query('SELECT balance FROM accounts WHERE id = 2')).rows,
+      [{balance: 200}],
+    );
     await clientDisjoint.query('BEGIN');
-    const dSeedRead = await clientDisjoint.query('SELECT balance FROM accounts WHERE id = 3');
-    assertNumericRowValues(dSeedRead.rows, [{balance: 300}]);
-
+    assertNumericRowValues(
+      (await clientDisjoint.query('SELECT balance FROM accounts WHERE id = 3')).rows,
+      [{balance: 300}],
+    );
     assert.ok(
       Array.from(listActiveParticipantSessions(r1)).length >= 2,
       'W and W_disjoint must have already-open participant sessions on leader r1',
     );
 
     await clientT.query('BEGIN');
-    proposedAcquireCmd = null;
-    armHoldOnAcquire = true;
+    race.armHoldOn(isAcquireCmd);
     const tAcquirePromise = clientT.query(
       'SELECT id, balance FROM accounts WHERE id = 1 FOR UPDATE',
     );
-
-    const acquirePaused = await cluster.group.waitFor(
-      () => proposedAcquireCmd !== null && heldDeliveries.length >= 2,
-    );
     assert.equal(
-      acquirePaused,
+      await cluster.group.waitFor(
+        () => race.state.triggeredCommand !== null && race.state.heldDeliveries.length >= 2,
+      ),
       true,
-      'ACQUIRE must pass precheck/proposal and have AppendEntries to r2/r3 held before quorum',
+      'ACQUIRE must pass precheck/proposal and have AppendEntries held before quorum',
     );
-    const proposedAcquire = proposedAcquireCmd;
+    const proposedAcquire = race.state.triggeredCommand;
     assert.equal(countDbReservations(r1.db), 0, 'ACQUIRE must not be applied yet on r1');
 
-    // Stage conflicting write W (id = 1) and disjoint write W_disjoint (id = 3) while ACQUIRE awaits consensus.
     await clientW.query('UPDATE accounts SET balance = 500 WHERE id = 1');
     await clientDisjoint.query('UPDATE accounts SET balance = 350 WHERE id = 3');
     assert.equal(countDbReservations(r1.db), 0, 'durable reservation still absent before quorum');
 
-    // Diverge process-local memory on r2/r3 before releasing ACQUIRE to verify memory-independent apply.
-    poisonOnR2Apply = true;
-    wipeOnR3Apply = true;
-    flushHeldDeliveries();
+    race.setMemoryDivergence(true);
+    race.flush();
+    assertNumericRowValues((await tAcquirePromise).rows, [{id: 1, balance: 100}]);
 
-    const tLockRes = await tAcquirePromise;
-    assertNumericRowValues(tLockRes.rows, [{id: 1, balance: 100}]);
-
-    const allHoldLock = await cluster.group.waitFor(
-      () => countDbReservations(r1.db) === 1 &&
-        countDbReservations(r2.db) === 1 &&
-        countDbReservations(r3.db) === 1,
+    assert.equal(
+      await cluster.group.waitFor(
+        () => countDbReservations(r1.db) === 1 &&
+          countDbReservations(r2.db) === 1 &&
+          countDbReservations(r3.db) === 1,
+      ),
+      true,
+      'all three replicas must durably hold T lock on id = 1',
     );
-    assert.equal(allHoldLock, true, 'all three replicas must durably hold T lock on id = 1');
     for (const svc of [r1, r2, r3]) {
       const settled = readSettledOwnerCommandIn(svc.db, {
         entryId: proposedAcquire.entryId,
@@ -1125,125 +1049,276 @@ test('Witness 3: writer staged while ACQUIRE awaits consensus cannot prepare or 
 
     // Clear process-local memory before W attempts PREPARE/COMMIT so refusal is 100% SQLite-authoritative.
     clearMemoryReservations();
-
-    // Conflicting writer W MUST NOT prepare or commit under T's acknowledged live lock!
     await expectSqlState(clientW, 'COMMIT', [], LOCK_NOT_AVAILABLE_SQLSTATE);
     for (const svc of [r1, r2, r3]) {
-      assert.equal(
-        readAccountBalance(svc.db, 1),
-        100,
-        `conflicting writer W must not modify locked row id = 1 on ${svc.replicaId}`,
-      );
-      assert.equal(
-        countDbReservations(svc.db),
-        1,
-        `T live reservation must stay intact on ${svc.replicaId} after W refusal`,
-      );
+      assert.equal(readAccountBalance(svc.db, 1), 100, `W must not mutate id = 1 on ${svc.replicaId}`);
+      assert.equal(countDbReservations(svc.db), 1, `T lock must stay intact on ${svc.replicaId}`);
     }
 
-    // Positive control: disjoint-row writer W_disjoint staged in the same window MUST commit cleanly!
-    await clientDisjoint.query('COMMIT');
-    const disjointCommitted = await cluster.group.waitFor(
-      () => readAccountBalance(r1.db, 3) === 350 &&
-        readAccountBalance(r2.db, 3) === 350 &&
-        readAccountBalance(r3.db, 3) === 350,
+    // Same-transaction reentrancy: T re-acquires FOR UPDATE on id = 1 cleanly.
+    const tReentrant = await clientT.query(
+      'SELECT id, balance FROM accounts WHERE id = 1 FOR UPDATE',
     );
-    assert.equal(disjointCommitted, true, 'disjoint writer must commit on all three replicas');
+    assertNumericRowValues(tReentrant.rows, [{id: 1, balance: 100}]);
+
+    // Positive control: disjoint-row writer W_disjoint commits cleanly across r1/r2/r3.
+    await clientDisjoint.query('COMMIT');
+    assert.equal(
+      await cluster.group.waitFor(
+        () => readAccountBalance(r1.db, 3) === 350 &&
+          readAccountBalance(r2.db, 3) === 350 &&
+          readAccountBalance(r3.db, 3) === 350,
+      ),
+      true,
+      'disjoint writer must commit on all three replicas',
+    );
     assert.equal(countDbReservations(r1.db), 1, 'T reservation on id = 1 still held');
 
-    // T updates its own locked row and commits, releasing its lock across all replicas.
+    // Legal winner progress & durable release: T updates id = 1 and commits.
     await clientT.query('UPDATE accounts SET balance = 175 WHERE id = 1');
     await clientT.query('COMMIT');
-    const tCommitted = await cluster.group.waitFor(
-      () => readAccountBalance(r1.db, 1) === 175 &&
-        readAccountBalance(r2.db, 1) === 175 &&
-        readAccountBalance(r3.db, 1) === 175 &&
-        countDbReservations(r1.db) === 0 &&
-        countDbReservations(r2.db) === 0 &&
-        countDbReservations(r3.db) === 0,
+    assert.equal(
+      await cluster.group.waitFor(
+        () => readAccountBalance(r1.db, 1) === 175 &&
+          readAccountBalance(r2.db, 1) === 175 &&
+          readAccountBalance(r3.db, 1) === 175 &&
+          countDbReservations(r1.db) === 0 &&
+          countDbReservations(r2.db) === 0 &&
+          countDbReservations(r3.db) === 0,
+      ),
+      true,
+      'T commit must apply and release locks across r1/r2/r3',
     );
-    assert.equal(tCommitted, true, 'T commit must apply and release locks across r1/r2/r3');
 
-    // --- Schedule 3b: W2 proposes PARTICIPANT_PREPARE into consensus behind held ACQUIRE;
-    // deterministic applyParticipantPrepare must refuse W2 identically on r1/r2/r3 without local memory. ---
-    capturedPrepare2TxId = null;
+    // --- Schedule 3b (ACQUIRE-first in log): W2 proposes PARTICIPANT_PREPARE behind uncommitted ACQUIRE;
+    // all three replicas apply ACQUIRE then PREPARE in actual committed order despite diverged memory. ---
+    race.setMemoryDivergence(false);
+    clearMemoryReservations();
     await clientW2.query('BEGIN');
     await clientW2.query('SELECT balance FROM accounts WHERE id = 2');
-
     await clientT.query('BEGIN');
-    proposedAcquireCmd = null;
-    armHoldOnAcquire = true;
+    race.armHoldOn(isAcquireCmd);
     const t2AcquirePromise = clientT.query(
       'SELECT id, balance FROM accounts WHERE id = 1 FOR UPDATE',
     );
-
-    const acquire2Paused = await cluster.group.waitFor(
-      () => proposedAcquireCmd !== null && heldDeliveries.length >= 2,
+    assert.equal(
+      await cluster.group.waitFor(
+        () => race.state.triggeredCommand !== null && race.state.heldDeliveries.length >= 2,
+      ),
+      true,
     );
-    assert.equal(acquire2Paused, true);
     const indexAfterAcquire = r1.raft.readStatus().lastIndex;
 
     await clientW2.query('UPDATE accounts SET balance = 600 WHERE id = 1');
-    const w2CommitOutcome = expectSqlState(
-      clientW2,
-      'COMMIT',
-      [],
-      LOCK_NOT_AVAILABLE_SQLSTATE,
-    );
-
-    const prepareProposedInLog = await cluster.group.waitFor(
-      () => r1.raft.readStatus().lastIndex > indexAfterAcquire,
-    );
+    const w2CommitOutcome = expectSqlState(clientW2, 'COMMIT', [], LOCK_NOT_AVAILABLE_SQLSTATE);
     assert.equal(
-      prepareProposedInLog,
+      await cluster.group.waitFor(() => r1.raft.readStatus().lastIndex > indexAfterAcquire),
       true,
       'W2 PARTICIPANT_PREPARE must enter r1 Raft log behind uncommitted ACQUIRE',
     );
 
-    // Release ACQUIRE followed by PARTICIPANT_PREPARE with poisoned/wiped local memory on r2/r3.
-    flushHeldDeliveries();
-
-    const t2LockRes = await t2AcquirePromise;
-    assertNumericRowValues(t2LockRes.rows, [{id: 1, balance: 175}]);
+    race.setMemoryDivergence(true);
+    race.flush();
+    assertNumericRowValues((await t2AcquirePromise).rows, [{id: 1, balance: 175}]);
     await w2CommitOutcome;
 
-    assert.ok(capturedPrepare2TxId, 'W2 PARTICIPANT_PREPARE transactionId must be observed');
-    const allSettledRefused = await cluster.group.waitFor(() =>
-      [r1, r2, r3].every((svc) => {
-        const row = svc.db
-          .prepare(
-            'SELECT state, refusal_cause FROM _participant_transactions WHERE transaction_id = ?',
-          )
-          .get(capturedPrepare2TxId);
-        return row?.state === 'REFUSED' && row?.refusal_cause === 'lock_conflict';
-      }),
-    );
+    const w2TxId = race.state.capturedPrepareTxId;
+    assert.ok(w2TxId, 'W2 PARTICIPANT_PREPARE transactionId must be observed');
     assert.equal(
-      allSettledRefused,
+      await cluster.group.waitFor(() =>
+        [r1, r2, r3].every((svc) => {
+          const row = svc.db
+            .prepare('SELECT state, refusal_cause FROM _participant_transactions WHERE transaction_id = ?')
+            .get(w2TxId);
+          return row?.state === 'REFUSED' && row?.refusal_cause === 'lock_conflict';
+        }),
+      ),
       true,
       'all three replicas must deterministically settle W2 PREPARE as REFUSED(lock_conflict)',
     );
     for (const svc of [r1, r2, r3]) {
-      assert.equal(
-        readAccountBalance(svc.db, 1),
-        175,
-        `W2 must not mutate locked row id = 1 on ${svc.replicaId}`,
-      );
+      assert.equal(readAccountBalance(svc.db, 1), 175, `W2 must not mutate id = 1 on ${svc.replicaId}`);
       assert.equal(countDbReservations(svc.db), 1, `T2 lock must remain live on ${svc.replicaId}`);
     }
 
+    race.setMemoryDivergence(false);
     await clientT.query('ROLLBACK');
-    const allReleased = await cluster.group.waitFor(
-      () => countDbReservations(r1.db) === 0 &&
-        countDbReservations(r2.db) === 0 &&
-        countDbReservations(r3.db) === 0,
+    assert.equal(
+      await cluster.group.waitFor(
+        () => countDbReservations(r1.db) === 0 &&
+          countDbReservations(r2.db) === 0 &&
+          countDbReservations(r3.db) === 0,
+      ),
+      true,
+      'T2 rollback must release lock across all replicas',
     );
-    assert.equal(allReleased, true, 'T2 rollback must release lock across all replicas');
+    clearMemoryReservations();
+
+    // --- Schedule 3c (Separate legal PREPARE-first trace): W3's PARTICIPANT_PREPARE enters the log
+    // before T3's ACQUIRE on id = 1; all three replicas apply PREPARE first and refuse ACQUIRE. ---
+    const sW3 = 's-w3-prepare-first';
+    const coord2 = cluster.node2.engine.transactionCoordinator;
+    const w3Begin = await coord2.begin(sW3);
+    assert.equal(w3Begin.success, true, w3Begin.error);
+    const w3Stage = await cluster.node2.engine.executeQuery(
+      'UPDATE accounts SET balance = 666 WHERE id = 1',
+      [],
+      {sessionId: sW3},
+    );
+    assert.equal(w3Stage.success, true, w3Stage.error);
+    const txW3 = coord2.getTransaction(sW3);
+    assert.ok(txW3, 'W3 active transaction record must exist');
+
+    // Hold W3's COMMIT fanout after PREPARE settles so W3 remains durably PREPARED while we verify
+    // duplicate ACQUIRE replay, leader precheck refusal, and disjoint-row FOR UPDATE progress.
+    let releaseW3CommitFanout = null;
+    const w3CommitGate = new Promise((resolve) => {
+      releaseW3CommitFanout = resolve;
+    });
+    const origCommitParticipant = coord2.commitParticipant.bind(coord2);
+    coord2.commitParticipant = async (sessionId, partitionId, options) => {
+      if (sessionId === sW3) {
+        await w3CommitGate;
+      }
+      return origCommitParticipant(sessionId, partitionId, options);
+    };
+
+    race.armHoldOn(isPrepareCmd);
+    const w3CommitPromise = coord2.commit(sW3);
+    let t3AcquireCmd = null;
+    try {
+      assert.equal(
+        await cluster.group.waitFor(
+          () => race.state.triggeredCommand !== null && race.state.heldDeliveries.length >= 2,
+        ),
+        true,
+        'W3 PARTICIPANT_PREPARE must be held before quorum commitment',
+      );
+      const indexAfterPrepare = r1.raft.readStatus().lastIndex;
+
+      t3AcquireCmd = buildLockingReadCommand(r1, {
+        op: 'ACQUIRE',
+        tableName: ACCOUNTS_TABLE,
+        pkValues: [1],
+        transactionId: 'tx-t3-behind-prepare',
+        sessionId: 's-t3-behind-prepare',
+        participantId: `tx-t3-behind-prepare:${ACCOUNTS_PARTITION_ID}`,
+      });
+      const t3AcquirePromise = startPartitionRaftWriteCommit(r1, {
+        entry: t3AcquireCmd,
+        phaseTimings: null,
+        applyStartMs: r1.timeSource.now(),
+        park: false,
+      });
+      assert.equal(
+        await cluster.group.waitFor(() => r1.raft.readStatus().lastIndex > indexAfterPrepare),
+        true,
+        'T3 ACQUIRE must enter r1 Raft log right behind uncommitted W3 PARTICIPANT_PREPARE',
+      );
+
+      race.setMemoryDivergence(true);
+      race.flush();
+      const t3Answer = await t3AcquirePromise;
+      assert.equal(t3Answer.success, false, 'T3 ACQUIRE behind committed PREPARE must refuse');
+      assert.equal(t3Answer.conflict, true);
+      assert.equal(t3Answer.sqlState, LOCK_NOT_AVAILABLE_SQLSTATE);
+      assert.equal(t3Answer.conflictingTransactionId, txW3.transactionId);
+
+      assert.equal(
+        await cluster.group.waitFor(() =>
+          [r1, r2, r3].every((svc) => {
+            const prepRow = svc.db
+              .prepare('SELECT state FROM _participant_transactions WHERE transaction_id = ?')
+              .get(txW3.transactionId);
+            const settled = readSettledOwnerCommandIn(svc.db, {
+              entryId: t3AcquireCmd.entryId,
+              commandDigest: t3AcquireCmd.commandDigest,
+            });
+            const ownerAns = settled.recorded ? JSON.parse(settled.recorded.ownerResultText) : null;
+            return prepRow?.state === 'PREPARED' &&
+              countDbReservations(svc.db) === 0 &&
+              ownerAns?.conflict === true &&
+              ownerAns?.conflictingTransactionId === txW3.transactionId;
+          }),
+        ),
+        true,
+        'all three replicas must hold W3 PREPARED and durably refuse T3 ACQUIRE with zero reservation rows',
+      );
+      race.setMemoryDivergence(false);
+      clearMemoryReservations();
+
+      // Duplicate delivery of T3 ACQUIRE must replay the exact settled conflict refusal.
+      const t3Replay = await startPartitionRaftWriteCommit(r1, {
+        entry: t3AcquireCmd,
+        phaseTimings: null,
+        applyStartMs: r1.timeSource.now(),
+        park: false,
+      });
+      assert.equal(t3Replay.success, false);
+      assert.equal(t3Replay.conflict, true);
+      assert.equal(t3Replay.conflictingTransactionId, txW3.transactionId);
+      assert.equal(countDbReservations(r1.db), 0);
+
+      // Leader precheck while W3 is durably PREPARED also refuses conflicting FOR UPDATE with 55P03.
+      await clientT.query('BEGIN');
+      await expectSqlState(
+        clientT,
+        'SELECT id, balance FROM accounts WHERE id = 1 FOR UPDATE',
+        [],
+        LOCK_NOT_AVAILABLE_SQLSTATE,
+      );
+      await clientT.query('ROLLBACK');
+
+      // Positive control: disjoint-row FOR UPDATE + write on id = 2 succeeds while W3 is PREPARED on id = 1.
+      await clientDisjoint.query('BEGIN');
+      const disjointLock = await clientDisjoint.query(
+        'SELECT id, balance FROM accounts WHERE id = 2 FOR UPDATE',
+      );
+      assertNumericRowValues(disjointLock.rows, [{id: 2, balance: 200}]);
+      await clientDisjoint.query('UPDATE accounts SET balance = 225 WHERE id = 2');
+      assert.equal(
+        await cluster.group.waitFor(
+          () => countDbReservations(r1.db) === 1 &&
+            countDbReservations(r2.db) === 1 &&
+            countDbReservations(r3.db) === 1,
+        ),
+        true,
+        'disjoint FOR UPDATE on id = 2 must replicate while W3 is PREPARED on id = 1',
+      );
+
+      // Legal winner W3 commits id = 1 -> 666 across r1/r2/r3; disjoint tx commits id = 2 -> 225 and releases lock.
+      releaseW3CommitFanout();
+      const w3Commit = await w3CommitPromise;
+      assert.equal(w3Commit.success, true, w3Commit.error);
+      assert.equal(
+        await cluster.group.waitFor(
+          () => readAccountBalance(r1.db, 1) === 666 &&
+            readAccountBalance(r2.db, 1) === 666 &&
+            readAccountBalance(r3.db, 1) === 666,
+        ),
+        true,
+        'W3 commit must apply 666 across r1/r2/r3',
+      );
+      await clientDisjoint.query('COMMIT');
+      assert.equal(
+        await cluster.group.waitFor(
+          () => readAccountBalance(r1.db, 2) === 225 &&
+            readAccountBalance(r2.db, 2) === 225 &&
+            readAccountBalance(r3.db, 2) === 225 &&
+            countDbReservations(r1.db) === 0 &&
+            countDbReservations(r2.db) === 0 &&
+            countDbReservations(r3.db) === 0,
+        ),
+        true,
+        'disjoint lock and write must commit 225 and release durably across r1/r2/r3',
+      );
+    } finally {
+      releaseW3CommitFanout();
+      coord2.commitParticipant = origCommitParticipant;
+      await w3CommitPromise.catch(() => {});
+    }
   } finally {
-    flushHeldDeliveries();
-    network.deliver = origDeliver;
-    r2.applyCommittedEntry = origR2Apply;
-    r3.applyCommittedEntry = origR3Apply;
+    race.restore();
     await clientT.end().catch(() => {});
     await clientW.end().catch(() => {});
     await clientDisjoint.end().catch(() => {});
@@ -1312,18 +1387,23 @@ test('Witness 4: gateway cleanup (write-error, unscoped helper, shutdown) never 
     assert.equal(countDbReservations(r2.db), 1);
     assert.equal(countDbReservations(r3.db), 1);
 
-    // 4b. Unscoped release helpers MUST clear only local memory and NEVER iterate PARTITION_DBS.
-    releaseTransactionReservations(tx.transactionId);
-    releaseSessionReservations(sessionId);
+    // 4b. Gateway cleanup surface exposes ONLY local memory clearing and removes
+    // durable-delete / authority-flag exports (P1 capability narrowing).
+    assert.equal(Object.hasOwn(reservationSurface, 'acquireRowReservation'), false);
+    assert.equal(Object.hasOwn(reservationSurface, 'releaseTransactionReservations'), false);
+    assert.equal(Object.hasOwn(reservationSurface, 'releaseSessionReservations'), false);
+    assert.equal(Object.hasOwn(reservationSurface, 'releaseSpecificRowReservations'), false);
+    clearTransactionMemoryReservations(tx.transactionId);
+    clearSessionMemoryReservations(sessionId);
     assert.equal(
       getTransactionReservations(tx.transactionId).length,
       0,
-      'unscoped helper clears local gateway memory mirror only',
+      'gateway cleanup clears local memory mirror only',
     );
     assert.equal(
       countDbReservations(r1.db),
       1,
-      'unscoped helper must never delete durable reservation rows out-of-log',
+      'gateway cleanup must never delete durable reservation rows out-of-log',
     );
     assert.equal(countDbReservations(r2.db), 1);
     assert.equal(countDbReservations(r3.db), 1);

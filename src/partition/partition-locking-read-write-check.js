@@ -23,8 +23,8 @@ import {
   createLockConflictResult,
   createReservationUnavailableResult,
   deriveRowLockKey,
-  listDbTableReservationConflicts,
 } from './partition-locking-read-reservation.js';
+import {listDbTableReservationConflicts} from './partition-locking-read-store.js';
 import {
   readPartitionWriteGeneration,
   readPartitionWriteGenerationHistoryRange,
@@ -41,6 +41,10 @@ import {
   encodeCanonicalPkTupleKey,
   extractStatementWriteFootprint,
 } from './partition-write-footprint-contract.js';
+import {
+  isDeterministicStatementFailure,
+  statementEnvironmentFailure,
+} from './partition-committed-statement-outcome.js';
 
 const PG_PARAM_RE = /\$[1-9]\d*/u;
 const PARTICIPANT_TRANSACTIONS_TABLE = '_participant_transactions';
@@ -50,6 +54,8 @@ const SQL_DIALECT = Object.freeze({
   POSTGRESQL: 'postgresql',
   SQLITE: 'sqlite',
 });
+const SCAN_WRITE_AST_TYPES = Object.freeze(new Set(['UPDATE', 'DELETE']));
+const UPDATE_AST_TYPE = 'UPDATE';
 
 function decodePayloadParams(payload) {
   if (payload?.typedParams !== undefined && payload?.typedParams !== null) {
@@ -139,14 +145,51 @@ function checkScopedFootprintConflict(service, tableName, footprint, lockedByKey
   return null;
 }
 
-function checkUnscopedWriteConflict(service, tableName, pkCols, ast, params, lockedByKey) {
-  if (ast?.type === LOCKING_READ_AST_TYPE.INSERT || pkCols.length === 0) {
-    const firstEntry = lockedByKey.entries().next().value;
-    return createLockConflictResult({
-      rowKey: firstEntry[0],
-      partitionId: service.partitionId,
-      conflictingTransactionId: firstEntry[1],
-    });
+function assignmentsMutatePk(ast, pkCols) {
+  if (ast?.type !== UPDATE_AST_TYPE || !Array.isArray(pkCols) || pkCols.length === 0) {
+    return false;
+  }
+  const assignments = ast.assignments ?? ast.set;
+  if (!Array.isArray(assignments)) {
+    return false;
+  }
+  const pkSet = new Set(pkCols.map((col) => String(col).toLowerCase()));
+  return assignments.some((assignment) => {
+    const rawCol = assignment ? (assignment.column ?? assignment.name) : '';
+    const col = String(rawCol ?? '').trim().replace(/^["'`]|["'`]$/gu, '').toLowerCase();
+    return pkSet.has(col);
+  });
+}
+
+function firstLockedEntryConflict(service, lockedByKey) {
+  const firstEntry = lockedByKey.entries().next().value;
+  return createLockConflictResult({
+    rowKey: firstEntry[0],
+    partitionId: service.partitionId,
+    conflictingTransactionId: firstEntry[1],
+  });
+}
+
+function handleScanConflictError(service, error, lockedByKey, deterministic) {
+  if (deterministic) {
+    if (!isDeterministicStatementFailure(error, service.db)) {
+      throw statementEnvironmentFailure(error);
+    }
+    return firstLockedEntryConflict(service, lockedByKey);
+  }
+  return createReservationUnavailableResult({
+    partitionId: service.partitionId,
+    message: `Failed to evaluate locking-read write conflict: ${error.message}`,
+  });
+}
+
+function checkUnscopedWriteConflict(
+  service, tableName, pkCols, ast, params, lockedByKey, deterministic,
+) {
+  if (!SCAN_WRITE_AST_TYPES.has(ast?.type) ||
+      pkCols.length === 0 ||
+      assignmentsMutatePk(ast, pkCols)) {
+    return firstLockedEntryConflict(service, lockedByKey);
   }
   try {
     const selectAst = buildScanSelectAst(tableName, pkCols, ast);
@@ -172,34 +215,124 @@ function checkUnscopedWriteConflict(service, tableName, pkCols, ast, params, loc
     }
     return null;
   } catch (error) {
-    return createReservationUnavailableResult({
-      partitionId: service.partitionId,
-      message: `Failed to evaluate locking-read write conflict: ${error.message}`,
-    });
+    return handleScanConflictError(service, error, lockedByKey, deterministic);
   }
 }
 
-function evaluateMatchedLockRows(service, tableName, payload, ast, listedRows) {
-  const lockedByKey = new Map(listedRows.map((r) => [r.rowKey, r.transactionId]));
+function evaluateSingleOperationAgainstLocks(
+  service, tableName, operation, ast, footprintMeta, lockedByKey, deterministic,
+) {
   if (!ast || ast.parseError) {
-    const first = listedRows[0];
-    return createLockConflictResult({
-      rowKey: first.rowKey,
-      partitionId: service.partitionId,
-      conflictingTransactionId: first.transactionId,
-    });
+    return firstLockedEntryConflict(service, lockedByKey);
   }
-  const params = decodePayloadParams(payload);
-  const {pkCols, allCols} = readTableFootprintMetadata(service.db, tableName);
+  const params = decodePayloadParams(operation);
+  const {pkCols, allCols} = footprintMeta;
   const footprint = extractStatementWriteFootprint({ast, params, pkCols, allCols});
   if (footprint.scoped && footprint.rowKeys.length > 0) {
     return checkScopedFootprintConflict(service, tableName, footprint, lockedByKey);
   }
-  return checkUnscopedWriteConflict(service, tableName, pkCols, ast, params, lockedByKey);
+  return checkUnscopedWriteConflict(
+    service, tableName, pkCols, ast, params, lockedByKey, deterministic,
+  );
 }
 
 function isWritablePartitionDb(service) {
   return Boolean(service?.db) && service.db.open !== false;
+}
+
+function resolveConflictTableName(service, firstAst) {
+  const hasServiceTable = typeof service.tableName === 'string' && service.tableName.length > 0;
+  return hasServiceTable ? service.tableName : firstAst?.table ?? null;
+}
+
+function listDurableConflictsForWrite(service, tableName, transactionId, deterministic) {
+  if (!deterministic) {
+    return listDbTableReservationConflicts(service.db, {
+      partitionId: service.partitionId,
+      tableName,
+      transactionId,
+      throwOnError: false,
+    });
+  }
+  try {
+    return listDbTableReservationConflicts(service.db, {
+      partitionId: service.partitionId,
+      tableName,
+      transactionId,
+      throwOnError: true,
+    });
+  } catch (error) {
+    throw statementEnvironmentFailure(error);
+  }
+}
+
+/**
+ * Deterministically check whether one or more SQL write operations conflict
+ * with any active durable FOR_UPDATE reservation in service.db held by another
+ * transaction. Reads solely from replicated SQLite state (zero process-local
+ * memory, zero wall-clock expiry) so Raft apply decisions are identical across
+ * every replica.
+ *
+ * @param {Object} service - PartitionService instance.
+ * @param {Object} options - {operations, transactionId, deterministic}.
+ * @return {Object|null} Conflict/unavailable answer, or null if clear.
+ */
+export function checkOperationsLockingReadConflict(
+  service,
+  {operations, transactionId = null, deterministic = false} = {},
+) {
+  if (!Array.isArray(operations) || operations.length === 0 || !isWritablePartitionDb(service)) {
+    return null;
+  }
+  const parsedAsts = operations.map((op) => parseWriteAst(op?.sql));
+  const tableName = resolveConflictTableName(service, parsedAsts[0]);
+  if (!tableName) {
+    return null;
+  }
+  const listed = listDurableConflictsForWrite(service, tableName, transactionId, deterministic);
+  if (!listed.ok) {
+    return createReservationUnavailableResult({
+      partitionId: service.partitionId,
+      message: listed.error,
+    });
+  }
+  if (listed.rows.length === 0) {
+    return null;
+  }
+  const lockedByKey = new Map(listed.rows.map((r) => [r.rowKey, r.transactionId]));
+  const footprintMeta = readTableFootprintMetadata(service.db, tableName);
+  for (let i = 0; i < operations.length; i += 1) {
+    const conflict = evaluateSingleOperationAgainstLocks(
+      service, tableName, operations[i], parsedAsts[i], footprintMeta, lockedByKey, deterministic,
+    );
+    if (conflict !== null) {
+      return conflict;
+    }
+  }
+  return null;
+}
+
+/**
+ * Canonical lock-conflict response fields shared by participant PREPARE/COMMIT
+ * refusal answers (R08).
+ *
+ * @param {Object|null|undefined} lockConflict - Conflict result from checkOperationsLockingReadConflict.
+ * @return {Object} Public typed conflict fields.
+ */
+export function buildLockConflictAnswerFields(lockConflict) {
+  if (!lockConflict) {
+    return {};
+  }
+  return {
+    errorCode: lockConflict.errorCode,
+    code: lockConflict.code,
+    sqlState: lockConflict.sqlState,
+    conflict: lockConflict.conflict === true,
+    retryable: lockConflict.retryable === true,
+    ...(lockConflict.rowKey ? {rowKey: lockConflict.rowKey} : {}),
+    ...(lockConflict.conflictingTransactionId ?
+      {conflictingTransactionId: lockConflict.conflictingTransactionId} : {}),
+  };
 }
 
 /**
@@ -211,30 +344,11 @@ function isWritablePartitionDb(service) {
  * @return {Object|null} Conflict/unavailable error answer, or null if clear.
  */
 export function checkPartitionWriteLockingReadConflict(service, payload) {
-  if (!isWritablePartitionDb(service)) {
-    return null;
-  }
-  const ast = parseWriteAst(payload?.sql);
-  const hasServiceTable = typeof service.tableName === 'string' && service.tableName.length > 0;
-  const tableName = hasServiceTable ? service.tableName : ast?.table ?? null;
-  if (!tableName) {
-    return null;
-  }
-  const listed = listDbTableReservationConflicts(service.db, {
-    partitionId: service.partitionId,
-    tableName,
+  return checkOperationsLockingReadConflict(service, {
+    operations: [payload],
     transactionId: payload?.transactionId || null,
+    deterministic: false,
   });
-  if (!listed.ok) {
-    return createReservationUnavailableResult({
-      partitionId: service.partitionId,
-      message: listed.error,
-    });
-  }
-  if (listed.rows.length === 0) {
-    return null;
-  }
-  return evaluateMatchedLockRows(service, tableName, payload, ast, listed.rows);
 }
 
 function generationRowTouchesKey(row, expectedGen, canonicalPkKey) {
@@ -328,7 +442,10 @@ function hasParticipantTransactionsTable(db) {
 }
 
 function operationsConflictWithPkKey(db, tableName, operations, canonicalPkKey) {
-  if (!Array.isArray(operations) || operations.length === 0) {
+  if (!Array.isArray(operations)) {
+    return true;
+  }
+  if (operations.length === 0) {
     return false;
   }
   const {pkCols, allCols, uniqueConstraintCols, hasUnscopedSchemaConstraints} =

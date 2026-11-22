@@ -10,17 +10,9 @@
 
 import {randomUUID} from 'node:crypto';
 import {
-  acquireRowReservation,
   createLockConflictResult,
   createReservationUnavailableResult,
-  deriveRowLockKey,
-  releaseSpecificRowReservations,
-  releaseTransactionReservations,
 } from '../partition/partition-locking-read-reservation.js';
-import {
-  buildStaleReadLockConflict,
-  hasRowModificationSinceGeneration,
-} from '../partition/partition-locking-read-write-check.js';
 import {requestLockingReadReservation} from
   '../partition/partition-locking-read-service.js';
 import {RAFT_ROLE} from '../raft/constants.js';
@@ -32,7 +24,6 @@ import {
 import {
   LOCKING_READ_ERROR_MSG,
   LOCKING_READ_PARTITION_OP,
-  LOCKING_READ_RESERVATION_KIND,
   LOCKING_READ_RESERVATION_OUTCOME,
   LOCKING_READ_RESERVATION_TYPE,
 } from './sql-locking-read-constants.js';
@@ -40,7 +31,6 @@ import {
 const RESERVATION_RESULT_MODE = Object.freeze({
   LOCAL: 'local',
   REMOTE: 'remote',
-  UNAVAILABLE: 'unavailable',
 });
 
 const RESERVATION_ENTRY_PREFIX = 'locking-read-';
@@ -233,42 +223,13 @@ export async function sendRemoteLockingReadOp(engine, partitionId, op, payload) 
   });
 }
 
-function acquireLocalNonRaftReservation(service, params) {
-  const {
-    tableName, partitionId, pkValues, transactionId,
-    sessionId, holdTimeoutMs, readGeneration,
-  } = params;
-  if (!service.db || service.db.open === false) {
-    return {
-      mode: RESERVATION_RESULT_MODE.UNAVAILABLE,
-      result: createReservationUnavailableResult({partitionId, tableName}),
-    };
-  }
-  const rowKey = deriveRowLockKey(tableName, partitionId, pkValues);
-  if (Number.isSafeInteger(readGeneration) &&
-      hasRowModificationSinceGeneration(service.db, readGeneration, pkValues)) {
-    return {
-      mode: RESERVATION_RESULT_MODE.LOCAL,
-      result: buildStaleReadLockConflict(partitionId, rowKey, transactionId),
-    };
-  }
-  const result = acquireRowReservation({
-    tableName,
-    partitionId,
-    pkValues,
-    transactionId,
-    sessionId,
-    participantId: `${transactionId}:${partitionId}`,
-    kind: LOCKING_READ_RESERVATION_KIND.FOR_UPDATE,
-    db: service.db,
-    holdTimeoutMs,
-  });
-  return {mode: RESERVATION_RESULT_MODE.LOCAL, result};
+function bindServicePartitionId(service, partitionId) {
+  return service.partitionId ? service : {...service, partitionId};
 }
 
 /**
- * Acquire one authoritative FOR_UPDATE reservation through the partition leader.
- * Fails closed if neither an authoritative local writable DB nor RPC route succeeds.
+ * Acquire one authoritative FOR_UPDATE reservation through the partition owner.
+ * Fails closed if neither an eligible local partition owner nor RPC route succeeds.
  *
  * @param {Object} engine - SQLQueryEngine instance.
  * @param {Object} params - Reservation parameters.
@@ -277,9 +238,6 @@ function acquireLocalNonRaftReservation(service, params) {
 export async function acquireAuthoritativePartitionReservation(engine, params) {
   const {partitionId} = params;
   const {service} = resolvePartitionServiceEntry(engine, partitionId);
-  if (service && !service.raft) {
-    return acquireLocalNonRaftReservation(service, params);
-  }
   const rpcPayload = {
     tableName: params.tableName,
     pkValues: params.pkValues,
@@ -289,12 +247,18 @@ export async function acquireAuthoritativePartitionReservation(engine, params) {
     holdTimeoutMs: params.holdTimeoutMs,
     readGeneration: params.readGeneration,
   };
-  if (service && service.raft) {
-    const result = await requestLockingReadReservation(service, {
-      op: LOCKING_READ_PARTITION_OP.ACQUIRE,
-      ...rpcPayload,
-    });
-    return {mode: RESERVATION_RESULT_MODE.REMOTE, result};
+  if (service) {
+    const result = await requestLockingReadReservation(
+      bindServicePartitionId(service, partitionId),
+      {
+        op: LOCKING_READ_PARTITION_OP.ACQUIRE,
+        ...rpcPayload,
+      },
+    );
+    return {
+      mode: service.raft ? RESERVATION_RESULT_MODE.REMOTE : RESERVATION_RESULT_MODE.LOCAL,
+      result,
+    };
   }
   const result = await sendRemoteLockingReadOp(
     engine,
@@ -307,29 +271,32 @@ export async function acquireAuthoritativePartitionReservation(engine, params) {
 
 async function releaseTransactionOnPartition(engine, partitionId, transactionId, sessionId) {
   const {service} = resolvePartitionServiceEntry(engine, partitionId);
-  if (service && !service.raft) {
-    releaseTransactionReservations(transactionId, {db: service.db || null, partitionId});
-    return;
-  }
-  if (service && service.raft) {
-    await requestLockingReadReservation(service, {
-      op: LOCKING_READ_PARTITION_OP.RELEASE_TRANSACTION,
-      transactionId,
-      sessionId,
-      participantId: `${transactionId}:${partitionId}`,
-    });
+  const payload = {
+    transactionId,
+    sessionId,
+    participantId: `${transactionId}:${partitionId}`,
+  };
+  if (service) {
+    await requestLockingReadReservation(
+      bindServicePartitionId(service, partitionId),
+      {
+        op: LOCKING_READ_PARTITION_OP.RELEASE_TRANSACTION,
+        ...payload,
+      },
+    );
     return;
   }
   await sendRemoteLockingReadOp(
     engine,
     partitionId,
     LOCKING_READ_PARTITION_OP.RELEASE_TRANSACTION,
-    {transactionId, sessionId, participantId: `${transactionId}:${partitionId}`},
+    payload,
   );
 }
 
 /**
- * Roll back partially acquired locking-read reservations after an acquisition failure.
+ * Roll back partially acquired locking-read reservations after an acquisition failure
+ * exclusively through each partition's canonical reservation owner.
  *
  * @param {Object} engine - SQLQueryEngine instance.
  * @param {Array<Object>} acquiredEntries - Entries newly acquired in this statement.
@@ -346,22 +313,13 @@ export async function rollbackAcquiredReservations(
   if (!Array.isArray(acquiredEntries) || acquiredEntries.length === 0) {
     return;
   }
-  const localEntries = [];
-  const remotePartitions = new Set();
+  const affectedPartitions = new Set();
   for (const entry of acquiredEntries) {
-    if (entry.mode === RESERVATION_RESULT_MODE.LOCAL) {
-      localEntries.push({
-        ...entry,
-        db: resolvePartitionDb(engine, entry.partitionId),
-      });
-    } else if (entry.partitionId) {
-      remotePartitions.add(entry.partitionId);
+    if (entry.partitionId) {
+      affectedPartitions.add(entry.partitionId);
     }
   }
-  if (localEntries.length > 0) {
-    releaseSpecificRowReservations(localEntries);
-  }
-  for (const partitionId of remotePartitions) {
+  for (const partitionId of affectedPartitions) {
     await releaseTransactionOnPartition(engine, partitionId, transactionId, sessionId);
   }
 }

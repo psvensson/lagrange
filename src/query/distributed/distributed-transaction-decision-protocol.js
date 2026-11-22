@@ -32,7 +32,12 @@ import {
   PARTICIPANT_TRANSACTION_DECISION,
   PARTICIPANT_TRANSACTION_REFUSAL_CAUSE,
 } from '../../partition/partition-participant-transaction-constants.js';
-import {releaseTransactionReservations} from
+import {
+  LOCKING_READ_ERROR_CODE,
+  LOCKING_READ_ERROR_MSG,
+  LOCKING_READ_SQL_STATE,
+} from '../sql-locking-read-constants.js';
+import {clearTransactionMemoryReservations} from
   '../../partition/partition-locking-read-reservation.js';
 import {
   PARTICIPANT_STATUS,
@@ -86,7 +91,20 @@ function rolledBackCommitFailure(preparation) {
     return {errorCode: QUERY_ERROR_CODE.TIMEOUT,
       error: QUERY_ERROR_MSG.QUERY_TIMEOUT};
   }
-  const conflicted = (preparation?.failedParticipants || []).some((entry) =>
+  const failed = preparation?.failedParticipants || [];
+  const lockEntry = failed.find((entry) =>
+    entry.refusalCause === PARTICIPANT_TRANSACTION_REFUSAL_CAUSE.LOCK_CONFLICT);
+  if (lockEntry) {
+    return {
+      errorCode: LOCKING_READ_ERROR_CODE.LOCK_NOT_AVAILABLE,
+      code: LOCKING_READ_ERROR_CODE.LOCK_NOT_AVAILABLE,
+      sqlState: LOCKING_READ_SQL_STATE.LOCK_NOT_AVAILABLE,
+      conflict: true,
+      retryable: true,
+      error: LOCKING_READ_ERROR_MSG.LOCK_CONFLICT,
+    };
+  }
+  const conflicted = failed.some((entry) =>
     entry.refusalCause === PARTICIPANT_TRANSACTION_REFUSAL_CAUSE.CONFLICT);
   return conflicted ?
     {errorCode: QUERY_ERROR_CODE.TRANSACTION_CONFLICT,
@@ -113,7 +131,7 @@ function endTransaction(coordinator, tx) {
     coordinator.transactionsBySession.delete(tx.sessionId);
     coordinator.endedTransactions?.record(tx);
   }
-  releaseTransactionReservations(tx.transactionId);
+  clearTransactionMemoryReservations(tx.transactionId);
 }
 
 async function settleInDoubtRollback(coordinator, tx) {

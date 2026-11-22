@@ -97,10 +97,13 @@ import {
   resetParticipantRowKeyHistory,
   stagePreparedParticipantRowKeys,
 } from './partition-participant-transaction-session.js';
+import {clearPartitionTransactionMemoryReservations} from
+  './partition-locking-read-reservation.js';
+import {releaseDbPartitionTransactionReservations} from './partition-locking-read-store.js';
 import {
-  clearPartitionTransactionMemoryReservations,
-  releaseDbPartitionTransactionReservations,
-} from './partition-locking-read-reservation.js';
+  buildLockConflictAnswerFields,
+  checkOperationsLockingReadConflict,
+} from './partition-locking-read-write-check.js';
 
 // The private value that ends a PREPARE's dry run: thrown inside its
 // savepoint, so better-sqlite3 rolls every carried operation back.
@@ -248,7 +251,7 @@ function preparedRowOf(committed, fields) {
 }
 
 // Steps 3, 6 and 7: a REFUSED row, a control row that never moves g.
-function refusePrepare(service, committed, {cause, detail}) {
+function refusePrepare(service, committed, {cause, detail, lockConflict = null}) {
   clearPreparedParticipantRowKeys(service, committed.command.participantId);
   releaseDbPartitionTransactionReservations(
     service.db,
@@ -269,8 +272,9 @@ function refusePrepare(service, committed, {cause, detail}) {
     refusalCause: cause,
   });
   answerProposer(service, committed, {success: false,
-    error: messageOf(MESSAGE.COMMAND_REFUSED, CODE.PREPARE_REFUSED),
+    error: lockConflict?.error || messageOf(MESSAGE.COMMAND_REFUSED, CODE.PREPARE_REFUSED),
     failureCode: CODE.PREPARE_REFUSED,
+    ...buildLockConflictAnswerFields(lockConflict),
     ...rowAnswer(service, committed.command)});
   return OUTCOME.APPLIED;
 }
@@ -331,10 +335,8 @@ function applyParticipantPrepare(service, committed) {
       readPartitionWriteOrigin(service.db)?.originIndex) {
     return refuseOriginMismatch(service, committed);
   }
-  const footprint = extractOperationsRowKeyFootprint(
-    service,
-    operationsOf(command.operationsText),
-  );
+  const operations = operationsOf(command.operationsText);
+  const footprint = extractOperationsRowKeyFootprint(service, operations);
   if (isPartitionReservedForPrepare(
     service,
     command.participantId,
@@ -349,6 +351,18 @@ function applyParticipantPrepare(service, committed) {
       !canAdvanceCommittedValidationText(service, command.validationText, footprint)) {
     return refusePrepare(service, committed,
       {cause: CAUSE.CONFLICT, detail: null});
+  }
+  const lockConflict = checkOperationsLockingReadConflict(service, {
+    operations,
+    transactionId: command.transactionId,
+    deterministic: true,
+  });
+  if (lockConflict !== null) {
+    return refusePrepare(service, committed, {
+      cause: CAUSE.LOCK_CONFLICT,
+      detail: lockConflict.rowKey ?? null,
+      lockConflict,
+    });
   }
   const dryRun = dryRunCarriedOperations(service, command.operationsText);
   if (dryRun !== DRY_RUN_PASSED) {
@@ -448,8 +462,10 @@ function refuseCommit(service, committed, refusal) {
   clearPreparedParticipantRowKeys(service, committed.command.participantId);
   committed.afterRollback(() => resetParticipantRowKeyHistory(service));
   releaseReservation(service, committed);
-  alarmRefusal(service, committed, CODE.COMMIT_REFUSED,
-    rowAnswer(service, committed.command));
+  alarmRefusal(service, committed, CODE.COMMIT_REFUSED, {
+    ...rowAnswer(service, committed.command),
+    ...buildLockConflictAnswerFields(refusal?.lockConflict),
+  });
   return OUTCOME.APPLIED;
 }
 
@@ -500,6 +516,18 @@ function commitPrepared(service, committed, row) {
       !canAdvanceCommittedValidationText(service, row.validationText, footprint)) {
     return refuseCommit(service, committed,
       {cause: CAUSE.COMMIT_BASE_MOVED, detail: null});
+  }
+  const lockConflict = checkOperationsLockingReadConflict(service, {
+    operations,
+    transactionId: row.transactionId,
+    deterministic: true,
+  });
+  if (lockConflict !== null) {
+    return refuseCommit(service, committed, {
+      cause: CAUSE.COMMIT_LOCK_CONFLICT,
+      detail: lockConflict.rowKey ?? null,
+      lockConflict,
+    });
   }
   let applied;
   try {

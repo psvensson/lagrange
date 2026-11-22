@@ -2342,6 +2342,27 @@
         "test/rebalancer/placement-owner-authority-disruptions.test.js",
         "test/rebalancer/placement-owner-authority-five-nodes.test.js"
       ]
+    },
+    "locking-read-reciprocal-committed-exclusion": {
+      "description": "Authoritative FOR_UPDATE locking-read reservations and participant PREPARE/COMMIT/SQL application enforce reciprocal committed exclusion in the same partition log order solely from durable SQLite state; gateway cleanup clears only process-local bookkeeping and never mutates durable reservations.",
+      "owners": [
+        "src/partition/partition-locking-read-service.js",
+        "src/partition/partition-locking-read-store.js",
+        "src/partition/partition-locking-read-write-check.js",
+        "src/partition/partition-locking-read-reservation.js",
+        "src/partition/partition-participant-transaction-apply.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/sql-locking-read-remote.js",
+        "src/query/sql-query-engine-lifecycle-and-callback-dispatch.js",
+        "src/query/sql-query-engine-write-execution.js",
+        "src/query/distributed/distributed-transaction-decision-protocol.js"
+      ],
+      "tests": [
+        "test/query/locking-read-authoritative-reservations.test.js",
+        "test/query/locking-read-execution-lifecycle.test.js",
+        "test/transaction/queryable-core-j4-locking-read-journey.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -5019,6 +5040,32 @@
       "contract": "replica-placement-single-scheduler",
       "witnessTests": [
         "test/partition/placement-owner-construction-orders.test.js"
+      ]
+    },
+    "locking-read-acquire-and-participant-prepare": {
+      "description": "Locking-read ACQUIRE/store/conflict enforcement and participant PREPARE/COMMIT/SQL apply enforce reciprocal committed exclusion in partition log order: PREPARE-first refuses conflicting ACQUIRE, ACQUIRE-first refuses conflicting PREPARE before global COMMIT, and gateway cleanup clears only local bookkeeping.",
+      "endpoints": [
+        {
+          "id": "locking-read-acquire-and-store",
+          "owners": [
+            "src/partition/partition-locking-read-service.js",
+            "src/partition/partition-locking-read-store.js",
+            "src/partition/partition-locking-read-write-check.js",
+            "src/partition/partition-locking-read-reservation.js"
+          ]
+        },
+        {
+          "id": "participant-prepare-and-commit-apply",
+          "owners": [
+            "src/partition/partition-participant-transaction-apply.js",
+            "src/partition/partition-participant-transaction-request.js",
+            "src/partition/partition-service-entry-apply-base.js"
+          ]
+        }
+      ],
+      "contract": "locking-read-reciprocal-committed-exclusion",
+      "witnessTests": [
+        "test/query/locking-read-authoritative-reservations.test.js"
       ]
     }
   }

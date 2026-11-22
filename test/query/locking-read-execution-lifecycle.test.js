@@ -7,12 +7,16 @@ import {createTransactionPersistenceGateway} from '../test-helpers/transaction-p
 import {answerParticipantTransactionRequest} from '../test-helpers/participant-protocol-double.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {
-  acquireRowReservation,
   clearAllReservations,
+  deriveRowLockKey,
   getTransactionReservations,
   hasLockingReadReservations,
   registerPartitionDatabase,
 } from '../../src/partition/partition-locking-read-reservation.js';
+import {
+  acquireDbForUpdateReservation,
+  releaseDbPartitionTransactionReservations,
+} from '../../src/partition/partition-locking-read-store.js';
 import {resolveFailureSqlState} from '../../src/runtime/pgwire-result-mapper.js';
 import {
   canAdvanceRowKeySessionGeneration,
@@ -87,6 +91,21 @@ function createTestHarness(options = {}) {
       async deliver(address, message) {
         deliveredMessages.push({address, ...message});
         if (message.type === 'TRANSACTION') {
+          const txPartitionId = address?.split('/')?.at(-1);
+          if (
+            (message.operation === 'COMMIT' || message.operation === 'ROLLBACK') &&
+            txPartitionId &&
+            message.transactionId
+          ) {
+            const svc = partitionServices.get(txPartitionId);
+            if (svc?.db) {
+              releaseDbPartitionTransactionReservations(
+                svc.db,
+                txPartitionId,
+                message.transactionId,
+              );
+            }
+          }
           return buildDeliveryEnvelope(
             {acknowledged: true},
             answerParticipantTransactionRequest(message),
@@ -567,14 +586,15 @@ test('B4: participant session sweep respects localExpiry: "forbidden" for lockin
   );
 
   const db = new Database(':memory:');
-  acquireRowReservation({
+  acquireDbForUpdateReservation(db, {
     tableName: 'orders',
     partitionId: 'orders-p1',
-    pkValues: [1],
+    rowKey: deriveRowLockKey('orders', 'orders-p1', [1]),
     transactionId: 'tx-with-lock',
     sessionId: 's1',
-    kind: 'FOR_UPDATE',
-    db,
+    epoch: 0,
+    acquiredAt: 1000,
+    expiresAt: null,
   });
 
   assert.equal(hasLockingReadReservations('tx-with-lock', db), true);
