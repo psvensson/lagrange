@@ -2,50 +2,68 @@
   "schema": "test-receipt/1",
   "quest": "locking-read-authoritative-reservations",
   "status": "pass",
-  "candidate": "c39c505b40b71734579c93508c241f276ea8b351",
-  "generatedAt": "2026-11-22T15:35:00.000Z",
+  "candidate": "f607d58a43f6f26c34dd9537ee5b53d4c3408120",
+  "baseCandidate": "9355f516dea53b72971e4ba8d0f98abc1343f806",
+  "redCandidate": "7ad55475fb8a5c33065f0c97f5844ce0ed7d995c",
+  "generatedAt": "2026-11-22T18:03:00.000Z",
   "testFileDigests": {
-    "test/query/locking-read-authoritative-reservations.test.js": "2213dca9d0da23fed8e082815b78122e800a0605a406de9c0d58cd9472e229fc",
-    "test/query/locking-read-execution-lifecycle.test.js": "8938d690f3bc9e4a8d67e6fb52a76fb17488096305707d2e385a8c7907f5752a",
-    "test/transaction/queryable-core-j4-locking-read-journey.test.js": "6adc9295fa6f86de49c0de5d34c2cb87e5b2e62c68789d4fc252704c51b08aef",
+    "test/query/locking-read-authoritative-reservations.test.js": "c09e92eb05b3231b2698f0cdf1b812b61d0779859e97a94fa62f67beb7590e06",
+    "test/query/locking-read-authoritative-test-support.js": "8baf23d9bc9421eb52551d36bd862982e9e39937d92717588a3ec09589d62152",
+    "test/query/locking-read-execution-lifecycle.test.js": "5d3ed1cf8cc6f21947ced4e2dc03d6b207fb635a858a5bc44c077dc92b715942",
+    "test/transaction/queryable-core-j4-locking-read-journey.test.js": "36d8ce16361252e8b3d00f684c86a365f9fe1b8af63058c0120e649f1b19fabc",
     "test/query/locking-read-canonical-ast.test.js": "47ae7b227afd0ed8e4cdaaf494bff11bfc0769d586881e4360bdb161ee858f7f"
   },
   "receipts": [
     {
       "id": "public-cross-node-conflict-enforced-or-refused",
       "passed": true,
-      "command": "focused.mjs c39c505b40b71734579c93508c241f276ea8b351 auto -> /mnt/data/peter/projects/lagrange-takeover-20261121/lab/pkg5-divergence-green",
-      "detail": "Red witnesses captured at f04a462e27d51fc0abec67d9d7956bc0a9903c95 (lab/pkg5-red-witness-2) and cf0cad5d0cca67271c1fd5e1f723fbbf9669e9eb (lab/pkg5-divergence-red). Green across separate PgWire gateways/nodes on Receipt 1, Receipt 1b (stale read generation conflict), Witness 1a (leader-side staged-write claims block FOR UPDATE across processes with cleared process-local RESERVATIONS), and Witness 1b (deterministic SQLite-only Raft apply across r1/r2/r3). Fleet runs: lab/pkg5-green-7 (7/7 files, 367 assertions) and lab/pkg5-divergence-green (7/7 files, 370 assertions)."
+      "command": "run-lab-focused.mjs f607d58a43f6f26c34dd9537ee5b53d4c3408120 tv-dator (placement-pid=3719234, 16/16 files, 503 assertions; locking-read-authoritative-reservations.test.js 12/12 in 9469ms)",
+      "detail": "Red witnesses captured at f04a462e27d51fc0abec67d9d7956bc0a9903c95, cf0cad5d0cca67271c1fd5e1f723fbbf9669e9eb, and 7ad55475fb8a5c33065f0c97f5844ce0ed7d995c (tv-dator placement-pid=3695907, 9 pass / 2 fail on Witness 3 & Witness 4). Green across separate PgWire gateways/nodes on Receipt 1, Receipt 1b, Witness 1a, Witness 1b, Witness 3 (Schedules 3a/3b/3c), and Witness 5 (48 bounded schedules)."
+    },
+    {
+      "id": "reciprocal-committed-exclusion-acquire-and-prepare",
+      "passed": true,
+      "command": "run-lab-focused.mjs f607d58a43f6f26c34dd9537ee5b53d4c3408120 tv-dator (placement-pid=3719234)",
+      "detail": "Witness 3 proves P2 reciprocal committed exclusion in both legal committed orders on a 3-replica Raft + 2-node PgWire cluster with poisoned/wiped local RESERVATIONS on followers (Schedules 3a, 3b, 3c). Witness 5 adds P5.3 bounded model exploration across 48 distinct production-apply interleavings (ACQUIRE-first vs PREPARE-first, provisional leader staging, disjoint id=2 writes at every slot, same-tx reentrancy, duplicate delivery, winner commit vs release/rollback, successor progress) driving real applyLockingReadReservationCommand and applyCommittedTransactionCommand on rA (poisoned memory) and rB (empty memory) with zero joint-state violations and 100% deterministic replica state."
     },
     {
       "id": "reservation-admission-failure-visible",
       "passed": true,
-      "command": "focused.mjs c39c505b40b71734579c93508c241f276ea8b351 auto -> /mnt/data/peter/projects/lagrange-takeover-20261121/lab/pkg5-divergence-green",
-      "detail": "Receipt 2 verifies acquireRowReservation with store === null fails closed without phantom memory entries, and read-only SQLite store causes multi-partition SELECT ... FOR UPDATE to fail closed and roll back partial locks on accounts-p2."
+      "command": "run-lab-focused.mjs f607d58a43f6f26c34dd9537ee5b53d4c3408120 tv-dator (placement-pid=3719234)",
+      "detail": "Receipt 2 verifies acquireDbForUpdateReservation(null, ...) and requestLockingReadReservation({db: null, ...}) fail closed without phantom memory entries, and read-only SQLite store causes multi-partition SELECT ... FOR UPDATE to fail closed and roll back partial locks on accounts-p2 via canonical partition release."
     },
     {
       "id": "participant-restart-and-owner-change",
       "passed": true,
-      "command": "focused.mjs c39c505b40b71734579c93508c241f276ea8b351 auto -> /mnt/data/peter/projects/lagrange-takeover-20261121/lab/pkg5-divergence-green",
-      "detail": "Receipt 3a/3b and Witness 1b verify durable _lagrange_locking_read_reservations survive file-backed SQLite restart and Raft leadership transfer (r1 -> r2 -> r3 deterministic settled outcomes) with zero reliance on process-local RESERVATIONS memory."
+      "command": "run-lab-focused.mjs f607d58a43f6f26c34dd9537ee5b53d4c3408120 tv-dator (placement-pid=3719234)",
+      "detail": "Receipt 3a/3b and Witness 1b verify durable _lagrange_locking_read_reservations survive file-backed SQLite restart and Raft leadership transfer (r1 -> r2 -> r3 deterministic settled outcomes) with zero reliance on process-local RESERVATIONS memory or wall-clock read-time expiry."
     },
     {
       "id": "terminal-resolution-and-resource-release",
       "passed": true,
-      "command": "focused.mjs c39c505b40b71734579c93508c241f276ea8b351 auto -> /mnt/data/peter/projects/lagrange-takeover-20261121/lab/pkg5-divergence-green",
-      "detail": "Receipt 4 and Witness 2 verify COMMIT, ROLLBACK, abrupt PgWire TCP disconnect, coordinator cancel, coordinator timeout, partial multi-row acquisition rollback, and strictly partition-scoped per-participant release (accounts-p1 release preserves accounts-p2 until accounts-p2 releases itself, plus shared-DB partition isolation)."
+      "command": "run-lab-focused.mjs f607d58a43f6f26c34dd9537ee5b53d4c3408120 tv-dator (placement-pid=3719234)",
+      "detail": "Receipt 4, Witness 2, and Witness 4 verify COMMIT, ROLLBACK, abrupt PgWire TCP disconnect, coordinator cancel, coordinator timeout, partial multi-row acquisition rollback, strictly partition-scoped release, and complete P1/1B gateway capability narrowing: explicit-tx write-error cleanup, gateway memory-only cleanup, and lost settlement reply + SQLQueryEngine.shutdown() never erase unresolved durable reservations on co-located r1.db; all durable-delete/authority-flag exports (acquireRowReservation, authoritativeDbOnly, releaseTransactionReservations, releaseSessionReservations, releaseSpecificRowReservations, sweepExpiredReservations) are removed from partition-locking-read-reservation.js; dependency-cruiser rule query-no-durable-locking-read-store statically rejects src/query/ -> partition-locking-read-store.js (negative control verified); canonical replicated RELEASE_TRANSACTION settles all 3 replicas cleanly."
     },
     {
       "id": "all-write-consumers-censused",
       "passed": true,
-      "command": "focused.mjs c39c505b40b71734579c93508c241f276ea8b351 auto -> /mnt/data/peter/projects/lagrange-takeover-20261121/lab/pkg5-divergence-green",
-      "detail": "Receipt 5 verifies scoped INSERT, omitted-PK INSERT, INSERT OR REPLACE, equality UPDATE/DELETE, scan/secondary-index UPDATE/DELETE, and competing SELECT ... FOR UPDATE enforce 55P03 from durable SQLite reservations even with empty process-local maps, while disjoint writes progress."
+      "command": "run-lab-focused.mjs f607d58a43f6f26c34dd9537ee5b53d4c3408120 tv-dator (placement-pid=3719234)",
+      "detail": "Receipt 5, Witness 3, and Witness 5 verify scoped INSERT, omitted-PK INSERT, INSERT OR REPLACE, equality UPDATE/DELETE, scan/secondary-index UPDATE/DELETE, participant PREPARE/COMMIT, direct-autocommit SQL apply, and competing SELECT ... FOR UPDATE enforce 55P03 from durable SQLite reservations even with empty process-local maps, while disjoint writes progress. P5 coupled pair locking-read-acquire-and-participant-prepare registered in test/shards/impact-contracts.json and verified via impact-contract-registry.test.js (20/20) and one-sided evaluateCoupledPairGuards selection."
+    },
+    {
+      "id": "independent-verification-prior-package5",
+      "passed": true,
+      "verifier": "subagent:e9afe79f-8d12-49c4-86b6-629c54ca6f0c",
+      "detail": "Prior Package 5 verification at c39c505b40b71734579c93508c241f276ea8b351 preserved."
     },
     {
       "id": "independent-verification",
       "passed": true,
-      "verifier": "subagent:e9afe79f-8d12-49c4-86b6-629c54ca6f0c",
-      "detail": "Independent adversarial review by subagent:e9afe79f-8d12-49c4-86b6-629c54ca6f0c identified replica apply divergence via process-local RESERVATIONS and cross-partition release-scope leakage; both findings were witnessed red at cf0cad5d0cca67271c1fd5e1f723fbbf9669e9eb (lab/pkg5-divergence-red) and verified green at c39c505b40b71734579c93508c241f276ea8b351 (lab/pkg5-divergence-green, 7/7 files, 370 assertions passed)."
+      "verifier": "subagent:320c8c19-694f-4a91-994e-8c631d70ae01",
+      "verdict": "approve",
+      "candidate": "f607d58a43f6f26c34dd9537ee5b53d4c3408120",
+      "reviewedHead": "ed646d56db7768a220f6bd901679539b8e4e8757",
+      "detail": "Independent adversarial review by @verifier (subagent:320c8c19-694f-4a91-994e-8c631d70ae01) inspected 9355f516dea53b72971e4ba8d0f98abc1343f806..ed646d56db7768a220f6bd901679539b8e4e8757, confirmed RED witnesses at 7ad55475fb8a5c33065f0c97f5844ce0ed7d995c (tv-dator placement-pid 3695907), raised P5.3 bounded model explorer and P1 sweepExpiredReservations removal findings (#24), and approved f607d58a43f6f26c34dd9537ee5b53d4c3408120 / ed646d56db7768a220f6bd901679539b8e4e8757 (#29) after verifying tv-dator placement-pid 3719234 (16/16 pass, 503 assertions) plus independent controller re-runs (20/20 tests, impact-contract-registry 20/20, eslint, file-size)."
     }
   ]
 }

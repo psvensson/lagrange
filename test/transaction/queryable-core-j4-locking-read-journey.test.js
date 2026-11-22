@@ -29,10 +29,12 @@ import {
   clearAllReservations,
   hasLockingReadReservations,
   registerPartitionDatabase,
-  releaseSessionReservations,
   checkRowReservationConflict,
-  sweepExpiredReservations,
 } from '../../src/partition/partition-locking-read-reservation.js';
+import {
+  deleteExpiredDbReservations,
+  releaseDbPartitionTransactionReservations,
+} from '../../src/partition/partition-locking-read-store.js';
 import {checkWriteStatementReservations} from '../../src/query/sql-locking-read-execution.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
@@ -125,6 +127,21 @@ function createJourneyHarness(options = {}) {
     messageRouter: {
       async deliver(address, message) {
         if (message.type === 'TRANSACTION') {
+          const txPartitionId = address?.split('/')?.at(-1);
+          if (
+            (message.operation === 'COMMIT' || message.operation === 'ROLLBACK') &&
+            txPartitionId &&
+            message.transactionId
+          ) {
+            const txDb = partitionDbs.get(txPartitionId);
+            if (txDb) {
+              releaseDbPartitionTransactionReservations(
+                txDb,
+                txPartitionId,
+                message.transactionId,
+              );
+            }
+          }
           return buildDeliveryEnvelope(
             {acknowledged: true},
             answerParticipantTransactionRequest(message),
@@ -434,14 +451,14 @@ test('J4: reservation release on coordinator timeout, cancel, and client disconn
     await engine.transactionCoordinator.cancel(s2);
     assert.equal(hasLockingReadReservations(s2), false);
 
-    // 3. Client disconnect release via releaseSessionReservations
+    // 3. Client disconnect release via canonical coordinator rollback (matches PgWire closeSession)
     await engine.transactionCoordinator.begin(s1);
     await engine.executeQuery(
       'SELECT balance FROM accounts WHERE id = 1 FOR UPDATE',
       [],
       {sessionId: 's1'},
     );
-    releaseSessionReservations(s1);
+    await engine.transactionCoordinator.rollback(s1);
 
     // Successor acquires after disconnect
     await engine.transactionCoordinator.begin(s2);
@@ -581,7 +598,7 @@ test('J4: durable partition SQLite reservation survives simulated coordinator st
       'UPDATE _lagrange_locking_read_reservations SET expires_at = ? WHERE row_key = ?',
     ).run(Date.now() - 1000, 'accounts:p1:42');
 
-    const swept = sweepExpiredReservations(db);
+    const swept = deleteExpiredDbReservations(db, Date.now());
     assert.equal(swept, 1);
 
     const postSweepCheck = checkRowReservationConflict({

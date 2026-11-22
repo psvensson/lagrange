@@ -74,10 +74,12 @@ const PARTICIPANT_TRANSACTION_REFUSAL_CAUSE = Object.freeze({
   DIGEST_INVALID: 'digest_invalid',
   ORIGIN_MISMATCH: 'origin_mismatch',
   CONFLICT: 'conflict',
+  LOCK_CONFLICT: 'lock_conflict',
   STATEMENT_FAILED: 'statement_failed',
   ROWID_CEILING: 'rowid_ceiling',
   COMMIT_BASE_MOVED: 'commit_base_moved',
   COMMIT_STATEMENT_FAILED: 'commit_statement_failed',
+  COMMIT_LOCK_CONFLICT: 'commit_lock_conflict',
   HISTORICAL_PREPARED_CONTRADICTION: 'historical_prepared_contradiction',
 });
 
@@ -290,8 +292,9 @@ const PARTICIPANT_TRANSACTION_SQL = Object.freeze({
     'SELECT participant_id AS participantId FROM _participant_transactions ' +
     'WHERE state = ?',
   SELECT_PREPARED_ROWS:
-    'SELECT participant_id AS participantId, operations_text AS operationsText, ' +
-    'validation_text AS validationText, prepare_index AS prepareIndex ' +
+    'SELECT transaction_id AS transactionId, participant_id AS participantId, ' +
+    'operations_text AS operationsText, validation_text AS validationText, ' +
+    'prepare_index AS prepareIndex ' +
     'FROM _participant_transactions WHERE state = ? ' +
     'ORDER BY COALESCE(prepare_index, 0) ASC, participant_id ASC',
   SELECT_COMMITTED_ROWS:

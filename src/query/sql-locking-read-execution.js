@@ -17,13 +17,14 @@
 import {resolveDeclaredPrimaryKeyColumns} from
   '../partition/partition-boundary-representation.js';
 import {
-  acquireRowReservation,
+  checkLocalStagedWriteConflict,
   checkRowReservationConflict,
   createLockConflictResult,
   createReservationUnavailableResult,
   findTableDbReservationConflict,
   getTransactionReservations,
   LOCKING_READ_RESERVATION_KIND,
+  stageLocalWriteReservation,
 } from '../partition/partition-locking-read-reservation.js';
 import {extractStatementWriteFootprint} from
   '../partition/partition-write-footprint-contract.js';
@@ -241,6 +242,28 @@ async function tryResolveCanonicalPkTuples(engine, ctx) {
   }
 }
 
+function checkLocalStagedWriteConflicts(
+  engine, tableName, canonicalTuples, candidatePartitions, transactionId,
+) {
+  for (const pkValues of canonicalTuples) {
+    const partitionId = resolveRowPartitionId(engine, tableName, pkValues, candidatePartitions);
+    const conflict = checkLocalStagedWriteConflict({
+      tableName,
+      partitionId,
+      pkValues,
+      transactionId,
+    });
+    if (conflict.conflict) {
+      return createLockConflictResult({
+        rowKey: conflict.rowKey,
+        transactionId,
+        conflictingTransactionId: conflict.conflictingTransactionId,
+      });
+    }
+  }
+  return null;
+}
+
 export async function executeLockingReadReservations(options) {
   const {engine, ast, sessionId, transactionRead, selectResult} = options;
   const target = validateLockingReadTarget(engine, ast, selectResult);
@@ -259,15 +282,23 @@ export async function executeLockingReadReservations(options) {
   });
   if (resolution.failure) return resolution.failure;
 
+  const transactionId = transactionRead.identity.transactionId;
+  const localStagedConflict = checkLocalStagedWriteConflicts(
+    engine, target.tableName, resolution.tuples, candidatePartitions, transactionId,
+  );
+  if (localStagedConflict) {
+    await rollbackConflictingSession(engine, sessionId, transactionId);
+    return localStagedConflict;
+  }
+
   const failure = await acquireAllRowReservations({
     engine, tableName: target.tableName, canonicalTuples: resolution.tuples,
     resolvePartitionId: (pkValues) =>
       resolveRowPartitionId(engine, target.tableName, pkValues, candidatePartitions),
-    transactionId: transactionRead.identity.transactionId,
+    transactionId,
     sessionId, holdTimeoutMs: options.holdTimeoutMs,
     readGenerationsByPartition: selectResult.readGenerationsByPartition || {},
-    onConflict: () =>
-      rollbackConflictingSession(engine, sessionId, transactionRead.identity.transactionId),
+    onConflict: () => rollbackConflictingSession(engine, sessionId, transactionId),
   });
   return failure || selectResult;
 }
@@ -606,7 +637,7 @@ function stageInsertPkReservations(args) {
   const {engine, tableName, ast, pkColumns, params, candidatePartitions, meta} = args;
   for (const pkValues of extractInsertPkValues(ast, pkColumns, params)) {
     const partitionId = resolveRowPartitionId(engine, tableName, pkValues, candidatePartitions);
-    acquireRowReservation({
+    stageLocalWriteReservation({
       tableName,
       partitionId,
       pkValues,
@@ -633,7 +664,7 @@ function stageWherePkReservations(args) {
   for (const pkTuple of footprint.pkTuples) {
     const pkValues = [...pkTuple];
     const partitionId = resolveRowPartitionId(engine, tableName, pkValues, candidatePartitions);
-    acquireRowReservation({
+    stageLocalWriteReservation({
       tableName,
       partitionId,
       pkValues,

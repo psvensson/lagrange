@@ -22,8 +22,6 @@ import {
   LOCKING_READ_ERROR_CODE,
   LOCKING_READ_SQL_STATE,
 } from './sql-locking-read-constants.js';
-import {releaseTransactionReservations} from
-  '../partition/partition-locking-read-reservation.js';
 import {
   resolveWriteExecutionPlanWithAuthorityRefresh,
 } from './sql-query-engine-metadata-authority-refresh.js';
@@ -278,9 +276,6 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
   }
 
   async rollbackOwnedWriteTransaction(transaction) {
-    if (transaction?.transactionState?.transactionId) {
-      releaseTransactionReservations(transaction.transactionState.transactionId);
-    }
     if (
       transaction.ownership ===
         WRITE_TRANSACTION_OWNERSHIP.STATEMENT_AUTOCOMMIT &&

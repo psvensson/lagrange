@@ -78,6 +78,10 @@ import {
   PARTITION_STATEMENT_REFUSAL_CODE,
   refusalLayerFieldOf,
 } from './partition-statement-admission-constants.js';
+import {
+  LOCKING_READ_ERROR_CODE,
+  LOCKING_READ_SQL_STATE,
+} from '../query/sql-locking-read-constants.js';
 
 const NO_COMMITTED_STATEMENT_KEY = null;
 const COLUMN_LIST_SEPARATOR = ', ';
@@ -498,6 +502,19 @@ function statementEnvironmentFailure(error) {
  *   command asking.
  * @return {Object} The write result.
  */
+function lockingReadReplayFieldsOf(failureCode) {
+  if (failureCode !== LOCKING_READ_ERROR_CODE.LOCK_NOT_AVAILABLE) {
+    return {};
+  }
+  return {
+    errorCode: LOCKING_READ_ERROR_CODE.LOCK_NOT_AVAILABLE,
+    code: LOCKING_READ_ERROR_CODE.LOCK_NOT_AVAILABLE,
+    sqlState: LOCKING_READ_SQL_STATE.LOCK_NOT_AVAILABLE,
+    conflict: true,
+    retryable: true,
+  };
+}
+
 function answerSettledStatement(service, {recorded, command}) {
   const settledAt = {
     partitionId: service.partitionId,
@@ -523,6 +540,7 @@ function answerSettledStatement(service, {recorded, command}) {
     success: false,
     error: recorded.failureMessage,
     failureCode: recorded.failureCode,
+    ...lockingReadReplayFieldsOf(recorded.failureCode),
     // The statement-admission owner's refusal layer, read from the record.
     ...refusalLayerFieldOf(recorded.failureCode, recorded.failureMessage),
     committed: true,
@@ -607,6 +625,45 @@ function settleFailedCommittedStatement(service, {error, command, entryKey,
   return PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED;
 }
 
+/**
+ * Deterministically settle a committed SQL write that conflicts with an active
+ * durable FOR_UPDATE reservation in service.db: records STATEMENT_FAILED under
+ * LOCK_NOT_AVAILABLE and resolves the proposer with typed 55P03 conflict fields.
+ *
+ * @param {Object} service - The partition.
+ * @param {Object} refused - {lockConflict, command, entryKey, index, term, identity, afterCommit}.
+ * @return {string} PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED.
+ */
+function settleLockingReadRefusedCommittedStatement(service, {
+  lockConflict, command, entryKey, index, term, identity, afterCommit,
+}) {
+  recordCommittedStatementOutcome(service, {
+    entryKey,
+    outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED,
+    index,
+    term,
+    error: {code: lockConflict.errorCode, message: lockConflict.error},
+  });
+  afterCommit(() => service.resolveCommittedWrite(command.entryId, {
+    success: false,
+    error: lockConflict.error,
+    failureCode: lockConflict.errorCode,
+    errorCode: lockConflict.errorCode,
+    code: lockConflict.code,
+    sqlState: lockConflict.sqlState,
+    conflict: true,
+    retryable: true,
+    ...(lockConflict.rowKey ? {rowKey: lockConflict.rowKey} : {}),
+    ...(lockConflict.conflictingTransactionId ?
+      {conflictingTransactionId: lockConflict.conflictingTransactionId} : {}),
+    committed: true,
+    outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED,
+    entryId: command.entryId,
+    ...identity,
+  }));
+  return PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED;
+}
+
 export {
   committedStatementEntryKey,
   committedStatementOutcomeFormatError,
@@ -621,6 +678,7 @@ export {
   readCommittedStatementOutcome,
   recordCommittedStatementOutcome,
   settleFailedCommittedStatement,
+  settleLockingReadRefusedCommittedStatement,
   settleRecordedCommittedStatement,
   statementEnvironmentFailure,
   trackPendingOwnerCommand,

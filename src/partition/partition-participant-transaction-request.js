@@ -74,52 +74,44 @@ import {
   participantTransactionActive,
   stagePreparedParticipantRowKeys,
 } from './partition-participant-transaction-session.js';
-import {runParticipantSessionStatement} from
-  './partition-participant-transaction-staging.js';
-import {participantDeterminismSelfCheckOf} from
-  './partition-participant-transaction-self-check.js';
-import {participantConnectionStampOf} from
-  './partition-participant-transaction-connection.js';
+import {runParticipantSessionStatement} from './partition-participant-transaction-staging.js';
+import {participantDeterminismSelfCheckOf} from './partition-participant-transaction-self-check.js';
+import {participantConnectionStampOf} from './partition-participant-transaction-connection.js';
 import {participantCutoverPauseOf} from './partition-participant-transaction-pause.js';
 import {coordinatorTableParticipantRefusal} from
   '../query/distributed/distributed-transaction-participant-admission.js';
-import {readTransactionSchemaEnforcement, TRANSACTION_SCHEMA_ENFORCEMENT_ERROR,
-  TRANSACTION_SCHEMA_ENFORCEMENT_STATE} from
-  '../query/distributed/distributed-transaction-schema-enforcement.js';
+import {
+  readTransactionSchemaEnforcement, TRANSACTION_SCHEMA_ENFORCEMENT_ERROR,
+  TRANSACTION_SCHEMA_ENFORCEMENT_STATE,
+} from '../query/distributed/distributed-transaction-schema-enforcement.js';
 import {TOPOLOGY_TRANSITION_KIND, topologyTransitionOf} from
   './partition-participant-transaction-topology-fence.js';
 import {executionEnvelopeOf} from './partition-transaction-execution-envelope.js';
 import {transactionStatementKindOf} from './partition-transaction-determinism.js';
 import {TRANSACTION_STATEMENT_KIND} from './partition-transaction-determinism-constants.js';
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
-import {checkPartitionWriteLockingReadConflict, releaseUnboundTransactionLockingRead} from './partition-locking-read-service.js';
 import {
-  PARTICIPANT_TRANSACTION_DECISION as DECISION,
-  PARTICIPANT_TRANSACTION_FAILURE_CODE as CODE,
-  PARTICIPANT_TRANSACTION_MESSAGE as MESSAGE,
-  PARTICIPANT_TRANSACTION_REFUSAL_CAUSE as CAUSE,
-  PARTICIPANT_TRANSACTION_SESSION_PHASE as PHASE,
-  PARTICIPANT_TRANSACTION_STATE as STATE,
+  checkPartitionWriteLockingReadConflict, releaseUnboundTransactionLockingRead,
+} from './partition-locking-read-service.js';
+import {
+  buildLockConflictAnswerFields, checkOperationsLockingReadConflict,
+} from './partition-locking-read-write-check.js';
+import {
+  PARTICIPANT_TRANSACTION_DECISION as DECISION, PARTICIPANT_TRANSACTION_FAILURE_CODE as CODE,
+  PARTICIPANT_TRANSACTION_MESSAGE as MESSAGE, PARTICIPANT_TRANSACTION_REFUSAL_CAUSE as CAUSE,
+  PARTICIPANT_TRANSACTION_SESSION_PHASE as PHASE, PARTICIPANT_TRANSACTION_STATE as STATE,
 } from './partition-participant-transaction-constants.js';
 
-const {
-  PARTITION_SERVICE_LITERAL,
-  PARTITION_SERVICE_OPERATION,
-} = PARTITION_SERVICE_SHARED;
+const {PARTITION_SERVICE_LITERAL, PARTITION_SERVICE_OPERATION} = PARTITION_SERVICE_SHARED;
 
 // What a decision request does when the durable row and the session leave it
 // to the log: it is proposed, and its apply decides.
 const PROPOSE_DECISION = Object.freeze({proposeDecision: true});
 const REQUEST_IDENTITY_FIELDS = Object.freeze([
-  'transactionId',
-  'participantId',
-  'commitMode',
-  'transactionEpoch',
+  'transactionId', 'participantId', 'commitMode', 'transactionEpoch',
 ]);
 const PARTICIPANT_QUERY_KIND = Object.freeze({
-  ORDINARY: 'ordinary',
-  CURRENT: 'current',
-  REFUSED: 'refused',
+  ORDINARY: 'ordinary', CURRENT: 'current', REFUSED: 'refused',
 });
 const objectHasOwn = Object.hasOwn;
 
@@ -367,20 +359,28 @@ function sealSession(service, payload, session) {
     return refusalOf(service, payload, CODE.PREPARE_REFUSED,
       {refusalCause: CAUSE.CONFLICT, ...participantOutcomeOf(null)});
   }
+  const lockConflict = checkOperationsLockingReadConflict(service, {
+    operations: session.operations,
+    transactionId: session.identity.transactionId,
+    deterministic: false,
+  });
+  if (lockConflict?.unavailable) {
+    return answerOf(service, payload, lockConflict);
+  }
+  if (lockConflict !== null) {
+    endParticipantSession(service, session);
+    return refusalOf(service, payload, CODE.PREPARE_REFUSED, {
+      refusalCause: CAUSE.LOCK_CONFLICT, ...buildLockConflictAnswerFields(lockConflict),
+      error: lockConflict.error, ...participantOutcomeOf(null)});
+  }
   const command = buildPrepareCommand(identityOf(payload), {
     operationsText: JSON.stringify(session.operations),
     validationText: validationTextOf(session.generationBase, service.partitionId,
       session.originIndex)}, commandStampOf(service));
   const refused = admissionRefusalOf(service, payload, command);
-  if (refused !== null) {
-    return refused;
-  }
+  if (refused !== null) return refused;
   stagePreparedParticipantRowKeys(
-    service,
-    session.identity.participantId,
-    session.touchedRowKeys,
-    session.hasUnscopedWrite,
-  );
+    service, session.identity.participantId, session.touchedRowKeys, session.hasUnscopedWrite);
   session.phase = PHASE.PREPARING;
   session.sealed = command;
   return null;
@@ -395,18 +395,12 @@ function clearStaleRowKeySealedPrepare(service, session) {
 
 async function prepareSession(service, payload, session) {
   const refused = sessionRefusalOf(service, payload, session);
-  if (refused !== null) {
-    return refused;
-  }
+  if (refused !== null) return refused;
   if (session.sealed !== null && session.sealed.commitMode !== payload.commitMode) {
     return refusalOf(service, payload, CODE.IDENTITY_MISMATCH);
   }
   if (isPartitionReservedForPrepare(
-    service,
-    session.identity.participantId,
-    session.touchedRowKeys,
-    session.hasUnscopedWrite,
-  )) {
+    service, session.identity.participantId, session.touchedRowKeys, session.hasUnscopedWrite)) {
     return refusalOf(service, payload, CODE.RESERVED,
       {deferRetry: true, ...participantOutcomeOf(null, volatileStateOf(session))});
   }
@@ -582,7 +576,10 @@ async function unboundRollback(service, payload) {
   if (session !== null) {
     endParticipantSession(service, session);
   }
-  await releaseUnboundTransactionLockingRead(service, payload);
+  const lockReleaseRefusal = await releaseUnboundTransactionLockingRead(service, payload);
+  if (lockReleaseRefusal !== null) {
+    return answerOf(service, payload, lockReleaseRefusal);
+  }
   return answerOf(service, payload, {success: true, durable: false,
     ...participantOutcomeOf(null)});
 }
