@@ -11,6 +11,7 @@ import {
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
+import {buildCommittedCdcOutcome, hasDurableCdcEvents} from '../../src/cdc/cdc-delivery-outcome.js';
 import {
   ControlPlaneSystemTableGateway,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
@@ -147,6 +148,20 @@ function seedBootstrapCache(cache, {usersPartitions}) {
   }
 }
 
+function buildPartitionCdcSubscriberAck(sysPs, list) {
+  if (!hasDurableCdcEvents(list)) {
+    return {success: true};
+  }
+  const last = list.at(-1);
+  const index = last?.sourceLogIndex ?? last?.logIndex ?? 1;
+  const term = last?.term ?? sysPs.resolveCurrentTermSafe?.() ?? 1;
+  return buildCommittedCdcOutcome(
+    list,
+    sysPs.groupId || sysPs.partitionId,
+    {index, term},
+  );
+}
+
 async function withIndependentCacheCdcEnvironment(callback) {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lagrange-gsi-cdc-2c-'));
   const cacheA = new SystemTableCache();
@@ -269,13 +284,13 @@ async function withIndependentCacheCdcEnvironment(callback) {
   for (const sysPs of systemPartitions) {
     sysPs.subscribeToCDC((events) => {
       const list = Array.isArray(events) ? events : [events];
+      const now = Date.now();
       for (const event of list) {
         propagatedCdcEvents.push(event);
-        setImmediate(() => {
-          gatewayA.applyCommittedPartitionCdcEventToCache(cacheA, event, Date.now());
-          gatewayB.applyCommittedPartitionCdcEventToCache(cacheB, event, Date.now());
-        });
+        gatewayA.applyCommittedPartitionCdcEventToCache(cacheA, event, now);
+        gatewayB.applyCommittedPartitionCdcEventToCache(cacheB, event, now);
       }
+      return buildPartitionCdcSubscriberAck(sysPs, list);
     });
   }
 

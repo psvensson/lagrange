@@ -191,51 +191,59 @@ function serializeBoundaryValue(val) {
   return val === null || val === undefined ? null : String(val);
 }
 
+function seedGatewayTableRow(db, t, now) {
+  const pkCol = t.partition_key || 'id';
+  const schemaDef = t.schema || {columns: [{name: pkCol, type: t.partition_key_type || 'INTEGER'}]};
+  executeSystemDbMutation(db, {
+    operation: 'upsert',
+    tableName: TABLES.TABLES,
+    row: {
+      table_id: t.table_id || t.table_name,
+      table_name: t.table_name,
+      schema_definition: JSON.stringify(schemaDef),
+      partition_key: pkCol,
+      table_policies: '{}',
+      partition_count: 1,
+      active_partition_version: t.active_partition_version || 1,
+      created_at: now,
+      updated_at: now,
+    },
+  });
+}
+
+function seedGatewayPartitionRow(db, tables, p, now) {
+  const ownerTable = tables.find(
+    (t) => (t.table_name || t.table_id) === (p.table_name || p.table_id),
+  );
+  executeSystemDbMutation(db, {
+    operation: 'upsert',
+    tableName: TABLES.PARTITIONS,
+    row: {
+      partition_id: p.partition_id,
+      table_id: p.table_id || p.table_name,
+      table_name: p.table_name,
+      partition_key_start: serializeBoundaryValue(p.partition_key_start),
+      partition_key_end: serializeBoundaryValue(p.partition_key_end),
+      partition_key_type: p.partition_key_type || ownerTable?.partition_key_type || 'TEXT',
+      partition_version: 1,
+      replica_count: 1,
+      size_bytes: 0,
+      leader_node_id: p.leader_node_id || 'test-node',
+      state: 'NORMAL',
+      created_at: now,
+      updated_at: now,
+    },
+  });
+}
+
 function createSeededSchemaAwareGateway(catalogDbPath, tables, partitions, systemCache = null) {
   const result = createSchemaAwareSystemGateway(catalogDbPath, systemCache);
   const now = Date.now();
   for (const t of tables) {
-    const pkCol = t.partition_key || 'id';
-    const schemaDef = t.schema || {columns: [{name: pkCol, type: t.partition_key_type || 'INTEGER'}]};
-    executeSystemDbMutation(result.gateway.db, {
-      operation: 'upsert',
-      tableName: TABLES.TABLES,
-      row: {
-        table_id: t.table_id || t.table_name,
-        table_name: t.table_name,
-        schema_definition: JSON.stringify(schemaDef),
-        partition_key: pkCol,
-        table_policies: '{}',
-        partition_count: 1,
-        active_partition_version: t.active_partition_version || 1,
-        created_at: now,
-        updated_at: now,
-      },
-    });
+    seedGatewayTableRow(result.gateway.db, t, now);
   }
   for (const p of partitions) {
-    const ownerTable = tables.find(
-      (t) => (t.table_name || t.table_id) === (p.table_name || p.table_id),
-    );
-    executeSystemDbMutation(result.gateway.db, {
-      operation: 'upsert',
-      tableName: TABLES.PARTITIONS,
-      row: {
-        partition_id: p.partition_id,
-        table_id: p.table_id || p.table_name,
-        table_name: p.table_name,
-        partition_key_start: serializeBoundaryValue(p.partition_key_start),
-        partition_key_end: serializeBoundaryValue(p.partition_key_end),
-        partition_key_type: p.partition_key_type || ownerTable?.partition_key_type || 'TEXT',
-        partition_version: 1,
-        replica_count: 1,
-        size_bytes: 0,
-        leader_node_id: p.leader_node_id || 'test-node',
-        state: 'NORMAL',
-        created_at: now,
-        updated_at: now,
-      },
-    });
+    seedGatewayPartitionRow(result.gateway.db, tables, p, now);
   }
   return result;
 }
@@ -500,7 +508,6 @@ export {
   createSchemaAwareSystemGateway,
   createSeededSchemaAwareGateway,
   createTargetRouter,
-  executeSystemDbMutation,
   seedRealSystemTableCache,
   withFoundingPlacementEnvironment,
 };

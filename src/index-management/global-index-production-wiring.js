@@ -37,6 +37,7 @@ import {extractPredicateConditions} from './global-index-read-router.js';
 import {buildIndexInsertSql} from './global-index-write-maintenance.js';
 import {
   GLOBAL_INDEX_ERROR_CODE,
+  GLOBAL_INDEX_STATEMENT_LABEL,
   INDEX_TYPE,
 } from './index-constants.js';
 
@@ -201,7 +202,7 @@ function parseGenerationFromIndexId(indexId) {
   return match ? Number(match[1]) : 1;
 }
 
-async function submitCatalogMutation(gateway, mutation, fallbackFn) {
+async function submitCatalogMutation(gateway, mutation, rowOperationFn) {
   const options = {
     workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
     deliveryPriority: LOCAL_STR_CRITICAL,
@@ -215,12 +216,15 @@ async function submitCatalogMutation(gateway, mutation, fallbackFn) {
       throw err;
     }
     if (gateway.awaitProjectionAt && res?.position) {
-      await gateway.awaitProjectionAt(res.position, {statement: 'GLOBAL INDEX CATALOG'});
+      await gateway.awaitProjectionAt(
+        res.position,
+        {statement: GLOBAL_INDEX_STATEMENT_LABEL.CATALOG_MUTATION},
+      );
     }
     return res;
   }
-  if (fallbackFn) {
-    return fallbackFn(options);
+  if (rowOperationFn) {
+    return rowOperationFn(options);
   }
   return null;
 }
@@ -536,6 +540,26 @@ function syncGlobalIndexesForService(indexService) {
   );
 }
 
+async function removeIndexCatalogMetadata(indexService, record) {
+  await persistCatalogDelete(indexService, record);
+  indexService._removeIndexFromCache(
+    record.index_name,
+    record.table_id || record.table_name,
+  );
+}
+
+async function dropIndexDatasetPartition(indexService, {tableName, indexName, partitionId}) {
+  if (!hasDistributedPartitionRoute(indexService, partitionId)) return;
+  const datasetName = getGlobalIndexDatasetName(tableName, indexName);
+  await executePartitionWriteSql(
+    indexService,
+    partitionId,
+    `DELETE FROM ${quoteIdentifier(datasetName)}`,
+    [],
+    datasetName,
+  );
+}
+
 function buildCatalogPersistenceHooks(indexService) {
   return {
     refreshCatalogPartitions: async () => {
@@ -551,24 +575,8 @@ function buildCatalogPersistenceHooks(indexService) {
       await persistCatalogUpdate(indexService, indexId, update, updatedRecord);
       syncServiceIndexEntryFromRecord(indexService, updatedRecord);
     },
-    onCatalogDelete: async (record) => {
-      await persistCatalogDelete(indexService, record);
-      indexService._removeIndexFromCache(
-        record.index_name,
-        record.table_id || record.table_name,
-      );
-    },
-    onDropIndexDataset: async ({tableName, indexName, partitionId}) => {
-      if (!hasDistributedPartitionRoute(indexService, partitionId)) return;
-      const datasetName = getGlobalIndexDatasetName(tableName, indexName);
-      await executePartitionWriteSql(
-        indexService,
-        partitionId,
-        `DELETE FROM ${quoteIdentifier(datasetName)}`,
-        [],
-        datasetName,
-      );
-    },
+    onCatalogDelete: (record) => removeIndexCatalogMetadata(indexService, record),
+    onDropIndexDataset: (params) => dropIndexDatasetPartition(indexService, params),
   };
 }
 

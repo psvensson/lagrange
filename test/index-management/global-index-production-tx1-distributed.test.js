@@ -13,7 +13,6 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {TABLES} from '../../src/constants/index.js';
 import {CACHE_CDC_OPERATIONS} from '../../src/cache/cache-constants.js';
-import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {waitForCondition} from '../partition/partition-service-test-support.js';
@@ -28,6 +27,7 @@ import {
   buildIndexDatasetSchema,
 } from '../../src/index-management/global-index-dataset-manager.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+import {seedRealSystemTableCache} from './global-index-founding-witness-support.js';
 import {
   createCommittedServeEligibilityOwner,
 } from '../control-plane/serve-eligibility-test-support.js';
@@ -175,25 +175,6 @@ function buildStrictUsersAndIndexDefs(includeIndexPartitions) {
   return {tables, partitions: [...basePartitions, ...indexPartitions]};
 }
 
-function seedRealSystemTableCache(tables, partitions) {
-  const cache = new SystemTableCache();
-  for (const t of tables) {
-    cache.applySystemTableChange(TABLES.TABLES, CACHE_CDC_OPERATIONS.INSERT, t);
-  }
-  for (const p of partitions) {
-    cache.applySystemTableChange(TABLES.PARTITIONS, CACHE_CDC_OPERATIONS.INSERT, p);
-    cache.applySystemTableChange(TABLES.SERVICES, CACHE_CDC_OPERATIONS.INSERT, {
-      service_id: p.partition_id,
-      service_type: 'partition',
-      partition_id: p.partition_id,
-      node_id: 'test-node',
-      raft_role: 'leader',
-      address: `test-node/partition/${p.partition_id}`,
-      status: 'active',
-    });
-  }
-  return cache;
-}
 
 function createOracleUsersDb() {
   const oracleDb = new Database(':memory:');
@@ -747,19 +728,23 @@ test('Independent peer SystemTableCache instances propagate GSI catalog, table, 
     );
     t.equal(createRes.success, true, 'engineA creates fresh global index over real CDC-backed gateway');
 
-    await waitForCondition(() => {
-      const idx = cacheB.get(TABLES.INDICES, 'idx_users_email-gen1') ||
-        cacheB.getAll(TABLES.INDICES).find((r) => r.index_name === 'idx_users_email');
-      const part = cacheB.get(TABLES.PARTITIONS, '__gsi_users_idx_users_email_p0');
-      return Boolean(
-        idx &&
-        idx.state === 'READ_WRITE' &&
-        part &&
-        part.leader_node_id === 'node-a' &&
-        cacheB.get(TABLES.TABLES, '__idx_users_idx_users_email') &&
-        cacheB.get(TABLES.SERVICES, '__gsi_users_idx_users_email_p0-r1'),
-      );
-    }, 3000, 10);
+    t.equal(
+      await waitForCondition(() => {
+        const idx = cacheB.get(TABLES.INDICES, 'idx_users_email-gen1') ||
+          cacheB.getAll(TABLES.INDICES).find((r) => r.index_name === 'idx_users_email');
+        const part = cacheB.get(TABLES.PARTITIONS, '__gsi_users_idx_users_email_p0');
+        return Boolean(
+          idx &&
+          idx.state === 'READ_WRITE' &&
+          part &&
+          part.leader_node_id === 'node-a' &&
+          cacheB.get(TABLES.TABLES, '__idx_users_idx_users_email') &&
+          cacheB.get(TABLES.SERVICES, '__gsi_users_idx_users_email_p0-r1'),
+        );
+      }, 3000, 10),
+      true,
+      'cacheB converges to READ_WRITE index, table, partition leader, and service via real CDC',
+    );
 
     const cdcTablesObserved = new Set(propagatedCdcEvents.map((evt) => evt.tableName));
     t.ok(cdcTablesObserved.has(TABLES.INDICES), 'Real CDC events propagated for TABLES.INDICES');
@@ -793,18 +778,27 @@ test('Independent peer SystemTableCache instances propagate GSI catalog, table, 
     const dropRes = await engineA.executeQuery('DROP INDEX idx_users_email');
     t.equal(dropRes.success, true, 'engineA DROP INDEX succeeds');
 
-    await waitForCondition(
-      () => cacheB.getAll(TABLES.INDICES).filter((r) => r.index_name === 'idx_users_email').length === 0,
-      3000,
-      10,
+    t.equal(
+      await waitForCondition(
+        () => cacheB.getAll(TABLES.INDICES).filter((r) => r.index_name === 'idx_users_email').length === 0,
+        3000,
+        10,
+      ),
+      true,
+      'cacheB observes index removal via real CDC after DROP INDEX',
     );
 
     const postDropSelectOnB = await engineB.executeQuery(selectSql, ['nina@example.com']);
     t.equal(postDropSelectOnB.success, true, 'Peer engineB falls back cleanly to scatter-gather after DROP CDC');
     t.equal(
-      postDropSelectOnB.globalIndexPlan?.accessPath,
-      GLOBAL_INDEX_ACCESS_PATH.SCATTER_GATHER,
-      'Peer engineB no longer uses dropped GSI after CDC delete propagation',
+      postDropSelectOnB.globalIndexPlan,
+      undefined,
+      'Peer engineB no longer plans any GSI after CDC delete propagation',
+    );
+    t.same(
+      engineB.indexService.globalIndexCoordinator?.getIndexesForTable('users') || [],
+      [],
+      'Peer engineB global index catalog evicted dropped index after CDC delete propagation',
     );
     t.same(postDropSelectOnB.rows, oracleDb.prepare(selectSql).all('nina@example.com'));
   });

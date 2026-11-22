@@ -33,10 +33,13 @@ import {
   resolveHostedPartitionService,
   resolvePartitionDatabase,
 } from './global-index-partition-discovery.js';
+import {GLOBAL_INDEX_STATEMENT_LABEL} from './index-constants.js';
 
 const LOCAL_STR_CRITICAL = 'critical';
 const LOCAL_STR_ID = 'id';
 const LOCAL_STR_TEXT = 'TEXT';
+// The original TABLES producer persists SQL NULL when no transition exists.
+const NO_PARTITION_TRANSITION = null;
 
 function resolveProvisionerCallback(indexService) {
   if (indexService?.partitionProvisioner) {
@@ -88,29 +91,33 @@ async function executeHostedServiceRead(service, partitionId, sql, params) {
   return decodePartitionResponseRows(res).rows;
 }
 
+async function executeExecutorRead(executor, partitionId, sql, params, options) {
+  const readOptions = {
+    requireLeader: true,
+    ...(options.tableName ? {tableName: options.tableName} : {}),
+  };
+  const res = await executor.executeOnPartition(
+    partitionId,
+    sql,
+    params,
+    true,
+    true,
+    false,
+    readOptions,
+  );
+  if (!res || res.success !== true) {
+    throw createWriteExecutionUnavailableError(partitionId, res);
+  }
+  return Array.isArray(res.rows) ? res.rows : [];
+}
+
 async function executePartitionReadSql(indexService, partitionId, sql, params = [], options = {}) {
   if (indexService?.queryRouter?.executeReadOnPartition) {
     return executeRemoteReadViaRouter(indexService, partitionId, sql, params);
   }
   const executor = indexService?.sqlQueryEngine?.queryExecutor;
-  if (executor && executor.executeOnPartition) {
-    const readOptions = {
-      requireLeader: true,
-      ...(options.tableName ? {tableName: options.tableName} : {}),
-    };
-    const res = await executor.executeOnPartition(
-      partitionId,
-      sql,
-      params,
-      true,
-      true,
-      false,
-      readOptions,
-    );
-    if (!res || res.success !== true) {
-      throw createWriteExecutionUnavailableError(partitionId, res);
-    }
-    return Array.isArray(res.rows) ? res.rows : [];
+  if (executor?.executeOnPartition) {
+    return executeExecutorRead(executor, partitionId, sql, params, options);
   }
   const hostedService = resolveHostedPartitionService(indexService, partitionId);
   if (hostedService) {
@@ -131,6 +138,43 @@ async function executeRemoteWriteViaRouter(indexService, partitionId, sql, param
   return routed;
 }
 
+async function executeExecutorWrite(indexService, executor, partitionId, sql, params, tableName) {
+  const expectedPartitionVersion = resolveFenceVersion(indexService, tableName);
+  const res = await executor.executeOnPartition(
+    partitionId,
+    sql,
+    params,
+    false,
+    true,
+    false,
+    {tableName, expectedPartitionVersion},
+  );
+  if (!res || res.success !== true) {
+    throw createWriteExecutionUnavailableError(partitionId, res);
+  }
+  return res;
+}
+
+async function executeHostedServiceWrite(
+  indexService,
+  hostedService,
+  partitionId,
+  sql,
+  params,
+  tableName,
+) {
+  const expectedPartitionVersion = resolveFenceVersion(indexService, tableName);
+  const res = await hostedService.handleRemoteQuery({
+    sql,
+    params,
+    ...(expectedPartitionVersion !== null ? {expectedPartitionVersion} : {}),
+  });
+  if (!res || res.success !== true) {
+    throw createWriteExecutionUnavailableError(partitionId, res);
+  }
+  return res;
+}
+
 async function executePartitionWriteSql(
   indexService,
   partitionId,
@@ -142,34 +186,19 @@ async function executePartitionWriteSql(
     return executeRemoteWriteViaRouter(indexService, partitionId, sql, params);
   }
   const executor = indexService?.sqlQueryEngine?.queryExecutor;
-  if (executor && executor.executeOnPartition) {
-    const expectedPartitionVersion = resolveFenceVersion(indexService, tableName);
-    const res = await executor.executeOnPartition(
-      partitionId,
-      sql,
-      params,
-      false,
-      true,
-      false,
-      {tableName, expectedPartitionVersion},
-    );
-    if (!res || res.success !== true) {
-      throw createWriteExecutionUnavailableError(partitionId, res);
-    }
-    return res;
+  if (executor?.executeOnPartition) {
+    return executeExecutorWrite(indexService, executor, partitionId, sql, params, tableName);
   }
   const hostedService = resolveHostedPartitionService(indexService, partitionId);
   if (hostedService) {
-    const expectedPartitionVersion = resolveFenceVersion(indexService, tableName);
-    const res = await hostedService.handleRemoteQuery({
+    return executeHostedServiceWrite(
+      indexService,
+      hostedService,
+      partitionId,
       sql,
       params,
-      ...(expectedPartitionVersion !== null ? {expectedPartitionVersion} : {}),
-    });
-    if (!res || res.success !== true) {
-      throw createWriteExecutionUnavailableError(partitionId, res);
-    }
-    return res;
+      tableName,
+    );
   }
   throw createParticipantUnavailableError(partitionId);
 }
@@ -203,10 +232,16 @@ function recordPartitionDescriptorLocally(coordinator, runtimeState, partitionMe
   }
 }
 
+function resolveBaseTableColumns(baseTable) {
+  if (Array.isArray(baseTable?.columns)) {
+    return baseTable.columns;
+  }
+  return resolveDeclaredTableSchema(baseTable)?.columns;
+}
+
 function mergeColumnTypesWithBaseTable(baseTable, columnTypes = {}) {
   const merged = {...(columnTypes || {})};
-  const baseSchema = resolveDeclaredTableSchema(baseTable);
-  const baseCols = baseTable?.columns || baseSchema?.columns;
+  const baseCols = resolveBaseTableColumns(baseTable);
   if (Array.isArray(baseCols)) {
     for (const col of baseCols) {
       if (col?.name && col?.type && !merged[col.name]) {
@@ -233,7 +268,7 @@ function buildCanonicalTableRow(
     partition_count: 1,
     active_partition_version: activeVersion,
     pending_partition_version: null,
-    partition_transition_state: null,
+    partition_transition_state: NO_PARTITION_TRANSITION,
     partition_transition_metadata: null,
     created_at: now,
     updated_at: now,
@@ -356,17 +391,7 @@ async function awaitGatewayProjection(gateway, positions, statementLabel) {
   );
 }
 
-async function ensureIndexDatasetTableInGateway(indexService, record) {
-  const norm = normalizeGlobalIndexRecord(record);
-  if (!norm.tableName || !norm.indexName) return;
-  const datasetName = getGlobalIndexDatasetName(norm.tableName, norm.indexName);
-  if (hasDatasetTableInCache(indexService, datasetName)) {
-    return;
-  }
-  if (!indexService?.canWriteSystemTable?.()) return;
-  const gateway = indexService.getControlPlaneSystemTableGateway?.();
-  if (!gateway?.submitMutation) return;
-
+function buildDatasetTableMetadataRow(indexService, norm, record, datasetName) {
   const pks = record.basePrimaryKeyColumns;
   const pkCols = Array.isArray(pks) && pks.length > 0 ? pks : [LOCAL_STR_ID];
   const baseTable = indexService?.sqlQueryEngine?.getTableInfo?.(norm.tableName) || null;
@@ -378,23 +403,41 @@ async function ensureIndexDatasetTableInGateway(indexService, record) {
     basePrimaryKeyColumns: pkCols,
     columnTypes: resolvedTypes,
   });
-  const tableRow = buildCanonicalTableRow(
+  return buildCanonicalTableRow(
     datasetName,
     norm.columnNames,
     datasetSchema,
     resolveIndexActivePartitionVersion(indexService, norm.tableName),
     Date.now(),
   );
+}
+
+async function ensureIndexDatasetTableInGateway(indexService, record) {
+  const norm = normalizeGlobalIndexRecord(record);
+  if (!norm.tableName || !norm.indexName) return;
+  const datasetName = getGlobalIndexDatasetName(norm.tableName, norm.indexName);
+  if (hasDatasetTableInCache(indexService, datasetName)) {
+    return;
+  }
+  if (!indexService?.canWriteSystemTable?.()) return;
+  const gateway = indexService.getControlPlaneSystemTableGateway?.();
+  if (!gateway?.submitMutation) return;
+
+  const tableRow = buildDatasetTableMetadataRow(indexService, norm, record, datasetName);
   const res = await submitControlPlaneMutation(gateway, {
     operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
     tableName: TABLES.TABLES,
     row: tableRow,
   });
-  await awaitGatewayProjection(gateway, [res?.position].filter(Boolean), 'CREATE GLOBAL INDEX');
+  await awaitGatewayProjection(
+    gateway,
+    [res?.position].filter(Boolean),
+    GLOBAL_INDEX_STATEMENT_LABEL.CREATE_GLOBAL_INDEX,
+  );
 }
 
-function buildWorkflowFailureError(outcome, fallbackMessage) {
-  const err = new Error(outcome?.error || fallbackMessage);
+function buildWorkflowFailureError(outcome, defaultMessage) {
+  const err = new Error(outcome?.error || defaultMessage);
   if (outcome?.errorCode) {
     err.code = outcome.errorCode;
     err.errorCode = outcome.errorCode;
@@ -405,78 +448,129 @@ function buildWorkflowFailureError(outcome, fallbackMessage) {
   return err;
 }
 
+async function submitProvisioningMetadataMutations(gateway, job, built) {
+  if (!gateway?.submitMutation) {
+    const err = new Error(
+      `Durable control-plane gateway unavailable for '${built.datasetName}'`,
+    );
+    err.code = SCHEMA_PROVISIONING_ERROR_CODE.PERSISTENCE_UNAVAILABLE;
+    throw err;
+  }
+  const tableRes = await submitControlPlaneMutation(gateway, {
+    operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
+    tableName: TABLES.TABLES,
+    row: built.tableMetadata,
+  });
+  await job.assertOwnership();
+  const partitionRes = await submitControlPlaneMutation(gateway, {
+    operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
+    tableName: TABLES.PARTITIONS,
+    row: built.partitionMetadata,
+  });
+  return [tableRes?.position, partitionRes?.position].filter(Boolean);
+}
+
+function normalizeProvisioningContractOutcome(provResult) {
+  const base = provResult && typeof provResult === 'object' ? provResult : {};
+  return {
+    ...base,
+    contractState: provResult?.contractState === OWNER_CONTRACT_STATE.UNDER_REPLICATED ?
+      OWNER_CONTRACT_STATE.UNDER_REPLICATED :
+      OWNER_CONTRACT_STATE.READY,
+  };
+}
+
+async function runProvisioningJobBody({
+  gateway,
+  job,
+  built,
+  provisioner,
+  timeoutBudget,
+  cancellationToken,
+  recordPositions,
+}) {
+  await job.assertOwnership();
+  const positions = await submitProvisioningMetadataMutations(gateway, job, built);
+  recordPositions(positions);
+  await job.assertOwnership();
+  const provResult = await provisioner({
+    tableId: built.datasetName,
+    tableName: built.datasetName,
+    tableMetadata: built.tableMetadata,
+    partitionId: built.partitionId,
+    partitionMetadata: built.partitionMetadata,
+    replicaCount: built.replicaCount,
+    schema: built.datasetSchema,
+    keyRange: {start: null, end: null},
+    schemaJobId: job.jobId,
+    schemaOwnerFenceToken: job.ownerFenceToken,
+    assertProvisioningOwnership: job.assertOwnership,
+    timeoutBudget,
+    cancellationToken,
+  });
+  return normalizeProvisioningContractOutcome(provResult);
+}
+
+function buildSchemaJobExecuteOptions(rawOptions = {}) {
+  const timeoutBudget = rawOptions.timeoutBudget ?? null;
+  const cancellationToken = rawOptions.cancellationToken ?? null;
+  const generation = rawOptions.generation;
+  const identityQualifier = Number.isSafeInteger(generation) && generation > 1 ?
+    `gen-${generation}` :
+    undefined;
+  return {
+    timeoutBudget,
+    cancellationToken,
+    executeOptions: {
+      timeoutBudget,
+      ...(identityQualifier ? {identityQualifier} : {}),
+    },
+  };
+}
+
+function assertProvisioningJobOutcome(schemaJobOwner, outcome, capturedError, indexName) {
+  if (
+    outcome?.contractState === OWNER_CONTRACT_STATE.READY ||
+    outcome?.contractState === OWNER_CONTRACT_STATE.UNDER_REPLICATED
+  ) {
+    return;
+  }
+  schemaJobOwner.clearScheduledRetry?.(outcome?.jobId);
+  throw capturedError || buildWorkflowFailureError(
+    outcome,
+    `Schema provisioning failed for global index '${indexName}'`,
+  );
+}
+
 async function executeProvisioningThroughSchemaJob(
   indexService,
   schemaJobOwner,
   context,
   provisioner,
 ) {
-  const {
-    datasetName,
-    datasetSchema,
-    partitionId,
-    partitionMetadata,
-    tableMetadata,
-    replicaCount,
-  } = context.built;
   const gateway = indexService?.getControlPlaneSystemTableGateway?.();
-  const generation = context.raw.options?.generation;
-  const identityQualifier = Number.isSafeInteger(generation) && generation > 1 ?
-    `gen-${generation}` :
-    undefined;
+  const {timeoutBudget, cancellationToken, executeOptions} = buildSchemaJobExecuteOptions(
+    context.raw.options,
+  );
   let capturedError = null;
   let metadataPositions = [];
 
   const outcome = await schemaJobOwner.execute(
-    buildDatasetAstForWorkflow(datasetName, datasetSchema),
-    {
-      timeoutBudget: context.raw.options?.timeoutBudget ?? context.raw.timeoutBudget,
-      ...(identityQualifier ? {identityQualifier} : {}),
-    },
+    buildDatasetAstForWorkflow(context.built.datasetName, context.built.datasetSchema),
+    executeOptions,
     async (job) => {
       try {
-        await job.assertOwnership();
-        if (!gateway?.submitMutation) {
-          const err = new Error(
-            `Durable control-plane gateway unavailable for '${datasetName}'`,
-          );
-          err.code = SCHEMA_PROVISIONING_ERROR_CODE.PERSISTENCE_UNAVAILABLE;
-          throw err;
-        }
-        const tableRes = await submitControlPlaneMutation(gateway, {
-          operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
-          tableName: TABLES.TABLES,
-          row: tableMetadata,
+        return await runProvisioningJobBody({
+          gateway,
+          job,
+          built: context.built,
+          provisioner,
+          timeoutBudget,
+          cancellationToken,
+          recordPositions: (positions) => {
+            metadataPositions = positions;
+          },
         });
-        await job.assertOwnership();
-        const partitionRes = await submitControlPlaneMutation(gateway, {
-          operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
-          tableName: TABLES.PARTITIONS,
-          row: partitionMetadata,
-        });
-        metadataPositions = [tableRes?.position, partitionRes?.position].filter(Boolean);
-        await job.assertOwnership();
-        const provResult = await provisioner({
-          tableId: datasetName,
-          tableName: datasetName,
-          tableMetadata,
-          partitionId,
-          partitionMetadata,
-          replicaCount,
-          schema: datasetSchema,
-          keyRange: {start: null, end: null},
-          schemaJobId: job.jobId,
-          schemaOwnerFenceToken: job.ownerFenceToken,
-          assertProvisioningOwnership: job.assertOwnership,
-          timeoutBudget: context.raw.options?.timeoutBudget ?? context.raw.timeoutBudget,
-          cancellationToken: context.raw.options?.cancellationToken ?? null,
-        });
-        return {
-          ...(provResult && typeof provResult === 'object' ? provResult : {}),
-          contractState: provResult?.contractState === OWNER_CONTRACT_STATE.UNDER_REPLICATED ?
-            OWNER_CONTRACT_STATE.UNDER_REPLICATED :
-            OWNER_CONTRACT_STATE.READY,
-        };
       } catch (err) {
         capturedError = err;
         throw err;
@@ -484,17 +578,12 @@ async function executeProvisioningThroughSchemaJob(
     },
   );
 
-  if (
-    outcome?.contractState !== OWNER_CONTRACT_STATE.READY &&
-    outcome?.contractState !== OWNER_CONTRACT_STATE.UNDER_REPLICATED
-  ) {
-    schemaJobOwner.clearScheduledRetry?.(outcome?.jobId);
-    throw capturedError || buildWorkflowFailureError(
-      outcome,
-      `Schema provisioning failed for global index '${context.raw.indexName}'`,
-    );
-  }
-  await awaitGatewayProjection(gateway, metadataPositions, 'CREATE GLOBAL INDEX');
+  assertProvisioningJobOutcome(schemaJobOwner, outcome, capturedError, context.raw.indexName);
+  await awaitGatewayProjection(
+    gateway,
+    metadataPositions,
+    GLOBAL_INDEX_STATEMENT_LABEL.CREATE_GLOBAL_INDEX,
+  );
 }
 
 async function provisionWithoutSchemaJobOwner(indexService, provisioner, built, context) {
@@ -528,7 +617,7 @@ async function provisionWithoutSchemaJobOwner(indexService, provisioner, built, 
     await awaitGatewayProjection(
       gateway,
       [tableRes?.position, partRes?.position].filter(Boolean),
-      'CREATE GLOBAL INDEX',
+      GLOBAL_INDEX_STATEMENT_LABEL.CREATE_GLOBAL_INDEX,
     );
   }
 }

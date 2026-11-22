@@ -77,6 +77,13 @@ const GLOBAL_INDEX_ERROR_MSG = Object.freeze({
   TABLE_NAME_REQUIRED: 'table_name is required for global secondary index',
   INDEX_NAME_REQUIRED: 'index_name is required for global secondary index',
   COLUMN_NAMES_REQUIRED: 'column_names is required for global secondary index',
+  DISTRIBUTED_TX_IDENTITY_UNAVAILABLE:
+    'Distributed transaction identity unavailable for global index write',
+});
+
+const GLOBAL_INDEX_STATEMENT_LABEL = Object.freeze({
+  CREATE_GLOBAL_INDEX: 'CREATE GLOBAL INDEX',
+  CATALOG_MUTATION: 'GLOBAL INDEX CATALOG',
 });
 
 const GLOBAL_INDEX_ACCESS_PATH = Object.freeze({
@@ -155,6 +162,7 @@ export {
   GLOBAL_INDEX_ERROR_MSG,
   GLOBAL_INDEX_SQL_STATE,
   GLOBAL_INDEX_STATE,
+  GLOBAL_INDEX_STATEMENT_LABEL,
   INDEX_CONFIG_KEY,
   INDEX_COST,
   INDEX_DEFAULTS,

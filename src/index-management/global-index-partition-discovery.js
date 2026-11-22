@@ -4,6 +4,7 @@
  */
 
 import {TABLES} from '../constants/index.js';
+import {RAFT_ROLE} from '../raft/constants.js';
 import {
   resolveDeclaredPrimaryKeyColumns,
   resolveDeclaredTableSchema,
@@ -70,8 +71,8 @@ function readDatabaseViaGetter(handle) {
 function isHostedPartitionService(handle) {
   if (!handle || typeof handle !== 'object') return false;
   return Boolean(
-    typeof handle.handleRemoteQuery === 'function' ||
-    typeof handle.handleApplicationMessage === 'function' ||
+    handle.handleRemoteQuery ||
+    handle.handleApplicationMessage ||
     handle.raftGroup ||
     handle.raft ||
     typeof handle.isLeader === 'boolean' ||
@@ -94,7 +95,7 @@ function extractSqliteDb(handle) {
 }
 
 function isLeaderCandidate(svc) {
-  return Boolean(svc && (svc.isLeader === true || svc.role === 'leader'));
+  return Boolean(svc && (svc.isLeader === true || svc.role === RAFT_ROLE.LEADER));
 }
 
 function selectPreferredService(candidates) {
@@ -160,32 +161,27 @@ function resolveFromEngine(engine, partitionId) {
   return null;
 }
 
-function resolveHostedPartitionService(indexService, partitionId) {
-  if (!indexService || !partitionId) return null;
-  const sources = [
-    indexService.partitionServices,
-    indexService.partitionService,
-  ];
-  for (const source of sources) {
-    const candidate = findPartitionInContainer(source, partitionId);
-    if (isHostedPartitionService(candidate)) return candidate;
-  }
-  if (indexService.partitionServicesProvider) {
-    const provided = indexService.partitionServicesProvider(partitionId);
-    const candidate = findPartitionInContainer(provided, partitionId);
-    if (isHostedPartitionService(candidate)) return candidate;
-  }
-  const engine = indexService.sqlQueryEngine;
-  if (engine?.partitionServicesProvider) {
-    const provided = engine.partitionServicesProvider(partitionId);
-    const candidate = findPartitionInContainer(provided, partitionId);
-    if (isHostedPartitionService(candidate)) return candidate;
-  }
-  if (engine?.getPartitionService) {
-    const candidate = engine.getPartitionService(partitionId);
+function findHostedCandidateInContainers(containers, partitionId) {
+  for (const container of containers) {
+    const candidate = findPartitionInContainer(container, partitionId);
     if (isHostedPartitionService(candidate)) return candidate;
   }
   return null;
+}
+
+function resolveHostedPartitionService(indexService, partitionId) {
+  if (!indexService || !partitionId) return null;
+  const engine = indexService.sqlQueryEngine;
+  return findHostedCandidateInContainers(
+    [
+      indexService.partitionServices,
+      indexService.partitionService,
+      indexService.partitionServicesProvider?.(partitionId),
+      engine?.partitionServicesProvider?.(partitionId),
+      engine?.getPartitionService?.(partitionId),
+    ],
+    partitionId,
+  );
 }
 
 function resolvePartitionDatabase(indexService, coordinator, partitionId) {
@@ -502,7 +498,6 @@ export {
   ensureRuntimeState,
   extractPartitionIdFromRow,
   extractTableNameFromRow,
-  isHostedPartitionService,
   preloadProductionPartitionMetadata,
   quoteIdentifier,
   resolveHostedPartitionService,
