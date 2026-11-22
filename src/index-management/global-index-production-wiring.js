@@ -19,10 +19,12 @@ import {
 } from './global-index-dataset-manager.js';
 import {
   ensureIndexDatasetTableInGateway,
+  hasHostedPartitionReplica,
+} from './global-index-dataset-reconciliation.js';
+import {
   executePartitionReadSql,
   executePartitionWriteSql,
   hasDistributedPartitionRoute,
-  hasHostedPartitionReplica,
   provisionIndexPartitionsWithRuntime,
   reconcileDistributedIndexDatasetSchema,
   syncGlobalIndexesFromSystemCache,

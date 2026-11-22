@@ -142,27 +142,36 @@ function buildInitialRow(intent, workflow) {
   };
 }
 
-export function isTransientProvisioningError(error) {
-  if (error?.admissionAnswer?.[RETAINED_PLACEMENT_ATTEMPT] === true) {
-    return true;
-  }
-  const code = String(error?.code || error?.errorCode || '').toUpperCase();
-  const failureCode = String(error?.failureCode || '').toUpperCase();
-  const skipReason = String(error?.rebalanceSkipReason || '').toLowerCase();
-  const message = String(error?.message || '').toLowerCase();
-  return TRANSIENT_PROVISIONING_CODES.has(code) ||
-    TRANSIENT_FAILURE_CODES.has(failureCode) ||
-    TRANSIENT_SKIP_REASONS.has(skipReason) ||
-    TRANSIENT_CODE_FRAGMENTS.some((fragment) => code.includes(fragment)) ||
-    TRANSIENT_MESSAGE_FRAGMENTS.some((fragment) => message.includes(fragment)) ||
-    isRetryableControlPlaneError(error);
-}
+const DEFERRED_AUTHORITY_MESSAGE = 'Placement authority temporarily unavailable';
 
 function isDeferredAuthorityError(error) {
   const failureCode = String(error?.failureCode || '').toUpperCase();
   const skipReason = String(error?.rebalanceSkipReason || '').toLowerCase();
   return TRANSIENT_FAILURE_CODES.has(failureCode) ||
     TRANSIENT_SKIP_REASONS.has(skipReason);
+}
+
+function hasTransientProvisioningCode(code) {
+  return TRANSIENT_PROVISIONING_CODES.has(code) ||
+    TRANSIENT_CODE_FRAGMENTS.some((fragment) => code.includes(fragment));
+}
+
+function hasTransientProvisioningMessage(message) {
+  return TRANSIENT_MESSAGE_FRAGMENTS.some((fragment) => message.includes(fragment));
+}
+
+export function isTransientProvisioningError(error) {
+  if (!error) return false;
+  if (error.admissionAnswer?.[RETAINED_PLACEMENT_ATTEMPT] === true) {
+    return true;
+  }
+  if (isDeferredAuthorityError(error) || isRetryableControlPlaneError(error)) {
+    return true;
+  }
+  const code = String(error.code || error.errorCode || '').toUpperCase();
+  const message = String(error.message || '').toLowerCase();
+  return hasTransientProvisioningCode(code) ||
+    hasTransientProvisioningMessage(message);
 }
 
 function buildProvisioningRefusal(workflow, error) {
@@ -185,16 +194,25 @@ function buildProvisioningRefusal(workflow, error) {
   };
 }
 
+function resolveDeferredReasons(detail, failureCode, workflow) {
+  if (Array.isArray(detail.reasons)) return detail.reasons;
+  if (failureCode) return [failureCode];
+  return workflow.reasonCodes || [];
+}
+
+function resolveDeferredErrorCode(error, failureCode) {
+  if (error?.code) return error.code;
+  if (error?.errorCode) return error.errorCode;
+  return failureCode || null;
+}
+
 function buildDeferredAuthorityOutcome(workflow, error, defaultRetryAfterMs) {
   const detail = error?.detail || {};
   const failureCode = error?.failureCode || null;
-  const reasons = Array.isArray(detail.reasons) ?
-    detail.reasons :
-    (failureCode ? [failureCode] : workflow.reasonCodes || []);
   return {
     success: false,
-    error: error?.message || 'Placement authority temporarily unavailable',
-    errorCode: error?.code || error?.errorCode || failureCode || null,
+    error: error?.message || DEFERRED_AUTHORITY_MESSAGE,
+    errorCode: resolveDeferredErrorCode(error, failureCode),
     failureCode,
     ...buildOwnerContractOutcome({
       contractState: OWNER_CONTRACT_STATE.DEFERRED,
@@ -203,19 +221,19 @@ function buildDeferredAuthorityOutcome(workflow, error, defaultRetryAfterMs) {
     jobId: workflow.workflowId,
     tableId: workflow.tableId || null,
     retryAfterMs: detail.retryAfterMs ?? defaultRetryAfterMs,
-    reasonCodes: reasons,
+    reasonCodes: resolveDeferredReasons(detail, failureCode, workflow),
   };
 }
 
 function recoverIntentFromRow(row) {
   const intent = JSON.parse(row.normalized_ddl);
-  const tableId = intent.tableId || row.table_id;
+  const tableId = row.table_id;
   const partitions = Array.isArray(intent.partitions) &&
       intent.partitions.length > 0 ?
     intent.partitions :
     null;
-  const partitionId = partitions?.[0]?.partitionId || `${tableId}-p1`;
-  const globalIndex = intent.globalIndex || intent.options?.globalIndex || null;
+  const partitionId = partitions ? partitions[0].partitionId : `${tableId}-p1`;
+  const globalIndex = intent.globalIndex ?? null;
   return {
     intent,
     ast: {
@@ -282,6 +300,21 @@ function reportSchemaProvisioningDeadlineSpent(
   });
 }
 
+function createWorkflowCoordinator(owner, options) {
+  if (options.workflowCoordinator) {
+    return options.workflowCoordinator;
+  }
+  return new DurableWorkflowCoordinator({
+    now: owner.now,
+    persistWorkflowClaim: (workflow, context) =>
+      owner.repository.persistWorkflowCandidate(workflow, context),
+    persistWorkflowTransition: (workflow, context) =>
+      owner.repository.persistWorkflowCandidate(workflow, context),
+    isTerminalWorkflow: (workflow) =>
+      SCHEMA_PROVISIONING_JOB_TERMINAL_STATUSES.has(workflow.status),
+  });
+}
+
 class SchemaProvisioningJobOwner {
   constructor(options = {}) {
     this.repository = options.repository;
@@ -297,21 +330,9 @@ class SchemaProvisioningJobOwner {
     this.retryClearTimeoutFn = options.retryClearTimeoutFn || clearTimeout;
     this.retryTimersByWorkflowId = new Map();
     this.retryCompletionHandlers = new Map();
-    this.onBackgroundJobSucceeded =
-      typeof options.onBackgroundJobSucceeded === 'function' ?
-        options.onBackgroundJobSucceeded :
-        null;
+    this.onBackgroundJobSucceeded = options.onBackgroundJobSucceeded || null;
     this.shuttingDown = false;
-    this.workflowCoordinator = options.workflowCoordinator ||
-      new DurableWorkflowCoordinator({
-        now: this.now,
-        persistWorkflowClaim: (workflow, context) =>
-          this.repository.persistWorkflowCandidate(workflow, context),
-        persistWorkflowTransition: (workflow, context) =>
-          this.repository.persistWorkflowCandidate(workflow, context),
-        isTerminalWorkflow: (workflow) =>
-          SCHEMA_PROVISIONING_JOB_TERMINAL_STATUSES.has(workflow.status),
-      });
+    this.workflowCoordinator = createWorkflowCoordinator(this, options);
     this.recover();
   }
 
@@ -323,8 +344,7 @@ class SchemaProvisioningJobOwner {
   }
 
   setBackgroundJobSucceededHandler(handler) {
-    this.onBackgroundJobSucceeded =
-      typeof handler === 'function' ? handler : null;
+    this.onBackgroundJobSucceeded = handler || null;
   }
 
   async notifyBackgroundSucceeded(intent, outcome, runOptions = {}) {
@@ -447,7 +467,7 @@ class SchemaProvisioningJobOwner {
           nextAction: OWNER_CONTRACT_NEXT_ACTION.PROCEED,
         }),
         jobId: workflow.workflowId,
-        tableId: workflow.result?.tableId || workflow.tableId || null,
+        tableId: workflow.tableId ?? null,
         reasonCodes: [...reasonCodes],
         retryAfterMs: 0,
       };
@@ -670,7 +690,7 @@ class SchemaProvisioningJobOwner {
 
   async execute(ast, options = {}, executor) {
     const intent = canonicalizeSchemaProvisioningIntent(ast, options);
-    if (typeof options.onBackgroundSucceeded === 'function') {
+    if (options.onBackgroundSucceeded) {
       this.retryCompletionHandlers.set(
         intent.workflowId,
         options.onBackgroundSucceeded,

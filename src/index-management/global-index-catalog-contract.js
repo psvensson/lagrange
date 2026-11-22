@@ -267,10 +267,10 @@ export function normalizeGlobalIndexRecord(row) {
 
   return {
     ...extractIdentifiers(row),
-    columnNames: parseColumnNames(row.column_names ?? row.columnNames),
+    columnNames: parseColumnNames(row.column_names),
     indexType: row.index_type || row.indexType || INDEX_TYPE.BTREE,
     isGlobal: row.is_global !== undefined ? Boolean(row.is_global) : true,
-    isUnique: Boolean(row.is_unique ?? row.isUnique ?? row.unique),
+    isUnique: Boolean(row.is_unique),
     state: row.state || GLOBAL_INDEX_STATE.CREATING,
     ...extractBackfillCursors(row),
     ...extractTimestampsAndErrors(row),

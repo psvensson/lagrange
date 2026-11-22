@@ -25,6 +25,15 @@ import {
   readCacheApplyChangeChannel,
 } from '../control-plane/control-plane-readiness-collaborators.js';
 
+function bindSchemaJobGsiCompletionHandler(engine) {
+  const owner = engine.tableCreationService?.schemaProvisioningJobOwner;
+  if (owner?.setBackgroundJobSucceededHandler) {
+    owner.setBackgroundJobSucceededHandler(
+      (intent) => engine.indexService?.completeRecoveredGlobalIndexProvisioning?.(intent),
+    );
+  }
+}
+
 const LOCAL_STR_SQL_CONTROL_PLANE = 'sql_control_plane';
 const LOCAL_STR_FUNCTION = 'function';
 
@@ -349,9 +358,7 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
       engine.calculateQuorumReplicaCount(replicaCount),
     partitionProvisioner: tablePartitionProvisioner,
   });
-  engine.tableCreationService?.schemaProvisioningJobOwner?.setBackgroundJobSucceededHandler?.(
-    (intent) => engine.indexService?.completeRecoveredGlobalIndexProvisioning?.(intent),
-  );
+  bindSchemaJobGsiCompletionHandler(engine);
 
   engine.parseCache = new SqlParseCache(SQL_PARSE_CACHE.DEFAULT_MAX_SIZE);
 

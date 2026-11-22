@@ -69,13 +69,19 @@ function resolveEnginePartitionTarget(engine, partitionId) {
   return null;
 }
 
-function hasHandleExecutor(partition) {
+function hasNonStorageHandleExecutor(partition) {
   return Boolean(
     partition?.handleRemoteQuery ||
-    (partition?.db?.prepare && !partition?.raft) ||
-    (!partition?.raft && typeof partition?.storage?.getDatabase === 'function') ||
-    partition?.executeQuery,
+    partition?.executeQuery ||
+    (partition?.db?.prepare && !partition?.raft),
   );
+}
+
+function hasHandleExecutor(partition) {
+  if (hasNonStorageHandleExecutor(partition)) {
+    return true;
+  }
+  return Boolean(!partition?.raft && partition?.storage?.getDatabase);
 }
 
 function hasServiceExecutor(service) {
@@ -132,15 +138,23 @@ function resolveRebuildTarget(service, tableId, indexName) {
   return null;
 }
 
-function executeOnLocalPartitionDb(partition, sql) {
+function executeOnPreparedDb(partition, sql) {
   if (partition?.db?.prepare && !partition?.raft) {
     return partition.db.prepare(sql).run();
   }
-  const storageDb = !partition?.raft && typeof partition?.storage?.getDatabase === 'function' ?
-    partition.storage.getDatabase() :
-    null;
-  if (storageDb?.prepare) {
-    return storageDb.prepare(sql).run();
+  return undefined;
+}
+
+function executeOnLocalPartitionDb(partition, sql) {
+  const direct = executeOnPreparedDb(partition, sql);
+  if (direct !== undefined) {
+    return direct;
+  }
+  if (!partition?.raft && partition?.storage?.getDatabase) {
+    const storageDb = partition.storage.getDatabase();
+    if (storageDb?.prepare) {
+      return storageDb.prepare(sql).run();
+    }
   }
   return undefined;
 }

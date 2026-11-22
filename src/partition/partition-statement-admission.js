@@ -247,12 +247,14 @@ function matchIndexDdl(lexed) {
     matchDropIndex(lexed.tokens) : null;
 }
 
+const QUALIFIED_TARGET_ADVANCE = 3;
+
 function matchDatasetTableTarget(tokens, at) {
   if (tokens[at + 1]?.text === CHAR.DOT) {
     const schema = tokens[at]?.identifier;
     const tableName = tokens[at + 2]?.identifier ?? null;
     return schema === asciiLower(KEYWORD.MAIN) && tableName !== null ?
-      {tableName, next: at + 3} : null;
+      {tableName, next: at + QUALIFIED_TARGET_ADVANCE} : null;
   }
   const tableName = nameAt(tokens, at);
   return tableName !== null ? {tableName, next: at + 1} : null;

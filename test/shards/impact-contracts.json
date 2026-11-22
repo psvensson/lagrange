@@ -2347,6 +2347,8 @@
       "description": "Global secondary index dataset provisioning runs through SchemaProvisioningJobOwner with canonical TABLES and PARTITIONS metadata persisted through the control-plane gateway before invoking provisionInitialTablePartition, passing a real schemaJobId and owner fence without synthetic IDs or weakening requireFoundingIdentity's XOR guard.",
       "owners": [
         "src/index-management/global-index-distributed-execution.js",
+        "src/index-management/global-index-dataset-reconciliation.js",
+        "src/index-management/global-index-provisioning-lifecycle.js",
         "src/query/schema-provisioning-intent.js",
         "src/query/schema-provisioning-job-owner.js",
         "src/query/sql-query-engine-initial-partition-provisioning.js",
@@ -2361,6 +2363,8 @@
       "owners": [
         "src/index-management/global-index-production-wiring.js",
         "src/index-management/global-index-distributed-execution.js",
+        "src/index-management/global-index-dataset-reconciliation.js",
+        "src/index-management/global-index-provisioning-lifecycle.js",
         "src/index-management/global-index-partition-discovery.js",
         "src/index-management/global-index-lifecycle-coordinator.js",
         "src/index-management/index-service-partition-methods.js",
@@ -5058,6 +5062,8 @@
           "id": "gsi-runtime-provisioning-workflow",
           "owners": [
             "src/index-management/global-index-distributed-execution.js",
+            "src/index-management/global-index-dataset-reconciliation.js",
+            "src/index-management/global-index-provisioning-lifecycle.js",
             "src/query/schema-provisioning-intent.js",
             "src/query/schema-provisioning-job-owner.js"
           ]
@@ -5083,6 +5089,8 @@
           "owners": [
             "src/index-management/global-index-production-wiring.js",
             "src/index-management/global-index-distributed-execution.js",
+            "src/index-management/global-index-dataset-reconciliation.js",
+            "src/index-management/global-index-provisioning-lifecycle.js",
             "src/index-management/global-index-partition-discovery.js",
             "src/index-management/global-index-lifecycle-coordinator.js",
             "src/index-management/index-service-partition-methods.js"
