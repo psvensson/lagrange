@@ -33,10 +33,20 @@ function resolveFenceVersion(indexService, tableName) {
   return engine.resolveWriteFencePartitionVersion(info);
 }
 
+function createWriteExecutionUnavailableError(partitionId, res) {
+  const err = createParticipantUnavailableError(partitionId);
+  if (res?.error) {
+    err.message = `${err.message}: ${res.error}`;
+  }
+  if (res?.errorCode) err.errorCode = res.errorCode;
+  if (res?.failureCode) err.failureCode = res.failureCode;
+  return err;
+}
+
 async function executeRemoteReadViaRouter(indexService, partitionId, sql, params) {
   const routed = await indexService.queryRouter.executeReadOnPartition(partitionId, sql, params);
   if (!routed || routed.success !== true) {
-    throw createParticipantUnavailableError(partitionId);
+    throw createWriteExecutionUnavailableError(partitionId, routed);
   }
   return Array.isArray(routed.rows) ? routed.rows : [];
 }
@@ -49,7 +59,7 @@ async function executeRemoteRead(indexService, partitionId, sql, params) {
   if (executor && executor.executeOnPartition) {
     const res = await executor.executeOnPartition(partitionId, sql, params, true, true, false, {});
     if (!res || res.success !== true) {
-      throw createParticipantUnavailableError(partitionId);
+      throw createWriteExecutionUnavailableError(partitionId, res);
     }
     return Array.isArray(res.rows) ? res.rows : [];
   }
@@ -67,7 +77,7 @@ async function executePartitionReadSql(indexService, resolveDb, partitionId, sql
 async function executeRemoteWriteViaRouter(indexService, partitionId, sql, params) {
   const routed = await indexService.queryRouter.executeWriteOnPartition(partitionId, sql, params);
   if (!routed || routed.success !== true) {
-    throw createParticipantUnavailableError(partitionId);
+    throw createWriteExecutionUnavailableError(partitionId, routed);
   }
   return routed;
 }
@@ -95,7 +105,7 @@ async function executePartitionWriteSql(
       {tableName, expectedPartitionVersion},
     );
     if (!res || res.success !== true) {
-      throw createParticipantUnavailableError(partitionId);
+      throw createWriteExecutionUnavailableError(partitionId, res);
     }
     return res;
   }

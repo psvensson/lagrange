@@ -585,7 +585,11 @@ test('TX1 real-participant isolation, rollback atomicity, and unavailable partic
   const createRes = await engine.executeQuery(
     'CREATE GLOBAL INDEX idx_users_email ON users (email)',
   );
-  t.equal(createRes.success, true, 'CREATE GLOBAL INDEX succeeds on strict cluster');
+  t.equal(
+    createRes.success,
+    true,
+    `CREATE GLOBAL INDEX succeeds on strict cluster: ${JSON.stringify(createRes)}`,
+  );
 
   const selectByEmailSql = 'SELECT * FROM users WHERE email = ? ORDER BY id ASC';
 
@@ -598,7 +602,11 @@ test('TX1 real-participant isolation, rollback atomicity, and unavailable partic
   const stagedInsert = await engine.executeQuery(insertSql, insertParams, {
     sessionId: 'tx1-s1',
   });
-  t.equal(stagedInsert.success, true, 'Staged TX1 INSERT succeeds');
+  t.equal(
+    stagedInsert.success,
+    true,
+    `Staged TX1 INSERT succeeds: ${JSON.stringify(stagedInsert)}`,
+  );
 
   // Outside reader must NOT see uncommitted base or index row
   t.notOk(
@@ -733,7 +741,11 @@ test('Dynamic index partition provisioning, distributed execution without local 
   const createRes = await engineA.executeQuery(
     'CREATE GLOBAL INDEX idx_users_email ON users (email)',
   );
-  t.equal(createRes.success, true, 'CREATE GLOBAL INDEX dynamically provisions index partitions');
+  t.equal(
+    createRes.success,
+    true,
+    `CREATE GLOBAL INDEX dynamically provisions index partitions: ${JSON.stringify(createRes)}`,
+  );
 
   const provisionedIndexPartitions = env.systemCache
     .getAll(TABLES.PARTITIONS)
