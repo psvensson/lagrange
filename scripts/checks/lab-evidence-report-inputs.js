@@ -9,211 +9,41 @@ import path from 'node:path';
 import {spawnGit} from './git-invocation.js';
 import {gitProcessEnvironment} from './git-process-environment.js';
 
-const stringTrim = Function.call.bind(String.prototype.trim);
-const stringSplit = Function.call.bind(String.prototype.split);
-const stringStartsWith = Function.call.bind(String.prototype.startsWith);
-const stringEndsWith = Function.call.bind(String.prototype.endsWith);
-const stringSlice = Function.call.bind(String.prototype.slice);
-const stringIndexOf = Function.call.bind(String.prototype.indexOf);
-const stringToLowerCase = Function.call.bind(String.prototype.toLowerCase);
-const arrayJoin = Function.call.bind(Array.prototype.join);
-const arrayMap = Function.call.bind(Array.prototype.map);
-const arrayFilter = Function.call.bind(Array.prototype.filter);
-const arraySome = Function.call.bind(Array.prototype.some);
-const arrayEvery = Function.call.bind(Array.prototype.every);
-const regexExec = Function.call.bind(RegExp.prototype.exec);
-const regexTest = Function.call.bind(RegExp.prototype.test);
-
-const LAB_EVIDENCE_SCHEMA = 'lagrange-p6-lab-evidence-report/v1';
-
-const OUTCOME = Object.freeze({
-  ADMITTED: 'ADMITTED',
-  REFUSED: 'REFUSED',
-  UNAVAILABLE: 'UNAVAILABLE',
-});
-
-const REMOTE_STATE = Object.freeze({
-  PUSHED_MATCH: 'PUSHED_MATCH',
-  REMOTE_DIVERGED: 'REMOTE_DIVERGED',
-  UNPUSHED: 'UNPUSHED',
-  UNAVAILABLE: 'UNAVAILABLE',
-});
-
-const CLAIM_KIND = Object.freeze({
-  CROSS_NODE_CDC_PROPAGATION: 'cross-node-cdc-propagation',
-  MULTI_HOST_FORMATION: 'multi-host-formation',
-  COMPOSED_LAB_PROOF: 'composed-lab-proof',
-  FOCUSED_SUITE: 'focused-suite',
-});
-
-const ARTIFACT_STATUS = Object.freeze({
-  APPLICABLE: 'applicable',
-  NOT_APPLICABLE: 'not_applicable',
-});
-
-const PROBLEM_CODE = Object.freeze({
-  CLAIMED_SHA_INVALID: 'claimed_sha_invalid',
-  GIT_STATE_UNAVAILABLE: 'git_state_unavailable',
-  TARGET_REF_SHA_MISMATCH: 'target_ref_sha_mismatch',
-  REMOTE_REF_NOT_PUSHED: 'remote_ref_not_pushed',
-  JOBS_MISSING: 'jobs_missing',
-  JOB_PATH_UNSAFE: 'job_path_unsafe',
-  JOB_EXIT_MISSING: 'job_exit_missing',
-  JOB_FAILED: 'job_failed',
-  SELECTION_MISSING: 'selection_missing',
-  SELECTION_SHA_MISMATCH: 'selection_sha_mismatch',
-  PLACEMENT_LOG_MISSING: 'placement_log_missing',
-  EXECUTION_SHA_MISMATCH: 'execution_sha_mismatch',
-  PLACEMENT_SUMMARY_FAILED: 'placement_summary_failed',
-  TEST_CASE_FAILED: 'test_case_failed',
-  RESULTS_MISMATCH: 'results_mismatch',
-  REQUIRED_FILE_MISSING_OR_FAILED: 'required_file_missing_or_failed',
-  RETRY_POLICY_VIOLATED: 'retry_policy_violated',
-  HOST_MANIFEST_MISSING: 'host_manifest_missing',
-  HOST_MANIFEST_SHA_MISMATCH: 'host_manifest_sha_mismatch',
-  HOST_RUNTIME_MISMATCH: 'host_runtime_mismatch',
-  HOST_BACKEND_MISMATCH: 'host_backend_mismatch',
-  HOST_ARTIFACT_MISMATCH: 'host_artifact_mismatch',
-  HOST_CONFIG_MISMATCH: 'host_config_mismatch',
-  TOPOLOGY_SCOPE_MISSING: 'topology_scope_missing',
-  SHARED_CACHE_SUBSTITUTION_REFUSED: 'shared_cache_substitution_refused',
-  APPLICABILITY_REFUSED: 'applicability_refused',
-  EXECUTION_REPORT_REFUSED: 'execution_report_refused',
-});
-
-const MESSAGE = Object.freeze({
-  JOBS_REQUIRED: 'at least one lab job directory is required',
-  CONTRADICTORY_TOPOLOGY:
-    'contradictory topologyScope: isolatedNodeCaches and sharedCache cannot both be true',
-});
-
-const SHA_HEX_PATTERN = /^[0-9a-f]{40}$/u;
-const PLACEMENT_LOG_EXT = '.log';
-const NDJSON_PREFIX = 'test-results-';
-const NDJSON_EXT = '.ndjson';
-const MERGED_NDJSON_NAME = 'test-results.ndjson';
-const EXIT_JSON_NAME = 'exit.json';
-const SELECTION_JSON_NAME = 'selection.json';
-const LOG_HOST_PATTERN = /^[0-9a-f]{7,40}-[a-z0-9]+-[0-9]+-(.+)\.log$/u;
-const TOTALS_LINE_PATTERN =
-  /^# test-files total=(\d+) pass=(\d+) fail=(\d+) assertions=(\d+)$/u;
-const PLANNED_LINE_PATTERN = /^# test-files planned=(\d+)$/u;
-
-const LOG_HEADER = Object.freeze({
-  PLACEMENT_HEAD: 'placement-head=',
-  PLACEMENT_PID: 'placement-pid=',
-  PLACEMENT_SHELL: 'placement-shell=',
-  PLACEMENT_ENV: 'placement-env=',
-  PLACEMENT_HOST: 'placement-host=',
-  PLACEMENT_RESULTS: 'placement-results=',
-});
-
-const GIT_ARGS = Object.freeze({
-  HEAD_REV: Object.freeze(['rev-parse', 'HEAD']),
-  HEAD_BRANCH: Object.freeze(['symbolic-ref', '--quiet', '--short', 'HEAD']),
-  REV_PARSE: 'rev-parse',
-  VERIFY: '--verify',
-  LS_REMOTE: 'ls-remote',
-  COMMIT_SUFFIX: '^{commit}',
-  ORIGIN: 'origin',
-  HEAD_REF: 'HEAD',
-  ORIGIN_MAIN_REF: 'refs/heads/main',
-});
-
-const PLACEMENT_ENV_KEYS = Object.freeze({
-  MODE: 'mode',
-  RETRY: 'retry',
-});
-
-const CLI_FLAGS = Object.freeze({
-  REPO: '--repo',
-  CLAIMED_SHA: '--claimed-sha',
-  TARGET_REF: '--target-ref',
-  REMOTE: '--remote',
-  REMOTE_REF: '--remote-ref',
-  ORIGIN_MAIN_REF: '--origin-main-ref',
-  REQUIRE_REMOTE_PUSHED: '--require-remote-pushed',
-  JOB_DIR: '--job-dir',
-  HOST_MANIFEST: '--host-manifest',
-  EXPECTED_HOST: '--expected-host',
-  CLAIM_KIND: '--claim-kind',
-  TOPOLOGY_JSON: '--topology-json',
-  REQUIRED_FILES: '--required-files',
-  FORMAT: '--format',
-  OUT: '--out',
-  ALLOW_RETRIES: '--allow-retries',
-});
-
-const FORMAT_MODES = Object.freeze({
-  JSON: 'json',
-  MARKDOWN: 'markdown',
-});
-
-const TEXT = Object.freeze({
-  UTF8: 'utf8',
-  EMPTY: '',
-  NEWLINE: '\n',
-  COMMA: ',',
-  COLON: ':',
-  TAB: '\t',
-  SLASH: '/',
-  DETACHED: 'DETACHED',
-  UNAVAILABLE: 'unavailable',
-  UNVERIFIED: 'unverified',
-  UNKNOWN: 'unknown',
-  TYPE_STRING: 'string',
-  TYPE_OBJECT: 'object',
-});
-
-const LINE_BREAK_PATTERN = /\r?\n/u;
-const WHITESPACE_SPLIT_PATTERN = /\s+/u;
-const ZERO = 0;
-const ONE = 1;
-const TWO = 2;
-const THREE = 3;
-const FOURTH_INDEX = 4;
-const TEN = 10;
-const EXIT_ADMITTED = 0;
-const EXIT_REFUSED = 1;
-const EXIT_USAGE_OR_UNAVAILABLE = 2;
-const MIN_ISOLATED_NODES = 2;
-
-const REPORT_TITLES = Object.freeze({
-  HEADING: '## P6 Lab Evidence & Branch Admission Report',
-  META_HEADER: '| Field | Value |',
-  META_SEP: '| --- | --- |',
-  HOSTS_HEADING: '### Per-Host Execution & Configuration Facts',
-  HOSTS_HEADER:
-    '| Job | Host | Placement Head | PID | Env | Runtime | Backend | Artifact | Results |',
-  HOSTS_SEP: '| --- | --- | --- | --- | --- | --- | --- | --- | --- |',
-  PROBLEMS_HEADING: '### Admission Refusal / Unavailable Reasons',
-  PROBLEMS_HEADER: '| Code | Detail |',
-  PROBLEMS_SEP: '| --- | --- |',
-});
-
-const LABEL = Object.freeze({
-  OUTCOME: 'Outcome',
-  CLAIMED_SHA: 'Claimed SHA',
-  HEAD_REF: 'Observed HEAD',
-  TARGET_REF: 'Observed Target Ref',
-  REMOTE_STATE: 'Remote Ref State',
-  ORIGIN_MAIN: 'Origin Main SHA',
-  CLAIM_KIND: 'Claim Kind',
-  TOPOLOGY: 'Topology & Cache Isolation',
-  TOTALS: 'Verified Totals',
-});
-
-function isPlainObject(value) {
-  return value !== null && typeof value === TEXT.TYPE_OBJECT && !Array.isArray(value);
-}
-
-function isValidSha(value) {
-  return typeof value === TEXT.TYPE_STRING && regexTest(SHA_HEX_PATTERN, value);
-}
-
-function addProblem(problems, code, detail, extra = {}) {
-  problems.push({code, detail, ...extra});
-}
+import {
+  EXIT_JSON_NAME,
+  FOURTH_INDEX,
+  GIT_ARGS,
+  LINE_BREAK_PATTERN,
+  LOG_HEADER,
+  LOG_HOST_PATTERN,
+  MERGED_NDJSON_NAME,
+  NDJSON_EXT,
+  NDJSON_PREFIX,
+  ONE,
+  PLACEMENT_LOG_EXT,
+  PLANNED_LINE_PATTERN,
+  PROBLEM_CODE,
+  REMOTE_STATE,
+  SELECTION_JSON_NAME,
+  TEN,
+  TEXT,
+  THREE,
+  TOTALS_LINE_PATTERN,
+  TWO,
+  WHITESPACE_SPLIT_PATTERN,
+  ZERO,
+  addProblem,
+  arrayFilter,
+  isPlainObject,
+  isValidSha,
+  regexExec,
+  stringEndsWith,
+  stringIndexOf,
+  stringSlice,
+  stringSplit,
+  stringStartsWith,
+  stringTrim,
+} from './lab-evidence-report-constants.js';
 
 function runDefaultGit(cwd, args) {
   return spawnGit(args, {
@@ -297,62 +127,29 @@ function classifyRemoteState(lsRemoteResult, claimedSha) {
   return classified;
 }
 
-function inspectGitBranchState(options, problems) {
-  const {
-    repoRoot,
-    claimedSha,
-    targetRef = GIT_ARGS.HEAD_REF,
-    remote = GIT_ARGS.ORIGIN,
-    remoteRef = TEXT.EMPTY,
-    originMainRef = GIT_ARGS.ORIGIN_MAIN_REF,
-    requireRemotePushed = false,
-    gitRunner = runDefaultGit,
-  } = options;
+function unavailableGitState(targetRef, remote, remoteRef) {
+  return {
+    available: false,
+    headSha: TEXT.UNAVAILABLE,
+    headBranch: TEXT.UNAVAILABLE,
+    targetRef,
+    targetRefSha: TEXT.UNAVAILABLE,
+    remote,
+    remoteRef,
+    remoteState: REMOTE_STATE.UNAVAILABLE,
+    remoteSha: TEXT.UNAVAILABLE,
+    originMainSha: TEXT.UNAVAILABLE,
+    pushed: false,
+  };
+}
 
-  const headRes = gitRunner(repoRoot, GIT_ARGS.HEAD_REV);
-  if (headRes.status !== ZERO) {
-    const errText = headRes.stderr || headRes.error?.message || TEXT.UNKNOWN;
-    addProblem(
-      problems,
-      PROBLEM_CODE.GIT_STATE_UNAVAILABLE,
-      `git rev-parse HEAD failed: ${stringTrim(String(errText))}`,
-    );
-    return {
-      available: false,
-      headSha: TEXT.UNAVAILABLE,
-      headBranch: TEXT.UNAVAILABLE,
-      targetRef,
-      targetRefSha: TEXT.UNAVAILABLE,
-      remote,
-      remoteRef,
-      remoteState: REMOTE_STATE.UNAVAILABLE,
-      remoteSha: TEXT.UNAVAILABLE,
-      originMainSha: TEXT.UNAVAILABLE,
-      pushed: false,
-    };
-  }
+function readGitStdout(gitRunner, repoRoot, args, fallbackValue) {
+  const res = gitRunner(repoRoot, args);
+  return res.status === ZERO ? stringTrim(String(res.stdout || TEXT.EMPTY)) : fallbackValue;
+}
 
-  const headSha = stringTrim(String(headRes.stdout || TEXT.EMPTY));
-  const branchRes = gitRunner(repoRoot, GIT_ARGS.HEAD_BRANCH);
-  const headBranch = branchRes.status === ZERO ?
-    stringTrim(String(branchRes.stdout || TEXT.EMPTY)) : TEXT.DETACHED;
-
-  const targetRes = gitRunner(
-    repoRoot,
-    [GIT_ARGS.REV_PARSE, GIT_ARGS.VERIFY, `${targetRef}${GIT_ARGS.COMMIT_SUFFIX}`],
-  );
-  const targetRefSha = targetRes.status === ZERO ?
-    stringTrim(String(targetRes.stdout || TEXT.EMPTY)) : TEXT.UNAVAILABLE;
-
-  if (targetRefSha !== claimedSha) {
-    addProblem(
-      problems,
-      PROBLEM_CODE.TARGET_REF_SHA_MISMATCH,
-      `target ref ${targetRef} resolved to ${targetRefSha}, expected ${claimedSha}`,
-    );
-  }
-
-  const refToCheck = remoteRef.length > ZERO ? remoteRef : targetRef;
+function inspectRemoteBranchRefs(gitRunner, repoRoot, options, problems) {
+  const {remote, refToCheck, originMainRef, claimedSha, requireRemotePushed} = options;
   const lsRemoteRes = gitRunner(repoRoot, [GIT_ARGS.LS_REMOTE, remote, refToCheck]);
   const remoteInfo = classifyRemoteState(lsRemoteRes, claimedSha);
   const pushed = remoteInfo.remoteState === REMOTE_STATE.PUSHED_MATCH;
@@ -367,20 +164,91 @@ function inspectGitBranchState(options, problems) {
 
   const mainRes = gitRunner(repoRoot, [GIT_ARGS.LS_REMOTE, remote, originMainRef]);
   const mainSha = mainRes.status === ZERO ? parseLsRemoteSha(mainRes.stdout) : TEXT.UNAVAILABLE;
-
   return {
-    available: true,
-    headSha,
-    headBranch,
-    targetRef,
-    targetRefSha,
-    remote,
-    remoteRef: refToCheck,
     remoteState: remoteInfo.remoteState,
     remoteSha: remoteInfo.remoteSha,
     remoteDetail: remoteInfo.detail,
     originMainSha: mainSha.length > ZERO ? mainSha : TEXT.UNAVAILABLE,
     pushed,
+  };
+}
+
+function normalizeGitInspectOptions(options) {
+  return {
+    repoRoot: options.repoRoot,
+    claimedSha: options.claimedSha,
+    targetRef: options.targetRef || GIT_ARGS.HEAD_REF,
+    remote: options.remote || GIT_ARGS.ORIGIN,
+    remoteRef: options.remoteRef || TEXT.EMPTY,
+    originMainRef: options.originMainRef || GIT_ARGS.ORIGIN_MAIN_REF,
+    requireRemotePushed: options.requireRemotePushed === true,
+    gitRunner: options.gitRunner || runDefaultGit,
+  };
+}
+
+function inspectGitBranchState(options, problems) {
+  const opts = normalizeGitInspectOptions(options);
+  const headRes = opts.gitRunner(opts.repoRoot, GIT_ARGS.HEAD_REV);
+  if (headRes.status !== ZERO) {
+    const errText = headRes.stderr || headRes.error?.message || TEXT.UNKNOWN;
+    addProblem(
+      problems,
+      PROBLEM_CODE.GIT_STATE_UNAVAILABLE,
+      `git rev-parse HEAD failed: ${stringTrim(String(errText))}`,
+    );
+    return unavailableGitState(opts.targetRef, opts.remote, opts.remoteRef);
+  }
+
+  const headSha = stringTrim(String(headRes.stdout || TEXT.EMPTY));
+  const headBranch = readGitStdout(
+    opts.gitRunner,
+    opts.repoRoot,
+    GIT_ARGS.HEAD_BRANCH,
+    TEXT.DETACHED,
+  );
+  const targetRevArgs = [
+    GIT_ARGS.REV_PARSE,
+    GIT_ARGS.VERIFY,
+    `${opts.targetRef}${GIT_ARGS.COMMIT_SUFFIX}`,
+  ];
+  const targetRefSha = readGitStdout(
+    opts.gitRunner,
+    opts.repoRoot,
+    targetRevArgs,
+    TEXT.UNAVAILABLE,
+  );
+
+  if (targetRefSha !== opts.claimedSha) {
+    addProblem(
+      problems,
+      PROBLEM_CODE.TARGET_REF_SHA_MISMATCH,
+      `target ref ${opts.targetRef} resolved to ${targetRefSha}, expected ${opts.claimedSha}`,
+    );
+  }
+
+  const refToCheck = opts.remoteRef.length > ZERO ? opts.remoteRef : opts.targetRef;
+  const remoteFacts = inspectRemoteBranchRefs(
+    opts.gitRunner,
+    opts.repoRoot,
+    {
+      remote: opts.remote,
+      refToCheck,
+      originMainRef: opts.originMainRef,
+      claimedSha: opts.claimedSha,
+      requireRemotePushed: opts.requireRemotePushed,
+    },
+    problems,
+  );
+
+  return {
+    available: true,
+    headSha,
+    headBranch,
+    targetRef: opts.targetRef,
+    targetRefSha,
+    remote: opts.remote,
+    remoteRef: refToCheck,
+    ...remoteFacts,
   };
 }
 
@@ -408,65 +276,81 @@ function inferHostFromLogName(fileName, knownHosts) {
   return stringSlice(fileName, ZERO, fileName.length - PLACEMENT_LOG_EXT.length);
 }
 
-function parsePlacementLogContent(content, defaultHost) {
-  const lines = stringSplit(content, LINE_BREAK_PATTERN);
-  const results = [];
-  const parseErrors = [];
-  let placementHead = TEXT.EMPTY;
-  let placementPid = null;
-  let placementShell = null;
-  let placementEnvRaw = TEXT.EMPTY;
-  let placementHost = defaultHost;
-  let plannedCount = null;
-  let summaryTotals = null;
+function applyLogHeaderLine(state, line) {
+  if (stringStartsWith(line, LOG_HEADER.PLACEMENT_HEAD)) {
+    state.placementHead = stringTrim(stringSlice(line, LOG_HEADER.PLACEMENT_HEAD.length));
+    return true;
+  }
+  if (stringStartsWith(line, LOG_HEADER.PLACEMENT_PID)) {
+    state.placementPid = Number.parseInt(stringSlice(line, LOG_HEADER.PLACEMENT_PID.length), TEN);
+    return true;
+  }
+  if (stringStartsWith(line, LOG_HEADER.PLACEMENT_SHELL)) {
+    state.placementShell = Number.parseInt(
+      stringSlice(line, LOG_HEADER.PLACEMENT_SHELL.length),
+      TEN,
+    );
+    return true;
+  }
+  if (stringStartsWith(line, LOG_HEADER.PLACEMENT_HOST)) {
+    state.host = stringTrim(stringSlice(line, LOG_HEADER.PLACEMENT_HOST.length));
+    return true;
+  }
+  if (stringStartsWith(line, LOG_HEADER.PLACEMENT_ENV)) {
+    state.placementEnvRaw = stringTrim(stringSlice(line, LOG_HEADER.PLACEMENT_ENV.length));
+    return true;
+  }
+  return false;
+}
 
-  for (const line of lines) {
-    if (stringStartsWith(line, LOG_HEADER.PLACEMENT_HEAD)) {
-      placementHead = stringTrim(stringSlice(line, LOG_HEADER.PLACEMENT_HEAD.length));
-    } else if (stringStartsWith(line, LOG_HEADER.PLACEMENT_PID)) {
-      placementPid = Number.parseInt(stringSlice(line, LOG_HEADER.PLACEMENT_PID.length), TEN);
-    } else if (stringStartsWith(line, LOG_HEADER.PLACEMENT_SHELL)) {
-      placementShell = Number.parseInt(stringSlice(line, LOG_HEADER.PLACEMENT_SHELL.length), TEN);
-    } else if (stringStartsWith(line, LOG_HEADER.PLACEMENT_HOST)) {
-      placementHost = stringTrim(stringSlice(line, LOG_HEADER.PLACEMENT_HOST.length));
-    } else if (stringStartsWith(line, LOG_HEADER.PLACEMENT_ENV)) {
-      placementEnvRaw = stringTrim(stringSlice(line, LOG_HEADER.PLACEMENT_ENV.length));
-    } else if (stringStartsWith(line, LOG_HEADER.PLACEMENT_RESULTS)) {
-      const jsonText = stringSlice(line, LOG_HEADER.PLACEMENT_RESULTS.length);
-      try {
-        results.push(JSON.parse(jsonText));
-      } catch (error) {
-        parseErrors.push(`malformed placement-results JSON: ${String(error?.message ?? error)}`);
-      }
-    } else {
-      const plannedMatch = regexExec(PLANNED_LINE_PATTERN, line);
-      if (plannedMatch) {
-        plannedCount = Number.parseInt(plannedMatch[ONE], TEN);
-      } else {
-        const totalsMatch = regexExec(TOTALS_LINE_PATTERN, line);
-        if (totalsMatch) {
-          summaryTotals = {
-            total: Number.parseInt(totalsMatch[ONE], TEN),
-            pass: Number.parseInt(totalsMatch[TWO], TEN),
-            fail: Number.parseInt(totalsMatch[THREE], TEN),
-            assertions: Number.parseInt(totalsMatch[FOURTH_INDEX], TEN),
-          };
-        }
-      }
+function applyLogBodyLine(state, line) {
+  if (stringStartsWith(line, LOG_HEADER.PLACEMENT_RESULTS)) {
+    const jsonText = stringSlice(line, LOG_HEADER.PLACEMENT_RESULTS.length);
+    try {
+      state.results.push(JSON.parse(jsonText));
+    } catch (error) {
+      state.parseErrors.push(`malformed placement-results JSON: ${String(error?.message ?? error)}`);
+    }
+    return;
+  }
+  const plannedMatch = regexExec(PLANNED_LINE_PATTERN, line);
+  if (plannedMatch) {
+    state.plannedCount = Number.parseInt(plannedMatch[ONE], TEN);
+    return;
+  }
+  const totalsMatch = regexExec(TOTALS_LINE_PATTERN, line);
+  if (totalsMatch) {
+    state.summaryTotals = {
+      total: Number.parseInt(totalsMatch[ONE], TEN),
+      pass: Number.parseInt(totalsMatch[TWO], TEN),
+      fail: Number.parseInt(totalsMatch[THREE], TEN),
+      assertions: Number.parseInt(totalsMatch[FOURTH_INDEX], TEN),
+    };
+  }
+}
+
+function parsePlacementLogContent(content, defaultHost) {
+  const state = {
+    host: defaultHost,
+    placementHead: TEXT.EMPTY,
+    placementPid: null,
+    placementShell: null,
+    placementEnvRaw: TEXT.EMPTY,
+    plannedCount: null,
+    summaryTotals: null,
+    results: [],
+    parseErrors: [],
+  };
+
+  for (const line of stringSplit(content, LINE_BREAK_PATTERN)) {
+    if (!applyLogHeaderLine(state, line)) {
+      applyLogBodyLine(state, line);
     }
   }
 
   return {
-    host: placementHost,
-    placementHead,
-    placementPid,
-    placementShell,
-    placementEnvRaw,
-    placementEnv: parsePlacementEnv(placementEnvRaw),
-    plannedCount,
-    summaryTotals,
-    results,
-    parseErrors,
+    ...state,
+    placementEnv: parsePlacementEnv(state.placementEnvRaw),
   };
 }
 
@@ -487,6 +371,19 @@ function parseNdjsonContent(content) {
   return {rows, parseErrors};
 }
 
+function rowIdentityMatches(a, b) {
+  return Boolean(a) && Boolean(b) && a.file === b.file && a.ok === b.ok &&
+    a.assertions === b.assertions;
+}
+
+function rowAttemptMatches(a, b) {
+  return a.attempt === b.attempt && Boolean(a.retriedOnce) === Boolean(b.retriedOnce);
+}
+
+function rowsMatchExactly(a, b) {
+  return rowIdentityMatches(a, b) && rowAttemptMatches(a, b);
+}
+
 function summarizeResultsMatch(logResults, ndjsonRows) {
   if (logResults.length !== ndjsonRows.length) {
     return `log placement-results count (${logResults.length}) != ndjson count (${ndjsonRows.length})`;
@@ -494,43 +391,83 @@ function summarizeResultsMatch(logResults, ndjsonRows) {
   for (let i = ZERO; i < logResults.length; i += ONE) {
     const a = logResults[i];
     const b = ndjsonRows[i];
-    if (a?.file !== b?.file || a?.ok !== b?.ok || a?.assertions !== b?.assertions ||
-        a?.attempt !== b?.attempt || Boolean(a?.retriedOnce) !== Boolean(b?.retriedOnce)) {
+    if (!rowsMatchExactly(a, b)) {
       return `result mismatch at entry ${i}: log=${JSON.stringify(a)} ndjson=${JSON.stringify(b)}`;
     }
   }
   return TEXT.EMPTY;
 }
 
+function validatePlacementSummaryTotals(summaryTotals, ctx, problems) {
+  if (summaryTotals === null) return;
+  const {total, pass, fail, assertions} = summaryTotals;
+  const hasFailure = fail !== ZERO || pass !== total;
+  const missingAssertions = total > ZERO && assertions <= ZERO;
+  if (hasFailure || missingAssertions) {
+    addProblem(
+      problems,
+      PROBLEM_CODE.PLACEMENT_SUMMARY_FAILED,
+      `${ctx.jobName}/${ctx.host}: summary total=${total} pass=${pass} fail=${fail} ` +
+      `assertions=${assertions}`,
+      {host: ctx.host, job: ctx.jobName},
+    );
+  }
+}
+
+function validateRowPassed(row, ctx, problems) {
+  const safeRow = isPlainObject(row) ? row : {};
+  const passed = safeRow.ok === true && Number(safeRow.assertions) > ZERO;
+  if (passed) return;
+  const fileLabel = safeRow.file || TEXT.UNKNOWN;
+  addProblem(
+    problems,
+    PROBLEM_CODE.TEST_CASE_FAILED,
+    `${ctx.jobName}/${ctx.host}: file=${fileLabel} ok=${safeRow.ok} assertions=${safeRow.assertions}`,
+    {host: ctx.host, job: ctx.jobName, file: safeRow.file},
+  );
+}
+
+function validateRowRetryPolicy(row, ctx, allowRetries, problems) {
+  if (allowRetries) return;
+  const safeRow = isPlainObject(row) ? row : {};
+  const retried = safeRow.retriedOnce === true || Number(safeRow.attempt) > ONE;
+  if (!retried) return;
+  const fileLabel = safeRow.file || TEXT.UNKNOWN;
+  addProblem(
+    problems,
+    PROBLEM_CODE.RETRY_POLICY_VIOLATED,
+    `${ctx.jobName}/${ctx.host}: retry observed for ${fileLabel} (attempt=${safeRow.attempt})`,
+    {host: ctx.host, job: ctx.jobName, file: safeRow.file},
+  );
+}
+
+function validateSingleResultRow(row, ctx, allowRetries, problems) {
+  validateRowPassed(row, ctx, problems);
+  validateRowRetryPolicy(row, ctx, allowRetries, problems);
+}
+
 function validateHostExecutionFacts(hostRecord, options, problems) {
-  const {claimedSha, allowRetries = false, jobName} = options;
-  const {host, parsedLog, ndjsonRows} = hostRecord;
+  const ctx = {host: hostRecord.host, jobName: options.jobName};
+  const {parsedLog, ndjsonRows} = hostRecord;
   const foundHead = parsedLog.placementHead || TEXT.UNAVAILABLE;
 
-  if (!isValidSha(parsedLog.placementHead) || parsedLog.placementHead !== claimedSha) {
+  if (!isValidSha(parsedLog.placementHead) || parsedLog.placementHead !== options.claimedSha) {
     addProblem(
       problems,
       PROBLEM_CODE.EXECUTION_SHA_MISMATCH,
-      `${jobName}/${host}: placement-head=${foundHead} != ${claimedSha}`,
-      {host, job: jobName},
+      `${ctx.jobName}/${ctx.host}: placement-head=${foundHead} != ${options.claimedSha}`,
+      {host: ctx.host, job: ctx.jobName},
     );
   }
-
   for (const err of parsedLog.parseErrors) {
-    addProblem(problems, PROBLEM_CODE.JOB_FAILED, `${jobName}/${host}: ${err}`, {host, job: jobName});
+    addProblem(
+      problems,
+      PROBLEM_CODE.JOB_FAILED,
+      `${ctx.jobName}/${ctx.host}: ${err}`,
+      {host: ctx.host, job: ctx.jobName},
+    );
   }
-
-  if (parsedLog.summaryTotals !== null) {
-    const {total, pass, fail, assertions} = parsedLog.summaryTotals;
-    if (fail !== ZERO || pass !== total || (total > ZERO && assertions <= ZERO)) {
-      addProblem(
-        problems,
-        PROBLEM_CODE.PLACEMENT_SUMMARY_FAILED,
-        `${jobName}/${host}: summary total=${total} pass=${pass} fail=${fail} assertions=${assertions}`,
-        {host, job: jobName},
-      );
-    }
-  }
+  validatePlacementSummaryTotals(parsedLog.summaryTotals, ctx, problems);
 
   if (parsedLog.results.length > ZERO && ndjsonRows !== null) {
     const mismatch = summarizeResultsMatch(parsedLog.results, ndjsonRows);
@@ -538,32 +475,17 @@ function validateHostExecutionFacts(hostRecord, options, problems) {
       addProblem(
         problems,
         PROBLEM_CODE.RESULTS_MISMATCH,
-        `${jobName}/${host}: ${mismatch}`,
-        {host, job: jobName},
+        `${ctx.jobName}/${ctx.host}: ${mismatch}`,
+        {host: ctx.host, job: ctx.jobName},
       );
     }
   }
 
   const effectiveRows = ndjsonRows !== null ? ndjsonRows : parsedLog.results;
+  const allowRetries = options.allowRetries === true;
   for (const row of effectiveRows) {
-    if (row?.ok !== true || !(Number(row?.assertions) > ZERO)) {
-      addProblem(
-        problems,
-        PROBLEM_CODE.TEST_CASE_FAILED,
-        `${jobName}/${host}: file=${row?.file || TEXT.UNKNOWN} ok=${row?.ok} assertions=${row?.assertions}`,
-        {host, job: jobName, file: row?.file},
-      );
-    }
-    if (!allowRetries && (row?.retriedOnce === true || Number(row?.attempt) > ONE)) {
-      addProblem(
-        problems,
-        PROBLEM_CODE.RETRY_POLICY_VIOLATED,
-        `${jobName}/${host}: retry observed for ${row?.file || TEXT.UNKNOWN} (attempt=${row?.attempt})`,
-        {host, job: jobName, file: row?.file},
-      );
-    }
+    validateSingleResultRow(row, ctx, allowRetries, problems);
   }
-
   return effectiveRows;
 }
 
@@ -589,65 +511,60 @@ function readJobNdjsonByHost(jobDir, jobName, dirEntries, problems) {
   return ndjsonByHost;
 }
 
-function inspectLabJobDirectory(jobDir, options, problems) {
-  const jobName = path.basename(jobDir);
-  if (!fs.existsSync(jobDir)) {
-    addProblem(problems, PROBLEM_CODE.JOBS_MISSING, `job directory does not exist: ${jobDir}`);
-    return null;
-  }
-
+function readJobExitStatus(jobDir, jobName, problems) {
   const exitRead = readJsonArtifact(jobDir, path.join(jobDir, EXIT_JSON_NAME));
   if (!exitRead.ok) {
-    addProblem(
-      problems,
-      exitRead.missing ? PROBLEM_CODE.JOB_EXIT_MISSING : PROBLEM_CODE.JOB_PATH_UNSAFE,
-      `${jobName}: ${exitRead.reason}`,
-    );
-  } else if (!Number.isInteger(exitRead.value?.status) || exitRead.value.status !== ZERO) {
-    addProblem(
-      problems,
-      PROBLEM_CODE.JOB_FAILED,
-      `${jobName}: exit.json status=${exitRead.value?.status}`,
-    );
+    const code = exitRead.missing ? PROBLEM_CODE.JOB_EXIT_MISSING : PROBLEM_CODE.JOB_PATH_UNSAFE;
+    addProblem(problems, code, `${jobName}: ${exitRead.reason}`);
+    return {exitStatus: TEXT.UNAVAILABLE, finishedAt: TEXT.EMPTY};
   }
+  const exitVal = isPlainObject(exitRead.value) ? exitRead.value : {};
+  if (exitVal.status !== ZERO) {
+    addProblem(problems, PROBLEM_CODE.JOB_FAILED, `${jobName}: exit.json status=${exitVal.status}`);
+  }
+  return {exitStatus: exitVal.status, finishedAt: exitVal.finishedAt || TEXT.EMPTY};
+}
 
+function readJobSelectionInfo(jobDir, jobName, claimedSha, problems) {
   const selectionRead = readJsonArtifact(jobDir, path.join(jobDir, SELECTION_JSON_NAME));
-  let plannedFiles = [];
   if (!selectionRead.ok) {
     addProblem(problems, PROBLEM_CODE.SELECTION_MISSING, `${jobName}: ${selectionRead.reason}`);
-  } else {
-    if (selectionRead.value?.sha !== options.claimedSha) {
-      addProblem(
-        problems,
-        PROBLEM_CODE.SELECTION_SHA_MISMATCH,
-        `${jobName}: selection.json sha=${selectionRead.value?.sha} != ${options.claimedSha}`,
-      );
-    }
-    if (Array.isArray(selectionRead.value?.files)) {
-      plannedFiles = [...selectionRead.value.files];
-    }
+    return {selectionSha: TEXT.EMPTY, plannedFiles: []};
   }
+  const selVal = isPlainObject(selectionRead.value) ? selectionRead.value : {};
+  if (selVal.sha !== claimedSha) {
+    addProblem(
+      problems,
+      PROBLEM_CODE.SELECTION_SHA_MISMATCH,
+      `${jobName}: selection.json sha=${selVal.sha} != ${claimedSha}`,
+    );
+  }
+  const plannedFiles = Array.isArray(selVal.files) ? [...selVal.files] : [];
+  return {selectionSha: selVal.sha || TEXT.EMPTY, plannedFiles};
+}
 
-  const dirEntries = fs.readdirSync(jobDir);
-  const ndjsonByHost = readJobNdjsonByHost(jobDir, jobName, dirEntries, problems);
+function readJobExitAndSelection(jobDir, jobName, claimedSha, problems) {
+  const exitInfo = readJobExitStatus(jobDir, jobName, problems);
+  const selectionInfo = readJobSelectionInfo(jobDir, jobName, claimedSha, problems);
+  return {...exitInfo, ...selectionInfo};
+}
+
+function readJobHostLogs(jobDir, jobName, ndjsonByHost, logFiles, options, problems) {
   const knownHosts = [...ndjsonByHost.keys()];
-  const logFiles = arrayFilter(dirEntries, (name) => stringEndsWith(name, PLACEMENT_LOG_EXT));
-  if (logFiles.length === ZERO) {
-    addProblem(problems, PROBLEM_CODE.PLACEMENT_LOG_MISSING, `${jobName}: no placement *.log files`);
-  }
-
   const hosts = [];
   const executedFiles = new Map();
+
   for (const logFile of logFiles) {
     const rawLog = readVerifiedFile(jobDir, path.join(jobDir, logFile));
     if (!rawLog.ok) {
       addProblem(problems, PROBLEM_CODE.JOB_PATH_UNSAFE, `${jobName}/${logFile}: ${rawLog.reason}`);
       continue;
     }
-    const defaultHost = inferHostFromLogName(logFile, knownHosts);
-    const parsedLog = parsePlacementLogContent(rawLog.content, defaultHost);
-    const ndjsonRows = ndjsonByHost.has(parsedLog.host) ?
-      ndjsonByHost.get(parsedLog.host) : null;
+    const parsedLog = parsePlacementLogContent(
+      rawLog.content,
+      inferHostFromLogName(logFile, knownHosts),
+    );
+    const ndjsonRows = ndjsonByHost.get(parsedLog.host) || null;
     const effectiveRows = validateHostExecutionFacts(
       {host: parsedLog.host, logFile, parsedLog, ndjsonRows},
       {...options, jobName},
@@ -669,60 +586,54 @@ function inspectLabJobDirectory(jobDir, options, problems) {
     });
   }
 
-  if (ndjsonByHost.size === ZERO && fs.existsSync(path.join(jobDir, MERGED_NDJSON_NAME))) {
-    const mergedRaw = readVerifiedFile(jobDir, path.join(jobDir, MERGED_NDJSON_NAME));
-    if (mergedRaw.ok) {
-      const mergedParsed = parseNdjsonContent(mergedRaw.content);
-      for (const row of mergedParsed.rows) {
-        if (row?.file && !executedFiles.has(row.file)) executedFiles.set(row.file, row);
-      }
-    }
+  return {hosts, executedFiles};
+}
+
+function mergeFallbackNdjson(jobDir, ndjsonByHost, executedFiles) {
+  const mergedPath = path.join(jobDir, MERGED_NDJSON_NAME);
+  if (ndjsonByHost.size > ZERO || !fs.existsSync(mergedPath)) return;
+  const mergedRaw = readVerifiedFile(jobDir, mergedPath);
+  if (!mergedRaw.ok) return;
+  for (const row of parseNdjsonContent(mergedRaw.content).rows) {
+    if (row?.file && !executedFiles.has(row.file)) executedFiles.set(row.file, row);
   }
+}
+
+function inspectLabJobDirectory(jobDir, options, problems) {
+  const jobName = path.basename(jobDir);
+  if (!fs.existsSync(jobDir)) {
+    addProblem(problems, PROBLEM_CODE.JOBS_MISSING, `job directory does not exist: ${jobDir}`);
+    return null;
+  }
+
+  const meta = readJobExitAndSelection(jobDir, jobName, options.claimedSha, problems);
+  const dirEntries = fs.readdirSync(jobDir);
+  const ndjsonByHost = readJobNdjsonByHost(jobDir, jobName, dirEntries, problems);
+  const logFiles = arrayFilter(dirEntries, (name) => stringEndsWith(name, PLACEMENT_LOG_EXT));
+  if (logFiles.length === ZERO) {
+    addProblem(problems, PROBLEM_CODE.PLACEMENT_LOG_MISSING, `${jobName}: no placement *.log files`);
+  }
+
+  const {hosts, executedFiles} = readJobHostLogs(
+    jobDir,
+    jobName,
+    ndjsonByHost,
+    logFiles,
+    options,
+    problems,
+  );
+  mergeFallbackNdjson(jobDir, ndjsonByHost, executedFiles);
 
   return {
     jobName,
     jobDir,
-    exitStatus: exitRead.ok ? exitRead.value?.status : null,
-    finishedAt: exitRead.ok ? exitRead.value?.finishedAt || TEXT.EMPTY : TEXT.EMPTY,
-    selectionSha: selectionRead.ok ? selectionRead.value?.sha || TEXT.EMPTY : TEXT.EMPTY,
-    plannedFiles,
+    ...meta,
     hosts,
     executedFiles,
   };
 }
 
 export {
-  ARTIFACT_STATUS,
-  CLAIM_KIND,
-  CLI_FLAGS,
-  EXIT_ADMITTED,
-  EXIT_REFUSED,
-  EXIT_USAGE_OR_UNAVAILABLE,
-  FORMAT_MODES,
-  LAB_EVIDENCE_SCHEMA,
-  LABEL,
-  MESSAGE,
-  MIN_ISOLATED_NODES,
-  ONE,
-  OUTCOME,
-  PLACEMENT_ENV_KEYS,
-  PROBLEM_CODE,
-  REMOTE_STATE,
-  REPORT_TITLES,
-  TEXT,
-  TWO,
-  ZERO,
-  addProblem,
-  arrayEvery,
-  arrayFilter,
-  arrayJoin,
-  arrayMap,
-  arraySome,
   inspectGitBranchState,
   inspectLabJobDirectory,
-  isPlainObject,
-  isValidSha,
-  stringSplit,
-  stringToLowerCase,
-  stringTrim,
 };

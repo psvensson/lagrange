@@ -41,32 +41,46 @@ import {
   arrayJoin,
   arrayMap,
   arraySome,
-  inspectGitBranchState,
-  inspectLabJobDirectory,
   isPlainObject,
   isValidSha,
   stringSplit,
   stringToLowerCase,
   stringTrim,
+} from './lab-evidence-report-constants.js';
+import {
+  inspectGitBranchState,
+  inspectLabJobDirectory,
 } from './lab-evidence-report-inputs.js';
 
-function normalizeHostManifestMap(hostManifests) {
-  const byHost = new Map();
-  const list = Array.isArray(hostManifests) ?
-    hostManifests :
-    (Array.isArray(hostManifests?.hosts) ? hostManifests.hosts : []);
-  for (const item of list) {
-    if (isPlainObject(item) && typeof item.host === TEXT.TYPE_STRING && item.host.length > ZERO) {
+function addManifestArrayItems(byHost, items) {
+  for (const item of items) {
+    if (!isPlainObject(item)) continue;
+    if (typeof item.host === TEXT.TYPE_STRING && item.host.length > ZERO) {
       byHost.set(item.host, item);
     }
   }
-  if (isPlainObject(hostManifests) && !Array.isArray(hostManifests.hosts)) {
-    for (const [key, val] of Object.entries(hostManifests)) {
-      if (isPlainObject(val)) {
-        byHost.set(val.host || key, {host: val.host || key, ...val});
-      }
-    }
+}
+
+function addManifestObjectEntries(byHost, manifestObj) {
+  for (const [key, val] of Object.entries(manifestObj)) {
+    if (!isPlainObject(val)) continue;
+    const hostKey = val.host || key;
+    byHost.set(hostKey, {host: hostKey, ...val});
   }
+}
+
+function normalizeHostManifestMap(hostManifests) {
+  const byHost = new Map();
+  if (Array.isArray(hostManifests)) {
+    addManifestArrayItems(byHost, hostManifests);
+    return byHost;
+  }
+  if (!isPlainObject(hostManifests)) return byHost;
+  if (Array.isArray(hostManifests.hosts)) {
+    addManifestArrayItems(byHost, hostManifests.hosts);
+    return byHost;
+  }
+  addManifestObjectEntries(byHost, hostManifests);
   return byHost;
 }
 
@@ -120,6 +134,42 @@ function subsetMatches(actual, expected) {
   return true;
 }
 
+function validateNotApplicableArtifact(artifact, host, problems) {
+  const hasReason = typeof artifact.reason === TEXT.TYPE_STRING &&
+    stringTrim(artifact.reason).length > ZERO;
+  if (hasReason) return true;
+  addProblem(
+    problems,
+    PROBLEM_CODE.HOST_ARTIFACT_MISMATCH,
+    `${host}: not_applicable artifact missing explicit reason`,
+    {host},
+  );
+  return false;
+}
+
+function validateApplicableArtifact(artifact, host, claimedSha, problems) {
+  if (describeArtifact(artifact) === TEXT.UNAVAILABLE) {
+    addProblem(
+      problems,
+      PROBLEM_CODE.HOST_ARTIFACT_MISMATCH,
+      `${host}: missing artifact digest or identifier`,
+      {host},
+    );
+    return false;
+  }
+  const artSha = artifact?.sourceSha || artifact?.buildSha;
+  if (artSha && artSha !== claimedSha) {
+    addProblem(
+      problems,
+      PROBLEM_CODE.HOST_ARTIFACT_MISMATCH,
+      `${host}: artifact provenance SHA=${artSha} != ${claimedSha}`,
+      {host},
+    );
+    return false;
+  }
+  return true;
+}
+
 function validateHostArtifactField(manifest, host, expectedHostProfile, claimedSha, problems) {
   const artifact = manifest.artifact;
   if (artifact === undefined || artifact === null) {
@@ -131,46 +181,42 @@ function validateHostArtifactField(manifest, host, expectedHostProfile, claimedS
     );
     return;
   }
-  if (isPlainObject(artifact) && artifact.status === ARTIFACT_STATUS.NOT_APPLICABLE) {
-    if (typeof artifact.reason !== TEXT.TYPE_STRING ||
-        stringTrim(artifact.reason).length === ZERO) {
-      addProblem(
-        problems,
-        PROBLEM_CODE.HOST_ARTIFACT_MISMATCH,
-        `${host}: not_applicable artifact missing explicit reason`,
-        {host},
-      );
-      return;
-    }
-  } else {
-    if (describeArtifact(artifact) === TEXT.UNAVAILABLE) {
-      addProblem(
-        problems,
-        PROBLEM_CODE.HOST_ARTIFACT_MISMATCH,
-        `${host}: missing artifact digest or identifier`,
-        {host},
-      );
-      return;
-    }
-    const artSha = artifact?.sourceSha || artifact?.buildSha;
-    if (artSha && artSha !== claimedSha) {
-      addProblem(
-        problems,
-        PROBLEM_CODE.HOST_ARTIFACT_MISMATCH,
-        `${host}: artifact provenance SHA=${artSha} != ${claimedSha}`,
-        {host},
-      );
-      return;
-    }
-  }
-  if (expectedHostProfile?.artifact !== undefined &&
-      !artifactMatches(artifact, expectedHostProfile.artifact)) {
-    const actualDesc = describeArtifact(artifact);
-    const expDesc = describeArtifact(expectedHostProfile.artifact);
+  const validShape = isPlainObject(artifact) && artifact.status === ARTIFACT_STATUS.NOT_APPLICABLE ?
+    validateNotApplicableArtifact(artifact, host, problems) :
+    validateApplicableArtifact(artifact, host, claimedSha, problems);
+  if (!validShape) return;
+
+  const expectedArtifact = expectedHostProfile?.artifact;
+  if (expectedArtifact !== undefined && !artifactMatches(artifact, expectedArtifact)) {
     addProblem(
       problems,
       PROBLEM_CODE.HOST_ARTIFACT_MISMATCH,
-      `${host}: artifact ${actualDesc} != expected ${expDesc}`,
+      `${host}: artifact ${describeArtifact(artifact)} != expected ${describeArtifact(expectedArtifact)}`,
+      {host},
+    );
+  }
+}
+
+function validateRuntimeAndBackend(manifest, host, expectedHostProfile, problems) {
+  const badRuntime = describeRuntime(manifest.runtime) === TEXT.UNAVAILABLE ||
+    !subsetMatches(manifest.runtime, expectedHostProfile?.runtime);
+  if (badRuntime) {
+    addProblem(
+      problems,
+      PROBLEM_CODE.HOST_RUNTIME_MISMATCH,
+      `${host}: runtime ${JSON.stringify(manifest.runtime)} incompatible with ` +
+      `${JSON.stringify(expectedHostProfile?.runtime)}`,
+      {host},
+    );
+  }
+  const badBackend = describeBackend(manifest.backend) === TEXT.UNAVAILABLE ||
+    !subsetMatches(manifest.backend, expectedHostProfile?.backend);
+  if (badBackend) {
+    addProblem(
+      problems,
+      PROBLEM_CODE.HOST_BACKEND_MISMATCH,
+      `${host}: backend ${JSON.stringify(manifest.backend)} incompatible with ` +
+      `${JSON.stringify(expectedHostProfile?.backend)}`,
       {host},
     );
   }
@@ -185,26 +231,7 @@ function validateManifestFields(manifest, host, expectedHostProfile, claimedSha,
       {host},
     );
   }
-  if (describeRuntime(manifest.runtime) === TEXT.UNAVAILABLE ||
-      !subsetMatches(manifest.runtime, expectedHostProfile?.runtime)) {
-    addProblem(
-      problems,
-      PROBLEM_CODE.HOST_RUNTIME_MISMATCH,
-      `${host}: runtime ${JSON.stringify(manifest.runtime)} incompatible with ` +
-      `${JSON.stringify(expectedHostProfile?.runtime)}`,
-      {host},
-    );
-  }
-  if (describeBackend(manifest.backend) === TEXT.UNAVAILABLE ||
-      !subsetMatches(manifest.backend, expectedHostProfile?.backend)) {
-    addProblem(
-      problems,
-      PROBLEM_CODE.HOST_BACKEND_MISMATCH,
-      `${host}: backend ${JSON.stringify(manifest.backend)} incompatible with ` +
-      `${JSON.stringify(expectedHostProfile?.backend)}`,
-      {host},
-    );
-  }
+  validateRuntimeAndBackend(manifest, host, expectedHostProfile, problems);
   validateHostArtifactField(manifest, host, expectedHostProfile, claimedSha, problems);
   if (!isPlainObject(manifest.config) ||
       !subsetMatches(manifest.config, expectedHostProfile?.config)) {
@@ -218,31 +245,34 @@ function validateManifestFields(manifest, host, expectedHostProfile, claimedSha,
   }
 }
 
+function validateSingleHostEnvConfig(hostEntry, manifest, problems) {
+  const envMode = hostEntry.placementEnv?.[PLACEMENT_ENV_KEYS.MODE];
+  if (envMode && manifest.config?.mode && envMode !== manifest.config.mode) {
+    addProblem(
+      problems,
+      PROBLEM_CODE.HOST_CONFIG_MISMATCH,
+      `${hostEntry.host}: manifest config.mode=${manifest.config.mode} ` +
+      `contradicts placement-env mode=${envMode}`,
+      {host: hostEntry.host},
+    );
+  }
+  const envRetry = hostEntry.placementEnv?.[PLACEMENT_ENV_KEYS.RETRY];
+  const cfgRetry = manifest.config?.retry;
+  if (envRetry !== undefined && cfgRetry !== undefined && String(cfgRetry) !== String(envRetry)) {
+    addProblem(
+      problems,
+      PROBLEM_CODE.HOST_CONFIG_MISMATCH,
+      `${hostEntry.host}: manifest config.retry=${cfgRetry} ` +
+      `contradicts placement-env retry=${envRetry}`,
+      {host: hostEntry.host},
+    );
+  }
+}
+
 function validatePlacementEnvConfig(participatingHosts, manifestMap, problems) {
   for (const hostEntry of participatingHosts) {
     const manifest = manifestMap.get(hostEntry.host);
-    if (!manifest) continue;
-    const envMode = hostEntry.placementEnv?.[PLACEMENT_ENV_KEYS.MODE];
-    const envRetry = hostEntry.placementEnv?.[PLACEMENT_ENV_KEYS.RETRY];
-    if (envMode && manifest.config?.mode && envMode !== manifest.config.mode) {
-      addProblem(
-        problems,
-        PROBLEM_CODE.HOST_CONFIG_MISMATCH,
-        `${hostEntry.host}: manifest config.mode=${manifest.config.mode} ` +
-        `contradicts placement-env mode=${envMode}`,
-        {host: hostEntry.host},
-      );
-    }
-    if (envRetry !== undefined && manifest.config?.retry !== undefined &&
-        String(manifest.config.retry) !== String(envRetry)) {
-      addProblem(
-        problems,
-        PROBLEM_CODE.HOST_CONFIG_MISMATCH,
-        `${hostEntry.host}: manifest config.retry=${manifest.config.retry} ` +
-        `contradicts placement-env retry=${envRetry}`,
-        {host: hostEntry.host},
-      );
-    }
+    if (manifest) validateSingleHostEnvConfig(hostEntry, manifest, problems);
   }
 }
 
@@ -279,9 +309,29 @@ function validateHostManifests(
   return manifestMap;
 }
 
-function validateTopologyScope(claimKind, topologyScope, problems) {
-  const requiresIsolation = claimKind === CLAIM_KIND.CROSS_NODE_CDC_PROPAGATION ||
+function requiresIsolatedTopology(claimKind) {
+  return claimKind === CLAIM_KIND.CROSS_NODE_CDC_PROPAGATION ||
     claimKind === CLAIM_KIND.MULTI_HOST_FORMATION;
+}
+
+function unverifiedTopology(claimKind) {
+  return {
+    claimKind: claimKind || TEXT.UNVERIFIED,
+    topology: TEXT.UNVERIFIED,
+    isolatedNodeCaches: null,
+    sharedCache: null,
+    nodeCount: null,
+  };
+}
+
+function extractNodeCount(topologyScope) {
+  const count = topologyScope.nodeCount !== undefined ?
+    topologyScope.nodeCount : topologyScope.processCount;
+  return Number(count !== undefined ? count : ZERO);
+}
+
+function validateTopologyScope(claimKind, topologyScope, problems) {
+  const requiresIsolation = requiresIsolatedTopology(claimKind);
   if (!isPlainObject(topologyScope)) {
     if (requiresIsolation) {
       addProblem(
@@ -290,18 +340,12 @@ function validateTopologyScope(claimKind, topologyScope, problems) {
         `claimKind=${claimKind} requires explicit topologyScope`,
       );
     }
-    return {
-      claimKind: claimKind || TEXT.UNVERIFIED,
-      topology: TEXT.UNVERIFIED,
-      isolatedNodeCaches: null,
-      sharedCache: null,
-      nodeCount: null,
-    };
+    return unverifiedTopology(claimKind);
   }
 
   const isolated = topologyScope.isolatedNodeCaches === true;
   const shared = topologyScope.sharedCache === true;
-  const nodeCount = Number(topologyScope.nodeCount ?? topologyScope.processCount ?? ZERO);
+  const nodeCount = extractNodeCount(topologyScope);
 
   if (isolated && shared) {
     addProblem(
@@ -310,7 +354,8 @@ function validateTopologyScope(claimKind, topologyScope, problems) {
       MESSAGE.CONTRADICTORY_TOPOLOGY,
     );
   }
-  if (requiresIsolation && (shared || !isolated || nodeCount < MIN_ISOLATED_NODES)) {
+  const failsIsolation = shared || !isolated || nodeCount < MIN_ISOLATED_NODES;
+  if (requiresIsolation && failsIsolation) {
     addProblem(
       problems,
       PROBLEM_CODE.SHARED_CACHE_SUBSTITUTION_REFUSED,
@@ -476,63 +521,45 @@ function buildHostSummaryRows(participatingHosts, manifestMap) {
   return {hostSummary, totals: {files, pass, fail, assertions}};
 }
 
-/**
- * Inspect original git refs, multi-host lab job records, per-host manifests,
- * and topology scope, returning an admitted or explicitly refused factual report.
- * @param {Object} input
- * @return {Object}
- */
-function evaluateLabEvidence(input) {
-  const problems = [];
-  const repoRoot = input?.repoRoot || process.cwd();
-  const claimedSha = stringToLowerCase(stringTrim(String(input?.claimedSha || TEXT.EMPTY)));
+const VALUE_FLAG_OPT_KEY = Object.freeze({
+  [CLI_FLAGS.REPO]: 'repoRoot',
+  [CLI_FLAGS.CLAIMED_SHA]: 'claimedSha',
+  [CLI_FLAGS.TARGET_REF]: 'targetRef',
+  [CLI_FLAGS.REMOTE]: 'remote',
+  [CLI_FLAGS.REMOTE_REF]: 'remoteRef',
+  [CLI_FLAGS.ORIGIN_MAIN_REF]: 'originMainRef',
+  [CLI_FLAGS.HOST_MANIFEST]: 'hostManifestPath',
+  [CLI_FLAGS.EXPECTED_HOST]: 'expectedHostPath',
+  [CLI_FLAGS.CLAIM_KIND]: 'claimKind',
+  [CLI_FLAGS.TOPOLOGY_JSON]: 'topologyPath',
+  [CLI_FLAGS.FORMAT]: 'format',
+  [CLI_FLAGS.OUT]: 'outPath',
+});
 
-  if (!isValidSha(claimedSha)) {
-    addProblem(
-      problems,
-      PROBLEM_CODE.CLAIMED_SHA_INVALID,
-      `claimedSha must be a 40-hex commit SHA, got ${String(input?.claimedSha)}`,
-    );
-  }
+const BOOL_FLAG_OPT_KEY = Object.freeze({
+  [CLI_FLAGS.REQUIRE_REMOTE_PUSHED]: 'requireRemotePushed',
+  [CLI_FLAGS.ALLOW_RETRIES]: 'allowRetries',
+});
 
-  const gitState = inspectGitBranchState({...input, repoRoot, claimedSha}, problems);
-  const jobDirs = Array.isArray(input?.jobDirs) ? input.jobDirs : [];
+function loadParsedJobs(jobDirs, repoRoot, claimedSha, allowRetries, problems) {
   if (jobDirs.length === ZERO) {
     addProblem(problems, PROBLEM_CODE.JOBS_MISSING, MESSAGE.JOBS_REQUIRED);
+    return {jobs: [], participatingHosts: []};
   }
-
   const jobs = [];
-  for (const dir of jobDirs) {
-    const parsedJob = inspectLabJobDirectory(
-      path.isAbsolute(dir) ? dir : path.join(repoRoot, dir),
-      {claimedSha, allowRetries: input?.allowRetries === true},
-      problems,
-    );
-    if (parsedJob !== null) jobs.push(parsedJob);
-  }
-
   const participatingHosts = [];
-  for (const job of jobs) {
-    for (const hostEntry of job.hosts) participatingHosts.push(hostEntry);
+  for (const dir of jobDirs) {
+    const absDir = path.isAbsolute(dir) ? dir : path.join(repoRoot, dir);
+    const parsedJob = inspectLabJobDirectory(absDir, {claimedSha, allowRetries}, problems);
+    if (parsedJob === null) continue;
+    jobs.push(parsedJob);
+    for (const hostEntry of parsedJob.hosts) participatingHosts.push(hostEntry);
   }
+  return {jobs, participatingHosts};
+}
 
-  const manifestMap = validateHostManifests(
-    participatingHosts,
-    input?.hostManifests,
-    input?.expectedHostProfile,
-    claimedSha,
-    problems,
-  );
-
-  validateRequiredFilesCoverage(
-    jobs,
-    input?.requiredFiles,
-    input?.requireAllPlannedFiles !== false,
-    problems,
-  );
-  const topology = validateTopologyScope(input?.claimKind, input?.topologyScope, problems);
-
-  if (input?.applicabilityReceipt) {
+function validateExternalReceipts(input, repoRoot, claimedSha, problems) {
+  if (input.applicabilityReceipt) {
     const appCheck = validateEvidenceApplicability(repoRoot, input.applicabilityReceipt);
     if (!appCheck.valid) {
       addProblem(
@@ -542,11 +569,11 @@ function evaluateLabEvidence(input) {
       );
     }
   }
-
-  if (input?.executionReport) {
+  if (input.executionReport) {
+    const requiredFiles = Array.isArray(input.requiredFiles) ? input.requiredFiles : undefined;
     const execCheck = executionReportProblems(input.executionReport, {
       sha: claimedSha,
-      requiredFiles: Array.isArray(input?.requiredFiles) ? input.requiredFiles : undefined,
+      requiredFiles,
     });
     for (const execProb of execCheck.problems) {
       addProblem(
@@ -556,6 +583,53 @@ function evaluateLabEvidence(input) {
       );
     }
   }
+}
+
+/**
+ * Inspect original git refs, multi-host lab job records, per-host manifests,
+ * and topology scope, returning an admitted or explicitly refused factual report.
+ * @param {Object} input
+ * @return {Object}
+ */
+function evaluateLabEvidence(input) {
+  const safeInput = isPlainObject(input) ? input : {};
+  const problems = [];
+  const repoRoot = safeInput.repoRoot || process.cwd();
+  const claimedSha = stringToLowerCase(stringTrim(String(safeInput.claimedSha || TEXT.EMPTY)));
+
+  if (!isValidSha(claimedSha)) {
+    addProblem(
+      problems,
+      PROBLEM_CODE.CLAIMED_SHA_INVALID,
+      `claimedSha must be a 40-hex commit SHA, got ${String(safeInput.claimedSha)}`,
+    );
+  }
+
+  const gitState = inspectGitBranchState({...safeInput, repoRoot, claimedSha}, problems);
+  const jobDirs = Array.isArray(safeInput.jobDirs) ? safeInput.jobDirs : [];
+  const {jobs, participatingHosts} = loadParsedJobs(
+    jobDirs,
+    repoRoot,
+    claimedSha,
+    safeInput.allowRetries === true,
+    problems,
+  );
+  const manifestMap = validateHostManifests(
+    participatingHosts,
+    safeInput.hostManifests,
+    safeInput.expectedHostProfile,
+    claimedSha,
+    problems,
+  );
+
+  validateRequiredFilesCoverage(
+    jobs,
+    safeInput.requiredFiles,
+    safeInput.requireAllPlannedFiles !== false,
+    problems,
+  );
+  const topology = validateTopologyScope(safeInput.claimKind, safeInput.topologyScope, problems);
+  validateExternalReceipts(safeInput, repoRoot, claimedSha, problems);
 
   const {hostSummary, totals} = buildHostSummaryRows(participatingHosts, manifestMap);
   const report = {
@@ -572,6 +646,13 @@ function evaluateLabEvidence(input) {
   return report;
 }
 
+function appendRequiredFilesFlag(opts, rawValue) {
+  for (const file of stringSplit(rawValue, TEXT.COMMA)) {
+    const trimmed = stringTrim(file);
+    if (trimmed.length > ZERO) opts.requiredFiles.push(trimmed);
+  }
+}
+
 function parseCliArgs(argv) {
   const opts = {
     repoRoot: process.cwd(),
@@ -583,27 +664,15 @@ function parseCliArgs(argv) {
   };
   for (let i = ZERO; i < argv.length; i += ONE) {
     const arg = argv[i];
-    if (arg === CLI_FLAGS.REPO) opts.repoRoot = argv[i += ONE];
-    else if (arg === CLI_FLAGS.CLAIMED_SHA) opts.claimedSha = argv[i += ONE];
-    else if (arg === CLI_FLAGS.TARGET_REF) opts.targetRef = argv[i += ONE];
-    else if (arg === CLI_FLAGS.REMOTE) opts.remote = argv[i += ONE];
-    else if (arg === CLI_FLAGS.REMOTE_REF) opts.remoteRef = argv[i += ONE];
-    else if (arg === CLI_FLAGS.ORIGIN_MAIN_REF) opts.originMainRef = argv[i += ONE];
-    else if (arg === CLI_FLAGS.REQUIRE_REMOTE_PUSHED) opts.requireRemotePushed = true;
-    else if (arg === CLI_FLAGS.ALLOW_RETRIES) opts.allowRetries = true;
-    else if (arg === CLI_FLAGS.JOB_DIR) opts.jobDirs.push(argv[i += ONE]);
-    else if (arg === CLI_FLAGS.HOST_MANIFEST) opts.hostManifestPath = argv[i += ONE];
-    else if (arg === CLI_FLAGS.EXPECTED_HOST) opts.expectedHostPath = argv[i += ONE];
-    else if (arg === CLI_FLAGS.CLAIM_KIND) opts.claimKind = argv[i += ONE];
-    else if (arg === CLI_FLAGS.TOPOLOGY_JSON) opts.topologyPath = argv[i += ONE];
-    else if (arg === CLI_FLAGS.REQUIRED_FILES) {
-      const val = argv[i += ONE];
-      for (const file of stringSplit(val, TEXT.COMMA)) {
-        const trimmed = stringTrim(file);
-        if (trimmed.length > ZERO) opts.requiredFiles.push(trimmed);
-      }
-    } else if (arg === CLI_FLAGS.FORMAT) opts.format = argv[i += ONE];
-    else if (arg === CLI_FLAGS.OUT) opts.outPath = argv[i += ONE];
+    if (Object.hasOwn(BOOL_FLAG_OPT_KEY, arg)) {
+      opts[BOOL_FLAG_OPT_KEY[arg]] = true;
+    } else if (Object.hasOwn(VALUE_FLAG_OPT_KEY, arg)) {
+      opts[VALUE_FLAG_OPT_KEY[arg]] = argv[i += ONE];
+    } else if (arg === CLI_FLAGS.JOB_DIR) {
+      opts.jobDirs.push(argv[i += ONE]);
+    } else if (arg === CLI_FLAGS.REQUIRED_FILES) {
+      appendRequiredFilesFlag(opts, argv[i += ONE]);
+    }
   }
   return opts;
 }
