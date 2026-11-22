@@ -999,15 +999,331 @@ test('Production construction 7 (2A negative): missing/conflicting founding iden
       {code: 'PLACEMENT_FOUND_IDENTITY_REQUIRED'},
       'CREATE GLOBAL INDEX fails closed when placement coordinator lacks hosting nodeId',
     );
+    t.equal(
+      engine.tableCreationService.schemaProvisioningJobOwner.retryTimersByWorkflowId.size,
+      0,
+      'Non-retryable placement refusal cancels/retains zero retry timers',
+    );
     coordinator.nodeId = originalNodeId;
+  });
+});
+
+function createProcessAbortableProxy(target) {
+  let dead = false;
+  return new Proxy(target, {
+    get(obj, prop, receiver) {
+      if (prop === 'markDead') {
+        return () => {
+          dead = true;
+        };
+      }
+      const value = Reflect.get(obj, prop, receiver);
+      if (typeof value === 'function') {
+        return (...args) => {
+          if (dead) {
+            return Promise.reject(Object.assign(
+              new Error('Simulated process crash'),
+              {code: 'SCHEMA_JOB_STALE_OWNER'},
+            ));
+          }
+          return value.apply(obj, args);
+        };
+      }
+      return value;
+    },
+  });
+}
+
+test('Production construction 8 (3C): interrupted GSI creation after metadata commit recovers cleanly with preserved identities', async (t) => {
+  await withFoundingPlacementEnvironment(async ({
+    engine,
+    leader,
+    coordinator,
+    cache,
+    gateway,
+    readiness,
+    partitionServices,
+    createdReplicas,
+  }) => {
+    await engine.executeQuery(
+      'INSERT INTO users (id, email, name, status) VALUES (?, ?, ?, ?)',
+      [10, 'alice@example.com', 'Alice', 'active'],
+    );
+    await engine.executeQuery(
+      'INSERT INTO users (id, email, name, status) VALUES (?, ?, ?, ?)',
+      [20, 'bob@example.com', 'Bob', 'pending'],
+    );
+
+    const {cdcIntegrationService, messageRouter} = engine;
+    await engine.shutdown();
+
+    const engine1Gateway = createProcessAbortableProxy(gateway);
+    const engine1Cdc = createProcessAbortableProxy(cdcIntegrationService);
+    const engine1 = new SQLQueryEngine({
+      nodeId: 'test-node',
+      systemCache: cache,
+      controlPlaneReadinessService: readiness,
+      controlPlaneSystemTableGateway: engine1Gateway,
+      cdcIntegrationService: engine1Cdc,
+      messageRouter,
+      partitionServicesProvider: () => partitionServices,
+      rebalanceCoordinator: coordinator,
+      autoStartDistributedTransactionRecovery: false,
+      migrationAutoWire: false,
+    });
+    engine1.setRebalanceCoordinator(coordinator);
+    engine1.tableCreationService.schemaProvisioningJobOwner.ownerId = 'crashed-engine';
+
+    let signalCrashPoint;
+    const crashPointReached = new Promise((resolve) => {
+      signalCrashPoint = resolve;
+    });
+    let releaseCrashedCall;
+    const crashedCallGate = new Promise((resolve) => {
+      releaseCrashedCall = resolve;
+    });
+
+    const originalProvision = engine1.provisionInitialTablePartition.bind(engine1);
+    let intercepted = false;
+    engine1.provisionInitialTablePartition = async (ctx) => {
+      if (!intercepted) {
+        intercepted = true;
+        signalCrashPoint();
+        await crashedCallGate;
+        throw Object.assign(
+          new Error('Simulated crash after METADATA_COMMITTED'),
+          {code: 'SCHEMA_JOB_STALE_OWNER'},
+        );
+      }
+      return originalProvision(ctx);
+    };
+
+    const createPromise = engine1.executeQuery(
+      'CREATE GLOBAL INDEX idx_users_email ON users (email)',
+    );
+    await crashPointReached;
+
+    t.equal(createdReplicas.length, 0, 'Zero replicas founded before crash after METADATA_COMMITTED');
+    const preRecoveryTable = gateway.db.prepare(
+      'SELECT * FROM tables WHERE table_id = ?',
+    ).get('__idx_users_idx_users_email');
+    const preRecoveryPartition = gateway.db.prepare(
+      'SELECT * FROM partitions WHERE partition_id = ?',
+    ).get('__gsi_users_idx_users_email_p0');
+    const preRecoverySchemaOp = gateway.db.prepare(
+      'SELECT * FROM schema_operations WHERE table_name = ?',
+    ).get('__idx_users_idx_users_email');
+    t.ok(preRecoveryTable, 'TABLES.TABLES persisted durable GSI table row before crash');
+    t.ok(preRecoveryPartition, 'TABLES.PARTITIONS persisted durable GSI partition row before crash');
+    t.ok(preRecoverySchemaOp, 'Durable schema_operations job persisted before crash');
+    t.equal(
+      preRecoverySchemaOp.table_id,
+      '__idx_users_idx_users_email',
+      'Durable schema job persists exact GSI dataset table_id',
+    );
+    const initialJobId = preRecoverySchemaOp.job_id;
+    const persistedIntent = JSON.parse(preRecoverySchemaOp.normalized_ddl);
+    t.equal(persistedIntent.tableId, '__idx_users_idx_users_email');
+    t.equal(persistedIntent.partitions?.[0]?.partitionId, '__gsi_users_idx_users_email_p0');
+
+    // Freeze dead process engine1 before creating restarted engine2 on durable state
+    engine1Gateway.markDead();
+    engine1Cdc.markDead();
+
+    const engine2 = new SQLQueryEngine({
+      nodeId: 'test-node',
+      systemCache: cache,
+      controlPlaneReadinessService: readiness,
+      controlPlaneSystemTableGateway: gateway,
+      cdcIntegrationService,
+      messageRouter,
+      partitionServicesProvider: () => partitionServices,
+      rebalanceCoordinator: coordinator,
+      autoStartDistributedTransactionRecovery: false,
+      migrationAutoWire: false,
+    });
+    engine2.setRebalanceCoordinator(coordinator);
+    const futureNow = () => Date.now() + 60000;
+    engine2.tableCreationService.schemaProvisioningJobOwner.ownerId = 'restarted-engine';
+    engine2.tableCreationService.schemaProvisioningJobOwner.now = futureNow;
+    engine2.tableCreationService.schemaProvisioningJobOwner.workflowCoordinator.now = futureNow;
+
+    try {
+      await engine2.indexService.initialize();
+      const recoveredJobs = await engine2.tableCreationService.resumeDurableProvisioningJobs();
+      t.equal(recoveredJobs.length, 1, 'Restart recovery resumes the single non-terminal GSI job');
+      t.equal(recoveredJobs[0].jobId, initialJobId, 'Recovered job preserves durable jobId');
+      t.equal(
+        recoveredJobs[0].tableId,
+        '__idx_users_idx_users_email',
+        'Recovered job preserves exact dataset tableId',
+      );
+      t.equal(
+        recoveredJobs[0].contractState,
+        'ready',
+        'Recovered GSI provisioning job completes to READY contract state',
+      );
+
+      const postRecoveryOp = gateway.db.prepare(
+        'SELECT * FROM schema_operations WHERE job_id = ?',
+      ).get(initialJobId);
+      t.equal(postRecoveryOp.status, 'SUCCEEDED', 'Recovered schema_operations job reached SUCCEEDED');
+      t.equal(postRecoveryOp.table_id, '__idx_users_idx_users_email');
+
+      t.equal(createdReplicas.length, 1, 'Recovery founded exactly 1 GSI PartitionService replica');
+      const foundedOp = ledgerRows(leader).find(
+        (row) => row.partition_id === '__gsi_users_idx_users_email_p0',
+      );
+      t.ok(foundedOp, 'Ledger recorded native FOUND operation for recovered GSI partition');
+      const [initialStep] = JSON.parse(foundedOp.steps_history);
+      t.equal(
+        initialStep.placementAdmission?.foundingIntentId,
+        `${initialJobId}:__gsi_users_idx_users_email_p0`,
+        'Recovery founding admission preserves exact deterministic foundingIntentId',
+      );
+
+      const reachedReadWrite = await waitForCondition(() => {
+        const row = gateway.db.prepare('SELECT * FROM indices WHERE index_name = ?').get('idx_users_email');
+        return row?.state === GLOBAL_INDEX_STATE.READ_WRITE;
+      }, 5000, 10);
+      t.equal(reachedReadWrite, true, 'Recovered GSI completes backfill and transitions to READ_WRITE');
+
+      const idxRecord = gateway.db.prepare(
+        'SELECT * FROM indices WHERE index_name = ?',
+      ).get('idx_users_email');
+      t.equal(idxRecord.backfill_total_rows, 2, 'Recovered GSI backfilled all existing base rows');
+
+      const selectRes = await engine2.executeQuery(
+        'SELECT * FROM users WHERE email = ? ORDER BY id ASC',
+        ['alice@example.com'],
+      );
+      t.equal(selectRes.success, true);
+      t.equal(
+        selectRes.globalIndexPlan?.accessPath,
+        GLOBAL_INDEX_ACCESS_PATH.GLOBAL_SECONDARY_INDEX,
+        'Query after crash recovery engages GLOBAL_SECONDARY_INDEX',
+      );
+      t.same(
+        selectRes.rows.map((r) => ({id: r.id, email: r.email, name: r.name})),
+        [{id: 10, email: 'alice@example.com', name: 'Alice'}],
+        'Recovered GSI serves authoritative row',
+      );
+    } finally {
+      releaseCrashedCall();
+      await createPromise.catch(() => {});
+      await engine1.shutdown().catch(() => {});
+      await engine2.shutdown().catch(() => {});
+    }
+  });
+});
+
+test('Production construction 9 (3D): temporary FORMATION_NOT_LATCHED preserves deferred retry and completes cleanly upon recovery while idle', async (t) => {
+  await withFoundingPlacementEnvironment(async ({
+    engine,
+    leader,
+    coordinator,
+    gateway,
+    createdReplicas,
+  }) => {
+    await engine.executeQuery(
+      'INSERT INTO users (id, email, name, status) VALUES (?, ?, ?, ?)',
+      [10, 'alice@example.com', 'Alice', 'active'],
+    );
+    await engine.executeQuery(
+      'INSERT INTO users (id, email, name, status) VALUES (?, ?, ?, ?)',
+      [20, 'bob@example.com', 'Bob', 'pending'],
+    );
+
+    const schemaOwner = engine.tableCreationService.schemaProvisioningJobOwner;
+    schemaOwner.retryAfterMs = 50;
 
     coordinator.controlPlaneReadinessService.answerCommittedNodes = () => ({
       formation: {state: 'UNAVAILABLE', latchEpoch: null},
     });
+
+    const deferredRes = await engine.executeQuery(
+      'CREATE GLOBAL INDEX idx_users_email ON users (email)',
+    );
+    t.equal(deferredRes.deferred, true, 'Initial CREATE returns structured deferred outcome');
+    t.equal(deferredRes.contractState, 'deferred');
+    t.equal(deferredRes.failureCode, 'FORMATION_NOT_LATCHED');
+    t.equal(deferredRes.nextAction, 'retry');
+    t.equal(deferredRes.state, GLOBAL_INDEX_STATE.CREATING);
+    t.ok(deferredRes.jobId, 'Deferred outcome exposes durable schema jobId');
+    t.equal(deferredRes.indexId, 'idx_users_email-gen1');
+    t.equal(createdReplicas.length, 0, 'No replica founded while formation unavailable');
+
+    const schemaOpPending = gateway.db.prepare(
+      'SELECT * FROM schema_operations WHERE job_id = ?',
+    ).get(deferredRes.jobId);
+    t.equal(schemaOpPending?.status, 'PENDING', 'schema_operations remains PENDING with retry preserved');
+    t.equal(
+      schemaOwner.retryTimersByWorkflowId.has(deferredRes.jobId),
+      true,
+      'SchemaProvisioningJobOwner retains active scheduled retry timer on FORMATION_NOT_LATCHED',
+    );
+
+    const catalogPending = gateway.db.prepare(
+      'SELECT * FROM indices WHERE index_name = ?',
+    ).get('idx_users_email');
+    t.equal(catalogPending?.state, GLOBAL_INDEX_STATE.CREATING, 'TABLES.INDICES stays CREATING instead of FAILED');
+
+    // Re-invoking with the same definition joins the existing in-flight durable workflow identity
+    const joinedRes = await engine.executeQuery(
+      'CREATE GLOBAL INDEX idx_users_email ON users (email)',
+    );
+    t.equal(joinedRes.jobId, deferredRes.jobId, 'Re-invoked identical CREATE joins same durable jobId');
+    t.equal(joinedRes.indexId, deferredRes.indexId, 'Re-invoked identical CREATE keeps same indexId');
+    t.equal(joinedRes.deferred, true);
+
+    // Re-invoking with a conflicting definition while in-flight is rejected
     await t.rejects(
-      engine.indexService.createIndex('CREATE GLOBAL INDEX idx_users_unlatched ON users (email)'),
-      {failureCode: 'FORMATION_NOT_LATCHED'},
-      'CREATE GLOBAL INDEX fails closed with typed placement refusal when formation unlatched',
+      engine.executeQuery('CREATE GLOBAL INDEX idx_users_email ON users (name)'),
+      /already exists/i,
+      'Conflicting CREATE with same index name rejects while durable workflow is in flight',
+    );
+
+    // Restore formation authority while otherwise idle (no additional user DDL calls)
+    coordinator.controlPlaneReadinessService.answerCommittedNodes = () => ({
+      formation: {state: 'FORMED', latchEpoch: 5},
+    });
+
+    const completed = await waitForCondition(() => {
+      const idx = gateway.db.prepare('SELECT * FROM indices WHERE index_name = ?').get('idx_users_email');
+      const job = gateway.db.prepare('SELECT * FROM schema_operations WHERE job_id = ?').get(deferredRes.jobId);
+      return idx?.state === GLOBAL_INDEX_STATE.READ_WRITE && job?.status === 'SUCCEEDED';
+    }, 5000, 15);
+    t.equal(
+      completed,
+      true,
+      'Background retry automatically progresses schema job to SUCCEEDED and GSI to READ_WRITE while idle',
+    );
+
+    const idxFinal = gateway.db.prepare('SELECT * FROM indices WHERE index_name = ?').get('idx_users_email');
+    t.equal(idxFinal.backfill_total_rows, 2, 'Background completion executed full base backfill');
+    t.equal(createdReplicas.length, 1, 'Background retry founded 1 GSI PartitionService replica');
+
+    const foundedOp = ledgerRows(leader).find(
+      (row) => row.partition_id === '__gsi_users_idx_users_email_p0',
+    );
+    t.ok(foundedOp, 'Ledger recorded native FOUND operation from background retry');
+    const [initialStep] = JSON.parse(foundedOp.steps_history);
+    t.equal(
+      initialStep.placementAdmission?.foundingIntentId,
+      `${deferredRes.jobId}:__gsi_users_idx_users_email_p0`,
+      'Background retry FOUND op uses the exact same durable workflow identity',
+    );
+
+    const selectRes = await engine.executeQuery(
+      'SELECT * FROM users WHERE email = ? ORDER BY id ASC',
+      ['alice@example.com'],
+    );
+    t.equal(selectRes.success, true);
+    t.equal(selectRes.globalIndexPlan?.accessPath, GLOBAL_INDEX_ACCESS_PATH.GLOBAL_SECONDARY_INDEX);
+    t.same(
+      selectRes.rows.map((r) => ({id: r.id, email: r.email, name: r.name})),
+      [{id: 10, email: 'alice@example.com', name: 'Alice'}],
+      'Query after background retry recovery serves authoritative row via GSI',
     );
   });
 });

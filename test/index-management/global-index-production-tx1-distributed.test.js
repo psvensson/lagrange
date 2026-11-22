@@ -803,3 +803,105 @@ test('Independent peer SystemTableCache instances propagate GSI catalog, table, 
     t.same(postDropSelectOnB.rows, oracleDb.prepare(selectSql).all('nina@example.com'));
   });
 });
+
+test('DROP INDEX + CREATE GLOBAL INDEX with changed column replaces physical dataset schema and serves populated backfill (3E)', async (t) => {
+  const env = await setupStrictCluster(t, {includeIndexPartitions: false});
+  seedUsers(env, [
+    {id: 10, email: 'alice@example.com', name: 'Alice', status: 'active'},
+    {id: 120, email: 'zoe@example.com', name: 'Zoe', status: 'pending'},
+  ]);
+
+  const engine = await env.createStrictEngine({attachProvisioner: true});
+  try {
+    const createEmail = await engine.executeQuery('CREATE GLOBAL INDEX idx ON users (email)');
+    t.equal(createEmail.success, true, 'Initial CREATE GLOBAL INDEX idx ON users (email) succeeds');
+
+    const dropRes = await engine.executeQuery('DROP INDEX idx');
+    t.equal(dropRes.success, true, 'DROP INDEX idx succeeds');
+
+    const indexReplicasAfterDrop = [...env.partitionServices.values()].filter(
+      (ps) => ps.tableName === '__idx_users_idx',
+    );
+    t.ok(indexReplicasAfterDrop.length >= 1, 'Index partition service exists');
+    for (const ps of indexReplicasAfterDrop) {
+      const existsAfterDrop = ps.db.prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+      ).get('__idx_users_idx');
+      t.equal(
+        existsAfterDrop,
+        undefined,
+        `Physical dataset table __idx_users_idx dropped on partition ${ps.partitionId}`,
+      );
+    }
+
+    const createName = await engine.executeQuery('CREATE GLOBAL INDEX idx ON users (name)');
+    t.equal(createName.success, true, 'Replacement CREATE GLOBAL INDEX idx ON users (name) succeeds');
+
+    const updatedTableMeta = env.gateway.db.prepare(
+      'SELECT * FROM tables WHERE table_id = ?',
+    ).get('__idx_users_idx');
+    t.equal(updatedTableMeta?.partition_key, 'name', 'TABLES.TABLES updated partition_key to name');
+    const updatedSchemaMeta = JSON.parse(updatedTableMeta.schema_definition);
+    t.same(updatedSchemaMeta.columnNames, ['name'], 'TABLES.TABLES updated columnNames to [name]');
+
+    for (const ps of indexReplicasAfterDrop) {
+      const cols = ps.db.prepare('PRAGMA table_info("__idx_users_idx")').all().map((c) => c.name);
+      t.ok(cols.includes('name'), `Replica ${ps.partitionId} SQLite table has replacement column name`);
+      t.equal(cols.includes('email'), false, `Replica ${ps.partitionId} SQLite table dropped stale column email`);
+    }
+
+    const selectSql = 'SELECT * FROM users WHERE name = ? ORDER BY id ASC';
+    const selectRes = await engine.executeQuery(selectSql, ['Zoe']);
+    t.equal(selectRes.success, true);
+    t.equal(
+      selectRes.globalIndexPlan?.accessPath,
+      GLOBAL_INDEX_ACCESS_PATH.GLOBAL_SECONDARY_INDEX,
+      'Replacement GSI engages GLOBAL_SECONDARY_INDEX on new column name',
+    );
+    t.same(selectRes.rows, env.oracleDb.prepare(selectSql).all('Zoe'));
+  } finally {
+    await engine.shutdown();
+  }
+});
+
+test('DROP INDEX + CREATE GLOBAL INDEX on empty base table reconciles physical schema before TX1 DML and indexed SELECT (3E)', async (t) => {
+  const env = await setupStrictCluster(t, {includeIndexPartitions: false});
+  const engine = await env.createStrictEngine({attachProvisioner: true});
+  try {
+    const createEmail = await engine.executeQuery('CREATE GLOBAL INDEX idx ON users (email)');
+    t.equal(createEmail.success, true);
+
+    const dropRes = await engine.executeQuery('DROP INDEX idx');
+    t.equal(dropRes.success, true);
+
+    const createName = await engine.executeQuery('CREATE GLOBAL INDEX idx ON users (name)');
+    t.equal(createName.success, true, 'Recreated GSI on initially empty base table succeeds');
+
+    const insertSql = 'INSERT INTO users (id, email, name, status) VALUES (?, ?, ?, ?)';
+    env.oracleDb.prepare(insertSql).run(10, 'alice@example.com', 'Alice', 'active');
+    env.oracleDb.prepare(insertSql).run(120, 'zoe@example.com', 'Zoe', 'pending');
+
+    const insert1 = await engine.executeQuery(insertSql, [10, 'alice@example.com', 'Alice', 'active']);
+    const insert2 = await engine.executeQuery(insertSql, [120, 'zoe@example.com', 'Zoe', 'pending']);
+    t.equal(insert1.success, true, 'TX1 INSERT maintains recreated GSI on (name)');
+    t.equal(insert2.success, true, 'TX1 INSERT across second partition maintains recreated GSI on (name)');
+
+    const updateSql = 'UPDATE users SET name = ? WHERE id = ?';
+    env.oracleDb.prepare(updateSql).run('Alicia', 10);
+    const updateRes = await engine.executeQuery(updateSql, ['Alicia', 10]);
+    t.equal(updateRes.success, true, 'TX1 UPDATE maintains recreated GSI on (name)');
+
+    const selectSql = 'SELECT * FROM users WHERE name = ? ORDER BY id ASC';
+    const selectAlicia = await engine.executeQuery(selectSql, ['Alicia']);
+    t.equal(selectAlicia.success, true);
+    t.equal(selectAlicia.globalIndexPlan?.accessPath, GLOBAL_INDEX_ACCESS_PATH.GLOBAL_SECONDARY_INDEX);
+    t.same(selectAlicia.rows, env.oracleDb.prepare(selectSql).all('Alicia'));
+
+    const selectOld = await engine.executeQuery(selectSql, ['Alice']);
+    t.equal(selectOld.success, true);
+    t.equal(selectOld.globalIndexPlan?.accessPath, GLOBAL_INDEX_ACCESS_PATH.GLOBAL_SECONDARY_INDEX);
+    t.same(selectOld.rows, []);
+  } finally {
+    await engine.shutdown();
+  }
+});
