@@ -17,118 +17,42 @@ import {
 } from './global-index-dataset-manager.js';
 import {
   GLOBAL_INDEX_ACCESS_PATH,
+  GLOBAL_INDEX_ERROR_CODE,
   INDEX_REJECTION_REASON,
 } from './index-constants.js';
 import {PartitionResolver} from '../query/partition-resolver.js';
 import {compareRoutingKeys} from '../partition/split-key-comparator.js';
+import {
+  extractPredicateConditions,
+  filterRowsByWhereClause,
+  isEqualityOperator,
+  isRangeOperator,
+  projectBaseRows,
+} from './global-index-predicate-matcher.js';
 
 export {
   GLOBAL_INDEX_ACCESS_PATH,
   INDEX_REJECTION_REASON,
+  extractPredicateConditions,
 };
 
-const LOCAL_STR_EQUALS = '=';
-const LOCAL_STR_AND = 'AND';
-const LOCAL_STR_PARAM = 'param';
 const LOCAL_STR_STAR = '*';
 const LOCAL_STR_ID = 'id';
-const LOCAL_STR_COLUMN = 'column';
 
-const EQUALITY_OPERATORS = new Set([LOCAL_STR_EQUALS, '==', 'IS']);
-const RANGE_OPERATORS = new Set(['<', '<=', '>', '>=', 'BETWEEN']);
+const READ_ROUTER_PORT = Object.freeze({
+  EXECUTE_INDEX_SCAN: 'executeIndexScan',
+  EXECUTE_BASE_FETCH: 'executeBaseFetch',
+  EXECUTE_SCATTER_GATHER: 'executeScatterGather',
+});
 
-function isColumnNode(node) {
-  return Boolean(node && (node.type === LOCAL_STR_COLUMN || node.column));
-}
-
-function resolveColAndValNodes(node) {
-  if (isColumnNode(node.left)) {
-    return {colNode: node.left, valNode: node.right};
-  }
-  if (isColumnNode(node.right)) {
-    return {colNode: node.right, valNode: node.left};
-  }
-  return {colNode: null, valNode: null};
-}
-
-function getColumnNodeName(colNode) {
-  if (!colNode) return null;
-  const name = colNode.name || colNode.column || colNode.value;
-  return typeof name === 'string' ? name : null;
-}
-
-function resolvePredicateNodeValue(valNode, params) {
-  if (!valNode) return undefined;
-  if (valNode.type === LOCAL_STR_PARAM && typeof valNode.index === 'number') {
-    return params ? params[valNode.index] : undefined;
-  }
-  return valNode.value;
-}
-
-function recordComparisonCondition(node, op, params, conditions) {
-  const {colNode, valNode} = resolveColAndValNodes(node);
-  const colName = getColumnNodeName(colNode);
-  if (!colName) return;
-
-  conditions.set(colName.toLowerCase(), {
-    column: colName,
-    operator: op,
-    value: resolvePredicateNodeValue(valNode, params),
-    node,
-  });
-}
-
-/**
- * Extract column predicate conditions from a WHERE clause (AST or object).
- * @param {Object|null} whereClause
- * @param {Array} [params=[]]
- * @return {Map<string, Object>} Column -> condition description.
- */
-export function extractPredicateConditions(whereClause, params = []) {
-  const conditions = new Map();
-  if (!whereClause) {
-    return conditions;
-  }
-
-  // Support simple dictionary format: { col: value } or { col: { operator, value } }
-  if (typeof whereClause === 'object' && !whereClause.type && !whereClause.operator) {
-    for (const [col, val] of Object.entries(whereClause)) {
-      const lowerCol = col.toLowerCase();
-      if (val && typeof val === 'object' && val.operator) {
-        conditions.set(lowerCol, {
-          column: col,
-          operator: String(val.operator).toUpperCase(),
-          value: val.value,
-        });
-      } else {
-        conditions.set(lowerCol, {
-          column: col,
-          operator: LOCAL_STR_EQUALS,
-          value: val,
-        });
-      }
-    }
-    return conditions;
-  }
-
-  // Recursive AST walker for binary expressions and AND trees
-  function walkNode(node) {
-    if (!node) return;
-    const op = String(node.operator || node.type || '').toUpperCase();
-
-    if (op === LOCAL_STR_AND) {
-      walkNode(node.left);
-      walkNode(node.right);
-      return;
-    }
-
-    if (EQUALITY_OPERATORS.has(op) || RANGE_OPERATORS.has(op)) {
-      recordComparisonCondition(node, op, params, conditions);
-    }
-  }
-
-  walkNode(whereClause);
-  return conditions;
+function unwiredAsyncReadExecutor(executorName) {
+  return async () => {
+    const error = new Error(
+      `GlobalIndexReadRouter requires wired '${executorName}'`,
+    );
+    error.code = GLOBAL_INDEX_ERROR_CODE.DEPENDENCY_UNAVAILABLE;
+    throw error;
+  };
 }
 
 /**
@@ -154,9 +78,9 @@ export function matchStrictLeftPrefix(columnNames, conditions) {
     }
 
     const op = condition.operator;
-    if (EQUALITY_OPERATORS.has(op)) {
+    if (isEqualityOperator(op)) {
       equalityPrefixColumns.push(col);
-    } else if (RANGE_OPERATORS.has(op)) {
+    } else if (isRangeOperator(op)) {
       rangeColumn = col;
       break; // Range terminates the usable prefix
     } else {
@@ -185,6 +109,7 @@ export function isIndexCovering(
   projectedColumns,
   indexedColumns,
   basePrimaryKeyColumns,
+  conditions = null,
 ) {
   if (!Array.isArray(projectedColumns) || projectedColumns.length === 0) {
     return false;
@@ -197,6 +122,14 @@ export function isIndexCovering(
     ...indexedColumns.map((c) => c.toLowerCase()),
     ...basePrimaryKeyColumns.map((c) => c.toLowerCase()),
   ]);
+
+  if (conditions && conditions.size > 0) {
+    for (const col of conditions.keys()) {
+      if (!availableCols.has(col)) {
+        return false;
+      }
+    }
+  }
 
   return projectedColumns.every((col) => availableCols.has(String(col).toLowerCase()));
 }
@@ -408,7 +341,7 @@ function narrowIndexPartitions(resolvedPartitions, indexPartitions, candidate, c
   if (resolvedPartitions.length === indexPartitions.length && indexPartitions.length > 1) {
     const leadingCol = candidate.columnNames[0];
     const leadingCond = conditions.get(leadingCol.toLowerCase());
-    if (leadingCond && EQUALITY_OPERATORS.has(leadingCond.operator)) {
+    if (leadingCond && isEqualityOperator(leadingCond.operator)) {
       const targetPart = resolveIndexPartitionForEntry(
         {[leadingCol]: leadingCond.value},
         indexPartitions,
@@ -444,9 +377,12 @@ export class GlobalIndexReadRouter {
     this.getBaseTablePartitions = options.getBaseTablePartitions || (() => []);
     this.resolveBasePartitionId = options.resolveBasePartitionId || null;
     this.partitionResolver = options.partitionResolver || new PartitionResolver();
-    this.executeIndexScan = options.executeIndexScan || (async () => []);
-    this.executeBaseFetch = options.executeBaseFetch || (async () => []);
-    this.executeScatterGather = options.executeScatterGather || (async () => []);
+    this.executeIndexScan = options.executeIndexScan ||
+      unwiredAsyncReadExecutor(READ_ROUTER_PORT.EXECUTE_INDEX_SCAN);
+    this.executeBaseFetch = options.executeBaseFetch ||
+      unwiredAsyncReadExecutor(READ_ROUTER_PORT.EXECUTE_BASE_FETCH);
+    this.executeScatterGather = options.executeScatterGather ||
+      unwiredAsyncReadExecutor(READ_ROUTER_PORT.EXECUTE_SCATTER_GATHER);
     this.logger = options.logger || console;
   }
 
@@ -527,6 +463,7 @@ export class GlobalIndexReadRouter {
       projectedColumns,
       selectedCandidate.columnNames,
       basePrimaryKeyColumns,
+      conditions,
     );
 
     return {
@@ -696,7 +633,7 @@ export class GlobalIndexReadRouter {
    * @return {Promise<Object[]>}
    */
   async executeTwoStageIndexQuery(queryContext, plan) {
-    const {tableName, whereClause, projectedColumns = null} = queryContext;
+    const {tableName, whereClause, projectedColumns = null, params = []} = queryContext;
     const {selectedIndex, indexPartitions, covering} = plan;
     const datasetName = getGlobalIndexDatasetName(tableName, selectedIndex.indexName);
 
@@ -704,23 +641,27 @@ export class GlobalIndexReadRouter {
     const indexRows = await this.executeIndexScan({
       datasetName,
       indexName: selectedIndex.indexName,
+      columnNames: selectedIndex.columnNames,
       indexPartitions,
       whereClause,
+      params,
     });
 
     if (!indexRows || indexRows.length === 0) {
       return [];
     }
 
-    // If index covers all projected columns, return directly from Stage 1
+    // If index covers all projected columns and predicates, return directly from Stage 1
     if (covering && Array.isArray(projectedColumns) && projectedColumns.length > 0) {
       return projectCoveringIndexRows(indexRows, projectedColumns);
     }
 
-    // Stage 2: fetch base rows through current owner placement
-    return this.executeStage2BaseLookup({
+    // Stage 2: fetch base rows through current owner placement and apply residual predicates
+    const baseRows = await this.executeStage2BaseLookup({
       tableName,
       candidateEntries: indexRows,
     });
+    const filteredRows = filterRowsByWhereClause(baseRows, whereClause, params);
+    return projectBaseRows(filteredRows, projectedColumns);
   }
 }

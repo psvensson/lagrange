@@ -249,3 +249,102 @@ export function normalizeGlobalIndexRecord(row) {
     ...extractTimestampsAndErrors(row),
   };
 }
+
+/**
+ * Resolve final outcome object after a backfill run or interruption.
+ * @param {Object} context
+ * @return {Object}
+ */
+export function resolveBackfillOutcome(context) {
+  const {isCurrent, isInterrupted, indexId, indexName, currentGen, result} = context;
+  if (!isCurrent) {
+    return {indexId, indexName, generation: currentGen, fenced: true};
+  }
+  if (isInterrupted) {
+    return {
+      indexId,
+      indexName,
+      generation: currentGen,
+      state: GLOBAL_INDEX_STATE.BACKFILLING,
+      interrupted: true,
+      ...result,
+    };
+  }
+  return {
+    indexId,
+    indexName,
+    generation: currentGen,
+    state: GLOBAL_INDEX_STATE.READ_WRITE,
+    completed: true,
+  };
+}
+
+/**
+ * Find an existing catalog entry in the coordinator map by name or indexId.
+ * @param {Map} catalog
+ * @param {Object} update
+ * @return {Object|null}
+ */
+export function findCatalogTarget(catalog, update) {
+  let targetName = null;
+  if (update.indexName !== undefined) {
+    targetName = update.indexName;
+  } else if (update.index_name !== undefined) {
+    targetName = update.index_name;
+  }
+  if (targetName && catalog.has(targetName)) {
+    return catalog.get(targetName);
+  }
+  if (!update.indexId) {
+    return null;
+  }
+  for (const rec of catalog.values()) {
+    const recId = rec.index_id !== undefined ? rec.index_id : rec.indexId;
+    if (recId === update.indexId) {
+      return rec;
+    }
+  }
+  return null;
+}
+
+/**
+ * Check whether an index already exists in the catalog, honoring ifNotExists.
+ * @param {Map} catalog
+ * @param {Object} def
+ * @param {Object} options
+ * @return {boolean}
+ */
+/**
+ * Resolve primary key columns and column types for global index creation.
+ * @param {Object} def
+ * @param {Object} options
+ * @param {Object|null} schemaInfo
+ * @return {{basePrimaryKeyColumns: string[], columnTypes: Object}}
+ */
+export function resolveGlobalCreateSchemaContext(def, options, schemaInfo) {
+  let basePrimaryKeyColumns = [];
+  if (def.basePrimaryKeyColumns) {
+    basePrimaryKeyColumns = def.basePrimaryKeyColumns;
+  } else if (options.basePrimaryKeyColumns) {
+    basePrimaryKeyColumns = options.basePrimaryKeyColumns;
+  } else if (schemaInfo?.basePrimaryKeyColumns?.length > 0) {
+    basePrimaryKeyColumns = schemaInfo.basePrimaryKeyColumns;
+  }
+  let columnTypes = {};
+  if (options.columnTypes !== undefined) {
+    columnTypes = options.columnTypes;
+  } else if (schemaInfo?.columnTypes !== undefined) {
+    columnTypes = schemaInfo.columnTypes;
+  }
+  return {basePrimaryKeyColumns, columnTypes};
+}
+
+export function checkIndexExistence(catalog, def, options) {
+  const indexName = def.indexName;
+  if (catalog.has(indexName)) {
+    if (def.ifNotExists) return true;
+    if (options.ifNotExists) return true;
+    throw new Error(`Index '${indexName}' already exists`);
+  }
+  return false;
+}

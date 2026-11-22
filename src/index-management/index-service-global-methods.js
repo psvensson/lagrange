@@ -15,7 +15,12 @@ import {
 } from './index-constants.js';
 import {
   GlobalIndexLifecycleCoordinator,
+  parseGlobalIndexDdl,
 } from './global-index-lifecycle-coordinator.js';
+import {buildProductionCoordinatorOptions} from './global-index-production-wiring.js';
+
+const DEFAULT_INDEX_TYPE = INDEX_TYPE.BTREE;
+const DEFAULT_READABLE_STATE = INDEX_READABLE_STATE.READY;
 
 function isGlobalIndexRequest(input, options = {}) {
   if (input?.isGlobal === true || input?.global === true) {
@@ -46,9 +51,22 @@ function resolveGlobalIndexColumns(cat, input, options) {
     input?.columnNames || input?.columns || options?.columnNames || [];
 }
 
+function resolveMetadataIndexId(result, cat, indexName) {
+  if (result.indexId) return result.indexId;
+  if (cat?.indexId) return cat.indexId;
+  if (cat?.index_id) return cat.index_id;
+  return `idx-${indexName}`;
+}
+
+function resolveMetadataCreatedAt(cat) {
+  if (cat?.createdAt !== undefined) return cat.createdAt;
+  if (cat?.created_at !== undefined) return cat.created_at;
+  return Date.now();
+}
+
 function buildGlobalIndexMetadata(result, cat, tableId, fields) {
-  return {
-    indexId: result.indexId || cat?.index_id || `idx-${fields.indexName}`,
+  const metadata = {
+    indexId: resolveMetadataIndexId(result, cat, fields.indexName),
     tableId,
     tableName: fields.tableName,
     indexName: fields.indexName,
@@ -58,9 +76,40 @@ function buildGlobalIndexMetadata(result, cat, tableId, fields) {
     isGlobal: true,
     global: true,
     state: result.state || cat?.state || GLOBAL_INDEX_STATE.READ_WRITE,
-    createdAt: cat?.created_at || Date.now(),
+    createdAt: resolveMetadataCreatedAt(cat),
     generation: result.generation || cat?.index_generation || 1,
   };
+  if (result.interrupted) {
+    metadata.interrupted = true;
+    metadata.cursorPartitionId = result.cursorPartitionId;
+    metadata.cursorPk = result.cursorPk;
+    metadata.totalRows = result.totalRows;
+  }
+  if (result.deferred) {
+    metadata.deferred = true;
+  }
+  return metadata;
+}
+
+function resolveCatalogTableId(cat, tableName) {
+  if (cat.tableId !== undefined) return cat.tableId;
+  if (cat.table_id !== undefined) return cat.table_id;
+  return tableName;
+}
+
+function resolveCatalogColumnNames(cat) {
+  if (Array.isArray(cat.columnNames)) return cat.columnNames;
+  if (Array.isArray(cat.column_names)) return cat.column_names;
+  if (typeof cat.column_names === 'string') {
+    const raw = cat.column_names ? cat.column_names : STRING.EMPTY_JSON_ARRAY;
+    return JSON.parse(raw);
+  }
+  return [];
+}
+
+function resolveCatalogUniqueFlag(cat) {
+  if (cat.isUnique !== undefined) return Boolean(cat.isUnique);
+  return Boolean(cat.unique || cat.is_unique);
 }
 
 function isGlobalIndexName(metadata, coordinator, indexName) {
@@ -85,9 +134,9 @@ const indexServiceGlobalMethods = {
    */
   getGlobalIndexCoordinator() {
     if (!this.globalIndexCoordinator) {
-      this.globalIndexCoordinator = new GlobalIndexLifecycleCoordinator({
-        logger: this.logger,
-      });
+      this.globalIndexCoordinator = new GlobalIndexLifecycleCoordinator(
+        buildProductionCoordinatorOptions(this),
+      );
     }
     return this.globalIndexCoordinator;
   },
@@ -146,7 +195,21 @@ const indexServiceGlobalMethods = {
    */
   async _createGlobalIndexEntry(input, options = {}) {
     const coordinator = this.getGlobalIndexCoordinator();
-    const result = await coordinator.createGlobalIndex(input, options);
+    let rawTableName = null;
+    if (input && typeof input === 'object' && input.tableName) {
+      rawTableName = input.tableName;
+    } else if (options.tableName) {
+      rawTableName = options.tableName;
+    } else if (typeof input === 'string') {
+      rawTableName = parseGlobalIndexDdl(input).tableName;
+    }
+    const resolvedInputTableId = rawTableName ?
+      await this._resolveGlobalIndexTableId(rawTableName) :
+      null;
+    const createOptions = resolvedInputTableId && !options.tableId ?
+      {...options, tableId: resolvedInputTableId} :
+      options;
+    const result = await coordinator.createGlobalIndex(input, createOptions);
 
     const indexName = resolveGlobalIndexName(result, input, options);
     const cat = coordinator.getCatalogRecord?.(indexName);
@@ -173,12 +236,11 @@ const indexServiceGlobalMethods = {
    * @return {Promise<boolean>} True if dropped.
    */
   async _dropGlobalIndexEntry(indexName, indexMetadata, tableId, {ifExists}) {
-    if (this.globalIndexCoordinator) {
-      await this.globalIndexCoordinator.dropGlobalIndex(indexName, {ifExists});
-    }
+    const coordinator = this.getGlobalIndexCoordinator();
+    const dropOutcome = await coordinator.dropGlobalIndex(indexName, {ifExists});
     const resolvedTableId = indexMetadata?.tableId || tableId;
     this._removeIndexFromCache(indexName, resolvedTableId);
-    if (indexMetadata) {
+    if (indexMetadata && (!coordinator.onCatalogDelete || !dropOutcome?.dropped)) {
       await this.deleteIndexMetadata(indexMetadata, resolvedTableId, indexName);
     }
     this.logger.info(INDEX_LOG_MSG.INDEX_DROPPED, {
@@ -187,6 +249,34 @@ const indexServiceGlobalMethods = {
       indexName,
     });
     return true;
+  },
+
+  /**
+   * Execute transactional write with synchronous global index maintenance.
+   * @param {Object} writeContext - Write context.
+   * @return {Promise<Object>}
+   */
+  async executeTransactionalWrite(writeContext) {
+    return this.getGlobalIndexCoordinator().executeTransactionalWrite(writeContext);
+  },
+
+  /**
+   * Plan and execute read query via global secondary index or scatter-gather.
+   * @param {Object} readContext - Read context.
+   * @return {Promise<Object[]>}
+   */
+  async planAndExecuteRead(readContext) {
+    return this.getGlobalIndexCoordinator().planAndExecuteRead(readContext);
+  },
+
+  /**
+   * Resume an interrupted global index backfill from its durable checkpoint.
+   * @param {string} indexName - Index name.
+   * @param {Object} [options={}] - Resume options.
+   * @return {Promise<Object>}
+   */
+  async resumeGlobalIndexBackfill(indexName, options = {}) {
+    return this.getGlobalIndexCoordinator().resumeBackfill(indexName, options);
   },
 
   /**
@@ -232,15 +322,15 @@ const indexServiceGlobalMethods = {
     const tableName = cat.table_name || cat.tableName || null;
     return {
       indexId: cat.index_id || cat.indexId,
-      tableId: tableName,
+      tableId: resolveCatalogTableId(cat, tableName),
       tableName,
       indexName,
-      columnNames: cat.column_names || cat.columnNames || [],
-      indexType: cat.index_type || INDEX_TYPE.BTREE,
-      unique: Boolean(cat.unique || cat.is_unique),
+      columnNames: resolveCatalogColumnNames(cat),
+      indexType: cat.index_type !== undefined ? cat.index_type : DEFAULT_INDEX_TYPE,
+      unique: resolveCatalogUniqueFlag(cat),
       isGlobal: true,
       global: true,
-      state: cat.state || INDEX_READABLE_STATE.READY,
+      state: cat.state !== undefined ? cat.state : DEFAULT_READABLE_STATE,
       createdAt: cat.created_at || cat.createdAt || Date.now(),
     };
   },

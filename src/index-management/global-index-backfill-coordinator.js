@@ -16,7 +16,10 @@ import {
   getGlobalIndexDatasetName,
   resolveIndexPartitionForEntry,
 } from './global-index-dataset-manager.js';
-import {INDEX_LOG_MSG} from './index-constants.js';
+import {
+  GLOBAL_INDEX_ERROR_CODE,
+  INDEX_LOG_MSG,
+} from './index-constants.js';
 import {compareRoutingKeys} from '../partition/split-key-comparator.js';
 
 const DEFAULT_BATCH_SIZE = 50;
@@ -24,6 +27,35 @@ const LOCAL_STR_BRACKET_OPEN = '[';
 const LOCAL_STR_BRACE_OPEN = '{';
 const LOCAL_STR_ID = 'id';
 const UNKNOWN_INDEX_NAME = 'unknown';
+
+const BACKFILL_PORT = Object.freeze({
+  UPDATE_INDEX_CHECKPOINT: 'updateIndexCheckpoint',
+  GET_BASE_TABLE_PARTITIONS: 'getBaseTablePartitions',
+  GET_INDEX_PARTITIONS: 'getIndexPartitions',
+  FETCH_BASE_PARTITION_BATCH: 'fetchBasePartitionBatch',
+  VERIFY_BASE_ROW_IMAGE: 'verifyBaseRowImage',
+  WRITE_INDEX_BATCH: 'writeIndexBatch',
+});
+
+function createUnwiredDependencyError(dependencyName) {
+  const error = new Error(
+    `GlobalIndexBackfillCoordinator requires wired '${dependencyName}'`,
+  );
+  error.code = GLOBAL_INDEX_ERROR_CODE.DEPENDENCY_UNAVAILABLE;
+  return error;
+}
+
+function unwiredSyncDependency(dependencyName) {
+  return () => {
+    throw createUnwiredDependencyError(dependencyName);
+  };
+}
+
+function unwiredAsyncDependency(dependencyName) {
+  return async () => {
+    throw createUnwiredDependencyError(dependencyName);
+  };
+}
 
 /**
  * Serialize a primary key value or tuple into a durable string checkpoint.
@@ -167,12 +199,18 @@ export class GlobalIndexBackfillCoordinator {
    * @param {Object} [options.logger]
    */
   constructor(options = {}) {
-    this.updateIndexCheckpoint = options.updateIndexCheckpoint || (async () => {});
-    this.getBaseTablePartitions = options.getBaseTablePartitions || (() => []);
-    this.getIndexPartitions = options.getIndexPartitions || (() => []);
-    this.fetchBasePartitionBatch = options.fetchBasePartitionBatch || (async () => []);
-    this.verifyBaseRowImage = options.verifyBaseRowImage || (async () => null);
-    this.writeIndexBatch = options.writeIndexBatch || (async () => {});
+    this.updateIndexCheckpoint = options.updateIndexCheckpoint ||
+      unwiredAsyncDependency(BACKFILL_PORT.UPDATE_INDEX_CHECKPOINT);
+    this.getBaseTablePartitions = options.getBaseTablePartitions ||
+      unwiredSyncDependency(BACKFILL_PORT.GET_BASE_TABLE_PARTITIONS);
+    this.getIndexPartitions = options.getIndexPartitions ||
+      unwiredSyncDependency(BACKFILL_PORT.GET_INDEX_PARTITIONS);
+    this.fetchBasePartitionBatch = options.fetchBasePartitionBatch ||
+      unwiredAsyncDependency(BACKFILL_PORT.FETCH_BASE_PARTITION_BATCH);
+    this.verifyBaseRowImage = options.verifyBaseRowImage ||
+      unwiredAsyncDependency(BACKFILL_PORT.VERIFY_BASE_ROW_IMAGE);
+    this.writeIndexBatch = options.writeIndexBatch ||
+      unwiredAsyncDependency(BACKFILL_PORT.WRITE_INDEX_BATCH);
     this.batchSize = options.batchSize || DEFAULT_BATCH_SIZE;
     this.logger = options.logger || console;
   }
@@ -312,11 +350,14 @@ export class GlobalIndexBackfillCoordinator {
       datasetName,
     } = partitionContext;
 
+    const effectiveBatchSize = executionOptions.batchSize !== undefined ?
+      executionOptions.batchSize :
+      this.batchSize;
     const rows = await this.fetchBasePartitionBatch({
       tableName,
       partitionId,
       cursorPk: deserializePrimaryKeyCursor(progress.cursorPk),
-      batchSize: this.batchSize,
+      batchSize: effectiveBatchSize,
       basePrimaryKeyColumns,
     });
 
@@ -371,7 +412,7 @@ export class GlobalIndexBackfillCoordinator {
       }
     }
 
-    return {partitionDone: rows.length < this.batchSize};
+    return {partitionDone: rows.length < effectiveBatchSize};
   }
 
   async _backfillPartition(partitionContext, progress, executionOptions) {

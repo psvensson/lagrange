@@ -35,6 +35,9 @@ import {
   COORDINATOR_ADMISSION_DECISION,
   evaluateCoordinatorSelectAdmission,
 } from './coordinator-sql-admission.js';
+import {
+  executeSelectWithGlobalIndexSupport,
+} from './sql-query-engine-global-index-integration.js';
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_WAIT_FOR_CONDITION = 'wait_for_condition';
@@ -361,94 +364,100 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       return authoritativeLocalResult;
     }
 
-    const planResolution =
-      await resolveSelectExecutionPlanWithAuthorityRefresh(
-        this,
-        ast,
-        params,
-        {sessionId, queryOptions},
-      );
-    if (planResolution.settled) {
-      return planResolution.response;
-    }
-    const {
-      distributedPlan,
-      rootPlan,
-      dualWriteMode,
-      planningDurationMs,
-    } = planResolution;
+    return executeSelectWithGlobalIndexSupport(
+      this,
+      {ast, params, sessionId, queryOptions, transactionRead},
+      async () => {
+        const planResolution =
+          await resolveSelectExecutionPlanWithAuthorityRefresh(
+            this,
+            ast,
+            params,
+            {sessionId, queryOptions},
+          );
+        if (planResolution.settled) {
+          return planResolution.response;
+        }
+        const {
+          distributedPlan,
+          rootPlan,
+          dualWriteMode,
+          planningDurationMs,
+        } = planResolution;
 
-    const partitionIds = rootPlan.partitions;
+        const partitionIds = rootPlan.partitions;
 
-    this.logger.debug(QUERY_LOG_MSG.RESOLVED_PARTITIONS_SELECT, {
-      tableName,
-      totalPartitions: partitionIds.length,
-      targetPartitions: partitionIds.length,
-      sessionId,
-    });
+        this.logger.debug(QUERY_LOG_MSG.RESOLVED_PARTITIONS_SELECT, {
+          tableName,
+          totalPartitions: partitionIds.length,
+          targetPartitions: partitionIds.length,
+          sessionId,
+        });
 
-    const routingReadinessDimension = this.resolveTableRoutingReadinessDimension(
-      tableName,
-      queryOptions.routingReadinessDimension,
-    );
-    const preferSameLatencyGroup =
-      queryOptions.preferSameLatencyGroup === true ||
-      this.resolveIssuingServiceReadLocality(queryOptions);
-    const preferLeader = this.resolveSelectPreferLeader(
-      tableName,
-      routingReadinessDimension,
-      queryOptions,
-      transactionRead,
-      preferSameLatencyGroup,
-    );
+        const routingReadinessDimension = this.resolveTableRoutingReadinessDimension(
+          tableName,
+          queryOptions.routingReadinessDimension,
+        );
+        const preferSameLatencyGroup =
+          queryOptions.preferSameLatencyGroup === true ||
+          this.resolveIssuingServiceReadLocality(queryOptions);
+        const preferLeader = this.resolveSelectPreferLeader(
+          tableName,
+          routingReadinessDimension,
+          queryOptions,
+          transactionRead,
+          preferSameLatencyGroup,
+        );
 
-    const enlistmentFailure = await enlistTransactionSelectParticipants(
-      ast,
-      distributedPlan,
-      transactionRead,
-    );
-    if (enlistmentFailure) return enlistmentFailure;
+        const enlistmentFailure = await enlistTransactionSelectParticipants(
+          ast,
+          distributedPlan,
+          transactionRead,
+        );
+        if (enlistmentFailure) return enlistmentFailure;
 
-    const executionStartTimeMs = Date.now();
-    const deliveryPriority = this.resolveRoutedDeliveryPriority(
-      tableName,
-      queryOptions.deliveryPriority,
-    );
-    const result = await this.queryExecutor.executeSelect(
-      ast,
-      partitionIds,
-      params,
-      {
-        ...selectRequestOptions(queryOptions, sessionId, transactionRead),
-        preferLeader,
-        preferSameLatencyGroup,
-        deliveryPriority,
-        distributedPlan,
-        routingReadinessDimension,
+        const executionStartTimeMs = Date.now();
+        const deliveryPriority = this.resolveRoutedDeliveryPriority(
+          tableName,
+          queryOptions.deliveryPriority,
+        );
+        const result = await this.queryExecutor.executeSelect(
+          ast,
+          partitionIds,
+          params,
+          {
+            ...selectRequestOptions(queryOptions, sessionId, transactionRead),
+            preferLeader,
+            preferSameLatencyGroup,
+            deliveryPriority,
+            distributedPlan,
+            routingReadinessDimension,
+          },
+        );
+        const executionDurationMs = Date.now() - executionStartTimeMs;
+
+        if (result?.success === true) {
+          const lockingFailure = await this.finalizeSelectSuccess(
+            ast,
+            sessionId,
+            queryOptions,
+            transactionRead,
+            result,
+            partitionIds,
+            params,
+          );
+          if (lockingFailure) return lockingFailure;
+        }
+
+        return buildSelectExecutionEnvelope(
+          result,
+          tableName,
+          dualWriteMode,
+          distributedPlan,
+          planningDurationMs,
+          executionDurationMs,
+        );
       },
-    );
-    const executionDurationMs = Date.now() - executionStartTimeMs;
-
-    if (result?.success === true) {
-      const lockingFailure = await this.finalizeSelectSuccess(
-        ast,
-        sessionId,
-        queryOptions,
-        transactionRead,
-        result,
-        partitionIds,
-        params,
-      );
-      if (lockingFailure) return lockingFailure;
-    }
-
-    return buildSelectExecutionEnvelope(
-      result,
-      tableName,
-      dualWriteMode,
-      distributedPlan,
-      planningDurationMs,
-      executionDurationMs,
     );
   }
 

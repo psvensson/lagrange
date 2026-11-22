@@ -25,6 +25,10 @@ import {QUERY_ERROR_CODE} from '../query/query-constants.js';
 import {indexServiceCdcHandler} from './index-service-cdc-handler.js';
 import {indexServicePartitionMethods} from './index-service-partition-methods.js';
 import {indexServiceGlobalMethods} from './index-service-global-methods.js';
+import {
+  hydrateGlobalIndexFromRow,
+  preloadProductionPartitionMetadata,
+} from './global-index-production-wiring.js';
 
 const LOCAL_STR_CRITICAL = 'critical';
 
@@ -87,6 +91,52 @@ function resolveOptionTableName(options) {
  */
 const IndexType = INDEX_TYPE;
 
+function assignIndexServiceCollaborators(service, options) {
+  const fields = [
+    'cdcIntegrationService',
+    'systemTableCache',
+    'sqlQueryEngine',
+    'partitionService',
+    'partitionManager',
+    'partitionDirectory',
+    'partitionServices',
+    'partitionServicesProvider',
+    'storageManager',
+    'queryRouter',
+    'partitionDatabases',
+    'globalIndexCoordinator',
+  ];
+  for (const field of fields) {
+    service[field] = options[field] || null;
+  }
+  service.controlPlaneSystemTableGateway =
+    options.controlPlaneSystemTableGateway ||
+    options.systemTableGateway ||
+    null;
+  service.requirePartitionMaterialization =
+    Boolean(options.requirePartitionMaterialization);
+}
+
+const DEFAULT_LOCAL_INDEX_TYPE = INDEX_TYPE.BTREE;
+const DEFAULT_LOCAL_INDEX_STATE = INDEX_READABLE_STATE.READY;
+
+function buildLocalIndexMetadata(index) {
+  const rawCols = index.column_names ? index.column_names : STRING.EMPTY_JSON_ARRAY;
+  const indexType = index.index_type !== undefined ? index.index_type : DEFAULT_LOCAL_INDEX_TYPE;
+  const state = index.state !== undefined ? index.state : DEFAULT_LOCAL_INDEX_STATE;
+  return {
+    indexId: index.index_id,
+    tableId: index.table_id,
+    tableName: index.table_name || null,
+    indexName: index.index_name,
+    columnNames: JSON.parse(rawCols),
+    indexType,
+    unique: Boolean(index.unique || index.is_unique),
+    state,
+    createdAt: index.created_at,
+  };
+}
+
 /**
  * IndexService manages database indices for query optimization.
  * Indices are stored in the indices system table and maintained
@@ -103,15 +153,7 @@ class IndexService {
    * @param {Object} [options.controlPlaneSystemTableGateway] - Metadata gateway.
    */
   constructor(options = {}) {
-    this.cdcIntegrationService = options.cdcIntegrationService || null;
-    this.systemTableCache = options.systemTableCache || null;
-    this.sqlQueryEngine = options.sqlQueryEngine || null;
-    this.partitionService = options.partitionService || null;
-    this.controlPlaneSystemTableGateway =
-      options.controlPlaneSystemTableGateway || null;
-    this.requirePartitionMaterialization =
-      Boolean(options.requirePartitionMaterialization);
-    this.globalIndexCoordinator = options.globalIndexCoordinator || null;
+    assignIndexServiceCollaborators(this, options);
 
     // Configuration
     const config = ConfigurationManager.getInstance();
@@ -154,6 +196,7 @@ class IndexService {
    */
   async loadIndicesFromCache() {
     try {
+      await preloadProductionPartitionMetadata(this);
       let indices = [];
       if (this.canReadMetadata()) {
         const result = await this.getControlPlaneSystemTableGateway().readRows(
@@ -170,24 +213,16 @@ class IndexService {
           this.indexCache.set(tableId, new Map());
         }
 
-        const indexMetadata = {
-          indexId: index.index_id,
-          tableId: index.table_id,
-          tableName: index.table_name || null,
-          indexName: index.index_name,
-          columnNames: JSON.parse(
-            index.column_names || STRING.EMPTY_JSON_ARRAY,
-          ),
-          indexType: index.index_type || INDEX_TYPE.BTREE,
-          unique: Boolean(index.unique || index.is_unique),
-          state: index.state || INDEX_READABLE_STATE.READY,
-          createdAt: index.created_at,
-        };
+        const indexMetadata = index.is_global ?
+          hydrateGlobalIndexFromRow(this, this.getGlobalIndexCoordinator(), index) :
+          buildLocalIndexMetadata(index);
 
-        this.indexCache.get(tableId).set(
-          index.index_name, indexMetadata,
-        );
-        this.indices.set(index.index_name, indexMetadata);
+        if (indexMetadata) {
+          this.indexCache.get(tableId).set(
+            index.index_name, indexMetadata,
+          );
+          this.indices.set(index.index_name, indexMetadata);
+        }
       }
 
       this.logger.debug(INDEX_LOG_MSG.INDICES_LOADED, {
@@ -527,9 +562,13 @@ class IndexService {
     }
     const gateway = this.getControlPlaneSystemTableGateway();
     if (gateway) {
+      const whereClause = {table_id: resolvedTableId, index_name: indexName};
+      if (indexMetadata?.indexId) {
+        whereClause.index_id = indexMetadata.indexId;
+      }
       await gateway.deleteSystemTableRow(
         TABLES.INDICES,
-        {table_id: resolvedTableId, index_name: indexName},
+        whereClause,
         {
           workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
           deliveryPriority: LOCAL_STR_CRITICAL,

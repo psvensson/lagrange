@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2774,
+    "ordinary": 2775,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2800,
-  "digest": "fnv1a32-77497d84",
+  "censusSize": 2801,
+  "digest": "fnv1a32-ba1c0abb",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1105,6 +1105,7 @@
     "test/helm/lagrange-node-admin-default-deny.test.js": "ordinary",
     "test/hlc/hlc.test.js": "ordinary",
     "test/index-management/global-index-maintenance-mode-seal.test.js": "ordinary",
+    "test/index-management/global-index-production-construction.test.js": "ordinary",
     "test/index-management/global-secondary-index-lifecycle.test.js": "ordinary",
     "test/index-management/global-secondary-index-routing.test.js": "ordinary",
     "test/index-management/index-maintenance-consistency.property.test.js": "ordinary",
