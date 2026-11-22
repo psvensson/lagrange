@@ -2318,6 +2318,30 @@
         "test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js",
         "test/partition/committed-statement-outcome.test.js"
       ]
+    },
+    "replica-placement-single-scheduler": {
+      "description": "Replica placement has one scheduler: the ReplicaPlacementOwner attached to the replica_operations-p1 partition service, acting while that replica leads the ledger group (owner decision 2026-11-21: the per-partition scheduler is not reactivated; a declaration recomputed from a local cache grants nothing). The interaction spans the ledger replica's leadership producer (role events, tenure, activation sink), a target partition's leader publication (PARTITIONS leader_node_id through the row mutation helper and the cache apply boundary; SERVICES rows publish follower roles), the construction that binds the owner and guards against a per-partition UnifiedRebalancer, and the owner's pass, deficit evaluation and wakes. The witnesses drive the real producers through the production construction with a controllable consensus port and a fixture-owned ledger log; native rs-raft election and the five-host formation are separate gates.",
+      "owners": [
+        "src/raft/replica-leadership-state.js",
+        "src/partition/partition-service-raft-lifecycle-wiring.js",
+        "src/partition/partition-service-leader-activation-methods.js",
+        "src/partition/partition-service-metadata-delivery-methods.js",
+        "src/partition/partition-service-metadata-mutation-helpers.js",
+        "src/bootstrap/shared/control-plane-setup.js",
+        "src/rebalancer/rebalance-coordinator-operation-creation-support.js",
+        "src/partition/partition-service-rebalancer-methods.js",
+        "src/rebalancer/replica-placement-owner.js",
+        "src/rebalancer/replica-placement-owner-deficits.js",
+        "src/rebalancer/replica-placement-owner-constants.js"
+      ],
+      "tests": [
+        "test/partition/placement-owner-construction-orders.test.js",
+        "test/rebalancer/placement-owner-authority-tenure.test.js",
+        "test/rebalancer/placement-owner-authority-wakes.test.js",
+        "test/rebalancer/placement-owner-authority-negatives.test.js",
+        "test/rebalancer/placement-owner-authority-disruptions.test.js",
+        "test/rebalancer/placement-owner-authority-five-nodes.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -4924,6 +4948,77 @@
       "witnessTests": [
         "test/partition/committed-outcome-identity-boundary.test.js",
         "test/control-plane/formation-transition-settled-replay.test.js"
+      ]
+    },
+    "ledger-leadership-tenure-and-placement-scheduler": {
+      "description": "The ledger replica's leadership producer (role and term events, the leadership tenure it mints, the activation gate and the rebalancer leadership sink) and the placement owner that schedules while it leads change together: a pass decided under one tenure must not be admitted under another, the successor progresses without waiting for obsolete work, and inherited admissions keep their identity.",
+      "endpoints": [
+        {
+          "id": "ledger-leadership-producer",
+          "owners": [
+            "src/raft/replica-leadership-state.js",
+            "src/partition/partition-service-raft-lifecycle-wiring.js",
+            "src/partition/partition-service-leader-activation-methods.js"
+          ]
+        },
+        {
+          "id": "placement-scheduler-consumer",
+          "owners": [
+            "src/rebalancer/replica-placement-owner.js"
+          ]
+        }
+      ],
+      "contract": "replica-placement-single-scheduler",
+      "witnessTests": [
+        "test/rebalancer/placement-owner-authority-tenure.test.js",
+        "test/rebalancer/placement-owner-authority-negatives.test.js",
+        "test/rebalancer/placement-owner-authority-five-nodes.test.js"
+      ]
+    },
+    "partition-leader-publication-and-placement-deficit-wake": {
+      "description": "A target partition leader's publication (queueLeaderNodeUpdate and the PARTITIONS leader_node_id row mutation; SERVICES roles collapsed to follower) and the placement owner's deficit evaluation and wake change together: the leader is found through PARTITIONS leader_node_id, the LEADER_UNKNOWN wait resumes on that publication alone, and the copy source is the node whose core leads.",
+      "endpoints": [
+        {
+          "id": "partition-leader-publication-producer",
+          "owners": [
+            "src/partition/partition-service-metadata-delivery-methods.js",
+            "src/partition/partition-service-metadata-mutation-helpers.js"
+          ]
+        },
+        {
+          "id": "placement-deficit-and-wake-consumer",
+          "owners": [
+            "src/rebalancer/replica-placement-owner-deficits.js",
+            "src/rebalancer/replica-placement-owner-constants.js"
+          ]
+        }
+      ],
+      "contract": "replica-placement-single-scheduler",
+      "witnessTests": [
+        "test/rebalancer/placement-owner-authority-wakes.test.js",
+        "test/rebalancer/placement-owner-authority-disruptions.test.js"
+      ]
+    },
+    "placement-owner-construction-and-partition-scheduler": {
+      "description": "The construction that binds the placement-owner factory and attaches the owner to the ledger partition service, and the partition service's scheduler guard, change together: in every construction order the code allows a node holds exactly one scheduler, the placement owner on the ledger service, and no per-partition UnifiedRebalancer.",
+      "endpoints": [
+        {
+          "id": "placement-owner-construction",
+          "owners": [
+            "src/bootstrap/shared/control-plane-setup.js",
+            "src/rebalancer/rebalance-coordinator-operation-creation-support.js"
+          ]
+        },
+        {
+          "id": "partition-scheduler-guard",
+          "owners": [
+            "src/partition/partition-service-rebalancer-methods.js"
+          ]
+        }
+      ],
+      "contract": "replica-placement-single-scheduler",
+      "witnessTests": [
+        "test/partition/placement-owner-construction-orders.test.js"
       ]
     }
   }

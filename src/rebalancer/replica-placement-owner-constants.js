@@ -154,7 +154,11 @@ const PLACEMENT_WAITING_REASON = Object.freeze({
 
 // Every trigger of the owner's pass (design section 2.3). RESYNC is the one
 // declared cadence and never a clearing trigger (owner decision D5).
+// TERM_START_APPLIED is the ledger port's APPLIED_PROGRESS while a tenure's
+// term-start barrier is pending (the barrier is a pass stop, not a waiting
+// reason: replica-placement-owner-tenure.js).
 const PLACEMENT_TRIGGER = Object.freeze({
+  TERM_START_APPLIED: 'TERM_START_APPLIED',
   LEDGER_COMMIT: 'LEDGER_COMMIT',
   NODES_OR_FORMATION: 'NODES_OR_FORMATION',
   SERVICES_CHANGED: 'SERVICES_CHANGED',
@@ -232,7 +236,10 @@ const PLACEMENT_WAITING_CLEARING_TRIGGER = Object.freeze({
     TRIGGER.TARGET_CAPACITY_CHANGED,
   [PLACEMENT_WAITING_REASON.TARGET_STORAGE_UNKNOWN]:
     TRIGGER.TARGET_CAPACITY_CHANGED,
-  [PLACEMENT_WAITING_REASON.LEADER_UNKNOWN]: TRIGGER.SERVICES_CHANGED,
+  // The wait ends when the target's leader is published: its PARTITIONS row
+  // (leader_node_id), the row the owner reads; SERVICES rows carry follower
+  // roles only.
+  [PLACEMENT_WAITING_REASON.LEADER_UNKNOWN]: TRIGGER.PARTITIONS_CHANGED,
   [PLACEMENT_WAITING_REASON.NODE_AUTHORITY_UNAVAILABLE]:
     TRIGGER.NODES_OR_FORMATION,
   [PLACEMENT_WAITING_REASON.INCUMBENT_AUTHORITY_UNAVAILABLE]:

@@ -75,7 +75,8 @@ import {
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {RAFT_OPERATION_OUTCOME} from '../../src/raft/raft-operation-port-constants.js';
 import {settledTurn} from '../../src/raft/raft-rs-turn-answer.js';
-import {applyCommandThroughApplicationOwner} from '../test-helpers/controllable-consensus-port.js';
+import {applyCommandThroughApplicationOwner, leadingLedgerStubFields} from
+  '../test-helpers/controllable-consensus-port.js';
 import {
   PARTITION_CDC_EVENT_BUILD_STATE,
 } from '../../src/partition/partition-cdc-generator.js';
@@ -293,6 +294,7 @@ function createSimulatedLedgerPartitionService({seedHosts, cache}) {
   });
   const configurationKey = raftRsConfStateKey(confState);
   const identities = Object.freeze({[peerId]: replicaId});
+  const leadership = leadingLedgerStubFields();
 
   const service = Object.assign(emitter, {
     partitionId: LEDGER_PARTITION_ID,
@@ -370,10 +372,13 @@ function createSimulatedLedgerPartitionService({seedHosts, cache}) {
       commitWaiters.delete(entryId);
       waiter?.reject(error);
     },
+    leadershipTenure: leadership.leadershipTenure,
     raft: {
+      subscribe: leadership.raft.subscribe,
       readStatus: () => ({
         outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
         role: service.isLeader ? RAFT_ROLE.LEADER : RAFT_ROLE.FOLLOWER,
+        currentTermApplied: service.isLeader === true,
         term: 1,
         leaderId: replicaId,
         leaderAddress: seedHosts.nodeId,
