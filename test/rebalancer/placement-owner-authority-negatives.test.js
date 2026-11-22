@@ -77,7 +77,7 @@ test('P9 a target partition\'s leader does not schedule: it publishes its leader
     assert.ok(target.buildRebalancerDependencyBundle(), 'anti-vacuity: the target leader holds ' +
       'every dependency of a per-partition rebalancer');
     assert.equal(target.isBackgroundWorkReady(), true, 'anti-vacuity: background-work ready');
-    assert.equal(target.rebalancer, null, `the target leader built no scheduler; ${report}`);
+    assert.equal(target.rebalancer ?? null, null, `the target leader built no scheduler; ${report}`);
     assert.equal(target.replicaPlacementOwnerAttachment ?? null, null, report);
     assert.ok(world.publishedMutations.some((record) => record.tableName === 'partitions' &&
       record.data.leader_node_id === 'n2'), `it published its own leadership; ${report}`);

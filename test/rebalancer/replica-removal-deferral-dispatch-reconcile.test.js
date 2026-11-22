@@ -23,8 +23,10 @@ import {
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {
+  OPERATION_METADATA_KEY,
   OperationType,
   ReplicaStatus,
+  createOperation,
 } from '../../src/rebalancer/replica-status.js';
 import {
   REBALANCER_ENTITY_TYPE,
@@ -233,15 +235,22 @@ async function createOrdersFailedCreateCleanupHarness(t, createOpId) {
       ],
       handler,
     });
-  const removeOp = await coordinator.createOperation({
+  const removeOp = createOperation({
+    operationId: 'op-remove-orders-p1-failed-create',
     type: OperationType.REMOVE,
     partitionId: USER_PARTITION_ID,
     replicaId: USER_REPLICA_ID,
-    nodeId: targetNodeId,
-    entityType: REBALANCER_ENTITY_TYPE.PARTITION,
-    entityId: USER_PARTITION_ID,
-    [ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION]: failed,
+    sourceNodeId: 'node-1',
+    targetNodeId,
   });
+  removeOp.entityType = REBALANCER_ENTITY_TYPE.PARTITION;
+  removeOp.entityId = USER_PARTITION_ID;
+  removeOp[ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION] =
+    failed;
+  removeOp.stepsHistory[0][
+    OPERATION_METADATA_KEY.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+  ] = failed;
+  await coordinator.repository.persistNewOperation(removeOp);
   return {
     coordinator,
     failed,
@@ -420,14 +429,17 @@ test('post-completion REMOVE redelivery during SERVICES read blip preserves ' +
       ],
       handler,
     });
-  const sysRemoveOp = await coordinator.createOperation({
+  const sysRemoveOp = createOperation({
+    operationId: 'op-remove-services-p1-r1',
     type: OperationType.REMOVE,
     partitionId: SYSTEM_PARTITION_ID,
     replicaId: SYSTEM_REPLICA_ID,
-    nodeId: targetNodeId,
-    entityType: REBALANCER_ENTITY_TYPE.PARTITION,
-    entityId: SYSTEM_PARTITION_ID,
+    sourceNodeId: 'node-2',
+    targetNodeId,
   });
+  sysRemoveOp.entityType = REBALANCER_ENTITY_TYPE.PARTITION;
+  sysRemoveOp.entityId = SYSTEM_PARTITION_ID;
+  await coordinator.repository.persistNewOperation(sysRemoveOp);
   await coordinator.workflowOwner.updateStep(sysRemoveOp, WORKFLOW_STEP.STOPPING);
   const opId = sysRemoveOp.operationId;
 

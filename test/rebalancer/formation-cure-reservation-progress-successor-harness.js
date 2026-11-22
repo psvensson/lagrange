@@ -218,6 +218,7 @@ function createSuccessorFixture(options = {}) {
     setTimeoutFn: timers.setTimeoutFn,
     clearTimeoutFn: timers.clearTimeoutFn,
   });
+  coordinator.isPlacementAdmissionManagedEntityType = () => false;
   configureCreationOwner(coordinator);
   const boundary = installReservationBoundary(coordinator);
   const normalArmOperationIds = [];

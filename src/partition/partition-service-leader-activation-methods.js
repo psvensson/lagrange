@@ -13,20 +13,22 @@ const {
 
 const PARTITION_SERVICE_LEADER_ACTIVATION_METHODS = Object.freeze({
   /**
-   * Resolve whether this partition's rebalancer should hold leadership.
+   * Resolve whether this partition's leadership sink should hold leadership.
    *
-   * Policy: background-work readiness gates rebalancer-leadership
-   * ACQUISITION; raft leadership gates RETENTION. Once a rebalancer has
-   * acquired leadership while the node was ready, a transient node-wide
-   * readiness dip (e.g. the shared metadata-publication readiness state
-   * re-entering a degraded phase during control-plane recovery) must NOT
-   * demote it while this partition still holds raft leadership. Without
-   * this hysteresis every partition's rebalancer flaps in lockstep with
-   * the single shared readiness object each time it oscillates, which
-   * resets the post-restart quiescence window and stalls convergence. A
-   * draining/shutting-down node still demotes (drain is terminal).
+   * Policy: background-work readiness gates sink-leadership ACQUISITION;
+   * raft leadership gates RETENTION. Once this partition has driven its sink
+   * to leadership while the node was ready, a transient node-wide readiness
+   * dip (e.g. the shared metadata-publication readiness state re-entering a
+   * degraded phase during control-plane recovery) must NOT demote it while
+   * this partition still holds raft leadership. Without this hysteresis the
+   * sinks (the runtime-service owner, the service-installation reconciler)
+   * flap in lockstep with the single shared readiness object each time it
+   * oscillates. A draining/shutting-down node still demotes (drain is
+   * terminal). The retained state is this partition's own record of the
+   * leadership it last drove to its sink: the partition is the single owner
+   * of that decision.
    *
-   * @return {boolean} Desired rebalancer leadership state.
+   * @return {boolean} Desired sink leadership state.
    * @private
    */
   resolveRebalancerLeadership() {
@@ -36,12 +38,7 @@ const PARTITION_SERVICE_LEADER_ACTIVATION_METHODS = Object.freeze({
     if (this.isBackgroundWorkReady()) {
       return true;
     }
-    const rebalancer = this.rebalancer;
-    if (
-      !rebalancer ||
-      rebalancer.isLeader !== true ||
-      rebalancer.isShuttingDown === true
-    ) {
+    if (this.rebalancerLeadershipSinkHeld !== true) {
       return false;
     }
     const snapshot = getTrafficReadinessSnapshot(
@@ -66,6 +63,8 @@ const PARTITION_SERVICE_LEADER_ACTIVATION_METHODS = Object.freeze({
       sink && typeof sink.setLeader === PARTITION_SERVICE_TYPE.FUNCTION ?
         sink :
         null;
+    // A sink holds no leadership until this partition drives it.
+    this.rebalancerLeadershipSinkHeld = false;
     this.driveRebalancerLeadershipSink();
   },
   /** @private */
@@ -74,18 +73,12 @@ const PARTITION_SERVICE_LEADER_ACTIVATION_METHODS = Object.freeze({
       const desired = this.partitionId === LEDGER_PARTITION_ID ?
         Boolean(this.isLeader && !this.isShutdown) :
         this.resolveRebalancerLeadership();
+      this.rebalancerLeadershipSinkHeld = desired;
       this.rebalancerLeadershipSink.setLeader(desired);
     }
   },
   updateRebalancerLeadership() {
-    if (!this.rebalancer) {
-      this.maybeInitializeRebalancer();
-      this.driveRebalancerLeadershipSink();
-      return;
-    }
-    if (typeof this.rebalancer.setLeader === PARTITION_SERVICE_TYPE.FUNCTION) {
-      this.rebalancer.setLeader(this.resolveRebalancerLeadership());
-    }
+    this.maybeInitializeRebalancer();
     this.driveRebalancerLeadershipSink();
   },
   cancelLeaderOwnedActivation() {

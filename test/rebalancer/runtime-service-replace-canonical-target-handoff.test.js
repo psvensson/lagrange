@@ -35,9 +35,11 @@ import {
 import {
   createAllowAllStorageAdmissionService,
   createMockCache,
-  createTestCoordinator,
   createTestRebalancer,
 } from './test-helpers.js';
+import {
+  createPlacementBoundTestCoordinator,
+} from './placement-bound-coordinator-fixture.js';
 import {
   RUNTIME_SERVICE_REPLACE_CANONICAL_TARGET_HANDOFF_SCENARIO,
 } from './runtime-service-replace-canonical-target-handoff-scenario.js';
@@ -272,7 +274,7 @@ test('runtime-service REPLACE keeps one canonical target through the next ' +
   const handlerByNodeId = new Map();
   const messageRouter = createInProcessRuntimeRouter(handlerByNodeId);
   const storageAdmissionService = createAllowAllStorageAdmissionService();
-  const coordinator = createTestCoordinator({
+  const coordinator = await createPlacementBoundTestCoordinator({
     enableTimeouts: false,
     messageRouter,
     nodeId: SOURCE_NODE_ID,

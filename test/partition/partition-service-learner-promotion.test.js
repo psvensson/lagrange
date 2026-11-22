@@ -99,17 +99,9 @@ test('PartitionService - setRebalanceCoordinator replaces local coordinator',
       },
     };
     const sharedCoordinator = {shared: true};
-    let rebalancerCoordinator = null;
 
     partition.ownsRebalanceCoordinator = true;
     partition.rebalanceCoordinator = previousCoordinator;
-    partition.rebalancer = {
-      setRebalanceCoordinator: (coordinator) => {
-        rebalancerCoordinator = coordinator;
-      },
-      shutdown: () => {},
-      setLeader: () => {},
-    };
 
     partition.setRebalanceCoordinator(sharedCoordinator);
     await new Promise((resolve) => setImmediate(resolve));
@@ -123,11 +115,6 @@ test('PartitionService - setRebalanceCoordinator replaces local coordinator',
       partition.ownsRebalanceCoordinator,
       false,
       'Shared coordinator should not be owned by partition',
-    );
-    t.equal(
-      rebalancerCoordinator,
-      sharedCoordinator,
-      'Rebalancer should receive shared coordinator',
     );
     t.equal(
       previousCoordinator.shutdownCalled,

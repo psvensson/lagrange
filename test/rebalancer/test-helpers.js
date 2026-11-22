@@ -10,8 +10,7 @@ import {DEFAULT_TABLE_POLICY} from '../../src/policy/policy-constants.js';
 
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {
-  answerFixtureCommittedMembership,
-  withFixtureCommittedMembership,
+  answerFixtureCommittedMembership, withFixtureCommittedMembership,
 } from './committed-membership-fixture.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {UnifiedRebalancer} from '../../src/rebalancer/unified-rebalancer.js';
@@ -19,47 +18,31 @@ import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import Database from 'better-sqlite3';
 import {
-  generateCreateIndexSQL,
-  generateCreateTableSQL,
+  generateCreateIndexSQL, generateCreateTableSQL,
 } from '../../src/bootstrap/system-table-schema-sql.js';
 import {
-  PARTITIONS_SCHEMA,
-  REPLICA_OPERATIONS_SCHEMA,
-  STORAGE_RESERVATIONS_SCHEMA,
-  SYSTEM_TABLE_NAME,
+  PARTITIONS_SCHEMA, REPLICA_OPERATIONS_SCHEMA, STORAGE_RESERVATIONS_SCHEMA, SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
-  extractSqlOperationKind,
-  extractSystemTableNameFromSql,
+  extractSqlOperationKind, extractSystemTableNameFromSql,
 } from '../../src/control-plane/control-plane-system-table-gateway-normalizers.js';
+import {CONTROL_PLANE_SQL_OPERATION} from
+  '../../src/control-plane/control-plane-system-table-gateway-shared.js';
+import {ControlPlaneSystemTableGateway} from
+  '../../src/control-plane/control-plane-system-table-gateway.js';
+import {CONTROL_PLANE_READINESS_DIMENSION} from
+  '../../src/control-plane/control-plane-readiness-constants.js';
+import {DistributedTransactionCoordinator} from
+  '../../src/query/distributed/distributed-transaction-coordinator.js';
 import {
-  CONTROL_PLANE_SQL_OPERATION,
-} from '../../src/control-plane/control-plane-system-table-gateway-shared.js';
-import {
-  ControlPlaneSystemTableGateway,
-} from '../../src/control-plane/control-plane-system-table-gateway.js';
-import {
-  CONTROL_PLANE_READINESS_DIMENSION,
-} from '../../src/control-plane/control-plane-readiness-constants.js';
-import {
-  DistributedTransactionCoordinator,
-} from '../../src/query/distributed/distributed-transaction-coordinator.js';
-import {
-  DEFAULT_MESSAGE_GROUP_POLICY,
-  EntityType,
-  MoveType,
-  NodeStatus,
-  ReplicaStatus,
+  DEFAULT_MESSAGE_GROUP_POLICY, EntityType, MoveType, NodeStatus, ReplicaStatus,
 } from '../../src/rebalancer/unified-rebalancer.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {PARTITION_REPLICA_MEMBERSHIP_STATE} from
+  '../../src/partition/partition-replica-membership-constants.js';
 import {
-  PARTITION_REPLICA_MEMBERSHIP_STATE,
-} from '../../src/partition/partition-replica-membership-constants.js';
-import {
-  ReplicaOperationField,
-  ReplicaOperationMessageType,
-  ReplicaOperationResponseStatus,
+  ReplicaOperationField, ReplicaOperationMessageType, ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {buildFailedCreateCleanupToken} from
   '../../src/rebalancer/failed-create-cleanup-token.js';
@@ -323,6 +306,7 @@ function createMockControlPlaneReadinessService(options = {}) {
     readinessByNodeId = {},
     livenessProjectionByNodeId = null,
     membershipPublicationPlanningSnapshot = null,
+    formation = null,
     callbacks = {},
   } = options;
   const project = (nodeRow) => projectNodeLivenessSemantics({nodeRow, nowMs: now()}).projection;
@@ -337,6 +321,7 @@ function createMockControlPlaneReadinessService(options = {}) {
         state: 'ready',
         epoch: {publicationEpoch: 1, publicationId: 'cluster_membership-1', readAtMs: now()},
         nodeRows: readNodeRows(),
+        ...(formation === null ? {} : {formation}),
       };
     },
     getNodeReadinessSync(nodeId) {
@@ -1045,15 +1030,16 @@ function answerFixtureServicesRead(cache, sql, params) {
   };
 }
 
-function createCoordinatorSqlStore(cache, {onCommittedOperationWrite} = {}) {
+function createCoordinatorSqlStore(cache, {onCommittedOperationWrite, openDatabase = null} = {}) {
   // The store outlives its coordinator (a shutdown and re-initialize keeps
   // the ledger); while no coordinator runs it is held as its serialized
-  // image, so its SQLite connection is released.
+  // image (or, opened over a ledger partition's file, by that file), so its
+  // SQLite connection is released.
   let image = SQL_STORE_DATABASE_IMAGE;
   let database = null;
   let statements = new Map();
   const prepare = (sql) => {
-    database ??= new Database(image);
+    database ??= openDatabase ? openDatabase() : new Database(image);
     if (!statements.has(sql)) {
       statements.set(sql, database.prepare(sql));
     }
@@ -1061,7 +1047,7 @@ function createCoordinatorSqlStore(cache, {onCommittedOperationWrite} = {}) {
   };
   const suspend = () => {
     if (database) {
-      image = database.serialize();
+      if (!openDatabase) image = database.serialize();
       database.close();
       database = null;
       statements = new Map();
@@ -1101,6 +1087,10 @@ function createCoordinatorSqlStore(cache, {onCommittedOperationWrite} = {}) {
   // The fixture's committed rows enter through the owner's insert; a row the
   // owner's schema refuses is a fixture defect, never a row to repair here.
   for (const row of cache.getAll?.(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) ?? []) {
+    if (openDatabase && run('SELECT 1 FROM replica_operations WHERE operation_id = ?',
+      [row.operation_id]).rows?.length > 0) {
+      continue;
+    }
     const {sql, params} = MUTATION_SQL_PLANNER.buildSqlMutationPlan({
       operation: 'insert', tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, row,
     });
@@ -1112,6 +1102,8 @@ function createCoordinatorSqlStore(cache, {onCommittedOperationWrite} = {}) {
   }
   takeWrittenOperationIds();
   const execute = (sql, params) => {
+    // Rows another writer of a shared ledger file committed reach the cache first.
+    mirrorOperationWrites();
     if (extractSqlOperationKind(sql) === CONTROL_PLANE_SQL_OPERATION.READ &&
         extractSystemTableNameFromSql(sql) === SYSTEM_TABLE_NAME.SERVICES) {
       return answerFixtureServicesRead(cache, sql, params);
@@ -1181,6 +1173,7 @@ function createTestCoordinator(options = {}) {
 
   const sqlStore = createCoordinatorSqlStore(mockCache, {
     onCommittedOperationWrite: options.onCommittedOperationWrite,
+    openDatabase: options.openLedgerDatabase,
   });
   // The SQL engine: a test's pattern answers first, then the store.
   const mockSqlEngine = options.sqlQueryEngine || {
@@ -1291,7 +1284,8 @@ function createTestCoordinator(options = {}) {
 /**
  * A fixture coordinator persists a fresh create at its durable PENDING step
  * without arming its progress: the owner's create arm is inert while
- * createOperationRecordInternal runs. The reuse rearm of an existing
+ * createOperationRecordInternal or a placement admission (the partition and
+ * runtime-service path) runs. The reuse rearm of an existing
  * in-flight row (maybeRearmReusedPendingOperation) stays live, also when the
  * create's own persistence collision reuses a row. The scope is the create's
  * call chain, so a concurrent create's reuse rearm is not silenced.
@@ -1307,6 +1301,9 @@ function withInertFreshCreateArm(coordinator) {
     .bind(coordinator);
   coordinator.createOperationRecordInternal = (context) =>
     freshCreateScope.run(true, () => createRecord(context));
+  const createAdmitted = coordinator.createOperationViaPlacementAdmission.bind(coordinator);
+  coordinator.createOperationViaPlacementAdmission = (context) =>
+    freshCreateScope.run(true, () => createAdmitted(context));
   coordinator.maybeRearmReusedPendingOperation = (operation) =>
     freshCreateScope.run(false, () => rearmReused(operation));
   coordinator.armCoordinatorCreatedOperationProgress =
@@ -1487,4 +1484,5 @@ export {
   createMockRpcClient, createTestCoordinator, createTestRebalancer,
   initializeSpreadTestEnvironment, installActualReplicaObservationResolver,
   isAddLikeMoveResult, withSuccessfulStorageReservationInsert, withFixtureReplaceWitness,
+  REPLICA_OPERATION_WRITE_CAPTURE, SQL_STORE_SCHEMAS,
 };

@@ -36,6 +36,11 @@
 
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {EventEmitter} from 'node:events';
+import {
+  COMMITTED_FORMATION,
+  bindPlacementAdmission,
+  startPlacementLedger,
+} from './placement-bound-coordinator-fixture.js';
 
 import {DELIVERED_TO_PEER, PartitionNodeCluster} from
   '../raft/raft-rs-backend/partition-node-cluster.js';
@@ -53,6 +58,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {CDC_OPERATION, NODE_STATE, WORKFLOW_STEP} from
   '../../src/constants/index.js';
 import {
+  OPERATION_METADATA_KEY,
   OperationType,
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
@@ -659,6 +665,12 @@ function createReplaceWorld(options = {}) {
       nodeId: NODE.SOURCE, cache: sourceNodeCache,
       rowOf: (status) => serviceRow(partitionId, sourceReplicaId,
         NODE.SOURCE, 'follower', status)});
+    const sourceGateway = world.sourceHandler.lifecycleStore.gateway;
+    const readSourceRows = sourceGateway.readAuthoritativeRows.bind(sourceGateway);
+    sourceGateway.readAuthoritativeRows = async (table, sql, params, readOptions) => {
+      const result = await readSourceRows(table, sql, params, readOptions);
+      return result?.success === true ? {...result, rowSetComplete: true} : result;
+    };
     // The REMOVING write exhausts its retry on a retryable control-plane
     // failure while the flag holds (verification round 1 V2).
     world.removingWriteFails = options.removingWriteFails === true;
@@ -892,6 +904,10 @@ async function deliver(world, target, payload) {
 // The fixture store calls this once per changed ledger row in a committed
 // SQLite statement, before publishing CDC. Raft membership is a distinct oracle.
 function captureTerminalWrite(world, row) {
+  world.sourceHandler?.lifecycleStore.durable.replica_operations.set(
+    row.operation_id,
+    {...row},
+  );
   if (row.operation_id !== world.operation?.operationId ||
       !TERMINAL_STEPS.has(row.workflow_step) || row.completed_at === null) return;
   world.terminalWrites.push(Object.freeze({
@@ -915,6 +931,7 @@ function startCoordinator(world, controlPlaneSystemTableGatewayFactory) {
     enableTimeouts: false,
     replaceWitness: false,
     committedMembershipFixture: false,
+    openLedgerDatabase: world.ledger?.openDatabase,
     systemTableCache: world.cache,
     onCommittedOperationWrite: (row) => captureTerminalWrite(world, row),
     controlPlaneSystemTableGatewayFactory,
@@ -926,6 +943,7 @@ function startCoordinator(world, controlPlaneSystemTableGatewayFactory) {
     },
     readinessFixture: {
       callbacks: world.readiness,
+      formation: COMMITTED_FORMATION,
       now: () => Date.now() + world.clockOffsetMs,
       readNodeRows: () => world.members.map(([, nodeId]) =>
         readyNode(nodeId, Date.now() + world.clockOffsetMs)),
@@ -951,6 +969,9 @@ function startCoordinator(world, controlPlaneSystemTableGatewayFactory) {
     now: () => Date.now() + world.clockOffsetMs,
   };
   coordinator.initialize();
+  if (world.ledger) {
+    bindPlacementAdmission(coordinator, world.ledger, false);
+  }
   coordinator.attachReplicaConsensusEvents(world.relay);
   world.coordinator = coordinator;
   return coordinator;
@@ -971,6 +992,21 @@ async function createReplace(world) {
     membershipPublicationEpoch: PLANNING_EPOCH,
   });
   operation.replicaId = world.targetReplicaId;
+  const bootstrapTopology = await coordinator.buildOperationBootstrapTopology({
+    normalizedMoveType: OperationType.REPLACE,
+    entityType: 'partition',
+    entityId: world.partitionId,
+    partitionId: world.partitionId,
+    targetNodeId: world.targetNodeId,
+    targetReplicaId: world.targetReplicaId,
+    deferredBootstrap: false,
+  });
+  if (bootstrapTopology?.bootstrapMembership) {
+    operation[ReplicaOperationField.BOOTSTRAP_MEMBERSHIP] =
+      bootstrapTopology.bootstrapMembership;
+    operation.stepsHistory[0][OPERATION_METADATA_KEY.BOOTSTRAP_MEMBERSHIP] =
+      bootstrapTopology.bootstrapMembership;
+  }
   operation.workflowStep = WORKFLOW_STEP.ACTIVE;
   operation.status = ReplicaStatus.ACTIVE;
   await coordinator.repository.persistOperationUpdate(operation);
@@ -1102,6 +1138,7 @@ async function disposeWorld(world) {
     if (world.coordinator) {
       await world.coordinator.shutdown();
     }
+    await world.ledger?.stop();
     await world.sourceHandler?.dispose();
   } finally {
     world.registry.clear();
@@ -1149,6 +1186,7 @@ function coordinatorGatewayFactory(options, world) {
 async function openReplaceWorld(options = {}) {
   const world = createReplaceWorld(options);
   try {
+    world.ledger = await startPlacementLedger({nodeId: world.ownerNodeId});
     startCoordinator(world, coordinatorGatewayFactory(options, world));
     if (options.initializeOperation) await options.initializeOperation(world);
     else await createReplace(world);

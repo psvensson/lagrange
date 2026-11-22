@@ -201,6 +201,7 @@ function createCoordinatorWithRealSize(options = {}) {
     storageAdmissionService: admissionService,
   });
   coordinator.initialize();
+  coordinator.isPlacementAdmissionManagedEntityType = () => false;
   return {coordinator, sqlEngine, estimateCalls, admissionService};
 }
 

@@ -9,7 +9,8 @@
  * Requirements: 8.1, 8.2, 8.3
  */
 
-import {createMockCache, createTestCoordinator} from './test-helpers.js';
+import {createMockCache} from './test-helpers.js';
+import {createPlacementBoundTestCoordinator} from './placement-bound-coordinator-fixture.js';
 import {buildCreatedOperationFixture} from './operation-outcome-fixture.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
@@ -104,8 +105,10 @@ function withLedgerLatency(gateway, delayMs) {
   };
 }
 
-function createCoordinatorUnderTest(ledger, overrides = {}) {
-  const coordinator = createTestCoordinator({
+// Bound like production: partition operations are created through placement
+// admission on this node's ledger replica (placement-bound-coordinator-fixture).
+async function createCoordinatorUnderTest(ledger, overrides = {}) {
+  const coordinator = await createPlacementBoundTestCoordinator({
     nodeId: COORDINATOR_NODE_ID,
     systemTableCache: ledger.cache,
     messageRouter: {
@@ -317,7 +320,7 @@ test('RebalanceCoordinator - Concurrent Operation Deduplication', async (t) => {
     // Property: When multiple createOperation calls happen concurrently
     // for the same partition/node, only one operation should be created
     const ledger = createOperationLedger({insertDelay: 10});
-    const coordinator = createCoordinatorUnderTest(ledger);
+    const coordinator = await createCoordinatorUnderTest(ledger);
 
     // Simulate concurrent createOperation calls
     const move = {
@@ -366,7 +369,7 @@ test('RebalanceCoordinator - Concurrent Operation Deduplication', async (t) => {
     const ledger = createOperationLedger({
       existingOperations: [existingOp],
     });
-    const coordinator = createCoordinatorUnderTest(ledger);
+    const coordinator = await createCoordinatorUnderTest(ledger);
 
     const move = {
       type: 'ADD',
@@ -394,7 +397,7 @@ test('Multiple Partition Rebalancers - Cross-Partition Deduplication', async (t)
     // The issue from the logs is that the SAME partition was creating
     // duplicate operations, which should be prevented by the deduplication.
     const ledger = createOperationLedger();
-    const coordinator = createCoordinatorUnderTest(ledger);
+    const coordinator = await createCoordinatorUnderTest(ledger);
 
     // Two different partitions creating operations to the same node
     const move1 = {
@@ -433,7 +436,7 @@ test('Multiple Partition Rebalancers - Cross-Partition Deduplication', async (t)
           fc.integer({min: 2, max: 5}),
           async (concurrentAttempts) => {
             const ledger = createOperationLedger({insertDelay: 5});
-            const coordinator = createCoordinatorUnderTest(ledger);
+            const coordinator = await createCoordinatorUnderTest(ledger);
 
             const move = {
               type: 'ADD',
@@ -478,7 +481,7 @@ test('Rapid Rebalance Cycles - Race Condition Prevention', async (t) => {
     // rebalance cycles happen in rapid succession, potentially before
     // the in-flight operations are visible in the system cache.
     const ledger = createOperationLedger();
-    const coordinator = createCoordinatorUnderTest(ledger);
+    const coordinator = await createCoordinatorUnderTest(ledger);
 
     // Simulate multiple rapid rebalance cycles for the same partition
     const partitionId = 'indices-p1';
@@ -740,7 +743,7 @@ test('System Cache Consistency - In-Flight Operation Visibility', async (t) => {
     // that provides immediate visibility of operations being created.
     // This is the correct approach for preventing duplicates.
     const ledger = createOperationLedger();
-    const coordinator = createCoordinatorUnderTest(ledger);
+    const coordinator = await createCoordinatorUnderTest(ledger);
 
     // Start creating an operation (but don't await yet)
     const createPromise = coordinator.createOperation({
@@ -782,10 +785,10 @@ test('Cross-Rebalancer Coordination - Multiple Partition Leaders', async (t) => 
     // the logs is that the SAME partition is creating duplicates.
 
     const ledger1 = createOperationLedger();
-    const coordinator1 = createCoordinatorUnderTest(ledger1);
+    const coordinator1 = await createCoordinatorUnderTest(ledger1);
 
     const ledger2 = createOperationLedger();
-    const coordinator2 = createCoordinatorUnderTest(ledger2);
+    const coordinator2 = await createCoordinatorUnderTest(ledger2);
 
     // Each coordinator has its own in-memory guard
     t.not(coordinator1.operationsInCreation, coordinator2.operationsInCreation,
@@ -809,7 +812,7 @@ test('Cross-Rebalancer Coordination - Multiple Partition Leaders', async (t) => 
 
     // Shared SQL engine simulates shared database
     const sharedLedger = createOperationLedger();
-    const coordinator1 = createCoordinatorUnderTest(
+    const coordinator1 = await createCoordinatorUnderTest(
       sharedLedger,
       {nodeId: 'node-1'},
     );

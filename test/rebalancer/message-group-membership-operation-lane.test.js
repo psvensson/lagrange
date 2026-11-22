@@ -447,6 +447,7 @@ test('canonical visibility treats omitted nullable membership fields as SQL ' +
     const repository = createRepository(database, {nodeId: 'visibility-owner'});
     coordinator = createCoordinator(database, 'ordinary-replace-owner');
     allowOrdinaryReplaceCreation(coordinator, 'ordinary-p1-r2');
+    coordinator.isPlacementAdmissionManagedEntityType = () => false;
     const sourceBearingReplace = await coordinator.createOperation({
       operationIntentId: 'source-bearing-replace-without-membership',
       type: OperationType.REPLACE,

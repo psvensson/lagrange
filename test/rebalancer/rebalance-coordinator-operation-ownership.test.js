@@ -20,6 +20,10 @@ class RebalanceCoordinator extends CommittedReadRebalanceCoordinator {
       .queryTerminalReplicaCleanupOperations = async () => [];
     this.workflowOwner.recoverReplicaCleanupReleaseDebt = async () => 0;
   }
+
+  isPlacementAdmissionManagedEntityType() {
+    return false;
+  }
 }
 import {CONTROL_PLANE_MUTATION_OPERATION} from
   '../../src/control-plane/control-plane-system-table-gateway.js';

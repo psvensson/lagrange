@@ -364,6 +364,7 @@ function createCoordinator(sqlEngine) {
     },
   });
   coordinator.initialize();
+  coordinator.isPlacementAdmissionManagedEntityType = () => false;
   coordinator.repository.waitForOperationPersistRetry = async () => {};
   return coordinator;
 }
@@ -447,6 +448,7 @@ function createLostAnswerCoordinator() {
       };
     },
   });
+  coordinator.isPlacementAdmissionManagedEntityType = () => false;
   coordinator.repository.waitForOperationPersistRetry = async () => {};
   return {coordinator, ledger};
 }

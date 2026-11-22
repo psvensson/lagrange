@@ -27,7 +27,8 @@ import {
 const SHARED_LEDGER_STORES = new WeakMap();
 const OPERATIONS_TABLE = 'replica_operations';
 
-function createTrackedLedgerStore(rows) {
+// openDatabase: the store over a ledger partition's database file (placement-bound fixtures).
+function createTrackedLedgerStore(rows, openDatabase = null) {
   const published = new Map();
   const cache = {
     getAll: (table) => table === OPERATIONS_TABLE ? [...rows.values()] : [],
@@ -42,7 +43,7 @@ function createTrackedLedgerStore(rows) {
       published.delete(id);
     },
   };
-  const store = createCoordinatorSqlStore(cache);
+  const store = createCoordinatorSqlStore(cache, {openDatabase});
   for (const [id, row] of rows) published.set(id, JSON.stringify(row));
   const commitFixtureChange = (mutation) => {
     const result = store.submitMutation(mutation);
@@ -90,7 +91,8 @@ function createTimeoutTestCoordinator(options = {}) {
       options.trackedOperations :
       new Map();
   if (!SHARED_LEDGER_STORES.has(trackedOperations)) {
-    SHARED_LEDGER_STORES.set(trackedOperations, createTrackedLedgerStore(trackedOperations));
+    SHARED_LEDGER_STORES.set(trackedOperations,
+      createTrackedLedgerStore(trackedOperations, options.openLedgerDatabase));
   }
   const ledgerStore = SHARED_LEDGER_STORES.get(trackedOperations);
 
@@ -161,6 +163,7 @@ function createTimeoutTestCoordinator(options = {}) {
     transactionCoordinator: createMockTransactionCoordinator(),
     controlPlaneReadinessService: createMockControlPlaneReadinessService({
       defaultRepairEligible: true,
+      ...options.readinessFixture,
     }),
     storageAdmissionService: {
       checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
@@ -176,6 +179,9 @@ function createTimeoutTestCoordinator(options = {}) {
   });
 
   coordinator.initialize();
+  if (!options.openLedgerDatabase) {
+    coordinator.isPlacementAdmissionManagedEntityType = () => false;
+  }
   const shutdown = coordinator.shutdown.bind(coordinator);
   coordinator.shutdown = async () => {
     try {
@@ -202,6 +208,16 @@ function createTimeoutTestCoordinator(options = {}) {
     const op = trackedOperations.get(operationId);
     if (op) {
       op.updated_at = Date.now() - msAgo;
+    }
+  };
+
+  // Backdate an operation's creation (created_at): the anchor of an admitted
+  // placement create's operation budget while it awaits its bootstrap
+  // authority at PENDING/SENDING (isPlacementBootstrapAwaitingAuthority).
+  const backdateOperationCreation = (operationId, msAgo) => {
+    const op = trackedOperations.get(operationId);
+    if (op) {
+      op.created_at = Date.now() - msAgo;
     }
   };
 
@@ -249,6 +265,7 @@ function createTimeoutTestCoordinator(options = {}) {
   return {
     coordinator,
     backdateOperation,
+    backdateOperationCreation,
     setOperationUpdatedAt,
     getTrackedOperation,
     trackedOperations,

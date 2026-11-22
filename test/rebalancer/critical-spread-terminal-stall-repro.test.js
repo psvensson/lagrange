@@ -51,9 +51,11 @@ import {
 import {
   createMockCache,
   createMockControlPlaneReadinessService,
-  createTestCoordinator,
   createTestRebalancer,
 } from './test-helpers.js';
+import {
+  createPlacementBoundTestCoordinator,
+} from './placement-bound-coordinator-fixture.js';
 
 const TEST_PARTITION_ID = 'sql_write_operations-p1';
 const TEST_TABLE_ID = SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS;
@@ -163,7 +165,7 @@ function isSpreadRestoringOperationRow(operationRow) {
 
 // Shared coordinator + rebalancer wiring over a prepared cache: both stall
 // repros differ only in the seeded services topology.
-function createStallReproStack(cache, options = {}) {
+async function createStallReproStack(cache, options = {}) {
   // Mutable: a case lets the services owner answer between two cycles.
   const servicesRead = {[TEST_SERVICES_SQL_PATTERN]:
     options.authoritativeServicesReadResult ||
@@ -173,7 +175,7 @@ function createStallReproStack(cache, options = {}) {
     defaultRepairEligible: true,
   });
   const storageAdmissionService = createAllowAllStorageAdmissionService();
-  const coordinator = createTestCoordinator({
+  const coordinator = await createPlacementBoundTestCoordinator({
     nodeId: TEST_NODE_ID_A,
     systemTableCache: cache,
     controlPlaneReadinessService: readinessService,
@@ -224,7 +226,7 @@ async function rebalanceAcrossOwnerOutage(t, {rebalancer, cache, servicesRead}) 
   t.same(cache.getAll(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS), [],
     'no operation exists after the unavailable cycle');
   servicesRead[TEST_SERVICES_SQL_PATTERN] = Object.freeze({success: true,
-    rows: cache.getAll(SYSTEM_TABLE_NAME.SERVICES)});
+    rowSetComplete: true, rows: cache.getAll(SYSTEM_TABLE_NAME.SERVICES)});
   return rebalancer.rebalance(TriggerType.PERIODIC);
 }
 
@@ -290,7 +292,7 @@ test('critical priority partition [A,A,B] with free active nodes gets a ' +
     // rows in flight for this partition while the gate demanded creation.
     replicaOperations: [],
   });
-  const {coordinator, rebalancer, servicesRead} = createStallReproStack(cache);
+  const {coordinator, rebalancer, servicesRead} = await createStallReproStack(cache);
 
   try {
     // Harness sanity: all 5 active nodes are visible, replicas read [A,A,B].
@@ -362,7 +364,7 @@ test('critical priority partition [A,A,B] with free active nodes gets a ' +
   } finally {
     rebalancer.shutdown();
     if (typeof coordinator.shutdown === 'function') {
-      coordinator.shutdown();
+      await coordinator.shutdown();
     }
   }
 });
@@ -386,7 +388,7 @@ test('over-target [A,A,A,B] priority partition (the ec-postfix archived ' +
   // THREE replicas are co-located on node A plus one on node B, with zero
   // in-flight operations: the archived over-target terminal topology.
   const cache = createOverTargetCache();
-  const {coordinator, rebalancer, servicesRead} = createStallReproStack(cache);
+  const {coordinator, rebalancer, servicesRead} = await createStallReproStack(cache);
 
   try {
     t.equal(
@@ -447,7 +449,7 @@ test('over-target [A,A,A,B] priority partition (the ec-postfix archived ' +
   } finally {
     rebalancer.shutdown();
     if (typeof coordinator.shutdown === 'function') {
-      coordinator.shutdown();
+      await coordinator.shutdown();
     }
   }
 });
@@ -460,9 +462,10 @@ async (t) => {
   const cache = createOverTargetCache();
   const authoritativeServicesReadResult = Object.freeze({
     success: true,
+    rowSetComplete: true,
     rows: cache.getAll(SYSTEM_TABLE_NAME.SERVICES),
   });
-  const {coordinator, rebalancer} = createStallReproStack(cache, {
+  const {coordinator, rebalancer} = await createStallReproStack(cache, {
     authoritativeServicesReadResult,
   });
 
@@ -499,7 +502,7 @@ async (t) => {
   } finally {
     rebalancer.shutdown();
     if (typeof coordinator.shutdown === 'function') {
-      coordinator.shutdown();
+      await coordinator.shutdown();
     }
   }
 });

@@ -41,7 +41,8 @@ import {
   TERMINAL_TRANSITION_REPAIR_CAUSE,
   armTerminalTransitionRepair,
 } from '../../src/rebalancer/operation-workflow-terminal-transition-repair.js';
-import {buildMockPolicyAuthorityWitness, createTestCoordinator} from './test-helpers.js';
+import {buildMockPolicyAuthorityWitness} from './test-helpers.js';
+import {createPlacementBoundTestCoordinator} from './placement-bound-coordinator-fixture.js';
 import {installServicesAuthorityFixture} from './operation-outcome-fixture.js';
 import {
   createReplaceWitness,
@@ -163,7 +164,7 @@ async function createHarness(t, {
         operationId, replicaId: payload?.replicaId, nodeId: options.targetNodeId});
     },
   };
-  coordinator = createTestCoordinator({
+  coordinator = await createPlacementBoundTestCoordinator({
     nodeId: SOURCE_NODE_ID,
     enableTimeouts: false,
     replaceWitness: false,
@@ -201,6 +202,7 @@ async function createHarness(t, {
   });
   operation.replicaId = TARGET_REPLICA_ID;
   operation.sourceReplicaId = SOURCE_REPLICA_ID;
+  await coordinator.repository.persistOperationUpdate(operation);
   return {coordinator, owner, operation, witness, deliveries, clock,
     heldTimers, commitServiceRow};
 }

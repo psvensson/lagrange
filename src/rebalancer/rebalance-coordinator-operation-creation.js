@@ -440,11 +440,9 @@ class RebalanceCoordinatorOperationCreation {
       observeAttempt: creationContext.observeAttempt,
       assertFreshCreationAllowed: creationContext.assertFreshCreationAllowed,
     };
-    if (this.placementAdmissionEnabled === true &&
-        this.isPlacementAdmissionManagedEntityType(entityType)) {
-      return this.createOperationViaPlacementAdmission(
-        recordContext,
-      );
+    // Partition and runtime-service operations: placement admission only.
+    if (this.isPlacementAdmissionManagedEntityType(entityType)) {
+      return this.createOperationViaPlacementAdmission(recordContext);
     }
     if (this.shouldEnforceConcurrentOperationBudget(move, normalizedMoveType)) {
       return this.createOperationWithinConcurrentCreateBudgetTurn(

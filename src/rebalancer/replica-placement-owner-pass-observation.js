@@ -14,7 +14,7 @@
 // proposals and admitted operations.
 import {PLACEMENT_RESULT_FIELD} from '../partition/partition-placement-admission-constants.js';
 import {isWriteOutcomeUnknown} from '../partition/partition-write-kernel.js';
-import {PLACEMENT_OUTCOME} from './replica-placement-owner-constants.js';
+import {PLACEMENT_OUTCOME, PLACEMENT_TRIGGER} from './replica-placement-owner-constants.js';
 import {PLACEMENT_DEFICIT_STATE} from './replica-placement-owner-deficits.js';
 
 // Where a pass stopped (lastPassSnapshot.stoppedAt): a tenure checkpoint (the
@@ -52,15 +52,43 @@ function createPlacementObservation() {
   return {passSequence: 0, totals: {passes: 0, completed: 0, waits: {}, staleStops: {},
     leadershipStartDrivesJoined: 0, constructions: 0, evaluated: 0, candidates: 0,
     capacityChecks: 0, proposals: 0, fenced: 0, admitted: 0, released: 0, refused: {},
-    outcomeUnknown: 0, failedPasses: 0, failedCandidates: 0, leadershipStartDriveFailures: 0}};
+    outcomeUnknown: 0, failedPasses: 0, failedCandidates: 0, leadershipStartDriveFailures: 0,
+    localFailuresAfterAdmission: 0, uncertainCandidates: 0}};
 }
 
 function newPassRecord(observation, custody, sequence, triggers) {
   return {observation, custody, sequence, triggers: Object.freeze([...triggers]),
     tenureTerm: custody?.tenure?.term ?? null, state: PLACEMENT_PASS_STATE.STOPPED,
-    stoppedAt: CHECKPOINT.RUNNING, stale: false, operationIds: Object.freeze([]),
+    stoppedAt: CHECKPOINT.RUNNING, stale: false, operationIds: [],
     evaluated: 0, candidates: 0, waiting: {}, capacityChecks: 0, proposals: 0, fenced: 0,
-    refused: {}, failedCandidates: {}};
+    refused: {}, failedCandidates: {}, localFailures: {}, uncertainCandidates: {}};
+}
+
+// An operation the pass admitted (kept also when the pass aborts later).
+function recordAdmittedOperation(pass, operationId) {
+  pass.operationIds.push(operationId);
+}
+
+// The admissions a pass woken by the resync alone recorded, also one whose
+// later local step aborted the pass: what placementResyncAdmissions counts.
+function resyncAdmissionsOf(pass, triggers) {
+  return triggers.size === 1 && triggers.has(PLACEMENT_TRIGGER.RESYNC) ?
+    pass.operationIds.length : 0;
+}
+
+// An admitted candidate whose later local step failed: the admission stands;
+// the failure is recorded apart from failed candidates (the pass aborts).
+function recordLocalFailureAfterAdmission(pass, partitionId, operationId, error) {
+  pass.localFailures[partitionId] = Object.freeze({operationId,
+    failure: String(error?.message ?? error)});
+  pass.observation.totals.localFailuresAfterAdmission += 1;
+}
+
+// A candidate handed over with no answer known: its attempt stays retained
+// for the uncertain-attempt reconciliation (the pass aborts).
+function recordUncertainCandidate(pass, partitionId, error) {
+  pass.uncertainCandidates[partitionId] = String(error?.message ?? error);
+  pass.observation.totals.uncertainCandidates += 1;
 }
 
 /**
@@ -193,10 +221,10 @@ function recordPlacementResult(pass, result) {
   }
 }
 
-// The end of a pass that planned; one stopped stale keeps its checkpoint.
-function completePass(pass, state, operationIds) {
+// The end of a pass that planned (its admissions recorded as they were made);
+// one stopped stale keeps its checkpoint.
+function completePass(pass, state) {
   pass.state = state;
-  pass.operationIds = operationIds;
   if (pass.stale) return;
   pass.stoppedAt = CHECKPOINT.COMPLETED;
   pass.observation.totals.completed += 1;
@@ -230,6 +258,8 @@ function placementPassSnapshot(pass, clearingTriggers) {
     waiting: frozenCounts(pass.waiting), capacityChecks: pass.capacityChecks,
     proposals: pass.proposals, fenced: pass.fenced, refused: frozenCounts(pass.refused),
     failedCandidates: frozenCounts(pass.failedCandidates),
+    localFailures: frozenCounts(pass.localFailures),
+    uncertainCandidates: frozenCounts(pass.uncertainCandidates),
     totals: frozenTotals(pass.observation.totals)});
 }
 
@@ -238,7 +268,11 @@ export {
   PLACEMENT_PASS_STATE,
   beginPlacementPass,
   completePass,
+  recordAdmittedOperation,
   recordCandidateFailure,
+  resyncAdmissionsOf,
+  recordLocalFailureAfterAdmission,
+  recordUncertainCandidate,
   createPlacementObservation,
   directSubmissionRecord,
   markPassStale,

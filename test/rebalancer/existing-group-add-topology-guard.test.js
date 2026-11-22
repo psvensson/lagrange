@@ -521,6 +521,7 @@ async (t) => {
     enableTimeouts: false,
   });
   coordinator.initialize();
+  coordinator.isPlacementAdmissionManagedEntityType = () => false;
 
   try {
     const createdEvents = [];

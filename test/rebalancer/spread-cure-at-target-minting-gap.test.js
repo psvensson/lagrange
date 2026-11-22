@@ -42,11 +42,13 @@ import {
   createAllowAllStorageAdmissionService,
   createMockCache,
   createMockControlPlaneReadinessService,
-  createTestCoordinator,
   createTestRebalancer,
   initializeSpreadTestEnvironment,
   isAddLikeMoveResult,
 } from './test-helpers.js';
+import {
+  createPlacementBoundTestCoordinator,
+} from './placement-bound-coordinator-fixture.js';
 
 const TEST_PARTITION_ID = 'sql_write_operations-p1';
 const TEST_TABLE_ID = SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS;
@@ -216,7 +218,7 @@ async function runAtTargetGapCycle(t, {
     defaultRepairEligible: true,
   });
   const storageAdmissionService = createAllowAllStorageAdmissionService();
-  const coordinator = createTestCoordinator({
+  const coordinator = await createPlacementBoundTestCoordinator({
     nodeId: TEST_NODE_ID_A,
     systemTableCache: cache,
     controlPlaneReadinessService: readinessService,
@@ -299,7 +301,7 @@ async function runAtTargetGapCycle(t, {
   } finally {
     rebalancer.shutdown();
     if (typeof coordinator.shutdown === 'function') {
-      coordinator.shutdown();
+      await coordinator.shutdown();
     }
   }
 }
@@ -340,7 +342,7 @@ test('guard: with the conservative-union escape deleted (ruling 2026-11-21), a '
     systemTableCache: cache,
     defaultRepairEligible: true,
   });
-  const coordinator = createTestCoordinator({
+  const coordinator = await createPlacementBoundTestCoordinator({
     nodeId: TEST_NODE_ID_A,
     systemTableCache: cache,
     controlPlaneReadinessService: readinessService,
@@ -375,7 +377,7 @@ test('guard: with the conservative-union escape deleted (ruling 2026-11-21), a '
     t.equal(operation, null, 'no operation is created');
   } finally {
     if (typeof coordinator.shutdown === 'function') {
-      coordinator.shutdown();
+      await coordinator.shutdown();
     }
   }
 });
@@ -420,7 +422,7 @@ test('at-target [A,A,B] priority partition still receives an admitted ' +
 const TEST_OVER_TARGET_REPLICA_ID_4 = 'sql_write_operations-p1-r4';
 const TEST_OVER_TARGET_ACTIVE_COUNT = 4;
 
-function createOverTargetTestStack({services, replicaOperations}) {
+async function createOverTargetTestStack({services, replicaOperations}) {
   const cache = createMockCache({
     nodes: [
       createNodeRow(TEST_NODE_ID_A),
@@ -443,7 +445,7 @@ function createOverTargetTestStack({services, replicaOperations}) {
     defaultRepairEligible: true,
   });
   const storageAdmissionService = createAllowAllStorageAdmissionService();
-  const coordinator = createTestCoordinator({
+  const coordinator = await createPlacementBoundTestCoordinator({
     nodeId: TEST_NODE_ID_A,
     systemTableCache: cache,
     controlPlaneReadinessService: readinessService,
@@ -478,7 +480,7 @@ test('over-target [A,A,A,B] priority partition below its distinct-node ' +
 'spread cure through the drain residue', async (t) => {
   initializeTestEnvironment();
 
-  const {cache, coordinator, rebalancer} = createOverTargetTestStack({
+  const {cache, coordinator, rebalancer} = await createOverTargetTestStack({
     services: [
       createReplicaRow(TEST_REPLICA_ID_1, TEST_NODE_ID_A,
         TEST_RAFT_ROLE_LEADER),
@@ -538,7 +540,7 @@ test('over-target [A,A,A,B] priority partition below its distinct-node ' +
   } finally {
     rebalancer.shutdown();
     if (typeof coordinator.shutdown === 'function') {
-      coordinator.shutdown();
+      await coordinator.shutdown();
     }
   }
 });
@@ -549,7 +551,7 @@ test('over-target priority partition ALREADY AT its distinct-node floor ' +
 '(fail-closed floor)', async (t) => {
   initializeTestEnvironment();
 
-  const {cache, coordinator, rebalancer} = createOverTargetTestStack({
+  const {cache, coordinator, rebalancer} = await createOverTargetTestStack({
     services: [
       createReplicaRow(TEST_REPLICA_ID_1, TEST_NODE_ID_A,
         TEST_RAFT_ROLE_LEADER),
@@ -601,7 +603,7 @@ test('over-target priority partition ALREADY AT its distinct-node floor ' +
   } finally {
     rebalancer.shutdown();
     if (typeof coordinator.shutdown === 'function') {
-      coordinator.shutdown();
+      await coordinator.shutdown();
     }
   }
 });

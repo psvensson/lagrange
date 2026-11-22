@@ -44,7 +44,7 @@ import {
 } from './replica-placement-owner-admission-statement.js';
 import {classifyPlacementClass, formationWaitingReasonOf} from
   './replica-placement-owner-order.js';
-import {attachReplicaPlacementOwner} from './replica-placement-owner.js';
+import {COLLABORATOR, invalidCollaborator} from './replica-placement-owner-collaborators.js';
 import {isBootstrapTopologyDispatchDeferred} from './replica-status.js';
 import {ReplicaOperationField} from './replica-operation-constants.js';
 import {resolvePlacementLedgerDelivery, resolvePlacementLedgerRoute} from
@@ -600,18 +600,23 @@ const operationCreationSupportMethods = {
     );
   },
 
+  // The one placement-owner factory (ControlPlaneSetup's), required. Binding
+  // is the owned retry of every ledger replica that met this coordinator
+  // before it: each one still waiting is attached now.
   bindReplicaPlacementOwnerFactory(factory) {
-    if (typeof factory !== LOCAL_STR_FUNCTION) return;
+    if (typeof factory !== LOCAL_STR_FUNCTION) {
+      invalidCollaborator(COLLABORATOR.FACTORY);
+    }
     this.replicaPlacementOwnerFactory = factory;
     this.placementAdmissionEnabled = true;
     if (this.workflowOwner) this.workflowOwner.placementAdmissionEnabled = true;
+    for (const ledgerPartitionService of [...this.ledgerPartitionServices]) {
+      ledgerPartitionService.ensureReplicaPlacementOwnerAttached();
+    }
   },
 
   registerLedgerPartitionService(partitionService) {
     if (!partitionService || partitionService.partitionId !== LEDGER_PARTITION_ID) return;
-    if (!(this.ledgerPartitionServices instanceof Set)) {
-      this.ledgerPartitionServices = new Set();
-    }
     this.ledgerPartitionServices.add(partitionService);
     this.repository.bindRetainedPlacementRepairWake(partitionService);
     this.placementAdmissionEnabled = true;
@@ -620,32 +625,19 @@ const operationCreationSupportMethods = {
 
   unregisterLedgerPartitionService(partitionService) {
     this.repository.unbindRetainedPlacementRepairWake(partitionService);
-    if (this.ledgerPartitionServices instanceof Set) {
-      this.ledgerPartitionServices.delete(partitionService);
-    }
+    this.ledgerPartitionServices.delete(partitionService);
   },
 
+  // One path: the ledger replica registers; before the factory is bound it
+  // waits (null: the binding attaches it), afterwards the factory attaches its
+  // owner. Any other partition is a typed refusal.
   attachLedgerReplicaPlacementOwner(ledgerPartitionService) {
-    if (!ledgerPartitionService || ledgerPartitionService.partitionId !== LEDGER_PARTITION_ID) {
-      return null;
+    if (ledgerPartitionService?.partitionId !== LEDGER_PARTITION_ID) {
+      invalidCollaborator(COLLABORATOR.LEDGER);
     }
-    const readiness = this.controlPlaneReadinessService;
-    const nodeAuthority = readiness ? readiness.serveEligibilityOwner : null;
-    if (!nodeAuthority || !this.systemTableCache) return null;
     this.registerLedgerPartitionService(ledgerPartitionService);
-    if (this.replicaPlacementOwnerFactory) {
-      return this.replicaPlacementOwnerFactory(ledgerPartitionService);
-    }
-    return attachReplicaPlacementOwner({
-      nodeId: this.nodeId,
-      ledgerPartitionService,
-      nodeAuthority,
-      systemTableCache: this.systemTableCache,
-      workflowOwner: this.workflowOwner || null,
-      storageAccountingService: this.storageAccountingService || null,
-      now: () => ledgerPartitionService.timeSource.now(),
-      logger: ledgerPartitionService.logger,
-    });
+    if (this.replicaPlacementOwnerFactory === null) return null;
+    return this.replicaPlacementOwnerFactory(ledgerPartitionService);
   },
 
   async releaseBootstrapTopologyDispatchHold(operationId, stamp) {

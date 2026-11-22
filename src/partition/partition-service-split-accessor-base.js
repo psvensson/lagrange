@@ -24,7 +24,7 @@ const {
   PARTITION_SERVICE_LITERAL, PARTITION_SERVICE_LOG_MSG, PARTITION_SERVICE_TYPE,
   PARTITION_TRANSITION_METADATA_FIELD, PARTITION_TRANSITION_STATE,
   PRESSURE_WORK_CLASS, RaftRole, SPLIT_ACK_CHECKPOINT_FIELD, SPLIT_ACK_STATUS,
-  SPLIT_PARTICIPANT_PREFIX, TABLES, assertCritical, cloneSplitRoutingEntry,
+  SPLIT_PARTICIPANT_PREFIX, TABLES, cloneSplitRoutingEntry,
   extractPartitionSplitRoutingKey, replayPartitionSplitEntry,
   resolvePartitionSplitSnapshotBatchRowLimit, resolvePartitionSplitTargetPartitionId,
   routePartitionSplitMirroredWrite, routePartitionSplitSnapshotBatch,
@@ -210,9 +210,7 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
    * @private
    */
   async submitPartitionSizeMutation(sizeBytes) {
-    const gateway =
-      this.rebalancer?.controlPlaneSystemTableGateway ||
-      this.controlPlaneSystemTableGateway;
+    const gateway = this.controlPlaneSystemTableGateway;
     const result = await runRetryableControlPlaneWrite(
       (attemptIdentity) =>
         gateway.submitMutation(
@@ -672,7 +670,6 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
    */
   setSystemTableCache(systemTableCache) {
     this.systemTableCache = systemTableCache;
-    if (this.rebalancer) this.rebalancer.systemTableCache = systemTableCache;
     if (this.rebalanceCoordinator) this.rebalanceCoordinator.systemTableCache = systemTableCache;
     this.maybeInitializeRebalancer();
   }
@@ -684,7 +681,6 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
    */
   setCdcIntegrationService(cdcIntegrationService) {
     this.cdcIntegrationService = cdcIntegrationService;
-    if (this.rebalancer) this.rebalancer.cdcIntegrationService = cdcIntegrationService;
     if (this.rebalanceCoordinator) {
       this.rebalanceCoordinator.cdcIntegrationService = cdcIntegrationService;
     }
@@ -706,7 +702,6 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
    */
   setTablePolicyService(tablePolicyService) {
     this.tablePolicyService = tablePolicyService;
-    if (this.rebalancer) this.rebalancer.tablePolicyService = tablePolicyService;
     if (this.rebalanceCoordinator) {
       this.rebalanceCoordinator.tablePolicyService = tablePolicyService;
     }
@@ -725,7 +720,7 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
    * Canonical rebind API for coordinator replacement.
    *
    * This is the single path for updating the coordinator reference,
-   * propagating the change to the rebalancer, and emitting a
+   * re-running the ledger placement-owner attach, and emitting a
    * diagnostic log. All coordinator replacement MUST route here.
    *
    * Validates: Requirements 7.2, 7.3
@@ -742,14 +737,6 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
       typeof previousCoordinator.shutdown === PARTITION_SERVICE_TYPE.FUNCTION;
     this.rebalanceCoordinator = newCoordinator;
     this.ownsRebalanceCoordinator = false;
-    if (this.rebalancer) {
-      const setCoordinator = assertCritical(
-        typeof this.rebalancer.setRebalanceCoordinator === PARTITION_SERVICE_TYPE.FUNCTION ?
-          this.rebalancer.setRebalanceCoordinator.bind(this.rebalancer) : null,
-        PARTITION_SERVICE_ERROR_MSG.REBALANCER_SET_COORDINATOR_REQUIRED,
-      );
-      setCoordinator(newCoordinator);
-    }
     this.logger.info(PARTITION_SERVICE_LOG_MSG.COORDINATOR_REBOUND, {
       partitionId: this.partitionId, replicaId: this.replicaId, hadPrevious, isReplacement,
     });

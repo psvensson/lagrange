@@ -178,6 +178,10 @@ function createCoordinatorWithLedger(leader, options = {}) {
   coordinator.nodeId = NODE.A;
   coordinator.initialized = true;
   coordinator.isShuttingDown = false;
+  // The constructor's placement-owner state (rebalance-coordinator-lifecycle.js:
+  // the ledger registry and an unbound factory).
+  coordinator.ledgerPartitionServices = new Set();
+  coordinator.replicaPlacementOwnerFactory = null;
   coordinator.systemTableCache = systemTableCache;
   coordinator.messageRouter = options.messageRouter || null;
   coordinator.logger = leader.logger;

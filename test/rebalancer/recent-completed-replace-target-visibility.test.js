@@ -8,7 +8,8 @@ import {
 import {
   REBALANCE_COORDINATOR_SHARED,
 } from '../../src/rebalancer/rebalance-coordinator-shared.js';
-import {buildMockPolicyAuthorityWitness, createTestCoordinator} from './test-helpers.js';
+import {buildMockPolicyAuthorityWitness} from './test-helpers.js';
+import {createPlacementBoundTestCoordinator} from './placement-bound-coordinator-fixture.js';
 
 const TEST_PRIORITY_PARTITION_ID = 'schema_operations-p1';
 const TEST_NON_PRIORITY_PARTITION_ID = 'tables-p1';
@@ -69,7 +70,7 @@ function createVisibilityCoordinator({
   targetStatus = ReplicaStatus.SYNCING,
   completedAgeMs = TEST_RECENT_COMPLETION_AGE_MS,
 } = {}) {
-  return createTestCoordinator({
+  return createPlacementBoundTestCoordinator({
     cacheData: {
       services: [
         buildServiceRow(
@@ -133,7 +134,7 @@ test('recent completed REPLACE target visibility guard', async (t) => {
   await t.test(
     'holds a priority replacement while its completed target is still syncing',
     async (t) => {
-      const coordinator = createVisibilityCoordinator();
+      const coordinator = await createVisibilityCoordinator();
       try {
         const error = await captureCreateError(
           coordinator,
@@ -153,7 +154,7 @@ test('recent completed REPLACE target visibility guard', async (t) => {
   await t.test(
     'waits for planner cache settlement despite an owner-active row',
     async (t) => {
-      const coordinator = createVisibilityCoordinator();
+      const coordinator = await createVisibilityCoordinator();
       answerServicesAsLeader(coordinator, [
         buildServiceRow(
           TEST_PRIORITY_PARTITION_ID,
@@ -181,7 +182,7 @@ test('recent completed REPLACE target visibility guard', async (t) => {
   await t.test(
     'allows the next legitimate move against a different original source',
     async (t) => {
-      const coordinator = createVisibilityCoordinator();
+      const coordinator = await createVisibilityCoordinator();
       try {
         const operation = await coordinator.createOperation(
           buildReplaceMove(
@@ -200,7 +201,7 @@ test('recent completed REPLACE target visibility guard', async (t) => {
   await t.test(
     'leases out a second ledger REPLACE against a different original source',
     async (t) => {
-      const coordinator = createVisibilityCoordinator({
+      const coordinator = await createVisibilityCoordinator({
         partitionId: TEST_LEDGER_PARTITION_ID,
       });
       try {
@@ -222,7 +223,7 @@ test('recent completed REPLACE target visibility guard', async (t) => {
   await t.test(
     'releases the ledger self-move lease after the recent-intent TTL',
     async (t) => {
-      const coordinator = createVisibilityCoordinator({
+      const coordinator = await createVisibilityCoordinator({
         partitionId: TEST_LEDGER_PARTITION_ID,
         completedAgeMs: TEST_EXPIRED_COMPLETION_AGE_MS,
       });
@@ -245,7 +246,7 @@ test('recent completed REPLACE target visibility guard', async (t) => {
   await t.test(
     'keeps an active completed target stable for the placement lease',
     async (t) => {
-      const coordinator = createVisibilityCoordinator({
+      const coordinator = await createVisibilityCoordinator({
         targetStatus: ReplicaStatus.ACTIVE,
       });
       try {
@@ -271,7 +272,7 @@ test('recent completed REPLACE target visibility guard', async (t) => {
     await t.test(
       'allows explicit completed-target status ' + targetStatus,
       async (t) => {
-        const coordinator = createVisibilityCoordinator({targetStatus});
+        const coordinator = await createVisibilityCoordinator({targetStatus});
         try {
           const error = await captureCreateError(
             coordinator,
@@ -291,7 +292,7 @@ test('recent completed REPLACE target visibility guard', async (t) => {
 
   await t.test('releases the placement lease on owner-terminal evidence',
     async (t) => {
-      const coordinator = createVisibilityCoordinator();
+      const coordinator = await createVisibilityCoordinator();
       answerServicesAsLeader(coordinator, [
         buildServiceRow(
           TEST_PRIORITY_PARTITION_ID,
@@ -317,7 +318,7 @@ test('recent completed REPLACE target visibility guard', async (t) => {
 
   await t.test('bounds the placement lease by the priority intent TTL',
     async (t) => {
-      const coordinator = createVisibilityCoordinator({
+      const coordinator = await createVisibilityCoordinator({
         completedAgeMs: TEST_EXPIRED_COMPLETION_AGE_MS,
       });
       try {
@@ -337,7 +338,7 @@ test('recent completed REPLACE target visibility guard', async (t) => {
 
   await t.test('does not apply the priority hold to ordinary partitions',
     async (t) => {
-      const coordinator = createVisibilityCoordinator({
+      const coordinator = await createVisibilityCoordinator({
         partitionId: TEST_NON_PRIORITY_PARTITION_ID,
       });
       try {
@@ -381,7 +382,7 @@ function buildLedgerVoterRow(replicaId, nodeId) {
 }
 
 function createConcentratedLedgerCoordinator({sourceNodeIdOfR2}) {
-  return createTestCoordinator({
+  return createPlacementBoundTestCoordinator({
     cacheData: {
       nodes: [TEST_HOT_NODE_ID, ...TEST_FREE_NODE_IDS].map((nodeId) => ({
         node_id: nodeId,
@@ -413,7 +414,7 @@ test('the ledger self-move lease exempts the engaged quorum-spread cure', async 
     'admits the cure REPLACE off the hottest node of a concentrated ledger ' +
       'right after a completed self-move',
     async (t) => {
-      const coordinator = createConcentratedLedgerCoordinator({
+      const coordinator = await createConcentratedLedgerCoordinator({
         sourceNodeIdOfR2: TEST_HOT_NODE_ID,
       });
       try {
@@ -438,7 +439,7 @@ test('the ledger self-move lease exempts the engaged quorum-spread cure', async 
     async (t) => {
       // r2 actually sits on a free node; the move still DECLARES the hot node
       // as its source. Actuals say this is not the cure.
-      const coordinator = createConcentratedLedgerCoordinator({
+      const coordinator = await createConcentratedLedgerCoordinator({
         sourceNodeIdOfR2: TEST_FREE_NODE_IDS[1],
       });
       try {

@@ -91,6 +91,7 @@ import {
   onLedgerLeader,
 } from '../partition/placement-admission-fixture.js';
 import {
+  INERT_RESYNC_TIMER,
   runCorrectionBProductionAssemblyWitness,
   runGrowthPromoteLeaderRedirectAndTimeoutWitness,
   runGrowthPromoteProductionWitness,
@@ -956,21 +957,19 @@ test('P3 & P4 (Findings 3a, 3b, 4): automatic production attachment via Partitio
       const coordinator = {
         nodeId: 'n1',
         systemTableCache: cache,
-        controlPlaneReadinessService: {
-          serveEligibilityOwner: nodeAuthority,
-        },
         workflowOwner: null,
         storageAccountingService: null,
         attachLedgerReplicaPlacementOwner(service) {
           return ControlPlaneSetup.attachReplicaPlacementOwner({
             nodeId: this.nodeId,
             ledgerPartitionService: service,
-            controlPlaneReadinessService: this.controlPlaneReadinessService,
-            rebalanceCoordinator: this,
+            nodeAuthority,
+            workflowOwner: this.workflowOwner,
             systemTableCache: this.systemTableCache,
             storageAccountingService: this.storageAccountingService,
             now: () => NOW_MS,
             logger: service.logger,
+            ...INERT_RESYNC_TIMER,
           });
         },
       };

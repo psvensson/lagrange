@@ -293,6 +293,7 @@ function createWedgeCoordinator({
     coordinator,
     () => rows.map((row) => ({...row})),
   );
+  coordinator.isPlacementAdmissionManagedEntityType = () => false;
   return coordinator;
 }
 

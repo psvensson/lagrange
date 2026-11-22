@@ -85,6 +85,7 @@ test(
       autoProgressCreatedOperations: true,
       enableTimeouts: false,
     });
+    coordinator.isPlacementAdmissionManagedEntityType = () => false;
     const gateway = coordinator.controlPlaneSystemTableGateway;
     const originalExecuteQuery = gateway.executeQuery.bind(gateway);
     const originalReadAuthoritativeRows =

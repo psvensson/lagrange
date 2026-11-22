@@ -326,7 +326,7 @@ async (t) => {
     const operation = await coordinator.createOperation({
       type: 'REMOVE',
       partitionId: 'partition-prime-test',
-      entityType: 'partition',
+      entityType: 'message_group',
       entityId: 'partition-prime-test',
       nodeId: 'node-target',
       replicaId: 'partition-prime-test-r1',
@@ -363,7 +363,7 @@ async (t) => {
     const heldOperation = await coordinator.createOperation({
       type: 'REMOVE',
       partitionId: 'partition-bootstrap-hold-test',
-      entityType: 'partition',
+      entityType: 'message_group',
       entityId: 'partition-bootstrap-hold-test',
       nodeId: 'node-bootstrap-target',
       replicaId: 'partition-bootstrap-hold-test-r1',
@@ -392,7 +392,7 @@ test('createOperation defers retryable participant-pressure failures and ' +
   const seededSafetyPeerRow = {
     service_id: 'partition-pressure-retry-test-r2',
     replica_id: 'partition-pressure-retry-test-r2',
-    service_type: 'partition',
+    service_type: 'message_group',
     partition_id: 'partition-pressure-retry-test',
     node_id: 'node-peer',
     status: 'active',
@@ -553,7 +553,7 @@ test('createOperation defers retryable participant-pressure failures and ' +
     const operation = await coordinator.createOperation({
       type: 'REMOVE',
       partitionId: 'partition-pressure-retry-test',
-      entityType: 'partition',
+      entityType: 'message_group',
       entityId: 'partition-pressure-retry-test',
       nodeId: 'node-target',
       replicaId: 'partition-pressure-retry-test-r1',

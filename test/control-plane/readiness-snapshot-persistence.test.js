@@ -437,12 +437,14 @@ test('coordinator createOperation persists readiness snapshot in initial step',
       enableTimeouts: false,
     });
     coordinator.initialize();
+    coordinator.isPlacementAdmissionManagedEntityType = () => false;
 
     try {
       const operation = await coordinator.createOperation({
         type: 'ADD',
         partitionId: 'partition-1',
         nodeId: targetNodeId,
+        deferDispatchUntilBootstrapTopology: true,
       });
 
       t.ok(operation, 'operation created');

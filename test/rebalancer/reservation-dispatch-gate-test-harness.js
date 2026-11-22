@@ -337,6 +337,7 @@ async function createCoordinatorWithStorage(options = {}) {
   });
   coordinator.initialize();
   await publishLedgerRoute(cache);
+  coordinator.isPlacementAdmissionManagedEntityType = () => false;
   let unavailableReads =
     options.unavailableOperationAuthorityReadsAfterReservationInsert || 0;
   const queryAuthority =

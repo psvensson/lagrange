@@ -10,62 +10,30 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
-import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {
   OperationType,
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
 import {
-  createMockCache,
-  createCoordinatorSqlStore,
-  createMockPolicyService,
-  createMockMessageRouter,
-  createMockCdcService,
-  createMockControlPlaneSystemTableGateway,
-  createMockControlPlaneReadinessService,
-  createMockTransactionCoordinator,
-} from './test-helpers.js';
+  committedVoterWorld,
+  createPlacementBoundTestCoordinator,
+} from './placement-bound-coordinator-fixture.js';
 
 const PERSISTENCE_PROPERTY_DEFAULT_PARTITION_ID = 'partition';
 const PERSISTENCE_PROPERTY_DEFAULT_REPLICA_SUFFIX = 'r1';
 
-function createTestCoordinatorWithPersistence() {
-  const cache = createMockCache();
-  const store = createCoordinatorSqlStore(cache);
-  const persistedOperations = {
-    get: (operationId) => store.execute(
-      'SELECT * FROM replica_operations WHERE operation_id = ?', [operationId]).rows[0],
-  };
-  const sqlQueryEngine = {executeQuery: async (sql, params) => store.execute(sql, params)};
-
-  const coordinator = new RebalanceCoordinator({
+async function createTestCoordinatorWithPersistence(cacheData = {}) {
+  const coordinator = await createPlacementBoundTestCoordinator({
     nodeId: 'test-node-1',
-    systemTableCache: createMockCache(),
-    cdcIntegrationService: createMockCdcService(),
-    tablePolicyService: createMockPolicyService(),
-    messageRouter: createMockMessageRouter(),
-    sqlQueryEngine,
-    controlPlaneSystemTableGateway:
-      createMockControlPlaneSystemTableGateway(sqlQueryEngine),
-    transactionCoordinator: createMockTransactionCoordinator(),
-    controlPlaneReadinessService: createMockControlPlaneReadinessService({
-      defaultRepairEligible: true,
-    }),
-    storageAdmissionService: {
-      checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
-      checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
-    },
-    storageAccountingService: {
-      estimateReplicaBytes: () => 1,
-    },
     enableTimeouts: false,
+    cacheData,
   });
-
-  coordinator.initialize();
-  const shutdown = coordinator.shutdown.bind(coordinator);
-  coordinator.shutdown = async () => {
-    await shutdown();
-    store.suspend();
+  const [ledgerPartition] = coordinator.ledgerPartitionServices;
+  const persistedOperations = {
+    get: (operationId) =>
+      ledgerPartition.db
+        .prepare('SELECT * FROM replica_operations WHERE operation_id = ?')
+        .get(operationId),
   };
   // Persistence of the created record is under test, not dispatch: a created
   // operation rests at its durable PENDING step (the create arm is inert).
@@ -74,15 +42,21 @@ function createTestCoordinatorWithPersistence() {
 }
 
 function buildPersistencePropertyMove(move = {}) {
-  if (move?.type !== OperationType.ADD) {
-    return move;
+  const partitionId =
+    move.partitionId || PERSISTENCE_PROPERTY_DEFAULT_PARTITION_ID;
+  if (move?.type === OperationType.REMOVE) {
+    return {
+      ...move,
+      partitionId,
+      replicaId:
+        move.replicaId ||
+        `${partitionId}-${PERSISTENCE_PROPERTY_DEFAULT_REPLICA_SUFFIX}`,
+    };
   }
-
-  const partitionId = move.partitionId || PERSISTENCE_PROPERTY_DEFAULT_PARTITION_ID;
+  const {replicaId: _omitted, ...rest} = move;
   return {
-    ...move,
+    ...rest,
     partitionId,
-    replicaId: move.replicaId || `${partitionId}-${PERSISTENCE_PROPERTY_DEFAULT_REPLICA_SUFFIX}`,
   };
 }
 
@@ -96,13 +70,14 @@ test('Property 10: Operation Log Persistence', async (t) => {
           nodeId: fc.uuid(),
         }),
         async (move) => {
+          const request = buildPersistencePropertyMove(move);
           const {coordinator, persistedOperations} =
-            createTestCoordinatorWithPersistence();
+            await createTestCoordinatorWithPersistence(
+              request.replicaId ? committedVoterWorld(request) : {},
+            );
 
           try {
-            const operation = await coordinator.createOperation(
-              buildPersistencePropertyMove(move),
-            );
+            const operation = await coordinator.createOperation(request);
             const persisted = persistedOperations.get(operation.operationId);
 
             return persisted !== undefined &&
@@ -127,13 +102,14 @@ test('Property 10: Operation Log Persistence', async (t) => {
           nodeId: fc.uuid(),
         }),
         async (move) => {
+          const request = buildPersistencePropertyMove(move);
           const {coordinator, persistedOperations} =
-            createTestCoordinatorWithPersistence();
+            await createTestCoordinatorWithPersistence(
+              request.replicaId ? committedVoterWorld(request) : {},
+            );
 
           try {
-            const operation = await coordinator.createOperation(
-              buildPersistencePropertyMove(move),
-            );
+            const operation = await coordinator.createOperation(request);
             const persisted = persistedOperations.get(operation.operationId);
 
             if (!persisted) return false;
@@ -168,13 +144,14 @@ test('Property 10: Operation Log Persistence', async (t) => {
           nodeId: fc.uuid(),
         }),
         async (move) => {
+          const request = buildPersistencePropertyMove(move);
           const {coordinator, persistedOperations} =
-            createTestCoordinatorWithPersistence();
+            await createTestCoordinatorWithPersistence(
+              request.replicaId ? committedVoterWorld(request) : {},
+            );
 
           try {
-            const operation = await coordinator.createOperation(
-              buildPersistencePropertyMove(move),
-            );
+            const operation = await coordinator.createOperation(request);
             await coordinator.updateStep(operation, 'SENDING');
 
             const persisted = persistedOperations.get(operation.operationId);
@@ -202,13 +179,14 @@ test('Property 10: Operation Log Persistence', async (t) => {
           nodeId: fc.uuid(),
         }),
         async (move) => {
+          const request = buildPersistencePropertyMove(move);
           const {coordinator, persistedOperations} =
-            createTestCoordinatorWithPersistence();
+            await createTestCoordinatorWithPersistence(
+              request.replicaId ? committedVoterWorld(request) : {},
+            );
 
           try {
-            const operation = await coordinator.createOperation(
-              buildPersistencePropertyMove(move),
-            );
+            const operation = await coordinator.createOperation(request);
             await coordinator.completeOperation(operation);
 
             const persisted = persistedOperations.get(operation.operationId);
@@ -240,13 +218,14 @@ test('Property 10: Operation Log Persistence', async (t) => {
         fc.string({minLength: 1, maxLength: 100})
           .filter((value) => value.trim().length > 0),
         async (move, errorMessage) => {
+          const request = buildPersistencePropertyMove(move);
           const {coordinator, persistedOperations} =
-            createTestCoordinatorWithPersistence();
+            await createTestCoordinatorWithPersistence(
+              request.replicaId ? committedVoterWorld(request) : {},
+            );
 
           try {
-            const operation = await coordinator.createOperation(
-              buildPersistencePropertyMove(move),
-            );
+            const operation = await coordinator.createOperation(request);
             await coordinator.failOperation(operation, errorMessage);
 
             const persisted = persistedOperations.get(operation.operationId);
@@ -276,13 +255,14 @@ test('Property 10: Operation Log Persistence', async (t) => {
           nodeId: fc.uuid(),
         }),
         async (move) => {
+          const request = buildPersistencePropertyMove(move);
           const {coordinator, persistedOperations} =
-            createTestCoordinatorWithPersistence();
+            await createTestCoordinatorWithPersistence(
+              request.replicaId ? committedVoterWorld(request) : {},
+            );
 
           try {
-            const operation = await coordinator.createOperation(
-              buildPersistencePropertyMove(move),
-            );
+            const operation = await coordinator.createOperation(request);
             await coordinator.updateStep(operation, 'SENDING');
             const nextStep = move.type === OperationType.REMOVE ? 'STOPPING' : 'CREATING';
             await coordinator.updateStep(operation, nextStep);
@@ -309,7 +289,14 @@ test('Property 10: Operation Log Persistence', async (t) => {
   });
 
   await t.test('getInFlightOperations returns non-terminal operations', async (t) => {
-    const {coordinator} = createTestCoordinatorWithPersistence();
+    const {coordinator} = await createTestCoordinatorWithPersistence(
+      committedVoterWorld({
+        type: OperationType.REMOVE,
+        partitionId: 'partition-3',
+        nodeId: 'node-3',
+        replicaId: 'partition-3-r1',
+      }),
+    );
 
     try {
       const op1 = await coordinator.createOperation({
@@ -329,6 +316,7 @@ test('Property 10: Operation Log Persistence', async (t) => {
         type: OperationType.REMOVE,
         partitionId: 'partition-3',
         nodeId: 'node-3',
+        replicaId: 'partition-3-r1',
       });
       await coordinator.failOperation(op3, 'Test error');
 
@@ -343,7 +331,7 @@ test('Property 10: Operation Log Persistence', async (t) => {
   });
 
   await t.test('getInFlightOperations converts row to operation object', async (t) => {
-    const {coordinator} = createTestCoordinatorWithPersistence();
+    const {coordinator} = await createTestCoordinatorWithPersistence();
 
     try {
       await coordinator.createOperation({

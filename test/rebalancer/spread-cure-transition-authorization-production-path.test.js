@@ -130,6 +130,7 @@ async function driveOneRebalance(options) {
       [SERVICES_QUERY_FRAGMENT]: {success: true, rows: services},
     },
   });
+  coordinator.isPlacementAdmissionManagedEntityType = () => false;
   const rebalancer = createTestRebalancer({
     entityId: partitionId,
     entityType: EntityType.PARTITION,

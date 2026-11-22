@@ -41,8 +41,11 @@ import {
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {
   createMockPolicyService,
-  createTestCoordinator,
 } from './test-helpers.js';
+import {
+  COMMITTED_FORMATION,
+  createPlacementBoundTestCoordinator,
+} from './placement-bound-coordinator-fixture.js';
 import {createReplaceWitness} from './replace-witness-fixture.js';
 import {readinessServiceFake} from '../helpers/readiness-service-fixture.js';
 import {ServeEligibilityOwner} from '../../src/control-plane/serve-eligibility-owner.js';
@@ -158,7 +161,10 @@ function createReadinessFake(initialLevels) {
   return readinessServiceFake({
     listeners,
     readServeEligibility: () => committed.readServeEligibility(),
-    answerCommittedNodes: () => committed.answerCommittedNodes(),
+    answerCommittedNodes: () => ({
+      ...committed.answerCommittedNodes(),
+      formation: COMMITTED_FORMATION,
+    }),
     subscribeServeEligibility: (listener) => committed.subscribe(listener),
     shutdown: () => committed.shutdown(),
     setLevel(nodeId, level) {
@@ -252,7 +258,7 @@ async function createDeferredReplaceHarness(profile) {
     [profile.wakingNodeId]: LEVEL.REFRESH_PENDING,
   });
   await readiness.readServeEligibility();
-  const coordinator = createTestCoordinator({
+  const coordinator = await createPlacementBoundTestCoordinator({
     nodeId: profile.ownerNodeId,
     enableTimeouts: false,
     setTimeoutFn(fn, delayMs) {

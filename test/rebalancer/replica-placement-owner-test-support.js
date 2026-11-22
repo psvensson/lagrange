@@ -117,6 +117,13 @@ function hasIncompletePlacementOperation(db, operationId) {
 }
 
 const NOW_MS = 1_000_000;
+// The production attach requires the owner's resync timer pair; these
+// witnesses are not about the resync (60 s, never reached here), so the pair
+// is inert (substituted): the owner arms nothing that fires.
+export const INERT_RESYNC_TIMER = Object.freeze({
+  setIntervalFn: () => Object.freeze({inertResync: true}),
+  clearIntervalFn: () => {},
+});
 
 export async function runGrowthPromoteProductionWitness({
   createSimpleSystemCache,
@@ -352,11 +359,12 @@ export async function runGrowthPromoteProductionWitness({
       ControlPlaneSetup.attachReplicaPlacementOwner({
         nodeId: 'n1',
         ledgerPartitionService: service,
-        controlPlaneReadinessService: {serveEligibilityOwner: nodeAuthority},
-        rebalanceCoordinator: coordinator,
+        nodeAuthority,
+        workflowOwner: coordinator.workflowOwner,
         systemTableCache: cache,
         now: () => NOW_MS,
         logger: service.logger,
+        ...INERT_RESYNC_TIMER,
       }),
     );
     assert.equal(coordinator.placementAdmissionEnabled, true);
@@ -1232,15 +1240,12 @@ export async function runScopedRemovalPlacementAttachmentWitness({
       const attachment1 = ControlPlaneSetup.attachReplicaPlacementOwner({
         nodeId: 'n1',
         ledgerPartitionService: leader,
-        controlPlaneReadinessService: {
-          serveEligibilityOwner: nodeAuthority,
-        },
-        rebalanceCoordinator: {
-          workflowOwner: null,
-        },
+        nodeAuthority,
+        workflowOwner: null,
         systemTableCache: cache,
         now: () => NOW_MS,
         logger: leader.logger,
+        ...INERT_RESYNC_TIMER,
       });
       assert.equal(leader.rebalancerLeadershipSink, attachment1.owner);
       assert.equal(attachment1.owner.isLeader, true);
@@ -1277,15 +1282,12 @@ export async function runScopedRemovalPlacementAttachmentWitness({
       const attachment2 = ControlPlaneSetup.attachReplicaPlacementOwner({
         nodeId: 'n1',
         ledgerPartitionService: leader,
-        controlPlaneReadinessService: {
-          serveEligibilityOwner: nodeAuthority,
-        },
-        rebalanceCoordinator: {
-          workflowOwner,
-        },
+        nodeAuthority,
+        workflowOwner,
         systemTableCache: cache,
         now: () => NOW_MS,
         logger: leader.logger,
+        ...INERT_RESYNC_TIMER,
       });
       await attachment2.owner.awaitCurrentWorkIdle();
       const secondRows = ledgerRows(leader);

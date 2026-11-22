@@ -12,7 +12,10 @@ import {
   CONTROL_PLANE_PARTICIPATION_KIND,
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
-import {OperationType} from '../../src/rebalancer/replica-status.js';
+import {
+  OperationType,
+  createOperation,
+} from '../../src/rebalancer/replica-status.js';
 import {
   REBALANCER_SKIP_REASON,
   REBALANCE_COORDINATOR_DEFER_REASON,
@@ -23,10 +26,50 @@ import {
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {
-  createMockPolicyService, createObservationOnlyMutationPort, createTestCoordinator,
+  createMockPolicyService,
+  createObservationOnlyMutationPort,
+  createTestCoordinator as createBaseTestCoordinator,
 } from './test-helpers.js';
 import {registerQuorumConditionedRemoveSafetyDeferredDispatchTests} from './quorum-conditioned-remove-safety-deferred-dispatch-test-cases.js';
 import {registerQuorumConditionedRemoveSafetyTailTests} from './quorum-conditioned-remove-safety-tail-test-cases.js';
+
+let removeSafetyOpSeq = 0;
+
+function createTestCoordinator(options = {}) {
+  const coordinator = createBaseTestCoordinator(options);
+  coordinator.createOperation = async (move) => {
+    const partitionId = move.partitionId ?? move.entityId;
+    const isReplace = move.type === OperationType.REPLACE;
+    const sourceReplicaId = isReplace ? move.replicaId || null : null;
+    const replicaId = isReplace ?
+      await coordinator.allocateCanonicalReplicaId({
+        partitionId,
+        entityType: move.entityType || 'partition',
+        entityId: move.entityId || partitionId,
+        excludeReplicaIds: sourceReplicaId ? [sourceReplicaId] : [],
+      }) :
+      move.replicaId || null;
+    removeSafetyOpSeq += 1;
+    const operation = createOperation({
+      operationId:
+        move.operationIntentId ||
+        `op-qrs-${partitionId}-${removeSafetyOpSeq}`,
+      type: move.type,
+      partitionId,
+      sourceNodeId: isReplace ?
+        move.sourceNodeId || coordinator.nodeId :
+        coordinator.nodeId,
+      targetNodeId: move.nodeId,
+      replicaId,
+      sourceReplicaId,
+    });
+    operation.entityType = move.entityType || 'partition';
+    operation.entityId = move.entityId || partitionId;
+    await coordinator.repository.persistNewOperation(operation);
+    return operation;
+  };
+  return coordinator;
+}
 
 const OWNER_READ_PARTICIPATION_KIND =
   CONTROL_PLANE_PARTICIPATION_KIND.REPLICA_OPERATION_OWNER_READ;

@@ -1,4 +1,4 @@
-// Public entry: validateReplicaPlacementOwnerOptions, invalidCollaborator, REPLICA_PLACEMENT_OWNER_COLLABORATOR_INVALID.
+// Public entry: validateReplicaPlacementOwnerOptions, requireResyncTimerCollaborators, invalidCollaborator, REPLICA_PLACEMENT_OWNER_COLLABORATOR_INVALID.
 // Required collaborators: none (pure checks of the options ReplicaPlacementOwner is constructed with).
 // Durable authority / commit point: none.
 // Permitted post-commit work: none.
@@ -30,6 +30,7 @@ const COLLABORATOR = Object.freeze({
   RELEASE: 'releasePlacementHold',
   RESYNC_TIMER: 'resyncTimer',
   RETAINED_REPAIR: 'workflowOwner.repository',
+  FACTORY: 'replicaPlacementOwnerFactory',
 });
 const REQUIRED_METHOD_MAP = Object.freeze({
   [COLLABORATOR.LEDGER]: Object.freeze(['on', 'off']),
@@ -89,6 +90,14 @@ function validateResyncTimerCollaborators(options, resyncIntervalMs) {
   }
 }
 
+// The production attach's timer pair, required (the owner's resync).
+function requireResyncTimerCollaborators(options) {
+  if (!isObject(options) || !isFunction(options.setIntervalFn) ||
+      !isFunction(options.clearIntervalFn)) {
+    invalidCollaborator(COLLABORATOR.RESYNC_TIMER);
+  }
+}
+
 function validateOptionalPlacementCollaborators(options, resyncIntervalMs) {
   requireOptionalMethods(options.workflowOwner, COLLABORATOR.WORKFLOW_OWNER);
   if (options.workflowOwner !== undefined && options.workflowOwner !== null) {
@@ -131,5 +140,6 @@ export {
   REPLICA_PLACEMENT_OWNER_COLLABORATOR_INVALID,
   invalidCollaborator,
   isFunction,
+  requireResyncTimerCollaborators,
   validateReplicaPlacementOwnerOptions,
 };

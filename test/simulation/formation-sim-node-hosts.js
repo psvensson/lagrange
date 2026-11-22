@@ -457,6 +457,7 @@ function createSimulatedNodeHosts({network, nodeId, randomSource,
     storageAccountingService, storageAdmissionService, membershipPublicationService,
     rebalanceCoordinator, randomSource, heartbeatService, bootIncarnation,
     setTimeoutFn: hostSetTimeout, clearTimeoutFn: hostClearTimeout,
+    setIntervalFn: hostSetInterval, clearIntervalFn: hostClearInterval,
     stopIntervals: () => intervals.clear(),
   });
 }

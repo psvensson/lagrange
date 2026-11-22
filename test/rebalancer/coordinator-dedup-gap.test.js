@@ -25,6 +25,7 @@ import {
   INCOMPLETE_OPERATION_OBSERVATION_STATE,
 } from '../../src/rebalancer/replica-operation-repository.js';
 import {createTestCoordinator} from './test-helpers.js';
+import {createPlacementBoundTestCoordinator} from './placement-bound-coordinator-fixture.js';
 
 const DEFERRED_PRIORITY_ENTITY_OBSERVATION = Object.freeze({
   state: INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED,
@@ -89,6 +90,7 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
         enableTimeouts: false,
       });
       coordinator.initialize();
+      coordinator.isPlacementAdmissionManagedEntityType = () => false;
 
       try {
         const move = {
@@ -125,6 +127,7 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
         enableTimeouts: false,
       });
       coordinator.initialize();
+      coordinator.isPlacementAdmissionManagedEntityType = () => false;
 
       try {
         const first = await coordinator.createOperation({
@@ -157,6 +160,7 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
         enableTimeouts: false,
       });
       coordinator.initialize();
+      coordinator.isPlacementAdmissionManagedEntityType = () => false;
 
       try {
         const first = await coordinator.createOperation({
@@ -304,6 +308,7 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
         enableTimeouts: false,
       });
       coordinator.initialize();
+      coordinator.isPlacementAdmissionManagedEntityType = () => false;
 
       try {
         const removeReplicaOne = await coordinator.createOperation({
@@ -413,11 +418,10 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
     'critical REPLACE keeps one existing add-like recovery operation ' +
       'when authoritative entity reads miss and the planner switches target nodes',
     async (t) => {
-      const coordinator = createTestCoordinator({
+      const coordinator = await createPlacementBoundTestCoordinator({
         nodeId: 'seed-node',
         enableTimeouts: false,
       });
-      coordinator.initialize();
 
       try {
         coordinator.repository.getOperationsByEntityAuthoritativeObservation =
@@ -548,8 +552,10 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
   );
 
   t.test('positive terminal ledger evidence retires the recent creation hint', async (t) => {
-    const coordinator = createTestCoordinator({nodeId: 'seed-node', enableTimeouts: false});
-    coordinator.initialize();
+    const coordinator = await createPlacementBoundTestCoordinator({
+      nodeId: 'seed-node',
+      enableTimeouts: false,
+    });
     const move = {type: OperationType.ADD, partitionId: 'nodes-p1', nodeId: 'node-2'};
     try {
       const first = await coordinator.createOperation(move);

@@ -120,6 +120,7 @@ function createEpochCoordinator({
     enableTimeouts: false,
   });
   coordinator.initialize();
+  coordinator.isPlacementAdmissionManagedEntityType = () => false;
   return {
     coordinator,
     persistedRowCount: () => persistedRows,
