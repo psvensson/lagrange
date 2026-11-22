@@ -691,7 +691,7 @@ test('Directive 5: exceptional identity-registry failure during lazy status ' +
   const targetDb = cluster.replica(leader).db;
   const leaderClock = clocks.get(leader);
   const events = [];
-  const unsubscribe = subscribeAllEvents(port, events);
+  let unsubscribe = () => {};
   let timersScheduled = 0;
   const originalSetTimeout = leaderClock.setTimeout.bind(leaderClock);
   leaderClock.setTimeout = (...args) => {
@@ -719,6 +719,9 @@ test('Directive 5: exceptional identity-registry failure during lazy status ' +
     quiesceWithClocks(cluster, clocks, replicaIds);
     assert.equal(port[OBSERVE]().role, 'leader');
     assert.equal(port[OBSERVE]().groupHealth, USABLE);
+
+    // Subscribe after quiesce so STATUS_CHANGED did not pre-shape group.shapedStatus.
+    unsubscribe = subscribeAllEvents(port, events);
 
     // 10a: followerProgressSnapshot throws during lazy readStatus().
     mode = 'progress';
