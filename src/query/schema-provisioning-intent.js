@@ -49,10 +49,26 @@ function normalizeColumn(column = {}) {
   });
 }
 
-function canonicalizeSchemaProvisioningIntent(ast = {}) {
+function resolveIdentityQualifier(options = {}) {
+  const raw = options?.identityQualifier ??
+    (Number.isSafeInteger(options?.globalIndex?.generation) &&
+      options.globalIndex.generation > 1 ?
+      `gen-${options.globalIndex.generation}` :
+      null);
+  return typeof raw === TYPEOF_STRING && raw.trim().length > 0 ?
+    raw.trim() :
+    null;
+}
+
+function canonicalizeSchemaProvisioningIntent(ast = {}, options = {}) {
   const namespace = SCHEMA_PROVISIONING_DEFAULT.NAMESPACE;
   const tableName = String(ast.tableName || '');
-  const tableIdentityKey = `${namespace}.${tableName}`;
+  const qualifier = resolveIdentityQualifier(options) ||
+    resolveIdentityQualifier(ast.options);
+  const baseIdentityKey = `${namespace}.${tableName}`;
+  const tableIdentityKey = qualifier ?
+    `${baseIdentityKey}:${qualifier}` :
+    baseIdentityKey;
   const intent = sortObject({
     intentVersion: SCHEMA_PROVISIONING_INTENT_VERSION,
     namespace,

@@ -182,6 +182,15 @@ function resolveTableSchemaRaw(tableInfo) {
   return tableInfo.schema ?? tableInfo.schema_definition ?? tableInfo.schemaDefinition ?? null;
 }
 
+/**
+ * Resolve and parse a table's declared schema object from metadata.
+ * @param {Object|null} tableInfo - Table metadata row.
+ * @return {Object|null} Parsed schema object or null.
+ */
+export function resolveDeclaredTableSchema(tableInfo) {
+  return parseSchemaIfJson(resolveTableSchemaRaw(tableInfo));
+}
+
 function resolveRawPartitionKey(tableInfo) {
   if (!tableInfo) return null;
   return tableInfo.partition_key ?? tableInfo.partitionKey ?? null;

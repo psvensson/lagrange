@@ -171,9 +171,10 @@ const queryExecutorPartitionRoutingCandidateMethods = {
       [];
     const requireCanonicalLeader =
       forRead &&
-      resolvedRoutingOptions?.[
-        QUERY_EXECUTOR_ROUTING_OPTION_FIELD.READ_AUTHORITY
-      ]?.leaderMode === CONTROL_PLANE_READ_LEADER_MODE.REQUIRED;
+      (resolvedRoutingOptions?.requireLeader === true ||
+        resolvedRoutingOptions?.[
+          QUERY_EXECUTOR_ROUTING_OPTION_FIELD.READ_AUTHORITY
+        ]?.leaderMode === CONTROL_PLANE_READ_LEADER_MODE.REQUIRED);
     if (requireCanonicalLeader) {
       // Redirect-first (S0 ruling Q1): the published leader's replicas when
       // it is published and usable; a replica that does not lead refuses typed

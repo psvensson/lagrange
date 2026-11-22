@@ -102,7 +102,7 @@ function createSchemaAwareSystemGateway(catalogDbPath, cache) {
   const txGateway = createTransactionPersistenceGateway();
 
   const applyCacheChange = (tableName, operation, rowOrWhere, data) => {
-    if (!cache) return;
+    if (!cache?.applySystemTableChange) return;
     if (operation === 'delete') {
       cache.applySystemTableChange(tableName, CDC_OPERATION.DELETE, rowOrWhere);
       return;
@@ -146,7 +146,7 @@ function createSchemaAwareSystemGateway(catalogDbPath, cache) {
     },
     async readRows(tableName, sql, params = []) {
       if (TX_TABLES.has(tableName)) {
-        return txGateway.readRows(tableName, sql, params);
+        return txGateway.readAuthoritativeRows(tableName, sql, params);
       }
       return {success: true, rows: db.prepare(sql).all(...params)};
     },
@@ -185,6 +185,56 @@ function createSchemaAwareSystemGateway(catalogDbPath, cache) {
   };
 
   return {gateway, cdcService};
+}
+
+function serializeBoundaryValue(val) {
+  return val === null || val === undefined ? null : String(val);
+}
+
+function createSeededSchemaAwareGateway(catalogDbPath, tables, partitions, systemCache = null) {
+  const result = createSchemaAwareSystemGateway(catalogDbPath, systemCache);
+  const now = Date.now();
+  for (const t of tables) {
+    const pkCol = t.partition_key || 'id';
+    const schemaDef = t.schema || {columns: [{name: pkCol, type: t.partition_key_type || 'INTEGER'}]};
+    executeSystemDbMutation(result.gateway.db, {
+      operation: 'upsert',
+      tableName: TABLES.TABLES,
+      row: {
+        table_id: t.table_id || t.table_name,
+        table_name: t.table_name,
+        schema_definition: JSON.stringify(schemaDef),
+        partition_key: pkCol,
+        table_policies: '{}',
+        partition_count: 1,
+        active_partition_version: t.active_partition_version || 1,
+        created_at: now,
+        updated_at: now,
+      },
+    });
+  }
+  for (const p of partitions) {
+    executeSystemDbMutation(result.gateway.db, {
+      operation: 'upsert',
+      tableName: TABLES.PARTITIONS,
+      row: {
+        partition_id: p.partition_id,
+        table_id: p.table_id || p.table_name,
+        table_name: p.table_name,
+        partition_key_start: serializeBoundaryValue(p.partition_key_start),
+        partition_key_end: serializeBoundaryValue(p.partition_key_end),
+        partition_key_type: p.partition_key_type || 'INTEGER',
+        partition_version: 1,
+        replica_count: 1,
+        size_bytes: 0,
+        leader_node_id: p.leader_node_id || 'test-node',
+        state: 'NORMAL',
+        created_at: now,
+        updated_at: now,
+      },
+    });
+  }
+  return result;
 }
 
 function createTargetRouter(partitionServices) {
@@ -358,6 +408,11 @@ async function withFoundingPlacementEnvironment(callback) {
           service: ps,
           status: 'active',
         });
+        await gateway.updateSystemTableRow(
+          TABLES.PARTITIONS,
+          {partition_id: operation.partitionId},
+          {leader_node_id: operation.targetNodeId},
+        );
         return {success: true};
       },
     };
@@ -406,6 +461,8 @@ async function withFoundingPlacementEnvironment(callback) {
 
 export {
   createSchemaAwareSystemGateway,
+  createSeededSchemaAwareGateway,
   createTargetRouter,
+  executeSystemDbMutation,
   withFoundingPlacementEnvironment,
 };

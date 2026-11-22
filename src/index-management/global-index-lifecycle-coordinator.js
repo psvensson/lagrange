@@ -162,6 +162,7 @@ function assignCoordinatorOptions(coordinator, options) {
     ['onCatalogInsert', 'onCatalogInsert'],
     ['onCatalogUpdate', 'onCatalogUpdate'],
     ['onCatalogDelete', 'onCatalogDelete'],
+    ['onDropIndexDataset', 'onDropIndexDataset'],
   ];
   for (const [target, source] of fields) {
     coordinator[target] = options[source] || null;
@@ -398,13 +399,14 @@ export class GlobalIndexLifecycleCoordinator {
     }
   }
 
-  _dropIndexDatasets(tableName, indexName) {
-    const partitions = this.getIndexPartitions(indexName);
-    for (const p of partitions) {
+  async _dropIndexDatasets(tableName, indexName) {
+    for (const p of this.getIndexPartitions(indexName)) {
       const pId = p.partition_id || p.partitionId;
       const db = this._getPartitionDb(pId);
       if (db) {
         this.datasetManager.dropIndexDataset(db, tableName, indexName);
+      } else if (this.onDropIndexDataset) {
+        await this.onDropIndexDataset({tableName, indexName, partitionId: pId});
       }
     }
   }
@@ -519,7 +521,7 @@ export class GlobalIndexLifecycleCoordinator {
         indexName,
         columnNames,
         basePrimaryKeyColumns,
-        {...options, columnTypes},
+        {...options, columnTypes, generation: currentGen, indexId},
       );
     } catch (err) {
       await this._updateCatalogRecord({
@@ -589,7 +591,7 @@ export class GlobalIndexLifecycleCoordinator {
     this.generations.set(indexName, currentGen + 1);
 
     const tableName = rawRecord.table_name || rawRecord.tableName;
-    this._dropIndexDatasets(tableName, indexName);
+    await this._dropIndexDatasets(tableName, indexName);
 
     this.catalog.delete(indexName);
     if (this.onCatalogDelete) await this.onCatalogDelete(rawRecord);

@@ -35,8 +35,11 @@ import {
   buildDeliveryEnvelope,
 } from '../../src/transport/transport-semantic-outcome.js';
 import {
-  createTransactionPersistenceGateway,
-} from '../test-helpers/transaction-persistence-gateway.js';
+  createSeededSchemaAwareGateway,
+} from './global-index-founding-witness-support.js';
+import {
+  withIndependentCacheCdcEnvironment,
+} from './global-index-cdc-witness-support.js';
 import {
   withLaggingFollowerEnvironment,
 } from './global-index-lagging-follower-witness-support.js';
@@ -61,233 +64,6 @@ afterEach(() => {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
 });
-
-function initCatalogSchema(db) {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS tables (
-      table_id TEXT PRIMARY KEY,
-      table_name TEXT,
-      partition_key TEXT,
-      primary_key TEXT,
-      partition_key_type TEXT
-    );
-    CREATE TABLE IF NOT EXISTS partitions (
-      partition_id TEXT PRIMARY KEY,
-      table_id TEXT,
-      table_name TEXT,
-      partition_key TEXT,
-      partition_key_start TEXT,
-      partition_key_end TEXT
-    );
-    CREATE TABLE IF NOT EXISTS indices (
-      index_id TEXT PRIMARY KEY,
-      table_id TEXT NOT NULL,
-      table_name TEXT,
-      index_name TEXT NOT NULL,
-      column_names TEXT NOT NULL,
-      index_type TEXT NOT NULL DEFAULT 'btree',
-      is_global INTEGER NOT NULL DEFAULT 1,
-      is_unique INTEGER NOT NULL DEFAULT 0,
-      state TEXT NOT NULL DEFAULT 'CREATING',
-      backfill_cursor_partition_id TEXT,
-      backfill_cursor_pk TEXT,
-      backfill_total_rows INTEGER NOT NULL DEFAULT 0,
-      error_message TEXT,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER
-    );
-  `);
-}
-
-function serializeBoundaryValue(val) {
-  return val === null || val === undefined ? null : String(val);
-}
-
-function seedCatalogTables(db, tables) {
-  const insertTable = db.prepare(
-    'INSERT OR REPLACE INTO tables (table_id, table_name, partition_key, primary_key, partition_key_type) VALUES (?, ?, ?, ?, ?)',
-  );
-  for (const t of tables) {
-    const pkCol = t.partition_key || 'id';
-    insertTable.run(
-      t.table_id || t.table_name,
-      t.table_name,
-      pkCol,
-      JSON.stringify(t.primaryKey || [pkCol]),
-      t.partition_key_type || 'INTEGER',
-    );
-  }
-}
-
-function seedCatalogPartitions(db, partitions) {
-  const insertPartition = db.prepare(
-    'INSERT OR REPLACE INTO partitions (partition_id, table_id, table_name, partition_key, partition_key_start, partition_key_end) VALUES (?, ?, ?, ?, ?, ?)',
-  );
-  for (const p of partitions) {
-    insertPartition.run(
-      p.partition_id,
-      p.table_id || p.table_name,
-      p.table_name,
-      p.partition_key || null,
-      serializeBoundaryValue(p.partition_key_start),
-      serializeBoundaryValue(p.partition_key_end),
-    );
-  }
-}
-
-function serializeColumns(rawCols) {
-  return typeof rawCols === 'string' ? rawCols : JSON.stringify(rawCols || []);
-}
-
-function normalizeIndicesParams(data) {
-  const createdAt = data.created_at || Date.now();
-  const isGlobal = data.is_global !== undefined ? Number(Boolean(data.is_global)) : 0;
-  return [
-    data.index_id,
-    data.table_id,
-    data.table_name || null,
-    data.index_name,
-    serializeColumns(data.column_names),
-    data.index_type || 'btree',
-    isGlobal,
-    data.is_unique ? 1 : 0,
-    data.state || 'CREATING',
-    data.backfill_cursor_partition_id ?? null,
-    data.backfill_cursor_pk ?? null,
-    Number(data.backfill_total_rows || 0),
-    data.error_message ?? null,
-    createdAt,
-    data.updated_at || createdAt,
-  ];
-}
-
-function runIndicesInsert(db, data) {
-  db.prepare(`
-    INSERT OR REPLACE INTO indices (
-      index_id, table_id, table_name, index_name, column_names,
-      index_type, is_global, is_unique, state,
-      backfill_cursor_partition_id, backfill_cursor_pk, backfill_total_rows,
-      error_message, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(...normalizeIndicesParams(data));
-}
-
-function runIndicesUpdate(db, whereClause, data) {
-  const setEntries = Object.entries(data);
-  const whereEntries = Object.entries(whereClause);
-  if (setEntries.length === 0 || whereEntries.length === 0) return;
-  const setParts = setEntries.map(([col]) => `${col} = ?`);
-  const whereParts = whereEntries.map(([col]) => `${col} = ?`);
-  const sql = `UPDATE indices SET ${setParts.join(', ')} WHERE ${whereParts.join(' AND ')}`;
-  db.prepare(sql).run(
-    ...setEntries.map(([, val]) => val),
-    ...whereEntries.map(([, val]) => val),
-  );
-}
-
-function runIndicesDelete(db, whereClause) {
-  if (whereClause.index_id) {
-    db.prepare('DELETE FROM indices WHERE index_id = ?').run(whereClause.index_id);
-  } else if (whereClause.index_name) {
-    db.prepare('DELETE FROM indices WHERE index_name = ?').run(whereClause.index_name);
-  }
-}
-
-function runPartitionsInsert(db, data) {
-  db.prepare(`
-    INSERT OR REPLACE INTO partitions (
-      partition_id, table_id, table_name, partition_key,
-      partition_key_start, partition_key_end
-    ) VALUES (?, ?, ?, ?, ?, ?)
-  `).run(
-    data.partition_id,
-    data.table_id || data.table_name,
-    data.table_name,
-    data.partition_key || null,
-    serializeBoundaryValue(data.partition_key_start),
-    serializeBoundaryValue(data.partition_key_end),
-  );
-}
-
-function handleGatewayInsert(db, tableName, data) {
-  if (tableName === TABLES.INDICES) runIndicesInsert(db, data);
-  if (tableName === TABLES.PARTITIONS) runPartitionsInsert(db, data);
-  return {success: true};
-}
-
-function handleGatewayUpdate(db, tableName, whereClause, data) {
-  if (tableName === TABLES.INDICES) runIndicesUpdate(db, whereClause, data);
-  return {success: true};
-}
-
-function handleGatewayDelete(db, tableName, whereClause) {
-  if (tableName === TABLES.INDICES) runIndicesDelete(db, whereClause);
-  if (tableName === TABLES.PARTITIONS && whereClause?.partition_id) {
-    db.prepare('DELETE FROM partitions WHERE partition_id = ?').run(whereClause.partition_id);
-  }
-  return {success: true};
-}
-
-function createDurableSystemGateway(catalogDbPath, tables, partitions) {
-  const db = new Database(catalogDbPath);
-  initCatalogSchema(db);
-  seedCatalogTables(db, tables);
-  seedCatalogPartitions(db, partitions);
-  const txGateway = createTransactionPersistenceGateway();
-  const txTables = new Set([
-    TABLES.SQL_TRANSACTIONS,
-    TABLES.SQL_TRANSACTION_PARTICIPANTS,
-    TABLES.SQL_WRITE_OPERATIONS,
-  ]);
-
-  let cdcService = null;
-  const gateway = {
-    db,
-    resolveCdcIntegrationService() {
-      return cdcService;
-    },
-    supportsMutationSubmission: () => true,
-    async submitMutation(mutation, mutationOptions = {}) {
-      return txGateway.submitMutation(mutation, mutationOptions);
-    },
-    async readAuthoritativeRows(tableName, sql, params = []) {
-      if (txTables.has(tableName)) {
-        return txGateway.readAuthoritativeRows(tableName, sql, params);
-      }
-      return {success: true, rows: db.prepare(sql).all(...params)};
-    },
-    async readRows(_tableName, sql, params = []) {
-      return {rows: db.prepare(sql).all(...params)};
-    },
-    async insertSystemTableRow(tableName, data) {
-      return handleGatewayInsert(db, tableName, data);
-    },
-    async updateSystemTableRow(tableName, whereClause, data) {
-      return handleGatewayUpdate(db, tableName, whereClause, data);
-    },
-    async deleteSystemTableRow(tableName, whereClause) {
-      return handleGatewayDelete(db, tableName, whereClause);
-    },
-    close() {
-      txGateway.db.close();
-      db.close();
-    },
-  };
-
-  cdcService = {
-    async insertSystemTableRow(tableName, data) {
-      return gateway.insertSystemTableRow(tableName, data);
-    },
-    async updateSystemTableRow(tableName, whereClause, data) {
-      return gateway.updateSystemTableRow(tableName, whereClause, data);
-    },
-    async deleteSystemTableRow(tableName, whereClause) {
-      return gateway.deleteSystemTableRow(tableName, whereClause);
-    },
-  };
-
-  return {gateway, cdcService};
-}
 
 function resolveTargetPartition(partitionServicesMap, address) {
   const parts = address.split('/');
@@ -461,8 +237,13 @@ async function setupStrictCluster(t, options = {}) {
   const {tables, partitions} = buildStrictUsersAndIndexDefs(includeIndexPartitions);
   const oracleDb = createOracleUsersDb();
   const catalogDbPath = path.join(tmpDir, 'catalog.db');
-  const {gateway, cdcService} = createDurableSystemGateway(catalogDbPath, tables, partitions);
   const systemCache = seedRealSystemTableCache(tables, partitions);
+  const {gateway, cdcService} = createSeededSchemaAwareGateway(
+    catalogDbPath,
+    tables,
+    partitions,
+    systemCache,
+  );
 
   const usersP0 = await createRealPartition(tmpDir, {
     partitionId: 'users_p0',
@@ -731,7 +512,7 @@ test('TX1 real-participant isolation, rollback atomicity, and unavailable partic
   await engine.shutdown();
 });
 
-test('Dynamic index partition provisioning, distributed execution without local DB handles, and cross-engine catalog propagation', async (t) => {
+test('Shared-cache peer engine sees dynamic index provisioning and executes distributed queries (2C shared-cache component witness)', async (t) => {
   const env = await setupStrictCluster(t, {includeIndexPartitions: false});
   seedUsers(env, [
     {id: 10, email: 'alice@example.com', name: 'Alice', status: 'active'},
@@ -741,6 +522,11 @@ test('Dynamic index partition provisioning, distributed execution without local 
   // Both engines have NO partitionServicesProvider / partitionDatabases (distributed-only)
   const engineA = await env.createStrictEngine({attachProvisioner: true});
   const engineB = await env.createStrictEngine({attachProvisioner: false});
+  t.equal(
+    engineA.systemCache,
+    engineB.systemCache,
+    'Shared-cache component witness explicitly shares one SystemTableCache instance across engines',
+  );
 
   // 1. engineA creates global index with zero pre-created index partitions
   const createRes = await engineA.executeQuery(
@@ -845,6 +631,13 @@ test('Hosted lagging follower replica routes GSI SELECT and backfill writes auth
     );
     t.equal(createRes.success, true, 'CREATE GLOBAL INDEX succeeds from follower-hosting node');
 
+    await waitForCondition(
+      () => idxGroup.services[1].db
+        .prepare('SELECT __base_pk_id FROM __idx_users_idx_users_email').all().length === 2,
+      3000,
+      20,
+    );
+
     const leaderIdxRows = idxGroup.services[0].db.prepare(
       'SELECT __base_pk_id, email FROM __idx_users_idx_users_email ORDER BY __base_pk_id ASC',
     ).all();
@@ -914,5 +707,105 @@ test('Hosted lagging follower replica routes GSI SELECT and backfill writes auth
       unavailableRes.errorCode || unavailableRes.error,
       'Unavailable authoritative read surfaces typed failure details',
     );
+  });
+});
+
+test('Independent peer SystemTableCache instances propagate GSI catalog, table, partition, and drop changes via real CDC (2C)', async (t) => {
+  await withIndependentCacheCdcEnvironment(async ({
+    cacheA,
+    cacheB,
+    engineA,
+    engineB,
+    oracleDb,
+    propagatedCdcEvents,
+  }) => {
+    t.not(
+      cacheA,
+      cacheB,
+      'node-a and node-b hold distinct SystemTableCache instances',
+    );
+    t.not(
+      engineA.systemCache,
+      engineB.systemCache,
+      'engineA and engineB do not share a SystemTableCache instance',
+    );
+
+    const insertSql = 'INSERT INTO users (id, email, name, status) VALUES (?, ?, ?, ?)';
+    oracleDb.prepare(insertSql).run(10, 'alice@example.com', 'Alice', 'active');
+    oracleDb.prepare(insertSql).run(120, 'zoe@example.com', 'Zoe', 'pending');
+    t.equal((await engineA.executeQuery(insertSql, [10, 'alice@example.com', 'Alice', 'active'])).success, true);
+    t.equal((await engineA.executeQuery(insertSql, [120, 'zoe@example.com', 'Zoe', 'pending'])).success, true);
+
+    t.same(
+      cacheB.getAll(TABLES.INDICES),
+      [],
+      'Peer cacheB starts with zero global index catalog entries before CREATE GLOBAL INDEX',
+    );
+
+    const createRes = await engineA.executeQuery(
+      'CREATE GLOBAL INDEX idx_users_email ON users (email)',
+    );
+    t.equal(createRes.success, true, 'engineA creates fresh global index over real CDC-backed gateway');
+
+    await waitForCondition(() => {
+      const idx = cacheB.get(TABLES.INDICES, 'idx_users_email-gen1') ||
+        cacheB.getAll(TABLES.INDICES).find((r) => r.index_name === 'idx_users_email');
+      const part = cacheB.get(TABLES.PARTITIONS, '__gsi_users_idx_users_email_p0');
+      return Boolean(
+        idx &&
+        idx.state === 'READ_WRITE' &&
+        part &&
+        part.leader_node_id === 'node-a' &&
+        cacheB.get(TABLES.TABLES, '__idx_users_idx_users_email') &&
+        cacheB.get(TABLES.SERVICES, '__gsi_users_idx_users_email_p0-r1'),
+      );
+    }, 3000, 10);
+
+    const cdcTablesObserved = new Set(propagatedCdcEvents.map((evt) => evt.tableName));
+    t.ok(cdcTablesObserved.has(TABLES.INDICES), 'Real CDC events propagated for TABLES.INDICES');
+    t.ok(cdcTablesObserved.has(TABLES.TABLES), 'Real CDC events propagated for TABLES.TABLES');
+    t.ok(cdcTablesObserved.has(TABLES.PARTITIONS), 'Real CDC events propagated for TABLES.PARTITIONS');
+    t.ok(cdcTablesObserved.has(TABLES.SERVICES), 'Real CDC events propagated for TABLES.SERVICES');
+
+    const selectSql = 'SELECT * FROM users WHERE email = ? ORDER BY id ASC';
+    const selectOnB = await engineB.executeQuery(selectSql, ['zoe@example.com']);
+    t.equal(selectOnB.success, true, 'Independent-cache peer engineB executes GSI query');
+    t.equal(
+      selectOnB.globalIndexPlan?.accessPath,
+      GLOBAL_INDEX_ACCESS_PATH.GLOBAL_SECONDARY_INDEX,
+      'Peer engineB engages GLOBAL_SECONDARY_INDEX via CDC-hydrated cacheB',
+    );
+    t.same(
+      selectOnB.rows,
+      oracleDb.prepare(selectSql).all('zoe@example.com'),
+      'Peer engineB GSI SELECT matches oracle',
+    );
+
+    oracleDb.prepare(insertSql).run(45, 'nina@example.com', 'Nina', 'active');
+    const insertOnB = await engineB.executeQuery(insertSql, [45, 'nina@example.com', 'Nina', 'active']);
+    t.equal(insertOnB.success, true, 'Peer engineB maintains GSI via TX1 using CDC-hydrated cacheB');
+
+    const selectOnA = await engineA.executeQuery(selectSql, ['nina@example.com']);
+    t.equal(selectOnA.success, true);
+    t.equal(selectOnA.globalIndexPlan?.accessPath, GLOBAL_INDEX_ACCESS_PATH.GLOBAL_SECONDARY_INDEX);
+    t.same(selectOnA.rows, oracleDb.prepare(selectSql).all('nina@example.com'));
+
+    const dropRes = await engineA.executeQuery('DROP INDEX idx_users_email');
+    t.equal(dropRes.success, true, 'engineA DROP INDEX succeeds');
+
+    await waitForCondition(
+      () => cacheB.getAll(TABLES.INDICES).filter((r) => r.index_name === 'idx_users_email').length === 0,
+      3000,
+      10,
+    );
+
+    const postDropSelectOnB = await engineB.executeQuery(selectSql, ['nina@example.com']);
+    t.equal(postDropSelectOnB.success, true, 'Peer engineB falls back cleanly to scatter-gather after DROP CDC');
+    t.equal(
+      postDropSelectOnB.globalIndexPlan?.accessPath,
+      GLOBAL_INDEX_ACCESS_PATH.SCATTER_GATHER,
+      'Peer engineB no longer uses dropped GSI after CDC delete propagation',
+    );
+    t.same(postDropSelectOnB.rows, oracleDb.prepare(selectSql).all('nina@example.com'));
   });
 });

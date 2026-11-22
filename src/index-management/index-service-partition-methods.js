@@ -35,7 +35,10 @@ function normalizePartitionIndexArgs(partitionId, indexMetadataOrName, ...rest) 
 }
 
 function executeOnPartitionServiceTarget(target, sql, params) {
-  if (target?.db?.prepare) {
+  if (typeof target?.handleRemoteQuery === 'function') {
+    return target.handleRemoteQuery({sql, params});
+  }
+  if (target?.db?.prepare && !target?.raft) {
     return target.db.prepare(sql).run();
   }
   if (typeof target?.executeQuery === 'function') {
@@ -68,7 +71,8 @@ function resolveEnginePartitionTarget(engine, partitionId) {
 
 function hasHandleExecutor(partition) {
   return Boolean(
-    partition?.db?.prepare ||
+    typeof partition?.handleRemoteQuery === 'function' ||
+    (partition?.db?.prepare && !partition?.raft) ||
     partition?.storage?.getDatabase ||
     typeof partition?.executeQuery === 'function',
   );
@@ -77,7 +81,8 @@ function hasHandleExecutor(partition) {
 function hasServiceExecutor(service) {
   if (!service) return false;
   return Boolean(
-    service.db?.prepare ||
+    typeof service.handleRemoteQuery === 'function' ||
+    (service.db?.prepare && !service.raft) ||
     typeof service.getPartition === 'function' ||
     typeof service.executeQuery === 'function' ||
     typeof service.executePartitionQuery === 'function' ||
@@ -131,7 +136,10 @@ function resolveRebuildTarget(service, tableId, indexName) {
 
 const indexServicePartitionMethods = {
   executeOnPartitionHandle(partition, sql, params) {
-    if (partition?.db?.prepare) {
+    if (typeof partition?.handleRemoteQuery === 'function') {
+      return partition.handleRemoteQuery({sql, params});
+    }
+    if (partition?.db?.prepare && !partition?.raft) {
       return partition.db.prepare(sql).run();
     }
     if (partition?.storage?.getDatabase) {
@@ -164,14 +172,14 @@ const indexServicePartitionMethods = {
 
   executeViaSqlQueryEngine(partitionId, sql, params) {
     if (!this.sqlQueryEngine) return undefined;
+    const executor = this.sqlQueryEngine.queryExecutor;
+    if (typeof executor?.executeOnPartition === 'function') {
+      return executor.executeOnPartition(partitionId, sql, params, false, true);
+    }
     const target = resolveEnginePartitionTarget(this.sqlQueryEngine, partitionId);
     const directResult = executeOnPartitionServiceTarget(target, sql, params);
     if (directResult !== undefined) {
       return directResult;
-    }
-    const executor = this.sqlQueryEngine.queryExecutor;
-    if (typeof executor?.executeOnPartition === 'function') {
-      return executor.executeOnPartition(partitionId, sql, params, false, true);
     }
     return undefined;
   },

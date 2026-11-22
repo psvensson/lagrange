@@ -488,6 +488,13 @@ async function executeEngineWriteWithGlobalIndexes(engine, context) {
     [LOCAL_STR_ID];
 
   if (!transactionIdentity) {
+    if (engine.queryExecutor?.executeOnPartition || engine.partitionServicesProvider) {
+      return {
+        success: false,
+        error: 'Distributed transaction identity unavailable for global index write',
+        errorCode: GLOBAL_INDEX_ERROR_CODE.PARTICIPANT_UNAVAILABLE,
+      };
+    }
     return executeDirectLocalGlobalIndexWrite({
       coordinator,
       statement,
