@@ -157,6 +157,7 @@ async function setupProductionEnvironment(t) {
       table_id: 'users',
       table_name: 'users',
       partition_key: 'id',
+      partition_key_type: 'INTEGER',
       partition_key_start: null,
       partition_key_end: 100,
     },
@@ -165,6 +166,7 @@ async function setupProductionEnvironment(t) {
       table_id: 'users',
       table_name: 'users',
       partition_key: 'id',
+      partition_key_type: 'INTEGER',
       partition_key_start: 100,
       partition_key_end: null,
     },
@@ -176,6 +178,7 @@ async function setupProductionEnvironment(t) {
       table_id: '__idx_users_idx_users_email',
       table_name: '__idx_users_idx_users_email',
       partition_key: 'email',
+      partition_key_type: 'TEXT',
       partition_key_start: null,
       partition_key_end: 'm',
     },
@@ -184,6 +187,7 @@ async function setupProductionEnvironment(t) {
       table_id: '__idx_users_idx_users_email',
       table_name: '__idx_users_idx_users_email',
       partition_key: 'email',
+      partition_key_type: 'TEXT',
       partition_key_start: 'm',
       partition_key_end: null,
     },
@@ -456,6 +460,14 @@ test('Production construction 2: TX1 synchronous INSERT/UPDATE/DELETE maintenanc
   const {engine, indexService} = await env.createEngineAndService();
   await indexService.createIndex('CREATE GLOBAL INDEX idx_users_email ON users (email)');
   const coordinator = indexService.getGlobalIndexCoordinator();
+  const txContext = {
+    getDatabase(partitionId) {
+      for (const svc of env.partitionServices.values()) {
+        if (svc.partitionId === partitionId) return svc.db;
+      }
+      return null;
+    },
+  };
 
   // 1. INSERT via transactional write hook
   const insertedRow = {id: 15, email: 'charlie@example.com', name: 'Charlie', status: 'active'};
@@ -465,6 +477,7 @@ test('Production construction 2: TX1 synchronous INSERT/UPDATE/DELETE maintenanc
     basePartitionId: 'users_p0',
     afterRows: [insertedRow],
     basePrimaryKeyColumns: ['id'],
+    txContext,
     baseWriteFn: async () => {
       env.usersP0.db.prepare(
         'INSERT INTO users (id, email, name, status) VALUES (?, ?, ?, ?)',
@@ -490,6 +503,7 @@ test('Production construction 2: TX1 synchronous INSERT/UPDATE/DELETE maintenanc
     beforeRows: [insertedRow],
     afterRows: [updatedRow],
     basePrimaryKeyColumns: ['id'],
+    txContext,
     baseWriteFn: async () => {
       env.usersP0.db.prepare('UPDATE users SET email = ? WHERE id = ?').run(updatedRow.email, 15);
       env.oracleDb.prepare('UPDATE users SET email = ? WHERE id = ?').run(updatedRow.email, 15);
@@ -513,6 +527,7 @@ test('Production construction 2: TX1 synchronous INSERT/UPDATE/DELETE maintenanc
     basePartitionId: 'users_p0',
     beforeRows: [updatedRow],
     basePrimaryKeyColumns: ['id'],
+    txContext,
     baseWriteFn: async () => {
       env.usersP0.db.prepare('DELETE FROM users WHERE id = ?').run(15);
       env.oracleDb.prepare('DELETE FROM users WHERE id = ?').run(15);
@@ -539,6 +554,7 @@ test('Production construction 2: TX1 synchronous INSERT/UPDATE/DELETE maintenanc
       basePartitionId: 'users_p1',
       afterRows: [blockedRow],
       basePrimaryKeyColumns: ['id'],
+      txContext,
       baseWriteFn: async () => {
         env.usersP1.db.prepare(
           'INSERT INTO users (id, email, name, status) VALUES (?, ?, ?, ?)',

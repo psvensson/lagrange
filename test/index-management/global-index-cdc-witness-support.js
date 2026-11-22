@@ -293,7 +293,7 @@ async function withIndependentCacheCdcEnvironment(callback) {
     partitionServices.set(replicaId, ps);
     provisionedPartitions.push(ps);
     const serviceRes = await gatewayA.submitMutation({
-      operation: 'upsert',
+      operation: 'insert',
       tableName: TABLES.SERVICES,
       row: {
         service_id: replicaId,

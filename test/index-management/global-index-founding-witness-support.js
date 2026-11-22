@@ -214,6 +214,9 @@ function createSeededSchemaAwareGateway(catalogDbPath, tables, partitions, syste
     });
   }
   for (const p of partitions) {
+    const ownerTable = tables.find(
+      (t) => (t.table_name || t.table_id) === (p.table_name || p.table_id),
+    );
     executeSystemDbMutation(result.gateway.db, {
       operation: 'upsert',
       tableName: TABLES.PARTITIONS,
@@ -223,7 +226,7 @@ function createSeededSchemaAwareGateway(catalogDbPath, tables, partitions, syste
         table_name: p.table_name,
         partition_key_start: serializeBoundaryValue(p.partition_key_start),
         partition_key_end: serializeBoundaryValue(p.partition_key_end),
-        partition_key_type: p.partition_key_type || 'INTEGER',
+        partition_key_type: p.partition_key_type || ownerTable?.partition_key_type || 'TEXT',
         partition_version: 1,
         replica_count: 1,
         size_bytes: 0,
@@ -246,12 +249,16 @@ function seedRealSystemTableCache(tables, partitions, nodeId = 'test-node') {
     });
   }
   for (const p of partitions) {
+    const ownerTable = tables.find(
+      (t) => (t.table_name || t.table_id) === (p.table_name || p.table_id),
+    );
     cache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.INSERT, {
       partition_version: 1,
       replica_count: 1,
       size_bytes: 0,
       leader_node_id: p.leader_node_id || nodeId,
       state: 'NORMAL',
+      partition_key_type: p.partition_key_type || ownerTable?.partition_key_type || 'TEXT',
       ...p,
     });
     cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
