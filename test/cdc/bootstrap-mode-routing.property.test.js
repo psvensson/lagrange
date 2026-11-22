@@ -27,6 +27,7 @@ import {
 } from '../../src/cache/system-cache-key-descriptor.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {createBootstrapLaneReplica} from '../test-helpers/bootstrap-lane-replica.js';
 
 /**
  * System table names that support write operations.
@@ -77,26 +78,25 @@ function createTrackingSqlEngine() {
 }
 
 /**
- * Create a mock partition service that tracks direct writes.
+ * Create a mock partition service: one local replica as the bootstrap lane
+ * meets it, counting the statements its raft lane carried (raftWrites) and
+ * the statements it executed outside raft (outsideRaft).
  * @param {string} partitionId - Partition identifier.
  * @param {string} tableName - Table this partition serves.
- * @return {Object} Mock partition service with directWrites array.
+ * @return {Object} Mock partition service.
  */
 function createMockPartitionService(partitionId, tableName) {
-  const directWrites = [];
-  return {
-    partitionId,
-    tableName,
-    isLeader: true,
-    directWrites,
-    async executeLocalQuery(sql, params = []) {
-      directWrites.push({sql, params});
-      if (sql.includes('sqlite_master')) {
-        return {success: true, rows: [{name: tableName}]};
-      }
-      return {success: true, affectedRows: 1};
-    },
-  };
+  return createBootstrapLaneReplica({partitionId, tableName});
+}
+
+/**
+ * Whether no partition executed any statement, through raft or outside it.
+ * @param {Object} partitionServices - Mock partition services by table.
+ * @return {boolean}
+ */
+function noPartitionExecuted(partitionServices) {
+  return Object.values(partitionServices).every((svc) =>
+    svc.raftWrites.length === 0 && svc.outsideRaft.length === 0);
 }
 
 /**
@@ -320,12 +320,9 @@ test('Property 6: Bootstrap mode routing enforcement',
               const sqlUsed =
                 sqlEngine.executedQueries.length > 0;
 
-              // No partition service should have direct writes
-              const noDirectWrites = Object.values(
-                partitionServices,
-              ).every((svc) => svc.directWrites.length === 0);
-
-              return sqlUsed && noDirectWrites;
+              // No local partition executed anything, through raft or
+              // outside it
+              return sqlUsed && noPartitionExecuted(partitionServices);
             },
           ),
           {numRuns: 10},
@@ -340,8 +337,9 @@ test('Property 6: Bootstrap mode routing enforcement',
 
     /**
      * Property: For any write operation and any system table,
-     * when bootstrap mode is enabled, the write goes directly
-     * to local partitions and does NOT route through SQL engine.
+     * when bootstrap mode is enabled, the write goes to the local
+     * partition through its raft lane exactly once, nothing is
+     * executed outside raft, and it does NOT route through SQL engine.
      */
     t.test(
       'writes go to local partitions when bootstrap enabled',
@@ -375,19 +373,23 @@ test('Property 6: Bootstrap mode routing enforcement',
               const sqlNotUsed =
                 sqlEngine.executedQueries.length === 0;
 
-              // The target partition must have direct writes
-              const targetSvc = partitionServices[tableName];
-              const hasDirectWrites =
-                targetSvc.directWrites.length > 0;
+              // The target partition's raft lane carried the write
+              // exactly once; no other partition was written, and no
+              // partition executed anything outside raft
+              const raftLaneOnce = Object.entries(partitionServices)
+                .every(([table, svc]) => svc.raftWrites.length ===
+                  (table === tableName ? 1 : 0));
+              const nothingOutsideRaft = Object.values(partitionServices)
+                .every((svc) => svc.outsideRaft.length === 0);
 
-              return sqlNotUsed && hasDirectWrites;
+              return sqlNotUsed && raftLaneOnce && nothingOutsideRaft;
             },
           ),
           {numRuns: 10},
         );
 
         t.pass(
-          'all writes go directly to local partitions ' +
+          'all writes go to the local partition through raft ' +
           'when bootstrap mode is enabled',
         );
       },
@@ -430,12 +432,9 @@ test('Property 6: Bootstrap mode routing enforcement',
               const sqlUsed =
                 sqlEngine.executedQueries.length > 0;
 
-              // No partition service should have direct writes
-              const noDirectWrites = Object.values(
-                partitionServices,
-              ).every((svc) => svc.directWrites.length === 0);
-
-              return sqlUsed && noDirectWrites;
+              // No local partition executed anything, through raft or
+              // outside it
+              return sqlUsed && noPartitionExecuted(partitionServices);
             },
           ),
           {numRuns: 10},
@@ -483,8 +482,7 @@ test('Property 6: Bootstrap mode routing enforcement',
               }
               return code === 'SERVICES_UPSERT_FORBIDDEN' &&
                 sqlEngine.executedQueries.length === 0 &&
-                Object.values(partitionServices)
-                  .every((svc) => svc.directWrites.length === 0);
+                noPartitionExecuted(partitionServices);
             },
           ),
           {numRuns: 10},

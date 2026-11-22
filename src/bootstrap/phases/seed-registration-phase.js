@@ -76,6 +76,10 @@ const REGISTRATION_REQUIRED_LEADER_TABLES = Object.freeze([
   SYSTEM_TABLE_NAME.SERVICES,
   SYSTEM_TABLE_NAME.TABLES,
   SYSTEM_TABLE_NAME.MESSAGE_GROUPS,
+  SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS,
+  SYSTEM_TABLE_NAME.SERVICE_ENDPOINTS,
+  SYSTEM_TABLE_NAME.CONFIG,
+  SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
 ]);
 const REGISTRATION_REQUIRED_LEADER_PARTITION_IDS = Object.freeze(
   REGISTRATION_REQUIRED_LEADER_TABLES.map((tableName) =>
@@ -552,7 +556,9 @@ class SeedRegistrationPhase {
       );
       logger.info(BOOTSTRAP_LOG_MSG.CONFIG_SEEDED, {
         seeded: result.seeded.length,
-        skipped: result.skipped.length,
+        alreadyPresent: result.alreadyPresent.length,
+        refused: result.refused.length,
+        unknown: result.unknown.length,
       });
     } catch (error) {
       logger.error(BOOTSTRAP_LOG_MSG.CONFIG_SEED_FAILED, {

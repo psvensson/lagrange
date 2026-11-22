@@ -627,8 +627,8 @@ test('DynamicConfigService seedConfiguration', async (t) => {
   const result = await service.seedConfiguration('system');
 
   t.ok(result.seeded.length > 0, 'should seed some keys');
-  t.ok(Array.isArray(result.skipped),
-    'should return skipped array');
+  t.ok(Array.isArray(result.alreadyPresent),
+    'should return alreadyPresent array');
 
   const definedKeyCount =
     Object.keys(CONFIG_DEFINITIONS).length;
@@ -671,8 +671,8 @@ test('DynamicConfigService seedConfiguration skips existing',
 
     const result = await service.seedConfiguration('system');
 
-    t.ok(result.skipped.includes('logging.level'),
-      'should skip existing key');
+    t.ok(result.alreadyPresent.includes('logging.level'),
+      'should count existing key as alreadyPresent');
     t.notOk(result.seeded.includes('logging.level'),
       'should not seed existing key');
   });
@@ -733,7 +733,7 @@ test('DynamicConfigService seedConfiguration bootstrap fast path skips reads',
       Object.keys(CONFIG_DEFINITIONS).length,
       'should seed all definitions without per-key reads',
     );
-    t.same(result.skipped, [], 'should not skip keys when table is known empty');
+    t.same(result.alreadyPresent, [], 'should not report alreadyPresent keys when table is known empty');
     t.equal(
       gatewayWrites.length,
       Object.keys(CONFIG_DEFINITIONS).length,
@@ -770,9 +770,9 @@ test('DynamicConfigService seedConfiguration fast path remains idempotent',
       'replayed bootstrap seeding should not insert duplicates',
     );
     t.equal(
-      secondResult.skipped.length,
+      secondResult.alreadyPresent.length,
       Object.keys(CONFIG_DEFINITIONS).length,
-      'replayed bootstrap seeding should classify existing keys as skipped',
+      'replayed bootstrap seeding should classify existing keys as alreadyPresent',
     );
   });
 

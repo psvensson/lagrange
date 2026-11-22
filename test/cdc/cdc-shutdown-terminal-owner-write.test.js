@@ -120,8 +120,12 @@ import {
   PARTITION_WRITE_RELEASE_CAUSE,
   buildReleasedPendingWriteAnswer,
 } from '../../src/partition/partition-write-kernel.js';
+import {PartitionServiceEntryApplyBase} from
+  '../../src/partition/partition-service-entry-apply-base.js';
 import {PROPOSAL_QUEUE_PROPOSAL_STATE} from
   '../../src/partition/proposal-queue-constants.js';
+import {deriveParticipantEntryId} from
+  '../../src/query/distributed/distributed-write-coordinator.js';
 import {
   INITIAL_PARTITION_IDS, SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
@@ -161,6 +165,42 @@ const TEST_FILE = fileURLToPath(import.meta.url);
 // The owner's files, subdirectories included (write-router/).
 const CDC_OWNER_FILE = /[\\/]src[\\/]cdc[\\/](?:[\w-]+[\\/])*[\w-]+\.js$/u;
 
+const ACCEPTED_OPERATION_ID = 'dwrite-shutdown-accepted';
+const ACCEPTED_LOG_INDEX = 1;
+const ACCEPTED_TERM = 1;
+
+function acceptedWriteAnswer(idempotencyKey) {
+  const leader = {
+    partitionId: PUBLICATIONS_PARTITION_ID,
+    nodeId: NODE_ID,
+    replicaId: `${PUBLICATIONS_PARTITION_ID}-r1`,
+  };
+  const entry = {
+    entryId: deriveParticipantEntryId(idempotencyKey, PUBLICATIONS_PARTITION_ID),
+    idempotencyKey,
+    operationId: ACCEPTED_OPERATION_ID,
+    proposedBy: leader.replicaId,
+  };
+  const participant = {
+    success: true,
+    affectedRows: 1,
+    changes: 1,
+    rows: [],
+    ...PartitionServiceEntryApplyBase.prototype.buildCommittedWriteIdentity.call(
+      leader, entry, ACCEPTED_LOG_INDEX, ACCEPTED_TERM),
+  };
+  return {
+    success: true,
+    affectedRows: 1,
+    rows: [],
+    partitions: [PUBLICATIONS_PARTITION_ID],
+    mirrorPartitions: [],
+    idempotencyKey,
+    operationId: ACCEPTED_OPERATION_ID,
+    participantResults: [participant],
+  };
+}
+
 function releasedWriteAnswer() {
   return buildReleasedPendingWriteAnswer({
     entryId: RELEASED_ENTRY_ID,
@@ -179,13 +219,14 @@ function createInFlightEngine(shutdownState) {
     writesAfterShutdown: 0,
     submissions: 0,
     pendingWrite: null,
-    executeQuery() {
+    executeQuery(_sql, _params, options) {
       engine.submissions += 1;
       if (shutdownState.begun) {
         engine.writesAfterShutdown += 1;
       }
       return new Promise((resolve) => {
-        engine.pendingWrite = resolve;
+        engine.pendingWrite = (answer) => resolve(
+          typeof answer === 'function' ? answer(options?.idempotencyKey) : answer);
         firstSubmission.resolve();
       });
     },
@@ -195,7 +236,7 @@ function createInFlightEngine(shutdownState) {
       resolve(answer);
     },
     accept() {
-      engine.settle({success: true, affectedRows: 1, rows: []});
+      engine.settle(acceptedWriteAnswer);
     },
     release() {
       engine.settle(releasedWriteAnswer());

@@ -881,7 +881,7 @@ test('Bootstrap sequence - partition leadership wait allows init-phase priority 
   }
 });
 
-test('Bootstrap sequence - partition leadership wait allows direct bootstrap priority partition bypass during registration', async (t) => {
+test('Bootstrap sequence - partition leadership wait does not bypass priority partitions during registration without recovery pending', async (t) => {
   initializeTestEnvironment();
 
   const bootstrap = new BootstrapService({
@@ -916,10 +916,21 @@ test('Bootstrap sequence - partition leadership wait allows direct bootstrap pri
     ],
   ]);
 
+  const originalNow = Date.now;
+  let now = 1000;
+  Date.now = () => now;
+  bootstrap.sleep = async () => {
+    now += 10;
+  };
+
   try {
-    await bootstrap.seedPartitionsPhase.waitForPartitionLeadership();
-    t.pass('registration should not block bootstrap-direct startup on a local priority control-plane partition before the SQL engine exists');
+    await t.rejects(
+      bootstrap.seedPartitionsPhase.waitForPartitionLeadership(),
+      /Partition leaders not established within 5ms.*sql_transactions-p1/,
+      'registration requires a leader when no recovery or canonical remote leader bypass applies',
+    );
   } finally {
+    Date.now = originalNow;
     await bootstrap.shutdown();
   }
 });

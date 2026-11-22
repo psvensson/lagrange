@@ -1,5 +1,6 @@
 import {mintControlPlaneWriteKey} from
   '../control-plane/control-plane-write-identity.js';
+import {createRoutedWriteUncertainty} from './cdc-routed-write-uncertainty.js';
 import {deriveParticipantEntryId} from
   '../query/distributed/distributed-write-coordinator.js';
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
@@ -218,6 +219,7 @@ class CDCRoutedMutationReadiness {
         return {
           handled: true,
           result,
+          priorAnswer: issued.answer,
         };
       } catch (error) {
         if (
@@ -534,6 +536,7 @@ class CDCRoutedMutationReadiness {
     }
     // The answer of the last hop issued (a local leg or an engine attempt).
     const issuedHop = {};
+    const uncertainty = createRoutedWriteUncertainty();
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
         const remainingBudgetMs = getRemainingQueryExecutionBudgetMs();
@@ -583,8 +586,9 @@ class CDCRoutedMutationReadiness {
             params,
             baseQueryOptions.idempotencyKey,
           );
+          uncertainty.observe(localWriteResult.priorAnswer);
           if (localWriteResult.handled) {
-            return localWriteResult.result;
+            return uncertainty.settled(localWriteResult.result);
           }
           issuedHop.answer = localWriteResult.priorAnswer ?? issuedHop.answer;
         }
@@ -597,6 +601,7 @@ class CDCRoutedMutationReadiness {
           () => sqlQueryEngine.executeQuery(sql, params, queryOptions),
           issuedHop.answer);
         issuedHop.answer = result;
+        uncertainty.observe(result);
         if (result && result.success === false) {
           const message = result.error || ERRORS.QUERY_FAILED;
           if (
@@ -646,6 +651,7 @@ class CDCRoutedMutationReadiness {
         }
         return result;
       } catch (error) {
+        uncertainty.admit(error);
         const message = error?.message || String(error);
         const retryable =
           this.shouldRetryRoutedSystemTableMutationFailure(error, tableName);
@@ -653,14 +659,13 @@ class CDCRoutedMutationReadiness {
           if (retryable) {
             spentLatch.attemptsSpent(attempt, error);
           }
-          annotateSystemTableMutationError(error, {
+          throw annotateSystemTableMutationError(uncertainty.failure(error), {
             attempt,
             writeMode:
               this.writeRouter?.mode === WRITE_ROUTER_MODE.BOOTSTRAP_DIRECT ?
                 WRITE_ROUTER_MODE.BOOTSTRAP_DIRECT :
                 WRITE_ROUTER_MODE.SQL_ROUTED,
           });
-          throw error;
         }
         this.logger.warn(CDC_LOG_MSG.TRANSIENT_SQL_EXCEPTION_RETRY, {
           nodeId: this.nodeId,
@@ -675,14 +680,13 @@ class CDCRoutedMutationReadiness {
             attempt,
           ))
         ) {
-          annotateSystemTableMutationError(error, {
+          throw annotateSystemTableMutationError(uncertainty.failure(error), {
             attempt,
             writeMode:
               this.writeRouter?.mode === WRITE_ROUTER_MODE.BOOTSTRAP_DIRECT ?
                 WRITE_ROUTER_MODE.BOOTSTRAP_DIRECT :
                 WRITE_ROUTER_MODE.SQL_ROUTED,
           });
-          throw error;
         }
       }
     }

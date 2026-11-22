@@ -12,6 +12,7 @@ import {
 import {INITIAL_PARTITION_IDS} from '../bootstrap/system-table-schemas-constants.js';
 import {CONTROL_PLANE_MUTATION_OUTCOME} from './control-plane-system-table-gateway-constants.js';
 import {ERRORS} from '../constants/errors.js';
+import {isControlPlaneWriterShutDown} from './control-plane-error-classification.js';
 import {OWNER_CONTRACT_NEXT_ACTION, OWNER_CONTRACT_STATE} from './owner-contract-outcome.js';
 import {
   PARTITION_WRITE_LEADERSHIP_REFUSAL,
@@ -380,10 +381,21 @@ function unresolvedErrorText(observed) {
 // Whether an observed attempt leaves its instance unresolved: its answer did
 // not settle it, or it threw the typed unknown. A thrown failure that names no
 // unknown (a refusal before delivery, an internal error) is the transport's
-// own failure and is thrown on as it was.
+// own failure and is thrown on as it was. So is the writer's terminal
+// shut-down answer, even when it links an unknown: it stays terminal for its
+// owner - never "pending, retry" - and names the unresolved instance beside
+// it (terminalPendingInstance).
 function isUnresolvedObservation(record, state, answer) {
-  return record.settlement === null && (state === WRITE_DELIVERY.ANSWER ||
-    someLinkedAnswer(answer, isWriteOutcomeUnknown));
+  return record.settlement === null && !isControlPlaneWriterShutDown(answer) &&
+    (state === WRITE_DELIVERY.ANSWER || someLinkedAnswer(answer, isWriteOutcomeUnknown));
+}
+
+// The pending instance a terminal shut-down answer carries: its own, outcome
+// unknown, while an attempt may have proposed it (the instance stays held for
+// a successor or the caller to resolve); otherwise the one it was given.
+function terminalPendingInstance(record, answer, pendingInstance) {
+  return record.settlement === null && isControlPlaneWriterShutDown(answer) ?
+    describePendingInstance(record, PENDING_INSTANCE_OUTCOME.UNKNOWN) : pendingInstance;
 }
 
 // The held instance of a name, resolved under its own entry by re-delivering
@@ -471,7 +483,8 @@ function observedWriteResult(record, {answer, state}, pendingInstance) {
   if (isUnresolvedObservation(record, state, answer)) {
     return rememberWriteReceipt(unresolvedAnswer(record, answer), record);
   }
-  const observed = rememberWriteReceipt(withPendingInstance(answer, pendingInstance), record);
+  const observed = rememberWriteReceipt(withPendingInstance(answer,
+    terminalPendingInstance(record, answer, pendingInstance)), record);
   if (state === WRITE_DELIVERY.ERROR) throw observed;
   return observed;
 }

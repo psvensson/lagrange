@@ -11,7 +11,7 @@ documentClass: generated
 
 ## Files
 
-- [cdc-bootstrap-direct-sql.js](cdc-bootstrap-direct-sql.js) - The bootstrap-mode direct write path of the CDC integration service (the seed's registration window): SQL executed... (importers: one)
+- [cdc-bootstrap-direct-sql.js](cdc-bootstrap-direct-sql.js) - The bootstrap-mode path of the CDC integration service (the seed's registration window): reads on the local... (importers: one)
 - [cdc-cache-deletion-visibility.js](cdc-cache-deletion-visibility.js) - The existing CDC visibility owner's absence repair. (importers: one)
 - [cdc-committed-write-answer.js](cdc-committed-write-answer.js) - The answer of a routed system-table write: it answers at its commit at the partition owner, with its position (quest... (importers: few)
 - [cdc-confirmation-tracker.js](cdc-confirmation-tracker.js) - CDC Confirmation Tracker - awaitable CDC delivery confirmation. (importers: many)
@@ -49,6 +49,7 @@ documentClass: generated
 - [cdc-replica-operation-mutation-coalescing-key.js](cdc-replica-operation-mutation-coalescing-key.js) - No leading comment; first export: resolveReplicaOperationMutationCoalescingKey. (importers: one)
 - [cdc-routed-mutation-readiness.js](cdc-routed-mutation-readiness.js) - The spent-wait latch of one routed write. (importers: few)
 - [cdc-routed-system-write-selection.js](cdc-routed-system-write-selection.js) - No leading comment; first export: resolveRoutedSystemTableMutationCoalescingKey. (importers: one)
+- [cdc-routed-write-uncertainty.js](cdc-routed-write-uncertainty.js) - The most uncertain answer of one routed system-table write across its hops and attempts (the CDC routed-mutation... (importers: one)
 - [cdc-source-scope-evidence.js](cdc-source-scope-evidence.js) - No leading comment; first export: CDC_SOURCE_SCOPE_AUTHORITY. (importers: many)
 - [cdc-sql-builder.js](cdc-sql-builder.js) - CDC SQL Builder - Builds SQL queries for CDC operations. (importers: few)
 - [cdc-system-table-mutation-sql-helpers.js](cdc-system-table-mutation-sql-helpers.js) - No leading comment; first export: buildSystemTableUpsert. (importers: many)

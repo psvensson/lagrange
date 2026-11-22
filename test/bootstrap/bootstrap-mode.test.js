@@ -8,6 +8,10 @@ import {test} from '../../src/test-helpers/tap.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {WRITE_ROUTER_MODE} from '../../src/cdc/write-router/index.js';
+import {
+  createBootstrapLaneReplica,
+  raftLaneRefusal,
+} from '../test-helpers/bootstrap-lane-replica.js';
 
 // Use hardcoded partition IDs matching the constants file
 const NODES_PARTITION_ID = 'nodes-p1';
@@ -27,23 +31,16 @@ function createMockSqlQueryEngine() {
 }
 
 /**
- * Create a mock partition service for testing.
+ * Create a mock partition service for testing: one local replica as the
+ * bootstrap lane meets it (a write rides its raft lane; statements outside
+ * raft are counted).
  * @param {string} partitionId - Partition ID.
- * @param {boolean} shouldSucceed - Whether executeLocalQuery should succeed.
+ * @param {boolean} shouldSucceed - Whether its raft lane commits the write
+ *   (otherwise it refuses it: the replica does not lead the partition).
  * @return {Object} Mock partition service.
  */
 function createMockPartitionService(partitionId, shouldSucceed = true) {
-  return {
-    partitionId,
-    initialized: true,
-    isLeader: true,
-    executeLocalQuery: async (_sql, _params) => {
-      if (shouldSucceed) {
-        return {success: true, affectedRows: 1, rows: []};
-      }
-      return {success: false, error: 'Mock partition error'};
-    },
-  };
+  return createBootstrapLaneReplica({partitionId, refuse: !shouldSucceed});
 }
 
 // Test 1: Bootstrap mode enable/disable
@@ -171,16 +168,7 @@ test('Bootstrap mode - direct write executes on correct partition', async (t) =>
   const service = new CDCIntegrationService({nodeId: 'test-seed-node'});
   service.initialize();
 
-  let executedSql = null;
-  const mockPartitionService = {
-    partitionId: SERVICES_PARTITION_ID,
-    initialized: true,
-    isLeader: true,
-    executeLocalQuery: async (sql, _params) => {
-      executedSql = sql;
-      return {success: true, affectedRows: 1};
-    },
-  };
+  const mockPartitionService = createMockPartitionService(SERVICES_PARTITION_ID);
 
   const mockPartitionServices = new Map();
   mockPartitionServices.set(SERVICES_PARTITION_ID, mockPartitionService);
@@ -190,7 +178,10 @@ test('Bootstrap mode - direct write executes on correct partition', async (t) =>
   const result = await service.executeSQLDirectToLocalPartition(sql, ['svc-1']);
 
   t.ok(result.success, 'should return success');
-  t.equal(executedSql, sql, 'should pass SQL to partition');
+  t.same(mockPartitionService.raftWrites, [{sql, params: ['svc-1']}],
+    'should pass SQL to the partition\'s raft lane exactly once');
+  t.equal(mockPartitionService.outsideRaft.length, 0,
+    'nothing is executed outside raft');
   t.end();
 });
 
@@ -304,15 +295,16 @@ test('Bootstrap mode - direct write handles partition errors', async (t) => {
   mockPartitionServices.set(NODES_PARTITION_ID, mockPartitionService);
   service.setBootstrapMode(true, mockPartitionServices);
 
-  try {
-    await service.executeSQLDirectToLocalPartition(
-      'INSERT INTO nodes (node_id) VALUES (?)',
-      ['node-1'],
-    );
-    t.fail('should throw when partition returns error');
-  } catch (error) {
-    t.ok(error.message.includes('Mock partition error'), 'should throw partition error');
-  }
+  const result = await service.executeSQLDirectToLocalPartition(
+    'INSERT INTO nodes (node_id) VALUES (?)',
+    ['node-1'],
+  );
+  t.same(result, raftLaneRefusal(NODES_PARTITION_ID),
+    'the raft lane\'s own failure is the write\'s answer');
+  t.equal(mockPartitionService.raftWrites.length, 1,
+    'the raft lane carried the write once');
+  t.equal(mockPartitionService.outsideRaft.length, 0,
+    'nothing is executed outside raft');
   t.end();
 });
 
@@ -321,16 +313,7 @@ test('Bootstrap mode - routes to direct partition when enabled', async (t) => {
   const service = new CDCIntegrationService({nodeId: 'test-seed-node'});
   service.initialize();
 
-  let directCallMade = false;
-  const mockPartitionService = {
-    partitionId: NODES_PARTITION_ID,
-    initialized: true,
-    isLeader: true,
-    executeLocalQuery: async (_sql, _params) => {
-      directCallMade = true;
-      return {success: true, affectedRows: 1};
-    },
-  };
+  const mockPartitionService = createMockPartitionService(NODES_PARTITION_ID);
 
   const mockPartitionServices = new Map();
   mockPartitionServices.set(NODES_PARTITION_ID, mockPartitionService);
@@ -342,7 +325,10 @@ test('Bootstrap mode - routes to direct partition when enabled', async (t) => {
   });
 
   t.ok(result.success, 'should succeed');
-  t.ok(directCallMade, 'should call direct partition method');
+  t.equal(mockPartitionService.raftWrites.length, 1,
+    'the write goes through the local partition\'s raft lane exactly once');
+  t.equal(mockPartitionService.outsideRaft.length, 0,
+    'nothing is executed outside raft');
   t.end();
 });
 
@@ -378,18 +364,9 @@ test('Bootstrap mode - switches from bootstrap to normal mode', async (t) => {
   });
   service.initialize();
 
-  let directCallCount = 0;
   let sqlEngineCallCount = 0;
 
-  const mockPartitionService = {
-    partitionId: NODES_PARTITION_ID,
-    initialized: true,
-    isLeader: true,
-    executeLocalQuery: async (_sql, _params) => {
-      directCallCount++;
-      return {success: true, affectedRows: 1};
-    },
-  };
+  const mockPartitionService = createMockPartitionService(NODES_PARTITION_ID);
 
   mockSqlEngine.executeQuery = async (_sql, _params) => {
     sqlEngineCallCount++;
@@ -406,7 +383,10 @@ test('Bootstrap mode - switches from bootstrap to normal mode', async (t) => {
     node_address: 'localhost:8080',
   });
 
-  t.equal(directCallCount, 1, 'should call direct partition in bootstrap mode');
+  t.equal(mockPartitionService.raftWrites.length, 1,
+    'the bootstrap write goes through the local partition\'s raft lane exactly once');
+  t.equal(mockPartitionService.outsideRaft.length, 0,
+    'nothing is executed outside raft');
   t.equal(sqlEngineCallCount, 0, 'should not call SQL engine in bootstrap mode');
 
   // Phase 2: Bootstrap mode disabled
@@ -416,7 +396,10 @@ test('Bootstrap mode - switches from bootstrap to normal mode', async (t) => {
     node_address: 'localhost:8081',
   });
 
-  t.equal(directCallCount, 1, 'should not call direct partition after disable');
+  t.equal(mockPartitionService.raftWrites.length, 1,
+    'should not call the local partition after disable');
+  t.equal(mockPartitionService.outsideRaft.length, 0,
+    'nothing is executed outside raft');
   t.equal(sqlEngineCallCount, 1, 'should call SQL engine after disable');
   t.end();
 });

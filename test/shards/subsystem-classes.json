@@ -4,8 +4,8 @@
   "counts": {
     "admin-diagnostics": 122,
     "architecture-governance": 21,
-    "bootstrap-membership": 353,
-    "cdc-metadata": 72,
+    "bootstrap-membership": 355,
+    "cdc-metadata": 73,
     "cli-tooling": 99,
     "control-plane": 237,
     "convergence-topology": 87,
@@ -13,7 +13,7 @@
     "examples-e2e": 8,
     "pgwire-compat": 23,
     "placement-rebalance": 292,
-    "query-sql": 212,
+    "query-sql": 213,
     "release-packaging": 15,
     "runtime-primitives": 24,
     "services-runtime": 160,
@@ -25,10 +25,10 @@
     "transport-messaging": 116,
     "wasm-toolchain": 74
   },
-  "censusSize": 2735,
-  "digest": "fnv1a32-3ef9c24c",
+  "censusSize": 2739,
+  "digest": "fnv1a32-fa1582b2",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-76fdc285",
+  "observationDigest": "fnv1a32-b342ee6b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -290,6 +290,7 @@
     "test/bootstrap/seed-bootstrap-direct-lane.integration.test.js": "bootstrap-membership",
     "test/bootstrap/seed-bootstrap-lane-refusal.integration.test.js": "bootstrap-membership",
     "test/bootstrap/seed-cache-hydration-handoff.test.js": "bootstrap-membership",
+    "test/bootstrap/seed-config-seeding-count.integration.test.js": "bootstrap-membership",
     "test/bootstrap/seed-delegate-bundles.test.js": "bootstrap-membership",
     "test/bootstrap/seed-infrastructure-phase.test.js": "bootstrap-membership",
     "test/bootstrap/seed-infrastructure-runtime-identity.test.js": "bootstrap-membership",
@@ -308,6 +309,7 @@
     "test/bootstrap/seed-startup-listener-failure.integration.test.js": "bootstrap-membership",
     "test/bootstrap/seed-startup-session-store.test.js": "bootstrap-membership",
     "test/bootstrap/seed-teardown-pending-cdc-delivery.test.js": "bootstrap-membership",
+    "test/bootstrap/seed-window-leadership-wait.integration.test.js": "bootstrap-membership",
     "test/bootstrap/service-instance-table-schema.test.js": "bootstrap-membership",
     "test/bootstrap/shared/cdc-integration-setup.test.js": "bootstrap-membership",
     "test/bootstrap/shared/control-plane-setup.test.js": "bootstrap-membership",
@@ -365,6 +367,7 @@
     "test/cdc/bootstrap-mode-routing.property.test.js": "cdc-metadata",
     "test/cdc/cdc-authoritative-catchup-hydration.test.js": "cdc-metadata",
     "test/cdc/cdc-authoritative-catchup-terminal.test.js": "cdc-metadata",
+    "test/cdc/cdc-bootstrap-lane-write-count.test.js": "cdc-metadata",
     "test/cdc/cdc-cache-visibility-wait-bound-spent.test.js": "cdc-metadata",
     "test/cdc/cdc-confirmation-tracker.property.test.js": "cdc-metadata",
     "test/cdc/cdc-confirmation-tracker.test.js": "cdc-metadata",
@@ -1651,6 +1654,7 @@
     "test/query/locking-read-canonical-ast.test.js": "query-sql",
     "test/query/locking-read-execution-lifecycle.test.js": "query-sql",
     "test/query/lookup-primitive.test.js": "query-sql",
+    "test/query/named-write-cdc-sticky-unknown.test.js": "query-sql",
     "test/query/named-write-real-producer-applied.test.js": "query-sql",
     "test/query/named-write-real-producer-definite.test.js": "query-sql",
     "test/query/nested-call-classifier.test.js": "query-sql",
@@ -3299,6 +3303,12 @@
         "test/integration/helpers/cluster-test-helpers.js"
       ]
     },
+    "test/bootstrap/bootstrap-mode.test.js": {
+      "files": [
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js"
+      ]
+    },
     "test/bootstrap/bootstrap-request-admission-precheck.test.js": {
       "files": [
         "src/bootstrap/bootstrap-api-constants.js",
@@ -4201,6 +4211,13 @@
         "src/partition/partition-service-hydration-image-methods.js"
       ]
     },
+    "test/bootstrap/seed-config-seeding-count.integration.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-write-kernel.js",
+        "test/test-helpers/fresh-seed-activation-public-child.js"
+      ]
+    },
     "test/bootstrap/seed-infrastructure-phase.test.js": {
       "files": [
         "src/bootstrap/rejoin-hints.js",
@@ -4400,6 +4417,14 @@
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
+    "test/bootstrap/seed-window-leadership-wait.integration.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-write-kernel.js",
+        "test/test-helpers/fresh-seed-activation-public-child.js",
+        "test/test-helpers/seed-bootstrap-lane-observer.js"
+      ]
+    },
     "test/bootstrap/service-instance-table-schema.test.js": {
       "files": [
         "src/cache/system-cache-key-descriptor.js",
@@ -4544,10 +4569,25 @@
         "src/control-plane/control-plane-system-table-gateway-read-contracts.js"
       ]
     },
+    "test/cdc/bootstrap-mode-routing.property.test.js": {
+      "files": [
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js"
+      ]
+    },
     "test/cdc/cdc-authoritative-catchup-hydration.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/logging/wait-bound-spent.js"
+      ]
+    },
+    "test/cdc/cdc-bootstrap-lane-write-count.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/config/dynamic-config-service.js",
+        "src/control-plane/control-plane-mutation-outcome-classifier.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js"
       ]
     },
     "test/cdc/cdc-cache-visibility-wait-bound-spent.test.js": {
@@ -4602,9 +4642,17 @@
     },
     "test/cdc/cdc-integration-service-execute-sql-and-delivery.test.js": {
       "files": [
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
         "src/partition/partition-write-kernel.js",
         "src/partition/proposal-queue-constants.js",
         "src/raft/raft-operation-port-constants.js"
+      ]
+    },
+    "test/cdc/cdc-integration-service-node-state-and-bootstrap.test.js": {
+      "files": [
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js"
       ]
     },
     "test/cdc/cdc-integration-service-sql-route-metrics.test.js": {
@@ -4666,7 +4714,9 @@
         "src/cdc/cdc-integration-service-projection-wait.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/control-plane-system-table-gateway-read-contracts.js",
-        "src/partition/proposal-queue-constants.js"
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/partition/proposal-queue-constants.js",
+        "src/query/distributed/distributed-write-coordinator.js"
       ],
       "directories": [
         "src/cdc"
@@ -15973,6 +16023,39 @@
         "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "test/test-helpers/participant-protocol-double.js"
+      ]
+    },
+    "test/query/named-write-cdc-sticky-unknown.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/config/configuration-manager.js",
+        "src/control-plane/control-plane-error-classification.js",
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/control-plane-runtime-bundle.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/rebalancer/rebalance-coordinator.js",
+        "src/transport/transport-error-codes.js",
+        "test/partition/committed-operation-gateway-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/query/named-write-real-producer-applied.test.js": {
