@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2406,
+    "unit": 2407,
     "integration": 126,
     "bootstrap": 226,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2765,
-  "digest": "fnv1a32-9250f3b4",
+  "censusSize": 2766,
+  "digest": "fnv1a32-973faed2",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1663,6 +1663,7 @@
     "test/query/pg-translate.property.test.js": "unit",
     "test/query/pg-translate.test.js": "unit",
     "test/query/pg-type-affinity.test.js": "unit",
+    "test/query/pg/postgres-wire-description-contract.test.js": "unit",
     "test/query/plan-diagnostics-classification.test.js": "unit",
     "test/query/plan-diagnostics.test.js": "unit",
     "test/query/postgres-wire-adapter.integration.test.js": "integration",

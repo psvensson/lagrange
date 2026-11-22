@@ -12,6 +12,6 @@ documentClass: generated
 - [pg-translate.js](pg-translate.js) - Stateless PG-to-SQLite AST translation functions. (importers: many)
 - [pg-type-affinity.js](pg-type-affinity.js) - PostgreSQL type to SQLite affinity mapping. (importers: few)
 - [pg-wire-constants.js](pg-wire-constants.js) - Constants for the PostgreSQL wire adapter. (importers: few)
-- [postgres-compatibility-catalog.js](postgres-compatibility-catalog.js) - Canonical catalog of PostgreSQL wire-protocol compatibility dimensions, external client identifiers, error codes,... (importers: one)
+- [postgres-compatibility-catalog.js](postgres-compatibility-catalog.js) - Canonical catalog of PostgreSQL wire-protocol compatibility dimensions, external client identifiers, error codes,... (importers: few)
 - [postgres-compatibility-matrix.js](postgres-compatibility-matrix.js) - PostgreSQL wire-protocol compatibility matrix generator and regression verifier for Q10... (importers: one)
 - [postgres-wire-adapter.js](postgres-wire-adapter.js) - PostgresWireAdapter - adapter for external SQL protocol sessions. (importers: many)

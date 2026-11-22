@@ -13,7 +13,7 @@
     "examples-e2e": 8,
     "pgwire-compat": 23,
     "placement-rebalance": 303,
-    "query-sql": 210,
+    "query-sql": 211,
     "release-packaging": 15,
     "runtime-primitives": 23,
     "services-runtime": 160,
@@ -25,10 +25,10 @@
     "transport-messaging": 115,
     "wasm-toolchain": 74
   },
-  "censusSize": 2765,
-  "digest": "fnv1a32-fc898cb0",
+  "censusSize": 2766,
+  "digest": "fnv1a32-7fc8a429",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-7482914f",
+  "observationDigest": "fnv1a32-2e845c4a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1682,6 +1682,7 @@
     "test/query/pg-translate.property.test.js": "query-sql",
     "test/query/pg-translate.test.js": "query-sql",
     "test/query/pg-type-affinity.test.js": "query-sql",
+    "test/query/pg/postgres-wire-description-contract.test.js": "query-sql",
     "test/query/plan-diagnostics-classification.test.js": "query-sql",
     "test/query/plan-diagnostics.test.js": "query-sql",
     "test/query/postgres-wire-adapter.integration.test.js": "query-sql",
@@ -16186,6 +16187,19 @@
         "test/partition/partition-service-test-support.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/query/pg/postgres-wire-description-contract.test.js": {
+      "files": [
+        "src/cdc/cdc-system-table-mutation-sql-helpers.js",
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/partition/partition-participant-transaction-constants.js",
+        "src/query/pg/postgres-compatibility-catalog.js",
+        "src/runtime/pgwire-runtime-module.js",
+        "test/helpers/sqlite-partition-sql-engine.js",
+        "test/test-helpers/participant-protocol-double.js",
+        "test/test-helpers/transaction-persistence-gateway.js"
       ]
     },
     "test/query/postgres-wire-adapter.integration.test.js": {
