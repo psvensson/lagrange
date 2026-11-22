@@ -7,6 +7,7 @@
 
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import Database from 'better-sqlite3';
 import pg from 'pg';
 
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
@@ -20,14 +21,54 @@ import {
 import {META_SERVICE_ID} from '../../src/constants/wasm-meta.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
+  committedStatementEntryKey,
+  createCommittedStatementOutcomeTable,
+} from '../../src/partition/partition-committed-statement-outcome.js';
+import {buildLockingReadCommand} from '../../src/partition/partition-locking-read-command.js';
+import {
   clearAllReservations,
   clearMemoryReservations,
   stageLocalWriteReservation,
 } from '../../src/partition/partition-locking-read-reservation.js';
 import {
+  applyLockingReadReservationCommand,
+} from '../../src/partition/partition-locking-read-service.js';
+import {
+  ensureLockingReadTableInitialized,
+} from '../../src/partition/partition-locking-read-store.js';
+import {
+  applyCommittedTransactionCommand,
+} from '../../src/partition/partition-participant-transaction-apply.js';
+import {
+  buildDecisionCommand,
+  buildDecisionRecord,
+  buildPrepareCommand,
+  operationsOf,
+  validationTextOf,
+} from '../../src/partition/partition-participant-transaction-bytes.js';
+import {
   PARTICIPANT_CONCURRENCY_GRANULARITY,
   PARTICIPANT_TRANSACTION_COMMAND,
+  PARTICIPANT_TRANSACTION_DECISION,
 } from '../../src/partition/partition-participant-transaction-constants.js';
+import {
+  openParticipantSession,
+} from '../../src/partition/partition-participant-transaction-session.js';
+import {
+  runParticipantSessionStatement,
+} from '../../src/partition/partition-participant-transaction-staging.js';
+import {
+  openParticipantTransactionStore,
+  readPartitionWriteGeneration,
+  recordPartitionWriteOrigin,
+} from '../../src/partition/partition-participant-transaction-store.js';
+import {
+  executionEnvelopeOf,
+} from '../../src/partition/partition-transaction-execution-envelope.js';
+import {
+  extractStatementWriteFootprint,
+} from '../../src/partition/partition-write-footprint-contract.js';
+import {PartitionWriteTraffic} from '../../src/partition/partition-write-traffic.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {isRaftRsTransportEnvelope} from '../../src/raft/raft-packet-utils.js';
@@ -483,4 +524,384 @@ export function installAppendEntriesRaceHarness([r1, r2, r3]) {
       r3.applyCommittedEntry = origR3Apply;
     },
   };
+}
+
+function createModelReplica(replicaId) {
+  const db = new Database(':memory:');
+  db.exec('CREATE TABLE accounts (id INTEGER PRIMARY KEY, balance INTEGER)');
+  db.prepare('INSERT INTO accounts (id, balance) VALUES (1, 100), (2, 200)').run();
+  openParticipantTransactionStore(db);
+  recordPartitionWriteOrigin(db, {index: 1, term: 1});
+  createCommittedStatementOutcomeTable(db, ACCOUNTS_PARTITION_ID);
+  ensureLockingReadTableInitialized(db, {readOnly: false});
+  const answers = new Map();
+  return {
+    db,
+    answers,
+    partitionId: ACCOUNTS_PARTITION_ID,
+    tableName: ACCOUNTS_TABLE,
+    nodeId: `${replicaId}-node`,
+    replicaId,
+    concurrencyGranularity: PARTICIPANT_CONCURRENCY_GRANULARITY.ROW_KEY,
+    cdcEnabled: false,
+    writeTraffic: new PartitionWriteTraffic(),
+    logger: QUIET_LOGGER,
+    timeSource: {now: () => 1700000000000},
+    hlcClock: {now: () => ({toString: () => '1700000000000-0-model'})},
+    getCommittedEntryKey: (command) => committedStatementEntryKey(command),
+    resolveCommittedWrite(entryId, answer) {
+      answers.set(entryId, answer);
+    },
+    rejectCommittedWrite(_entryId, failure) {
+      throw failure;
+    },
+    emit() {},
+    scheduleSizeUpdate() {},
+  };
+}
+
+function applyCommandOnReplica(svc, command, index, {poisonMemory}) {
+  clearMemoryReservations();
+  if (poisonMemory) {
+    stageLocalWriteReservation({
+      tableName: ACCOUNTS_TABLE,
+      partitionId: ACCOUNTS_PARTITION_ID,
+      pkValues: [1],
+      transactionId: 'tx-poisoned-model-memory',
+      sessionId: 's-poisoned-model-memory',
+      db: null,
+    });
+  }
+  const afterCommitQueue = [];
+  const afterRollbackQueue = [];
+  const committed = {
+    command,
+    index,
+    term: 1,
+    afterCommit: (fn) => afterCommitQueue.push(fn),
+    afterRollback: (fn) => afterRollbackQueue.push(fn),
+  };
+  svc.answers.delete(command.entryId);
+  try {
+    svc.db.transaction(() => {
+      if (command.type === 'LOCKING_READ_RESERVATION') {
+        applyLockingReadReservationCommand(svc, committed);
+      } else {
+        applyCommittedTransactionCommand(svc, committed);
+      }
+    })();
+  } catch (err) {
+    for (const fn of afterRollbackQueue) fn();
+    throw err;
+  }
+  for (const fn of afterCommitQueue) fn();
+  return svc.answers.get(command.entryId);
+}
+
+function snapshotReplicaState(svc) {
+  const locks = svc.db
+    .prepare(
+      'SELECT row_key, transaction_id FROM _lagrange_locking_read_reservations ' +
+      'ORDER BY row_key, transaction_id',
+    )
+    .all();
+  const txRows = svc.db
+    .prepare(
+      'SELECT transaction_id, state, refusal_cause, operations_text ' +
+      'FROM _participant_transactions ORDER BY transaction_id',
+    )
+    .all();
+  const balances = svc.db
+    .prepare('SELECT id, balance FROM accounts ORDER BY id')
+    .all();
+  return {locks, txRows, balances};
+}
+
+function assertReciprocalExclusionAndDeterminism(rA, rB, label) {
+  const snapA = snapshotReplicaState(rA);
+  const snapB = snapshotReplicaState(rB);
+  assert.deepEqual(snapA, snapB, `${label}: rA and rB durable SQLite state must be identical`);
+  const lockHolderByPk = new Map();
+  for (const row of snapA.locks) {
+    const pkKey = row.row_key.split(':').at(-1);
+    lockHolderByPk.set(pkKey, row.transaction_id);
+  }
+  for (const txRow of snapA.txRows) {
+    if (txRow.state !== 'PREPARED') continue;
+    const ops = operationsOf(txRow.operations_text) || [];
+    for (const op of ops) {
+      const fp = extractStatementWriteFootprint({
+        sql: op.sql,
+        params: op.params,
+        pkCols: ['id'],
+        allCols: ['id', 'balance'],
+      });
+      const touched = fp.scoped ? fp.rowKeys : Array.from(lockHolderByPk.keys());
+      for (const pkKey of touched) {
+        const holder = lockHolderByPk.get(pkKey);
+        assert.ok(
+          !holder || holder === txRow.transaction_id,
+          `${label}: forbidden joint state on pk=${pkKey}: FOR_UPDATE=${holder}, PREPARED=${txRow.transaction_id}`,
+        );
+      }
+    }
+  }
+}
+
+function modelIdentity(txId) {
+  return {
+    sessionId: `s-${txId}`,
+    transactionId: txId,
+    participantId: `${txId}:${ACCOUNTS_PARTITION_ID}`,
+    commitMode: 'SINGLE_PARTITION_2PC',
+    transactionEpoch: 1,
+  };
+}
+
+function modelStamp(svc) {
+  return {
+    executionEnvelope: executionEnvelopeOf(svc.db),
+    timestamp: '1700000000000-0-model',
+    proposedBy: svc.replicaId,
+    proposedAt: 1700000000000,
+  };
+}
+
+function buildModelPrepare(svc, txId, sql, params, genBase) {
+  return buildPrepareCommand(
+    modelIdentity(txId),
+    {
+      operationsText: JSON.stringify([{sql, params}]),
+      validationText: validationTextOf(genBase, ACCOUNTS_PARTITION_ID, 1),
+    },
+    modelStamp(svc),
+  );
+}
+
+function buildModelDecision(svc, txId, decision, preparedDigest) {
+  const id = modelIdentity(txId);
+  const rec = buildDecisionRecord(txId, decision, [[id.participantId, preparedDigest]]);
+  return buildDecisionCommand(
+    id,
+    {
+      decision,
+      preparedDigest,
+      decisionText: rec.decisionText,
+      decisionDigest: rec.decisionDigest,
+    },
+    modelStamp(svc),
+  );
+}
+
+/**
+ * P5.3 bounded schedule explorer connected directly to real production partition apply
+ * (`applyLockingReadReservationCommand`, `applyCommittedTransactionCommand`).
+ * Enumerates all 48 legal committed-order interleavings across ACQUIRE-first / PREPARE-first,
+ * provisional leader staging, disjoint-row writes, same-tx reentrancy, duplicate delivery,
+ * winner commit vs release/rollback, and successor progress on two replicas with diverged memory.
+ *
+ * @return {Object} Summary statistics of explored schedules and verified transitions.
+ */
+export function runBoundedReciprocalExclusionExplorer() {
+  const stats = {
+    schedulesExplored: 0,
+    stepsVerified: 0,
+    acquireFirstRefusals: 0,
+    prepareFirstRefusals: 0,
+    reentrantSuccesses: 0,
+    duplicateReplays: 0,
+    disjointCommits: 0,
+    successorWins: 0,
+  };
+  const orders = ['ACQUIRE_FIRST', 'PREPARE_FIRST'];
+  const stagings = ['STAGED_BEFORE_LOG', 'UNSTAGED'];
+  const disjointSlots = ['BEFORE_BOTH', 'BETWEEN', 'AFTER_BOTH'];
+  const extras = ['REENTRANT_SAME_TX', 'DUPLICATE_DELIVERY'];
+  const settlements = ['WINNER_COMMITS', 'WINNER_RELEASES'];
+
+  for (const order of orders) {
+    for (const staging of stagings) {
+      for (const disjointSlot of disjointSlots) {
+        for (const extra of extras) {
+          for (const settlement of settlements) {
+            const label = `${order}/${staging}/${disjointSlot}/${extra}/${settlement}`;
+            const rA = createModelReplica('rA');
+            const rB = createModelReplica('rB');
+            let logIndex = 2;
+            const applyBoth = (cmd) => {
+              const idx = logIndex;
+              logIndex += 1;
+              const ansA = applyCommandOnReplica(rA, cmd, idx, {poisonMemory: true});
+              const ansB = applyCommandOnReplica(rB, cmd, idx, {poisonMemory: false});
+              assert.deepEqual(ansA, ansB, `${label}@${idx}: proposer answers diverged`);
+              assertReciprocalExclusionAndDeterminism(rA, rB, `${label}@${idx}`);
+              stats.stepsVerified += 1;
+              return ansA;
+            };
+            const runDisjointD = () => {
+              const genD = readPartitionWriteGeneration(rA.db);
+              const prepD = buildModelPrepare(
+                rA, 'tx-D', 'UPDATE accounts SET balance = 250 WHERE id = 2', [], genD,
+              );
+              const prepDAns = applyBoth(prepD);
+              assert.equal(prepDAns.success, true, `${label}: disjoint D PREPARE must succeed`);
+              const commitD = buildModelDecision(
+                rA, 'tx-D', PARTICIPANT_TRANSACTION_DECISION.COMMIT, prepDAns.preparedDigest,
+              );
+              const commitDAns = applyBoth(commitD);
+              assert.equal(commitDAns.success, true, `${label}: disjoint D COMMIT must succeed`);
+              stats.disjointCommits += 1;
+            };
+
+            try {
+              const genStart = readPartitionWriteGeneration(rA.db);
+              if (staging === 'STAGED_BEFORE_LOG') {
+                const sessW = openParticipantSession(
+                  rA, modelIdentity('tx-W'), {generationBase: genStart, originIndex: 1},
+                );
+                const staged = runParticipantSessionStatement(rA, sessW, {
+                  sql: 'UPDATE accounts SET balance = 500 WHERE id = 1',
+                  params: [],
+                });
+                assert.equal(staged.success, true, `${label}: provisional staging on rA`);
+              }
+              if (disjointSlot === 'BEFORE_BOTH') runDisjointD();
+
+              const acqT = buildLockingReadCommand(rA, {
+                op: 'ACQUIRE', tableName: ACCOUNTS_TABLE, pkValues: [1],
+                transactionId: 'tx-T', sessionId: 's-tx-T',
+                participantId: `tx-T:${ACCOUNTS_PARTITION_ID}`,
+              });
+              const prepW = buildModelPrepare(
+                rA, 'tx-W', 'UPDATE accounts SET balance = 500 WHERE id = 1', [],
+                readPartitionWriteGeneration(rA.db),
+              );
+
+              if (order === 'ACQUIRE_FIRST') {
+                const acqAns = applyBoth(acqT);
+                assert.equal(acqAns.success, true, `${label}: ACQUIRE(T) first must succeed`);
+                if (disjointSlot === 'BETWEEN') runDisjointD();
+                const prepWAns = applyBoth(prepW);
+                assert.equal(prepWAns.success, false, `${label}: conflicting PREPARE(W) must refuse`);
+                assert.equal(prepWAns.refusalCause, 'lock_conflict');
+                assert.equal(prepWAns.sqlState, LOCK_NOT_AVAILABLE_SQLSTATE);
+                stats.acquireFirstRefusals += 1;
+                if (extra === 'REENTRANT_SAME_TX') {
+                  const reAcq = buildLockingReadCommand(rA, {
+                    op: 'ACQUIRE', tableName: ACCOUNTS_TABLE, pkValues: [1],
+                    transactionId: 'tx-T', sessionId: 's-tx-T',
+                    participantId: `tx-T:${ACCOUNTS_PARTITION_ID}`,
+                  });
+                  const reAns = applyBoth(reAcq);
+                  assert.equal(reAns.success, true);
+                  assert.equal(reAns.reentrant, true);
+                  stats.reentrantSuccesses += 1;
+                } else {
+                  const dupPrep = applyBoth(prepW);
+                  assert.equal(dupPrep.success, false);
+                  stats.duplicateReplays += 1;
+                }
+                if (disjointSlot === 'AFTER_BOTH') runDisjointD();
+                if (settlement === 'WINNER_COMMITS') {
+                  const prepT = buildModelPrepare(
+                    rA, 'tx-T', 'UPDATE accounts SET balance = 175 WHERE id = 1', [],
+                    readPartitionWriteGeneration(rA.db),
+                  );
+                  const prepTAns = applyBoth(prepT);
+                  assert.equal(prepTAns.success, true, `${label}: owner T PREPARE must succeed`);
+                  const commitT = buildModelDecision(
+                    rA, 'tx-T', PARTICIPANT_TRANSACTION_DECISION.COMMIT, prepTAns.preparedDigest,
+                  );
+                  assert.equal(applyBoth(commitT).success, true);
+                } else {
+                  const relT = buildLockingReadCommand(rA, {
+                    op: 'RELEASE_TRANSACTION', transactionId: 'tx-T', sessionId: 's-tx-T',
+                    participantId: `tx-T:${ACCOUNTS_PARTITION_ID}`,
+                  });
+                  assert.equal(applyBoth(relT).success, true);
+                }
+                // Terminal cleanup & fresh successor progress on id = 1.
+                assert.equal(countDbReservations(rA.db), 0);
+                const prepNext = buildModelPrepare(
+                  rA, 'tx-W-next', 'UPDATE accounts SET balance = 333 WHERE id = 1', [],
+                  readPartitionWriteGeneration(rA.db),
+                );
+                const prepNextAns = applyBoth(prepNext);
+                assert.equal(prepNextAns.success, true);
+                assert.equal(
+                  applyBoth(buildModelDecision(
+                    rA, 'tx-W-next', PARTICIPANT_TRANSACTION_DECISION.COMMIT,
+                    prepNextAns.preparedDigest,
+                  )).success,
+                  true,
+                );
+                assert.equal(readAccountBalance(rA.db, 1), 333);
+                stats.successorWins += 1;
+              } else {
+                const prepWAns = applyBoth(prepW);
+                assert.equal(prepWAns.success, true, `${label}: PREPARE(W) first must succeed`);
+                if (disjointSlot === 'BETWEEN') runDisjointD();
+                const acqAns = applyBoth(acqT);
+                assert.equal(acqAns.success, false, `${label}: conflicting ACQUIRE(T) must refuse`);
+                assert.equal(acqAns.conflict, true);
+                assert.equal(acqAns.sqlState, LOCK_NOT_AVAILABLE_SQLSTATE);
+                assert.equal(acqAns.conflictingTransactionId, 'tx-W');
+                stats.prepareFirstRefusals += 1;
+                if (extra === 'DUPLICATE_DELIVERY') {
+                  const dupAcq = applyBoth(acqT);
+                  assert.equal(dupAcq.success, false);
+                  assert.equal(dupAcq.conflict, true);
+                  stats.duplicateReplays += 1;
+                } else {
+                  // Re-entrant ACQUIRE by the prepared writer itself (tx-W) is permitted.
+                  const selfAcq = buildLockingReadCommand(rA, {
+                    op: 'ACQUIRE', tableName: ACCOUNTS_TABLE, pkValues: [1],
+                    transactionId: 'tx-W', sessionId: 's-tx-W',
+                    participantId: `tx-W:${ACCOUNTS_PARTITION_ID}`,
+                  });
+                  assert.equal(applyBoth(selfAcq).success, true);
+                  stats.reentrantSuccesses += 1;
+                }
+                if (disjointSlot === 'AFTER_BOTH') runDisjointD();
+                const decW = buildModelDecision(
+                  rA,
+                  'tx-W',
+                  settlement === 'WINNER_COMMITS' ?
+                    PARTICIPANT_TRANSACTION_DECISION.COMMIT :
+                    PARTICIPANT_TRANSACTION_DECISION.ROLLBACK,
+                  prepWAns.preparedDigest,
+                );
+                assert.equal(applyBoth(decW).success, true);
+                assert.equal(countDbReservations(rA.db), 0);
+                // Successor T_next acquires id = 1 cleanly after W settles, then releases.
+                const acqNext = buildLockingReadCommand(rA, {
+                  op: 'ACQUIRE', tableName: ACCOUNTS_TABLE, pkValues: [1],
+                  transactionId: 'tx-T-next', sessionId: 's-tx-T-next',
+                  participantId: `tx-T-next:${ACCOUNTS_PARTITION_ID}`,
+                });
+                assert.equal(applyBoth(acqNext).success, true);
+                assert.equal(
+                  applyBoth(buildLockingReadCommand(rA, {
+                    op: 'RELEASE_TRANSACTION', transactionId: 'tx-T-next', sessionId: 's-tx-T-next',
+                    participantId: `tx-T-next:${ACCOUNTS_PARTITION_ID}`,
+                  })).success,
+                  true,
+                );
+                assert.equal(countDbReservations(rA.db), 0);
+                stats.successorWins += 1;
+              }
+              assert.equal(readAccountBalance(rA.db, 2), 250, `${label}: disjoint id=2 committed`);
+              assert.equal(readAccountBalance(rB.db, 2), 250, `${label}: disjoint id=2 replicated`);
+              stats.schedulesExplored += 1;
+            } finally {
+              rA.db.close();
+              rB.db.close();
+              clearMemoryReservations();
+            }
+          }
+        }
+      }
+    }
+  }
+  return stats;
 }

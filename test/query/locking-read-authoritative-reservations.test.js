@@ -84,6 +84,7 @@ import {
   initEnvironment,
   installAppendEntriesRaceHarness,
   readAccountBalance,
+  runBoundedReciprocalExclusionExplorer,
   setupTwoNodeCluster,
 } from './locking-read-authoritative-test-support.js';
 
@@ -1393,6 +1394,7 @@ test('Witness 4: gateway cleanup (write-error, unscoped helper, shutdown) never 
     assert.equal(Object.hasOwn(reservationSurface, 'releaseTransactionReservations'), false);
     assert.equal(Object.hasOwn(reservationSurface, 'releaseSessionReservations'), false);
     assert.equal(Object.hasOwn(reservationSurface, 'releaseSpecificRowReservations'), false);
+    assert.equal(Object.hasOwn(reservationSurface, 'sweepExpiredReservations'), false);
     clearTransactionMemoryReservations(tx.transactionId);
     clearSessionMemoryReservations(sessionId);
     assert.equal(
@@ -1476,4 +1478,16 @@ test('Witness 4: gateway cleanup (write-error, unscoped helper, shutdown) never 
     await clientB.end().catch(() => {});
     await cluster.cleanup();
   }
+});
+
+test('Witness 5: P5.3 bounded model exploration verifies reciprocal exclusion across 48 production-apply schedules', () => {
+  const stats = runBoundedReciprocalExclusionExplorer();
+  assert.equal(stats.schedulesExplored, 48);
+  assert.ok(stats.stepsVerified >= 300, `expected >= 300 verified apply transitions, got ${stats.stepsVerified}`);
+  assert.equal(stats.acquireFirstRefusals, 24);
+  assert.equal(stats.prepareFirstRefusals, 24);
+  assert.equal(stats.reentrantSuccesses, 24);
+  assert.equal(stats.duplicateReplays, 24);
+  assert.equal(stats.disjointCommits, 48);
+  assert.equal(stats.successorWins, 48);
 });

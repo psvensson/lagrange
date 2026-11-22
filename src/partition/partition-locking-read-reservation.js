@@ -27,7 +27,6 @@ import {
 import {encodeCanonicalPkTupleKey} from './partition-write-footprint-contract.js';
 import {
   checkDbRowReservation,
-  deleteExpiredDbReservations,
   ensureLockingReadTableInitialized,
   hasDbTransactionReservations,
   listDbTableReservationConflicts,
@@ -424,16 +423,6 @@ export function clearSessionMemoryReservations(sessionId) {
     }
   }
   return released;
-}
-
-/**
- * Explicitly sweep expired reservations from a partition database.
- *
- * @param {Object} db - SQLite database instance.
- * @return {number} Count of swept reservations.
- */
-export function sweepExpiredReservations(db) {
-  return deleteExpiredDbReservations(db, Date.now());
 }
 
 /**

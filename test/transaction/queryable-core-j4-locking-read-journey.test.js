@@ -30,9 +30,9 @@ import {
   hasLockingReadReservations,
   registerPartitionDatabase,
   checkRowReservationConflict,
-  sweepExpiredReservations,
 } from '../../src/partition/partition-locking-read-reservation.js';
 import {
+  deleteExpiredDbReservations,
   releaseDbPartitionTransactionReservations,
 } from '../../src/partition/partition-locking-read-store.js';
 import {checkWriteStatementReservations} from '../../src/query/sql-locking-read-execution.js';
@@ -598,7 +598,7 @@ test('J4: durable partition SQLite reservation survives simulated coordinator st
       'UPDATE _lagrange_locking_read_reservations SET expires_at = ? WHERE row_key = ?',
     ).run(Date.now() - 1000, 'accounts:p1:42');
 
-    const swept = sweepExpiredReservations(db);
+    const swept = deleteExpiredDbReservations(db, Date.now());
     assert.equal(swept, 1);
 
     const postSweepCheck = checkRowReservationConflict({
