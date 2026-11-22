@@ -54,7 +54,16 @@
       "id": "independent-verification-prior-package5",
       "passed": true,
       "verifier": "subagent:e9afe79f-8d12-49c4-86b6-629c54ca6f0c",
-      "detail": "Prior Package 5 verification at c39c505b40b71734579c93508c241f276ea8b351 preserved; follow-up P1/P2/P5 candidate f607d58a43f6f26c34dd9537ee5b53d4c3408120 pending independent approval by @verifier."
+      "detail": "Prior Package 5 verification at c39c505b40b71734579c93508c241f276ea8b351 preserved."
+    },
+    {
+      "id": "independent-verification",
+      "passed": true,
+      "verifier": "subagent:320c8c19-694f-4a91-994e-8c631d70ae01",
+      "verdict": "approve",
+      "candidate": "f607d58a43f6f26c34dd9537ee5b53d4c3408120",
+      "reviewedHead": "ed646d56db7768a220f6bd901679539b8e4e8757",
+      "detail": "Independent adversarial review by @verifier (subagent:320c8c19-694f-4a91-994e-8c631d70ae01) inspected 9355f516dea53b72971e4ba8d0f98abc1343f806..ed646d56db7768a220f6bd901679539b8e4e8757, confirmed RED witnesses at 7ad55475fb8a5c33065f0c97f5844ce0ed7d995c (tv-dator placement-pid 3695907), raised P5.3 bounded model explorer and P1 sweepExpiredReservations removal findings (#24), and approved f607d58a43f6f26c34dd9537ee5b53d4c3408120 / ed646d56db7768a220f6bd901679539b8e4e8757 (#29) after verifying tv-dator placement-pid 3719234 (16/16 pass, 503 assertions) plus independent controller re-runs (20/20 tests, impact-contract-registry 20/20, eslint, file-size)."
     }
   ]
 }
