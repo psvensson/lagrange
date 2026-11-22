@@ -64,6 +64,8 @@ const SHARED_WAL_LIMIT_BYTES = 1048576;
 const REAP_AGE_MS = 180;
 const REAP_INTERVAL_MS = 30;
 const REAP_WAIT_MS = 380;
+const TIMER_REAP_INTERVAL_MS = 25;
+const TIMER_REAP_WAIT_MS = 180;
 const VIRTUAL_NOW_START_MS = 1000000;
 const VIRTUAL_DEADLINE_OFFSET_MS = 500;
 const VIRTUAL_AGE_LIMIT_MS = 400;
@@ -1137,7 +1139,8 @@ describe(`Retained read-view generation custody (${QUEST_ID})`, () => {
       if (mainDb2.open) mainDb2.close();
     }
 
-    // Case 3: Post-open failure during openPinnedWalReader when closeReader FAILS.
+    // Case 3: Post-open failure on a fresh manager (no prior successful acquisition)
+    // when closeReader FAILS must arm the background reaper timer to drain unclosed custody.
     const dbPath3 = path.join(tempDir, 'post-open-error-close-fail.sqlite');
     const mainDb3 = seedWalPartitionDb(dbPath3, INITIAL_ROW_COUNT);
     let openedReader3 = null;
@@ -1164,6 +1167,7 @@ describe(`Retained read-view generation custody (${QUEST_ID})`, () => {
           throw new Error('injected_after_pin_failure');
         }
       },
+      reapIntervalMs: TIMER_REAP_INTERVAL_MS,
     });
     try {
       await assert.rejects(
@@ -1197,12 +1201,16 @@ describe(`Retained read-view generation custody (${QUEST_ID})`, () => {
       );
 
       allowClose3 = true;
-      const reap3 = mgr3.reapExpiredViews();
-      assert.equal(reap3.closedIds.length, 1);
-      assert.equal(openedReader3.open, false);
+      await sleep(TIMER_REAP_WAIT_MS);
+      assert.equal(
+        openedReader3.open,
+        false,
+        'idle reaper timer must close failed-first-acquisition handle without manual reap',
+      );
+      assert.equal(inspectDbPathCustody(dbPath3).hasLiveOrUnclosedReaders, false);
+      assertStorageArtifactsUnlinkSafe(dbPath3);
       assert.equal(mgr3.stats().unclosedViewCount, 0);
       assert.equal(mgr3.stats().totalPinnedBytes, 0);
-      assert.equal(inspectDbPathCustody(dbPath3).hasLiveOrUnclosedReaders, false);
     } finally {
       allowClose3 = true;
       mgr3.shutdown();
