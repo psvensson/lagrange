@@ -893,4 +893,474 @@ describe('Unit J6: Multi-node remote producer CDC delivery and leader failover',
 
     wiringA.liveQueryManager.unregisterLiveQuery(reg.queryId, client.id);
   });
+
+  async function createRemotePairHarness(clientId, options = {}) {
+    const capturedCdcDeliveries = [];
+    routers = await createBridgedRouters(['node-a', 'node-b'], capturedCdcDeliveries);
+    const routerA = routers.get('node-a');
+    const routerB = routers.get('node-b');
+    if (options.configureRouters) {
+      options.configureRouters({routerA, routerB});
+    }
+    ({leader: leaderB} = await startLeader({
+      tableName: 'live_orders',
+      schema: TABLE_SCHEMA,
+      nodeId: 'node-b',
+      replicaId: 'p1',
+      transport: routerB,
+    }, 'p1'));
+    const currentPartitions = [{
+      partition_id: 'p1',
+      table_name: 'live_orders',
+      partition_key_start: null,
+      partition_key_end: null,
+      partition_key_type: 'INTEGER',
+      leader_node_id: 'node-b',
+    }];
+    const systemCache = createRemoteTopologyCache(
+      TABLES_METADATA,
+      () => currentPartitions,
+      () => [{partition_id: 'p1', node_id: 'node-b'}],
+    );
+    const parserEngine = new SQLQueryEngine();
+    const sqlEngine = {
+      callCount: 0,
+      failNextCount: 0,
+      failedCount: 0,
+      parse: (sql) => parserEngine.parse(sql),
+      executeQuery: async (sql, params = []) => {
+        sqlEngine.callCount += 1;
+        if (sqlEngine.failNextCount > 0) {
+          sqlEngine.failNextCount -= 1;
+          sqlEngine.failedCount += 1;
+          throw new Error('injected transient live-query snapshot read failure');
+        }
+        const rows = oracleDb.prepare(sql).all(...params);
+        return {rows, results: rows, count: rows.length};
+      },
+    };
+    wiringA = createLiveQueryStartupWiring({
+      nodeId: 'node-a',
+      systemTableCache: systemCache,
+      sqlQueryEngine: sqlEngine,
+      partitionServicesProvider: () => new Map(),
+      messageRouter: routerA,
+    });
+    const client = createMockClient(clientId);
+    const observedRows = new Map();
+    const origSend = client.send;
+    client.send = (msg) => {
+      origSend(msg);
+      applyClientMessageToView(observedRows, client.messages[client.messages.length - 1]);
+    };
+    return {
+      routerA,
+      routerB,
+      systemCache,
+      currentPartitions,
+      sqlEngine,
+      client,
+      observedRows,
+      capturedCdcDeliveries,
+    };
+  }
+
+  it('Schedule 3A: held first delivery cannot be overtaken by Row 2 and delivers both in order', async () => {
+    let releaseRow1Delivery = null;
+    let resolveRow1InFlight = null;
+    const row1InFlight = new Promise((resolve) => {
+      resolveRow1InFlight = resolve;
+    });
+    let heldRow1Once = false;
+
+    const {client, observedRows} = await createRemotePairHarness('held-order-client', {
+      configureRouters: ({routerB}) => {
+        const origDeliverB = routerB.deliver.bind(routerB);
+        routerB.deliver = async (targetAddress, message, opts = {}) => {
+          if (!heldRow1Once &&
+              message?.type === 'LIVE_QUERY_CDC_EVENT' &&
+              message.events?.some((e) => e.data?.id === 1)) {
+            heldRow1Once = true;
+            resolveRow1InFlight();
+            return await new Promise((resolve) => {
+              releaseRow1Delivery = resolve;
+            });
+          }
+          return origDeliverB(targetAddress, message, opts);
+        };
+      },
+    });
+
+    const sql = 'SELECT id, customer, total FROM live_orders WHERE status = \'OPEN\'';
+    const insertSql =
+      'INSERT INTO live_orders (id, customer, status, total, secret_note) VALUES (?, ?, ?, ?, ?)';
+    const reg = await wiringA.liveQueryManager.registerLiveQuery(sql, client);
+
+    // 1. Commit Row 1 and hold its first delivery unresolved before receiver acceptance.
+    oracleDb.prepare(insertSql).run(1, 'Alice', 'OPEN', 100, 's1');
+    applyCommitted(
+      leaderB,
+      {...committedQueryOf('ord-1', insertSql), params: [1, 'Alice', 'OPEN', 100, 's1']},
+    );
+    await row1InFlight;
+
+    // 2. Commit Row 2 while Row 1's first delivery is still unresolved.
+    oracleDb.prepare(insertSql).run(2, 'Bob', 'OPEN', 200, 's2');
+    applyCommitted(
+      leaderB,
+      {...committedQueryOf('ord-2', insertSql), params: [2, 'Bob', 'OPEN', 200, 's2']},
+    );
+    await new Promise((r) => setTimeout(r, 40));
+
+    // 3. Resolve Row 1's first attempt as canonical DEFERRED (noHandler: false).
+    releaseRow1Delivery(buildDeliveryEnvelope({
+      acknowledged: false,
+      deferRetry: true,
+      noHandler: false,
+      retryAfterMs: 25,
+      error: 'held first delivery deferred',
+    }));
+
+    // 4. Owned retry must deliver both Row 1 and Row 2 in proper order.
+    const recovered = await waitForMessageMatch(() => observedRows.size === 2);
+    assert.ok(recovered, 'client must receive both Row 1 and Row 2 without dropping Row 1');
+    const sortedObserved = Array.from(observedRows.values()).sort((a, b) => a.id - b.id);
+    assert.deepEqual(sortedObserved, oracleDb.prepare(`${sql} ORDER BY id`).all());
+    const insertOrder = client.messages
+      .filter((m) => m.type === 'insert')
+      .map((m) => m.row.id);
+    assert.deepEqual(insertOrder, [1, 2], 'rows must be delivered in committed order [1, 2]');
+
+    wiringA.liveQueryManager.unregisterLiveQuery(reg.queryId, client.id);
+  });
+
+  it('Schedule 3B-1: failed catch-up SQL read after deferred handshake retains debt and recovers while idle', async () => {
+    let failSubscribe = true;
+    const {sqlEngine, client, observedRows} = await createRemotePairHarness('catchup-fail-client', {
+      configureRouters: ({routerA}) => {
+        const origDeliverA = routerA.deliver.bind(routerA);
+        routerA.deliver = async (targetAddress, message, opts = {}) => {
+          if (failSubscribe && message?.type === 'LIVE_QUERY_CDC_SUBSCRIBE') {
+            return buildDeliveryEnvelope({
+              acknowledged: false,
+              deferRetry: true,
+              noHandler: false,
+              retryAfterMs: 25,
+              error: 'initial subscribe deferred',
+            });
+          }
+          return origDeliverA(targetAddress, message, opts);
+        };
+      },
+    });
+
+    const sql = 'SELECT id, customer, total FROM live_orders WHERE status = \'OPEN\'';
+    const insertSql =
+      'INSERT INTO live_orders (id, customer, status, total, secret_note) VALUES (?, ?, ?, ?, ?)';
+    const reg = await wiringA.liveQueryManager.registerLiveQuery(sql, client);
+    const group = wiringA.liveQueryManager.findGroupByQueryId(reg.queryId);
+
+    assert.deepEqual(client.messages[0].rows, [], 'initial snapshot is empty');
+    assert.equal(group.subscribedPartitions.has('p1'), false, 'subscribe is deferred');
+
+    // Commit Row 1 before registration completes, then fail the catch-up SQL read once.
+    oracleDb.prepare(insertSql).run(1, 'Alice', 'OPEN', 100, 's1');
+    applyCommitted(
+      leaderB,
+      {...committedQueryOf('cu-1', insertSql), params: [1, 'Alice', 'OPEN', 100, 's1']},
+    );
+    sqlEngine.failNextCount = 1;
+    failSubscribe = false;
+
+    // With NO further writes, catch-up debt must retry after SQL heals and recover Row 1.
+    const recovered = await waitForMessageMatch(
+      () => group.subscribedPartitions.has('p1') && observedRows.size === 1,
+    );
+    assert.equal(sqlEngine.failedCount, 1, 'catch-up SQL read failed once as injected');
+    assert.ok(recovered, 'client must recover Row 1 while idle after catch-up SQL heals');
+    assert.deepEqual(
+      Array.from(observedRows.values()),
+      oracleDb.prepare(`${sql} ORDER BY id`).all(),
+    );
+
+    const settledCalls = sqlEngine.callCount;
+    await new Promise((r) => setTimeout(r, 80));
+    assert.equal(sqlEngine.callCount, settledCalls, 'zero idle polling after catch-up settles');
+
+    wiringA.liveQueryManager.unregisterLiveQuery(reg.queryId, client.id);
+  });
+
+  it('Schedule 3B-2: failed overflow-resync SQL read retains resync debt and converges while idle', async () => {
+    let deferEventDelivery = false;
+    let resyncDeliveryAttempts = 0;
+
+    const {sqlEngine, client, observedRows} = await createRemotePairHarness('overflow-fail-client', {
+      configureRouters: ({routerB}) => {
+        const origDeliverB = routerB.deliver.bind(routerB);
+        routerB.deliver = async (targetAddress, message, opts = {}) => {
+          if (message?.type === 'LIVE_QUERY_CDC_EVENT') {
+            if (deferEventDelivery) {
+              return buildDeliveryEnvelope({
+                acknowledged: false,
+                deferRetry: true,
+                noHandler: false,
+                retryAfterMs: 25,
+                error: 'delivery deferred to trigger overflow',
+              });
+            }
+            if (message.resyncRequired === true) {
+              resyncDeliveryAttempts += 1;
+            }
+          }
+          return origDeliverB(targetAddress, message, opts);
+        };
+      },
+    });
+
+    const sql = 'SELECT id, customer, total FROM live_orders WHERE status = \'OPEN\'';
+    const insertSql =
+      'INSERT INTO live_orders (id, customer, status, total, secret_note) VALUES (?, ?, ?, ?, ?)';
+    const reg = await wiringA.liveQueryManager.registerLiveQuery(sql, client);
+
+    deferEventDelivery = true;
+    const totalRows = 261;
+    for (let id = 1; id <= totalRows; id += 1) {
+      const params = [id, `Customer-${id}`, 'OPEN', id * 10, `s-${id}`];
+      oracleDb.prepare(insertSql).run(...params);
+      applyCommitted(leaderB, {...committedQueryOf(`ov-${id}`, insertSql), params});
+    }
+    const remoteEntry = Array.from(leaderB.remoteLiveQueryCdcSubscribers.values())[0];
+    const overflowed = await waitForMessageMatch(() => remoteEntry.overflowResyncRequired === true);
+    assert.ok(overflowed, 'producer entered overflowResyncRequired state');
+    assert.equal(observedRows.size, 0, 'no rows delivered while deferred');
+
+    // Fail the overflow-resync SQL read once, then heal with NO further writes.
+    sqlEngine.failNextCount = 1;
+    deferEventDelivery = false;
+
+    const recovered = await waitForMessageMatch(() => observedRows.size === totalRows, 2500);
+    assert.equal(sqlEngine.failedCount, 1, 'overflow-resync SQL read failed once as injected');
+    assert.ok(recovered, 'client must converge to full row set while idle after resync heals');
+    assert.ok(resyncDeliveryAttempts >= 2, 'producer retained resyncRequired debt and retried');
+    assert.equal(remoteEntry.overflowResyncRequired, false, 'overflow debt settled after success');
+    const sortedObserved = Array.from(observedRows.values()).sort((a, b) => a.id - b.id);
+    assert.deepEqual(sortedObserved, oracleDb.prepare(`${sql} ORDER BY id`).all());
+
+    const settledCalls = sqlEngine.callCount;
+    await new Promise((r) => setTimeout(r, 80));
+    assert.equal(sqlEngine.callCount, settledCalls, 'zero idle polling after resync settles');
+
+    wiringA.liveQueryManager.unregisterLiveQuery(reg.queryId, client.id);
+  });
+
+  it('Schedule 3C: preserves transport retryAfterMs deadline across timers and incoming events', async () => {
+    const retryAfterMs = 250;
+    const subscribeAttempts = [];
+    let subscribeRefusedAt = 0;
+    const deliveryAttempts = [];
+    let deliveryRefusedAt = 0;
+
+    const {systemCache, currentPartitions, client, observedRows} =
+      await createRemotePairHarness('retry-after-client', {
+        configureRouters: ({routerA, routerB}) => {
+          const origDeliverA = routerA.deliver.bind(routerA);
+          routerA.deliver = async (targetAddress, message, opts = {}) => {
+            if (message?.type === 'LIVE_QUERY_CDC_SUBSCRIBE') {
+              const now = Date.now();
+              subscribeAttempts.push(now);
+              if (subscribeAttempts.length === 1) {
+                subscribeRefusedAt = now;
+                return buildDeliveryEnvelope({
+                  acknowledged: false,
+                  deferRetry: true,
+                  noHandler: false,
+                  retryAfterMs,
+                  error: 'subscribe backpressured',
+                });
+              }
+            }
+            return origDeliverA(targetAddress, message, opts);
+          };
+          const origDeliverB = routerB.deliver.bind(routerB);
+          routerB.deliver = async (targetAddress, message, opts = {}) => {
+            if (message?.type === 'LIVE_QUERY_CDC_EVENT') {
+              const now = Date.now();
+              deliveryAttempts.push(now);
+              if (deliveryAttempts.length === 1) {
+                deliveryRefusedAt = now;
+                return buildDeliveryEnvelope({
+                  acknowledged: false,
+                  deferRetry: true,
+                  noHandler: false,
+                  retryAfterMs,
+                  error: 'delivery backpressured',
+                });
+              }
+            }
+            return origDeliverB(targetAddress, message, opts);
+          };
+        },
+      });
+
+    const sql = 'SELECT id, customer, total FROM live_orders WHERE status = \'OPEN\'';
+    const insertSql =
+      'INSERT INTO live_orders (id, customer, status, total, secret_note) VALUES (?, ?, ?, ?, ?)';
+    const reg = await wiringA.liveQueryManager.registerLiveQuery(sql, client);
+    const group = wiringA.liveQueryManager.findGroupByQueryId(reg.queryId);
+
+    // Part 1: Subscriber handshake backoff window (250ms) + incoming topology event during window.
+    oracleDb.prepare(insertSql).run(1, 'Alice', 'OPEN', 100, 's1');
+    applyCommitted(
+      leaderB,
+      {...committedQueryOf('ra-1', insertSql), params: [1, 'Alice', 'OPEN', 100, 's1']},
+    );
+    await new Promise((r) => setTimeout(r, 70));
+    systemCache.emitCacheChange(TABLES.PARTITIONS, 'UPDATE', currentPartitions[0]);
+    await new Promise((r) => setTimeout(r, 70));
+    assert.equal(
+      subscribeAttempts.length,
+      1,
+      'zero early subscribe retries before transport retryAfterMs deadline',
+    );
+
+    const subRecovered = await waitForMessageMatch(
+      () => group.subscribedPartitions.has('p1') && observedRows.size === 1,
+      1500,
+    );
+    assert.ok(subRecovered, 'subscribe recovers after retryAfterMs deadline passes');
+    assert.equal(subscribeAttempts.length, 2, 'exactly one retry attempt after deadline');
+    assert.ok(
+      subscribeAttempts[1] - subscribeRefusedAt >= retryAfterMs,
+      `subscribe retry waited ${subscribeAttempts[1] - subscribeRefusedAt}ms >= ${retryAfterMs}ms`,
+    );
+
+    // Part 2: Producer delivery backoff window (250ms) + incoming CDC event during window.
+    oracleDb.prepare(insertSql).run(2, 'Bob', 'OPEN', 200, 's2');
+    applyCommitted(
+      leaderB,
+      {...committedQueryOf('ra-2', insertSql), params: [2, 'Bob', 'OPEN', 200, 's2']},
+    );
+    const firstAttemptSeen = await waitForMessageMatch(() => deliveryAttempts.length === 1);
+    assert.ok(firstAttemptSeen, 'first delivery attempt recorded');
+
+    await new Promise((r) => setTimeout(r, 70));
+    oracleDb.prepare(insertSql).run(3, 'Carol', 'OPEN', 300, 's3');
+    applyCommitted(
+      leaderB,
+      {...committedQueryOf('ra-3', insertSql), params: [3, 'Carol', 'OPEN', 300, 's3']},
+    );
+    await new Promise((r) => setTimeout(r, 70));
+    assert.equal(
+      deliveryAttempts.length,
+      1,
+      'zero early delivery retries before transport retryAfterMs deadline despite incoming CDC',
+    );
+
+    const deliveryRecovered = await waitForMessageMatch(() => observedRows.size === 3, 1500);
+    assert.ok(deliveryRecovered, 'producer delivers queued rows once retryAfterMs deadline passes');
+    assert.ok(deliveryAttempts.length >= 2, 'retry occurred after deadline');
+    assert.ok(
+      deliveryAttempts[1] - deliveryRefusedAt >= retryAfterMs,
+      `delivery retry waited ${deliveryAttempts[1] - deliveryRefusedAt}ms >= ${retryAfterMs}ms`,
+    );
+    const sortedObserved = Array.from(observedRows.values()).sort((a, b) => a.id - b.id);
+    assert.deepEqual(sortedObserved, oracleDb.prepare(`${sql} ORDER BY id`).all());
+
+    wiringA.liveQueryManager.unregisterLiveQuery(reg.queryId, client.id);
+  });
+
+  it('Schedule 3D: cancellation during awaited subscribe handshake retires local and remote state', async () => {
+    let subscribeMode = 'hold_after_register';
+    let unsubscribeDeliveries = 0;
+    let notifyRegistered = null;
+    let releaseSubscribeResponse = null;
+    const armHoldGate = () => {
+      const gate = {isRegistered: false, registered: null, responseGate: null};
+      gate.registered = new Promise((resolve) => {
+        notifyRegistered = () => {
+          gate.isRegistered = true;
+          resolve();
+        };
+      });
+      gate.responseGate = new Promise((resolve) => {
+        releaseSubscribeResponse = resolve;
+      });
+      return gate;
+    };
+    let activeGate = armHoldGate();
+
+    const {client} = await createRemotePairHarness('cancel-handshake-client', {
+      configureRouters: ({routerA}) => {
+        const origDeliverA = routerA.deliver.bind(routerA);
+        routerA.deliver = async (targetAddress, message, opts = {}) => {
+          if (message?.type === 'LIVE_QUERY_CDC_UNSUBSCRIBE') {
+            unsubscribeDeliveries += 1;
+            return origDeliverA(targetAddress, message, opts);
+          }
+          if (message?.type === 'LIVE_QUERY_CDC_SUBSCRIBE') {
+            if (subscribeMode === 'defer_once_then_hold') {
+              subscribeMode = 'hold_after_register';
+              return buildDeliveryEnvelope({
+                acknowledged: false,
+                deferRetry: true,
+                noHandler: false,
+                retryAfterMs: 25,
+                error: 'defer initial subscribe once',
+              });
+            }
+            if (subscribeMode === 'hold_after_register') {
+              subscribeMode = 'pass';
+              const realResponse = await origDeliverA(targetAddress, message, opts);
+              notifyRegistered();
+              await activeGate.responseGate;
+              return realResponse;
+            }
+          }
+          return origDeliverA(targetAddress, message, opts);
+        };
+      },
+    });
+
+    const sql = 'SELECT id, customer, total FROM live_orders WHERE status = \'OPEN\'';
+
+    // Case 1: Cancellation during initial subscribe handshake held after remote registration.
+    const reg1Promise = wiringA.liveQueryManager.registerLiveQuery(sql, client);
+    await activeGate.registered;
+    assert.equal(leaderB.cdcSubscribers.size, 1, 'remote partition registered initial subscriber');
+    const inFlightGroup = Array.from(wiringA.liveQueryManager.queryGroups.values())[0];
+    assert.ok(inFlightGroup, 'local query group exists while subscribe is in flight');
+
+    wiringA.liveQueryManager.unregisterLiveQuery(inFlightGroup.queryId, client.id);
+    releaseSubscribeResponse();
+    await reg1Promise;
+
+    const retiredInitial = await waitForMessageMatch(
+      () => leaderB.cdcSubscribers.size === 0 &&
+        (leaderB.remoteLiveQueryCdcSubscribers?.size ?? 0) === 0,
+    );
+    assert.ok(retiredInitial, 'late initial subscribe completion retires remote subscriber without CDC');
+    assert.equal(wiringA.liveQueryManager.queryGroups.size, 0, 'local group retired');
+    assert.equal(wiringA.liveQueryManager.getStats().totalClientSubscriptions, 0);
+    assert.ok(unsubscribeDeliveries >= 1, 'remote LIVE_QUERY_CDC_UNSUBSCRIBE delivered');
+
+    // Case 2: Cancellation during retry subscribe handshake held after remote registration.
+    subscribeMode = 'defer_once_then_hold';
+    activeGate = armHoldGate();
+    const client2 = createMockClient('cancel-retry-handshake-client');
+    const reg2 = await wiringA.liveQueryManager.registerLiveQuery(sql, client2);
+    const retryReachedRemote = await waitForMessageMatch(() => activeGate.isRegistered);
+    assert.ok(retryReachedRemote, 'retry subscribe handshake reached remote partition');
+    assert.equal(leaderB.cdcSubscribers.size, 1, 'remote partition registered retry subscriber');
+
+    wiringA.liveQueryManager.unregisterLiveQuery(reg2.queryId, client2.id);
+    releaseSubscribeResponse();
+
+    const retiredRetry = await waitForMessageMatch(
+      () => leaderB.cdcSubscribers.size === 0 &&
+        (leaderB.remoteLiveQueryCdcSubscribers?.size ?? 0) === 0,
+    );
+    assert.ok(retiredRetry, 'late retry subscribe completion retires remote subscriber without CDC');
+    assert.equal(wiringA.liveQueryManager.queryGroups.size, 0, 'local group retired on retry cancel');
+    assert.ok(unsubscribeDeliveries >= 2, 'remote unsubscribe delivered for cancelled retry');
+  });
 });

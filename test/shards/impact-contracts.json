@@ -2415,6 +2415,25 @@
       "tests": [
         "test/index-management/global-index-production-tx1-distributed.test.js"
       ]
+    },
+    "live-query-remote-cdc-lifecycle": {
+      "description": "Remote live-query CDC delivery, explicit QueryGroup refresh outcomes, per-subscriber ordered initial/retry shipping with exact batch and overflow coverage, absolute transport retry-after deadlines, and binding-generation subscription/retirement custody form one end-to-end contract.",
+      "owners": [
+        "src/partition/partition-live-query-cdc-remote.js",
+        "src/live-query/live-query-remote-cdc.js",
+        "src/live-query/live-query-remote-cdc-lifecycle.js",
+        "src/live-query/live-query-refresh-outcome.js",
+        "src/live-query/live-query-group.js",
+        "src/live-query/live-query-group-helpers.js",
+        "src/live-query/live-query-manager.js",
+        "src/live-query/live-query-startup-wiring.js",
+        "src/live-query/live-query-constants.js"
+      ],
+      "tests": [
+        "test/live-query/queryable-core-j6-live-query-journey.test.js",
+        "test/live-query/live-query-remote-cdc-lifecycle.test.js",
+        "test/live-query/live-query-startup-wiring.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -5203,6 +5222,57 @@
       "contract": "gsi-canonical-partition-execution",
       "witnessTests": [
         "test/index-management/global-index-production-tx1-distributed.test.js"
+      ]
+    },
+    "live-query-remote-delivery-and-refresh": {
+      "description": "The partition remote CDC forwarder's single ordered lane, exact batch/overflow coverage, and transport retry-after enforcement change together with the live-query receiver's explicit QueryGroup refresh outcome settlement and retained catch-up/reset debt.",
+      "endpoints": [
+        {
+          "id": "remote-cdc-delivery-producer",
+          "owners": [
+            "src/partition/partition-live-query-cdc-remote.js"
+          ]
+        },
+        {
+          "id": "live-query-refresh-consumer",
+          "owners": [
+            "src/live-query/live-query-remote-cdc.js",
+            "src/live-query/live-query-refresh-outcome.js",
+            "src/live-query/live-query-group.js"
+          ]
+        }
+      ],
+      "contract": "live-query-remote-cdc-lifecycle",
+      "witnessTests": [
+        "test/live-query/queryable-core-j6-live-query-journey.test.js",
+        "test/live-query/live-query-remote-cdc-lifecycle.test.js"
+      ]
+    },
+    "live-query-subscription-and-retirement": {
+      "description": "The remote partition subscriber registrar and the live-query subscription lifecycle/wiring owner change together: every subscription carries exact binding-generation custody before starting I/O, and late completion after cancellation or replacement retires only the superseded old binding.",
+      "endpoints": [
+        {
+          "id": "remote-cdc-subscription-registrar",
+          "owners": [
+            "src/partition/partition-live-query-cdc-remote.js"
+          ]
+        },
+        {
+          "id": "live-query-subscription-lifecycle",
+          "owners": [
+            "src/live-query/live-query-remote-cdc-lifecycle.js",
+            "src/live-query/live-query-remote-cdc.js",
+            "src/live-query/live-query-manager.js",
+            "src/live-query/live-query-group-helpers.js",
+            "src/live-query/live-query-startup-wiring.js"
+          ]
+        }
+      ],
+      "contract": "live-query-remote-cdc-lifecycle",
+      "witnessTests": [
+        "test/live-query/queryable-core-j6-live-query-journey.test.js",
+        "test/live-query/live-query-remote-cdc-lifecycle.test.js",
+        "test/live-query/live-query-startup-wiring.test.js"
       ]
     }
   }

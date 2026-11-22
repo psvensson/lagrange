@@ -435,6 +435,16 @@ function subscribePartitionWithOptions(options, {
         partition, queryId, wrappedHandler, subOptions,
       );
       if (subResult.handled) {
+        if (partitionSubscribers.get(subKey) !== wrappedHandler) {
+          partition.unsubscribeFromCDC?.(wrappedHandler);
+          return {
+            acknowledged: false,
+            success: false,
+            subscribed: false,
+            cancelled: true,
+            retryable: false,
+          };
+        }
         remoteCdc.trackLocal(
           partitionId, queryId, partition, handler, wrappedHandler, subOptions,
         );
@@ -445,6 +455,10 @@ function subscribePartitionWithOptions(options, {
       partitionId, queryId, handler, wrappedHandler, subOptions, remoteTarget,
     );
     if (remoteResult.handled) {
+      if (remoteResult.result?.cancelled === true &&
+          partitionSubscribers.get(subKey) === wrappedHandler) {
+        partitionSubscribers.delete(subKey);
+      }
       return remoteResult.result;
     }
     return subscriptionAdapter.subscribeToPartition(partitionId, queryId, handler);
@@ -516,6 +530,7 @@ function createLiveQueryStartupWiring(options = {}) {
     nodeId: options.nodeId,
     metadataStore: options.systemTableCache,
     messageRouter: options.messageRouter,
+    timeSource: options.timeSource,
     findGroupById: (id) => liveQueryManager.findGroupByQueryId(id),
     partitionSubscribers,
     resolveLocalPartition: (partitionId) => resolvePartition(options, partitionId),
