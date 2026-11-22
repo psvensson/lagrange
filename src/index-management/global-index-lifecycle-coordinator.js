@@ -14,6 +14,7 @@ import {
   createGlobalIndexRecord,
   findCatalogTarget,
   normalizeGlobalIndexRecord,
+  parseGlobalIndexDdl,
   resolveBackfillOutcome,
   resolveGlobalCreateSchemaContext,
 } from './global-index-catalog-contract.js';
@@ -26,9 +27,10 @@ import {
   GlobalIndexReadRouter,
 } from './global-index-read-router.js';
 
-const LOCAL_STR_COMMA = ',';
-const LOCAL_STR_ID = 'id';
+export {parseGlobalIndexDdl};
+
 const LOCAL_STR_COLON_COLON = '::';
+const LOCAL_STR_ID = 'id';
 
 const SQL_DML_VERB = Object.freeze({
   INSERT: 'INSERT',
@@ -55,31 +57,6 @@ const ERROR_CODE_PARTICIPANT_UNAVAILABLE = 'INDEX_PARTICIPANT_UNAVAILABLE';
  * @param {string} ddl - SQL DDL statement.
  * @return {Object} Parsed definition.
  */
-export function parseGlobalIndexDdl(ddl) {
-  const match = String(ddl).match(
-    /CREATE\s+(UNIQUE\s+)?GLOBAL\s+INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?([^\s]+)\s+ON\s+([^\s(]+)\s*\(([^)]+)\)/i,
-  );
-  if (!match) {
-    throw new Error(`Invalid CREATE GLOBAL INDEX DDL statement: ${ddl}`);
-  }
-  const isUnique = Boolean(match[1]);
-  const ifNotExists = /CREATE\s+(?:UNIQUE\s+)?GLOBAL\s+INDEX\s+IF\s+NOT\s+EXISTS\b/i.test(ddl);
-  const indexName = match[2].trim().replace(/^[`"']|[`"']$/g, '');
-  const tableName = match[3].trim().replace(/^[`"']|[`"']$/g, '');
-  const columnNames = match[4].split(LOCAL_STR_COMMA).map((c) => {
-    return c.trim().replace(/^[`"']|[`"']$/g, '');
-  });
-
-  return {
-    indexName,
-    tableName,
-    columnNames,
-    isGlobal: true,
-    isUnique,
-    ifNotExists,
-  };
-}
-
 function inferWriteType(statementType, beforeCount, afterCount) {
   if (statementType) {
     return statementType.toUpperCase();
@@ -100,12 +77,9 @@ function planMultiRowDelete(maintenance, context) {
   const operations = [];
   const enlistedSet = new Set();
   for (const deletedRow of rows) {
-    const plan = maintenance.planDeleteMaintenance({
-      tableName,
-      basePartitionId,
-      deletedRow,
-      basePrimaryKeyColumns,
-    });
+    const plan = maintenance.planDeleteMaintenance(
+      {tableName, basePartitionId, deletedRow, basePrimaryKeyColumns},
+    );
     operations.push(...plan.operations);
     for (const p of plan.enlistedIndexPartitions) enlistedSet.add(p);
   }
@@ -117,24 +91,14 @@ function planMultiRowUpdate(maintenance, context) {
   const oldList = Array.isArray(beforeRows) ? beforeRows : [beforeRows];
   const newList = Array.isArray(afterRows) ? afterRows : [afterRows];
   const pkCols = basePrimaryKeyColumns || [LOCAL_STR_ID];
-
-  const newRowMap = new Map();
-  for (const row of newList) {
-    newRowMap.set(buildRowPkKey(row, pkCols), row);
-  }
-
+  const newRowMap = new Map(newList.map((row) => [buildRowPkKey(row, pkCols), row]));
   const operations = [];
   const enlistedSet = new Set();
   for (const oldRow of oldList) {
-    const pkKey = buildRowPkKey(oldRow, pkCols);
-    const newRow = newRowMap.get(pkKey);
+    const newRow = newRowMap.get(buildRowPkKey(oldRow, pkCols));
     if (!newRow) continue;
     const plan = maintenance.planUpdateMaintenance({
-      tableName,
-      basePartitionId,
-      oldRow,
-      newRow,
-      basePrimaryKeyColumns: pkCols,
+      tableName, basePartitionId, oldRow, newRow, basePrimaryKeyColumns: pkCols,
     });
     operations.push(...plan.operations);
     for (const p of plan.enlistedIndexPartitions) enlistedSet.add(p);
@@ -182,6 +146,28 @@ function normalizeGlobalIndexDefinition(ddlOrAst, options) {
   };
 }
 
+function resolveDescriptorPartitionId(partition) {
+  return partition.partition_id !== undefined ? partition.partition_id : partition.partitionId;
+}
+
+function assignCoordinatorOptions(coordinator, options) {
+  const fields = [
+    ['externalGetBaseTablePartitions', 'getBaseTablePartitions'],
+    ['externalGetIndexPartitions', 'getIndexPartitions'],
+    ['resolvePartitionDatabase', 'resolvePartitionDatabase'],
+    ['resolveTableSchema', 'resolveTableSchema'],
+    ['hasDistributedPartitionRoute', 'hasDistributedPartitionRoute'],
+    ['provisionIndexPartitions', 'provisionIndexPartitions'],
+    ['refreshCatalogPartitions', 'refreshCatalogPartitions'],
+    ['onCatalogInsert', 'onCatalogInsert'],
+    ['onCatalogUpdate', 'onCatalogUpdate'],
+    ['onCatalogDelete', 'onCatalogDelete'],
+  ];
+  for (const [target, source] of fields) {
+    coordinator[target] = options[source] || null;
+  }
+}
+
 /**
  * End-to-end coordinator for Global Secondary Index lifecycle.
  */
@@ -196,14 +182,7 @@ export class GlobalIndexLifecycleCoordinator {
     this.indexPartitionsByName = new Map();
     this.partitionDatabases = new Map();
     this.logger = options.logger || console;
-    this.externalGetBaseTablePartitions = options.getBaseTablePartitions || null;
-    this.externalGetIndexPartitions = options.getIndexPartitions || null;
-    this.resolvePartitionDatabase = options.resolvePartitionDatabase || null;
-    this.resolveTableSchema = options.resolveTableSchema || null;
-    this.refreshCatalogPartitions = options.refreshCatalogPartitions || null;
-    this.onCatalogInsert = options.onCatalogInsert || null;
-    this.onCatalogUpdate = options.onCatalogUpdate || null;
-    this.onCatalogDelete = options.onCatalogDelete || null;
+    assignCoordinatorOptions(this, options);
 
     this.metrics = {
       totalWrites: 0,
@@ -374,27 +353,48 @@ export class GlobalIndexLifecycleCoordinator {
     }
   }
 
-  _provisionIndexDatasets(tableName, indexName, columnNames, basePrimaryKeyColumns, options) {
-    const partitions = this.getIndexPartitions(indexName);
-    if (this.resolvePartitionDatabase && partitions.length === 0) {
+  _provisionSingleIndexDataset(partition, meta) {
+    const pId = resolveDescriptorPartitionId(partition);
+    const db = this._getPartitionDb(pId);
+    if (db) {
+      this.datasetManager.createIndexDataset(db, meta);
+      return;
+    }
+    const remoteReady = partition._provisionedWithSchema ||
+      Boolean(this.hasDistributedPartitionRoute?.(pId));
+    if (!remoteReady && this.resolvePartitionDatabase) {
+      const error = new Error(`${LIFECYCLE_ERROR_MSG.PARTICIPANT_UNAVAILABLE}: ${pId}`);
+      error.code = ERROR_CODE_PARTICIPANT_UNAVAILABLE;
+      throw error;
+    }
+  }
+
+  async _provisionIndexDatasets(
+    tableName,
+    indexName,
+    columnNames,
+    basePrimaryKeyColumns,
+    options,
+  ) {
+    let partitions = this.getIndexPartitions(indexName);
+    if (partitions.length === 0 && this.provisionIndexPartitions) {
+      partitions = await this.provisionIndexPartitions({
+        tableName, indexName, columnNames, basePrimaryKeyColumns,
+        columnTypes: options.columnTypes || {}, options,
+      });
+    }
+    const requiresNonEmpty = Boolean(
+      this.resolvePartitionDatabase || this.hasDistributedPartitionRoute,
+    );
+    if (requiresNonEmpty && partitions.length === 0) {
       throw new Error(`No index partitions available for global index '${indexName}'`);
     }
+    const meta = {
+      tableName, indexName, columnNames, basePrimaryKeyColumns,
+      columnTypes: options.columnTypes || {},
+    };
     for (const p of partitions) {
-      const pId = p.partition_id || p.partitionId;
-      const db = this._getPartitionDb(pId);
-      if (db) {
-        this.datasetManager.createIndexDataset(db, {
-          tableName,
-          indexName,
-          columnNames,
-          basePrimaryKeyColumns,
-          columnTypes: options.columnTypes || {},
-        });
-      } else if (this.resolvePartitionDatabase) {
-        const error = new Error(`${LIFECYCLE_ERROR_MSG.PARTICIPANT_UNAVAILABLE}: ${pId}`);
-        error.code = ERROR_CODE_PARTICIPANT_UNAVAILABLE;
-        throw error;
-      }
+      this._provisionSingleIndexDataset(p, meta);
     }
   }
 
@@ -514,7 +514,7 @@ export class GlobalIndexLifecycleCoordinator {
     await this._saveCatalogRecord(record);
 
     try {
-      this._provisionIndexDatasets(
+      await this._provisionIndexDatasets(
         tableName,
         indexName,
         columnNames,

@@ -15,6 +15,8 @@ import {
 } from './index-constants.js';
 
 const LOCAL_STR_COMMA = ',';
+const DDL_CAPTURE_TABLE_INDEX = 3;
+const DDL_CAPTURE_COLUMNS_INDEX = 4;
 
 export {
   GLOBAL_INDEX_ERROR_MSG,
@@ -125,6 +127,31 @@ export function assertSupportedGlobalIndexDefinition(definition = {}) {
     error.sqlState = GLOBAL_INDEX_SQL_STATE.FEATURE_NOT_SUPPORTED;
     throw error;
   }
+}
+
+export function parseGlobalIndexDdl(ddl) {
+  const match = String(ddl).match(
+    /CREATE\s+(UNIQUE\s+)?GLOBAL\s+INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?([^\s]+)\s+ON\s+([^\s(]+)\s*\(([^)]+)\)/i,
+  );
+  if (!match) {
+    throw new Error(`Invalid CREATE GLOBAL INDEX DDL statement: ${ddl}`);
+  }
+  const isUnique = Boolean(match[1]);
+  const ifNotExists = /CREATE\s+(?:UNIQUE\s+)?GLOBAL\s+INDEX\s+IF\s+NOT\s+EXISTS\b/i.test(ddl);
+  const indexName = match[2].trim().replace(/^[`"']|[`"']$/g, '');
+  const tableName = match[DDL_CAPTURE_TABLE_INDEX].trim().replace(/^[`"']|[`"']$/g, '');
+  const columnNames = match[DDL_CAPTURE_COLUMNS_INDEX].split(LOCAL_STR_COMMA).map((c) => {
+    return c.trim().replace(/^[`"']|[`"']$/g, '');
+  });
+
+  return {
+    indexName,
+    tableName,
+    columnNames,
+    isGlobal: true,
+    isUnique,
+    ifNotExists,
+  };
 }
 
 function validateGlobalIndexRecordOptions(options) {

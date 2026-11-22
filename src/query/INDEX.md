@@ -98,6 +98,8 @@ documentClass: generated
 - [sql-query-engine-bootstrap-routing-overlay.js](sql-query-engine-bootstrap-routing-overlay.js) - Resolve cache-backed routable partition services without overlay help. (importers: one)
 - [sql-query-engine-ddl-methods.js](sql-query-engine-ddl-methods.js) - No leading comment; first export: sqlQueryEngineDdlMethods. (importers: one)
 - [sql-query-engine-global-index-integration.js](sql-query-engine-global-index-integration.js) - SQLQueryEngine Global Secondary Index integration helpers. (importers: few)
+- [sql-query-engine-global-index-select.js](sql-query-engine-global-index-select.js) - AST eligibility, projection, ordering, and limit helpers for SQLQueryEngine Global Secondary Index SELECT execution. (importers: one)
+- [sql-query-engine-global-index-tx1.js](sql-query-engine-global-index-tx1.js) - TX1 transactional execution helpers for SQLQueryEngine Global Secondary Index maintenance. (importers: one)
 - [sql-query-engine-initial-partition-provisioning.js](sql-query-engine-initial-partition-provisioning.js) - Return active, non-transitioning partitions eligible for split evaluation. (importers: one)
 - [sql-query-engine-instance-initializer.js](sql-query-engine-instance-initializer.js) - No leading comment; first export: attachAuthoritativeRoutingOverlayCacheApplyListener. (importers: one)
 - [sql-query-engine-lifecycle-and-callback-dispatch.js](sql-query-engine-lifecycle-and-callback-dispatch.js) - Initialize logger. (importers: few)
