@@ -13,6 +13,8 @@ import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outc
 import Database from 'better-sqlite3';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {QUERY_OPERATION} from '../../src/query/query-constants.js';
+import {PARSER_DIALECT} from '../../src/query/pg/pg-compat-constants.js';
+import {SQLParser} from '../../src/query/sql-parser.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {answerParticipantTransactionRequest} from
   '../test-helpers/participant-protocol-double.js';
@@ -33,7 +35,20 @@ function ensureConfiguration() {
 }
 
 function createSystemCache(table, partitions) {
-  const tables = [{table_name: table.name, primaryKey: table.primaryKey}];
+  const parsedDdl = new SQLParser(
+    table.ddl,
+    {dialect: PARSER_DIALECT.POSTGRESQL},
+  ).parse();
+  const schemaDefinition = JSON.stringify({
+    tableName: table.name,
+    columns: parsedDdl.columns || [],
+    primaryKey: table.primaryKey,
+  });
+  const tables = [{
+    table_name: table.name,
+    primaryKey: table.primaryKey,
+    schema_definition: schemaDefinition,
+  }];
   const partitionRows = partitions.map((partition) => ({
     ...partition,
     table_name: table.name,

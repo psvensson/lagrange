@@ -124,12 +124,16 @@ class PgWireSession {
    * @param {string} name - Statement name ('' for unnamed).
    * @param {string} query - SQL query text.
    * @param {number[]} [paramTypes] - Parameter type OIDs.
+   * @param {Object|null} [description] - Resolved wire description.
    */
-  setPreparedStatement(name, query, paramTypes = []) {
-    this._statements.set(name, {query, paramTypes});
-    // Close any existing portal with the same name
-    // per PG protocol semantics
-    this._portals.delete(name);
+  setPreparedStatement(name, query, paramTypes = [], description = null) {
+    this._statements.set(name, {query, paramTypes, description});
+    // Close all portals bound to this statement per PG protocol semantics.
+    for (const [portalName, portal] of this._portals.entries()) {
+      if (portal.statementName === name) {
+        this._portals.delete(portalName);
+      }
+    }
   }
 
   /**
@@ -153,13 +157,17 @@ class PgWireSession {
   }
 
   /**
-   * Remove a prepared statement and its associated portal.
+   * Remove a prepared statement and all portals bound to it.
    *
    * @param {string} name - Statement name.
    */
   closePreparedStatement(name) {
     this._statements.delete(name);
-    this._portals.delete(name);
+    for (const [portalName, portal] of this._portals.entries()) {
+      if (portal.statementName === name) {
+        this._portals.delete(portalName);
+      }
+    }
   }
 
   /**
@@ -168,9 +176,16 @@ class PgWireSession {
    * @param {string} portalName - Portal name ('' for unnamed).
    * @param {string} statementName - Source prepared statement name.
    * @param {unknown[]} params - Bound parameter values.
+   * @param {Object} [metadata] - Bound format codes and resolved description.
    */
-  setPortal(portalName, statementName, params) {
-    this._portals.set(portalName, {statementName, params});
+  setPortal(portalName, statementName, params, metadata = {}) {
+    this._portals.set(portalName, {
+      statementName,
+      params,
+      paramFormats: metadata.paramFormats || [],
+      resultFormats: metadata.resultFormats || [],
+      description: metadata.description || null,
+    });
   }
 
   /**

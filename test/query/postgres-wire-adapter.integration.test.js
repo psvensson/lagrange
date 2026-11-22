@@ -123,7 +123,18 @@ function createMockSystemCache(tables, partitions) {
  */
 function createAdapterWithEngine(opts = {}) {
   const cache = opts.cache || createMockSystemCache(
-    [{table_name: 'orders', primaryKey: 'id'}],
+    [{
+      table_name: 'orders',
+      primaryKey: 'id',
+      schema_definition: JSON.stringify({
+        tableName: 'orders',
+        columns: [
+          {name: 'id', type: 'TEXT', primaryKey: true},
+          {name: 'total', type: 'INTEGER'},
+        ],
+        primaryKey: 'id',
+      }),
+    }],
     [
       {
         partition_id: 'p1',

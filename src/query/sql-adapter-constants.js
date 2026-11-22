@@ -12,6 +12,7 @@
  */
 const EXECUTION_MODE = Object.freeze({
   SQL_STATEMENT: 'sql_statement',
+  DESCRIBE: 'describe',
   STAGE: 'stage',
   PLAN: 'plan',
 });

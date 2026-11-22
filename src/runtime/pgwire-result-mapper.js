@@ -295,17 +295,28 @@ function isEmptyStatementResult(result) {
     result?.errorCode === QUERY_ERROR_CODE.EMPTY_STATEMENT;
 }
 
+function normalizeColumnDescriptor(col) {
+  if (typeof col === LOCAL_STR_STRING) {
+    return {name: col};
+  }
+  return {
+    ...col,
+    name: col.name || LOCAL_STR_COLUMN,
+  };
+}
+
 /**
  * Extract column descriptors from a SqlCore result.
  *
  * @param {Object} result - SqlCore result.
- * @return {Array<{name: string}>}
+ * @return {Array<Object>}
  */
 function extractColumns(result) {
-  if (result?.columns && Array.isArray(result.columns)) {
-    return result.columns.map((c) =>
-      typeof c === LOCAL_STR_STRING ? {name: c} : {name: c.name || LOCAL_STR_COLUMN},
-    );
+  if (Array.isArray(result?.columnDescriptors)) {
+    return result.columnDescriptors.map(normalizeColumnDescriptor);
+  }
+  if (Array.isArray(result?.columns)) {
+    return result.columns.map(normalizeColumnDescriptor);
   }
   if (Array.isArray(result?.rows) && result.rows.length > 0) {
     return Object.keys(result.rows[0]).map((k) => ({name: k}));

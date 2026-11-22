@@ -6,9 +6,7 @@
  */
 
 import sqliteNodeSqlParser from 'node-sql-parser/build/sqlite.js';
-import postgresqlNodeSqlParser from
-  'node-sql-parser/build/postgresql.js';
-
+import postgresqlNodeSqlParser from 'node-sql-parser/build/postgresql.js';
 
 const CREATE_TABLE_PREFIX_PATTERN = /^\s*CREATE\s+TABLE\b/iu;
 const CREATE_TABLE_STORAGE_OPTIONS_PATTERN =
@@ -26,12 +24,9 @@ import {
   TRANSACTION_CONTROL_KIND,
   resolveTransactionControlStatement,
 } from './sql-transaction-control-grammar.js';
-import {
-  translateOnConflict,
-} from './pg/pg-translate.js';
+import {translateOnConflict} from './pg/pg-translate.js';
 import {sqlParserExpressionMethods} from './sql-parser-expression-methods.js';
-import {sqlParserSchemaMutationMethods} from
-  './sql-parser-schema-mutation-methods.js';
+import {sqlParserSchemaMutationMethods} from './sql-parser-schema-mutation-methods.js';
 import {sqlParserSelectMethods} from './sql-parser-select-methods.js';
 import {
   nodeSqlParserText,
@@ -39,10 +34,7 @@ import {
   sourceSelectListSpans,
   sqliteAcceptsGrammar,
 } from './sql-parser-source-text.js';
-import {
-  stripAndValidateLockingClause,
-  validateSelectAstLocking,
-} from './sql-locking-read-grammar.js';
+import {stripAndValidateLockingClause, validateSelectAstLocking} from './sql-locking-read-grammar.js';
 
 /**
  * Parser-specific error message constants.
@@ -69,6 +61,8 @@ const PARSER_ERROR_MSG = Object.freeze({
   MUTATION_DELETE_TARGET_MISMATCH: 'DELETE target and FROM table must denote the same table',
   RESULT_COLUMN_SPANS_UNREADABLE:
     'The result column names of this statement cannot be read from its text',
+  VALUES_UNSUPPORTED: 'Standalone VALUES queries are not supported',
+  EXPLAIN_UNSUPPORTED: 'EXPLAIN is supported only as EXPLAIN DISTRIBUTED',
 });
 const EXTERNAL_SELECT_TYPE = 'select';
 
@@ -87,6 +81,7 @@ const EXTERNAL_TYPE = Object.freeze({
   ALTER: 'alter',
   DROP: 'drop',
   TRUNCATE: 'truncate',
+  SHOW: 'show',
 });
 
 const INSERT_MODE = Object.freeze({
@@ -400,25 +395,15 @@ function assertIndexCreationSupported(sql) {
 }
 
 function parseDropIndexAst(sql) {
-  if (typeof sql !== 'string' || !/^\s*DROP\s+INDEX\b/iu.test(sql)) {
-    return null;
-  }
+  if (typeof sql !== 'string' || !/^\s*DROP\s+INDEX\b/iu.test(sql)) return null;
   const dropIndexMatch = sql.match(
     /^\s*DROP\s+INDEX\s+(IF\s+EXISTS\s+)?([A-Za-z0-9_".]+)(?:\s+ON\s+([A-Za-z0-9_".]+))?\s*;?\s*$/i,
   );
-  if (!dropIndexMatch) {
-    return null;
-  }
+  if (!dropIndexMatch) return null;
   const ifExists = Boolean(dropIndexMatch[1]);
   const indexName = dropIndexMatch[2].replace(/"/g, '');
   const tableName = dropIndexMatch[3] ? dropIndexMatch[3].replace(/"/g, '') : null;
-  return {
-    type: AST_TYPE.DROP_INDEX,
-    indexName,
-    tableName,
-    ifExists,
-    rawSql: sql,
-  };
+  return {type: AST_TYPE.DROP_INDEX, indexName, tableName, ifExists, rawSql: sql};
 }
 
 /**
@@ -487,13 +472,28 @@ function resultColumnSpans(statement, text) {
   return spans;
 }
 
+const UNSUPPORTED_SPECIAL_STATEMENTS = Object.freeze([
+  Object.freeze({
+    match: /^VALUES\b/iu,
+    message: PARSER_ERROR_MSG.VALUES_UNSUPPORTED,
+  }),
+  Object.freeze({
+    match: /^EXPLAIN(?!\s+DISTRIBUTED\b)\b/iu,
+    message: PARSER_ERROR_MSG.EXPLAIN_UNSUPPORTED,
+  }),
+]);
+
 function parseSpecialStatement(sql) {
   const transactionControl = parseTransactionControl(sql);
   if (transactionControl) return transactionControl;
+  const cleanSql = stripLeadingSqlComments(sql);
+  for (const rule of UNSUPPORTED_SPECIAL_STATEMENTS) {
+    if (rule.match.test(cleanSql)) {
+      throw createTypedParseError(QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE, rule.message);
+    }
+  }
   assertIndexCreationSupported(sql);
-  const createGlobalIndexAst = parseCreateGlobalIndexAst(sql);
-  if (createGlobalIndexAst) return createGlobalIndexAst;
-  return parseDropIndexAst(sql);
+  return parseCreateGlobalIndexAst(sql) || parseDropIndexAst(sql);
 }
 
 function prepareStatementInput(parser, parseSql) {
@@ -610,6 +610,11 @@ class SQLParser {
       return this.convertDrop(ast);
     case EXTERNAL_TYPE.TRUNCATE:
       return this.convertTruncate(ast);
+    case EXTERNAL_TYPE.SHOW:
+      throw createTypedParseError(
+        QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE,
+        QUERY_ERROR_MSG.UNSUPPORTED_STATEMENT_PREFIX + ast.type,
+      );
     default:
       throw new Error(
         QUERY_ERROR_MSG.UNSUPPORTED_STATEMENT_PREFIX + ast.type,

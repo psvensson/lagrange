@@ -9,13 +9,28 @@ import {
   PG_AUTH_TYPE,
   PG_ERROR_FIELD,
   PG_BUFFER_LIMIT,
+  PG_FORMAT_CODE,
 } from './pgwire-protocol-constants.js';
 import {writeCString} from './pgwire-buffer-codec.js';
 
+const LOCAL_NUM_TWO = 2;
 const LOCAL_NUM_FOUR = 4;
 const LOCAL_NUM_EIGHTEEN = 18;
 const LOCAL_NUM_TWENTY_FIVE = 25;
+const UNMODIFIED_TYPE = -1;
+const VARIABLE_SIZE = -1;
+const OID_BOOL = 16;
+const OID_BYTEA = 17;
+const OID_JSON = 114;
+const OID_JSONB = 3802;
+const PG_BOOL_TRUE = 't';
+const PG_BOOL_FALSE = 'f';
+const PG_BOOL_TRUE_LITERALS = new Set(['true', 't', 'TRUE', '1']);
+const BYTEA_HEX_PREFIX = '\\x';
+const BYTEA_HEX_RADIX = 'hex';
 const LOCAL_STR_UTF8 = 'utf8';
+const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_OBJECT = 'object';
 
 /**
  * Build a backend message with type byte and length-prefixed payload.
@@ -152,59 +167,102 @@ function buildFieldMessage(type, severity, code, message, detail) {
 }
 
 /**
+ * Build ParameterDescription message from parameter type OIDs.
+ * @param {number[]} paramOids - PostgreSQL type OIDs for each parameter.
+ * @return {Buffer}
+ */
+function buildParameterDescription(paramOids) {
+  const payload = Buffer.allocUnsafe(
+    LOCAL_NUM_TWO + paramOids.length * LOCAL_NUM_FOUR,
+  );
+  payload.writeInt16BE(paramOids.length, 0);
+  let off = LOCAL_NUM_TWO;
+  for (const oid of paramOids) {
+    payload.writeInt32BE(oid, off);
+    off += LOCAL_NUM_FOUR;
+  }
+  return buildMessage(PG_BACKEND_MSG.PARAMETER_DESCRIPTION, payload);
+}
+
+/**
  * Build RowDescription message from column metadata.
- * @param {Array<{name: string}>} columns - Column descriptors.
+ * @param {Array<{name: string, oid?: number, typeSize?: number, typeModifier?: number,
+ *   formatCode?: number, tableOid?: number, columnAttr?: number}>} columns - Column descriptors.
  * @return {Buffer}
  */
 function buildRowDescription(columns) {
-  let size = 2;
+  let size = LOCAL_NUM_TWO;
   for (const col of columns) {
     size += Buffer.byteLength(col.name, LOCAL_STR_UTF8) + 1 +
       LOCAL_NUM_EIGHTEEN;
   }
   const payload = Buffer.allocUnsafe(size);
   payload.writeInt16BE(columns.length, 0);
-  let off = 2;
+  let off = LOCAL_NUM_TWO;
   for (const col of columns) {
     off = writeCString(payload, col.name, off);
-    payload.writeInt32BE(0, off); off += LOCAL_NUM_FOUR;
-    payload.writeInt16BE(0, off); off += 2;
-    payload.writeInt32BE(LOCAL_NUM_TWENTY_FIVE, off); off += LOCAL_NUM_FOUR;
-    payload.writeInt16BE(-1, off); off += 2;
-    payload.writeInt32BE(-1, off); off += LOCAL_NUM_FOUR;
-    payload.writeInt16BE(0, off); off += 2;
+    payload.writeInt32BE(col.tableOid ?? 0, off); off += LOCAL_NUM_FOUR;
+    payload.writeInt16BE(col.columnAttr ?? 0, off); off += LOCAL_NUM_TWO;
+    payload.writeInt32BE(col.oid ?? LOCAL_NUM_TWENTY_FIVE, off); off += LOCAL_NUM_FOUR;
+    payload.writeInt16BE(col.typeSize ?? VARIABLE_SIZE, off); off += LOCAL_NUM_TWO;
+    payload.writeInt32BE(col.typeModifier ?? UNMODIFIED_TYPE, off); off += LOCAL_NUM_FOUR;
+    const fmt = Number.isInteger(col.formatCode) ? col.formatCode : PG_FORMAT_CODE.TEXT;
+    payload.writeInt16BE(fmt, off); off += LOCAL_NUM_TWO;
   }
   return buildMessage(PG_BACKEND_MSG.ROW_DESCRIPTION, payload);
 }
 
+function encodeColumnTextValue(value, col) {
+  const oid = col?.oid;
+  if (oid === OID_BOOL) {
+    const truthy = typeof value === 'boolean' ?
+      value :
+      typeof value === 'number' ?
+        value !== 0 :
+        PG_BOOL_TRUE_LITERALS.has(String(value));
+    return truthy ? PG_BOOL_TRUE : PG_BOOL_FALSE;
+  }
+  if (oid === OID_BYTEA && Buffer.isBuffer(value)) {
+    return BYTEA_HEX_PREFIX + value.toString(BYTEA_HEX_RADIX);
+  }
+  if ((oid === OID_JSON || oid === OID_JSONB) &&
+      typeof value === LOCAL_STR_OBJECT && typeof value !== LOCAL_STR_STRING) {
+    return JSON.stringify(value);
+  }
+  return String(value);
+}
+
 /**
  * Build DataRow message from column values.
- * @param {Array<string|null>} values - Column values (null for SQL NULL).
+ * @param {Array<unknown>} values - Column values (null for SQL NULL).
+ * @param {Array<Object>} [columns] - Optional column descriptors for typed text encoding.
  * @return {Buffer}
  */
-function buildDataRow(values) {
-  let size = 2;
-  for (const v of values) {
-    if (v === null || v === undefined) {
+function buildDataRow(values, columns = []) {
+  const encodedValues = values.map((v, idx) => {
+    if (v === null || v === undefined) return null;
+    return encodeColumnTextValue(v, columns[idx]);
+  });
+  let size = LOCAL_NUM_TWO;
+  for (const encoded of encodedValues) {
+    if (encoded === null) {
       size += LOCAL_NUM_FOUR;
     } else {
-      const s = String(v);
-      size += LOCAL_NUM_FOUR + Buffer.byteLength(s, LOCAL_STR_UTF8);
+      size += LOCAL_NUM_FOUR + Buffer.byteLength(encoded, LOCAL_STR_UTF8);
     }
   }
   const payload = Buffer.allocUnsafe(size);
-  payload.writeInt16BE(values.length, 0);
-  let off = 2;
-  for (const v of values) {
-    if (v === null || v === undefined) {
-      payload.writeInt32BE(-1, off);
+  payload.writeInt16BE(encodedValues.length, 0);
+  let off = LOCAL_NUM_TWO;
+  for (const encoded of encodedValues) {
+    if (encoded === null) {
+      payload.writeInt32BE(VARIABLE_SIZE, off);
       off += LOCAL_NUM_FOUR;
     } else {
-      const s = String(v);
-      const len = Buffer.byteLength(s, LOCAL_STR_UTF8);
+      const len = Buffer.byteLength(encoded, LOCAL_STR_UTF8);
       payload.writeInt32BE(len, off);
       off += LOCAL_NUM_FOUR;
-      payload.write(s, off, LOCAL_STR_UTF8);
+      payload.write(encoded, off, LOCAL_STR_UTF8);
       off += len;
     }
   }
@@ -271,6 +329,7 @@ export {
   buildReadyForQuery,
   buildErrorResponse,
   buildNoticeResponse,
+  buildParameterDescription,
   buildRowDescription,
   buildDataRow,
   buildCommandComplete,

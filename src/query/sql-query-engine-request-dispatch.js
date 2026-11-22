@@ -5,6 +5,10 @@
 import {META_SERVICE_ID} from '../constants/wasm-meta.js';
 import {isSystemTableName} from
   '../bootstrap/system-table-schema-shared-constants.js';
+import {readExecutedStatementType} from './application-database-result.js';
+import {PARSER_DIALECT} from './pg/pg-compat-constants.js';
+import {describePostgresSqlStatement} from './pg/postgres-wire-description.js';
+import {QUERY_OPERATION} from './query-constants.js';
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {SQLQueryEngineLifecycleAndCallbackDispatch} from
   './sql-query-engine-lifecycle-and-callback-dispatch.js';
@@ -12,6 +16,9 @@ import {SERVICE_LIFECYCLE_EXECUTION_DISPOSITION} from
   './service-lifecycle-sql-contract.js';
 import {classifyTransactionControlStatement} from
   './sql-transaction-control-grammar.js';
+import {
+  enforceApplicationDatabaseExplainPolicy,
+} from './application-database-statement-policy.js';
 import {
   CLIENT_STATEMENT_INGRESS,
   resolveClientStatementRefusal,
@@ -35,6 +42,7 @@ const {
   CancellationToken,
   DEFAULT_SNAPSHOT_MODE,
   EXECUTION_MODE,
+  EXPLAIN_DISTRIBUTED_PREFIX_REGEX,
   ExecutionContext,
   LineageTracker,
   METRICS_LOG_TAG,
@@ -377,35 +385,111 @@ class SQLQueryEngineRequestDispatch extends
     }
   }
 
+  async describeSqlRequest(sqlRequest, executionOptions = {}) {
+    const queryOptions = buildClientRequestQueryOptions(
+      sqlRequest,
+      executionOptions,
+    );
+    const isExplainDistributed = EXPLAIN_DISTRIBUTED_PREFIX_REGEX.test(
+      sqlRequest.statement,
+    );
+    if (isExplainDistributed) {
+      const explainDecision = enforceApplicationDatabaseExplainPolicy(
+        queryOptions,
+      );
+      if (explainDecision.allowed !== true) {
+        return explainDecision.failure;
+      }
+    }
+    const checkRequest = isExplainDistributed ?
+      {
+        ...sqlRequest,
+        statement: sqlRequest.statement.replace(
+          EXPLAIN_DISTRIBUTED_PREFIX_REGEX,
+          '',
+        ),
+      } :
+      sqlRequest;
+    const statementCheck = await this.checkPlanRequestStatement(
+      checkRequest,
+      queryOptions,
+    );
+    if (!statementCheck.allowed) {
+      return statementCheck.refusal;
+    }
+    let descriptionResult;
+    try {
+      descriptionResult = describePostgresSqlStatement({
+        sql: sqlRequest.statement,
+        paramTypes: sqlRequest.parameters,
+        resolveTableSchema: (tableName) =>
+          this.queryExecutor.resolveTableInfo(tableName),
+      });
+    } catch (error) {
+      descriptionResult = {
+        success: false,
+        error: error.message,
+        errorCode: error.code ? error.code : resolveParseFailureCode(error),
+        ...(error.sqlState ? {sqlState: error.sqlState} : {}),
+        ...(error.details ? {details: error.details} : {}),
+      };
+    }
+    return descriptionResult;
+  }
+
+  async executeSqlStatementRequest(sqlRequest, executionOptions = {}) {
+    const admission = admitRequestTransaction(
+      this.transactionCoordinator, sqlRequest);
+    if (admission.state === STATEMENT_ADMISSION.REFUSED) {
+      return admission.failure;
+    }
+    const lifecycleOptions = {
+      sessionId: sqlRequest.sessionId,
+      ...(sqlRequest.securityContext ?
+        {securityContext: sqlRequest.securityContext} : {}),
+      ...(sqlRequest.abortSignal ?
+        {abortSignal: sqlRequest.abortSignal} : {}),
+    };
+    const lifecycleExecution = await this.tryExecuteServiceLifecycleSql(
+      sqlRequest.statement,
+      sqlRequest.parameters,
+      lifecycleOptions,
+    );
+    if (lifecycleExecution.disposition ===
+        SERVICE_LIFECYCLE_EXECUTION_DISPOSITION.HANDLED) {
+      return lifecycleExecution.result;
+    }
+    const result = await this.executeQuery(
+      sqlRequest.statement,
+      sqlRequest.parameters,
+      buildClientRequestQueryOptions(sqlRequest, executionOptions),
+    );
+    return this.attachPgColumnDescriptors(sqlRequest, result);
+  }
+
+  attachPgColumnDescriptors(sqlRequest, result) {
+    const executedType = readExecutedStatementType(result);
+    const shouldDescribe = result?.success === true &&
+      sqlRequest.dialect === PARSER_DIALECT.POSTGRESQL &&
+      (executedType === QUERY_AST_TYPE.SELECT ||
+        executedType === QUERY_OPERATION.EXPLAIN_DISTRIBUTED);
+    if (!shouldDescribe) {
+      return result;
+    }
+    const description = describePostgresSqlStatement({
+      sql: sqlRequest.statement,
+      resolveTableSchema: (tableName) =>
+        this.queryExecutor.resolveTableInfo(tableName),
+    });
+    return {...result, columnDescriptors: description.columns};
+  }
+
   async dispatchSqlRequest(sqlRequest, executionOptions = {}) {
     switch (sqlRequest.executionMode) {
-    case EXECUTION_MODE.SQL_STATEMENT: {
-      const admission = admitRequestTransaction(
-        this.transactionCoordinator, sqlRequest);
-      if (admission.state === STATEMENT_ADMISSION.REFUSED) {
-        return admission.failure;
-      }
-      const lifecycleExecution = await this.tryExecuteServiceLifecycleSql(
-        sqlRequest.statement,
-        sqlRequest.parameters,
-        {
-          sessionId: sqlRequest.sessionId,
-          ...(sqlRequest.securityContext ?
-            {securityContext: sqlRequest.securityContext} : {}),
-          ...(sqlRequest.abortSignal ?
-            {abortSignal: sqlRequest.abortSignal} : {}),
-        },
-      );
-      if (lifecycleExecution.disposition ===
-          SERVICE_LIFECYCLE_EXECUTION_DISPOSITION.HANDLED) {
-        return lifecycleExecution.result;
-      }
-      return this.executeQuery(
-        sqlRequest.statement,
-        sqlRequest.parameters,
-        buildClientRequestQueryOptions(sqlRequest, executionOptions),
-      );
-    }
+    case EXECUTION_MODE.DESCRIBE:
+      return this.describeSqlRequest(sqlRequest, executionOptions);
+    case EXECUTION_MODE.SQL_STATEMENT:
+      return this.executeSqlStatementRequest(sqlRequest, executionOptions);
     case EXECUTION_MODE.STAGE:
       return this.executeStageRequest(sqlRequest, executionOptions);
     case EXECUTION_MODE.PLAN:

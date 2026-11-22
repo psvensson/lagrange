@@ -69,17 +69,11 @@ import {
 import {readExecutedStatementType} from '../query/application-database-result.js';
 import {OWNER_CONTRACT_STATE} from '../control-plane/owner-contract-outcome.js';
 import {AST_TYPE} from '../query/parser-constants.js';
-import {
-  writeCString,
-  readCString,
-} from './pgwire-buffer-codec.js';
+import {writeCString, readCString} from './pgwire-buffer-codec.js';
 import {PGWIRE_AUTH_MODE, PGWIRE_TLS_MODE} from './pgwire-descriptor.js';
-import {
-  PGWIRE_ANONYMOUS_PRINCIPAL, PGWIRE_DEFAULT_TENANT_ID,
-} from './pgwire-auth-constants.js';
+import {PGWIRE_ANONYMOUS_PRINCIPAL, PGWIRE_DEFAULT_TENANT_ID} from './pgwire-auth-constants.js';
 import {upgradePgwireSocketToTls} from './pgwire-tls-context.js';
-import {PgWireExtendedQueryHandler} from
-  './pgwire-extended-query-handler.js';
+import {PgWireExtendedQueryHandler} from './pgwire-extended-query-handler.js';
 
 // Executed transaction-end kinds: a successful one leaves the session idle.
 const TRANSACTION_END_STATEMENTS = new Set([AST_TYPE.COMMIT, AST_TYPE.ROLLBACK]);
@@ -150,7 +144,8 @@ class PgWireProtocolHandler {
     this._extendedQueryHandler = new PgWireExtendedQueryHandler({
       getSession: () => this._session,
       getSocket: () => this._socket,
-      executeAndSend: (query, params) => this._executeAndSend(query, params),
+      describeStatement: (q, pt) => this._adapter.describe(this._session.sessionId, q, pt),
+      executeAndSend: (q, p, meta) => this._executeAndSend(q, p, meta),
       destroyConnection: () => this.destroy(),
       logger: this._logger,
     });
@@ -626,8 +621,49 @@ class PgWireProtocolHandler {
    * @param {unknown[]} params - Bind parameters.
    * @private
    */
-  async _executeAndSend(query, params) {
+  _throwIfResultFailed(result) {
+    if (result?.success !== false) return;
+    const message = result.error ? result.error : PG_HANDLER_ERROR.QUERY_EXECUTION_FAILED;
+    const error = new Error(message);
+    Object.assign(error, result);
+    throw error;
+  }
+
+  _writeExecutionRows(result, executionMeta) {
+    const isExtended = executionMeta.extended === true;
+    const columns = isExtended ?
+      executionMeta.portalDescription.columns : extractColumns(result);
+    if (columns.length === 0 || !Array.isArray(result?.rows)) return;
+    if (!isExtended) this._socket.write(buildRowDescription(columns));
+    for (const row of result.rows) {
+      this._socket.write(buildDataRow(extractRowValues(row, columns), columns));
+    }
+  }
+
+  _sendExecutionSuccess(result, executionMeta) {
+    // The tag is derived before any row frame is written: a result the
+    // wire cannot tag is refused whole (XX000), never rows then an error.
+    const tag = deriveCommandTag(result);
+    this._writeExecutionRows(result, executionMeta);
+    const statementType = readExecutedStatementType(result);
+    if (result?.contractState === OWNER_CONTRACT_STATE.UNDER_REPLICATED) {
+      const ep = result.epoch?.publicationEpoch != null ?
+        ` at epoch ${result.epoch.publicationEpoch}` : '';
+      const msg =
+        `Table created under_replicated: ${result.missingReplicaCount ?? 1} replica(s) missing${ep}`;
+      this._socket.write(
+        buildNoticeResponse(PG_SEVERITY.NOTICE, PG_ERROR_CODE.SUCCESSFUL_COMPLETION, msg),
+      );
+    }
+    const notice = takeTransactionEndNotice(this._session, statementType);
+    if (notice) this._socket.write(notice);
+    this._socket.write(buildCommandComplete(tag));
+    this._applyTransactionOutcome(statementType, result);
+  }
+
+  async _executeAndSend(query, params, executionMeta = {}) {
     const stateBefore = this._session.getTransactionState();
+    let succeeded = false;
     try {
       const result = await this._adapter.execute(
         this._session.sessionId, query, params, this._executionOptions(),
@@ -635,49 +671,15 @@ class PgWireProtocolHandler {
       throwIfProvisioningDeadlineExpired(result);
       if (isEmptyStatementResult(result)) {
         this._socket.write(buildEmptyQueryResponse());
-        return;
+        return true;
       }
-      if (result?.success === false) {
-        const error = new Error(
-          result.error || result.message ||
-          PG_HANDLER_ERROR.QUERY_EXECUTION_FAILED,
-        );
-        Object.assign(error, result);
-        throw error;
-      }
-
-      // The tag is derived before any row frame is written: a result the
-      // wire cannot tag is refused whole (XX000), never rows then an error.
-      const tag = deriveCommandTag(result);
-
-      // Send result set for SELECT-like queries
-      const columns = extractColumns(result);
-      if (columns.length > 0 && Array.isArray(result?.rows)) {
-        this._socket.write(buildRowDescription(columns));
-        for (const row of result.rows) {
-          const values = extractRowValues(row, columns);
-          this._socket.write(buildDataRow(values));
-        }
-      }
-
-      const statementType = readExecutedStatementType(result);
-      if (result?.contractState === OWNER_CONTRACT_STATE.UNDER_REPLICATED) {
-        const ep = result.epoch?.publicationEpoch != null ?
-          ` at epoch ${result.epoch.publicationEpoch}` : '';
-        const msg =
-          `Table created under_replicated: ${result.missingReplicaCount ?? 1} replica(s) missing${ep}`;
-        this._socket.write(buildNoticeResponse(
-          PG_SEVERITY.NOTICE, PG_ERROR_CODE.SUCCESSFUL_COMPLETION, msg,
-        ));
-      }
-      const notice = takeTransactionEndNotice(this._session, statementType);
-      if (notice) this._socket.write(notice);
-      this._socket.write(buildCommandComplete(tag));
-
-      this._applyTransactionOutcome(statementType, result);
+      this._throwIfResultFailed(result);
+      this._sendExecutionSuccess(result, executionMeta);
+      succeeded = true;
     } catch (err) {
       this._answerFailure(err, stateBefore);
     }
+    return succeeded;
   }
 
   /**
