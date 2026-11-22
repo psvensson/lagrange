@@ -108,6 +108,26 @@ function currentTermApplied(status, appliedTerm) {
     BigInt(appliedTerm) === BigInt(status.term);
 }
 
+function validateObservationIdentities(group, status, confState, onError) {
+  try {
+    if (status.lead !== NO_LEADER) group.resolvePeerIdentity(status.lead);
+    for (const id of confState.voters) {
+      if (id !== group.peerId) group.resolvePeerIdentity(id);
+    }
+    for (const id of confState.learners) {
+      if (id !== group.peerId) group.resolvePeerIdentity(id);
+    }
+    if (Array.isArray(status?.progress)) {
+      for (const item of status.progress) {
+        if (String(item?.id) !== String(group.peerId)) group.resolvePeerIdentity(item?.id);
+      }
+    }
+    return null;
+  } catch (error) {
+    return onError(error);
+  }
+}
+
 /**
  * The status one observation of the core describes.
  * @param {Object} group - The runtime group.
@@ -121,9 +141,11 @@ function shapeGroupObservation(group, observation, leaderIdentityUnresolved) {
   const {status, confState} = observation;
   let leader;
   let peers;
+  let followerProgress;
   try {
     leader = leaderObservation(group, status.lead);
     peers = peerSnapshot(group, confState);
+    followerProgress = followerProgressSnapshot(group, status);
   } catch (error) {
     // The registry itself could not be read: a host failure, not a peer's
     // reservation state.
@@ -157,7 +179,7 @@ function shapeGroupObservation(group, observation, leaderIdentityUnresolved) {
     peerCount: Math.max(0,
       confState.voters.length + confState.learners.length - 1),
     peers,
-    followerProgress: followerProgressSnapshot(group, status),
+    followerProgress,
     // Delivered envelopes the core refused to step, per sender (the runtime
     // owner's observation; each was dropped and answered nothing).
     inboundStepRefusals: [...group.inboundStepRefusals.values()],
@@ -211,4 +233,5 @@ export {
   reseedHoldStatus,
   setNativeStatusObserver,
   shapeGroupObservation,
+  validateObservationIdentities,
 };
