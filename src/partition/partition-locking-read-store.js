@@ -12,6 +12,12 @@ import {sqliteConnectionState} from '../storage/sqlite-connection-state.js';
 
 const RESERVATION_TABLE_NAME = '_lagrange_locking_read_reservations';
 const STORE_UNAVAILABLE_MSG = 'Partition database is closed or unavailable';
+const RELEASE_ERROR_MSG = Object.freeze({
+  TX: 'Failed to release transaction reservations',
+  PARTITION_TX: 'Failed to release partition transaction reservations',
+  SESSION: 'Failed to release session reservations',
+  PARTITION_SESSION: 'Failed to release partition session reservations',
+});
 
 const RESERVATION_SQL = Object.freeze({
   DDL: `
@@ -44,8 +50,14 @@ const RESERVATION_SQL = Object.freeze({
     'WHERE partition_id = ? AND table_name = ?',
   SELECT_TX_EXISTS:
     'SELECT 1 AS held FROM _lagrange_locking_read_reservations WHERE transaction_id = ? LIMIT 1',
+  SELECT_PARTITION_TX_EXISTS:
+    'SELECT 1 AS held FROM _lagrange_locking_read_reservations ' +
+    'WHERE partition_id = ? AND transaction_id = ? LIMIT 1',
   SELECT_SESSION_EXISTS:
     'SELECT 1 AS held FROM _lagrange_locking_read_reservations WHERE session_id = ? LIMIT 1',
+  SELECT_PARTITION_SESSION_EXISTS:
+    'SELECT 1 AS held FROM _lagrange_locking_read_reservations ' +
+    'WHERE partition_id = ? AND session_id = ? LIMIT 1',
   DELETE_ROW:
     'DELETE FROM _lagrange_locking_read_reservations ' +
     'WHERE partition_id = ? AND table_name = ? AND row_key = ?',
@@ -56,8 +68,12 @@ const RESERVATION_SQL = Object.freeze({
     'DELETE FROM _lagrange_locking_read_reservations WHERE expires_at IS NOT NULL AND expires_at <= ?',
   DELETE_BY_TRANSACTION:
     'DELETE FROM _lagrange_locking_read_reservations WHERE transaction_id = ?',
+  DELETE_BY_PARTITION_TRANSACTION:
+    'DELETE FROM _lagrange_locking_read_reservations WHERE partition_id = ? AND transaction_id = ?',
   DELETE_BY_SESSION:
     'DELETE FROM _lagrange_locking_read_reservations WHERE session_id = ?',
+  DELETE_BY_PARTITION_SESSION:
+    'DELETE FROM _lagrange_locking_read_reservations WHERE partition_id = ? AND session_id = ?',
   DELETE_ALL:
     'DELETE FROM _lagrange_locking_read_reservations',
   UPSERT_ROW: `
@@ -294,48 +310,124 @@ export function deleteOwnedDbRowReservation(db, {partitionId, tableName, rowKey,
   }
 }
 
-/**
- * Release all reservations on a SQLite database for a transaction.
- *
- * @param {Object} db - SQLite database instance.
- * @param {string} transactionId - Transaction identifier.
- * @return {number} Count of deleted rows.
- */
-export function releaseDbTransactionReservations(db, transactionId) {
+function isNonEmptyId(value) {
+  return typeof value === 'string' && value.length > 0;
+}
+
+function runScopedDelete(db, sql, params, errorContext) {
   const init = ensureLockingReadTableInitialized(db, {readOnly: true});
-  if (!init.ok || !init.exists || !transactionId) {
+  if (!init.ok || !init.exists) {
     return 0;
   }
   try {
-    const info = sqliteConnectionState(db)
-      .statement(RESERVATION_SQL.DELETE_BY_TRANSACTION)
-      .run(transactionId);
-    return info.changes;
+    return sqliteConnectionState(db).statement(sql).run(...params).changes;
   } catch (error) {
-    throw new Error(`Failed to release transaction reservations: ${dbErrorMessage(error)}`);
+    throw new Error(`${errorContext}: ${dbErrorMessage(error)}`);
   }
 }
 
+function hasScopedReservationRow(db, sql, params) {
+  const init = ensureLockingReadTableInitialized(db, {readOnly: true});
+  if (!init.ok || !init.exists) {
+    return false;
+  }
+  return sqliteConnectionState(db).statement(sql).get(...params) !== undefined;
+}
+
 /**
- * Release all reservations on a SQLite database for a session.
+ * Release all reservations on a SQLite database for a transaction (optionally partition-scoped).
+ *
+ * @param {Object} db - SQLite database instance.
+ * @param {string} transactionId - Transaction identifier.
+ * @param {string|null} [partitionId=null] - Optional partition scope filter.
+ * @return {number} Count of deleted rows.
+ */
+export function releaseDbTransactionReservations(db, transactionId, partitionId = null) {
+  if (!transactionId) {
+    return 0;
+  }
+  if (isNonEmptyId(partitionId)) {
+    return runScopedDelete(
+      db,
+      RESERVATION_SQL.DELETE_BY_PARTITION_TRANSACTION,
+      [partitionId, transactionId],
+      RELEASE_ERROR_MSG.PARTITION_TX,
+    );
+  }
+  return runScopedDelete(
+    db,
+    RESERVATION_SQL.DELETE_BY_TRANSACTION,
+    [transactionId],
+    RELEASE_ERROR_MSG.TX,
+  );
+}
+
+/**
+ * Release durable SQLite reservations strictly scoped to one partition and transaction.
+ *
+ * @param {Object} db - SQLite database instance.
+ * @param {string} partitionId - Partition identifier.
+ * @param {string} transactionId - Transaction identifier.
+ * @return {number} Count of deleted rows.
+ */
+export function releaseDbPartitionTransactionReservations(db, partitionId, transactionId) {
+  if (!isNonEmptyId(partitionId) || !isNonEmptyId(transactionId)) {
+    return 0;
+  }
+  return runScopedDelete(
+    db,
+    RESERVATION_SQL.DELETE_BY_PARTITION_TRANSACTION,
+    [partitionId, transactionId],
+    RELEASE_ERROR_MSG.PARTITION_TX,
+  );
+}
+
+/**
+ * Release all reservations on a SQLite database for a session (optionally partition-scoped).
  *
  * @param {Object} db - SQLite database instance.
  * @param {string} sessionId - Session identifier.
+ * @param {string|null} [partitionId=null] - Optional partition scope filter.
  * @return {number} Count of deleted rows.
  */
-export function releaseDbSessionReservations(db, sessionId) {
-  const init = ensureLockingReadTableInitialized(db, {readOnly: true});
-  if (!init.ok || !init.exists || !sessionId) {
+export function releaseDbSessionReservations(db, sessionId, partitionId = null) {
+  if (!sessionId) {
     return 0;
   }
-  try {
-    const info = sqliteConnectionState(db)
-      .statement(RESERVATION_SQL.DELETE_BY_SESSION)
-      .run(sessionId);
-    return info.changes;
-  } catch (error) {
-    throw new Error(`Failed to release session reservations: ${dbErrorMessage(error)}`);
+  if (isNonEmptyId(partitionId)) {
+    return runScopedDelete(
+      db,
+      RESERVATION_SQL.DELETE_BY_PARTITION_SESSION,
+      [partitionId, sessionId],
+      RELEASE_ERROR_MSG.PARTITION_SESSION,
+    );
   }
+  return runScopedDelete(
+    db,
+    RESERVATION_SQL.DELETE_BY_SESSION,
+    [sessionId],
+    RELEASE_ERROR_MSG.SESSION,
+  );
+}
+
+/**
+ * Release durable SQLite reservations strictly scoped to one partition and session.
+ *
+ * @param {Object} db - SQLite database instance.
+ * @param {string} partitionId - Partition identifier.
+ * @param {string} sessionId - Session identifier.
+ * @return {number} Count of deleted rows.
+ */
+export function releaseDbPartitionSessionReservations(db, partitionId, sessionId) {
+  if (!isNonEmptyId(partitionId) || !isNonEmptyId(sessionId)) {
+    return 0;
+  }
+  return runScopedDelete(
+    db,
+    RESERVATION_SQL.DELETE_BY_PARTITION_SESSION,
+    [partitionId, sessionId],
+    RELEASE_ERROR_MSG.PARTITION_SESSION,
+  );
 }
 
 /**
@@ -343,20 +435,19 @@ export function releaseDbSessionReservations(db, sessionId) {
  *
  * @param {Object|null} db - SQLite database instance.
  * @param {string|null} transactionId - Transaction identifier.
+ * @param {string|null} [partitionId=null] - Optional partition scope filter.
  * @return {boolean}
  */
-export function hasDbTransactionReservations(db, transactionId) {
+export function hasDbTransactionReservations(db, transactionId, partitionId = null) {
   if (!transactionId) {
     return false;
   }
-  const init = ensureLockingReadTableInitialized(db, {readOnly: true});
-  if (!init.ok || !init.exists) {
-    return false;
-  }
-  const row = sqliteConnectionState(db)
-    .statement(RESERVATION_SQL.SELECT_TX_EXISTS)
-    .get(transactionId);
-  return row !== undefined;
+  return isNonEmptyId(partitionId) ?
+    hasScopedReservationRow(db, RESERVATION_SQL.SELECT_PARTITION_TX_EXISTS, [
+      partitionId,
+      transactionId,
+    ]) :
+    hasScopedReservationRow(db, RESERVATION_SQL.SELECT_TX_EXISTS, [transactionId]);
 }
 
 /**
@@ -364,20 +455,19 @@ export function hasDbTransactionReservations(db, transactionId) {
  *
  * @param {Object|null} db - SQLite database instance.
  * @param {string|null} sessionId - Session identifier.
+ * @param {string|null} [partitionId=null] - Optional partition scope filter.
  * @return {boolean}
  */
-export function hasDbSessionReservations(db, sessionId) {
+export function hasDbSessionReservations(db, sessionId, partitionId = null) {
   if (!sessionId) {
     return false;
   }
-  const init = ensureLockingReadTableInitialized(db, {readOnly: true});
-  if (!init.ok || !init.exists) {
-    return false;
-  }
-  const row = sqliteConnectionState(db)
-    .statement(RESERVATION_SQL.SELECT_SESSION_EXISTS)
-    .get(sessionId);
-  return row !== undefined;
+  return isNonEmptyId(partitionId) ?
+    hasScopedReservationRow(db, RESERVATION_SQL.SELECT_PARTITION_SESSION_EXISTS, [
+      partitionId,
+      sessionId,
+    ]) :
+    hasScopedReservationRow(db, RESERVATION_SQL.SELECT_SESSION_EXISTS, [sessionId]);
 }
 
 /**

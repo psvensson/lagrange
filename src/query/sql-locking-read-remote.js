@@ -308,7 +308,7 @@ export async function acquireAuthoritativePartitionReservation(engine, params) {
 async function releaseTransactionOnPartition(engine, partitionId, transactionId, sessionId) {
   const {service} = resolvePartitionServiceEntry(engine, partitionId);
   if (service && !service.raft) {
-    releaseTransactionReservations(transactionId, {db: service.db || null});
+    releaseTransactionReservations(transactionId, {db: service.db || null, partitionId});
     return;
   }
   if (service && service.raft) {

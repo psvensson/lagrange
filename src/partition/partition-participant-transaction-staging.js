@@ -53,6 +53,7 @@ import {
   checkAndRecordSessionRowKey,
   revertSessionRowKeyCheck,
 } from './partition-participant-transaction-session.js';
+import {recordSessionStagedWriteClaims} from './partition-locking-read-write-check.js';
 import {
   readOptionalPartitionWriteGeneration,
   readPartitionWriteGeneration,
@@ -302,6 +303,7 @@ function stageWrite(service, session, request, params) {
     return failedValidation(service, session, outcome.failure);
   }
   session.operations = operations;
+  recordSessionStagedWriteClaims(service, session, request.sql, params);
   if (Array.isArray(session.compiledOperations)) {
     session.compiledOperations.push(classified.statement);
   }

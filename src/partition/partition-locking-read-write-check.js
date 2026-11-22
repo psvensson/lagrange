@@ -28,14 +28,24 @@ import {
 import {
   readPartitionWriteGeneration,
   readPartitionWriteGenerationHistoryRange,
+  readPreparedParticipantRows,
   readTableFootprintMetadata,
 } from './partition-participant-transaction-store.js';
+import {operationsOf} from './partition-participant-transaction-bytes.js';
+import {
+  PARTICIPANT_TRANSACTION_SESSION_PHASE as PHASE,
+} from './partition-participant-transaction-constants.js';
+import {listActiveParticipantSessions} from './partition-participant-transaction-session.js';
+import {sqliteConnectionState} from '../storage/sqlite-connection-state.js';
 import {
   encodeCanonicalPkTupleKey,
   extractStatementWriteFootprint,
 } from './partition-write-footprint-contract.js';
 
 const PG_PARAM_RE = /\$[1-9]\d*/u;
+const PARTICIPANT_TRANSACTIONS_TABLE = '_participant_transactions';
+const CHECK_PARTICIPANT_TABLE_SQL =
+  'SELECT 1 AS present FROM sqlite_master WHERE type = \'table\' AND name = ?';
 const SQL_DIALECT = Object.freeze({
   POSTGRESQL: 'postgresql',
   SQLITE: 'sqlite',
@@ -273,6 +283,142 @@ export function hasRowModificationSinceGeneration(db, readGeneration, pkValues) 
     }
   }
   return false;
+}
+
+/**
+ * Record staged write row claims directly on a PartitionService staging session
+ * after provisional validation succeeds, so leader ACQUIRE precheck enforces mutual
+ * exclusion across processes independently of any client coordinator memory.
+ *
+ * @param {Object} service - PartitionService instance.
+ * @param {Object} session - Participant staging session.
+ * @param {string} sql - Staged write SQL.
+ * @param {Array} params - Normalized statement parameters.
+ */
+export function recordSessionStagedWriteClaims(service, session, sql, params) {
+  if (!session?.stagedLockClaims || !isWritablePartitionDb(service)) {
+    return;
+  }
+  const {pkCols, allCols, uniqueConstraintCols, hasUnscopedSchemaConstraints} =
+    readTableFootprintMetadata(service.db, service.tableName);
+  const footprint = extractStatementWriteFootprint({
+    sql,
+    params: Array.isArray(params) ? params : [],
+    pkCols,
+    allCols,
+    uniqueConstraintCols,
+    hasUnscopedSchemaConstraints,
+  });
+  if (!footprint.scoped || footprint.rowKeys.length === 0) {
+    session.stagedLockClaims.hasUnscopedWrite = true;
+    return;
+  }
+  for (let i = 0; i < footprint.rowKeys.length; i += 1) {
+    session.stagedLockClaims.rowKeys.add(footprint.rowKeys[i]);
+  }
+}
+
+function hasParticipantTransactionsTable(db) {
+  if (!db || db.open === false) {
+    return false;
+  }
+  return sqliteConnectionState(db)
+    .statement(CHECK_PARTICIPANT_TABLE_SQL)
+    .get(PARTICIPANT_TRANSACTIONS_TABLE) !== undefined;
+}
+
+function operationsConflictWithPkKey(db, tableName, operations, canonicalPkKey) {
+  if (!Array.isArray(operations) || operations.length === 0) {
+    return false;
+  }
+  const {pkCols, allCols, uniqueConstraintCols, hasUnscopedSchemaConstraints} =
+    readTableFootprintMetadata(db, tableName);
+  for (let i = 0; i < operations.length; i += 1) {
+    const op = operations[i];
+    const fp = extractStatementWriteFootprint({
+      sql: op?.sql,
+      params: Array.isArray(op?.params) ? op.params : [],
+      pkCols,
+      allCols,
+      uniqueConstraintCols,
+      hasUnscopedSchemaConstraints,
+    });
+    if (!fp.scoped || fp.rowKeys.length === 0 || fp.rowKeys.includes(canonicalPkKey)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Find any conflicting durable PREPARED participant transaction in service.db.
+ * Reads solely from replicated SQLite state so Raft apply stays deterministic.
+ *
+ * @param {Object} db - Partition SQLite database instance.
+ * @param {string|null} tableName - Partition table name.
+ * @param {Array<*>|*} pkValues - Row primary key tuple.
+ * @param {string|null} transactionId - Requesting transaction identifier.
+ * @return {string|null} Conflicting transactionId or null.
+ */
+export function findConflictingPreparedWrite(db, tableName, pkValues, transactionId) {
+  if (!hasParticipantTransactionsTable(db)) {
+    return null;
+  }
+  const canonicalPkKey = encodeCanonicalPkTupleKey(pkValues);
+  const preparedRows = readPreparedParticipantRows(db);
+  for (let i = 0; i < preparedRows.length; i += 1) {
+    const row = preparedRows[i];
+    if (row.transactionId === transactionId) {
+      continue;
+    }
+    const ops = operationsOf(row.operationsText);
+    if (operationsConflictWithPkKey(db, tableName, ops, canonicalPkKey)) {
+      return row.transactionId;
+    }
+  }
+  return null;
+}
+
+function sessionConflictsWithPkKey(session, transactionId, canonicalPkKey) {
+  const otherTxId = session.identity?.transactionId;
+  if (!otherTxId || otherTxId === transactionId || session.phase === PHASE.DOOMED) {
+    return null;
+  }
+  const claims = session.stagedLockClaims;
+  if (claims?.hasUnscopedWrite === true || claims?.rowKeys?.has(canonicalPkKey)) {
+    return otherTxId;
+  }
+  return null;
+}
+
+/**
+ * Find any conflicting provisionally staged write on the leader's active sessions
+ * or durable PREPARED participant rows.
+ *
+ * @param {Object} service - PartitionService instance.
+ * @param {Object} query - {tableName, pkValues, transactionId}.
+ * @return {string|null} Conflicting transactionId or null.
+ */
+export function findConflictingStagedOrPreparedWrite(
+  service,
+  {tableName, pkValues, transactionId},
+) {
+  const canonicalPkKey = encodeCanonicalPkTupleKey(pkValues);
+  for (const session of listActiveParticipantSessions(service)) {
+    const conflictTxId = sessionConflictsWithPkKey(session, transactionId, canonicalPkKey);
+    if (conflictTxId !== null) {
+      return conflictTxId;
+    }
+  }
+  const resolvedTable = typeof service?.tableName === 'string' && service.tableName.length > 0 ?
+    service.tableName :
+    tableName;
+  return findConflictingPreparedWrite(
+    service?.db,
+    resolvedTable,
+    pkValues,
+    transactionId,
+  );
 }
 
 /**

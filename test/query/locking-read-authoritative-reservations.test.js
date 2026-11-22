@@ -31,6 +31,9 @@ import {
 import {META_SERVICE_ID} from '../../src/constants/wasm-meta.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
+  readSettledOwnerCommandIn,
+} from '../../src/partition/partition-committed-statement-outcome.js';
+import {
   acquireRowReservation,
   clearAllReservations,
   clearMemoryReservations,
@@ -39,6 +42,9 @@ import {
   registerPartitionDatabase,
   releaseTransactionReservations,
 } from '../../src/partition/partition-locking-read-reservation.js';
+import {
+  requestLockingReadReservation,
+} from '../../src/partition/partition-locking-read-service.js';
 import {
   PARTICIPANT_CONCURRENCY_GRANULARITY,
 } from '../../src/partition/partition-participant-transaction-constants.js';
@@ -973,5 +979,272 @@ test('Receipt 5: all write consumers enforce durable SQLite reservations even wh
     await clientA.end().catch(() => {});
     await clientB.end().catch(() => {});
     await cluster.cleanup();
+  }
+});
+
+test('Witness 1a: staged write W on leader blocks competing FOR UPDATE across processes (zero shared RESERVATIONS memory)', async () => {
+  const cluster = await setupTwoNodeCluster({
+    tempPrefix: 'lock-w1a-',
+    concurrencyGranularity: PARTICIPANT_CONCURRENCY_GRANULARITY.ROW_KEY,
+  });
+  const clientA = await cluster.pg1.connectClient();
+  const clientB = await cluster.pg2.connectClient();
+  try {
+    const [r1, r2, r3] = cluster.group.services;
+
+    // Schedule 1a (scoped): Gateway B stages write W on id = 1, then local RESERVATIONS memory is cleared.
+    await clientB.query('BEGIN');
+    await clientB.query('UPDATE accounts SET balance = 777 WHERE id = 1');
+    clearMemoryReservations();
+
+    // Gateway A attempts SELECT ... FOR UPDATE on id = 1 without shared memory; leader r1 must refuse 55P03.
+    await clientA.query('BEGIN');
+    await expectSqlState(
+      clientA,
+      'SELECT id, balance FROM accounts WHERE id = 1 FOR UPDATE',
+      [],
+      LOCK_NOT_AVAILABLE_SQLSTATE,
+    );
+    assert.equal(countDbReservations(r1.db), 0);
+    assert.equal(countDbReservations(r2.db), 0);
+    assert.equal(countDbReservations(r3.db), 0);
+    await clientA.query('ROLLBACK');
+
+    // Disjoint row id = 2 CAN still be locked by Gateway A while W holds staged write on id = 1!
+    await clientA.query('BEGIN');
+    const disjointLock = await clientA.query(
+      'SELECT id, balance FROM accounts WHERE id = 2 FOR UPDATE',
+    );
+    assertNumericRowValues(disjointLock.rows, [{id: 2, balance: 200}]);
+    await clientA.query('COMMIT');
+
+    // Once W commits, Gateway A can acquire FOR UPDATE on id = 1 and sees balance = 777.
+    await clientB.query('COMMIT');
+    await clientA.query('BEGIN');
+    const afterCommitLock = await clientA.query(
+      'SELECT id, balance FROM accounts WHERE id = 1 FOR UPDATE',
+    );
+    assertNumericRowValues(afterCommitLock.rows, [{id: 1, balance: 777}]);
+    await clientA.query('COMMIT');
+
+    // Schedule 1a (unscoped): Gateway B stages non-PK scan write, memory cleared, Gateway A FOR UPDATE refuses 55P03.
+    await clientB.query('BEGIN');
+    await clientB.query('UPDATE accounts SET balance = 888 WHERE tier = \'gold\'');
+    clearMemoryReservations();
+
+    await clientA.query('BEGIN');
+    await expectSqlState(
+      clientA,
+      'SELECT id, balance FROM accounts WHERE id = 1 FOR UPDATE',
+      [],
+      LOCK_NOT_AVAILABLE_SQLSTATE,
+    );
+    await clientA.query('ROLLBACK');
+    await clientB.query('ROLLBACK');
+  } finally {
+    await clientA.end().catch(() => {});
+    await clientB.end().catch(() => {});
+    await cluster.cleanup();
+  }
+});
+
+test('Witness 1b: committed Raft apply of ACQUIRE is 100% deterministic across replicas despite divergent process-local RESERVATIONS', async () => {
+  const cluster = await setupTwoNodeCluster({
+    tempPrefix: 'lock-w1b-',
+    concurrencyGranularity: PARTICIPANT_CONCURRENCY_GRANULARITY.ROW_KEY,
+  });
+  const clientA = await cluster.pg1.connectClient();
+  const clientB = await cluster.pg2.connectClient();
+  try {
+    const [r1, r2, r3] = cluster.group.services;
+    let capturedAcquireCommand = null;
+
+    // Simulate separate process on r2 holding a divergent process-local WRITE_STAGED entry
+    // in RESERVATIONS right before r2 applies the committed ACQUIRE command.
+    const origR2Apply = r2.applyCommittedEntry.bind(r2);
+    r2.applyCommittedEntry = (committedArg) => {
+      if (committedArg?.command?.type === 'LOCKING_READ_RESERVATION' &&
+          committedArg?.command?.reservation?.op === 'ACQUIRE') {
+        capturedAcquireCommand = committedArg.command;
+        clearMemoryReservations();
+        acquireRowReservation({
+          tableName: ACCOUNTS_TABLE,
+          partitionId: ACCOUNTS_PARTITION_ID,
+          pkValues: [1],
+          transactionId: 'tx-divergent-gateway-b',
+          sessionId: 's-divergent-gateway-b',
+          kind: 'WRITE_STAGED',
+          db: null,
+        });
+      }
+      return origR2Apply(committedArg);
+    };
+
+    await clientA.query('BEGIN');
+    const sel = await clientA.query('SELECT id, balance FROM accounts WHERE id = 1 FOR UPDATE');
+    assertNumericRowValues(sel.rows, [{id: 1, balance: 100}]);
+
+    // Transfer Raft leadership r1 -> r2 so all replicas have applied through the ACQUIRE entry.
+    const transfer = await turnChainValue(
+      r1.raft.transferLeadership({
+        successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
+        replicaIdentity: r2.replicaId,
+      }),
+    );
+    assert.equal(transfer.outcome, RAFT_OPERATION_OUTCOME.CORE_OK, JSON.stringify(transfer));
+    const elected = await cluster.group.waitFor(
+      () => r2.raft?.readStatus?.().role === RAFT_ROLE.LEADER,
+    );
+    assert.equal(elected, true, 'r2 must become leader');
+    await cluster.releaseOwners.release(ACCOUNTS_PARTITION_ID);
+    cluster.updateLeaderRouting(cluster.members[1]);
+
+    const r3Applied = await cluster.group.waitFor(() => countDbReservations(r3.db) === 1);
+    assert.equal(r3Applied, true, 'r3 must have persisted the replicated reservation');
+    assert.equal(countDbReservations(r1.db), 1, 'r1 must hold 1 durable reservation');
+    assert.equal(countDbReservations(r2.db), 1, 'r2 must hold 1 durable reservation (no divergence)');
+
+    assert.ok(capturedAcquireCommand, 'r2 must have applied the ACQUIRE command');
+    for (const svc of [r1, r2, r3]) {
+      const settled = readSettledOwnerCommandIn(svc.db, {
+        entryId: capturedAcquireCommand.entryId,
+        commandDigest: capturedAcquireCommand.commandDigest,
+      });
+      const parsed = JSON.parse(settled.recorded.ownerResultText);
+      assert.equal(parsed.success, true, `replica ${svc.replicaId} settled outcome diverged`);
+    }
+
+    // Clear process memory and verify new leader r2 refuses competing write from its durable state.
+    clearMemoryReservations();
+    await clientB.query('BEGIN');
+    await expectSqlState(
+      clientB,
+      'UPDATE accounts SET balance = 600 WHERE id = 1',
+      [],
+      LOCK_NOT_AVAILABLE_SQLSTATE,
+    );
+    await clientB.query('ROLLBACK');
+    await clientA.query('ROLLBACK');
+    assert.equal(countDbReservations(r2.db), 0);
+  } finally {
+    await clientA.end().catch(() => {});
+    await clientB.end().catch(() => {});
+    await cluster.cleanup();
+  }
+});
+
+test('Witness 2: per-participant release clears ONLY target partition reservations without wiping other partitions', async () => {
+  clearAllReservations();
+  initEnvironment('release-scope-node');
+  const transport = createLoopbackTransport();
+  const groupP1 = await formAdmittedGroup({
+    partitionId: 'accounts-p1',
+    members: [['accounts-p1-r1', 'node-1']],
+    tempPrefix: 'lock-w2-p1-',
+    budgetMs: GROUP_BUDGET_MS,
+    transport,
+    serviceOptions: {
+      tableId: ACCOUNTS_TABLE,
+      tableName: ACCOUNTS_TABLE,
+      schema: ACCOUNTS_SCHEMA,
+      concurrencyGranularity: PARTICIPANT_CONCURRENCY_GRANULARITY.ROW_KEY,
+    },
+  });
+  const groupP2 = await formAdmittedGroup({
+    partitionId: 'accounts-p2',
+    members: [['accounts-p2-r1', 'node-1']],
+    tempPrefix: 'lock-w2-p2-',
+    budgetMs: GROUP_BUDGET_MS,
+    transport,
+    serviceOptions: {
+      tableId: ACCOUNTS_TABLE,
+      tableName: ACCOUNTS_TABLE,
+      schema: ACCOUNTS_SCHEMA,
+      concurrencyGranularity: PARTICIPANT_CONCURRENCY_GRANULARITY.ROW_KEY,
+    },
+  });
+  const p1 = groupP1.services[0];
+  const p2 = groupP2.services[0];
+  const txId = 'tx-two-part-scope';
+  const sessionId = 's-two-part-scope';
+  try {
+    const acq1 = await requestLockingReadReservation(p1, {
+      op: 'ACQUIRE',
+      tableName: ACCOUNTS_TABLE,
+      pkValues: [1],
+      transactionId: txId,
+      sessionId,
+      participantId: `${txId}:accounts-p1`,
+    });
+    const acq2 = await requestLockingReadReservation(p2, {
+      op: 'ACQUIRE',
+      tableName: ACCOUNTS_TABLE,
+      pkValues: [150],
+      transactionId: txId,
+      sessionId,
+      participantId: `${txId}:accounts-p2`,
+    });
+    assert.equal(acq1.success, true);
+    assert.equal(acq2.success, true);
+    assert.equal(countDbReservations(p1.db), 1);
+    assert.equal(countDbReservations(p2.db), 1);
+
+    // Releasing accounts-p1 MUST leave accounts-p2 untouched until accounts-p2 releases itself.
+    const rel1 = await requestLockingReadReservation(p1, {
+      op: 'RELEASE_TRANSACTION',
+      transactionId: txId,
+      sessionId,
+      participantId: `${txId}:accounts-p1`,
+    });
+    assert.equal(rel1.success, true);
+    assert.equal(countDbReservations(p1.db), 0, 'accounts-p1 durable reservation must be released');
+    assert.equal(
+      countDbReservations(p2.db),
+      1,
+      'accounts-p2 durable reservation must remain intact until accounts-p2 applies release',
+    );
+
+    const rel2 = await requestLockingReadReservation(p2, {
+      op: 'RELEASE_TRANSACTION',
+      transactionId: txId,
+      sessionId,
+      participantId: `${txId}:accounts-p2`,
+    });
+    assert.equal(rel2.success, true);
+    assert.equal(countDbReservations(p2.db), 0);
+
+    // Also verify partition-scoped release inside a shared SQLite DB only deletes the target partition.
+    const sharedDb = new Database(':memory:');
+    try {
+      acquireRowReservation({
+        tableName: ACCOUNTS_TABLE,
+        partitionId: 'accounts-p1',
+        pkValues: [1],
+        transactionId: txId,
+        sessionId,
+        kind: 'FOR_UPDATE',
+        db: sharedDb,
+      });
+      acquireRowReservation({
+        tableName: ACCOUNTS_TABLE,
+        partitionId: 'accounts-p2',
+        pkValues: [150],
+        transactionId: txId,
+        sessionId,
+        kind: 'FOR_UPDATE',
+        db: sharedDb,
+      });
+      assert.equal(countDbReservations(sharedDb), 2);
+      releaseTransactionReservations(txId, {db: sharedDb, partitionId: 'accounts-p1'});
+      assert.equal(countDbReservations(sharedDb), 1);
+      releaseTransactionReservations(txId, {db: sharedDb, partitionId: 'accounts-p2'});
+      assert.equal(countDbReservations(sharedDb), 0);
+    } finally {
+      sharedDb.close();
+    }
+  } finally {
+    await groupP1.dispose().catch(() => {});
+    await groupP2.dispose().catch(() => {});
+    clearAllReservations();
   }
 });
