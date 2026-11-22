@@ -189,7 +189,14 @@ Each decision is the core's state at that instant, not the status of its last
 completed turn. The node that hosts the replica reaches the same
 receiver in process; every other node reaches it over the query transport,
 redirect-first, inside the original request's deadline, under the routing
-class the caller states.
+class the caller states. Only the published leader's replicas are asked while
+a leader is published; one with no usable service ends the read typed
+(`owner_fact_published_leader_unusable`) and asks no other replica, because
+the PARTITIONS publication carries no term (`leader_node_id`, `updated_at`
+only) against which another replica's claim to lead could be ordered (at most
+one leader per term): an honest deposed leader would answer like the leader.
+Every routable replica is asked only while no leader is published, and there
+that exposure remains until the publication carries the leader's term.
 
 This is a leader-local read point, not a linearizable read: no quorum round
 confirms leadership when the rows are read, and the serving replica's role is

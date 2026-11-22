@@ -34,6 +34,10 @@ const OWNER_FACT_UNAVAILABLE_REASON = Object.freeze({
   UNEXPECTED_SERVING_REPLICA: 'owner_fact_unexpected_serving_replica',
   // The serving leader did not declare the statement's row set complete.
   INCOMPLETE_ROW_SET: 'owner_fact_incomplete_row_set',
+  // A leader is published but has no usable service. Only the published
+  // leader is asked: the publication carries no term, so no other replica's
+  // claim to lead can be ordered against it.
+  PUBLISHED_LEADER_UNUSABLE: 'owner_fact_published_leader_unusable',
   // The leader's connection is inside a transaction its receiver did not
   // open: a read through it would see that transaction's staged rows.
   FOREIGN_TRANSACTION: 'owner_fact_foreign_transaction',
@@ -185,6 +189,19 @@ function leaderReadWitnessRefusal(witness, {partitionId, read}) {
 }
 
 /**
+ * The typed end of a leader-REQUIRED read that found no candidate while a
+ * leader is published: the published leader has no usable service.
+ * @param {boolean} leaderRequired - Whether the read requires the leader.
+ * @param {Object} routingSnapshot - The routing snapshot it resolved.
+ * @return {Object} {failureCode} or nothing.
+ */
+function publishedLeaderGapOf(leaderRequired, routingSnapshot) {
+  const published = routingSnapshot?.canonicalLeaderNodeId;
+  return leaderRequired === true && typeof published === 'string' && published.length > 0 ?
+    {failureCode: OWNER_FACT_UNAVAILABLE_REASON.PUBLISHED_LEADER_UNUSABLE} : {};
+}
+
+/**
  * The reason a failed read answer names, when it is one of the owner-fact
  * reasons; READ_FAILED otherwise.
  * @param {*} answer - A failed read answer.
@@ -206,4 +223,5 @@ export {
   leaderReadWitnessRefusal,
   ownerFactFailureReasonOf,
   ownerFactReadOf,
+  publishedLeaderGapOf,
 };
