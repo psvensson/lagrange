@@ -53,8 +53,10 @@ import {
   checkAndRecordSessionRowKey,
   revertSessionRowKeyCheck,
 } from './partition-participant-transaction-session.js';
-import {readPartitionWriteGeneration} from
-  './partition-participant-transaction-store.js';
+import {
+  readOptionalPartitionWriteGeneration,
+  readPartitionWriteGeneration,
+} from './partition-participant-transaction-store.js';
 
 const {
   PARTITION_SERVICE_OPERATION,
@@ -311,12 +313,14 @@ function stageWrite(service, session, request, params) {
 }
 
 function buildSessionReadAnswer(service, collected) {
+  const readGeneration = readOptionalPartitionWriteGeneration(service.db);
   return {
     success: true,
     rowSet: collected.rowSet,
     rows: materializeAndPresentRowObjects(collected.columns, collected.rawRows),
     count: collected.rawRows.length,
     executionEnvelope: executionEnvelopeOf(service.db),
+    ...(readGeneration !== null ? {readGeneration} : {}),
   };
 }
 

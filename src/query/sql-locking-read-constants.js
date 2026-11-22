@@ -6,15 +6,26 @@
  */
 
 import {PG_ERROR_CODE} from '../runtime/pgwire-protocol-constants.js';
+import {
+  LOCKING_READ_PARTITION_OP,
+  LOCKING_READ_RESERVATION_TYPE,
+} from '../partition/partition-locking-read-command-constants.js';
+
+export {
+  LOCKING_READ_PARTITION_OP,
+  LOCKING_READ_RESERVATION_TYPE,
+};
 
 export const LOCKING_READ_ERROR_CODE = Object.freeze({
   LOCK_NOT_AVAILABLE: 'LOCK_NOT_AVAILABLE',
+  RESERVATION_UNAVAILABLE: 'RESERVATION_UNAVAILABLE',
 });
 
 export const LOCKING_READ_SQL_STATE = Object.freeze({
   LOCK_NOT_AVAILABLE: PG_ERROR_CODE.LOCK_NOT_AVAILABLE,
   FEATURE_NOT_SUPPORTED: PG_ERROR_CODE.FEATURE_NOT_SUPPORTED,
   NO_ACTIVE_TRANSACTION: PG_ERROR_CODE.NO_ACTIVE_SQL_TRANSACTION,
+  INTERNAL_ERROR: PG_ERROR_CODE.INTERNAL_ERROR,
 });
 
 export const LOCKING_READ_RESERVATION_KIND = Object.freeze({
@@ -30,6 +41,7 @@ export const LOCKING_READ_RESERVATION_OUTCOME = Object.freeze({
   ALREADY_OWNED: 'reservation_already_owned',
   CONFLICT: 'typed_locking_read_reservation_conflict',
   ACQUIRED: 'reservation_acquired',
+  UNAVAILABLE: 'reservation_unavailable',
 });
 
 export const LOCKING_READ_CLAUSE = Object.freeze({
@@ -74,6 +86,8 @@ export const LOCKING_READ_ERROR_MSG = Object.freeze({
     'FOR UPDATE requires a FROM table',
   REQUIRES_ACTIVE_EXPLICIT_TRANSACTION:
     'SELECT FOR UPDATE requires an active explicit transaction',
+  RESERVATION_STORE_UNAVAILABLE:
+    'Authoritative locking-read reservation store is unavailable',
 });
 
 export const LOCKING_READ_SET_OPERATION_KEYS = Object.freeze([

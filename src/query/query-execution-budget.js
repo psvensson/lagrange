@@ -86,6 +86,19 @@ export function pickRoutingDenialFields(source = {}) {
   return picked;
 }
 
+function pickLockingReadFailureFields(typed) {
+  const picked = {};
+  if (typed.sqlState) picked.sqlState = typed.sqlState;
+  if (typed.conflict === true) picked.conflict = true;
+  if (typeof typed.retryable === 'boolean') picked.retryable = typed.retryable;
+  if (typed.conflictingTransactionId) {
+    picked.conflictingTransactionId = typed.conflictingTransactionId;
+  }
+  if (typed.rowKey) picked.rowKey = typed.rowKey;
+  if (typed.code) picked.code = typed.code;
+  return picked;
+}
+
 /**
  * The one participant failure entry of a write or read fan-out, for every
  * statement kind: what the participant was answered (its code, entryId, log
@@ -110,6 +123,7 @@ export function buildParticipantFailureEntry(result) {
     entryId: normalizeParticipantFailureString(answer.entryId),
     ...(typed.consensus ? {consensus: typed.consensus} : {}),
     ...(typed.spentWait ? {spentWait: typed.spentWait} : {}),
+    ...pickLockingReadFailureFields(typed),
     ...pickRoutingDenialFields(answer),
     error: answer.error || ERRORS.QUERY_FAILED,
     durationMs:

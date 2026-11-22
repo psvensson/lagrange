@@ -33,6 +33,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   acquireRowReservation,
   clearAllReservations,
+  clearMemoryReservations,
   getTransactionReservations,
   hasLockingReadReservations,
   registerPartitionDatabase,
@@ -239,6 +240,11 @@ async function setupTwoNodeCluster(options = {}) {
   await releaseOwners.release(ACCOUNTS_PARTITION_ID);
 
   for (const svc of group.services) {
+    svc.systemTableCache.applySystemTableChange(
+      TABLES.TABLES,
+      CDC_OPERATION.INSERT,
+      createAccountsTableRow(members[0][1]),
+    );
     svc.db.exec('CREATE INDEX IF NOT EXISTS idx_accounts_tier ON accounts(tier)');
   }
 
@@ -715,7 +721,8 @@ test('Receipt 3: participant restart on disk and Raft leader change preserve and
     const r2 = cluster.group.services[1];
     const transfer = await turnChainValue(
       r1.raft.transferLeadership({
-        [RAFT_LEADERSHIP_TRANSFER_SUCCESSOR]: r2.replicaId,
+        successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
+        replicaIdentity: r2.replicaId,
       }),
     );
     assert.equal(transfer.outcome, 'core_ok', JSON.stringify(transfer));
@@ -726,7 +733,7 @@ test('Receipt 3: participant restart on disk and Raft leader change preserve and
     cluster.updateLeaderRouting(cluster.members[1]);
 
     // Clear in-memory map on process to guarantee r2 enforces from its replicated SQLite state.
-    clearAllReservations();
+    clearMemoryReservations();
 
     await clientB.query('BEGIN');
     await expectSqlState(
@@ -852,7 +859,7 @@ test('Receipt 5: all write consumers enforce durable SQLite reservations even wh
     await clientA.query('SELECT balance FROM accounts WHERE id = 1 FOR UPDATE');
 
     // Wipe in-memory maps to simulate empty process-local bookkeeping on Node 2 / post-restart.
-    clearAllReservations();
+    clearMemoryReservations();
 
     // 1. Scoped INSERT
     await expectSqlState(

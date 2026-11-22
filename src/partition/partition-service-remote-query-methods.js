@@ -29,6 +29,8 @@ import {
 } from './partition-statement-admission-constants.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL, pickTypedWriteAnswer} from
   './partition-write-kernel.js';
+import {checkPartitionWriteLockingReadConflict} from
+  './partition-locking-read-write-check.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {readStateField} from '../utils/state-field-read.js';
 import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
@@ -174,6 +176,8 @@ function remoteQueryAnswer(service, result, readAuthorityWitness) {
     durableCommitWitness: result.durableCommitWitness,
     originHlc: result.originHlc, acceptingNodeId: result.acceptingNodeId,
     acknowledgedAtMs: result.acknowledgedAtMs, readAuthorityWitness,
+    ...(Number.isSafeInteger(result?.readGeneration) ?
+      {readGeneration: result.readGeneration} : {}),
   };
   if (!success) Object.assign(answer, pickTypedWriteAnswer(result));
   if (!success && result.error) answer.error = result.error;
@@ -516,6 +520,9 @@ const PARTITION_SERVICE_REMOTE_QUERY_METHODS = Object.freeze({
     if (requestsLeaderQualifiedRead(payload, isWriteOperation)) {
       return answerLeaderQualifiedRead(this, payload, sql);
     }
+    const lockingConflict = isWriteOperation ?
+      checkPartitionWriteLockingReadConflict(this, payload) : null;
+    if (lockingConflict !== null) return lockingConflict;
     const readAuthorityWitness =
       this.buildRemoteReadAuthorityWitness(isWriteOperation);
     logRemoteQueryHandling(this, sql);

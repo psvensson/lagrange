@@ -58,6 +58,16 @@ const {
  * @param {Object} ast - Parsed SELECT AST.
  * @return {string|null} Base table name, or null when the SELECT has none.
  */
+function collectReadGenerationsByPartition(results) {
+  const generations = {};
+  for (const result of results) {
+    if (result?.partitionId && Number.isSafeInteger(result.readGeneration)) {
+      generations[result.partitionId] = result.readGeneration;
+    }
+  }
+  return generations;
+}
+
 function resolveSelectTableName(ast) {
   return ast?.from?.name || null;
 }
@@ -549,6 +559,7 @@ class QueryExecutorBase {
           params,
         )) :
       null;
+    const readGenerationsByPartition = collectReadGenerationsByPartition(results);
     return {
       success: true,
       rows: presentedRows,
@@ -562,6 +573,9 @@ class QueryExecutorBase {
       readAuthorityWitness: readAuthorityWitnesses[0] || null,
       readAuthorityWitnesses,
       authoritativeObservation,
+      ...(Object.keys(readGenerationsByPartition).length > 0 ?
+        {readGenerationsByPartition} :
+        {}),
       timestamp: queryTimestamp.toString(),
       distributedMetrics: {
         fanout: fanoutMetrics,

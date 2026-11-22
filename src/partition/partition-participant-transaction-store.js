@@ -20,6 +20,7 @@
 
 import {PARTICIPANT_COMMIT_OUTCOME} from '../constants/transactions.js';
 import {stampParticipantConnection} from './partition-participant-transaction-connection.js';
+import {ensureLockingReadTableInitialized} from './partition-locking-read-store.js';
 import {RaftRsDurableStore} from '../raft/raft-rs-durable-store.js';
 import {sqliteConnectionState} from '../storage/sqlite-connection-state.js';
 import {deepFreeze} from '../raft/raft-operation-port.js';
@@ -120,6 +121,7 @@ function openParticipantTransactionStore(db) {
     }
   }
   db.prepare(SQL.INSERT_INITIAL_GENERATION).run();
+  ensureLockingReadTableInitialized(db, {readOnly: false});
   recordPreparedObservation(
     db,
     sqliteConnectionState(db).statement(SQL.SELECT_RESERVATION).get(STATE.PREPARED) !==
@@ -142,6 +144,16 @@ function generationRowOf(db) {
  */
 function readPartitionWriteGeneration(db) {
   return generationRowOf(db).generation;
+}
+
+function readOptionalPartitionWriteGeneration(db) {
+  if (!db || db.open === false) return null;
+  const present = sqliteConnectionState(db)
+    .statement(SQL.GENERATION_TABLE_EXISTS)
+    .get(SQL.GENERATION_TABLE);
+  if (!present) return null;
+  const gen = readPartitionWriteGeneration(db);
+  return Number.isSafeInteger(gen) ? gen : null;
 }
 
 /**
@@ -766,6 +778,7 @@ export {
   readPreparedParticipantIds,
   readPreparedParticipantRows,
   readPartitionWriteGeneration,
+  readOptionalPartitionWriteGeneration,
   readPartitionWriteGenerationHistoryRange,
   readPartitionWriteOrigin,
   readPartitionWriteOriginHistory,

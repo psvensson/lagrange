@@ -202,6 +202,41 @@ function decodePartitionResponseRows(response, executionOptions) {
   };
 }
 
+function buildDecodedPartitionSuccessResult(partitionId, response, decodedPayload) {
+  return {
+    partitionId,
+    success: true,
+    rows: decodedPayload.rows,
+    ...(decodedPayload.rawRows ? {rawRows: decodedPayload.rawRows} : {}),
+    ...(decodedPayload.columns ? {columns: decodedPayload.columns} : {}),
+    ...(decodedPayload.rowSet ? {rowSet: decodedPayload.rowSet} : {}),
+    ...(decodedPayload.byteLength > 0 ?
+      {byteLength: decodedPayload.byteLength} :
+      {}),
+    ...(response.executionEnvelope ?
+      {executionEnvelope: response.executionEnvelope} :
+      {}),
+    changes: response.changes,
+    ...(typeof response.rowSetComplete === 'boolean' ?
+      {rowSetComplete: response.rowSetComplete} :
+      {}),
+    ...(response.partial === true ? {partial: true} : {}),
+    ...(response.settledReplay === undefined ? {} :
+      {settledReplay: response.settledReplay}),
+    durableCommitWitness: response.durableCommitWitness,
+    originHlc: response.originHlc,
+    acceptingNodeId: response.acceptingNodeId,
+    acknowledgedAtMs: response.acknowledgedAtMs,
+    readAuthorityWitness: response.readAuthorityWitness,
+    ...(response.authoritativeObservation ?
+      {authoritativeObservation: response.authoritativeObservation} :
+      {}),
+    ...(Number.isSafeInteger(response.readGeneration) ?
+      {readGeneration: response.readGeneration} :
+      {}),
+  };
+}
+
 function resolvePartitionExecutionBuilders({
   executionOptions = {},
   forRead = false,
@@ -245,35 +280,7 @@ function resolvePartitionExecutionBuilders({
           }
           throw error;
         }
-        return {
-          partitionId,
-          success: true,
-          rows: decodedPayload.rows,
-          ...(decodedPayload.rawRows ? {rawRows: decodedPayload.rawRows} : {}),
-          ...(decodedPayload.columns ? {columns: decodedPayload.columns} : {}),
-          ...(decodedPayload.rowSet ? {rowSet: decodedPayload.rowSet} : {}),
-          ...(decodedPayload.byteLength > 0 ?
-            {byteLength: decodedPayload.byteLength} :
-            {}),
-          ...(response.executionEnvelope ?
-            {executionEnvelope: response.executionEnvelope} :
-            {}),
-          changes: response.changes,
-          ...(typeof response.rowSetComplete === 'boolean' ?
-            {rowSetComplete: response.rowSetComplete} :
-            {}),
-          ...(response.partial === true ? {partial: true} : {}),
-          ...(response.settledReplay === undefined ? {} :
-            {settledReplay: response.settledReplay}),
-          durableCommitWitness: response.durableCommitWitness,
-          originHlc: response.originHlc,
-          acceptingNodeId: response.acceptingNodeId,
-          acknowledgedAtMs: response.acknowledgedAtMs,
-          readAuthorityWitness: response.readAuthorityWitness,
-          ...(response.authoritativeObservation ?
-            {authoritativeObservation: response.authoritativeObservation} :
-            {}),
-        };
+        return buildDecodedPartitionSuccessResult(partitionId, response, decodedPayload);
       };
   return Object.freeze({
     buildRequest,

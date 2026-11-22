@@ -736,7 +736,7 @@ function sweepExpiredParticipantSessions(service, nowMs, holdTimeoutMs) {
   let discarded = 0;
   for (const session of [...(sessions?.values() ?? [])]) {
     if (!session.inFlight && nowMs - session.startedAt >= holdTimeoutMs) {
-      if (hasLockingReadReservations(session.identity?.transactionId)) continue;
+      if (hasLockingReadReservations(session.identity?.transactionId, service.db)) continue;
       sessions?.delete(session.identity.participantId);
       discarded += 1;
       service.logger.info(LOG_MSG.SESSION_EXPIRED, {

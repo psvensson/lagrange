@@ -92,6 +92,7 @@ import {executionEnvelopeOf} from './partition-transaction-execution-envelope.js
 import {transactionStatementKindOf} from './partition-transaction-determinism.js';
 import {TRANSACTION_STATEMENT_KIND} from './partition-transaction-determinism-constants.js';
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
+import {checkPartitionWriteLockingReadConflict, releaseUnboundTransactionLockingRead} from './partition-locking-read-service.js';
 import {
   PARTICIPANT_TRANSACTION_DECISION as DECISION,
   PARTICIPANT_TRANSACTION_FAILURE_CODE as CODE,
@@ -561,7 +562,7 @@ async function decideParticipant(service, payload, decision) {
 
 // --- unbound ROLLBACK: volatile staging only (design 2.4) ---
 
-function unboundRollback(service, payload) {
+async function unboundRollback(service, payload) {
   const {row, session} = rowEndingSession(service, payload);
   if (row !== null) {
     if (row.state === STATE.PREPARED) {
@@ -581,6 +582,7 @@ function unboundRollback(service, payload) {
   if (session !== null) {
     endParticipantSession(service, session);
   }
+  await releaseUnboundTransactionLockingRead(service, payload);
   return answerOf(service, payload, {success: true, durable: false,
     ...participantOutcomeOf(null)});
 }
@@ -654,9 +656,10 @@ function sessionStatementAnswer(service, payload) {
     return refused;
   }
   // A sealed session stages no write; it still reads its sealed operations.
-  if (session.phase === PHASE.PREPARING &&
-      transactionStatementKindOf(payload.sql) === TRANSACTION_STATEMENT_KIND.WRITE) {
-    return refusalOf(service, payload, CODE.PREPARING);
+  if (transactionStatementKindOf(payload.sql) === TRANSACTION_STATEMENT_KIND.WRITE) {
+    if (session.phase === PHASE.PREPARING) return refusalOf(service, payload, CODE.PREPARING);
+    const lockRefusal = checkPartitionWriteLockingReadConflict(service, payload);
+    if (lockRefusal !== null) return answerOf(service, payload, lockRefusal);
   }
   return answerOf(service, payload,
     runParticipantSessionStatement(service, session, payload));

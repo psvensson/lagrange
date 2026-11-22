@@ -171,6 +171,12 @@ const TYPED_WRITE_ANSWER_FIELDS = Object.freeze([
   'outcome',
   'spentWait',
   'refusalLayer',
+  'sqlState',
+  'conflict',
+  'retryable',
+  'conflictingTransactionId',
+  'rowKey',
+  'code',
 ]);
 
 /**
