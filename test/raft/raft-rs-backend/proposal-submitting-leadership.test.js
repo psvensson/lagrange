@@ -90,11 +90,13 @@ function peerId(cluster, replicaId) {
   return String(cluster.raftPeerIdOf(replicaId));
 }
 
-// Hand envelopes to A's port: queued in its inbound, stepped by its next turn.
-function deliverToInbound(cluster, messages) {
+// Hand envelopes to A's port (raft id `a`): queued in its inbound, stepped by
+// its next turn. No status read in between: readStatus() drives delivered
+// inbound (and the cluster's raftPeerIdOf reads it).
+function deliverToInbound(cluster, a, messages) {
   for (const message of messages) {
     const admitted = turnChainValue(cluster.node(A).step(envelopeTo(
-      cluster.partitionId, peerId(cluster, A), message)));
+      cluster.partitionId, a, message)));
     assert.equal(admitted.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
       `setup: the port admits the envelope (${JSON.stringify(admitted)})`);
   }
@@ -122,7 +124,11 @@ function reelectionAtTermPlusTwo(cluster, {acknowledged}) {
       to: a, term: String(term + 2n),
       index: String(BigInt(status.lastIndex) + 1n), reject: false});
   }
-  deliverToInbound(cluster, messages);
+  deliverToInbound(cluster, a, messages);
+  // Read without driving: the envelopes wait unstepped, the core leads T.
+  const queued = cluster.node(A)[PORT_CONTRACT.RAFT_OPERATION.OBSERVE_CURRENT_AUTHORITY]();
+  assert.deepEqual([queued.inboundQueued, queued.term], [messages.length, Number(term)],
+    `setup: the re-election waits in A's inbound (${JSON.stringify(queued)})`);
   return {term: Number(term)};
 }
 
