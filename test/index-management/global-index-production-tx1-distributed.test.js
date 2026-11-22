@@ -347,6 +347,7 @@ function buildStrictUsersAndIndexDefs(includeIndexPartitions) {
       partition_key: 'id',
       primaryKey: ['id'],
       partition_key_type: 'INTEGER',
+      active_partition_version: 1,
       schema: USERS_SCHEMA,
     },
   ];

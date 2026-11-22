@@ -5,6 +5,7 @@
 
 import {TABLES} from '../constants/index.js';
 import {CACHE_CDC_OPERATIONS} from '../cache/cache-constants.js';
+import {normalizeGlobalIndexRecord} from './global-index-catalog-contract.js';
 import {
   buildIndexDatasetSchema,
   getGlobalIndexDatasetName,
@@ -14,6 +15,7 @@ import {
   extractPartitionIdFromRow,
 } from './global-index-partition-discovery.js';
 
+const LOCAL_STR_ID = 'id';
 const LOCAL_STR_NORMAL = 'normal';
 const LOCAL_STR_TEXT = 'TEXT';
 
@@ -176,6 +178,9 @@ function buildProvisionedIndexMetadata(indexService, context) {
     updated_at: now,
   };
   const baseTable = indexService?.sqlQueryEngine?.getTableInfo?.(tableName) || null;
+  const activeVersion = Number.isSafeInteger(baseTable?.active_partition_version) ?
+    baseTable.active_partition_version :
+    1;
   const tableMetadata = {
     table_id: datasetName,
     table_name: datasetName,
@@ -184,11 +189,42 @@ function buildProvisionedIndexMetadata(indexService, context) {
     primaryKey: datasetSchema.primaryKey,
     partition_key_type: partitionKeyType,
     schema: datasetSchema,
-    ...(Number.isSafeInteger(baseTable?.active_partition_version) ?
-      {active_partition_version: baseTable.active_partition_version} :
-      {}),
+    active_partition_version: activeVersion,
   };
   return {datasetName, datasetSchema, partitionId, partitionMetadata, tableMetadata};
+}
+
+function resolveIndexActivePartitionVersion(indexService, tableName) {
+  const baseTable = indexService?.sqlQueryEngine?.getTableInfo?.(tableName) || null;
+  const ver = baseTable?.active_partition_version;
+  return Number.isSafeInteger(ver) ? ver : 1;
+}
+
+function ensureIndexDatasetTableInCache(indexService, record) {
+  const norm = normalizeGlobalIndexRecord(record);
+  if (!norm.tableName || !norm.indexName) return;
+  const datasetName = getGlobalIndexDatasetName(norm.tableName, norm.indexName);
+  if (indexService?.systemTableCache?.get?.(TABLES.TABLES, datasetName)) {
+    return;
+  }
+  const pks = record.basePrimaryKeyColumns;
+  const pkCols = Array.isArray(pks) && pks.length > 0 ? pks : [LOCAL_STR_ID];
+  const datasetSchema = buildIndexDatasetSchema({
+    tableName: norm.tableName,
+    indexName: norm.indexName,
+    columnNames: norm.columnNames,
+    basePrimaryKeyColumns: pkCols,
+  });
+  propagateSystemTableCacheChange(indexService, TABLES.TABLES, CACHE_CDC_OPERATIONS.UPSERT, {
+    table_id: datasetName,
+    table_name: datasetName,
+    partition_key: norm.columnNames[0],
+    primary_key: JSON.stringify(datasetSchema.primaryKey),
+    primaryKey: datasetSchema.primaryKey,
+    partition_key_type: LOCAL_STR_TEXT,
+    schema: datasetSchema,
+    active_partition_version: resolveIndexActivePartitionVersion(indexService, norm.tableName),
+  });
 }
 
 async function provisionIndexPartitionsWithRuntime(
@@ -285,6 +321,7 @@ function syncGlobalIndexesFromSystemCache(indexService, hydrateFn, syncEntryFn) 
 }
 
 export {
+  ensureIndexDatasetTableInCache,
   executePartitionReadSql,
   executePartitionWriteSql,
   hasDistributedPartitionRoute,

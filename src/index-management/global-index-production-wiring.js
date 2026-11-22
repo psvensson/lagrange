@@ -13,6 +13,7 @@ import {
 } from './global-index-catalog-contract.js';
 import {getGlobalIndexDatasetName} from './global-index-dataset-manager.js';
 import {
+  ensureIndexDatasetTableInCache,
   executePartitionReadSql,
   executePartitionWriteSql,
   hasDistributedPartitionRoute,
@@ -550,6 +551,7 @@ function buildCatalogPersistenceHooks(indexService) {
       syncGlobalIndexesForService(indexService);
     },
     onCatalogInsert: async (record) => {
+      ensureIndexDatasetTableInCache(indexService, record);
       await persistCatalogInsert(indexService, record);
       syncServiceIndexEntryFromRecord(indexService, record);
     },
