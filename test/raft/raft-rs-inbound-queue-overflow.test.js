@@ -114,8 +114,9 @@ class BurstScenario {
       'the scenario elected its leader');
   }
 
-  async authority(replicaId) {
-    const observed = await turnChainValue(this.port(replicaId).observeCurrentAuthority());
+  // The observation answers in the call (never a turn).
+  authority(replicaId) {
+    const observed = this.port(replicaId).observeCurrentAuthority();
     return {outcome: observed.outcome, reason: observed.reason ?? null,
       role: observed.role ?? null, leaderPeerId: observed.leaderPeerId ?? null,
       inboundQueued: observed.inboundQueued ?? null,
