@@ -260,8 +260,29 @@ test('(c1-peer-bound) per-peer slow-socket (ws.bufferedAmount + pending ' +
     assert.equal(pendingAfterFirst, singleFrameBytes,
       'the first fitting envelope is accounted in pendingBatchBytes');
 
-    const slowSecond = await router.deliver(
+    const slowSecondPromise = router.deliver(
       'node-slow/partition/g1-r2', secondEnvelope);
+    assert.equal(router.getStats().consensusDelivery.pendingBatchBytes,
+      pendingAfterFirst,
+      'refused envelope released its bytes without corrupting the fitting batch');
+
+    const healthyFirst = router.deliver(
+      'node-healthy/partition/g1-r3', buildEnvelope('g1', 1));
+    const healthySecond = router.deliver(
+      'node-healthy/partition/g2-r3', buildEnvelope('g2', 1));
+
+    const [
+      slowFirstOutcome,
+      slowSecond,
+      healthyFirstOutcome,
+      healthySecondOutcome,
+    ] = await Promise.all([
+      slowFirst,
+      slowSecondPromise,
+      healthyFirst,
+      healthySecond,
+    ]);
+
     assert.equal(
       isDeliveredTransportDeliveryOutcome(deliveryTransportOf(slowSecond)),
       false,
@@ -273,17 +294,6 @@ test('(c1-peer-bound) per-peer slow-socket (ws.bufferedAmount + pending ' +
     assert.equal(deliveryTransportOf(slowSecond).errorCode,
       OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE,
       'refusal carries the backpressure error code');
-    assert.equal(router.getStats().consensusDelivery.pendingBatchBytes,
-      pendingAfterFirst,
-      'refused envelope released its bytes without corrupting the fitting batch');
-
-    const healthyFirst = router.deliver(
-      'node-healthy/partition/g1-r3', buildEnvelope('g1', 1));
-    const healthySecond = router.deliver(
-      'node-healthy/partition/g2-r3', buildEnvelope('g2', 1));
-
-    const [slowFirstOutcome, healthyFirstOutcome, healthySecondOutcome] =
-      await Promise.all([slowFirst, healthyFirst, healthySecond]);
 
     assert.equal(
       isDeliveredTransportDeliveryOutcome(deliveryTransportOf(slowFirstOutcome)),
