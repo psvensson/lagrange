@@ -18,18 +18,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 import Database from 'better-sqlite3';
-import pg from 'pg';
 
-import {SystemTableCache} from '../../src/cache/system-table-cache.js';
-import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {
-  CDC_OPERATION,
-  SERVICE_STATUS,
-  SERVICE_TYPE,
-  TABLES,
-} from '../../src/constants/index.js';
-import {META_SERVICE_ID} from '../../src/constants/wasm-meta.js';
-import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   readSettledOwnerCommandIn,
 } from '../../src/partition/partition-committed-statement-outcome.js';
@@ -40,6 +29,7 @@ import {
   getTransactionReservations,
   hasLockingReadReservations,
   registerPartitionDatabase,
+  releaseSessionReservations,
   releaseTransactionReservations,
 } from '../../src/partition/partition-locking-read-reservation.js';
 import {
@@ -47,336 +37,42 @@ import {
 } from '../../src/partition/partition-locking-read-service.js';
 import {
   PARTICIPANT_CONCURRENCY_GRANULARITY,
+  PARTICIPANT_TRANSACTION_COMMAND,
 } from '../../src/partition/partition-participant-transaction-constants.js';
+import {
+  listActiveParticipantSessions,
+} from '../../src/partition/partition-participant-transaction-session.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {isRaftRsTransportEnvelope} from '../../src/raft/raft-packet-utils.js';
+import {RAFT_RS_MESSAGE_TYPE} from '../../src/raft/raft-rs-ingress-constants.js';
+import {decodeCommittedProposal} from '../../src/raft/raft-rs-proposal-codec.js';
 import {
   RAFT_LEADERSHIP_TRANSFER_SUCCESSOR,
   RAFT_OPERATION_OUTCOME,
 } from '../../src/raft/raft-operation-port-constants.js';
-import {PostgresWireRuntimeModule} from '../../src/runtime/pgwire-runtime-module.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 import {formAdmittedGroup} from '../partition/partition-admitted-group-fixture.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
-import {attachPartitionReleaseOwners} from '../partition/partition-release-fixture.js';
 import {createLoopbackTransport} from '../partition/partition-service-test-support.js';
 import {answerParticipantTransactionRequest} from '../test-helpers/participant-protocol-double.js';
 import {createTransactionPersistenceGateway} from '../test-helpers/transaction-persistence-gateway.js';
 import {createMockSystemCache} from './sql-query-engine-test-support.js';
-
-const QUIET_LOGGER = Object.freeze({
-  debug() {},
-  info() {},
-  warn() {},
-  error() {},
-});
-
-const ACCOUNTS_TABLE = 'accounts';
-const ACCOUNTS_PARTITION_ID = 'accounts-p1';
-const ACCOUNTS_SCHEMA = Object.freeze({
-  columns: [
-    {name: 'id', type: 'INTEGER', primaryKey: true},
-    {name: 'balance', type: 'INTEGER', nullable: false},
-    {name: 'tier', type: 'TEXT', nullable: false},
-  ],
-});
-const GROUP_BUDGET_MS = 20000;
-const RAFT_TIMING = Object.freeze({
-  heartbeatIntervalMs: 20,
-  electionTimeoutMinMs: 150,
-  electionTimeoutMaxMs: 300,
-});
-const PG_HOST = '127.0.0.1';
-const PG_USER = 'postgres';
-const PG_DATABASE = 'lagrange';
-const LOCK_NOT_AVAILABLE_SQLSTATE = '55P03';
-
-function initEnvironment(nodeId = 'locking-node-1') {
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
-  ConfigurationManager.getInstance().initialize({
-    node: {id: nodeId},
-    raft: RAFT_TIMING,
-  });
-  LoggingService.getInstance().initialize({level: 'fatal'});
-}
-
-function createAccountsTableRow(leaderNodeId = 'node-1') {
-  return {
-    table_id: ACCOUNTS_TABLE,
-    table_name: ACCOUNTS_TABLE,
-    active_partition_version: 1,
-    schema: JSON.stringify(ACCOUNTS_SCHEMA),
-    partition_key: 'id',
-    partition_key_type: 'INTEGER',
-    primary_key: 'id',
-    leader_node_id: leaderNodeId,
-  };
-}
-
-function createAccountsPartitionRow(replicaCount, leaderNodeId = 'node-1') {
-  return {
-    partition_id: ACCOUNTS_PARTITION_ID,
-    table_id: ACCOUNTS_TABLE,
-    table_name: ACCOUNTS_TABLE,
-    partition_key_start: null,
-    partition_key_end: null,
-    partition_key_type: 'INTEGER',
-    replica_count: replicaCount,
-    leader_node_id: leaderNodeId,
-  };
-}
-
-function buildServiceRows(group, members, leaderReplicaId) {
-  return members.map(([replicaId, nodeId]) => ({
-    service_id: replicaId,
-    replica_id: replicaId,
-    partition_id: ACCOUNTS_PARTITION_ID,
-    service_type: SERVICE_TYPE.PARTITION,
-    node_id: nodeId,
-    status: SERVICE_STATUS.ACTIVE,
-    address: group.addressOf([replicaId, nodeId]),
-    raft_role: replicaId === leaderReplicaId ? RAFT_ROLE.LEADER : RAFT_ROLE.FOLLOWER,
-  }));
-}
-
-function buildNodeCache(group, members, leaderMember) {
-  const cache = new SystemTableCache();
-  cache.applySystemTableChange(
-    TABLES.TABLES,
-    CDC_OPERATION.INSERT,
-    createAccountsTableRow(leaderMember[1]),
-  );
-  cache.applySystemTableChange(
-    TABLES.PARTITIONS,
-    CDC_OPERATION.INSERT,
-    createAccountsPartitionRow(members.length, leaderMember[1]),
-  );
-  for (const row of buildServiceRows(group, members, leaderMember[0])) {
-    cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, row);
-  }
-  return cache;
-}
-
-async function seedAccountsData(engine) {
-  const inserts = [
-    [1, 100, 'gold'],
-    [2, 200, 'silver'],
-    [3, 300, 'gold'],
-  ];
-  for (const [id, balance, tier] of inserts) {
-    const res = await engine.executeQuery(
-      'INSERT INTO accounts (id, balance, tier) VALUES (?, ?, ?)',
-      [id, balance, tier],
-    );
-    assert.equal(res.success, true, `seed row ${id} failed: ${res.error}`);
-  }
-  const leaderService = engine.partitionServicesProvider?.()?.values()?.next()?.value;
-  if (leaderService?.db) {
-    for (const service of [leaderService]) {
-      service.db.exec('CREATE INDEX IF NOT EXISTS idx_accounts_tier ON accounts(tier)');
-    }
-  }
-}
-
-async function startPgWireNode(engine) {
-  const runtime = new PostgresWireRuntimeModule({logger: QUIET_LOGGER});
-  const prepared = await runtime.prepare({
-    serviceId: META_SERVICE_ID.POSTGRES_WIRE,
-    runtimeConfig: JSON.stringify({
-      host: PG_HOST,
-      authMode: 'trust',
-      tlsMode: 'disable',
-    }),
-  });
-  assert.equal(prepared.status, 'ready');
-  const started = await runtime.start({
-    serviceId: META_SERVICE_ID.POSTGRES_WIRE,
-    host: PG_HOST,
-    port: 0,
-    sqlRequestExecutor: (sqlRequest, opts) => engine.executeRequest(sqlRequest, opts),
-  });
-  assert.equal(started.status, 'running');
-  return {
-    runtime,
-    port: started.endpointIntent.port,
-    async connectClient() {
-      const client = new pg.Client({
-        host: PG_HOST,
-        port: started.endpointIntent.port,
-        user: PG_USER,
-        database: PG_DATABASE,
-      });
-      await client.connect();
-      return client;
-    },
-    async stop() {
-      await runtime.stop({serviceId: META_SERVICE_ID.POSTGRES_WIRE});
-    },
-  };
-}
-
-async function setupTwoNodeCluster(options = {}) {
-  clearAllReservations();
-  initEnvironment('node-1');
-  const members = [
-    [`${ACCOUNTS_PARTITION_ID}-r1`, 'node-1'],
-    [`${ACCOUNTS_PARTITION_ID}-r2`, 'node-2'],
-    [`${ACCOUNTS_PARTITION_ID}-r3`, 'node-3'],
-  ];
-  const group = await formAdmittedGroup({
-    partitionId: ACCOUNTS_PARTITION_ID,
-    members,
-    tempPrefix: options.tempPrefix || 'lock-auth-cluster-',
-    budgetMs: GROUP_BUDGET_MS,
-    serviceOptions: {
-      tableId: ACCOUNTS_TABLE,
-      tableName: ACCOUNTS_TABLE,
-      schema: ACCOUNTS_SCHEMA,
-      concurrencyGranularity:
-        options.concurrencyGranularity || PARTICIPANT_CONCURRENCY_GRANULARITY.ROW_KEY,
-    },
-  });
-  const releaseOwners = await attachPartitionReleaseOwners(group.services, {
-    directory: path.dirname(group.dbFileOf(members[0])),
-    budgetMs: GROUP_BUDGET_MS,
-  });
-  for (const sysTable of [TABLES.PARTITIONS, TABLES.SERVICES]) {
-    const rows = group.services[0].systemTableCache.getAll(sysTable) || [];
-    for (const row of rows) {
-      if (row.partition_id === releaseOwners.control.partitionId ||
-          row.service_id === releaseOwners.control.replicaId) {
-        for (const svc of group.services.slice(1)) {
-          svc.systemTableCache.applySystemTableChange(sysTable, CDC_OPERATION.INSERT, row);
-        }
-      }
-    }
-  }
-  await releaseOwners.release(ACCOUNTS_PARTITION_ID);
-
-  for (const svc of group.services) {
-    svc.systemTableCache.applySystemTableChange(
-      TABLES.TABLES,
-      CDC_OPERATION.INSERT,
-      createAccountsTableRow(members[0][1]),
-    );
-    svc.db.exec('CREATE INDEX IF NOT EXISTS idx_accounts_tier ON accounts(tier)');
-  }
-
-  const gateway = createTransactionPersistenceGateway();
-  const makeNodeEngine = (memberIndex) => {
-    const member = members[memberIndex];
-    const localService = group.services[memberIndex];
-    const cache = buildNodeCache(group, members, members[0]);
-    const localMap = new Map([[localService.replicaId, localService]]);
-    const engine = new SQLQueryEngine({
-      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
-      systemCache: cache,
-      messageRouter: group.services[0].transport,
-      controlPlaneSystemTableGateway: gateway,
-      partitionServicesProvider: () => localMap,
-      nodeId: member[1],
-      autoStartDistributedTransactionRecovery: false,
-      migrationAutoWire: false,
-      unrefRetryDelayTimers: true,
-    });
-    return {engine, cache, localService, member};
-  };
-
-  const node1 = makeNodeEngine(0);
-  const node2 = makeNodeEngine(1);
-  node2.engine.queryExecutor.setBootstrapTopologySnapshotOwner({
-    resolveCanonicalPartitionLeaderNodeId: (pid) =>
-      pid === releaseOwners.control.partitionId ? members[0][1] : null,
-  });
-  group.services[1].sqlQueryEngine = node2.engine;
-  await seedAccountsData(node1.engine);
-
-  const pg1 = await startPgWireNode(node1.engine);
-  const pg2 = await startPgWireNode(node2.engine);
-
-  return {
-    group,
-    members,
-    releaseOwners,
-    gateway,
-    node1,
-    node2,
-    pg1,
-    pg2,
-    leader: () =>
-      group.services.find(
-        (svc) => svc.raft?.readStatus?.().role === RAFT_ROLE.LEADER,
-      ) ?? null,
-    updateLeaderRouting(newLeaderMember) {
-      for (const node of [node1, node2]) {
-        for (const row of buildServiceRows(group, members, newLeaderMember[0])) {
-          node.cache.applySystemTableChange(
-            TABLES.SERVICES,
-            CDC_OPERATION.UPDATE,
-            row,
-          );
-        }
-      }
-    },
-    async cleanup() {
-      await pg1.stop().catch(() => {});
-      await pg2.stop().catch(() => {});
-      await node1.engine.shutdown().catch(() => {});
-      await node2.engine.shutdown().catch(() => {});
-      await releaseOwners.dispose().catch(() => {});
-      await group.dispose().catch(() => {});
-      gateway.db.close();
-      clearAllReservations();
-    },
-  };
-}
-
-async function expectSqlState(client, sql, params, expectedSqlState) {
-  let caught = null;
-  try {
-    await client.query(sql, params);
-  } catch (err) {
-    caught = err;
-  }
-  assert.ok(caught, `Expected SQLSTATE ${expectedSqlState} for "${sql}", but it succeeded`);
-  assert.equal(
-    caught.code,
-    expectedSqlState,
-    `Expected SQLSTATE ${expectedSqlState} for "${sql}", got ${caught.code}: ${caught.message}`,
-  );
-  return caught;
-}
-
-function countDbReservations(db, tableName = ACCOUNTS_TABLE) {
-  const exists = db
-    .prepare(
-      'SELECT 1 AS ok FROM sqlite_master WHERE type = \'table\' AND name = ?',
-    )
-    .get('_lagrange_locking_read_reservations');
-  if (!exists) return 0;
-  const row = db
-    .prepare(
-      'SELECT COUNT(*) AS cnt FROM _lagrange_locking_read_reservations WHERE table_name = ?',
-    )
-    .get(tableName);
-  return Number(row?.cnt || 0);
-}
-
-function assertNumericRowValues(rows, expectedRows) {
-  assert.equal(rows.length, expectedRows.length);
-  for (let i = 0; i < expectedRows.length; i += 1) {
-    const actual = rows[i];
-    const expected = expectedRows[i];
-    assert.deepEqual(Object.keys(actual).sort(), Object.keys(expected).sort());
-    for (const [k, v] of Object.entries(expected)) {
-      assert.equal(Number(actual[k]), v, `Mismatch on column ${k}`);
-    }
-  }
-}
+import {
+  ACCOUNTS_PARTITION_ID,
+  ACCOUNTS_SCHEMA,
+  ACCOUNTS_TABLE,
+  GROUP_BUDGET_MS,
+  LOCK_NOT_AVAILABLE_SQLSTATE,
+  assertNumericRowValues,
+  countDbReservations,
+  expectSqlState,
+  initEnvironment,
+  setupTwoNodeCluster,
+} from './locking-read-authoritative-test-support.js';
 
 test('Receipt 1: public cross-node SELECT FOR UPDATE enforces 55P03 across separate PgWire nodes and allows disjoint progress', async () => {
   const cluster = await setupTwoNodeCluster({tempPrefix: 'lock-r1-'});
@@ -1246,5 +942,458 @@ test('Witness 2: per-participant release clears ONLY target partition reservatio
     await groupP1.dispose().catch(() => {});
     await groupP2.dispose().catch(() => {});
     clearAllReservations();
+  }
+});
+
+test('Witness 3: writer staged while ACQUIRE awaits consensus cannot prepare or commit under live lock (deterministic, disjoint progresses)', {timeout: 30000}, async () => {
+  const cluster = await setupTwoNodeCluster({
+    tempPrefix: 'lock-w3-race-',
+    concurrencyGranularity: PARTICIPANT_CONCURRENCY_GRANULARITY.ROW_KEY,
+  });
+  const clientT = await cluster.pg1.connectClient();
+  const clientW = await cluster.pg2.connectClient();
+  const clientDisjoint = await cluster.pg2.connectClient();
+  const clientW2 = await cluster.pg2.connectClient();
+  const [r1, r2, r3] = cluster.group.services;
+  const network = r1.transport;
+  const origDeliver = network.deliver.bind(network);
+  const origR2Apply = r2.applyCommittedEntry.bind(r2);
+  const origR3Apply = r3.applyCommittedEntry.bind(r3);
+
+  let armHoldOnAcquire = false;
+  let holdAppendEntries = false;
+  const heldDeliveries = [];
+  let proposedAcquireCmd = null;
+  let capturedPrepare2TxId = null;
+  let poisonOnR2Apply = false;
+  let wipeOnR3Apply = false;
+
+  const decodeAppendCommands = (entries) => {
+    const commands = [];
+    for (const entry of entries || []) {
+      if (!entry?.data || entry.data.length === 0) continue;
+      try {
+        const bytes = typeof entry.data === 'string' ?
+          Buffer.from(entry.data, 'base64') :
+          entry.data;
+        commands.push(decodeCommittedProposal(bytes));
+      } catch (_err) {
+        // Non-proposal entry (e.g. conf change or empty noop).
+      }
+    }
+    return commands;
+  };
+
+  const flushHeldDeliveries = () => {
+    holdAppendEntries = false;
+    armHoldOnAcquire = false;
+    const queued = heldDeliveries.splice(0, heldDeliveries.length);
+    for (const deliverNow of queued) {
+      void deliverNow().catch(() => {});
+    }
+  };
+
+  network.deliver = (address, payload) => {
+    if ((armHoldOnAcquire || holdAppendEntries) &&
+        isRaftRsTransportEnvelope(payload) &&
+        payload.groupId === ACCOUNTS_PARTITION_ID &&
+        payload.message?.msgType === RAFT_RS_MESSAGE_TYPE.APPEND &&
+        Array.isArray(payload.message.entries) &&
+        payload.message.entries.length > 0) {
+      const commands = decodeAppendCommands(payload.message.entries);
+      if (armHoldOnAcquire) {
+        const acquireCmd = commands.find(
+          (cmd) => cmd?.type === 'LOCKING_READ_RESERVATION' &&
+            cmd?.reservation?.op === 'ACQUIRE',
+        );
+        if (acquireCmd) {
+          armHoldOnAcquire = false;
+          holdAppendEntries = true;
+          proposedAcquireCmd = acquireCmd;
+        }
+      }
+      if (holdAppendEntries) {
+        const prepCmd = commands.find(
+          (cmd) => cmd?.type === PARTICIPANT_TRANSACTION_COMMAND.PREPARE,
+        );
+        if (prepCmd?.transactionId) {
+          capturedPrepare2TxId = prepCmd.transactionId;
+        }
+        heldDeliveries.push(() => origDeliver(address, payload));
+        // Return immediately like an async wire send so r1.raft's turn chain stays unblocked
+        // while the AppendEntries packets remain held before quorum delivery to r2/r3.
+        return Promise.resolve(buildDeliveryEnvelope({acknowledged: true}, undefined));
+      }
+    }
+    return origDeliver(address, payload);
+  };
+
+  r2.applyCommittedEntry = (committedArg) => {
+    if (committedArg?.command?.type === PARTICIPANT_TRANSACTION_COMMAND.PREPARE &&
+        committedArg?.command?.transactionId) {
+      capturedPrepare2TxId = committedArg.command.transactionId;
+    }
+    if (poisonOnR2Apply &&
+        (committedArg?.command?.type === 'LOCKING_READ_RESERVATION' ||
+         committedArg?.command?.type === PARTICIPANT_TRANSACTION_COMMAND.PREPARE)) {
+      clearMemoryReservations();
+      acquireRowReservation({
+        tableName: ACCOUNTS_TABLE,
+        partitionId: ACCOUNTS_PARTITION_ID,
+        pkValues: [1],
+        transactionId: 'tx-divergent-memory-r2',
+        sessionId: 's-divergent-memory-r2',
+        kind: 'WRITE_STAGED',
+        db: null,
+      });
+    }
+    return origR2Apply(committedArg);
+  };
+
+  r3.applyCommittedEntry = (committedArg) => {
+    if (wipeOnR3Apply &&
+        (committedArg?.command?.type === 'LOCKING_READ_RESERVATION' ||
+         committedArg?.command?.type === PARTICIPANT_TRANSACTION_COMMAND.PREPARE)) {
+      clearMemoryReservations();
+    }
+    return origR3Apply(committedArg);
+  };
+
+  const readAccountBalance = (db, id) =>
+    Number(db.prepare('SELECT balance FROM accounts WHERE id = ?').get(id)?.balance);
+
+  try {
+    // --- Schedule 3a: ACQUIRE held after precheck/proposal, W & W_disjoint stage in already-open sessions,
+    // ACQUIRE commits/applies & acknowledges lock, then W attempts PREPARE/COMMIT while W_disjoint commits. ---
+    await clientW.query('BEGIN');
+    const wSeedRead = await clientW.query('SELECT balance FROM accounts WHERE id = 2');
+    assertNumericRowValues(wSeedRead.rows, [{balance: 200}]);
+
+    await clientDisjoint.query('BEGIN');
+    const dSeedRead = await clientDisjoint.query('SELECT balance FROM accounts WHERE id = 3');
+    assertNumericRowValues(dSeedRead.rows, [{balance: 300}]);
+
+    assert.ok(
+      Array.from(listActiveParticipantSessions(r1)).length >= 2,
+      'W and W_disjoint must have already-open participant sessions on leader r1',
+    );
+
+    await clientT.query('BEGIN');
+    proposedAcquireCmd = null;
+    armHoldOnAcquire = true;
+    const tAcquirePromise = clientT.query(
+      'SELECT id, balance FROM accounts WHERE id = 1 FOR UPDATE',
+    );
+
+    const acquirePaused = await cluster.group.waitFor(
+      () => proposedAcquireCmd !== null && heldDeliveries.length >= 2,
+    );
+    assert.equal(
+      acquirePaused,
+      true,
+      'ACQUIRE must pass precheck/proposal and have AppendEntries to r2/r3 held before quorum',
+    );
+    const proposedAcquire = proposedAcquireCmd;
+    assert.equal(countDbReservations(r1.db), 0, 'ACQUIRE must not be applied yet on r1');
+
+    // Stage conflicting write W (id = 1) and disjoint write W_disjoint (id = 3) while ACQUIRE awaits consensus.
+    await clientW.query('UPDATE accounts SET balance = 500 WHERE id = 1');
+    await clientDisjoint.query('UPDATE accounts SET balance = 350 WHERE id = 3');
+    assert.equal(countDbReservations(r1.db), 0, 'durable reservation still absent before quorum');
+
+    // Diverge process-local memory on r2/r3 before releasing ACQUIRE to verify memory-independent apply.
+    poisonOnR2Apply = true;
+    wipeOnR3Apply = true;
+    flushHeldDeliveries();
+
+    const tLockRes = await tAcquirePromise;
+    assertNumericRowValues(tLockRes.rows, [{id: 1, balance: 100}]);
+
+    const allHoldLock = await cluster.group.waitFor(
+      () => countDbReservations(r1.db) === 1 &&
+        countDbReservations(r2.db) === 1 &&
+        countDbReservations(r3.db) === 1,
+    );
+    assert.equal(allHoldLock, true, 'all three replicas must durably hold T lock on id = 1');
+    for (const svc of [r1, r2, r3]) {
+      const settled = readSettledOwnerCommandIn(svc.db, {
+        entryId: proposedAcquire.entryId,
+        commandDigest: proposedAcquire.commandDigest,
+      });
+      assert.equal(JSON.parse(settled.recorded.ownerResultText).success, true);
+    }
+
+    // Clear process-local memory before W attempts PREPARE/COMMIT so refusal is 100% SQLite-authoritative.
+    clearMemoryReservations();
+
+    // Conflicting writer W MUST NOT prepare or commit under T's acknowledged live lock!
+    await expectSqlState(clientW, 'COMMIT', [], LOCK_NOT_AVAILABLE_SQLSTATE);
+    for (const svc of [r1, r2, r3]) {
+      assert.equal(
+        readAccountBalance(svc.db, 1),
+        100,
+        `conflicting writer W must not modify locked row id = 1 on ${svc.replicaId}`,
+      );
+      assert.equal(
+        countDbReservations(svc.db),
+        1,
+        `T live reservation must stay intact on ${svc.replicaId} after W refusal`,
+      );
+    }
+
+    // Positive control: disjoint-row writer W_disjoint staged in the same window MUST commit cleanly!
+    await clientDisjoint.query('COMMIT');
+    const disjointCommitted = await cluster.group.waitFor(
+      () => readAccountBalance(r1.db, 3) === 350 &&
+        readAccountBalance(r2.db, 3) === 350 &&
+        readAccountBalance(r3.db, 3) === 350,
+    );
+    assert.equal(disjointCommitted, true, 'disjoint writer must commit on all three replicas');
+    assert.equal(countDbReservations(r1.db), 1, 'T reservation on id = 1 still held');
+
+    // T updates its own locked row and commits, releasing its lock across all replicas.
+    await clientT.query('UPDATE accounts SET balance = 175 WHERE id = 1');
+    await clientT.query('COMMIT');
+    const tCommitted = await cluster.group.waitFor(
+      () => readAccountBalance(r1.db, 1) === 175 &&
+        readAccountBalance(r2.db, 1) === 175 &&
+        readAccountBalance(r3.db, 1) === 175 &&
+        countDbReservations(r1.db) === 0 &&
+        countDbReservations(r2.db) === 0 &&
+        countDbReservations(r3.db) === 0,
+    );
+    assert.equal(tCommitted, true, 'T commit must apply and release locks across r1/r2/r3');
+
+    // --- Schedule 3b: W2 proposes PARTICIPANT_PREPARE into consensus behind held ACQUIRE;
+    // deterministic applyParticipantPrepare must refuse W2 identically on r1/r2/r3 without local memory. ---
+    capturedPrepare2TxId = null;
+    await clientW2.query('BEGIN');
+    await clientW2.query('SELECT balance FROM accounts WHERE id = 2');
+
+    await clientT.query('BEGIN');
+    proposedAcquireCmd = null;
+    armHoldOnAcquire = true;
+    const t2AcquirePromise = clientT.query(
+      'SELECT id, balance FROM accounts WHERE id = 1 FOR UPDATE',
+    );
+
+    const acquire2Paused = await cluster.group.waitFor(
+      () => proposedAcquireCmd !== null && heldDeliveries.length >= 2,
+    );
+    assert.equal(acquire2Paused, true);
+    const indexAfterAcquire = r1.raft.readStatus().lastIndex;
+
+    await clientW2.query('UPDATE accounts SET balance = 600 WHERE id = 1');
+    const w2CommitOutcome = expectSqlState(
+      clientW2,
+      'COMMIT',
+      [],
+      LOCK_NOT_AVAILABLE_SQLSTATE,
+    );
+
+    const prepareProposedInLog = await cluster.group.waitFor(
+      () => r1.raft.readStatus().lastIndex > indexAfterAcquire,
+    );
+    assert.equal(
+      prepareProposedInLog,
+      true,
+      'W2 PARTICIPANT_PREPARE must enter r1 Raft log behind uncommitted ACQUIRE',
+    );
+
+    // Release ACQUIRE followed by PARTICIPANT_PREPARE with poisoned/wiped local memory on r2/r3.
+    flushHeldDeliveries();
+
+    const t2LockRes = await t2AcquirePromise;
+    assertNumericRowValues(t2LockRes.rows, [{id: 1, balance: 175}]);
+    await w2CommitOutcome;
+
+    assert.ok(capturedPrepare2TxId, 'W2 PARTICIPANT_PREPARE transactionId must be observed');
+    const allSettledRefused = await cluster.group.waitFor(() =>
+      [r1, r2, r3].every((svc) => {
+        const row = svc.db
+          .prepare(
+            'SELECT state, refusal_cause FROM _participant_transactions WHERE transaction_id = ?',
+          )
+          .get(capturedPrepare2TxId);
+        return row?.state === 'REFUSED' && row?.refusal_cause === 'lock_conflict';
+      }),
+    );
+    assert.equal(
+      allSettledRefused,
+      true,
+      'all three replicas must deterministically settle W2 PREPARE as REFUSED(lock_conflict)',
+    );
+    for (const svc of [r1, r2, r3]) {
+      assert.equal(
+        readAccountBalance(svc.db, 1),
+        175,
+        `W2 must not mutate locked row id = 1 on ${svc.replicaId}`,
+      );
+      assert.equal(countDbReservations(svc.db), 1, `T2 lock must remain live on ${svc.replicaId}`);
+    }
+
+    await clientT.query('ROLLBACK');
+    const allReleased = await cluster.group.waitFor(
+      () => countDbReservations(r1.db) === 0 &&
+        countDbReservations(r2.db) === 0 &&
+        countDbReservations(r3.db) === 0,
+    );
+    assert.equal(allReleased, true, 'T2 rollback must release lock across all replicas');
+  } finally {
+    flushHeldDeliveries();
+    network.deliver = origDeliver;
+    r2.applyCommittedEntry = origR2Apply;
+    r3.applyCommittedEntry = origR3Apply;
+    await clientT.end().catch(() => {});
+    await clientW.end().catch(() => {});
+    await clientDisjoint.end().catch(() => {});
+    await clientW2.end().catch(() => {});
+    await cluster.cleanup();
+  }
+});
+
+test('Witness 4: gateway cleanup (write-error, unscoped helper, shutdown) never erases unresolved durable reservations on co-located participant DB', {timeout: 30000}, async () => {
+  const cluster = await setupTwoNodeCluster({
+    tempPrefix: 'lock-w4-gateway-cleanup-',
+    concurrencyGranularity: PARTICIPANT_CONCURRENCY_GRANULARITY.ROW_KEY,
+  });
+  const clientB = await cluster.pg2.connectClient();
+  const [r1, r2, r3] = cluster.group.services;
+  try {
+    // Co-located participant DB on node1 (r1.db) is also registered in PARTITION_DBS.
+    registerPartitionDatabase(ACCOUNTS_PARTITION_ID, r1.db);
+
+    const sessionId = 's-unresolved-colocated';
+    const tx = await cluster.node1.engine.transactionCoordinator.begin(sessionId);
+    assert.equal(tx.success, true);
+
+    const lockRes = await cluster.node1.engine.executeQuery(
+      'SELECT id, balance FROM accounts WHERE id = 1 FOR UPDATE',
+      [],
+      {sessionId},
+    );
+    assert.equal(lockRes.success, true, lockRes.error);
+    const replicated = await cluster.group.waitFor(
+      () => countDbReservations(r1.db) === 1 &&
+        countDbReservations(r2.db) === 1 &&
+        countDbReservations(r3.db) === 1,
+    );
+    assert.equal(replicated, true, 'durable reservation must replicate to r1/r2/r3');
+
+    // 4a. Write-error cleanup inside an explicit transaction MUST NOT release explicit tx reservations
+    // (neither memory nor co-located durable SQLite rows).
+    const origExecutePlan = cluster.node1.engine.distributedWriteCoordinator.executePlan.bind(
+      cluster.node1.engine.distributedWriteCoordinator,
+    );
+    cluster.node1.engine.distributedWriteCoordinator.executePlan = async () => {
+      throw new Error('simulated transient write execution failure');
+    };
+    let writeErrRes = null;
+    try {
+      writeErrRes = await cluster.node1.engine.executeQuery(
+        'UPDATE accounts SET balance = 250 WHERE id = 1',
+        [],
+        {sessionId},
+      );
+    } finally {
+      cluster.node1.engine.distributedWriteCoordinator.executePlan = origExecutePlan;
+    }
+    assert.equal(writeErrRes?.success, false, 'simulated write execution failure must return error');
+    assert.match(String(writeErrRes?.error || ''), /simulated transient write execution failure/u);
+    assert.ok(
+      cluster.node1.engine.transactionCoordinator.getTransaction(sessionId),
+      'explicit transaction must remain active after non-rollback write exception',
+    );
+    assert.equal(
+      countDbReservations(r1.db),
+      1,
+      'write-error cleanup must not erase explicit transaction durable reservation on co-located DB',
+    );
+    assert.equal(countDbReservations(r2.db), 1);
+    assert.equal(countDbReservations(r3.db), 1);
+
+    // 4b. Unscoped release helpers MUST clear only local memory and NEVER iterate PARTITION_DBS.
+    releaseTransactionReservations(tx.transactionId);
+    releaseSessionReservations(sessionId);
+    assert.equal(
+      getTransactionReservations(tx.transactionId).length,
+      0,
+      'unscoped helper clears local gateway memory mirror only',
+    );
+    assert.equal(
+      countDbReservations(r1.db),
+      1,
+      'unscoped helper must never delete durable reservation rows out-of-log',
+    );
+    assert.equal(countDbReservations(r2.db), 1);
+    assert.equal(countDbReservations(r3.db), 1);
+
+    // 4c. Lost settlement reply followed by gateway shutdown (SQLQueryEngine.shutdown ->
+    // releasePendingReservations) MUST NOT erase unresolved durable reservations on r1.db.
+    const coord = cluster.node1.engine.transactionCoordinator;
+    const origRollbackParticipant = coord.rollbackParticipant.bind(coord);
+    const origMaxRetries = coord.participantRetryMaxRetries;
+    coord.participantRetryMaxRetries = 0;
+    coord.rollbackParticipant = async () => {
+      throw new Error('simulated lost participant settlement reply');
+    };
+    let lostRollbackRes = null;
+    try {
+      lostRollbackRes = await coord.rollback(sessionId);
+    } finally {
+      coord.rollbackParticipant = origRollbackParticipant;
+      coord.participantRetryMaxRetries = origMaxRetries;
+    }
+    assert.equal(lostRollbackRes.success, false, 'lost settlement reply must leave rollback unsettled');
+    assert.equal(
+      countDbReservations(r1.db),
+      1,
+      'lost settlement reply must preserve unresolved durable reservation on co-located DB',
+    );
+
+    await cluster.pg1.stop();
+    await cluster.node1.engine.shutdown();
+    assert.equal(
+      countDbReservations(r1.db),
+      1,
+      'gateway shutdown / releasePendingReservations must not delete unresolved durable reservation',
+    );
+    assert.equal(countDbReservations(r2.db), 1);
+    assert.equal(countDbReservations(r3.db), 1);
+
+    // Competing writer on Node 2 MUST STILL be blocked with 55P03 while reservation is unresolved!
+    await clientB.query('BEGIN');
+    await expectSqlState(
+      clientB,
+      'UPDATE accounts SET balance = 999 WHERE id = 1',
+      [],
+      LOCK_NOT_AVAILABLE_SQLSTATE,
+    );
+    await clientB.query('ROLLBACK');
+
+    // 4d. Canonical replicated participant release settles the survived reservation cleanly across all replicas.
+    const canonicalRelease = await requestLockingReadReservation(r1, {
+      op: 'RELEASE_TRANSACTION',
+      transactionId: tx.transactionId,
+      sessionId,
+      participantId: `${tx.transactionId}:${ACCOUNTS_PARTITION_ID}`,
+    });
+    assert.equal(canonicalRelease.success, true, canonicalRelease.error);
+    const settledRelease = await cluster.group.waitFor(
+      () => countDbReservations(r1.db) === 0 &&
+        countDbReservations(r2.db) === 0 &&
+        countDbReservations(r3.db) === 0,
+    );
+    assert.equal(settledRelease, true, 'canonical participant release must clear lock across r1/r2/r3');
+
+    // Now successor write on Node 2 succeeds and commits cleanly.
+    await clientB.query('BEGIN');
+    await clientB.query('UPDATE accounts SET balance = 420 WHERE id = 1');
+    await clientB.query('COMMIT');
+    const verify = await clientB.query('SELECT balance FROM accounts WHERE id = 1');
+    assertNumericRowValues(verify.rows, [{balance: 420}]);
+  } finally {
+    await clientB.end().catch(() => {});
+    await cluster.cleanup();
   }
 });

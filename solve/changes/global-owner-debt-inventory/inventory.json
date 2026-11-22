@@ -23,8 +23,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3835001,
-        "sha256": "13d394101ab4606550898aa0f3a8c75632fc9c5cd908c2cf519548eafa02c1e3"
+        "bytes": 3835185,
+        "sha256": "3dc86e37005efdeeacbf38ce6ded119a7002fe456e167fb3ac4a37cfa63c688d"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "f3fbf8727234bbdacc25d0f709ce3e15dc5b4059a970e8080985147a02045d3d"
+    "inputDigest": "2159b901adb0f97c9f9a7a930529b2885839e2aeff940ab143e39fee2e464734"
   },
   "reconciliation": {
     "complexity": {
@@ -104,8 +104,8 @@
         "source": 21,
         "test": 21
       },
-      "observedCount": 36,
-      "assignedCount": 36
+      "observedCount": 37,
+      "assignedCount": 37
     },
     "duplication": [
       {
@@ -173,35 +173,35 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3835001,
-        "sha256": "13d394101ab4606550898aa0f3a8c75632fc9c5cd908c2cf519548eafa02c1e3"
+        "bytes": 3835185,
+        "sha256": "3dc86e37005efdeeacbf38ce6ded119a7002fe456e167fb3ac4a37cfa63c688d"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 7871,
         "sha256": "c74ac7531e8a59a48fcee584fa7767c7d6188e6489f4104eb404ded8e1400372"
       },
-      "sourceDigest": "2205b1d837445192614e9f8eece8b886d8800d0bf52a552b014b0430fb575353",
+      "sourceDigest": "ec6a75d44b163875f34e7b9d628523a37e79417d70d75eddb273061b3f04709d",
       "moduleCount": 6445,
-      "edgeCount": 38739,
+      "edgeCount": 38742,
       "unresolvedCount": 39
     }
   },
   "assignment": {
-    "sourceSignalCount": 2414,
-    "assignedSignalCount": 2414,
-    "uniqueAssignmentCount": 2414,
-    "digest": "5a9ad838198afec8a83a16d82fc4688c2c6780b88053846fe245dbf117694850"
+    "sourceSignalCount": 2415,
+    "assignedSignalCount": 2415,
+    "uniqueAssignmentCount": 2415,
+    "digest": "afaae844419a85892696cab336bae4d1e2a81ad1899213dd80c08935aa58d655"
   },
   "signalCounts": {
     "cognitive": 149,
     "complexity": 1741,
     "duplication": 448,
-    "fileSize": 36,
+    "fileSize": 37,
     "lintExclusion": 40
   },
   "summary": {
-    "filesWithDebt": 1256,
+    "filesWithDebt": 1257,
     "rankedBoundaryCount": 109,
     "semanticBoundaryCount": 20,
     "fallbackBoundaryCount": 89,
@@ -468,24 +468,24 @@
       "ownerAreas": [
         "test/query"
       ],
-      "fileCount": 36,
-      "signalCount": 38,
+      "fileCount": 37,
+      "signalCount": 39,
       "complexity": 7,
       "cognitive": 0,
-      "oversizedFiles": 0,
+      "oversizedFiles": 1,
       "duplicatedLines": 2012,
       "cloneTouches": 62,
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 9,
-      "importOut": 331,
-      "score": 229.2,
+      "importOut": 365,
+      "score": 241.2,
       "topPaths": [
         "test/query/deferred-hash.test.js",
         "test/query/sql-query-engine-partition-readiness-waits.test.js",
         "test/query/query-executor-deferred-control-plane-write-test-cases.js",
-        "test/query/routing-overlay-complete-state-retirement.test.js",
-        "test/query/internal-sql-adapter.integration.test.js"
+        "test/query/locking-read-authoritative-reservations.test.js",
+        "test/query/routing-overlay-complete-state-retirement.test.js"
       ]
     },
     {
@@ -3796,7 +3796,7 @@
           "scripts/run-test-structure-burndown-test-query-scenarios.js",
           "solve/quests/test-structure-burndown-test-query.json",
           "test/query/deferred-hash.test.js",
-          "test/query/internal-sql-adapter.integration.test.js",
+          "test/query/locking-read-authoritative-reservations.test.js",
           "test/query/query-executor-deferred-control-plane-write-test-cases.js",
           "test/query/routing-overlay-complete-state-retirement.test.js",
           "test/query/sql-query-engine-partition-readiness-waits.test.js"
@@ -3810,8 +3810,8 @@
           "test/query/deferred-hash.test.js",
           "test/query/query-executor-deferred-control-plane-write-test-cases.js",
           "test/query/sql-query-engine-partition-readiness-waits.test.js",
-          "test/query/routing-overlay-complete-state-retirement.test.js",
-          "test/query/internal-sql-adapter.integration.test.js"
+          "test/query/locking-read-authoritative-reservations.test.js",
+          "test/query/routing-overlay-complete-state-retirement.test.js"
         ],
         "engagementTargets": [
           {
@@ -3836,25 +3836,25 @@
             "structuralScore": 14.4
           },
           {
+            "path": "test/query/locking-read-authoritative-reservations.test.js",
+            "duplicatedLines": 0,
+            "oversizedLines": 1681,
+            "lintExclusions": 0,
+            "structuralScore": 12
+          },
+          {
             "path": "test/query/routing-overlay-complete-state-retirement.test.js",
             "duplicatedLines": 105,
             "oversizedLines": 0,
             "lintExclusions": 0,
             "structuralScore": 10.5
-          },
-          {
-            "path": "test/query/internal-sql-adapter.integration.test.js",
-            "duplicatedLines": 96,
-            "oversizedLines": 0,
-            "lintExclusions": 0,
-            "structuralScore": 9.6
           }
         ],
         "baseline": {
-          "score": 229.2,
+          "score": 241.2,
           "complexity": 7,
           "cognitive": 0,
-          "oversizedFiles": 0,
+          "oversizedFiles": 1,
           "duplicatedLines": 2012,
           "lintExclusions": 0
         },
