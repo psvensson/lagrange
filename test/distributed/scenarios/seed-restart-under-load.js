@@ -16,6 +16,25 @@ import {
   recordAndVerifyDiagnosticMarker,
 } from './user-load-table-and-marker-helpers.js';
 const ZERO = 0;
+const SEED_RESTART_ERROR_CODE = Object.freeze({
+  RESTART_FAILED: 'seed_restart_recovery_failed',
+});
+
+/**
+ * Typed error raised when seed restart fails, surfacing surviving-node
+ * load metrics while refusing seed recovery acceptance.
+ */
+class SeedRestartRecoveryError extends Error {
+  constructor(message, {code, seedNodeId, survivingNodeLoadMetrics, cause}) {
+    super(message, cause !== undefined ? {cause} : undefined);
+    this.name = 'SeedRestartRecoveryError';
+    this.code = code;
+    this.seedNodeId = seedNodeId;
+    this.seedRejoined = false;
+    this.seedRecoveryVerified = false;
+    this.survivingNodeLoadMetrics = survivingNodeLoadMetrics;
+  }
+}
 
 /**
  * Sleep helper.
@@ -26,6 +45,36 @@ function sleep(delayMs) {
   return new Promise((resolve) => {
     setTimeout(resolve, delayMs);
   });
+}
+
+function summarizeLoadMetrics(metrics) {
+  const total = Number(metrics?.total || ZERO);
+  const success = Number(metrics?.success || ZERO);
+  const failed = Number(metrics?.failed || ZERO);
+  return {
+    total,
+    success,
+    failed,
+    successRate: total > ZERO ? success / total : ZERO,
+  };
+}
+
+async function settleSurvivingLoadOnRestartFailure(loadRun) {
+  let settledMetrics = null;
+  let loadError = null;
+  try {
+    if (typeof loadRun?.cancel === 'function') {
+      loadRun.cancel();
+    }
+    settledMetrics = await loadRun.waitComplete();
+  } catch (error) {
+    loadError = error instanceof Error ? error.message : String(error);
+  }
+  const summary = summarizeLoadMetrics(settledMetrics);
+  if (loadError !== null) {
+    return {...summary, loadError};
+  }
+  return summary;
 }
 
 /**
@@ -54,6 +103,17 @@ async function run(cluster, options = {}) {
     consistencyTimeoutMs,
     minSuccessRate,
   } = resolveSeedRestartUnderLoadScenarioConfig(scenarioOptions);
+
+  assert.equal(
+    typeof cluster?.waitForAllActive,
+    'function',
+    'Cluster must expose waitForAllActive()',
+  );
+  assert.equal(
+    typeof cluster?.waitForConsistencyConvergence,
+    'function',
+    'Cluster must expose waitForConsistencyConvergence()',
+  );
 
   const nodes = cluster.getNodes();
   const seedNode = nodes.find((node) => node.role === 'seed') || nodes[0];
@@ -86,26 +146,39 @@ async function run(cluster, options = {}) {
   });
 
   await sleep(preRestartDelayMs);
-  if (typeof cluster.waitForAllActive === 'function') {
-    await cluster.waitForAllActive({
-      mode: 'load',
-      timeoutMs: preRestartActiveTimeoutMs,
-    });
-  }
+  await cluster.waitForAllActive({
+    mode: 'load',
+    timeoutMs: preRestartActiveTimeoutMs,
+  });
   const preRestartMarker = await recordAndVerifyDiagnosticMarker(cluster, {
     markerId: 'seed-restart-under-load-pre-restart',
   });
 
   availableLoadNodeIds.delete(String(seedNode.id));
-  let restartWarning = null;
   try {
     await cluster.restartNode(seedNode.id, {
       readinessTimeoutMs: restartReadinessTimeoutMs,
     });
-    availableLoadNodeIds.add(String(seedNode.id));
   } catch (error) {
-    restartWarning = error instanceof Error ? error.message : String(error);
+    const survivingNodeLoadMetrics =
+      await settleSurvivingLoadOnRestartFailure(loadRun);
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new SeedRestartRecoveryError(
+      `Seed node ${seedNode.id} failed to restart and rejoin: ${reason}`,
+      {
+        code: SEED_RESTART_ERROR_CODE.RESTART_FAILED,
+        seedNodeId: seedNode.id,
+        survivingNodeLoadMetrics,
+        cause: error,
+      },
+    );
   }
+
+  let preRejoinMetrics = null;
+  if (typeof loadRun?.getMetrics === 'function') {
+    preRejoinMetrics = loadRun.getMetrics();
+  }
+  availableLoadNodeIds.add(String(seedNode.id));
 
   const convergence = await cluster.waitForConvergence({
     settleTimeoutMs: convergenceTimeoutMs,
@@ -132,35 +205,33 @@ async function run(cluster, options = {}) {
       ')',
   );
 
-  if (
-    restartWarning === null &&
-    typeof cluster.waitForAllActive === 'function'
-  ) {
-    await cluster.waitForAllActive({
-      mode: 'load',
-      timeoutMs: postRestartActiveTimeoutMs,
-    });
-  }
+  await cluster.waitForAllActive({
+    mode: 'load',
+    timeoutMs: postRestartActiveTimeoutMs,
+  });
 
   await sleep(postRestartQuietWindowMs);
 
-  if (restartWarning === null) {
-    await cluster.waitForConsistencyConvergence({
-      timeoutMs: consistencyTimeoutMs,
-      forceRepairAfterMs: 0,
-      tolerateActiveNodeSkew: true,
-      maxActiveNodeSkew: 1,
-    });
-  }
+  await cluster.waitForConsistencyConvergence({
+    timeoutMs: consistencyTimeoutMs,
+    forceRepairAfterMs: 0,
+    tolerateActiveNodeSkew: true,
+    maxActiveNodeSkew: 1,
+  });
 
   const diagnosticMarker = await recordAndVerifyDiagnosticMarker(cluster, {
     markerId: 'seed-restart-under-load-post-restart',
-    writerNode: restartWarning === null ? seedNode : undefined,
+    writerNode: seedNode,
   });
+
+  const survivingNodeLoadMetrics = summarizeLoadMetrics(
+    preRejoinMetrics !== null ? preRejoinMetrics : metrics,
+  );
 
   return {
     seedNodeId: seedNode.id,
-    restartWarning,
+    seedRejoined: true,
+    seedRecoveryVerified: true,
     tableName: provisionedTable.tableName,
     diagnosticMarker,
     diagnosticMarkers: {
@@ -168,9 +239,14 @@ async function run(cluster, options = {}) {
       postRestart: diagnosticMarker,
     },
     loadMetrics: metrics,
+    survivingNodeLoadMetrics,
     successRate,
     convergenceTiming: convergence,
   };
 }
 
-export {run};
+export {
+  SEED_RESTART_ERROR_CODE,
+  SeedRestartRecoveryError,
+  run,
+};

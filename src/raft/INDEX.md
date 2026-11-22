@@ -45,6 +45,7 @@ documentClass: generated
 - [raft-rs-group-constants.js](raft-rs-group-constants.js) - How a raft-rs group is created and restored, and the tuning the core is given. (importers: many)
 - [raft-rs-group-membership-admission.js](raft-rs-group-membership-admission.js) - The one group-neutral owner of admitting a peer into a raft-rs group's configuration (design R3 section 1.6,... (importers: many)
 - [raft-rs-host-contract.js](raft-rs-host-contract.js) - The host contract of one raft-rs 0.7 Ready cycle, in order, derived from raft-rs 0.7 itself. (importers: few)
+- [raft-rs-inbound-queue.js](raft-rs-inbound-queue.js) - The bytes a delivered envelope holds in the queue: its fixed fields and the base64 strings it carries (each entry's... (importers: one)
 - [raft-rs-inbound-timer-custody.js](raft-rs-inbound-timer-custody.js) - Custody of one admitted native inbound drain timer, NOT a second drain driver. (importers: one)
 - [raft-rs-ingress-constants.js](raft-rs-ingress-constants.js) - What the host can refuse a raft-rs message for, and the two schema ranges the binding itself defines. (importers: hub)
 - [raft-rs-ingress.js](raft-rs-ingress.js) - The safety boundary around `step`: envelope and routing only. (importers: one)

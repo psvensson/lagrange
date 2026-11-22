@@ -56,7 +56,7 @@ documentClass: generated
 - [query-executor-partition-attempt-budget.js](query-executor-partition-attempt-budget.js) - One spent-bound reporter per executeOnPartition call: the deadline (or the read attempt limit) is reported once,... (importers: few)
 - [query-executor-partition-candidate-state.js](query-executor-partition-candidate-state.js) - Report one delivery attempt to a straggler-hedging observer when the caller supplied one, so a speculative retry can... (importers: one)
 - [query-executor-partition-delivery.js](query-executor-partition-delivery.js) - No leading comment; first export: QueryExecutorPartitionDelivery. (importers: one)
-- [query-executor-partition-failure.js](query-executor-partition-failure.js) - No leading comment; first export: applySuccessfulCandidateAffinity. (importers: one)
+- [query-executor-partition-failure.js](query-executor-partition-failure.js) - No leading comment; first export: applySuccessfulCandidateAffinity. (importers: few)
 - [query-executor-partition-request-builders.js](query-executor-partition-request-builders.js) - No leading comment; first export: createDefaultPartitionRequestBuilder. (importers: many)
 - [query-executor-partition-routing-candidates.js](query-executor-partition-routing-candidates.js) - Resolve the routed service row that produced the current delivery target. (importers: one)
 - [query-executor-partition-routing-snapshot.js](query-executor-partition-routing-snapshot.js) - Build one owner-style snapshot for partition routing diagnostics. (importers: one)

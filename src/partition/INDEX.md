@@ -117,7 +117,7 @@ documentClass: generated
 - [partition-service-core-base.js](partition-service-core-base.js) - Build this replica's consensus operation port. (importers: many)
 - [partition-service-create-admission-migration-constants.js](partition-service-create-admission-migration-constants.js) - No leading comment; first export: PARTITION_SERVICE_CREATE_ADMISSION_COLUMN. (importers: one)
 - [partition-service-durability-fitness.js](partition-service-durability-fitness.js) - Report one spent leader-durability bound with the unfitness evidence. (importers: few)
-- [partition-service-entry-apply-base.js](partition-service-entry-apply-base.js) - Handle incoming transport message. (importers: few)
+- [partition-service-entry-apply-base.js](partition-service-entry-apply-base.js) - Handle incoming transport message. (importers: many)
 - [partition-service-hydration-image-methods.js](partition-service-hydration-image-methods.js) - The partition's hydration image (CDC decision D4, owner 2026-10-26): the rows of one admitted read together with the... (importers: few)
 - [partition-service-leader-activation-methods.js](partition-service-leader-activation-methods.js) - Leader activation and its rebalancer leadership sink. (importers: one)
 - [partition-service-leadership-transfer.js](partition-service-leadership-transfer.js) - Ask this replica's consensus port to transfer the partition's leadership. (importers: few)
