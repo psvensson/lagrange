@@ -344,10 +344,10 @@ async function createJoinOperation(harness, {type = OperationType.ADD,
     stats: {operationsCreated: 0},
     systemTableCache: metadataCache(harness.partitionId, [],
       {leaderNodeId: leaderHint}),
-    messageRouter: harness.router,
+    // The node's projection of the partition's SERVICES rows (a join's
+    // address book is read from it).
     repository: {getEntityServiceRows: () => rows.map((row) => ({...row}))},
-    getAuthoritativeEntityServiceRowsObservation: async () => ({
-      available: true, rows: rows.map((row) => ({...row}))}),
+    messageRouter: harness.router,
     controlPlaneReadinessService: {getNodeReadinessSync: () => null},
     resolveEntitySizeBytes: () => 0,
     ensureProvisioningAdmissionAllowed: async () => undefined,

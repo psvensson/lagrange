@@ -506,17 +506,23 @@ function createMockTransactionCoordinator() {
   };
 }
 
+// A SERVICES answer as the services-p1 leader gives it to an owner-fact
+// read: a successful answer gains the leader's complete witness.
+function withServicesLeaderWitness(tableName, answer) {
+  return tableName === SYSTEM_TABLE_NAME.SERVICES && answer?.success === true ?
+    {rowSetComplete: true, ...answer,
+      readAuthorityWitness: buildMockPolicyAuthorityWitness(
+        `${SYSTEM_TABLE_NAME.SERVICES}-p1`)} :
+    answer;
+}
+
 function buildMockPolicyAuthorityWitness(partitionId) {
   return Object.freeze({
-    state: 'observed',
-    partitionId,
-    servingNodeId: 'test-node-1',
-    servingReplicaId: `${partitionId}-r1`,
-    role: 'leader',
-    leaderNodeId: 'test-node-1',
-    term: 1,
-    commitIndex: 1,
-    appliedIndex: 1,
+    state: 'observed', partitionId, servingNodeId: 'test-node-1',
+    servingReplicaId: `${partitionId}-r1`, role: 'leader', leaderNodeId: 'test-node-1',
+    term: 1, commitIndex: 1, appliedIndex: 1, currentTermApplied: true, electionLogApplied: true,
+    leaderRead: Object.freeze({kind: 'owner_fact',
+      floor: Object.freeze({partitionId, index: 0, term: 0})}),
     observedAtMs: 1_000_000,
   });
 }
@@ -1468,6 +1474,7 @@ function installActualReplicaObservationResolver(coordinator, resolver) {
 }
 
 export {
+  withServicesLeaderWitness,
   createFixtureSystemMutationPort, createObservationOnlyMutationPort, withExecutorMutationPort,
   applyOperationRowUpdate, createOperationRowInsertPort, createOperationRowUpdatePort,
   routeOperationRowUpdates,

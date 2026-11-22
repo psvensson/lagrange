@@ -272,12 +272,9 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
           ],
         },
       });
-      const originalGetAuthoritativeEntityServiceRows =
-        coordinator.getAuthoritativeEntityServiceRows;
       const originalGetEntityInFlightReplicaIds =
         coordinator.getEntityInFlightReplicaIds;
 
-      coordinator.getAuthoritativeEntityServiceRows = async () => [];
       coordinator.getEntityInFlightReplicaIds = async () => new Set();
 
       try {
@@ -293,8 +290,6 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
           'allocator should extend past the highest observed/excluded replica id instead of recycling a lower gap',
         );
       } finally {
-        coordinator.getAuthoritativeEntityServiceRows =
-          originalGetAuthoritativeEntityServiceRows;
         coordinator.getEntityInFlightReplicaIds =
           originalGetEntityInFlightReplicaIds;
         await coordinator.shutdown();

@@ -6,8 +6,16 @@ import {
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
 import {
+  buildMockPolicyAuthorityWitness,
   createTestCoordinator,
 } from './test-helpers.js';
+import {readOwnerFact} from '../../src/control-plane/control-plane-owner-fact-read.js';
+import {REBALANCE_COORDINATOR_SHARED} from
+  '../../src/rebalancer/rebalance-coordinator-shared.js';
+import {STORAGE_ADMISSION_DECISION_TYPE} from
+  '../../src/rebalancer/storage-admission-constants.js';
+
+const {TOPOLOGY_GUARD_REASON} = REBALANCE_COORDINATOR_SHARED;
 
 // Verdict matrix for the failed-authoritative-read-admission-verdict
 // invariant (architecture/contracts/invariants.json; GP-8 of the
@@ -17,6 +25,9 @@ import {
 // fail-open holds admit with their deadlock witness. The fail-open rows
 // double as the red-on-revert witness: they go red if the hold ever
 // silently flips polarity or changes its read-gap semantics.
+// The SERVICES rows the over-target hold and the topology guard read are the
+// services-p1 owner fact (readOwnerFact); a failed read is its UNAVAILABLE
+// answer, never rows.
 
 const TEST_PARTITION_ID = 'sql_write_operations-p1';
 const TEST_NODE_ID = 'node-verdict-a';
@@ -79,6 +90,26 @@ async function createVerdictCoordinator(t, overrides) {
   return coordinator;
 }
 
+// The services-p1 owner fact the hold reads, issued by the production read
+// over a reader that answers as the leader (or fails).
+function servicesOwnerFact(answer) {
+  return () => readOwnerFact(async () => answer, {
+    tableName: 'services',
+    sql: 'SELECT * FROM services WHERE service_type = ? AND partition_id = ?',
+    params: ['partition', TEST_PARTITION_ID],
+    floor: {partitionId: 'services-p1', index: 0, term: 0},
+    deadline: {timeoutMs: 5000},
+    routingReadinessDimension:
+      REBALANCE_COORDINATOR_SHARED.CONTROL_PLANE_READINESS_DIMENSION
+        .CONTROL_PLANE_RECOVERY_ELIGIBLE,
+  });
+}
+
+function servicesOwnerRows(rows) {
+  return servicesOwnerFact({success: true, rowSetComplete: true, rows,
+    readAuthorityWitness: buildMockPolicyAuthorityWitness('services-p1')});
+}
+
 function addLikeContext() {
   return {
     move: {enforceConcurrentOperationBudget: true},
@@ -96,12 +127,11 @@ test(
   async (t) => {
     initializeTestEnvironment();
     const coordinator = await createVerdictCoordinator(t, {
-      // Read gap: the authoritative services owner is unavailable — the
-      // production wrapper (rebalance-coordinator-operation-read-methods.js
-      // :429-442) discards availability and returns the empty rows of the
-      // failed observation, which is exactly what the hold's :226-228
-      // empty-read return consumes. Returning [] here IS the failed read.
-      getAuthoritativeEntityServiceRows: async () => [],
+      // Read gap: the services-p1 leader's read fails, so the owner fact the
+      // hold reads (and the only SERVICES rows it may count) is UNAVAILABLE.
+      // This IS the failed read.
+      readEntityServiceOwnerFact: servicesOwnerFact({success: false,
+        error: READ_GAP_ERROR}),
       // The op-observation lane reports no conflict so the call reaches the
       // over-target hold itself.
       getEntityAuthoritativeOperationObservation: async () => ({
@@ -133,7 +163,7 @@ test(
     const rows = overTargetServiceRows();
     t.equal(rows.length, OVER_TARGET_ROW_COUNT, 'fixture is over target');
     const coordinator = await createVerdictCoordinator(t, {
-      getAuthoritativeEntityServiceRows: async () => rows,
+      readEntityServiceOwnerFact: servicesOwnerRows(rows),
       getEntityAuthoritativeOperationObservation: async () => ({
         state: 'empty',
         operationCount: 0,
@@ -162,8 +192,8 @@ test(
   async (t) => {
     initializeTestEnvironment();
     const coordinator = await createVerdictCoordinator(t, {
-      getAuthoritativeEntityServiceRows: async () =>
-        overTargetServiceRows().slice(0, AT_TARGET_ROW_COUNT),
+      readEntityServiceOwnerFact: servicesOwnerRows(
+        overTargetServiceRows().slice(0, AT_TARGET_ROW_COUNT)),
       getEntityAuthoritativeOperationObservation: async () => ({
         state: 'empty',
         operationCount: 0,
@@ -212,5 +242,82 @@ test(
       'a deferred authoritative observation must throw the typed ' +
         'deferred-visibility error, never admit',
     );
+  },
+);
+
+// The topology guard (the invariant's "replica_inventory_unusable denial"):
+// an ADD the planner proposes, on a node that hosts no replica.
+function topologyGuardContext() {
+  return {
+    move: {type: OperationType.ADD, nodeId: 'node-verdict-b',
+      enforceConcurrentOperationBudget: true},
+    normalizedMoveType: OperationType.ADD,
+    partitionId: TEST_PARTITION_ID,
+    entityType: 'partition',
+    entityId: TEST_PARTITION_ID,
+  };
+}
+
+async function topologyGuardRejection(coordinator) {
+  try {
+    await coordinator.ensureCreateTopologyGuardAllowed(topologyGuardContext());
+  } catch (error) {
+    return error;
+  }
+  return null;
+}
+
+test(
+  'fail-closed gate: the topology guard decides nothing on an unavailable ' +
+    'SERVICES owner fact (typed deferral, never an admission)',
+  async (t) => {
+    initializeTestEnvironment();
+    const coordinator = await createVerdictCoordinator(t, {
+      readEntityServiceOwnerFact: servicesOwnerFact({success: false,
+        error: READ_GAP_ERROR}),
+      resolveTopologyGuardTargetReplicaCount: async () =>
+        TARGET_REPLICA_COUNT,
+    });
+
+    const admission = (await topologyGuardRejection(coordinator))?.admissionResult;
+    t.equal(admission?.allowed, false, 'the guard does not admit on the read gap');
+    t.equal(admission?.decisionType, STORAGE_ADMISSION_DECISION_TYPE.DEFERRED,
+      'a typed defer: no decision is taken from an unavailable read');
+    t.same(admission?.blockingReasons,
+      [TOPOLOGY_GUARD_REASON.REPLICA_INVENTORY_UNAVAILABLE]);
+    t.ok(admission?.topologySnapshot?.authoritativeReasonCode,
+      'the deferral names why the owner fact is unavailable');
+  },
+);
+
+test(
+  'fail-closed gate: the topology guard denies replica_inventory_unusable ' +
+    'when its authoritative operation read fails under a readable SERVICES ' +
+    'owner fact',
+  async (t) => {
+    initializeTestEnvironment();
+    const coordinator = await createVerdictCoordinator(t, {
+      readEntityServiceOwnerFact: servicesOwnerRows(
+        overTargetServiceRows().slice(0, 1)),
+      getEntityRecoveryOperationObservation: async () => ({
+        state: 'deferred',
+        operationCount: null,
+        operations: [],
+        deferredOutcome: {
+          reason: 'authoritative_observation_deferred',
+          detail: READ_GAP_ERROR,
+        },
+        retryAfterMs: 50,
+      }),
+      resolveTopologyGuardTargetReplicaCount: async () =>
+        TARGET_REPLICA_COUNT,
+    });
+
+    const admission = (await topologyGuardRejection(coordinator))?.admissionResult;
+    t.equal(admission?.allowed, false, 'the guard does not admit on the read gap');
+    t.equal(admission?.decisionType, STORAGE_ADMISSION_DECISION_TYPE.BLOCKED,
+      'a typed deny');
+    t.same(admission?.blockingReasons,
+      [TOPOLOGY_GUARD_REASON.REPLICA_INVENTORY_UNUSABLE]);
   },
 );

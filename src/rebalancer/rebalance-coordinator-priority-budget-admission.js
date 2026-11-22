@@ -20,9 +20,9 @@ import {
 import {
   PRIORITY_CONTROL_PLANE_REMOVE_LANE_WORKFLOW_STEPS_BY_TYPE,
 } from './replica-operation-step-policy.js';
-import {
-  isNonLedgerPriorityPlacementCurePartition,
-} from './replica-placement-cure-policy.js';
+import {isNonLedgerPriorityPlacementCurePartition} from './replica-placement-cure-policy.js';
+import {ownerFactEntityServiceRows} from './entity-service-row-read.js';
+import {OWNER_FACT_STATE} from '../control-plane/control-plane-owner-fact-read.js';
 
 const LOCAL_STR_CRITICAL_PARTITION = 'Critical partition ';
 const LOCAL_STR_FUNCTION = 'function';
@@ -45,6 +45,8 @@ const LOCAL_STR_CRITICAL_LANE_HELD_OVER_TARGET =
 const LOCAL_STR_CRITICAL_LANE_SPREAD_CURE_ADMITTED =
   'critical-partition create lane over-target hold exempted: ' +
   'planner-retained priority-spread cure ADD';
+const LOCAL_STR_CRITICAL_LANE_HOLD_READ_GAP_OPEN = 'critical-partition create lane ' +
+  'over-target hold open: SERVICES owner fact unavailable (read gap, deadlock witness G1)';
 
 // Statuses that PHYSICALLY occupy a partition slot: a live replica (active) OR a
 // source still draining (removing) -- the latter is the over-replication surplus
@@ -52,10 +54,7 @@ const LOCAL_STR_CRITICAL_LANE_SPREAD_CURE_ADMITTED =
 // hold never sees the surplus. Coming-up statuses (pending/creating/syncing) are
 // deliberately excluded so a 0->N provisioning fan-out still admits until the Nth
 // lands; removed/failed are gone and never count.
-const LANE_OCCUPANCY_STATUSES = new Set([
-  ReplicaStatus.ACTIVE,
-  ReplicaStatus.REMOVING,
-]);
+const LANE_OCCUPANCY_STATUSES = new Set([ReplicaStatus.ACTIVE, ReplicaStatus.REMOVING]);
 
 const ENTITY_SERIALIZED_ADD_LIKE_OPERATION_TYPES = Object.freeze([
   OperationType.ADD,
@@ -213,32 +212,30 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
    * its one retained priority-spread cure ADD, which this hold would refuse:
    * that pair is a static deadlock, so the cure ADD is exempted below. Fails
    * OPEN if the authoritative row read is unavailable (never blocks on a read gap).
+   * The rows are the SERVICES owner fact's (the leader's, complete); an UNAVAILABLE
+   * fact is no rows and no count (failed-authoritative-read-admission-verdict, G1).
    *
    * @param {Object} context
    * @return {Promise<void>}
    * @private
    */
   async holdCriticalPartitionCreateLaneIfOverTarget(context) {
-    const targetReplicaCount =
-      await this.resolveTopologyGuardTargetReplicaCount({
-        partitionId: context?.partitionId,
-        entityType: context?.entityType || SERVICE_TYPE.PARTITION,
-      });
-    if (!Number.isFinite(targetReplicaCount) || targetReplicaCount <= 0) {
+    const identity = {entityType: context?.entityType || SERVICE_TYPE.PARTITION,
+      entityId: context?.entityId || context?.partitionId};
+    const targetReplicaCount = await this.resolveTopologyGuardTargetReplicaCount(
+      {partitionId: context?.partitionId, entityType: identity.entityType});
+    if (!Number.isFinite(targetReplicaCount) || targetReplicaCount <= 0) return;
+    const inventoryFact = await this.readEntityServiceOwnerFact(identity);
+    if (inventoryFact.state !== OWNER_FACT_STATE.READY) {
+      this.logger?.info?.(LOCAL_STR_CRITICAL_LANE_HOLD_READ_GAP_OPEN,
+        {partitionId: context?.partitionId || null, reason: inventoryFact.reason});
       return;
     }
-    const serviceRows = await this.getAuthoritativeEntityServiceRows({
-      partitionId: context?.partitionId,
-      entityType: context?.entityType || SERVICE_TYPE.PARTITION,
-      entityId: context?.entityId || context?.partitionId,
-    });
-    if (!Array.isArray(serviceRows) || serviceRows.length === 0) {
-      return;
-    }
+    const serviceRows = ownerFactEntityServiceRows(inventoryFact, identity);
+    if (serviceRows.length === 0) return;
     const capturedAtMs = this.nowFn();
     const inventory = this.replicaInventoryBuilder({
-      entityType: context?.entityType || SERVICE_TYPE.PARTITION,
-      entityId: context?.entityId || context?.partitionId,
+      ...identity,
       capturedAtMs,
       committedRowsObservation: {
         state: 'present',
@@ -274,8 +271,7 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
     // static deadlock, not a transient hold (live witness: run
     // public-path-multinode-baseline-20260811T135503Z, 700 held cycles while
     // priority spread stayed 2/3 all run). Admit the one cure ADD — the same
-    // conjunct isEngagedPrioritySpreadCureMove already encodes one step later
-    // — computed on this hold's own alive-guarded inventory: ADD-only (the
+    // conjunct, computed on this hold's own alive-guarded inventory: ADD-only (the
     // REPLACE-churn hold this lane exists for is untouched), spread-cure
     // typed, non-ledger priority partition, target node not already hosting,
     // and alive-distinct coverage still below target. Bound: one in-flight

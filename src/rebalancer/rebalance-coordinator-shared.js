@@ -116,7 +116,6 @@ import {
 } from './replica-operation-repository.js';
 import {OperationWorkflowOwner} from './operation-workflow-owner.js';
 import {ProvisioningAdmissionPolicy} from './provisioning-admission-policy.js';
-import {buildReplicatedServiceBootstrapTopology} from '../service/replicated-service-topology.js';
 
 /**
  * SQL queries for replica_operations table access.
@@ -194,12 +193,19 @@ const RECENT_OPERATION_INTENT_VISIBILITY_STATE = Object.freeze({
 });
 const TOPOLOGY_GUARD_STATE = Object.freeze({
   ALLOWED: 'allowed',
+  // No decision: the SERVICES owner fact is unavailable (deferred, retried
+  // on the planner's scheduled turn).
+  INVENTORY_UNAVAILABLE: 'inventory_unavailable',
+  // A decision: the inventory was read and is not usable for a topology
+  // increase (source changed during capture, skew, conflicts, operations
+  // unavailable).
   INVENTORY_UNUSABLE: 'inventory_unusable',
   TARGET_UNAVAILABLE: 'target_unavailable',
   TARGET_NODE_OCCUPIED: 'target_node_occupied',
   TARGET_REPLICA_COUNT_SATISFIED: 'target_replica_count_satisfied',
 });
 const TOPOLOGY_GUARD_REASON = Object.freeze({
+  REPLICA_INVENTORY_UNAVAILABLE: 'replica_inventory_unavailable',
   REPLICA_INVENTORY_UNUSABLE: 'replica_inventory_unusable',
   PARTITION_TARGET_UNAVAILABLE: 'partition_target_unavailable',
   TARGET_NODE_ALREADY_OCCUPIED: 'target_node_already_occupied',
@@ -288,7 +294,6 @@ export const REBALANCE_COORDINATOR_SHARED = {
   buildPriorityRecoveryOperationAssessment,
   buildPriorityRecoveryOperationContextFromRecord,
   buildPriorityRecoveryPartitionAssessment,
-  buildReplicatedServiceBootstrapTopology,
   buildTimeoutClassification,
   classifySystemPartition,
   createChildTimeoutBudget,

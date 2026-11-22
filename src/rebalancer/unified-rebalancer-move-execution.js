@@ -125,12 +125,20 @@ function buildCoordinatorMoveSafetyRequest(move, context) {
   };
 }
 
+// A typed refusal's own reason (an unavailable read's reasonCode), carried to
+// the skipped-move log line with the skip.
+function typedRefusalDetail(error) {
+  return error.reasonCode ?
+    {error: Object.freeze({reasonCode: error.reasonCode, message: error.message})} : {};
+}
+
 function buildCoordinatorCreationErrorResult(rebalancer, error, move) {
   if (error?.rebalanceSkipReason) {
     return rebalancer.buildSkippedMoveResult(
       error.rebalanceSkipReason,
       move,
-      error.admissionResult ? {admission: error.admissionResult} : {},
+      {...typedRefusalDetail(error),
+        ...(error.admissionResult ? {admission: error.admissionResult} : {})},
     );
   }
   if (error?.admissionResult) {

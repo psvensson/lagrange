@@ -8,7 +8,7 @@ import {
 import {
   REBALANCE_COORDINATOR_SHARED,
 } from '../../src/rebalancer/rebalance-coordinator-shared.js';
-import {createTestCoordinator} from './test-helpers.js';
+import {buildMockPolicyAuthorityWitness, createTestCoordinator} from './test-helpers.js';
 
 const TEST_PRIORITY_PARTITION_ID = 'schema_operations-p1';
 const TEST_NON_PRIORITY_PARTITION_ID = 'tables-p1';
@@ -98,6 +98,16 @@ function createVisibilityCoordinator({
   });
 }
 
+// The services-p1 leader answers the SERVICES read with `rows`.
+function answerServicesAsLeader(coordinator, rows) {
+  const gateway = coordinator.controlPlaneSystemTableGateway;
+  const readAuthoritativeRows = gateway.readAuthoritativeRows;
+  gateway.readAuthoritativeRows = async (tableName, ...rest) =>
+    tableName === 'services' ? {success: true, rowSetComplete: true, rows,
+      readAuthorityWitness: buildMockPolicyAuthorityWitness('services-p1')} :
+      readAuthoritativeRows(tableName, ...rest);
+}
+
 function buildReplaceMove(partitionId, sourceReplicaId, sourceNodeId) {
   return {
     type: OperationType.REPLACE,
@@ -144,17 +154,14 @@ test('recent completed REPLACE target visibility guard', async (t) => {
     'waits for planner cache settlement despite an owner-active row',
     async (t) => {
       const coordinator = createVisibilityCoordinator();
-      coordinator.getAuthoritativeEntityServiceRowsObservation = async () => ({
-        available: true,
-        rows: [
-          buildServiceRow(
-            TEST_PRIORITY_PARTITION_ID,
-            TEST_COMPLETED_TARGET_REPLICA_ID,
-            TEST_COMPLETED_TARGET_NODE_ID,
-            ReplicaStatus.ACTIVE,
-          ),
-        ],
-      });
+      answerServicesAsLeader(coordinator, [
+        buildServiceRow(
+          TEST_PRIORITY_PARTITION_ID,
+          TEST_COMPLETED_TARGET_REPLICA_ID,
+          TEST_COMPLETED_TARGET_NODE_ID,
+          ReplicaStatus.ACTIVE,
+        ),
+      ]);
       try {
         const error = await captureCreateError(
           coordinator,
@@ -285,17 +292,14 @@ test('recent completed REPLACE target visibility guard', async (t) => {
   await t.test('releases the placement lease on owner-terminal evidence',
     async (t) => {
       const coordinator = createVisibilityCoordinator();
-      coordinator.getAuthoritativeEntityServiceRowsObservation = async () => ({
-        available: true,
-        rows: [
-          buildServiceRow(
-            TEST_PRIORITY_PARTITION_ID,
-            TEST_COMPLETED_TARGET_REPLICA_ID,
-            TEST_COMPLETED_TARGET_NODE_ID,
-            ReplicaStatus.FAILED,
-          ),
-        ],
-      });
+      answerServicesAsLeader(coordinator, [
+        buildServiceRow(
+          TEST_PRIORITY_PARTITION_ID,
+          TEST_COMPLETED_TARGET_REPLICA_ID,
+          TEST_COMPLETED_TARGET_NODE_ID,
+          ReplicaStatus.FAILED,
+        ),
+      ]);
       try {
         const error = await captureCreateError(
           coordinator,

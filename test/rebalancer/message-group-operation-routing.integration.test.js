@@ -441,72 +441,9 @@ test('Message-group operation routing integration', async (t) => {
           'the inserted row carries the message_group entity type');
         t.equal(insertedRow?.entity_id, 'mg-1',
           'the inserted row carries the message-group entity id');
-        const stepsHistory = JSON.parse(insertedRow.steps_history);
-        t.same(
-          stepsHistory[0]?.replicaIds,
-          ['mg-1-r1', 'mg-1-r2', 'mg-1-r3', 'mg-1-r4'],
-          'inserted steps history should persist canonical replica ids',
-        );
-      } finally {
-        await coordinator.shutdown();
-      }
-    },
-  );
-
-  await t.test(
-    'coordinator fails closed when message-group topology is unavailable',
-    async (t) => {
-      const sqlQueryEngine = {
-        executeQuery: async () => ({success: true, rows: [], changes: 1}),
-      };
-      const coordinator = new RebalanceCoordinator({
-        nodeId: 'node-1',
-        systemTableCache: {
-          get: () => null,
-          filter: () => [],
-        },
-        cdcIntegrationService: {
-          upsertSystemTableRow: async () => ({success: true}),
-          updateSystemTableRow: async () => ({success: true}),
-        },
-        messageRouter: {
-          deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {
-            status: 'initiated',
-          })),
-        },
-        tablePolicyService: {
-          getPolicyForPartition: () => ({}),
-        },
-        sqlQueryEngine,
-        controlPlaneSystemTableGateway: createMockControlPlaneSystemTableGateway(sqlQueryEngine),
-        transactionCoordinator: createMockTransactionCoordinator(),
-        controlPlaneReadinessService: createMockControlPlaneReadinessService({
-          defaultRepairEligible: true,
-        }),
-        storageAdmissionService: {
-          checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
-          checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
-        },
-        storageAccountingService: {
-          estimateReplicaBytes: () => 1,
-        },
-        enableTimeouts: false,
-      });
-      coordinator.initialize();
-
-      try {
-        await t.rejects(
-          coordinator.createOperation({
-            type: 'ADD',
-            partitionId: 'mg-1',
-            entityType: 'message_group',
-            entityId: 'mg-1',
-            nodeId: 'node-4',
-            replicaId: 'mg-1-r4',
-          }),
-          /without existing canonical topology/,
-          'message-group createOperation should fail closed when topology is missing',
-        );
+        // No creation-time bootstrap topology for a message group: its
+        // membership never changes through an operation (owner decision
+        // 2026-10-04), so no creator builds one.
       } finally {
         await coordinator.shutdown();
       }

@@ -7,14 +7,21 @@
  * groups are keyed by group_id and partitions by partition_id.
  */
 
-import {SYSTEM_TABLE_NAME} from
-  '../bootstrap/system-table-schemas-constants.js';
+import {
+  INITIAL_PARTITION_IDS,
+  SYSTEM_TABLE_NAME,
+} from '../bootstrap/system-table-schemas-constants.js';
 import {SERVICE_TYPE} from '../constants/service.js';
 import {UNIFIED_SERVICE_TYPE} from
   '../constants/unified-service-lifecycle.js';
 import {
   readAuthoritativeControlPlaneRows,
 } from '../control-plane/control-plane-system-table-gateway.js';
+import {
+  ownerFactRows,
+  readHint,
+  readOwnerFact,
+} from '../control-plane/control-plane-owner-fact-read.js';
 import {
   runtimeServiceReplicaBelongsToEntity,
 } from './runtime-service-replica-identity.js';
@@ -29,6 +36,15 @@ const ENTITY_SERVICE_ROW_READ_SQL = Object.freeze({
 });
 const UNSUPPORTED_REBALANCER_ENTITY_TYPE_REASON =
   'unsupported_rebalancer_entity_type';
+// The coordinator holds no position in the SERVICES partition yet, so its
+// owner-fact reads ask for none: a leader that has applied its election log
+// and its commit. A SERVICES position carried on the ledger's last terminal
+// operation is the design candidate for this floor (stage-2 record).
+const NO_SERVICES_POSITION = Object.freeze({
+  partitionId: INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES],
+  index: 0,
+  term: 0,
+});
 
 function buildEntityServiceRowRead({entityType, entityId}) {
   if (entityType === SERVICE_TYPE.PARTITION) {
@@ -105,8 +121,73 @@ async function readAuthoritativeEntityServiceRows(
   };
 }
 
+function requireEntityServiceRowRead(identity) {
+  const read = buildEntityServiceRowRead(identity);
+  if (!read) {
+    throw new TypeError(
+      `${UNSUPPORTED_REBALANCER_ENTITY_TYPE_REASON}: ${identity?.entityType}`);
+  }
+  return read;
+}
+
+/**
+ * The SERVICES rows of one rebalancer entity as an owner fact of the
+ * services-p1 leader (control-plane-owner-fact-read.js): the one adapter of
+ * the coordinator's inventory consumers onto readOwnerFact, so a change of
+ * the read's call shape is made here only. The answer is READY or
+ * UNAVAILABLE with a reason; its rows are taken with
+ * ownerFactEntityServiceRows.
+ * @param {Object} gateway - The control-plane system-table gateway.
+ * @param {Object} identity - {entityType, entityId}.
+ * @param {Object} queryOptions - The caller's deadline and routing options.
+ * @return {Promise<Object>} The readOwnerFact answer.
+ * @throws {TypeError} For an entity type with no SERVICES identity.
+ */
+async function readEntityServiceRowsOwnerFact(gateway, identity, queryOptions) {
+  const read = requireEntityServiceRowRead(identity);
+  return readOwnerFact(
+    (tableName, sql, params, readOptions) =>
+      gateway.readAuthoritativeRows(tableName, sql, params, readOptions),
+    {
+      tableName: SYSTEM_TABLE_NAME.SERVICES,
+      sql: read.sql,
+      params: read.params,
+      floor: NO_SERVICES_POSITION,
+      deadline: {timeoutMs: queryOptions.timeoutMs},
+      routingReadinessDimension: queryOptions.routingReadinessDimension,
+    },
+  );
+}
+
+/**
+ * The entity's rows of a READY owner fact (throws for anything else).
+ * @param {Object} fact - A readEntityServiceRowsOwnerFact answer.
+ * @param {Object} identity - {entityType, entityId}.
+ * @return {Array<Object>} The rows that belong to the entity.
+ */
+function ownerFactEntityServiceRows(fact, identity) {
+  return ownerFactRows(fact).filter((row) =>
+    entityServiceRowBelongsToIdentity(row, identity));
+}
+
+/**
+ * The SERVICES rows of one entity as the node's projection holds them: a
+ * hint (readHint), never an owner fact. A row the projection has not
+ * received is not yet known; nothing may be concluded from its absence.
+ * @param {Function} readProjectedRows - () -> the entity's projected rows
+ *   (the repository's one projection read of an entity's SERVICES rows).
+ * @return {Promise<Object>} {state: hint_observed, rows} | {state: hint_unavailable}.
+ */
+function readEntityServiceRowsHint(readProjectedRows) {
+  return readHint(() => ({success: true, rows: readProjectedRows()}),
+    {tableName: SYSTEM_TABLE_NAME.SERVICES});
+}
+
 export {
   ENTITY_SERVICE_ROW_READ_SQL,
   entityServiceRowBelongsToIdentity,
+  ownerFactEntityServiceRows,
   readAuthoritativeEntityServiceRows,
+  readEntityServiceRowsHint,
+  readEntityServiceRowsOwnerFact,
 };

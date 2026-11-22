@@ -184,10 +184,14 @@ function createAtTargetGapCache({partitions, replicaOperations}) {
 // rows only). The live read is entity-scoped SQL; only wire it when every
 // mock row belongs to the partition under test, or the blanket pattern
 // would feed other entities' rows into an entity-scoped read.
-function createOperationAwareSqlResults(cache, {wireOperationsRead}) {
+function createOperationAwareSqlResults(cache, {wireOperationsRead,
+  servicesOwnerUnavailable = false}) {
+  // The services owner answers as the leader with the cache's rows, unless a
+  // case makes it unavailable (then the guard decides nothing).
   const results = {
-    [TEST_SERVICES_SQL_PATTERN]:
-      TEST_AUTHORITATIVE_SERVICES_READ_UNAVAILABLE,
+    [TEST_SERVICES_SQL_PATTERN]: servicesOwnerUnavailable ?
+      TEST_AUTHORITATIVE_SERVICES_READ_UNAVAILABLE :
+      {success: true, rows: cache.getAll(SYSTEM_TABLE_NAME.SERVICES)},
   };
   if (wireOperationsRead) {
     results[TEST_OPERATIONS_SQL_PATTERN] = {
@@ -317,10 +321,10 @@ test('at-target [A,A,B] priority partition with the TERMINAL rows of its ' +
   });
 });
 
-test('guard: the conservative-union escape admits a spread-typed ADD for ' +
-'an at-target [A,A,B] priority partition whose entity operation read ' +
-'surfaces only TERMINAL rows while the authoritative services read is ' +
-'unavailable', async (t) => {
+test('guard: with the conservative-union escape deleted (ruling 2026-11-21), a ' +
+'spread-typed ADD for an at-target [A,A,B] priority partition whose entity ' +
+'operation read surfaces only TERMINAL rows is deferred, not decided, while ' +
+'the services owner fact is unavailable', async (t) => {
   initializeTestEnvironment();
 
   const cache = createAtTargetGapCache({
@@ -343,6 +347,7 @@ test('guard: the conservative-union escape admits a spread-typed ADD for ' +
     storageAdmissionService: createAllowAllStorageAdmissionService(),
     sqlQueryResults: createOperationAwareSqlResults(cache, {
       wireOperationsRead: true,
+      servicesOwnerUnavailable: true,
     }),
   });
 
@@ -361,21 +366,13 @@ test('guard: the conservative-union escape admits a spread-typed ADD for ' +
       createError = error;
     }
 
-    t.equal(
-      createError,
-      null,
-      'the spread-typed ADD must be admitted (no create error); got: ' +
-        (createError?.admissionResult ?
-          JSON.stringify({
-            decisionType: createError.admissionResult.decisionType,
-            blockingReasons: createError.admissionResult.blockingReasons,
-          }) :
-          String(createError)),
-    );
-    t.ok(
-      operation,
-      'createOperation must return the admitted spread-restoring operation',
-    );
+    // The critical-lane hold or the guard defers first; either is typed.
+    t.ok(createError?.rebalanceSkipReason === 'services_inventory_unavailable' ||
+      createError?.admissionResult?.decisionType === 'deferred',
+    'the spread-typed ADD is deferred, not decided: ' + JSON.stringify({
+      rebalanceSkipReason: createError?.rebalanceSkipReason,
+      admission: createError?.admissionResult?.blockingReasons}));
+    t.equal(operation, null, 'no operation is created');
   } finally {
     if (typeof coordinator.shutdown === 'function') {
       coordinator.shutdown();

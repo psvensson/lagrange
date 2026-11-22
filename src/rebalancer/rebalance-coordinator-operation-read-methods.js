@@ -11,8 +11,13 @@ import {
   REPLICA_INVENTORY_OBSERVATION_STATE,
 } from './replica-inventory-constants.js';
 import {
+  ownerFactEntityServiceRows,
   readAuthoritativeEntityServiceRows,
+  readEntityServiceRowsHint,
+  readEntityServiceRowsOwnerFact,
 } from './entity-service-row-read.js';
+import {OWNER_FACT_STATE} from '../control-plane/control-plane-owner-fact-read.js';
+import {OWNER_CONTRACT_NEXT_ACTION} from '../control-plane/owner-contract-outcome.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
@@ -21,10 +26,13 @@ const {
   CONTROL_PLANE_QUERY_OPTIONS,
   CONTROL_PLANE_READ_LEADER_MODE,
   INCOMPLETE_OPERATION_OBSERVATION_STATE,
+  REBALANCER_SKIP_REASON,
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
   SERVICE_TYPE,
   getControlPlaneRetryAfterMs,
 } = REBALANCE_COORDINATOR_SHARED;
+const STRICT_READ_MODE_REQUIRED =
+  'getAuthoritativeEntityServiceRowsObservation requires an explicit authoritativeReadMode';
 
 // The repository owns this envelope. Validation precedes the recovery-pressure
 // decision: an incomplete contract cannot become a synthetic deferred-empty read.
@@ -456,40 +464,72 @@ class RebalanceCoordinatorOperationReadMethods {
   }
 
   /**
-   * Read entity service rows from the authoritative services owner path.
-   * Falls back to an empty list when the authoritative read is unavailable.
-   * @readModel COORDINATOR_ENTITY_SERVICES_AUTHORITATIVE —
-   *   READ_MODEL_SOURCE.AUTHORITATIVE_SQL
-   * @param {Object} params
-   * @param {string} params.partitionId
-   * @param {string} params.entityType
-   * @param {string} params.entityId
-   * @return {Promise<Array<Object>>}
-   * @private
+   * The SERVICES rows of one entity as an owner fact of the services-p1
+   * leader: the coordinator's one adapter for the inventory consumers that
+   * decide from those rows (topology guard, replica-id allocator, over-target
+   * hold, retired REPLACE-source check). READY or UNAVAILABLE; rows only
+   * through ownerFactEntityServiceRows.
+   * @param {Object} identity - {entityType, entityId}.
+   * @return {Promise<Object>} The readOwnerFact answer.
    */
-  async getAuthoritativeEntityServiceRows({
-    partitionId,
-    entityType,
-    entityId,
-  }) {
-    const observation = await this.getAuthoritativeEntityServiceRowsObservation(
-      {
-        partitionId,
-        entityType,
-        entityId,
-      },
-    );
-    return observation.rows;
+  readEntityServiceOwnerFact({entityType, entityId}) {
+    return readEntityServiceRowsOwnerFact(this.controlPlaneSystemTableGateway,
+      {entityType, entityId}, CONTROL_PLANE_QUERY_OPTIONS);
   }
 
   /**
-   * Read entity service rows from the authoritative services owner path and
-   * preserve whether the read succeeded so create-time topology guards can
-   * distinguish "no rows" from "no authoritative answer".
+   * The entity's rows of a READY SERVICES owner fact; an UNAVAILABLE one is
+   * the typed refusal of buildServicesInventoryUnavailableError (no decision).
+   * @param {Object} identity - {entityType, entityId}.
+   * @return {Promise<Array<Object>>} The owner's rows of the entity.
+   */
+  async readEntityServiceOwnerRows(identity) {
+    const fact = await this.readEntityServiceOwnerFact(identity);
+    if (fact.state !== OWNER_FACT_STATE.READY) {
+      throw this.buildServicesInventoryUnavailableError(fact, identity);
+    }
+    return ownerFactEntityServiceRows(fact, identity);
+  }
+
+  /**
+   * The SERVICES rows of one entity in this node's projection: a hint, for
+   * discovery only (the partition bootstrap address book).
+   * @param {Object} identity - {entityType, entityId}.
+   * @return {Promise<Object>} The readHint answer.
+   */
+  readEntityServiceHint({entityType, entityId}) {
+    return readEntityServiceRowsHint(() => this.repository.getEntityServiceRows(
+      {partitionId: entityId, entityType, entityId}));
+  }
+
+  /**
+   * No decision: the typed refusal of a consumer whose SERVICES owner fact is
+   * UNAVAILABLE. The caller's existing continuation (the planner's scheduled
+   * turn, the workflow's deferred dispatch retry) brings the turn back.
+   * @param {Object} answer - The UNAVAILABLE owner fact or hint.
+   * @param {Object} identity - {entityType, entityId}.
+   * @return {Error} The typed refusal.
+   */
+  buildServicesInventoryUnavailableError(answer, {entityType, entityId}) {
+    const error = new Error(`SERVICES inventory of ${entityType} ${entityId} ` +
+      `unavailable: ${answer.reason}`);
+    error.rebalanceSkipReason = REBALANCER_SKIP_REASON.SERVICES_INVENTORY_UNAVAILABLE;
+    error.reasonCode = answer.reason;
+    error.nextAction = OWNER_CONTRACT_NEXT_ACTION.RETRY;
+    error.deferRetry = true;
+    if (Number.isSafeInteger(answer.retryAfterMs)) error.retryAfterMs = answer.retryAfterMs;
+    return error;
+  }
+
+  /**
+   * The strict readers' observation of an entity's SERVICES rows (the
+   * priority surplus REMOVE fence, the ledger quorum-spread confirmation):
+   * the read mode is the caller's and has no default.
    * @param {Object} params
    * @param {string} params.partitionId
    * @param {string} params.entityType
    * @param {string} params.entityId
+   * @param {Object} params.readOptions - With an explicit authoritativeReadMode.
    * @return {Promise<Object>}
    * @private
    */
@@ -497,8 +537,11 @@ class RebalanceCoordinatorOperationReadMethods {
     partitionId,
     entityType,
     entityId,
-    readOptions = {},
+    readOptions,
   }) {
+    if (typeof readOptions?.authoritativeReadMode !== 'string') {
+      throw new TypeError(STRICT_READ_MODE_REQUIRED);
+    }
     const result = await readAuthoritativeEntityServiceRows(
       this.controlPlaneSystemTableGateway,
       {
@@ -506,12 +549,7 @@ class RebalanceCoordinatorOperationReadMethods {
         entityType: entityType || SERVICE_TYPE.PARTITION,
         entityId,
       },
-      {
-        ...CONTROL_PLANE_QUERY_OPTIONS,
-        ...(readOptions && typeof readOptions === LOCAL_STR_OBJECT ?
-          readOptions :
-          {}),
-      },
+      {...CONTROL_PLANE_QUERY_OPTIONS, ...readOptions},
     );
     const requireLeaderWitness =
       readOptions?.leaderMode === CONTROL_PLANE_READ_LEADER_MODE?.REQUIRED;

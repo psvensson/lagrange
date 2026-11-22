@@ -14,6 +14,7 @@ import {REBALANCE_COORDINATOR_SHARED} from '../../src/rebalancer/rebalance-coord
 import {buildReplicaInventorySnapshot} from '../../src/rebalancer/replica-inventory.js';
 import {
   createTestCoordinator, createTestRebalancer, withExecutorMutationPort,
+  withServicesLeaderWitness,
 } from './test-helpers.js';
 import {createMockCache, createNodeEndpoint, initializeTestEnvironment} from './unified-rebalancer-test-support.js';
 
@@ -55,7 +56,7 @@ function fixture(t, retained = false) {
           reads++;
           return result;
         }
-        return {success: true, rows: []};
+        return withServicesLeaderWitness(table, {success: true, rows: []});
       },
       async executeQuery() {
         return {success: true, rows: []};

@@ -214,6 +214,8 @@ async function bindReplaceCreateTargetReplicaId(
   if (operation.createAdmissionState != null) return null;
   const {entityType, entityId} =
     assertCanonicalRebalancerEntityIdentity(operation);
+  // Without the SERVICES owner fact the allocator throws its typed deferral
+  // (deferRetry), handled by this dispatch turn as its other deferrals are.
   const replicaId = await owner.allocateCanonicalReplicaId({
     partitionId: operation.partitionId,
     entityType,

@@ -27,10 +27,6 @@ const RETIRED_REPLACE_SOURCE_OPERATION_STATUSES = new Set([
 const RETIRED_REPLACE_SOURCE_WORKFLOW_STEPS = new Set([
   WORKFLOW_STEP.REMOVED,
 ]);
-const RELEASED_RECENT_REPLACE_TARGET_CACHE_STATUSES = new Set([
-  ReplicaStatus.FAILED,
-  ReplicaStatus.REMOVED,
-]);
 const TERMINAL_RECENT_REPLACE_TARGET_OWNER_STATUSES = new Set([
   ReplicaStatus.FAILED,
   ReplicaStatus.REMOVED,
@@ -260,22 +256,13 @@ class RebalanceCoordinatorReplicaIdentityMethods {
     }
   }
 
-  isRecentReplaceTargetPlacementLeaseReleased(
-    cacheServiceRows,
-    authoritativeServiceRows,
-    sourceReplicaId,
-  ) {
-    return (
-      hasReplicaWithLifecycleStatus(
-        cacheServiceRows,
-        sourceReplicaId,
-        RELEASED_RECENT_REPLACE_TARGET_CACHE_STATUSES,
-      ) ||
-      hasReplicaWithLifecycleStatus(
-        authoritativeServiceRows,
-        sourceReplicaId,
-        TERMINAL_RECENT_REPLACE_TARGET_OWNER_STATUSES,
-      )
+  // Released only by the owner's terminal row: the node's projection is a
+  // hint and never releases a placement lease.
+  isRecentReplaceTargetPlacementLeaseReleased(ownerServiceRows, sourceReplicaId) {
+    return hasReplicaWithLifecycleStatus(
+      ownerServiceRows,
+      sourceReplicaId,
+      TERMINAL_RECENT_REPLACE_TARGET_OWNER_STATUSES,
     );
   }
 
@@ -328,8 +315,7 @@ class RebalanceCoordinatorReplicaIdentityMethods {
     evidence,
     retiredSourceReplicaIds,
     recentCompletedTargetReplicaIds = new Set(),
-    cacheServiceRows = [],
-    authoritativeServiceRows = [],
+    ownerServiceRows = [],
   ) {
     if (evidence.moveType !== OperationType.REPLACE) {
       return REPLACE_SOURCE_RETIREMENT_SAFETY_STATE.NOT_REPLACE;
@@ -364,8 +350,7 @@ class RebalanceCoordinatorReplicaIdentityMethods {
         recentCompletedTargetReplicaIds,
         placementLeaseReleased:
           this.isRecentReplaceTargetPlacementLeaseReleased(
-            cacheServiceRows,
-            authoritativeServiceRows,
+            ownerServiceRows,
             evidence.sourceReplicaId,
           ),
       })
@@ -396,28 +381,16 @@ class RebalanceCoordinatorReplicaIdentityMethods {
       classifySystemPartition({partitionId: evidence.entityId})
         .priorityControlPlane &&
       recentCompletedTargetReplicaIds.has(evidence.sourceReplicaId);
-    let cacheServiceRows = [];
-    let authoritativeServiceRows = [];
+    let ownerServiceRows = [];
     if (shouldReadRecentTargetServiceRows) {
-      cacheServiceRows = this.getEntityServiceRows({
-        partitionId: evidence.entityId,
-        entityType: evidence.entityType,
-        entityId: evidence.entityId,
-      });
-      const authoritativeObservation =
-        await this.getAuthoritativeEntityServiceRowsObservation({
-          partitionId: evidence.entityId,
-          entityType: evidence.entityType,
-          entityId: evidence.entityId,
-        });
-      authoritativeServiceRows = authoritativeObservation.rows;
+      ownerServiceRows = await this.readEntityServiceOwnerRows(
+        {entityType: evidence.entityType, entityId: evidence.entityId});
     }
     const safetyState = this.resolveReplaceSourceRetirementSafetyState(
       evidence,
       retiredSourceReplicaIds,
       recentCompletedTargetReplicaIds,
-      cacheServiceRows,
-      authoritativeServiceRows,
+      ownerServiceRows,
     );
     return REPLACE_SOURCE_RETIREMENT_SAFETY_ERROR_BY_STATE[safetyState] ||
       null;
@@ -435,12 +408,9 @@ class RebalanceCoordinatorReplicaIdentityMethods {
       entityType,
       entityId,
     });
+    // The projection's ids only add to the used set; the owner's rows decide.
     const authoritativeServiceRows =
-      await this.getAuthoritativeEntityServiceRows({
-        partitionId,
-        entityType,
-        entityId,
-      });
+      await this.readEntityServiceOwnerRows({entityType, entityId});
     const inFlightReplicaIds = await this.getEntityInFlightReplicaIds({
       entityType,
       entityId,

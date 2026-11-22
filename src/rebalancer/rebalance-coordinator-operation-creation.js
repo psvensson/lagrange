@@ -3,6 +3,7 @@ import {
   requireCreationReplayOutcome,
 } from './replica-operation-creation-request.js';
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
+import {CONTROL_PLANE_HINT_STATE} from '../control-plane/control-plane-owner-fact-read.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {
   OPERATION_RESERVATION_ATTEMPT_OUTCOME,
@@ -94,7 +95,6 @@ const {
   ReplicaOperationField,
   SERVICE_TYPE,
   STRICT_CREATE_DEDUPE_REPOSITORY_QUERY_OPTIONS,
-  buildReplicatedServiceBootstrapTopology,
   createOperationRecord,
   uuidv4,
 } = REBALANCE_COORDINATOR_SHARED;
@@ -311,22 +311,16 @@ class RebalanceCoordinatorOperationCreation {
     return null;
   }
 
+  // A partition join's bootstrap topology, from the committed membership
+  // stamp. No other entity has one: a message group's membership never
+  // changes through an operation (owner decision 2026-10-04; its planner
+  // parks before planning, and no other creator makes a message-group ADD or
+  // REPLACE).
   async buildOperationBootstrapTopology(context) {
-    const {
-      normalizedMoveType,
-      entityType,
-      entityId,
-      partitionId,
-      targetNodeId,
-      targetReplicaId,
-    } = context;
-
-    if (
-      (entityType !== SERVICE_TYPE.MESSAGE_GROUP &&
-        entityType !== SERVICE_TYPE.PARTITION) ||
-      (normalizedMoveType !== OperationType.ADD &&
-        normalizedMoveType !== OperationType.REPLACE)
-    ) {
+    const {normalizedMoveType, entityType, partitionId, targetNodeId, targetReplicaId} =
+      context;
+    if (normalizedMoveType !== OperationType.ADD &&
+        normalizedMoveType !== OperationType.REPLACE) {
       return null;
     }
     if (entityType === SERVICE_TYPE.PARTITION) {
@@ -339,65 +333,19 @@ class RebalanceCoordinatorOperationCreation {
           readAddressBook: () => this.readBootstrapServiceRows(context),
         });
     }
-
-    const serviceRows = await this.readBootstrapServiceRows(context);
-    if (!Array.isArray(serviceRows) || serviceRows.length === 0) {
-      throw new Error(
-        `Cannot create ${entityType} operation for ${entityId} without existing canonical topology`,
-      );
-    }
-
-    const topology = buildReplicatedServiceBootstrapTopology({
-      serviceType: entityType,
-      serviceRows,
-      targetReplicaId,
-      targetNodeId,
-    });
-    const replicaIds = topology?.replicaIds || [];
-    const peerAddresses = topology?.peerAddresses || [];
-
-    if (
-      replicaIds.length <= 1 ||
-      peerAddresses.length < replicaIds.length
-    ) {
-      throw new Error(
-        `Canonical topology for ${entityType} ${entityId} is incomplete`,
-      );
-    }
-
-    return {
-      replicaIds,
-      peerAddresses,
-    };
+    return null;
   }
 
-  async readBootstrapServiceRows({partitionId, entityType, entityId}) {
-    const cacheServiceRows = this.repository.getEntityServiceRows({
-      partitionId,
-      entityType,
-      entityId,
-    });
-    let authoritativeObservation = null;
-    try {
-      authoritativeObservation =
-        await this.getAuthoritativeEntityServiceRowsObservation({
-          partitionId,
-          entityType,
-          entityId,
-        });
-    } catch (_error) {
-      // An owner read error is indistinguishable from an unavailable owner
-      // here: fall back to the cache view, exactly like an unavailable
-      // observation.
-      authoritativeObservation = null;
+  // A partition join's address book: the node's projection, a hint (the
+  // committed stamp names the members); a row not yet projected is an
+  // address not yet known, nothing is concluded from its absence.
+  async readBootstrapServiceRows({entityType, entityId}) {
+    const identity = {entityType, entityId};
+    const hint = await this.readEntityServiceHint(identity);
+    if (hint.state !== CONTROL_PLANE_HINT_STATE.OBSERVED) {
+      throw this.buildServicesInventoryUnavailableError(hint, identity);
     }
-    return authoritativeObservation?.available === true &&
-      authoritativeObservation.rows.length > 0 ?
-      this.mergeEntityServiceRows(
-        cacheServiceRows,
-        authoritativeObservation.rows,
-      ) :
-      cacheServiceRows;
+    return hint.rows;
   }
 
   /**
