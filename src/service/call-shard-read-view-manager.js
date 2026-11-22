@@ -172,10 +172,7 @@ function createShardReadViewManager(options = {}) {
     expiredReapedViewIds.add(readViewId);
   }
 
-  function reapExpiredViews(nowMs = limits.nowProvider()) {
-    const closedIds = [];
-    const failedIds = [];
-    retryUnclosedViews(closedIds, failedIds);
+  function reapActiveViews(nowMs, closedIds, failedIds) {
     for (const view of [...activeViews.values()]) {
       const currentIncarnation = resolveStorageIncarnation(view.partitionServiceRef);
       const incarnationGone =
@@ -196,6 +193,13 @@ function createShardReadViewManager(options = {}) {
         }
       }
     }
+  }
+
+  function reapExpiredViews(nowMs = limits.nowProvider()) {
+    const closedIds = [];
+    const failedIds = [];
+    retryUnclosedViews(closedIds, failedIds);
+    reapActiveViews(nowMs, closedIds, failedIds);
     refreshTotals();
     return Object.freeze({closedIds, failedIds});
   }
@@ -444,7 +448,7 @@ function createShardReadViewManager(options = {}) {
   }
 
   function stats() {
-    reapExpiredViews(limits.nowProvider());
+    reapActiveViews(limits.nowProvider(), [], []);
     const totals = refreshTotals();
     return Object.freeze({
       activeViewCount: activeViews.size,
