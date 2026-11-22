@@ -162,6 +162,7 @@ function assertFileWalBudgets(dbPath, totals, limits) {
 async function openSnapshotHandle({
   incarnation, partitionId, partitionService, statement,
   keyColumns, boundParameters, deadlineMs, totals, limits, options,
+  onOpenedReader,
 }) {
   if (incarnation.dbPath) {
     assertFileWalBudgets(incarnation.dbPath, totals, limits);
@@ -169,6 +170,7 @@ async function openSnapshotHandle({
       incarnation.dbPath,
       partitionId,
       options,
+      onOpenedReader,
     );
     return {
       nativeHandleBytes: limits.nativeHandleOverheadBytes,

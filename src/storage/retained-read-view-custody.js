@@ -130,9 +130,35 @@ class RetainedReadViewCustodyRegistry {
     if (!record) return false;
     record.custodyState = CUSTODY_STATE.CLOSING_FAILED;
     record.lastCloseError = error ?
-      String(error.message || error) :
+      String(error.message) :
       DEFAULT_CLOSE_FAILED_MSG;
     return true;
+  }
+
+  recordUnclosed(entry) {
+    if (!entry || !entry.viewId || !entry.incarnation || !entry.closeHandler) {
+      throw new RetainedReadViewCustodyError(
+        CUSTODY_ERROR_CODE.CUSTODY_BLOCKED,
+        ERR_MSG_REGISTRATION_REQUIRED,
+      );
+    }
+    const domain = entry.policyDomain ?
+      entry.policyDomain :
+      POLICY_DOMAIN.QUERY_READ_VIEW;
+    const record = {
+      closeHandler: entry.closeHandler,
+      custodyState: CUSTODY_STATE.CLOSING_FAILED,
+      dbPath: entry.incarnation.dbPath,
+      incarnation: entry.incarnation,
+      incarnationKey: entry.incarnation.incarnationKey,
+      lastCloseError: entry.error ?
+        String(entry.error.message) :
+        DEFAULT_CLOSE_FAILED_MSG,
+      policyDomain: domain,
+      viewId: entry.viewId,
+    };
+    this.custodyEntries.set(entry.viewId, record);
+    return record;
   }
 
   unregister(viewId) {
@@ -342,6 +368,7 @@ export {
   markCustodyCloseFailed,
   mintStorageIncarnationId,
   normalizeCustodyDbPath,
+  recordUnclosedReaderCustody,
   registerRetainedReaderCustody,
   resolveStorageIncarnation,
   unregisterRetainedReaderCustody,
@@ -361,6 +388,10 @@ function registerRetainedReaderCustody(entry) {
 
 function markCustodyCloseFailed(viewId, error) {
   return CUSTODY_REGISTRY.markCloseFailed(viewId, error);
+}
+
+function recordUnclosedReaderCustody(entry) {
+  return CUSTODY_REGISTRY.recordUnclosed(entry);
 }
 
 function unregisterRetainedReaderCustody(viewId) {
