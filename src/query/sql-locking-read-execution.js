@@ -18,10 +18,9 @@ import {resolveDeclaredPrimaryKeyColumns} from
   '../partition/partition-boundary-representation.js';
 import {
   checkLocalStagedWriteConflict,
-  checkRowReservationConflict,
+  checkMemoryRowReservationConflict,
   createLockConflictResult,
   createReservationUnavailableResult,
-  findTableDbReservationConflict,
   getTransactionReservations,
   LOCKING_READ_RESERVATION_KIND,
   stageLocalWriteReservation,
@@ -34,8 +33,8 @@ import {
 } from './sql-locking-read-constants.js';
 import {
   acquireAllRowReservations,
-  listCandidatePartitionDbs,
-  resolvePartitionDb,
+  inspectLocalCandidateTableConflict,
+  inspectLocalPartitionRowConflict,
 } from './sql-locking-read-remote.js';
 import {EXPR_TYPE} from './parser-constants.js';
 import {QUERY_AST_NODE, QUERY_ERROR_CODE} from './query-constants.js';
@@ -377,13 +376,12 @@ function findUnscopedInsertConflict(engine, tableName, transactionId, candidateP
   } else if (conflicting[0]) {
     return conflicting[0];
   }
-  for (const {partitionId, db} of listCandidatePartitionDbs(engine, candidatePartitions)) {
-    const dbMatch = findTableDbReservationConflict(db, {partitionId, tableName, transactionId});
-    if (dbMatch) {
-      return dbMatch;
-    }
-  }
-  return null;
+  const found = inspectLocalCandidateTableConflict(engine, {
+    candidatePartitions,
+    tableName,
+    transactionId,
+  });
+  return found ? found.match : null;
 }
 
 /**
@@ -431,6 +429,25 @@ async function checkInsertReservations(ctx) {
   return null;
 }
 
+function inspectRowConflict(engine, {tableName, partitionId, pkValues, transactionId}) {
+  const localCheck = inspectLocalPartitionRowConflict(engine, {
+    partitionId,
+    tableName,
+    pkValues,
+    transactionId,
+  });
+  if (localCheck?.unavailable || localCheck?.conflict) {
+    return localCheck;
+  }
+  return checkMemoryRowReservationConflict({
+    tableName,
+    partitionId,
+    pkValues,
+    transactionId,
+    onlyForUpdate: true,
+  });
+}
+
 /**
  * Check single primary key conflict for UPDATE/DELETE with equality WHERE clause.
  * @param {Object} ctx - Check context.
@@ -440,13 +457,11 @@ async function checkInsertReservations(ctx) {
 async function checkSinglePkConflict(ctx, wherePk) {
   const {engine, tableName, candidatePartitions, statement, writeTransaction, transactionId} = ctx;
   const partitionId = resolveRowPartitionId(engine, tableName, wherePk, candidatePartitions);
-  const check = checkRowReservationConflict({
+  const check = inspectRowConflict(engine, {
     tableName,
     partitionId,
     pkValues: wherePk,
     transactionId,
-    db: resolvePartitionDb(engine, partitionId),
-    onlyForUpdate: true,
   });
   if (check.unavailable) {
     return createReservationUnavailableResult({
@@ -496,13 +511,11 @@ async function checkQueriedCandidatesConflict(ctx) {
     const pkValues = extractRowPkValues(row, pkColumns);
     if (!pkValues) continue;
     const partitionId = resolveRowPartitionId(engine, tableName, pkValues, candidatePartitions);
-    const check = checkRowReservationConflict({
+    const check = inspectRowConflict(engine, {
       tableName,
       partitionId,
       pkValues,
       transactionId,
-      db: resolvePartitionDb(engine, partitionId),
-      onlyForUpdate: true,
     });
     if (check.unavailable) {
       return createReservationUnavailableResult({
@@ -524,27 +537,22 @@ function inspectLocalLockCandidates(ctx) {
   if (memConflicts.length > 0) {
     return {hasCandidate: true, error: null};
   }
-  for (const {partitionId, db} of listCandidatePartitionDbs(ctx.engine, ctx.candidatePartitions)) {
-    const dbMatch = findTableDbReservationConflict(db, {
-      partitionId,
-      tableName: ctx.tableName,
-      transactionId: ctx.transactionId,
-    });
-    if (dbMatch?.error) {
-      return {
-        hasCandidate: false,
-        error: createReservationUnavailableResult({
-          partitionId,
-          tableName: ctx.tableName,
-          message: dbMatch.message,
-        }),
-      };
-    }
-    if (dbMatch) {
-      return {hasCandidate: true, error: null};
-    }
+  const found = inspectLocalCandidateTableConflict(ctx.engine, {
+    candidatePartitions: ctx.candidatePartitions,
+    tableName: ctx.tableName,
+    transactionId: ctx.transactionId,
+  });
+  if (found?.match?.error) {
+    return {
+      hasCandidate: false,
+      error: createReservationUnavailableResult({
+        partitionId: found.partitionId,
+        tableName: ctx.tableName,
+        message: found.match.message,
+      }),
+    };
   }
-  return {hasCandidate: false, error: null};
+  return {hasCandidate: Boolean(found?.match), error: null};
 }
 
 /**
@@ -641,7 +649,6 @@ function stageInsertPkReservations(args) {
       tableName,
       partitionId,
       pkValues,
-      db: resolvePartitionDb(engine, partitionId),
       ...meta,
     });
   }
@@ -668,7 +675,6 @@ function stageWherePkReservations(args) {
       tableName,
       partitionId,
       pkValues,
-      db: resolvePartitionDb(engine, partitionId),
       ...meta,
     });
   }

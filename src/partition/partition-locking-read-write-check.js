@@ -45,6 +45,9 @@ import {
   isDeterministicStatementFailure,
   statementEnvironmentFailure,
 } from './partition-committed-statement-outcome.js';
+import {PARTITION_SERVICE_OPERATION} from './partition-service-constants.js';
+import {PARTITION_STATEMENT_REFUSAL_CODE} from './partition-statement-admission-constants.js';
+import {runCommittedPartitionStatement} from './partition-statement-admission.js';
 
 const PG_PARAM_RE = /\$[1-9]\d*/u;
 const PARTICIPANT_TRANSACTIONS_TABLE = '_participant_transactions';
@@ -56,6 +59,7 @@ const SQL_DIALECT = Object.freeze({
 });
 const SCAN_WRITE_AST_TYPES = Object.freeze(new Set(['UPDATE', 'DELETE']));
 const UPDATE_AST_TYPE = 'UPDATE';
+const LOCK_REPLAY_COMPLETE = Object.freeze({lockReplayComplete: true});
 
 function decodePayloadParams(payload) {
   if (payload?.typedParams !== undefined && payload?.typedParams !== null) {
@@ -267,11 +271,122 @@ function listDurableConflictsForWrite(service, tableName, transactionId, determi
 }
 
 /**
+ * Prepare durable locking-read conflict inspection context for a sequence of
+ * operations before sequential dry-run or commit replay. Reads solely from
+ * replicated SQLite state (zero process-local memory, zero wall-clock expiry).
+ *
+ * @param {Object} service - PartitionService instance.
+ * @param {Object} options - {operations, transactionId, deterministic}.
+ * @return {{context: Object|null, unavailable: Object|null}}
+ */
+export function prepareOperationsLockingReadCheck(
+  service,
+  {operations, transactionId = null, deterministic = false} = {},
+) {
+  if (!Array.isArray(operations) || operations.length === 0 || !isWritablePartitionDb(service)) {
+    return {context: null, unavailable: null};
+  }
+  const parsedAsts = operations.map((op) => parseWriteAst(op?.sql));
+  const tableName = resolveConflictTableName(service, parsedAsts[0]);
+  if (!tableName) {
+    return {context: null, unavailable: null};
+  }
+  const listed = listDurableConflictsForWrite(service, tableName, transactionId, deterministic);
+  if (!listed.ok) {
+    return {
+      context: null,
+      unavailable: createReservationUnavailableResult({
+        partitionId: service.partitionId,
+        message: listed.error,
+      }),
+    };
+  }
+  if (listed.rows.length === 0) {
+    return {context: null, unavailable: null};
+  }
+  const lockedByKey = new Map(listed.rows.map((r) => [r.rowKey, r.transactionId]));
+  const footprintMeta = readTableFootprintMetadata(service.db, tableName);
+  return {
+    context: {tableName, parsedAsts, footprintMeta, lockedByKey, deterministic},
+    unavailable: null,
+  };
+}
+
+/**
+ * Evaluate one operation against a prepared locking-read check context using
+ * the CURRENT SQLite state (including any prior statements applied inside an
+ * active rollback-only dry-run or commit savepoint).
+ *
+ * @param {Object} service - PartitionService instance.
+ * @param {Object} context - Prepared context from prepareOperationsLockingReadCheck.
+ * @param {Object} operation - SQL write operation.
+ * @param {number} ordinal - Zero-based index in the operations list.
+ * @return {Object|null} Conflict/unavailable answer, or null if clear.
+ */
+export function evaluatePreparedOperationLockConflict(service, context, operation, ordinal) {
+  return evaluateSingleOperationAgainstLocks(
+    service,
+    context.tableName,
+    operation,
+    context.parsedAsts[ordinal],
+    context.footprintMeta,
+    context.lockedByKey,
+    context.deterministic,
+  );
+}
+
+function handleSequentialReplayError(service, stopped, deterministic) {
+  if (stopped === LOCK_REPLAY_COMPLETE) {
+    return null;
+  }
+  if (stopped?.lockReplayConflict === true) {
+    return stopped.conflict;
+  }
+  if (stopped?.code === PARTITION_STATEMENT_REFUSAL_CODE ||
+      isDeterministicStatementFailure(stopped, service.db)) {
+    return null;
+  }
+  if (deterministic) {
+    throw statementEnvironmentFailure(stopped);
+  }
+  return createReservationUnavailableResult({
+    partitionId: service.partitionId,
+    message: `Failed to replay locking-read conflict check: ${stopped?.message || String(stopped)}`,
+  });
+}
+
+function replayOperationsLockConflictInSavepoint(service, operations, context) {
+  try {
+    service.db.transaction(() => {
+      for (let i = 0; i < operations.length; i += 1) {
+        const conflict = evaluatePreparedOperationLockConflict(service, context, operations[i], i);
+        if (conflict !== null) {
+          throw Object.freeze({lockReplayConflict: true, conflict});
+        }
+        if (i < operations.length - 1) {
+          runCommittedPartitionStatement(service, {
+            type: PARTITION_SERVICE_OPERATION.QUERY,
+            sql: operations[i].sql,
+            params: decodePayloadParams(operations[i]),
+            carried: true,
+          });
+        }
+      }
+      throw LOCK_REPLAY_COMPLETE;
+    })();
+  } catch (stopped) {
+    return handleSequentialReplayError(service, stopped, context.deterministic);
+  }
+  return null;
+}
+
+/**
  * Deterministically check whether one or more SQL write operations conflict
  * with any active durable FOR_UPDATE reservation in service.db held by another
- * transaction. Reads solely from replicated SQLite state (zero process-local
- * memory, zero wall-clock expiry) so Raft apply decisions are identical across
- * every replica.
+ * transaction. Multi-operation transactions are checked in exact sequential
+ * execution order inside a rollback-only savepoint so later predicates observe
+ * mutations produced by earlier operations. Reads solely from replicated SQLite
+ * state (zero process-local memory, zero wall-clock expiry).
  *
  * @param {Object} service - PartitionService instance.
  * @param {Object} options - {operations, transactionId, deterministic}.
@@ -281,35 +396,21 @@ export function checkOperationsLockingReadConflict(
   service,
   {operations, transactionId = null, deterministic = false} = {},
 ) {
-  if (!Array.isArray(operations) || operations.length === 0 || !isWritablePartitionDb(service)) {
+  const prepared = prepareOperationsLockingReadCheck(service, {
+    operations,
+    transactionId,
+    deterministic,
+  });
+  if (prepared.unavailable !== null) {
+    return prepared.unavailable;
+  }
+  if (prepared.context === null) {
     return null;
   }
-  const parsedAsts = operations.map((op) => parseWriteAst(op?.sql));
-  const tableName = resolveConflictTableName(service, parsedAsts[0]);
-  if (!tableName) {
-    return null;
+  if (operations.length === 1) {
+    return evaluatePreparedOperationLockConflict(service, prepared.context, operations[0], 0);
   }
-  const listed = listDurableConflictsForWrite(service, tableName, transactionId, deterministic);
-  if (!listed.ok) {
-    return createReservationUnavailableResult({
-      partitionId: service.partitionId,
-      message: listed.error,
-    });
-  }
-  if (listed.rows.length === 0) {
-    return null;
-  }
-  const lockedByKey = new Map(listed.rows.map((r) => [r.rowKey, r.transactionId]));
-  const footprintMeta = readTableFootprintMetadata(service.db, tableName);
-  for (let i = 0; i < operations.length; i += 1) {
-    const conflict = evaluateSingleOperationAgainstLocks(
-      service, tableName, operations[i], parsedAsts[i], footprintMeta, lockedByKey, deterministic,
-    );
-    if (conflict !== null) {
-      return conflict;
-    }
-  }
-  return null;
+  return replayOperationsLockConflictInSavepoint(service, operations, prepared.context);
 }
 
 /**

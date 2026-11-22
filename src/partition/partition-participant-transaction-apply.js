@@ -102,7 +102,8 @@ import {clearPartitionTransactionMemoryReservations} from
 import {releaseDbPartitionTransactionReservations} from './partition-locking-read-store.js';
 import {
   buildLockConflictAnswerFields,
-  checkOperationsLockingReadConflict,
+  evaluatePreparedOperationLockConflict,
+  prepareOperationsLockingReadCheck,
 } from './partition-locking-read-write-check.js';
 
 // The private value that ends a PREPARE's dry run: thrown inside its
@@ -209,25 +210,42 @@ function deterministicRefusalOf(service, error, causes) {
   throw statementEnvironmentFailure(error);
 }
 
-function dryRunCarriedOperations(service, operationsText) {
+function dryRunStoppedOutcome(service, stopped) {
+  if (stopped === DRY_RUN_COMPLETE) {
+    return DRY_RUN_PASSED;
+  }
+  if (stopped?.dryRunLockConflict === true) {
+    return {cause: CAUSE.LOCK_CONFLICT, detail: stopped.lockConflict.rowKey ?? null,
+      lockConflict: stopped.lockConflict};
+  }
+  return deterministicRefusalOf(service, stopped, PREPARE_CAUSES);
+}
+
+function dryRunCarriedOperations(service, operationsText, transactionId) {
   const operations = operationsOf(operationsText);
   if (operations === null) {
     return {cause: CAUSE.STATEMENT_FAILED,
       detail: MESSAGE.OPERATIONS_UNREADABLE};
   }
-  let outcome = DRY_RUN_PASSED;
+  const {context: lockContext} = prepareOperationsLockingReadCheck(service, {
+    operations, transactionId, deterministic: true,
+  });
   try {
     service.db.transaction(() => {
-      for (const operation of operations) {
-        runCarriedOperation(service, operation);
+      for (let i = 0; i < operations.length; i += 1) {
+        const lockConflict = lockContext === null ? null :
+          evaluatePreparedOperationLockConflict(service, lockContext, operations[i], i);
+        if (lockConflict !== null) {
+          throw Object.freeze({dryRunLockConflict: true, lockConflict});
+        }
+        runCarriedOperation(service, operations[i]);
       }
       throw DRY_RUN_COMPLETE;
     })();
   } catch (stopped) {
-    outcome = stopped === DRY_RUN_COMPLETE ? DRY_RUN_PASSED :
-      deterministicRefusalOf(service, stopped, PREPARE_CAUSES);
+    return dryRunStoppedOutcome(service, stopped);
   }
-  return outcome;
+  return DRY_RUN_PASSED;
 }
 
 // --- PARTICIPANT_PREPARE (design 2.3, check order steps 1-8) ---
@@ -352,19 +370,7 @@ function applyParticipantPrepare(service, committed) {
     return refusePrepare(service, committed,
       {cause: CAUSE.CONFLICT, detail: null});
   }
-  const lockConflict = checkOperationsLockingReadConflict(service, {
-    operations,
-    transactionId: command.transactionId,
-    deterministic: true,
-  });
-  if (lockConflict !== null) {
-    return refusePrepare(service, committed, {
-      cause: CAUSE.LOCK_CONFLICT,
-      detail: lockConflict.rowKey ?? null,
-      lockConflict,
-    });
-  }
-  const dryRun = dryRunCarriedOperations(service, command.operationsText);
+  const dryRun = dryRunCarriedOperations(service, command.operationsText, command.transactionId);
   if (dryRun !== DRY_RUN_PASSED) {
     return refusePrepare(service, committed, dryRun);
   }
@@ -469,10 +475,15 @@ function refuseCommit(service, committed, refusal) {
   return OUTCOME.APPLIED;
 }
 
-function runCommittedOperations(service, committed, operations) {
+function runCommittedOperations(service, committed, operations, lockContext) {
   const {command, index, term} = committed;
   const events = [];
   const results = service.db.transaction(() => operations.map((operation, ordinal) => {
+    const lockConflict = lockContext === null ? null :
+      evaluatePreparedOperationLockConflict(service, lockContext, operation, ordinal);
+    if (lockConflict !== null) {
+      throw Object.freeze({commitLockConflict: true, lockConflict});
+    }
     const result = runCarriedOperation(service, operation);
     recordCommittedStatementOutcome(service, {
       entryKey: operationOutcomeKeyOf(command.participantId, ordinal),
@@ -517,23 +528,16 @@ function commitPrepared(service, committed, row) {
     return refuseCommit(service, committed,
       {cause: CAUSE.COMMIT_BASE_MOVED, detail: null});
   }
-  const lockConflict = checkOperationsLockingReadConflict(service, {
-    operations,
-    transactionId: row.transactionId,
-    deterministic: true,
+  const {context: lockContext} = prepareOperationsLockingReadCheck(service, {
+    operations, transactionId: row.transactionId, deterministic: true,
   });
-  if (lockConflict !== null) {
-    return refuseCommit(service, committed, {
-      cause: CAUSE.COMMIT_LOCK_CONFLICT,
-      detail: lockConflict.rowKey ?? null,
-      lockConflict,
-    });
-  }
   let applied;
   try {
-    applied = runCommittedOperations(service, committed, operations);
+    applied = runCommittedOperations(service, committed, operations, lockContext);
   } catch (failed) {
-    return refuseCommit(service, committed,
+    return refuseCommit(service, committed, failed?.commitLockConflict === true ?
+      {cause: CAUSE.COMMIT_LOCK_CONFLICT, detail: failed.lockConflict.rowKey ?? null,
+        lockConflict: failed.lockConflict} :
       deterministicRefusalOf(service, failed, COMMIT_CAUSES));
   }
   updateParticipantTransactionDecided(service.db,

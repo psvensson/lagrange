@@ -24,7 +24,6 @@ import {
 } from '../../src/partition/partition-committed-statement-outcome.js';
 import * as reservationSurface from '../../src/partition/partition-locking-read-reservation.js';
 import {
-  clearAllReservations,
   clearMemoryReservations,
   clearPartitionTransactionMemoryReservations,
   clearSessionMemoryReservations,
@@ -32,11 +31,11 @@ import {
   deriveRowLockKey,
   getTransactionReservations,
   hasLockingReadReservations,
-  registerPartitionDatabase,
   stageLocalWriteReservation,
 } from '../../src/partition/partition-locking-read-reservation.js';
 import {
   acquireDbForUpdateReservation,
+  ensureLockingReadTableInitialized,
   releaseDbPartitionTransactionReservations,
 } from '../../src/partition/partition-locking-read-store.js';
 import {
@@ -84,8 +83,11 @@ import {
   initEnvironment,
   installAppendEntriesRaceHarness,
   readAccountBalance,
+  resetFixtureReservations,
   runBoundedReciprocalExclusionExplorer,
+  runDependentPredicatePgWireWitness,
   setupTwoNodeCluster,
+  verifySequentialCommitPreparedLockConflict,
 } from './locking-read-authoritative-test-support.js';
 
 test('Receipt 1: public cross-node SELECT FOR UPDATE enforces 55P03 across separate PgWire nodes and allows disjoint progress', async () => {
@@ -106,55 +108,19 @@ test('Receipt 1: public cross-node SELECT FOR UPDATE enforces 55P03 across separ
     );
     assertNumericRowValues(selAliased.rows, [{acct_key: 2, balance: 200}]);
 
-    // Session B on Node 2 (separate engine + coordinator) tests conflicting UPDATE.
-    await clientB.query('BEGIN');
-    await expectSqlState(
-      clientB,
+    // Session B on Node 2 (separate engine + coordinator) tests conflicting UPDATE, DELETE,
+    // INSERT, SELECT ... FOR UPDATE, and secondary-index scan UPDATE.
+    for (const conflictSql of [
       'UPDATE accounts SET balance = 50 WHERE id = 1',
-      [],
-      LOCK_NOT_AVAILABLE_SQLSTATE,
-    );
-    await clientB.query('ROLLBACK');
-
-    // Conflicting DELETE on Node 2.
-    await clientB.query('BEGIN');
-    await expectSqlState(
-      clientB,
       'DELETE FROM accounts WHERE id = 2',
-      [],
-      LOCK_NOT_AVAILABLE_SQLSTATE,
-    );
-    await clientB.query('ROLLBACK');
-
-    // Conflicting INSERT on Node 2.
-    await clientB.query('BEGIN');
-    await expectSqlState(
-      clientB,
       'INSERT INTO accounts (id, balance, tier) VALUES (1, 999, \'gold\')',
-      [],
-      LOCK_NOT_AVAILABLE_SQLSTATE,
-    );
-    await clientB.query('ROLLBACK');
-
-    // Conflicting SELECT ... FOR UPDATE on Node 2.
-    await clientB.query('BEGIN');
-    await expectSqlState(
-      clientB,
       'SELECT id, balance FROM accounts WHERE id = 1 FOR UPDATE',
-      [],
-      LOCK_NOT_AVAILABLE_SQLSTATE,
-    );
-    await clientB.query('ROLLBACK');
-
-    // Conflicting secondary-index / scan UPDATE matching id = 1 and id = 3 on Node 2.
-    await clientB.query('BEGIN');
-    await expectSqlState(
-      clientB,
       'UPDATE accounts SET balance = 55 WHERE tier = \'gold\'',
-      [],
-      LOCK_NOT_AVAILABLE_SQLSTATE,
-    );
-    await clientB.query('ROLLBACK');
+    ]) {
+      await clientB.query('BEGIN');
+      await expectSqlState(clientB, conflictSql, [], LOCK_NOT_AVAILABLE_SQLSTATE);
+      await clientB.query('ROLLBACK');
+    }
 
     // Disjoint row id = 3 on Node 2 MUST make forward progress and commit!
     await clientB.query('BEGIN');
@@ -247,7 +213,7 @@ test('Receipt 1b: intervening write between candidate selection and reservation 
 });
 
 test('Receipt 2: admission and persistence failures fail closed with zero phantom reservations', async () => {
-  clearAllReservations();
+  clearMemoryReservations();
   initEnvironment('fail-closed-node');
 
   // 2a: Direct authoritative store acquire with db === null must fail closed for FOR_UPDATE.
@@ -344,17 +310,17 @@ test('Receipt 2: admission and persistence failures fail closed with zero phanto
     );
   } finally {
     await engine.shutdown().catch(() => {});
+    resetFixtureReservations([p2Db]);
     roDb.close();
     p2Db.close();
     gateway.db.close();
     fs.rmSync(tmpDir, {recursive: true, force: true});
-    clearAllReservations();
   }
 });
 
 test('Receipt 3: participant restart on disk and Raft leader change preserve and release authoritative reservations', async () => {
   // 3a: File-backed participant restart with empty in-memory reservation maps.
-  clearAllReservations();
+  clearMemoryReservations();
   initEnvironment('restart-node-1');
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lock-restart-'));
   const dbPath = path.join(tmpDir, 'accounts-p1.db');
@@ -365,7 +331,7 @@ test('Receipt 3: participant restart on disk and Raft leader change preserve and
   ];
 
   const makeSingleService = (db) => {
-    registerPartitionDatabase(ACCOUNTS_PARTITION_ID, db);
+    ensureLockingReadTableInitialized(db, {readOnly: false});
     const services = new Map([[ACCOUNTS_PARTITION_ID, {db, partitionId: ACCOUNTS_PARTITION_ID}]]);
     const cache = createMockSystemCache(tables, partitions);
     const gateway = createTransactionPersistenceGateway();
@@ -423,7 +389,7 @@ test('Receipt 3: participant restart on disk and Raft leader change preserve and
     // by closing handle directly and wiping ALL in-memory Maps!
     s1.gateway.db.close();
     db1.close();
-    clearAllReservations();
+    clearMemoryReservations();
   }
 
   // Reopen the SAME SQLite file with empty in-memory RESERVATIONS / TRANSACTION_RESERVATIONS!
@@ -466,10 +432,10 @@ test('Receipt 3: participant restart on disk and Raft leader change preserve and
     await s2.engine.transactionCoordinator.commit('s-successor');
   } finally {
     await s2.engine.shutdown().catch(() => {});
+    resetFixtureReservations([db2]);
     s2.gateway.db.close();
     db2.close();
     fs.rmSync(tmpDir, {recursive: true, force: true});
-    clearAllReservations();
   }
 
   // 3b: Raft leader change (r1 -> r2) in 3-replica group preserves lock and releases on COMMIT.
@@ -857,7 +823,7 @@ test('Witness 1b: committed Raft apply of ACQUIRE is 100% deterministic across r
 });
 
 test('Witness 2: per-participant release clears ONLY target partition reservations without wiping other partitions', async () => {
-  clearAllReservations();
+  clearMemoryReservations();
   initEnvironment('release-scope-node');
   const transport = createLoopbackTransport();
   const groupP1 = await formAdmittedGroup({
@@ -969,9 +935,9 @@ test('Witness 2: per-participant release clears ONLY target partition reservatio
       sharedDb.close();
     }
   } finally {
+    resetFixtureReservations([p1.db, p2.db]);
     await groupP1.dispose().catch(() => {});
     await groupP2.dispose().catch(() => {});
-    clearAllReservations();
   }
 });
 
@@ -1328,6 +1294,18 @@ test('Witness 3: reciprocal committed exclusion across ACQUIRE-first and PREPARE
   }
 });
 
+test('Witness 3d: multi-statement dependent-predicate write is refused with 55P03 in sequential order while disjoint dependent writes progress', {timeout: 30000}, async () => {
+  const cluster = await setupTwoNodeCluster({
+    tempPrefix: 'lock-w3d-seq-',
+    concurrencyGranularity: PARTICIPANT_CONCURRENCY_GRANULARITY.ROW_KEY,
+  });
+  try {
+    await runDependentPredicatePgWireWitness(cluster);
+  } finally {
+    await cluster.cleanup();
+  }
+});
+
 test('Witness 4: gateway cleanup (write-error, unscoped helper, shutdown) never erases unresolved durable reservations on co-located participant DB', {timeout: 30000}, async () => {
   const cluster = await setupTwoNodeCluster({
     tempPrefix: 'lock-w4-gateway-cleanup-',
@@ -1336,9 +1314,7 @@ test('Witness 4: gateway cleanup (write-error, unscoped helper, shutdown) never 
   const clientB = await cluster.pg2.connectClient();
   const [r1, r2, r3] = cluster.group.services;
   try {
-    // Co-located participant DB on node1 (r1.db) is also registered in PARTITION_DBS.
-    registerPartitionDatabase(ACCOUNTS_PARTITION_ID, r1.db);
-
+    // Co-located participant DB on node1 (r1.db) is owned by node1's PartitionService.
     const sessionId = 's-unresolved-colocated';
     const tx = await cluster.node1.engine.transactionCoordinator.begin(sessionId);
     assert.equal(tx.success, true);
@@ -1388,13 +1364,20 @@ test('Witness 4: gateway cleanup (write-error, unscoped helper, shutdown) never 
     assert.equal(countDbReservations(r2.db), 1);
     assert.equal(countDbReservations(r3.db), 1);
 
-    // 4b. Gateway cleanup surface exposes ONLY local memory clearing and removes
-    // durable-delete / authority-flag exports (P1 capability narrowing).
-    assert.equal(Object.hasOwn(reservationSurface, 'acquireRowReservation'), false);
-    assert.equal(Object.hasOwn(reservationSurface, 'releaseTransactionReservations'), false);
-    assert.equal(Object.hasOwn(reservationSurface, 'releaseSessionReservations'), false);
-    assert.equal(Object.hasOwn(reservationSurface, 'releaseSpecificRowReservations'), false);
-    assert.equal(Object.hasOwn(reservationSurface, 'sweepExpiredReservations'), false);
+    // 4b. Gateway cleanup surface exposes ONLY volatile memory-mirror helpers and removes
+    // ALL durable-delete, registry, and SQLite store primitives (P1 / Finding 4).
+    for (const forbiddenExport of [
+      'acquireRowReservation', 'releaseTransactionReservations', 'releaseSessionReservations',
+      'releaseSpecificRowReservations', 'sweepExpiredReservations', 'clearAllReservations',
+      'registerPartitionDatabase', 'unregisterPartitionDatabase', 'findTableDbReservationConflict',
+      'truncateDbReservations', 'acquireDbForUpdateReservation',
+      'releaseDbPartitionTransactionReservations', 'releaseDbPartitionSessionReservations',
+      'deleteExpiredDbReservations', 'checkDbRowReservation', 'listDbTableReservationConflicts',
+      'ensureLockingReadTableInitialized',
+    ]) {
+      assert.equal(Object.hasOwn(reservationSurface, forbiddenExport), false,
+        `partition-locking-read-reservation.js must not export ${forbiddenExport}`);
+    }
     clearTransactionMemoryReservations(tx.transactionId);
     clearSessionMemoryReservations(sessionId);
     assert.equal(
@@ -1480,14 +1463,16 @@ test('Witness 4: gateway cleanup (write-error, unscoped helper, shutdown) never 
   }
 });
 
-test('Witness 5: P5.3 bounded model exploration verifies reciprocal exclusion across 48 production-apply schedules', () => {
+test('Witness 5: P5.3 bounded model exploration verifies reciprocal exclusion across 96 single and dependent-predicate schedules', () => {
   const stats = runBoundedReciprocalExclusionExplorer();
-  assert.equal(stats.schedulesExplored, 48);
-  assert.ok(stats.stepsVerified >= 300, `expected >= 300 verified apply transitions, got ${stats.stepsVerified}`);
-  assert.equal(stats.acquireFirstRefusals, 24);
-  assert.equal(stats.prepareFirstRefusals, 24);
-  assert.equal(stats.reentrantSuccesses, 24);
-  assert.equal(stats.duplicateReplays, 24);
-  assert.equal(stats.disjointCommits, 48);
-  assert.equal(stats.successorWins, 48);
+  assert.equal(stats.schedulesExplored, 96);
+  assert.equal(stats.dependentPredicateSchedules, 48);
+  assert.ok(stats.stepsVerified >= 600, `expected >= 600 verified transitions, got ${stats.stepsVerified}`);
+  assert.equal(stats.acquireFirstRefusals, 48);
+  assert.equal(stats.prepareFirstRefusals, 48);
+  assert.equal(stats.reentrantSuccesses, 48);
+  assert.equal(stats.duplicateReplays, 48);
+  assert.equal(stats.disjointCommits, 96);
+  assert.equal(stats.successorWins, 96);
+  verifySequentialCommitPreparedLockConflict();
 });

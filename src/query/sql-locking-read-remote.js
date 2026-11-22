@@ -13,8 +13,11 @@ import {
   createLockConflictResult,
   createReservationUnavailableResult,
 } from '../partition/partition-locking-read-reservation.js';
-import {requestLockingReadReservation} from
-  '../partition/partition-locking-read-service.js';
+import {
+  inspectPartitionRowReservationConflict,
+  inspectPartitionTableReservationConflict,
+  requestLockingReadReservation,
+} from '../partition/partition-locking-read-service.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {
   deliveryAnswerOf,
@@ -114,40 +117,56 @@ export function resolvePartitionServiceEntry(engine, partitionId) {
 }
 
 /**
- * Resolve the local authoritative partition SQLite database if present.
+ * Perform read-only row conflict inspection through the local authoritative
+ * partition owner if co-located on this node; returns null when remote.
  *
  * @param {Object} engine - SQLQueryEngine instance.
- * @param {string} partitionId - Partition ID.
- * @return {Object|null} SQLite database handle or null.
+ * @param {Object} query - {partitionId, tableName, pkValues, transactionId}.
+ * @return {Object|null}
  */
-export function resolvePartitionDb(engine, partitionId) {
+export function inspectLocalPartitionRowConflict(
+  engine,
+  {partitionId, tableName, pkValues, transactionId = null},
+) {
   const {service} = resolvePartitionServiceEntry(engine, partitionId);
-  return service?.db || null;
+  if (!service) return null;
+  return inspectPartitionRowReservationConflict(
+    bindServicePartitionId(service, partitionId),
+    {tableName, pkValues, transactionId},
+  );
 }
 
 /**
- * Resolve unique local candidate partition DBs for a list of partition IDs.
+ * Perform read-only table conflict inspection across co-located candidate
+ * partition owners without exposing raw SQLite handles to query execution.
  *
  * @param {Object} engine - SQLQueryEngine instance.
- * @param {string[]} candidatePartitions - Candidate partition IDs.
- * @return {Array<{partitionId: string, db: Object}>}
+ * @param {Object} query - {candidatePartitions, tableName, transactionId}.
+ * @return {{partitionId: string, match: Object}|null}
  */
-export function listCandidatePartitionDbs(engine, candidatePartitions) {
-  if (!engine || !Array.isArray(candidatePartitions)) return [];
+export function inspectLocalCandidateTableConflict(
+  engine,
+  {candidatePartitions, tableName, transactionId = null},
+) {
+  if (!engine || !Array.isArray(candidatePartitions)) return null;
   const seen = new Set();
-  const entries = [];
   for (const rawCandidate of candidatePartitions) {
     const partitionId = typeof rawCandidate === 'object' && rawCandidate !== null ?
       (rawCandidate.partition_id || rawCandidate.id) :
       rawCandidate;
     if (!partitionId || seen.has(partitionId)) continue;
     seen.add(partitionId);
-    const db = resolvePartitionDb(engine, partitionId);
-    if (db) {
-      entries.push({partitionId, db});
+    const {service} = resolvePartitionServiceEntry(engine, partitionId);
+    if (!service) continue;
+    const match = inspectPartitionTableReservationConflict(
+      bindServicePartitionId(service, partitionId),
+      {tableName, transactionId},
+    );
+    if (match) {
+      return {partitionId, match};
     }
   }
-  return entries;
+  return null;
 }
 
 function createLockingReadDeliveryOptions(engine, partitionId, op, payload) {

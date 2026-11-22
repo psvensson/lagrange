@@ -8,7 +8,7 @@ import {
   executeLockingReadReservations,
 } from '../../src/query/sql-locking-read-execution.js';
 import {
-  clearAllReservations,
+  clearMemoryReservations,
   getTransactionReservations,
 } from '../../src/partition/partition-locking-read-reservation.js';
 import {
@@ -88,6 +88,9 @@ const VAL_C2 = 'c-val-2';
 const VAL_C1_SECOND = 'c-val-1-second';
 const PART_P1 = 'p1';
 const PART_P2 = 'p2';
+const PART_STOCK_P1 = 'stock-p1';
+const PART_NEW_ORDER_P1 = 'new_order-p1';
+const SQLITE_MEMORY_DB = ':memory:';
 const GROUP_BATCH = 'g-batch';
 const GRANULARITY_ROW_KEY = 'row-key';
 const MSG_STOCK_PK =
@@ -134,128 +137,137 @@ function buildPrepareEvidence(partitionId) {
 }
 
 async function checkWorkstream1LockingReadPkAndParams() {
-  clearAllReservations();
-  let fallbackSelectCalls = ZERO;
-  const mockEngine = {
-    getTableInfo(tableName) {
-      if (tableName === 'stock') {
-        return {
-          table_name: 'stock',
-          primary_key: 'warehouse_id,item_id',
-          schema_json: JSON.stringify({
-            primaryKey: ['warehouse_id', 'item_id'],
-          }),
-        };
-      }
-      if (tableName === 'new_order') {
-        return {
-          table_name: 'new_order',
-          primary_key: 'warehouse_id,district_id,order_id',
-          schema_json: JSON.stringify({
-            primaryKey: ['warehouse_id', 'district_id', 'order_id'],
-          }),
-        };
-      }
-      return null;
-    },
-    getTablePartitions(tableName) {
-      return [{partition_id: `${tableName}-p1`}];
-    },
-    queryExecutor: {
-      async executeSelect() {
-        fallbackSelectCalls += ONE;
-        return {success: true, rows: []};
+  clearMemoryReservations();
+  const partitionServices = new Map([
+    [PART_STOCK_P1, {db: new Database(SQLITE_MEMORY_DB), partitionId: PART_STOCK_P1}],
+    [PART_NEW_ORDER_P1, {db: new Database(SQLITE_MEMORY_DB), partitionId: PART_NEW_ORDER_P1}],
+  ]);
+  try {
+    let fallbackSelectCalls = ZERO;
+    const mockEngine = {
+      partitionServicesProvider: () => partitionServices,
+      getTableInfo(tableName) {
+        if (tableName === 'stock') {
+          return {
+            table_name: 'stock',
+            primary_key: 'warehouse_id,item_id',
+            schema_json: JSON.stringify({
+              primaryKey: ['warehouse_id', 'item_id'],
+            }),
+          };
+        }
+        if (tableName === 'new_order') {
+          return {
+            table_name: 'new_order',
+            primary_key: 'warehouse_id,district_id,order_id',
+            schema_json: JSON.stringify({
+              primaryKey: ['warehouse_id', 'district_id', 'order_id'],
+            }),
+          };
+        }
+        return null;
       },
-    },
-  };
+      getTablePartitions(tableName) {
+        return [{partition_id: `${tableName}-p1`}];
+      },
+      queryExecutor: {
+        async executeSelect() {
+          fallbackSelectCalls += ONE;
+          return {success: true, rows: []};
+        },
+      },
+    };
 
-  const stockAst = {
-    type: 'SELECT',
-    locking: {strength: 'UPDATE'},
-    columns: [{type: 'column_ref', column: 'quantity'}],
-    from: {type: 'table', name: 'stock'},
-    where: {
-      type: 'binary',
-      operator: 'AND',
-      left: {
+    const stockAst = {
+      type: 'SELECT',
+      locking: {strength: 'UPDATE'},
+      columns: [{type: 'column_ref', column: 'quantity'}],
+      from: {type: 'table', name: 'stock'},
+      where: {
         type: 'binary',
-        operator: '=',
-        left: {type: 'column_ref', column: 'warehouse_id'},
-        right: {type: 'parameter', index: ZERO},
+        operator: 'AND',
+        left: {
+          type: 'binary',
+          operator: '=',
+          left: {type: 'column_ref', column: 'warehouse_id'},
+          right: {type: 'parameter', index: ZERO},
+        },
+        right: {
+          type: 'binary',
+          operator: '=',
+          left: {type: 'column_ref', column: 'item_id'},
+          right: {type: 'parameter', index: ONE},
+        },
       },
-      right: {
-        type: 'binary',
-        operator: '=',
-        left: {type: 'column_ref', column: 'item_id'},
-        right: {type: 'parameter', index: ONE},
-      },
-    },
-  };
+    };
 
-  const txId1 = stringRepeat(CHAR_A, TX_ID_LEN);
-  const stockOutcome = await executeLockingReadReservations({
-    engine: mockEngine,
-    ast: stockAst,
-    params: [ONE, TEN],
-    sessionId: 'sess-lock-1',
-    transactionRead: {identity: {transactionId: txId1}},
-    selectResult: {
-      success: true,
-      rows: [{quantity: 50}],
-      partitions: ['stock-p1'],
-    },
-  });
-  assert.equal(stockOutcome.success, true);
-  assert.equal(
-    fallbackSelectCalls,
-    ZERO,
-    MSG_STOCK_PK,
-  );
-  assert.equal(getTransactionReservations(txId1).length, ONE);
+    const txId1 = stringRepeat(CHAR_A, TX_ID_LEN);
+    const stockOutcome = await executeLockingReadReservations({
+      engine: mockEngine,
+      ast: stockAst,
+      params: [ONE, TEN],
+      sessionId: 'sess-lock-1',
+      transactionRead: {identity: {transactionId: txId1}},
+      selectResult: {
+        success: true,
+        rows: [{quantity: 50}],
+        partitions: ['stock-p1'],
+      },
+    });
+    assert.equal(stockOutcome.success, true);
+    assert.equal(
+      fallbackSelectCalls,
+      ZERO,
+      MSG_STOCK_PK,
+    );
+    assert.equal(getTransactionReservations(txId1).length, ONE);
 
-  const newOrderAst = {
-    type: 'SELECT',
-    locking: {strength: 'UPDATE'},
-    columns: [{type: 'column_ref', column: 'order_id'}],
-    from: {type: 'table', name: 'new_order'},
-    where: {
-      type: 'binary',
-      operator: 'AND',
-      left: {
+    const newOrderAst = {
+      type: 'SELECT',
+      locking: {strength: 'UPDATE'},
+      columns: [{type: 'column_ref', column: 'order_id'}],
+      from: {type: 'table', name: 'new_order'},
+      where: {
         type: 'binary',
-        operator: '=',
-        left: {type: 'column_ref', column: 'warehouse_id'},
-        right: {type: 'parameter', index: ZERO},
+        operator: 'AND',
+        left: {
+          type: 'binary',
+          operator: '=',
+          left: {type: 'column_ref', column: 'warehouse_id'},
+          right: {type: 'parameter', index: ZERO},
+        },
+        right: {
+          type: 'binary',
+          operator: '=',
+          left: {type: 'column_ref', column: 'district_id'},
+          right: {type: 'parameter', index: ONE},
+        },
       },
-      right: {
-        type: 'binary',
-        operator: '=',
-        left: {type: 'column_ref', column: 'district_id'},
-        right: {type: 'parameter', index: ONE},
+    };
+    const txId2 = stringRepeat(CHAR_B, TX_ID_LEN);
+    const newOrderOutcome = await executeLockingReadReservations({
+      engine: mockEngine,
+      ast: newOrderAst,
+      params: [ONE, TWO],
+      sessionId: 'sess-lock-2',
+      transactionRead: {identity: {transactionId: txId2}},
+      selectResult: {
+        success: true,
+        rows: [{order_id: 3001}],
+        partitions: ['new_order-p1'],
       },
-    },
-  };
-  const txId2 = stringRepeat(CHAR_B, TX_ID_LEN);
-  const newOrderOutcome = await executeLockingReadReservations({
-    engine: mockEngine,
-    ast: newOrderAst,
-    params: [ONE, TWO],
-    sessionId: 'sess-lock-2',
-    transactionRead: {identity: {transactionId: txId2}},
-    selectResult: {
-      success: true,
-      rows: [{order_id: 3001}],
-      partitions: ['new_order-p1'],
-    },
-  });
-  assert.equal(newOrderOutcome.success, true);
-  assert.equal(
-    fallbackSelectCalls,
-    ZERO,
-    MSG_NEW_ORDER_PK,
-  );
-  assert.equal(getTransactionReservations(txId2).length, ONE);
-  clearAllReservations();
+    });
+    assert.equal(newOrderOutcome.success, true);
+    assert.equal(
+      fallbackSelectCalls,
+      ZERO,
+      MSG_NEW_ORDER_PK,
+    );
+    assert.equal(getTransactionReservations(txId2).length, ONE);
+  } finally {
+    for (const svc of partitionServices.values()) svc.db.close();
+    clearMemoryReservations();
+  }
 }
 
 async function checkWorkstream2CoordinatorConsensusReduction() {

@@ -26,14 +26,16 @@ import {createTransactionPersistenceGateway} from '../test-helpers/transaction-p
 import {answerParticipantTransactionRequest} from '../test-helpers/participant-protocol-double.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {
-  clearAllReservations,
+  clearMemoryReservations,
+  deriveRowLockKey,
   hasLockingReadReservations,
-  registerPartitionDatabase,
-  checkRowReservationConflict,
 } from '../../src/partition/partition-locking-read-reservation.js';
 import {
+  checkDbRowReservation,
   deleteExpiredDbReservations,
+  ensureLockingReadTableInitialized,
   releaseDbPartitionTransactionReservations,
+  truncateDbReservations,
 } from '../../src/partition/partition-locking-read-store.js';
 import {checkWriteStatementReservations} from '../../src/query/sql-locking-read-execution.js';
 
@@ -77,7 +79,7 @@ function seedPartitionDb(db, table, rows) {
  * @return {Object} Test harness.
  */
 function createJourneyHarness(options = {}) {
-  clearAllReservations();
+  clearMemoryReservations();
   const tables = [
     {table_name: 'accounts', primaryKey: 'id', partition_key_type: 'INTEGER'},
     {table_name: 'regional_inventory', primaryKey: 'sku', partition_key_type: 'TEXT'},
@@ -95,7 +97,7 @@ function createJourneyHarness(options = {}) {
     const db = new Database(':memory:');
     partitionDbs.set(part.partition_id, db);
     partitionServices.set(part.partition_id, {db, partitionId: part.partition_id});
-    registerPartitionDatabase(part.partition_id, db);
+    ensureLockingReadTableInitialized(db, {readOnly: false});
   }
 
   seedPartitionDb(partitionDbs.get('accounts-p1'), 'accounts', [
@@ -186,9 +188,10 @@ function createJourneyHarness(options = {}) {
     partitionDbs,
     harnessState,
     cleanup() {
-      clearAllReservations();
+      clearMemoryReservations();
       gateway.db.close();
       for (const db of partitionDbs.values()) {
+        truncateDbReservations(db);
         db.close();
       }
     },
@@ -554,63 +557,57 @@ test('J4: fail-closed candidate reads (failed candidate read does not become saf
 });
 
 test('J4: durable partition SQLite reservation survives simulated coordinator state reset', () => {
-  clearAllReservations();
+  clearMemoryReservations();
   const db = new Database(':memory:');
   try {
-    registerPartitionDatabase('p1', db);
-    const harness = {
+    ensureLockingReadTableInitialized(db, {readOnly: false});
+    const rowKey = deriveRowLockKey('accounts', 'p1', [42]);
+    const initialCheck = checkDbRowReservation(db, {
       tableName: 'accounts',
       partitionId: 'p1',
-      pkValues: [42],
+      rowKey,
       transactionId: 'tx-persisted',
-      sessionId: 's-persisted',
-      db,
-    };
-
-    // Acquire reservation backed by SQLite
-    const acq = checkRowReservationConflict(harness);
-    assert.equal(acq.conflict, false);
+    });
+    assert.equal(initialCheck, null);
 
     // Simulate coordinator memory wipe while partition DB retains state
-    clearAllReservations();
-    registerPartitionDatabase('p1', db);
+    clearMemoryReservations();
 
-    // Re-seed directly in SQLite DB to simulate survived reservation from an external coordinator
+    // Seed directly in SQLite DB to simulate survived reservation from an external coordinator
     db.prepare(`
       INSERT OR REPLACE INTO _lagrange_locking_read_reservations
       (partition_id, table_name, row_key, transaction_id, session_id, epoch, reserved_at, expires_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run('p1', 'accounts', 'accounts:p1:42', 'tx-persisted', 's-persisted', 1, Date.now(), Date.now() + 5000);
+    `).run('p1', 'accounts', rowKey, 'tx-persisted', 's-persisted', 1, Date.now(), Date.now() + 5000);
 
     // New transaction checking the partition DB must observe the conflict
-    const conflictCheck = checkRowReservationConflict({
+    const conflictCheck = checkDbRowReservation(db, {
       tableName: 'accounts',
       partitionId: 'p1',
-      pkValues: [42],
+      rowKey,
       transactionId: 'tx-new',
-      db,
     });
-    assert.equal(conflictCheck.conflict, true);
-    assert.equal(conflictCheck.conflictingTransactionId, 'tx-persisted');
+    assert.equal(conflictCheck?.conflict, true);
+    assert.equal(conflictCheck?.conflictingTransactionId, 'tx-persisted');
 
     // Sweep expired reservations
     db.prepare(
       'UPDATE _lagrange_locking_read_reservations SET expires_at = ? WHERE row_key = ?',
-    ).run(Date.now() - 1000, 'accounts:p1:42');
+    ).run(Date.now() - 1000, rowKey);
 
     const swept = deleteExpiredDbReservations(db, Date.now());
     assert.equal(swept, 1);
 
-    const postSweepCheck = checkRowReservationConflict({
+    const postSweepCheck = checkDbRowReservation(db, {
       tableName: 'accounts',
       partitionId: 'p1',
-      pkValues: [42],
+      rowKey,
       transactionId: 'tx-new',
-      db,
     });
-    assert.equal(postSweepCheck.conflict, false);
+    assert.equal(postSweepCheck, null);
   } finally {
+    truncateDbReservations(db);
     db.close();
-    clearAllReservations();
+    clearMemoryReservations();
   }
 });

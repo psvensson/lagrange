@@ -51,6 +51,7 @@ import {
   checkDbRowReservation,
   hasDbSessionReservations,
   hasDbTransactionReservations,
+  listDbTableReservationConflicts,
   releaseDbPartitionSessionReservations,
   releaseDbPartitionTransactionReservations,
 } from './partition-locking-read-store.js';
@@ -556,6 +557,67 @@ export async function releaseUnboundTransactionLockingRead(service, payload) {
     participantId: payload.participantId ?? null,
   });
   return releaseAnswer?.success === true ? null : releaseAnswer;
+}
+
+/**
+ * Read-only partition-owner inspection for a single row reservation conflict
+ * against this partition service's durable SQLite store.
+ *
+ * @param {Object} service - PartitionService instance.
+ * @param {Object} query - {tableName, pkValues, transactionId}.
+ * @return {{conflict: boolean, rowKey: string, conflictingTransactionId?: string, unavailable?: boolean, error?: string}}
+ */
+export function inspectPartitionRowReservationConflict(
+  service,
+  {tableName, pkValues, transactionId = null},
+) {
+  const rowKey = deriveRowLockKey(tableName, service.partitionId, pkValues);
+  if (!service?.db || service.db.open === false) {
+    return {conflict: false, rowKey};
+  }
+  const dbCheck = checkDbRowReservation(service.db, {
+    partitionId: service.partitionId,
+    tableName,
+    rowKey,
+    transactionId,
+  });
+  if (dbCheck?.error) {
+    return {conflict: false, unavailable: true, error: dbCheck.message, rowKey};
+  }
+  if (dbCheck?.conflict) {
+    return {
+      conflict: true,
+      rowKey,
+      conflictingTransactionId: dbCheck.conflictingTransactionId,
+    };
+  }
+  return {conflict: false, rowKey};
+}
+
+/**
+ * Read-only partition-owner inspection for the first conflicting FOR_UPDATE
+ * reservation on a table in this partition service's durable SQLite store.
+ *
+ * @param {Object} service - PartitionService instance.
+ * @param {Object} query - {tableName, transactionId}.
+ * @return {Object|null}
+ */
+export function inspectPartitionTableReservationConflict(
+  service,
+  {tableName, transactionId = null},
+) {
+  if (!service?.db || service.db.open === false) {
+    return null;
+  }
+  const listed = listDbTableReservationConflicts(service.db, {
+    partitionId: service.partitionId,
+    tableName,
+    transactionId,
+  });
+  if (!listed.ok) {
+    return {error: true, message: listed.error};
+  }
+  return listed.rows[0] || null;
 }
 
 export {checkPartitionWriteLockingReadConflict};

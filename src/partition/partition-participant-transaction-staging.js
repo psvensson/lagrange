@@ -53,7 +53,10 @@ import {
   checkAndRecordSessionRowKey,
   revertSessionRowKeyCheck,
 } from './partition-participant-transaction-session.js';
-import {recordSessionStagedWriteClaims} from './partition-locking-read-write-check.js';
+import {
+  checkPartitionWriteLockingReadConflict,
+  recordSessionStagedWriteClaims,
+} from './partition-locking-read-write-check.js';
 import {
   readOptionalPartitionWriteGeneration,
   readPartitionWriteGeneration,
@@ -295,11 +298,27 @@ function stageWrite(service, session, request, params) {
     return refused(CODE.REPLAY_BUDGET_EXCEEDED,
       {operations: operations.length, bytes});
   }
+  const runWithSequentialLockCheck = () => {
+    if (session.operations.length > ZERO) {
+      const lockRefusal = checkPartitionWriteLockingReadConflict(service, {
+        sql: operation.sql,
+        params: operation.params,
+        transactionId: session.identity.transactionId,
+      });
+      if (lockRefusal !== null) {
+        throw Object.freeze({stagingLockConflict: true, lockRefusal});
+      }
+    }
+    return runStaged(service, operation);
+  };
   const outcome = canDirectValidateDisjoint(service, session, rowKeyCheck) ?
-    validateDirectDisjointWrite(service, session, () => runStaged(service, operation)) :
-    validateOverReplay(service, session, () => runStaged(service, operation));
+    validateDirectDisjointWrite(service, session, runWithSequentialLockCheck) :
+    validateOverReplay(service, session, runWithSequentialLockCheck);
   if (outcome.failure !== undefined) {
     revertSessionRowKeyCheck(service, session, rowKeyCheck);
+    if (outcome.failure?.stagingLockConflict === true) {
+      return outcome.failure.lockRefusal;
+    }
     return failedValidation(service, session, outcome.failure);
   }
   session.operations = operations;

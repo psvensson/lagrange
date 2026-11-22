@@ -9,6 +9,7 @@ const DEPENDENCY_RULE = Object.freeze({
   PURE_SQL_RENDER_AND_PLACEMENT_DECISION_NO_NONDETERMINISTIC_CAPABILITIES:
     'pure-sql-render-and-placement-decision-no-nondeterministic-capabilities',
   QUERY_NO_DURABLE_LOCKING_READ_STORE: 'query-no-durable-locking-read-store',
+  LOCKING_READ_RESERVATION_NO_DURABLE_STORE: 'locking-read-reservation-no-durable-store',
 });
 const DEPENDENCY_RULE_COMMENT = Object.freeze({
   NO_CIRCULAR: 'Disallow circular dependencies.',
@@ -32,6 +33,10 @@ const DEPENDENCY_RULE_COMMENT = Object.freeze({
     'Query/gateway modules must never import the partition-private durable ' +
     'locking-read SQLite store; durable acquisition and release belong solely ' +
     'to the partition owners.',
+  LOCKING_READ_RESERVATION_NO_DURABLE_STORE:
+    'The shared volatile locking-read reservation mirror module must never ' +
+    'reach the durable SQLite reservation store or SQLite connection state ' +
+    'directly or transitively.',
 });
 const DEPENDENCY_RULE_SEVERITY = Object.freeze({
   ERROR: 'error',
@@ -57,8 +62,12 @@ const DEPENDENCY_PATH = Object.freeze({
     'partition-placement-admission-(decision|command|identity))|' +
     'rebalancer/replica-placement-owner-admission-statement)\\.js$',
   QUERY_LAYER_MODULES: '(^|/)src/query/',
+  LOCKING_READ_RESERVATION_MIRROR_MODULE:
+    '(^|/)src/partition/partition-locking-read-reservation\\.js$',
   DURABLE_LOCKING_READ_STORE_MODULE:
     '(^|/)src/partition/partition-locking-read-store\\.js$',
+  DURABLE_LOCKING_READ_SQLITE_MODULES:
+    '(^|/)src/(partition/partition-locking-read-store|storage/sqlite-connection-state)\\.js$',
   PARTITION_APPLY_FORBIDDEN_DIRECT:
     '(^|/)(src/(transport|cache|control-plane|api|cli|admin|time)/|' +
     'src/bootstrap/(bootstrap-)?readiness-|' +
@@ -163,6 +172,18 @@ module.exports = {
       },
       to: {
         path: DEPENDENCY_PATH.DURABLE_LOCKING_READ_STORE_MODULE,
+      },
+    },
+    {
+      name: DEPENDENCY_RULE.LOCKING_READ_RESERVATION_NO_DURABLE_STORE,
+      comment: DEPENDENCY_RULE_COMMENT.LOCKING_READ_RESERVATION_NO_DURABLE_STORE,
+      severity: DEPENDENCY_RULE_SEVERITY.ERROR,
+      from: {
+        path: DEPENDENCY_PATH.LOCKING_READ_RESERVATION_MIRROR_MODULE,
+      },
+      to: {
+        reachable: true,
+        path: DEPENDENCY_PATH.DURABLE_LOCKING_READ_SQLITE_MODULES,
       },
     },
     {

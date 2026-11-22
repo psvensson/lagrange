@@ -7,7 +7,7 @@ import {
   executeLockingReadReservations,
 } from '../../src/query/sql-locking-read-execution.js';
 import {
-  clearAllReservations,
+  clearMemoryReservations,
   getTransactionReservations,
 } from '../../src/partition/partition-locking-read-reservation.js';
 import {
@@ -60,14 +60,24 @@ function buildPrepareEvidence(partitionId) {
 }
 
 test('Scenario A deep-stack: Workstream 1 locking-read parameter propagation and split-PK tuple resolution', async (t) => {
-  clearAllReservations();
-  t.after(() => clearAllReservations());
+  clearMemoryReservations();
+  t.after(() => clearMemoryReservations());
 
   let fallbackSelectCalls = 0;
   let lastFallbackAst = null;
   let lastFallbackParams = null;
 
+  const partitionServices = new Map([
+    ['stock-p1', {db: new Database(':memory:'), partitionId: 'stock-p1'}],
+    ['new_order-p1', {db: new Database(':memory:'), partitionId: 'new_order-p1'}],
+    ['order_line-p1', {db: new Database(':memory:'), partitionId: 'order_line-p1'}],
+  ]);
+  t.after(() => {
+    for (const svc of partitionServices.values()) svc.db.close();
+  });
+
   const mockEngine = {
+    partitionServicesProvider: () => partitionServices,
     getTableInfo(tableName) {
       if (tableName === 'stock') {
         return {

@@ -7,15 +7,17 @@ import {createTransactionPersistenceGateway} from '../test-helpers/transaction-p
 import {answerParticipantTransactionRequest} from '../test-helpers/participant-protocol-double.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {
-  clearAllReservations,
+  clearMemoryReservations,
   deriveRowLockKey,
   getTransactionReservations,
   hasLockingReadReservations,
-  registerPartitionDatabase,
 } from '../../src/partition/partition-locking-read-reservation.js';
 import {
   acquireDbForUpdateReservation,
+  ensureLockingReadTableInitialized,
+  hasDbTransactionReservations,
   releaseDbPartitionTransactionReservations,
+  truncateDbReservations,
 } from '../../src/partition/partition-locking-read-store.js';
 import {resolveFailureSqlState} from '../../src/runtime/pgwire-result-mapper.js';
 import {
@@ -50,7 +52,7 @@ import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligi
 ConfigurationManager.getInstance().initialize();
 
 function createTestHarness(options = {}) {
-  clearAllReservations();
+  clearMemoryReservations();
   const tables = options.tables || [
     {table_name: 'accounts', primaryKey: 'id', partition_key_type: 'INTEGER'},
     {table_name: 'orders', primaryKey: 'id', partition_key_type: 'INTEGER'},
@@ -79,7 +81,7 @@ function createTestHarness(options = {}) {
     const db = new Database(':memory:');
     partitionDbs.push(db);
     partitionServices.set(part.partition_id, {db, partitionId: part.partition_id});
-    registerPartitionDatabase(part.partition_id, db);
+    ensureLockingReadTableInitialized(db, {readOnly: false});
   }
 
   const engine = new SQLQueryEngine({
@@ -136,8 +138,9 @@ function createTestHarness(options = {}) {
     deliveredMessages,
     mockRowsByTable,
     cleanup() {
-      clearAllReservations();
+      clearMemoryReservations();
       for (const db of partitionDbs) {
+        truncateDbReservations(db);
         db.close();
       }
       gateway.db.close();
@@ -562,9 +565,13 @@ test('B4: reservation release on transaction coordinator timeout (abortTimedOutT
 });
 
 test('B4: participant session sweep respects localExpiry: "forbidden" for locking reads', () => {
-  clearAllReservations();
+  clearMemoryReservations();
+  const db = new Database(':memory:');
+  openParticipantTransactionStore(db);
   const mockService = {
+    db,
     partitionId: 'orders-p1',
+    preparedStateHoldTimeoutMs: 1000,
     logger: {info() {}, warn() {}},
     timeSource: {
       now() {
@@ -585,7 +592,6 @@ test('B4: participant session sweep respects localExpiry: "forbidden" for lockin
     {generationBase: 1, originIndex: 1},
   );
 
-  const db = new Database(':memory:');
   acquireDbForUpdateReservation(db, {
     tableName: 'orders',
     partitionId: 'orders-p1',
@@ -597,13 +603,14 @@ test('B4: participant session sweep respects localExpiry: "forbidden" for lockin
     expiresAt: null,
   });
 
-  assert.equal(hasLockingReadReservations('tx-with-lock', db), true);
+  assert.equal(hasDbTransactionReservations(db, 'tx-with-lock', 'orders-p1'), true);
 
   // Sweep after holdTimeoutMs has elapsed
-  const discarded = sweepParticipantTransactionHolds(mockService, 100000, 1000);
+  const discarded = sweepParticipantTransactionHolds(mockService, 100000);
   assert.equal(discarded, 0, 'session with locking read reservations must not be expired');
-  assert.equal(hasLockingReadReservations('tx-with-lock', db), true);
-  clearAllReservations();
+  assert.equal(hasDbTransactionReservations(db, 'tx-with-lock', 'orders-p1'), true);
+  truncateDbReservations(db);
+  clearMemoryReservations();
   db.close();
 });
 
