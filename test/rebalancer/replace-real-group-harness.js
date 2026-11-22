@@ -665,6 +665,12 @@ function createReplaceWorld(options = {}) {
       nodeId: NODE.SOURCE, cache: sourceNodeCache,
       rowOf: (status) => serviceRow(partitionId, sourceReplicaId,
         NODE.SOURCE, 'follower', status)});
+    const sourceGateway = world.sourceHandler.lifecycleStore.gateway;
+    const readSourceRows = sourceGateway.readAuthoritativeRows.bind(sourceGateway);
+    sourceGateway.readAuthoritativeRows = async (table, sql, params, readOptions) => {
+      const result = await readSourceRows(table, sql, params, readOptions);
+      return result?.success === true ? {...result, rowSetComplete: true} : result;
+    };
     // The REMOVING write exhausts its retry on a retryable control-plane
     // failure while the flag holds (verification round 1 V2).
     world.removingWriteFails = options.removingWriteFails === true;
