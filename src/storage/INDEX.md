@@ -10,6 +10,7 @@ documentClass: generated
 - [data-directory-manager.js](data-directory-manager.js) - Data Directory Manager - Manages persistent storage directories. (importers: hub)
 - [data-directory-process-owner.js](data-directory-process-owner.js) - No leading comment; first export: DATA_DIRECTORY_OWNER_ERROR_CODE. (importers: hub)
 - [index.js](index.js) - Storage module exports. (importers: one)
+- [retained-read-view-custody.js](retained-read-view-custody.js) - Canonical owner of physical storage-incarnation custody for retained SQLite read-view handles. (importers: many)
 - [sqlite-connection-state.js](sqlite-connection-state.js) - What one SQLite connection's owners compile and derive from it, held on the connection itself for exactly the... (importers: many)
 - [sqlite-store-constants.js](sqlite-store-constants.js) - Constants for SQLiteStore - composable SQLite database lifecycle management. (importers: few)
 - [sqlite-store.js](sqlite-store.js) - SQLiteStore - Composable SQLite database lifecycle management. (importers: few)

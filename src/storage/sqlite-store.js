@@ -18,6 +18,12 @@ import {
 } from './sqlite-store-constants.js';
 import {collectBoundedSqliteRows} from
   '../query/query-result-budget.js';
+import {
+  CUSTODY_ERROR_CODE,
+  RetainedReadViewCustodyError,
+  endStorageIncarnationCustody,
+  mintStorageIncarnationId,
+} from './retained-read-view-custody.js';
 
 /**
  * SQL fragments used for schema-to-SQL conversion.
@@ -37,6 +43,7 @@ const SCHEMA_SQL = Object.freeze({
  * Maximum number of characters to include in logged SQL statements.
  */
 const SQL_LOG_TRUNCATE_LENGTH = NUM.HUNDRED;
+const STORE_CLOSE_END_REASON = 'store_close';
 
 /**
  * Composable SQLite database lifecycle manager.
@@ -72,6 +79,8 @@ class SQLiteStore {
     });
 
     this.db = new Database(this.dbPath);
+    this.storageIncarnationId = mintStorageIncarnationId(this.dbPath);
+    this.checkpointGeneration = 0;
     this.db.pragma(SQLITE_STORE_PRAGMA.JOURNAL_MODE_WAL);
     this.db.pragma(SQLITE_STORE_PRAGMA.SYNCHRONOUS_NORMAL);
 
@@ -129,6 +138,17 @@ class SQLiteStore {
       dbPath: this.dbPath,
     });
 
+    const custody = endStorageIncarnationCustody(
+      this,
+      STORE_CLOSE_END_REASON,
+    );
+    if (!custody.ok) {
+      throw new RetainedReadViewCustodyError(
+        CUSTODY_ERROR_CODE.CLOSE_FAILED,
+        `SQLiteStore close blocked by unclosed retained read views on ${this.dbPath}`,
+        custody,
+      );
+    }
     try {
       this.db.close();
     } catch (error) {

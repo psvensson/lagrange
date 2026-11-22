@@ -15,7 +15,9 @@ import Database from 'better-sqlite3';
 import {
   removeReplicaStorageArtifacts,
 } from '../../src/node/replica-storage-artifacts.js';
+import {PartitionRaftStorage} from '../../src/partition/partition-raft-storage.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
+import {SQLiteLogAdapter} from '../../src/raft/sqlite-log-adapter.js';
 import {requestSnapshotInstall} from '../../src/raft/snapshot-install.js';
 import {createSqliteStateMachineCheckpoint} from
   '../../src/raft/snapshot-checkpoint-store.js';
@@ -384,17 +386,20 @@ describe(`Retained read-view generation custody (${QUEST_ID})`, () => {
 
       const checkpointsRoot = path.join(tempDir, 'checkpoints-replace');
       const cpDb = seedWalPartitionDb(path.join(tempDir, 'cp-seed.sqlite'), INITIAL_ROW_COUNT);
-      cpDb.pragma(WAL_TRUNCATE_PRAGMA);
-      const cp = createSqliteStateMachineCheckpoint({
+      const adapter = new SQLiteLogAdapter(cpDb, {address: PARTITION_ID, term: 1});
+      const raftStorage = new PartitionRaftStorage(cpDb, PARTITION_ID, adapter);
+      const cpEntry = adapter.saveCommand({sql: 'seed'}, 1);
+      adapter.commit(cpEntry.index);
+      raftStorage.recordAppliedAdvance();
+      const cp = await createSqliteStateMachineCheckpoint({
         checkpointsRoot,
-        clusterId: 'cluster-test',
         db: cpDb,
-        entity: {id: PARTITION_ID, kind: 'partition'},
-        generationIndex: 1,
-        lastIncludedIndex: 1,
-        lastIncludedTerm: 1,
-        maxCommittedHlc: '1',
-        raftGroupId: PARTITION_ID,
+        identity: {
+          clusterId: 'cluster-test',
+          entity: {id: TABLE_NAME, kind: 'partition'},
+          membershipEpoch: 1,
+          raftGroupId: PARTITION_ID,
+        },
       });
       cpDb.close();
       assert.equal(cp.outcome, 'created');
@@ -403,7 +408,7 @@ describe(`Retained read-view generation custody (${QUEST_ID})`, () => {
         () =>
           requestSnapshotInstall({
             checkpointsRoot,
-            generationIndex: 1,
+            generationIndex: cp.descriptor.lastIncludedIndex,
             replicaDbPath: dbPath,
           }),
         (err) => err.code === 'RETAINED_READ_VIEW_CUSTODY_BLOCKED',

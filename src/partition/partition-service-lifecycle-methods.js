@@ -11,6 +11,11 @@ import {
 import {endReplicaLeadershipTenure} from '../raft/replica-leadership-state.js';
 import {assertRaftOperationSucceeded} from '../raft/raft-operation-port.js';
 import {stopReplicaAdmission} from './partition-replica-admission.js';
+import {
+  CUSTODY_ERROR_CODE,
+  RetainedReadViewCustodyError,
+  endStorageIncarnationCustody,
+} from '../storage/retained-read-view-custody.js';
 
 const {
   PARTITION_SERVICE_DEFAULT,
@@ -21,6 +26,7 @@ const {
 } = PARTITION_SERVICE_SHARED;
 
 const CONSTRUCTOR_METHOD = 'constructor';
+const PARTITION_SHUTDOWN_END_REASON = 'partition_shutdown';
 
 async function closePartitionConsensusResources(service) {
   if (service.learnerPromotionTimer) {
@@ -77,6 +83,17 @@ async function retirePartitionTransportHandler(service) {
 }
 
 function closePartitionPersistenceResources(service) {
+  const custody = endStorageIncarnationCustody(
+    service,
+    PARTITION_SHUTDOWN_END_REASON,
+  );
+  if (!custody.ok) {
+    throw new RetainedReadViewCustodyError(
+      CUSTODY_ERROR_CODE.CLOSE_FAILED,
+      `Partition shutdown blocked by unclosed retained read views on ${service.partitionId}`,
+      custody,
+    );
+  }
   if (service.db) {
     service.db.close();
     service.db = null;
