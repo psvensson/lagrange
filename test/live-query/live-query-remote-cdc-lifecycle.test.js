@@ -704,7 +704,13 @@ describe('P4 Live-Query Remote CDC Owned Lifecycle and Coverage Witnesses', () =
     assert.equal(cancelled.effects[0].type, REMOTE_CDC_EFFECT.SEND_REMOTE_UNSUBSCRIBE);
     assert.equal(cancelled.effects[0].binding.subscriberId, 'node-a:q1:p1:1');
 
-    const cleaned = transitionRemoteCdcSubscription(sub, {type: REMOTE_CDC_EVENT.CLEANUP_SETTLED});
+    const cleaned = transitionRemoteCdcSubscription(sub, {
+      type: REMOTE_CDC_EVENT.CLEANUP_SETTLED,
+      binding: cancelled.effects[0].binding,
+      bindingGeneration: sub.bindingGeneration,
+      success: true,
+      nowMs: 1400,
+    });
     assert.equal(sub.phase, REMOTE_CDC_PHASE.CLOSED);
     assert.equal(cleaned.effects[0].type, REMOTE_CDC_EFFECT.RETIRE_RECORD);
   });
@@ -1043,9 +1049,9 @@ describe('P4 Live-Query Remote CDC Owned Lifecycle and Coverage Witnesses', () =
       'stored group.resultSet preserves both Row 1 and Row 2',
     );
     assert.equal(
-      group.partitionFrontiers.get('p1'),
+      group.getPartitionFrontier('p1'),
       frontierAfterRow2,
-      'partition frontier remains aligned at Row 2',
+      'group.getPartitionFrontier remains aligned at Row 2',
     );
 
     const settledCalls = sqlEngine.callCount;
@@ -1191,278 +1197,268 @@ describe('P4 Live-Query Remote CDC Owned Lifecycle and Coverage Witnesses', () =
 
   it('P5.3: bounded exhaustive BFS exploration over transitionRemoteCdcSubscription preserves safety, custody, and convergence', () => {
     const MAX_DEPTH = 9;
-    const MAX_DEBT_EPOCHS = 3;
+    const MAX_DEBT_EPOCHS = 2;
+    const MAX_CDC_EPOCHS = 2;
     const MAX_ATTEMPTS = 4;
 
     const cloneSub = (sub) => ({
       ...sub,
       inFlightSubscribe: sub.inFlightSubscribe ? {...sub.inFlightSubscribe} : null,
       inFlightRefresh: sub.inFlightRefresh ? {...sub.inFlightRefresh} : null,
+      pendingCleanupBindings: sub.pendingCleanupBindings.map((b) => ({...b})),
     });
 
-    const stateKey = (sub, wasCancelled) => [
-      sub.phase,
-      sub.subscribed ? 1 : 0,
+    const stateKey = (sub, meta) => [
+      sub.phase, sub.subscribed ? 1 : 0, sub.uncertainRemoteRegistration ? 1 : 0,
       sub.needsCatchupOnSubscribe ? 1 : 0,
       sub.inFlightSubscribe ? sub.inFlightSubscribe.attemptId : 0,
-      sub.inFlightRefresh ? sub.inFlightRefresh.coversResetDebtEpoch : -1,
-      sub.inFlightCleanups,
+      sub.inFlightRefresh ?
+        `${sub.inFlightRefresh.coversResetDebtEpoch}:${sub.inFlightRefresh.coversCdcEpoch}` : -1,
+      sub.inFlightCleanups, sub.pendingCleanupBindings.length,
       sub.remoteUnsubscribeDispatched ? 1 : 0,
-      sub.resetDebtEpoch,
-      sub.settledResetEpoch,
+      sub.resetDebtEpoch, sub.settledResetEpoch,
+      sub.ordinaryCdcEpoch, sub.requiredCdcEpoch, sub.settledCdcEpoch,
       sub.retryNotBeforeMs > 0 ? 1 : 0,
-      wasCancelled ? 1 : 0,
+      meta.wasCancelled ? 1 : 0, meta.hadPossibleReg ? 1 : 0,
+      meta.cleanupConfirmed ? 1 : 0, meta.cleanupFailures,
     ].join('|');
 
-    const assertIndependentInvariants = (sub, wasCancelled, context) => {
-      assert.ok(sub.settledResetEpoch <= sub.resetDebtEpoch,
-        `${context}: settledResetEpoch <= resetDebtEpoch`);
+    const assertIndependentInvariants = (sub, meta, context) => {
+      assert.ok(sub.settledResetEpoch <= sub.resetDebtEpoch, `${context}: settled <= debt`);
       assert.ok(sub.inFlightCleanups >= 0, `${context}: non-negative inFlightCleanups`);
       assert.ok(sub.retryNotBeforeMs >= 0, `${context}: non-negative retryNotBeforeMs`);
 
       if (sub.phase === REMOTE_CDC_PHASE.LIVE) {
         assert.equal(sub.subscribed, true, `${context}: LIVE requires subscribed === true`);
-        assert.equal(sub.settledResetEpoch, sub.resetDebtEpoch,
-          `${context}: LIVE forbids unsettled resetDebtEpoch`);
+        assert.equal(sub.settledResetEpoch, sub.resetDebtEpoch, `${context}: LIVE forbids debt`);
+        assert.ok(sub.settledCdcEpoch >= sub.requiredCdcEpoch,
+          `${context}: LIVE forbids snapshot started before latest acknowledged CDC event`);
       }
       if (sub.phase === REMOTE_CDC_PHASE.CLOSED) {
         assert.equal(sub.inFlightSubscribe, null, `${context}: CLOSED forbids inFlightSubscribe`);
-        assert.equal(sub.inFlightCleanups, 0, `${context}: CLOSED forbids pending inFlightCleanups`);
+        assert.equal(sub.inFlightCleanups, 0, `${context}: CLOSED forbids inFlightCleanups`);
+        assert.equal(sub.pendingCleanupBindings.length, 0, `${context}: CLOSED forbids pending`);
+        assert.equal(sub.uncertainRemoteRegistration, false, `${context}: CLOSED clears uncertain`);
+        if (meta.hadPossibleReg) {
+          assert.equal(meta.cleanupConfirmed, true,
+            `${context}: CLOSED after accepted/uncertain registration requires confirmed cleanup`);
+        }
       }
-      if (wasCancelled) {
-        assert.ok(
-          sub.phase === REMOTE_CDC_PHASE.RETIRING || sub.phase === REMOTE_CDC_PHASE.CLOSED,
-          `${context}: cancelled subscription can never re-enter active phase ${sub.phase}`,
-        );
+      if (meta.wasCancelled) {
+        assert.ok(sub.phase === REMOTE_CDC_PHASE.RETIRING || sub.phase === REMOTE_CDC_PHASE.CLOSED,
+          `${context}: cancelled subscription can never re-enter active phase ${sub.phase}`);
       }
-
-      // Every non-terminal/non-LIVE state must either have an in-flight effect or an owned wake.
       const isQuiescent = sub.phase === REMOTE_CDC_PHASE.CLOSED ||
-        (sub.phase === REMOTE_CDC_PHASE.LIVE && sub.settledResetEpoch === sub.resetDebtEpoch);
+        (sub.phase === REMOTE_CDC_PHASE.LIVE &&
+          sub.settledResetEpoch === sub.resetDebtEpoch &&
+          sub.settledCdcEpoch >= sub.requiredCdcEpoch);
       const hasInFlight = sub.inFlightSubscribe !== null ||
-        sub.inFlightRefresh !== null ||
-        sub.inFlightCleanups > 0;
+        sub.inFlightRefresh !== null || sub.inFlightCleanups > 0;
       if (!isQuiescent && !hasInFlight) {
-        assert.equal(
-          hasOutstandingRemoteCdcObligation(sub),
-          true,
-          `${context}: active non-quiescent state without in-flight work must retain an owned wake`,
-        );
+        assert.equal(hasOutstandingRemoteCdcObligation(sub), true,
+          `${context}: non-quiescent state without in-flight work must retain an owned wake`);
       }
     };
 
     const assertBoundedConvergence = (sub, context) => {
       const sim = cloneSub(sub);
       let steps = 0;
-      while (steps < 12 &&
-          sim.phase !== REMOTE_CDC_PHASE.LIVE &&
-          sim.phase !== REMOTE_CDC_PHASE.CLOSED) {
+      while (steps < 16 &&
+          sim.phase !== REMOTE_CDC_PHASE.LIVE && sim.phase !== REMOTE_CDC_PHASE.CLOSED) {
         steps += 1;
         if (sim.phase === REMOTE_CDC_PHASE.RETIRING) {
           if (sim.inFlightSubscribe !== null) {
             transitionRemoteCdcSubscription(sim, {
-              type: REMOTE_CDC_EVENT.SUBSCRIBE_SETTLED,
-              attemptId: sim.inFlightSubscribe.attemptId,
-              binding: sim.inFlightSubscribe,
-              accepted: true,
-              nowMs: 5000 + steps,
+              type: REMOTE_CDC_EVENT.SUBSCRIBE_SETTLED, attemptId: sim.inFlightSubscribe.attemptId,
+              binding: sim.inFlightSubscribe, accepted: true, nowMs: 5000 + steps,
             });
           } else if (sim.inFlightCleanups > 0) {
-            transitionRemoteCdcSubscription(sim, {type: REMOTE_CDC_EVENT.CLEANUP_SETTLED});
+            transitionRemoteCdcSubscription(sim, {
+              type: REMOTE_CDC_EVENT.CLEANUP_SETTLED, bindingGeneration: sim.bindingGeneration,
+              success: true, nowMs: 5000 + steps,
+            });
+          } else if (sim.pendingCleanupBindings.length > 0) {
+            transitionRemoteCdcSubscription(sim, {type: REMOTE_CDC_EVENT.START_CLEANUP});
           } else {
             break;
           }
           continue;
         }
         if (sim.phase === REMOTE_CDC_PHASE.CONNECTING) {
-          if (sim.inFlightSubscribe === null) {
-            transitionRemoteCdcSubscription(sim, {type: REMOTE_CDC_EVENT.START_SUBSCRIBE});
-          } else {
-            transitionRemoteCdcSubscription(sim, {
-              type: REMOTE_CDC_EVENT.SUBSCRIBE_SETTLED,
-              attemptId: sim.inFlightSubscribe.attemptId,
-              binding: sim.inFlightSubscribe,
-              accepted: true,
-              requiresCatchup: true,
+          transitionRemoteCdcSubscription(sim, sim.inFlightSubscribe === null ?
+            {type: REMOTE_CDC_EVENT.START_SUBSCRIBE} :
+            {
+              type: REMOTE_CDC_EVENT.SUBSCRIBE_SETTLED, attemptId: sim.inFlightSubscribe.attemptId,
+              binding: sim.inFlightSubscribe, accepted: true, requiresCatchup: true,
               nowMs: 5000 + steps,
             });
-          }
           continue;
         }
         if (sim.phase === REMOTE_CDC_PHASE.CATCHING_UP) {
-          if (sim.inFlightRefresh === null) {
-            transitionRemoteCdcSubscription(sim, {type: REMOTE_CDC_EVENT.START_REFRESH});
-          } else {
-            transitionRemoteCdcSubscription(sim, {
-              type: REMOTE_CDC_EVENT.REFRESH_SETTLED,
-              attempt: sim.inFlightRefresh,
-              authoritative: true,
-              nowMs: 5000 + steps,
-              scheduleOnIncomplete: true,
+          transitionRemoteCdcSubscription(sim, sim.inFlightRefresh === null ?
+            {type: REMOTE_CDC_EVENT.START_REFRESH} :
+            {
+              type: REMOTE_CDC_EVENT.REFRESH_SETTLED, attempt: sim.inFlightRefresh,
+              authoritative: true, nowMs: 5000 + steps, scheduleOnIncomplete: true,
             });
-          }
         }
       }
-      assert.ok(
-        sim.phase === REMOTE_CDC_PHASE.LIVE || sim.phase === REMOTE_CDC_PHASE.CLOSED,
-        `${context}: state must converge to LIVE or CLOSED within bounded steps (got ${sim.phase})`,
-      );
+      assert.ok(sim.phase === REMOTE_CDC_PHASE.LIVE || sim.phase === REMOTE_CDC_PHASE.CLOSED,
+        `${context}: state must converge to LIVE or CLOSED within bounded steps (got ${sim.phase})`);
     };
 
     const initial = createRemoteCdcSubscriptionState({
-      subKey: 'q1:p1',
-      partitionId: 'p1',
-      queryId: 'q1',
-      subscriberId: 'node-a:q1:p1:1',
-      bindingGeneration: 1,
-      transportKind: REMOTE_CDC_TRANSPORT_KIND.REMOTE,
-      targetNodeId: 'node-b',
-      targetAddress: 'node-b/partition/p1',
-      handler: () => {},
-      wrappedHandler: () => {},
-      needsCatchupOnSubscribe: false,
+      subKey: 'q1:p1', partitionId: 'p1', queryId: 'q1', subscriberId: 'node-a:q1:p1:1',
+      bindingGeneration: 1, transportKind: REMOTE_CDC_TRANSPORT_KIND.REMOTE,
+      targetNodeId: 'node-b', targetAddress: 'node-b/partition/p1',
+      handler: () => {}, wrappedHandler: () => {}, needsCatchupOnSubscribe: false,
     });
-
-    const visited = new Set([stateKey(initial, false)]);
+    const initMeta = {
+      wasCancelled: false, hadPossibleReg: false, cleanupConfirmed: false, cleanupFailures: 0,
+    };
+    const visited = new Set([stateKey(initial, initMeta)]);
     const observedPhases = new Set([initial.phase]);
-    const queue = [{sub: initial, depth: 0, wasCancelled: false}];
+    const queue = [{sub: initial, depth: 0, meta: initMeta}];
     let transitionsChecked = 0;
+    let observedOrdinaryCdcInRefresh = 0;
+    let observedUncertainCancel = 0;
+    let observedCleanupRetryToClosed = 0;
 
     while (queue.length > 0) {
-      const {sub, depth, wasCancelled} = queue.shift();
+      const {sub, depth, meta} = queue.shift();
       observedPhases.add(sub.phase);
-      assertIndependentInvariants(sub, wasCancelled, `depth=${depth}`);
+      assertIndependentInvariants(sub, meta, `depth=${depth}`);
       assertBoundedConvergence(sub, `depth=${depth}`);
       if (depth >= MAX_DEPTH) continue;
 
+      const nowMs = 1000 + depth * 10;
       const actions = [];
       if (sub.phase === REMOTE_CDC_PHASE.CONNECTING &&
-          sub.inFlightSubscribe === null &&
-          sub.nextAttemptId < MAX_ATTEMPTS) {
+          sub.inFlightSubscribe === null && sub.nextAttemptId < MAX_ATTEMPTS) {
         actions.push({type: REMOTE_CDC_EVENT.START_SUBSCRIBE});
       }
       if (sub.inFlightSubscribe !== null) {
+        const b = sub.inFlightSubscribe;
+        const subEv = (extra) => ({
+          type: REMOTE_CDC_EVENT.SUBSCRIBE_SETTLED, attemptId: b.attemptId, binding: b, nowMs,
+          ...extra,
+        });
         actions.push(
-          {
-            type: REMOTE_CDC_EVENT.SUBSCRIBE_SETTLED,
-            attemptId: sub.inFlightSubscribe.attemptId,
-            binding: sub.inFlightSubscribe,
-            accepted: true,
-            requiresCatchup: true,
-            nowMs: 1000 + depth * 10,
-          },
-          {
-            type: REMOTE_CDC_EVENT.SUBSCRIBE_SETTLED,
-            attemptId: sub.inFlightSubscribe.attemptId,
-            binding: sub.inFlightSubscribe,
-            accepted: true,
-            requiresCatchup: false,
-            nowMs: 1000 + depth * 10,
-          },
-          {
-            type: REMOTE_CDC_EVENT.SUBSCRIBE_SETTLED,
-            attemptId: sub.inFlightSubscribe.attemptId,
-            binding: sub.inFlightSubscribe,
-            accepted: false,
-            retryAfterMs: 250,
-            error: 'deferred',
-            nowMs: 1000 + depth * 10,
-          },
-          {
-            type: REMOTE_CDC_EVENT.SUBSCRIBE_SETTLED,
-            attemptId: sub.inFlightSubscribe.attemptId,
-            binding: sub.inFlightSubscribe,
-            accepted: false,
-            uncertainRemoteRegistration: true,
-            retryAfterMs: null,
-            error: 'transport-error',
-            nowMs: 1000 + depth * 10,
-          },
+          subEv({accepted: true, requiresCatchup: true}),
+          subEv({accepted: true, requiresCatchup: false}),
+          subEv({accepted: false, retryAfterMs: 250, error: 'deferred'}),
+          subEv({accepted: false, uncertainRemoteRegistration: true, error: 'transport-error'}),
         );
       }
-      if (!wasCancelled && sub.resetDebtEpoch < MAX_DEBT_EPOCHS) {
-        actions.push({
-          type: REMOTE_CDC_EVENT.RAISE_RESET_DEBT,
-          scheduleContinuation: true,
-        });
+      if (!meta.wasCancelled && sub.resetDebtEpoch < MAX_DEBT_EPOCHS) {
+        actions.push({type: REMOTE_CDC_EVENT.RAISE_RESET_DEBT, scheduleContinuation: true});
       }
       if (sub.phase === REMOTE_CDC_PHASE.CATCHING_UP &&
-          sub.inFlightRefresh === null &&
-          sub.nextAttemptId < MAX_ATTEMPTS) {
+          sub.inFlightRefresh === null && sub.nextAttemptId < MAX_ATTEMPTS) {
         actions.push({type: REMOTE_CDC_EVENT.START_REFRESH});
       }
       if (sub.inFlightRefresh !== null) {
+        if (!meta.wasCancelled && sub.ordinaryCdcEpoch < MAX_CDC_EPOCHS) {
+          actions.push({type: REMOTE_CDC_EVENT.ORDINARY_CDC_DELIVERED});
+        }
+        const refEv = (extra) => ({
+          type: REMOTE_CDC_EVENT.REFRESH_SETTLED, attempt: sub.inFlightRefresh, nowMs,
+          scheduleOnIncomplete: true, ...extra,
+        });
         actions.push(
-          {
-            type: REMOTE_CDC_EVENT.REFRESH_SETTLED,
-            attempt: sub.inFlightRefresh,
-            authoritative: true,
-            nowMs: 1000 + depth * 10,
-            scheduleOnIncomplete: true,
-          },
-          {
-            type: REMOTE_CDC_EVENT.REFRESH_SETTLED,
-            attempt: sub.inFlightRefresh,
-            authoritative: false,
-            retryAfterMs: 150,
-            error: 'sql-err',
-            nowMs: 1000 + depth * 10,
-            scheduleOnIncomplete: true,
-          },
+          refEv({authoritative: true}),
+          refEv({authoritative: false, retryAfterMs: 150, error: 'sql-err'}),
         );
       }
-      if (sub.phase !== REMOTE_CDC_PHASE.CLOSED && !wasCancelled) {
+      if (sub.phase !== REMOTE_CDC_PHASE.CLOSED && !meta.wasCancelled) {
         actions.push({type: REMOTE_CDC_EVENT.CANCEL});
       }
       if (sub.inFlightCleanups > 0) {
-        actions.push({type: REMOTE_CDC_EVENT.CLEANUP_SETTLED});
+        const clEv = (extra) => ({
+          type: REMOTE_CDC_EVENT.CLEANUP_SETTLED, bindingGeneration: sub.bindingGeneration, nowMs,
+          ...extra,
+        });
+        actions.push(clEv({success: true}));
+        if (meta.cleanupFailures < 1) {
+          actions.push(clEv({success: false, retryAfterMs: 120, error: 'refused'}));
+        }
+      }
+      if (sub.phase === REMOTE_CDC_PHASE.RETIRING &&
+          sub.inFlightCleanups === 0 && sub.pendingCleanupBindings.length > 0) {
+        actions.push({type: REMOTE_CDC_EVENT.START_CLEANUP});
       }
 
       for (const action of actions) {
         const next = cloneSub(sub);
         const prevNotBefore = next.retryNotBeforeMs;
         const prevDebtEpoch = next.resetDebtEpoch;
+        const prevRequiredCdc = next.requiredCdcEpoch;
         const prevPhase = next.phase;
+        const prevSubscribed = next.subscribed;
+        const prevUncertain = next.uncertainRemoteRegistration;
         const res = transitionRemoteCdcSubscription(next, action);
         transitionsChecked += 1;
-        const nextCancelled = wasCancelled || action.type === REMOTE_CDC_EVENT.CANCEL;
 
-        // Verify transition-level contracts.
-        if (action.type === REMOTE_CDC_EVENT.SUBSCRIBE_SETTLED &&
-            (prevPhase === REMOTE_CDC_PHASE.RETIRING || prevPhase === REMOTE_CDC_PHASE.CLOSED) &&
-            (action.accepted || action.uncertainRemoteRegistration)) {
+        const subMayHaveReg = action.type === REMOTE_CDC_EVENT.SUBSCRIBE_SETTLED &&
+          (action.accepted || action.uncertainRemoteRegistration);
+        const cleanupOk = action.type === REMOTE_CDC_EVENT.CLEANUP_SETTLED &&
+          action.success === true;
+        const cleanupFail = action.type === REMOTE_CDC_EVENT.CLEANUP_SETTLED &&
+          action.success !== true;
+        const nextMeta = {
+          wasCancelled: meta.wasCancelled || action.type === REMOTE_CDC_EVENT.CANCEL,
+          hadPossibleReg: meta.hadPossibleReg || subMayHaveReg,
+          cleanupConfirmed: subMayHaveReg ? false : (meta.cleanupConfirmed || cleanupOk),
+          cleanupFailures: meta.cleanupFailures + (cleanupFail ? 1 : 0),
+        };
+
+        if (action.type === REMOTE_CDC_EVENT.ORDINARY_CDC_DELIVERED &&
+            sub.inFlightRefresh !== null) {
+          observedOrdinaryCdcInRefresh += 1;
+        }
+        if (action.type === REMOTE_CDC_EVENT.CANCEL && prevUncertain && !prevSubscribed) {
+          observedUncertainCancel += 1;
+          assert.ok(res.effects.some((e) => e.type === REMOTE_CDC_EFFECT.SEND_REMOTE_UNSUBSCRIBE),
+            'CANCEL after uncertain subscribe MUST emit SEND_REMOTE_UNSUBSCRIBE');
+        }
+        if (cleanupFail) {
+          assert.equal(next.phase, REMOTE_CDC_PHASE.RETIRING, 'failed cleanup stays RETIRING');
+          assert.ok(next.pendingCleanupBindings.length > 0, 'failed cleanup retains binding');
+          assert.equal(hasOutstandingRemoteCdcObligation(next), true);
+        }
+        if (cleanupOk && meta.cleanupFailures > 0 && next.phase === REMOTE_CDC_PHASE.CLOSED) {
+          observedCleanupRetryToClosed += 1;
+        }
+        if (subMayHaveReg &&
+            (prevPhase === REMOTE_CDC_PHASE.RETIRING || prevPhase === REMOTE_CDC_PHASE.CLOSED)) {
           const unsubEffect = res.effects.find(
             (e) => e.type === REMOTE_CDC_EFFECT.SEND_REMOTE_UNSUBSCRIBE,
           );
           assert.ok(unsubEffect, 'retiring late subscribe MUST emit SEND_REMOTE_UNSUBSCRIBE');
           assert.equal(unsubEffect.binding.subscriberId, action.binding.subscriberId);
-          assert.equal(unsubEffect.binding.targetAddress, action.binding.targetAddress);
         }
-        if (action.type === REMOTE_CDC_EVENT.REFRESH_SETTLED &&
-            action.authoritative &&
-            !wasCancelled &&
-            action.attempt.coversResetDebtEpoch < prevDebtEpoch) {
-          assert.equal(res.settled, false, 'older refresh cannot settle newer debt epoch');
+        if (action.type === REMOTE_CDC_EVENT.REFRESH_SETTLED && action.authoritative &&
+            !meta.wasCancelled &&
+            (action.attempt.coversResetDebtEpoch < prevDebtEpoch ||
+              action.attempt.coversCdcEpoch < prevRequiredCdc)) {
+          assert.equal(res.settled, false, 'older refresh cannot settle newer debt or CDC epoch');
           assert.equal(next.phase, REMOTE_CDC_PHASE.CATCHING_UP);
         }
-        if (action.type === REMOTE_CDC_EVENT.SUBSCRIBE_SETTLED &&
-            !action.accepted && !wasCancelled) {
-          assert.ok(
-            next.retryNotBeforeMs >= prevNotBefore,
-            'retryNotBeforeMs must never move backwards on subsequent deferral',
-          );
+        if (action.type === REMOTE_CDC_EVENT.SUBSCRIBE_SETTLED && !action.accepted &&
+            !meta.wasCancelled) {
+          assert.ok(next.retryNotBeforeMs >= prevNotBefore, 'retryNotBeforeMs must be monotonic');
           if (action.retryAfterMs) {
             assert.ok(
               next.retryNotBeforeMs >= action.nowMs + action.retryAfterMs,
-              'retryNotBeforeMs must honor transport retryAfterMs deadline',
+              'honors retryAfterMs',
             );
           }
         }
 
-        const key = stateKey(next, nextCancelled);
+        const key = stateKey(next, nextMeta);
         if (!visited.has(key)) {
           visited.add(key);
-          queue.push({sub: next, depth: depth + 1, wasCancelled: nextCancelled});
+          queue.push({sub: next, depth: depth + 1, meta: nextMeta});
         }
       }
     }
@@ -1470,7 +1466,10 @@ describe('P4 Live-Query Remote CDC Owned Lifecycle and Coverage Witnesses', () =
     for (const phase of Object.values(REMOTE_CDC_PHASE)) {
       assert.ok(observedPhases.has(phase), `BFS explored phase ${phase}`);
     }
-    assert.ok(visited.size >= 100, `explored ${visited.size} distinct reachable lifecycle states`);
-    assert.ok(transitionsChecked >= 250, `verified ${transitionsChecked} lifecycle transitions`);
+    assert.ok(observedOrdinaryCdcInRefresh > 0, 'BFS explored ORDINARY_CDC_DELIVERED during refreshInFlight');
+    assert.ok(observedUncertainCancel > 0, 'BFS explored SUBSCRIBE_SETTLED(uncertain) -> CANCEL');
+    assert.ok(observedCleanupRetryToClosed > 0, 'BFS explored CLEANUP_SETTLED(failed -> retry -> ok)');
+    assert.ok(visited.size >= 150, `explored ${visited.size} distinct reachable lifecycle states`);
+    assert.ok(transitionsChecked >= 400, `verified ${transitionsChecked} lifecycle transitions`);
   });
 });

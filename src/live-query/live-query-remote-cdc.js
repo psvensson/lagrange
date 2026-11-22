@@ -25,13 +25,18 @@ import {
   buildCancelledSubscribeResult,
   buildDeferredSubscribeResult,
   buildResyncFailureAnswer,
+  classifyUnsubscribeDeliveryError,
+  classifyUnsubscribeDeliveryOutcome,
+  collectDueRemoteCdcSubscriptions,
+  computeEarliestRemoteCdcDeadline,
   createRemoteCdcSubscriptionState,
   extractRemoteDeliveryAnswer,
   hasInboundSequenceGap,
-  hasOutstandingRemoteCdcObligation,
   isFailedSubscribeAnswer,
   isGroupClosed,
   isRemoteCdcBindingReceivable,
+  isUncertainSubscribeDelivery,
+  isUncertainSubscribeError,
   markGroupPending,
   markGroupSubscribed,
   transitionRemoteCdcSubscription,
@@ -44,12 +49,9 @@ const LIVE_QUERY_CDC_SERVICE_ID = 'live-query-cdc';
 const ACTIVE_SERVICE_STATUS = 'active';
 const RESYNC_REFRESH_FAILED_ERROR = 'Live query overflow resync refresh failed';
 const RESYNC_REFRESH_IN_PROGRESS_ERROR = 'Live query resync refresh already in progress';
-const LOG_MSG_REMOTE_SUBSCRIBE_FAILED =
-  'Live query remote partition CDC subscribe failed';
-const LOG_MSG_REMOTE_UNSUBSCRIBE_FAILED =
-  'Live query remote partition CDC unsubscribe failed';
-const LOG_MSG_REMOTE_REBIND_FAILED =
-  'Live query remote partition CDC rebind failed';
+const LOG_MSG_REMOTE_SUBSCRIBE_FAILED = 'Live query remote partition CDC subscribe failed';
+const LOG_MSG_REMOTE_UNSUBSCRIBE_FAILED = 'Live query remote partition CDC unsubscribe failed';
+const LOG_MSG_REMOTE_REBIND_FAILED = 'Live query remote partition CDC rebind failed';
 
 function isNonEmptyString(value) {
   return typeof value === 'string' && value.length > 0;
@@ -57,41 +59,25 @@ function isNonEmptyString(value) {
 
 function readTableRows(systemTableCache, tableName, predicate) {
   if (!systemTableCache) return [];
-  if (systemTableCache.filter) {
-    return systemTableCache.filter(tableName, predicate) || [];
-  }
-  if (systemTableCache.getAll) {
-    return (systemTableCache.getAll(tableName) || []).filter(predicate);
-  }
+  if (systemTableCache.filter) return systemTableCache.filter(tableName, predicate) || [];
+  if (systemTableCache.getAll) return (systemTableCache.getAll(tableName) || []).filter(predicate);
   return [];
 }
 
 function resolvePartitionRecord(systemTableCache, partitionId, overrideRow = null) {
-  if (overrideRow && overrideRow.partition_id === partitionId) {
-    return overrideRow;
-  }
+  if (overrideRow && overrideRow.partition_id === partitionId) return overrideRow;
   if (!systemTableCache || !partitionId) return null;
   if (systemTableCache.get) {
     const direct = systemTableCache.get(TABLES.PARTITIONS, partitionId);
     if (direct) return direct;
   }
-  if (systemTableCache.find) {
-    return systemTableCache.find(
-      TABLES.PARTITIONS,
-      (row) => row?.partition_id === partitionId,
-    ) || null;
-  }
-  return readTableRows(
-    systemTableCache,
-    TABLES.PARTITIONS,
-    (row) => row?.partition_id === partitionId,
-  )[0] || null;
+  const match = (row) => row?.partition_id === partitionId;
+  if (systemTableCache.find) return systemTableCache.find(TABLES.PARTITIONS, match) || null;
+  return readTableRows(systemTableCache, TABLES.PARTITIONS, match)[0] || null;
 }
 
 function resolveRemoteNodeId(systemTableCache, partitionId, ownNodeId, overrideRow) {
-  const partitionRow = resolvePartitionRecord(
-    systemTableCache, partitionId, overrideRow,
-  );
+  const partitionRow = resolvePartitionRecord(systemTableCache, partitionId, overrideRow);
   const leaderNodeId = partitionRow?.leader_node_id || null;
   if (isNonEmptyString(leaderNodeId)) {
     return leaderNodeId === ownNodeId ? null : leaderNodeId;
@@ -100,8 +86,7 @@ function resolveRemoteNodeId(systemTableCache, partitionId, ownNodeId, overrideR
     systemTableCache,
     TABLES.PARTITION_REPLICAS,
     (row) => row?.partition_id === partitionId &&
-      isNonEmptyString(row?.node_id) &&
-      row.node_id !== ownNodeId,
+      isNonEmptyString(row?.node_id) && row.node_id !== ownNodeId,
   );
   return replicaRows[0]?.node_id || null;
 }
@@ -114,10 +99,8 @@ function isPartitionServiceTypeAndStatusActive(row) {
 }
 
 function matchesActivePartitionService(row, partitionId, targetNodeId) {
-  return row?.partition_id === partitionId &&
-    row?.node_id === targetNodeId &&
-    isNonEmptyString(row?.address) &&
-    isPartitionServiceTypeAndStatusActive(row);
+  return row?.partition_id === partitionId && row?.node_id === targetNodeId &&
+    isNonEmptyString(row?.address) && isPartitionServiceTypeAndStatusActive(row);
 }
 
 function resolveRemotePartitionAddress(systemTableCache, partitionId, targetNodeId) {
@@ -126,10 +109,9 @@ function resolveRemotePartitionAddress(systemTableCache, partitionId, targetNode
     TABLES.SERVICES,
     (row) => matchesActivePartitionService(row, partitionId, targetNodeId),
   );
-  if (matchingServices.length > 0) {
-    return matchingServices[0].address;
-  }
-  return `${targetNodeId}/${PARTITION_ENTITY_TYPE}/${partitionId}`;
+  return matchingServices.length > 0 ?
+    matchingServices[0].address :
+    `${targetNodeId}/${PARTITION_ENTITY_TYPE}/${partitionId}`;
 }
 
 /**
@@ -143,19 +125,15 @@ function resolveRemotePartitionAddress(systemTableCache, partitionId, targetNode
 function resolveRemotePartitionTarget(
   systemTableCache, partitionId, ownNodeId, overrideRow = null,
 ) {
-  const targetNodeId = resolveRemoteNodeId(
-    systemTableCache, partitionId, ownNodeId, overrideRow,
-  );
+  const targetNodeId = resolveRemoteNodeId(systemTableCache, partitionId, ownNodeId, overrideRow);
   if (!targetNodeId) return null;
-  const targetAddress = resolveRemotePartitionAddress(
-    systemTableCache, partitionId, targetNodeId,
-  );
+  const targetAddress = resolveRemotePartitionAddress(systemTableCache, partitionId, targetNodeId);
   return {targetNodeId, targetAddress};
 }
 
 function buildLiveQueryCdcAddress(nodeId) {
-  if (!isNonEmptyString(nodeId)) return null;
-  return `${nodeId}/${SERVICE_ENTITY_TYPE}/${LIVE_QUERY_CDC_SERVICE_ID}`;
+  return isNonEmptyString(nodeId) ?
+    `${nodeId}/${SERVICE_ENTITY_TYPE}/${LIVE_QUERY_CDC_SERVICE_ID}` : null;
 }
 
 function resolveInboundRouter(messageRouter) {
@@ -209,45 +187,52 @@ function createRemoteLiveQueryCdcCoordinator({
     }
   };
 
-  const computeEarliestContinuationDeadline = () => {
-    let earliest = null;
-    for (const sub of activeSubscriptions.values()) {
-      if (!hasOutstandingRemoteCdcObligation(sub)) continue;
-      if (sub.inFlightSubscribe !== null || sub.inFlightRefresh !== null) continue;
-      const dueAt = sub.retryNotBeforeMs;
-      if (earliest === null || dueAt < earliest) {
-        earliest = dueAt;
-      }
+  const computeEarliestContinuationDeadline = () =>
+    computeEarliestRemoteCdcDeadline(activeSubscriptions, retiringSubscriptions);
+
+  const settleRemoteCleanup = (sub, binding, outcome) => {
+    if (isShutDown) return;
+    const done = transitionRemoteCdcSubscription(sub, {
+      type: REMOTE_CDC_EVENT.CLEANUP_SETTLED,
+      binding,
+      bindingGeneration: binding?.bindingGeneration,
+      success: outcome.confirmed,
+      retryAfterMs: outcome.retryAfterMs,
+      error: outcome.error,
+      nowMs: clock.now(),
+    });
+    executeEffects(sub, done.effects);
+    if (done.settled && computeEarliestContinuationDeadline() === null) {
+      clearPendingContinuationTimer();
     }
-    return earliest;
   };
 
-  const dispatchRemoteUnsubscribe = (sub, binding) => {
+  const dispatchRemoteUnsubscribe = async (sub, binding) => {
     if (!activeRouter || !binding?.targetAddress || !binding?.subscriberId) {
-      const done = transitionRemoteCdcSubscription(sub, {
-        type: REMOTE_CDC_EVENT.CLEANUP_SETTLED,
-      });
-      executeEffects(sub, done.effects);
-      return Promise.resolve();
+      settleRemoteCleanup(sub, binding, {confirmed: true});
+      return;
     }
-    return activeRouter.deliver(binding.targetAddress, {
-      type: PARTITION_SERVICE_MESSAGE_TYPE.LIVE_QUERY_CDC_UNSUBSCRIBE,
-      subscriberId: binding.subscriberId,
-      queryId: binding.queryId,
-      partitionId: binding.partitionId,
-    }).catch((error) => {
+    let outcome;
+    try {
+      const delivery = await activeRouter.deliver(binding.targetAddress, {
+        type: PARTITION_SERVICE_MESSAGE_TYPE.LIVE_QUERY_CDC_UNSUBSCRIBE,
+        subscriberId: binding.subscriberId,
+        queryId: binding.queryId,
+        partitionId: binding.partitionId,
+      });
+      outcome = classifyUnsubscribeDeliveryOutcome(delivery);
+    } catch (error) {
+      outcome = classifyUnsubscribeDeliveryError(error);
+    }
+    if (!outcome.confirmed) {
       logger.debug(LOG_MSG_REMOTE_UNSUBSCRIBE_FAILED, {
         partitionId: binding.partitionId,
         queryId: binding.queryId,
         targetAddress: binding.targetAddress,
-        error: error.message,
+        error: outcome.error,
       });
-    }).finally(() => {
-      const done = transitionRemoteCdcSubscription(sub, {
-        type: REMOTE_CDC_EVENT.CLEANUP_SETTLED,
-      });
-      executeEffects(sub, done.effects);
-    });
+    }
+    settleRemoteCleanup(sub, binding, outcome);
   };
 
   function executeEffects(sub, effects) {
@@ -256,6 +241,9 @@ function createRemoteLiveQueryCdcCoordinator({
       if (effect.type === REMOTE_CDC_EFFECT.SEND_REMOTE_UNSUBSCRIBE) {
         cleanupPromises.push(dispatchRemoteUnsubscribe(sub, effect.binding));
       } else if (effect.type === REMOTE_CDC_EFFECT.SCHEDULE_CONTINUATION) {
+        if (sub.phase === REMOTE_CDC_PHASE.RETIRING) {
+          retiringSubscriptions.add(sub);
+        }
         schedulePendingContinuation();
       } else if (effect.type === REMOTE_CDC_EFFECT.RETIRE_RECORD) {
         retiringSubscriptions.delete(sub);
@@ -296,6 +284,7 @@ function createRemoteLiveQueryCdcCoordinator({
       type: REMOTE_CDC_EVENT.REFRESH_SETTLED,
       attempt,
       authoritative,
+      supersededByCdc: Boolean(outcome.supersededByCdc),
       retryAfterMs: outcome.retryAfterMs,
       error: outcome.error,
       nowMs: clock.now(),
@@ -333,6 +322,7 @@ function createRemoteLiveQueryCdcCoordinator({
       type: REMOTE_CDC_EVENT.REFRESH_SETTLED,
       attempt,
       authoritative,
+      supersededByCdc: Boolean(outcome.supersededByCdc),
       retryAfterMs: outcome.retryAfterMs,
       error: outcome.error,
       nowMs: clock.now(),
@@ -367,6 +357,11 @@ function createRemoteLiveQueryCdcCoordinator({
     }
     if (hasInboundSequenceGap(payload, sub)) {
       return handleInboundSequenceGap(payload, sub);
+    }
+    if (payload.events.length > 0) {
+      transitionRemoteCdcSubscription(sub, {
+        type: REMOTE_CDC_EVENT.ORDINARY_CDC_DELIVERED,
+      });
     }
     await sub.wrappedHandler(payload.events);
     updateLastReceivedSeq(sub, payload.events);
@@ -405,28 +400,39 @@ function createRemoteLiveQueryCdcCoordinator({
     }
   };
 
+  const continueSingleRetiring = async (sub) => {
+    if (sub.phase !== REMOTE_CDC_PHASE.RETIRING ||
+        sub.inFlightCleanups > 0 ||
+        sub.retryNotBeforeMs > clock.now()) {
+      return;
+    }
+    const started = transitionRemoteCdcSubscription(sub, {
+      type: REMOTE_CDC_EVENT.START_CLEANUP,
+    });
+    const cleanups = executeEffects(sub, started.effects);
+    if (cleanups.length > 0) await Promise.all(cleanups);
+  };
+
   const flushPendingSubscriptions = async () => {
     if (isShutDown || flushInFlight) return;
     flushInFlight = true;
     try {
-      const now = clock.now();
-      const dueList = Array.from(activeSubscriptions.values()).filter((sub) =>
-        hasOutstandingRemoteCdcObligation(sub) &&
-        sub.inFlightSubscribe === null &&
-        sub.inFlightRefresh === null &&
-        sub.retryNotBeforeMs <= now,
+      const {dueActive, dueRetiring} = collectDueRemoteCdcSubscriptions(
+        activeSubscriptions, retiringSubscriptions, clock.now(),
       );
-      for (const sub of dueList) {
+      for (const sub of dueActive) {
         if (isShutDown) return;
         try {
           await continueSinglePending(sub);
         } catch (error) {
           logger.debug(LOG_MSG_REMOTE_SUBSCRIBE_FAILED, {
-            partitionId: sub.partitionId,
-            queryId: sub.queryId,
-            error: error.message,
+            partitionId: sub.partitionId, queryId: sub.queryId, error: error.message,
           });
         }
+      }
+      for (const sub of dueRetiring) {
+        if (isShutDown) return;
+        await continueSingleRetiring(sub);
       }
     } finally {
       flushInFlight = false;
@@ -593,7 +599,7 @@ function createRemoteLiveQueryCdcCoordinator({
       }
       return await settleSubscribeOutcome(remoteSub, binding, subOptions, {
         accepted,
-        uncertainRemoteRegistration: false,
+        uncertainRemoteRegistration: !accepted && isUncertainSubscribeDelivery(delivery),
         answer,
         retryAfterMs: answer.retryAfterMs ?? null,
         error: answer.error || null,
@@ -607,7 +613,7 @@ function createRemoteLiveQueryCdcCoordinator({
       });
       return await settleSubscribeOutcome(remoteSub, binding, subOptions, {
         accepted: false,
-        uncertainRemoteRegistration: true,
+        uncertainRemoteRegistration: isUncertainSubscribeError(error),
         answer: null,
         retryAfterMs: normalizePositiveRetryAfterMs(error?.retryAfterMs, null),
         error: error.message,
@@ -754,6 +760,7 @@ function createRemoteLiveQueryCdcCoordinator({
     }
     activeSubscriptions.clear();
     remoteSubscribersById.clear();
+    retiringSubscriptions.clear();
     latestRebindTokenByKey.clear();
     if (liveQueryCdcAddress) {
       activeRouter?.unregisterExact?.(liveQueryCdcAddress, dispatchInboundCdcEvent);

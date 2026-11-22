@@ -8,7 +8,11 @@
  */
 
 import {
+  TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
+  deliveryAnswerOf,
+  deliveryTransportOf,
   forwardedDeliveryAnswer,
+  isDeliveredTransportDeliveryOutcome,
   normalizePositiveRetryAfterMs,
 } from '../transport/transport-semantic-outcome.js';
 import {LIVE_QUERY_GROUP_STATE} from './live-query-constants.js';
@@ -30,10 +34,12 @@ const REMOTE_CDC_PHASE = Object.freeze({
 const REMOTE_CDC_EVENT = Object.freeze({
   START_SUBSCRIBE: 'start_subscribe',
   SUBSCRIBE_SETTLED: 'subscribe_settled',
+  ORDINARY_CDC_DELIVERED: 'ordinary_cdc_delivered',
   RAISE_RESET_DEBT: 'raise_reset_debt',
   START_REFRESH: 'start_refresh',
   REFRESH_SETTLED: 'refresh_settled',
   CANCEL: 'cancel',
+  START_CLEANUP: 'start_cleanup',
   CLEANUP_SETTLED: 'cleanup_settled',
 });
 
@@ -47,6 +53,14 @@ const REMOTE_CDC_EFFECT = Object.freeze({
 const DEFAULT_RETRY_DELAY_MS = 50;
 // ends-on: pending remote live-query subscription retry backoff cap is reached
 const MAX_RETRY_DELAY_MS = 500;
+const UNSUBSCRIBE_NOT_CONFIRMED_ERROR = 'Remote live query CDC unsubscribe not confirmed';
+const PRE_SEND_SUBSCRIBE_REASON_CODES = new Set([
+  TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER,
+  TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_CONNECTION,
+  TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.OUTBOUND_QUEUE_BACKPRESSURED,
+  TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.QUERY_TRANSPORT_NOT_READY,
+  TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.WEBSOCKET_CONNECT_TIMEOUT,
+]);
 
 function snapshotBinding(sub, attemptId = null) {
   return Object.freeze({
@@ -58,6 +72,26 @@ function snapshotBinding(sub, attemptId = null) {
     partitionId: sub.partitionId,
     queryId: sub.queryId,
   });
+}
+
+function bindingIdentityKey(binding) {
+  return `${binding?.subscriberId || ''}@${binding?.targetAddress || ''}`;
+}
+
+function enqueuePendingCleanupBinding(sub, binding) {
+  if (!binding) return;
+  const key = bindingIdentityKey(binding);
+  if (!sub.pendingCleanupBindings.some((item) => bindingIdentityKey(item) === key)) {
+    sub.pendingCleanupBindings.push(binding);
+  }
+}
+
+function removePendingCleanupBinding(sub, binding) {
+  if (!binding || sub.pendingCleanupBindings.length === 0) return;
+  const key = bindingIdentityKey(binding);
+  sub.pendingCleanupBindings = sub.pendingCleanupBindings.filter(
+    (item) => bindingIdentityKey(item) !== key,
+  );
 }
 
 function advanceRetryDeadline(sub, nowMs, retryAfterMs) {
@@ -80,7 +114,11 @@ function advanceRetryDeadline(sub, nowMs, retryAfterMs) {
 function maybeCloseRetiring(sub, effects) {
   if (sub.phase === REMOTE_CDC_PHASE.RETIRING &&
       sub.inFlightSubscribe === null &&
-      sub.inFlightCleanups === 0) {
+      sub.inFlightCleanups === 0 &&
+      sub.pendingCleanupBindings.length === 0) {
+    sub.subscribed = false;
+    sub.uncertainRemoteRegistration = false;
+    sub.retryNotBeforeMs = 0;
     sub.phase = REMOTE_CDC_PHASE.CLOSED;
     effects.push({type: REMOTE_CDC_EFFECT.RETIRE_RECORD});
   }
@@ -127,14 +165,19 @@ function createRemoteCdcSubscriptionState({
     subOptions,
     phase: isLocal ? REMOTE_CDC_PHASE.LIVE : initialPhase,
     subscribed: isLocal,
+    uncertainRemoteRegistration: false,
     needsCatchupOnSubscribe: Boolean(needsCatchupOnSubscribe),
     nextAttemptId: 0,
     inFlightSubscribe: null,
     inFlightRefresh: null,
     inFlightCleanups: 0,
+    pendingCleanupBindings: [],
     remoteUnsubscribeDispatched: false,
     resetDebtEpoch: 0,
     settledResetEpoch: 0,
+    ordinaryCdcEpoch: 0,
+    requiredCdcEpoch: 0,
+    settledCdcEpoch: 0,
     retryNotBeforeMs: 0,
     retryDelayMs: DEFAULT_RETRY_DELAY_MS,
     lastError: null,
@@ -155,6 +198,8 @@ function handleStartSubscribe(sub) {
 function settleStaleSubscribe(sub, event) {
   const effects = [];
   if (event.accepted || event.uncertainRemoteRegistration) {
+    sub.uncertainRemoteRegistration = false;
+    removePendingCleanupBinding(sub, event.binding);
     sub.inFlightCleanups += 1;
     effects.push({
       type: REMOTE_CDC_EFFECT.SEND_REMOTE_UNSUBSCRIBE,
@@ -169,6 +214,7 @@ function settleStaleSubscribe(sub, event) {
 function settleAcceptedSubscribe(sub, event) {
   const effects = [];
   sub.subscribed = true;
+  sub.uncertainRemoteRegistration = false;
   sub.lastError = null;
   sub.retryNotBeforeMs = 0;
   sub.retryDelayMs = DEFAULT_RETRY_DELAY_MS;
@@ -180,9 +226,10 @@ function settleAcceptedSubscribe(sub, event) {
     sub.resetDebtEpoch += 1;
     effects.push({type: REMOTE_CDC_EFFECT.SCHEDULE_CONTINUATION});
   }
-  sub.phase = requiresCatchup || sub.settledResetEpoch < sub.resetDebtEpoch ?
-    REMOTE_CDC_PHASE.CATCHING_UP :
-    REMOTE_CDC_PHASE.LIVE;
+  const hasDebt = requiresCatchup ||
+    sub.settledResetEpoch < sub.resetDebtEpoch ||
+    sub.settledCdcEpoch < sub.requiredCdcEpoch;
+  sub.phase = hasDebt ? REMOTE_CDC_PHASE.CATCHING_UP : REMOTE_CDC_PHASE.LIVE;
   return {stale: false, accepted: true, requiresCatchup, effects};
 }
 
@@ -196,6 +243,9 @@ function handleSubscribeSettled(sub, event) {
   }
   if (!event.accepted) {
     sub.subscribed = false;
+    if (event.uncertainRemoteRegistration) {
+      sub.uncertainRemoteRegistration = true;
+    }
     sub.needsCatchupOnSubscribe = true;
     sub.lastError = event.error || null;
     advanceRetryDeadline(sub, event.nowMs, event.retryAfterMs);
@@ -206,6 +256,28 @@ function handleSubscribeSettled(sub, event) {
     };
   }
   return settleAcceptedSubscribe(sub, event);
+}
+
+function handleOrdinaryCdcDelivered(sub) {
+  if (isInactivePhase(sub.phase)) {
+    return {
+      ordinaryCdcEpoch: sub.ordinaryCdcEpoch,
+      requiredCdcEpoch: sub.requiredCdcEpoch,
+      effects: [],
+    };
+  }
+  sub.ordinaryCdcEpoch += 1;
+  if (sub.inFlightRefresh !== null || sub.phase === REMOTE_CDC_PHASE.CATCHING_UP) {
+    sub.requiredCdcEpoch = Math.max(sub.requiredCdcEpoch, sub.ordinaryCdcEpoch);
+    if (sub.phase === REMOTE_CDC_PHASE.LIVE) {
+      sub.phase = REMOTE_CDC_PHASE.CATCHING_UP;
+    }
+  }
+  return {
+    ordinaryCdcEpoch: sub.ordinaryCdcEpoch,
+    requiredCdcEpoch: sub.requiredCdcEpoch,
+    effects: [],
+  };
 }
 
 function handleRaiseResetDebt(sub, event) {
@@ -230,6 +302,7 @@ function handleStartRefresh(sub) {
     attemptId: ++sub.nextAttemptId,
     bindingGeneration: sub.bindingGeneration,
     coversResetDebtEpoch: sub.resetDebtEpoch,
+    coversCdcEpoch: sub.ordinaryCdcEpoch,
   });
   sub.inFlightRefresh = attempt;
   return {attempt, effects: []};
@@ -242,7 +315,11 @@ function settleIncompleteRefresh(sub, event) {
   }
   const effects = [];
   if (event.scheduleOnIncomplete) {
-    advanceRetryDeadline(sub, event.nowMs, event.retryAfterMs);
+    if (event.supersededByCdc) {
+      sub.retryNotBeforeMs = 0;
+    } else {
+      advanceRetryDeadline(sub, event.nowMs, event.retryAfterMs);
+    }
     effects.push({type: REMOTE_CDC_EFFECT.SCHEDULE_CONTINUATION});
   }
   return {settled: false, stale: false, effects};
@@ -250,7 +327,9 @@ function settleIncompleteRefresh(sub, event) {
 
 function settleAuthoritativeRefresh(sub, attempt) {
   sub.settledResetEpoch = Math.max(sub.settledResetEpoch, attempt.coversResetDebtEpoch);
-  const fullyCovered = sub.settledResetEpoch >= sub.resetDebtEpoch;
+  sub.settledCdcEpoch = Math.max(sub.settledCdcEpoch, attempt.coversCdcEpoch ?? 0);
+  const fullyCovered = sub.settledResetEpoch >= sub.resetDebtEpoch &&
+    sub.settledCdcEpoch >= sub.requiredCdcEpoch;
   if (fullyCovered) {
     sub.retryNotBeforeMs = 0;
     sub.retryDelayMs = DEFAULT_RETRY_DELAY_MS;
@@ -258,7 +337,7 @@ function settleAuthoritativeRefresh(sub, attempt) {
     sub.phase = sub.subscribed ? REMOTE_CDC_PHASE.LIVE : sub.phase;
     return {settled: true, stale: false, effects: []};
   }
-  // Older refresh completed while newer reset/overflow debt already arose.
+  // Older refresh completed while newer reset/overflow debt or concurrent CDC already arose.
   sub.phase = REMOTE_CDC_PHASE.CATCHING_UP;
   sub.retryNotBeforeMs = 0;
   return {
@@ -290,25 +369,64 @@ function handleCancel(sub) {
   }
   sub.phase = REMOTE_CDC_PHASE.RETIRING;
   sub.retryNotBeforeMs = 0;
-  if (sub.subscribed &&
-      sub.transportKind === REMOTE_CDC_TRANSPORT_KIND.REMOTE &&
-      !sub.remoteUnsubscribeDispatched) {
+  const needsRemoteCleanup =
+    sub.transportKind === REMOTE_CDC_TRANSPORT_KIND.REMOTE &&
+    (sub.subscribed || sub.uncertainRemoteRegistration);
+  if (needsRemoteCleanup && !sub.remoteUnsubscribeDispatched) {
     sub.remoteUnsubscribeDispatched = true;
+    const binding = snapshotBinding(sub, null);
+    removePendingCleanupBinding(sub, binding);
     sub.inFlightCleanups += 1;
     effects.push({
       type: REMOTE_CDC_EFFECT.SEND_REMOTE_UNSUBSCRIBE,
-      binding: snapshotBinding(sub, null),
+      binding,
     });
   }
   maybeCloseRetiring(sub, effects);
   return {effects};
 }
 
-function handleCleanupSettled(sub) {
+function handleStartCleanup(sub) {
+  if (sub.phase !== REMOTE_CDC_PHASE.RETIRING ||
+      sub.inFlightCleanups > 0 ||
+      sub.pendingCleanupBindings.length === 0) {
+    return {bindings: [], effects: []};
+  }
+  const bindings = sub.pendingCleanupBindings.slice();
+  sub.pendingCleanupBindings = [];
+  sub.inFlightCleanups += bindings.length;
+  const effects = bindings.map((binding) => ({
+    type: REMOTE_CDC_EFFECT.SEND_REMOTE_UNSUBSCRIBE,
+    binding,
+  }));
+  return {bindings, effects};
+}
+
+function handleCleanupSettled(sub, event) {
   const effects = [];
   sub.inFlightCleanups = Math.max(0, sub.inFlightCleanups - 1);
+  if (sub.phase === REMOTE_CDC_PHASE.CLOSED) {
+    return {settled: true, effects};
+  }
+  const binding = event.binding || snapshotBinding(sub, null);
+  if (event.success !== true) {
+    sub.phase = REMOTE_CDC_PHASE.RETIRING;
+    enqueuePendingCleanupBinding(sub, binding);
+    sub.lastError = event.error || null;
+    advanceRetryDeadline(sub, event.nowMs ?? 0, event.retryAfterMs ?? null);
+    effects.push({type: REMOTE_CDC_EFFECT.SCHEDULE_CONTINUATION});
+    return {settled: false, effects};
+  }
+  removePendingCleanupBinding(sub, binding);
+  if (sub.inFlightCleanups === 0 && sub.pendingCleanupBindings.length === 0) {
+    sub.subscribed = false;
+    sub.uncertainRemoteRegistration = false;
+    sub.retryNotBeforeMs = 0;
+    sub.retryDelayMs = DEFAULT_RETRY_DELAY_MS;
+    sub.lastError = null;
+  }
   maybeCloseRetiring(sub, effects);
-  return {effects};
+  return {settled: sub.phase === REMOTE_CDC_PHASE.CLOSED, effects};
 }
 
 /**
@@ -323,6 +441,8 @@ function transitionRemoteCdcSubscription(sub, event) {
     return handleStartSubscribe(sub);
   case REMOTE_CDC_EVENT.SUBSCRIBE_SETTLED:
     return handleSubscribeSettled(sub, event);
+  case REMOTE_CDC_EVENT.ORDINARY_CDC_DELIVERED:
+    return handleOrdinaryCdcDelivered(sub);
   case REMOTE_CDC_EVENT.RAISE_RESET_DEBT:
     return handleRaiseResetDebt(sub, event);
   case REMOTE_CDC_EVENT.START_REFRESH:
@@ -331,20 +451,141 @@ function transitionRemoteCdcSubscription(sub, event) {
     return handleRefreshSettled(sub, event);
   case REMOTE_CDC_EVENT.CANCEL:
     return handleCancel(sub);
+  case REMOTE_CDC_EVENT.START_CLEANUP:
+    return handleStartCleanup(sub);
   case REMOTE_CDC_EVENT.CLEANUP_SETTLED:
-    return handleCleanupSettled(sub);
+    return handleCleanupSettled(sub, event);
   default:
     return {effects: []};
   }
 }
 
 function hasOutstandingRemoteCdcObligation(sub) {
-  if (!sub || isInactivePhase(sub.phase)) return false;
+  if (!sub || sub.phase === REMOTE_CDC_PHASE.CLOSED) return false;
+  if (sub.phase === REMOTE_CDC_PHASE.RETIRING) {
+    return sub.pendingCleanupBindings.length > 0;
+  }
   if (sub.phase === REMOTE_CDC_PHASE.CONNECTING) {
     return sub.transportKind === REMOTE_CDC_TRANSPORT_KIND.REMOTE;
   }
   return sub.phase === REMOTE_CDC_PHASE.CATCHING_UP &&
-    sub.settledResetEpoch < sub.resetDebtEpoch;
+    (sub.settledResetEpoch < sub.resetDebtEpoch ||
+      sub.settledCdcEpoch < sub.requiredCdcEpoch);
+}
+
+function computeEarliestRemoteCdcDeadline(activeSubscriptions, retiringSubscriptions) {
+  let earliest = null;
+  for (const sub of activeSubscriptions.values()) {
+    if (!hasOutstandingRemoteCdcObligation(sub)) continue;
+    if (sub.inFlightSubscribe !== null || sub.inFlightRefresh !== null) continue;
+    if (earliest === null || sub.retryNotBeforeMs < earliest) {
+      earliest = sub.retryNotBeforeMs;
+    }
+  }
+  for (const sub of retiringSubscriptions) {
+    if (!hasOutstandingRemoteCdcObligation(sub) || sub.inFlightCleanups > 0) continue;
+    if (earliest === null || sub.retryNotBeforeMs < earliest) {
+      earliest = sub.retryNotBeforeMs;
+    }
+  }
+  return earliest;
+}
+
+function collectDueRemoteCdcSubscriptions(activeSubscriptions, retiringSubscriptions, nowMs) {
+  const dueActive = [];
+  for (const sub of activeSubscriptions.values()) {
+    if (hasOutstandingRemoteCdcObligation(sub) &&
+        sub.inFlightSubscribe === null &&
+        sub.inFlightRefresh === null &&
+        sub.retryNotBeforeMs <= nowMs) {
+      dueActive.push(sub);
+    }
+  }
+  const dueRetiring = [];
+  for (const sub of retiringSubscriptions) {
+    if (hasOutstandingRemoteCdcObligation(sub) &&
+        sub.inFlightCleanups === 0 &&
+        sub.retryNotBeforeMs <= nowMs) {
+      dueRetiring.push(sub);
+    }
+  }
+  return {dueActive, dueRetiring};
+}
+
+function isUncertainSubscribeDelivery(delivery) {
+  if (!delivery) return true;
+  if (!delivery.transport) return false;
+  const transport = deliveryTransportOf(delivery);
+  if (isDeliveredTransportDeliveryOutcome(transport)) {
+    return deliveryAnswerOf(delivery) === null;
+  }
+  if (transport.recoverableBeforeSend === true || transport.noHandler === true) {
+    return false;
+  }
+  return !PRE_SEND_SUBSCRIBE_REASON_CODES.has(transport.reasonCode);
+}
+
+function isUncertainSubscribeError(error) {
+  return error?.recoverableBeforeSend !== true && error?.noHandler !== true;
+}
+
+const UNSUBSCRIBE_CONFIRMED_OUTCOME = Object.freeze({confirmed: true});
+
+function buildUnconfirmedUnsubscribeOutcome(errorMessage, rawRetryAfterMs = null) {
+  const retryAfterMs = normalizePositiveRetryAfterMs(rawRetryAfterMs, null);
+  return {
+    confirmed: false,
+    error: errorMessage || UNSUBSCRIBE_NOT_CONFIRMED_ERROR,
+    ...(retryAfterMs !== null ? {retryAfterMs} : {}),
+  };
+}
+
+function isConfirmedUnsubscribeAnswer(answer) {
+  return Boolean(
+    answer &&
+    answer.success === true &&
+    answer.acknowledged !== false &&
+    answer.unsubscribed !== false &&
+    (answer.unsubscribed === true || answer.alreadyAbsent === true),
+  );
+}
+
+function isAbsentUnsubscribeTransport(transport) {
+  return transport.noHandler === true ||
+    transport.reasonCode === TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER;
+}
+
+function classifyEnvelopeUnsubscribeOutcome(delivery) {
+  const transport = deliveryTransportOf(delivery);
+  if (!isDeliveredTransportDeliveryOutcome(transport)) {
+    return isAbsentUnsubscribeTransport(transport) ?
+      UNSUBSCRIBE_CONFIRMED_OUTCOME :
+      buildUnconfirmedUnsubscribeOutcome(
+        transport.error || transport.reasonCode, transport.retryAfterMs,
+      );
+  }
+  const answer = deliveryAnswerOf(delivery);
+  return isConfirmedUnsubscribeAnswer(answer) ?
+    UNSUBSCRIBE_CONFIRMED_OUTCOME :
+    buildUnconfirmedUnsubscribeOutcome(answer?.error, answer?.retryAfterMs);
+}
+
+function classifyUnsubscribeDeliveryOutcome(delivery) {
+  if (!delivery) {
+    return buildUnconfirmedUnsubscribeOutcome(UNSUBSCRIBE_NOT_CONFIRMED_ERROR);
+  }
+  if (delivery.transport) {
+    return classifyEnvelopeUnsubscribeOutcome(delivery);
+  }
+  return delivery.noHandler === true || isConfirmedUnsubscribeAnswer(delivery) ?
+    UNSUBSCRIBE_CONFIRMED_OUTCOME :
+    buildUnconfirmedUnsubscribeOutcome(delivery.error, delivery.retryAfterMs);
+}
+
+function classifyUnsubscribeDeliveryError(error) {
+  return error?.noHandler === true ?
+    UNSUBSCRIBE_CONFIRMED_OUTCOME :
+    buildUnconfirmedUnsubscribeOutcome(error?.message || String(error), error?.retryAfterMs);
 }
 
 function isRemoteCdcBindingReceivable(sub) {
@@ -478,6 +719,10 @@ export {
   buildCancelledSubscribeResult,
   buildDeferredSubscribeResult,
   buildResyncFailureAnswer,
+  classifyUnsubscribeDeliveryError,
+  classifyUnsubscribeDeliveryOutcome,
+  collectDueRemoteCdcSubscriptions,
+  computeEarliestRemoteCdcDeadline,
   createRemoteCdcSubscriptionState,
   extractRemoteDeliveryAnswer,
   hasInboundSequenceGap,
@@ -485,6 +730,8 @@ export {
   isFailedSubscribeAnswer,
   isGroupClosed,
   isRemoteCdcBindingReceivable,
+  isUncertainSubscribeDelivery,
+  isUncertainSubscribeError,
   markGroupPending,
   markGroupSubscribed,
   transitionRemoteCdcSubscription,

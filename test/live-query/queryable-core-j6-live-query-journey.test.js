@@ -1468,7 +1468,7 @@ describe('Unit J6: Multi-node remote producer CDC delivery and leader failover',
       [1, 2],
       'stored group.resultSet retains both Row 1 and Row 2',
     );
-    assert.equal(group.partitionFrontiers.get('p1'), frontierAfterRow2, 'partition frontier stays at Row 2');
+    assert.equal(group.getPartitionFrontier('p1'), frontierAfterRow2, 'partition frontier stays at Row 2');
 
     const settledCalls = sqlEngine.callCount;
     await new Promise((r) => setTimeout(r, 80));
