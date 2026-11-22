@@ -32,6 +32,8 @@ import {RAFT_SNAPSHOT_BOUNDARY_STATE_KEY, RAFT_SNAPSHOT_INSTALL_DIRNAME,
   RAFT_SNAPSHOT_INSTALL_OUTCOME, RAFT_SNAPSHOT_INSTALL_REJECTION,
   RAFT_SNAPSHOT_INSTALL_STAGING_FILE, RAFT_SNAPSHOT_INSTALL_STATE} from
   './snapshot-install-constants.js';
+import {assertStorageArtifactsUnlinkSafe} from
+  '../storage/retained-read-view-custody.js';
 
 const OUTCOME = RAFT_SNAPSHOT_INSTALL_OUTCOME;
 const STATE = RAFT_SNAPSHOT_INSTALL_STATE;
@@ -374,6 +376,7 @@ function resolveDurableElectionRule(localElection, lastIncludedTerm) {
 }
 
 function swapStagingIntoReplica(checkpointsRoot, replicaDbPath) {
+  assertStorageArtifactsUnlinkSafe(replicaDbPath);
   for (const suffix of RAFT_CHECKPOINT_PAYLOAD_SIDECAR_SUFFIXES) {
     fs.rmSync(`${replicaDbPath}${suffix}`, {force: true});
   }

@@ -33,6 +33,7 @@ import {
   hostedConsensusSubstrate,
 } from '../raft/raft-operation-port-request.js';
 import {RAFT_SNAPSHOT_INSTALL_OUTCOME} from '../raft/snapshot-install-constants.js';
+import {mintStorageIncarnationId} from '../storage/retained-read-view-custody.js';
 import {
   cleanupStaleTransferStaging,
 } from '../raft/snapshot-transfer-receiver.js';
@@ -235,6 +236,8 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
         dbPath: this.dbPath,
       });
       this.db = new Database(this.dbPath);
+      this.storageIncarnationId = mintStorageIncarnationId(this.dbPath);
+      this.checkpointGeneration = this.checkpointGeneration ?? 0;
       this.db.pragma(REPLICA_DB_PRAGMA.JOURNAL_MODE);
       this.db.pragma(REPLICA_DB_PRAGMA.SYNCHRONOUS);
       // Before any DDL and before the port: a database holding the retired

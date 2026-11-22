@@ -1,3 +1,5 @@
+import {inspectDbPathCustody} from '../storage/retained-read-view-custody.js';
+
 const REPLICA_STORAGE_ARTIFACT_SUFFIXES = Object.freeze([
   '',
   '-wal',
@@ -7,6 +9,7 @@ const REPLICA_STORAGE_ARTIFACT_SUFFIXES = Object.freeze([
 
 const REPLICA_STORAGE_ARTIFACT_OUTCOME = Object.freeze({
   ALREADY_ABSENT: 'already_absent',
+  BLOCKED_BY_RETAINED_READER: 'blocked_by_retained_reader',
   DELETED: 'deleted',
   FAILED: 'failed',
   RETRY_DEFERRED: 'retry_deferred',
@@ -30,6 +33,24 @@ function replicaStorageArtifactsAbsent(fs, dbPath) {
 }
 
 async function removeReplicaStorageArtifacts(fs, dbPath, beforeRemove) {
+  const custody = inspectDbPathCustody(dbPath);
+  if (custody.hasLiveOrUnclosedReaders) {
+    const blockedOutcomes = replicaStorageArtifactPaths(dbPath).map(
+      (artifactPath) => ({
+        artifactPath,
+        outcome: fs.existsSync(artifactPath) ?
+          REPLICA_STORAGE_ARTIFACT_OUTCOME.BLOCKED_BY_RETAINED_READER :
+          REPLICA_STORAGE_ARTIFACT_OUTCOME.ALREADY_ABSENT,
+      }),
+    );
+    return Object.freeze({
+      activeViewIds: custody.activeViewIds,
+      allAbsent: replicaStorageArtifactsAbsent(fs, dbPath),
+      blockedByRetainedReader: true,
+      outcomes: Object.freeze(blockedOutcomes),
+      unclosedViewIds: custody.unclosedViewIds,
+    });
+  }
   const outcomes = Array.from({length: 0});
   for (const artifactPath of replicaStorageArtifactPaths(dbPath)) {
     if (!fs.existsSync(artifactPath)) {
