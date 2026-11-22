@@ -1,0 +1,55 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "retained-read-view-generation-custody",
+  "status": "pass",
+  "generatedAt": "2026-11-22T15:18:00.000Z",
+  "commit": "0fc58152607ae1aee1cbb0d10f05202c4ebc73ad",
+  "testFileDigests": {
+    "test/service/retained-read-view-generation-custody.test.js": "503364b4aad76167283b8b6ae1fc4d4b048edc4b3d0b03247ffec14b7e18732f",
+    "test/service/q3-call-shard-paged-execution.test.js": "282209b20ede3afe2c6b23ef4c30f3872cd684324af86e86f7f7f46cd0434295"
+  },
+  "receipts": [
+    {
+      "id": "production-owner-red-witness",
+      "passed": true,
+      "command": "node /mnt/data/peter/projects/lagrange-takeover-20261121/tools/focused.mjs fd3b9aee766b3d99027c5a16f70a8a7698c729ff auto ca95a9090961c8279eb704628d000f06a9f0629a /mnt/data/peter/projects/lagrange-takeover-20261121/lab/pkg9-red-1 test/service/retained-read-view-generation-custody.test.js",
+      "detail": "Genuine red failures captured on lab fleet before repairs: lab/pkg9-red-1 (fd3b9aee766b3d99027c5a16f70a8a7698c729ff, 5/5 subtests failed), lab/pkg9-opening-red (2fb745967e571a8b379fada4e0cf5612a9217ea8, opening readerDb remained open on retirement), and lab/pkg9-timer-red (2c878cc5d93a3fc3cf4ca8fa001a9c2976378dc3, idle reaper timer failed to arm on failed first acquisition)."
+    },
+    {
+      "id": "snapshot-replacement-reader-closure",
+      "passed": true,
+      "command": "node /mnt/data/peter/projects/lagrange-takeover-20261121/tools/focused.mjs 0fc58152607ae1aee1cbb0d10f05202c4ebc73ad split ca95a9090961c8279eb704628d000f06a9f0629a /mnt/data/peter/projects/lagrange-takeover-20261121/lab/pkg9-timer-green test/service/retained-read-view-generation-custody.test.js test/service/q3-call-shard-paged-execution.test.js",
+      "detail": "Paused reader across PartitionService shutdown, store/storageIncarnationId/checkpointGeneration bump, and same-path reopen rejects READ_VIEW_LOST; removeReplicaStorageArtifacts and requestSnapshotInstall refuse while active or unclosed readers pin dbPath; opening-window retirement closes or retains unclosed custody (lab/pkg9-opening-green-2, lab/pkg9-timer-green)."
+    },
+    {
+      "id": "close-failure-and-same-path-incarnation",
+      "passed": true,
+      "command": "node /mnt/data/peter/projects/lagrange-takeover-20261121/tools/focused.mjs 0fc58152607ae1aee1cbb0d10f05202c4ebc73ad split ca95a9090961c8279eb704628d000f06a9f0629a /mnt/data/peter/projects/lagrange-takeover-20261121/lab/pkg9-timer-green test/service/retained-read-view-generation-custody.test.js test/service/q3-call-shard-paged-execution.test.js",
+      "detail": "Injected closeReader failure retains unclosedViews and CUSTODY_REGISTRY (CLOSING_FAILED) slot/byte accounting, fences reads (READ_VIEW_LOST), blocks slot reuse and sidecar removal until actual closure, and arms the idle reaper timer even on failed first acquisition (lab/pkg9-timer-green)."
+    },
+    {
+      "id": "snapshot-local-position-and-row-agreement",
+      "passed": true,
+      "command": "node /mnt/data/peter/projects/lagrange-takeover-20261121/tools/focused.mjs 0fc58152607ae1aee1cbb0d10f05202c4ebc73ad split ca95a9090961c8279eb704628d000f06a9f0629a /mnt/data/peter/projects/lagrange-takeover-20261121/lab/pkg9-timer-green test/service/retained-read-view-generation-custody.test.js test/service/q3-call-shard-paged-execution.test.js",
+      "detail": "readPinnedSnapshotMetadata reads snapshotAppliedIndex, snapshotTerm, and schemaVersion strictly after BEGIN DEFERRED + PIN_WAL_SNAPSHOT_SQL through readerDb, agreeing with rows across concurrent commits at after_open and after_pin; lost custody triggers wholeAttemptDiscard=true."
+    },
+    {
+      "id": "idle-reader-wal-byte-age-count-bounds",
+      "passed": true,
+      "command": "node /mnt/data/peter/projects/lagrange-takeover-20261121/tools/focused.mjs 0fc58152607ae1aee1cbb0d10f05202c4ebc73ad split ca95a9090961c8279eb704628d000f06a9f0629a /mnt/data/peter/projects/lagrange-takeover-20261121/lab/pkg9-timer-green test/service/retained-read-view-generation-custody.test.js test/service/q3-call-shard-paged-execution.test.js",
+      "detail": "Real -wal file bytes measured without double-counting shared dbPath files, enforcing maxRetainedWalBytes/maxRetainedBytes/maxRetainedViews, preserving READ_VIEW_EXPIRED across deadlineMs/maxViewAgeMs/maxIdleMs before and after reapExpiredViews (lab/pkg9-green-c1-2), reaping idle views without next-page requests, and plateauing across repeated checkpoint/reopen cycles."
+    },
+    {
+      "id": "query-attempt-and-cdc-policy-separation",
+      "passed": true,
+      "command": "node /mnt/data/peter/projects/lagrange-takeover-20261121/tools/focused.mjs 0fc58152607ae1aee1cbb0d10f05202c4ebc73ad split ca95a9090961c8279eb704628d000f06a9f0629a /mnt/data/peter/projects/lagrange-takeover-20261121/lab/pkg9-timer-green test/service/retained-read-view-generation-custody.test.js test/service/q3-call-shard-paged-execution.test.js",
+      "detail": "Query read views retain POLICY_DOMAIN.QUERY_READ_VIEW with per_shard_retained_read_view and wholeAttemptDiscard=true while PartitionService.readHydrationImage preserves independent CDC hydration image state/appliedIndex semantics."
+    },
+    {
+      "id": "red-on-removal-and-independent-review",
+      "passed": true,
+      "command": "node /mnt/data/peter/projects/lagrange-takeover-20261121/tools/focused.mjs 0fc58152607ae1aee1cbb0d10f05202c4ebc73ad split ca95a9090961c8279eb704628d000f06a9f0629a /mnt/data/peter/projects/lagrange-takeover-20261121/lab/pkg9-timer-green test/service/retained-read-view-generation-custody.test.js test/service/q3-call-shard-paged-execution.test.js",
+      "detail": "Verified red on unpatched/incomplete states (lab/pkg9-red-1, lab/pkg9-opening-red, lab/pkg9-timer-red) and green across all 6 files (289 assertions in lab/pkg9-green-1) plus follow-up lab/pkg9-green-c1-2, lab/pkg9-opening-green-2, and lab/pkg9-timer-green (14 assertions, 0 failures); independent review recorded by subagent:66d31106-656c-4d8d-8501-7cfc26bdd82e with all conditions and follow-up findings resolved."
+    }
+  ]
+}
