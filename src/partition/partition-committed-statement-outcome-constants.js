@@ -1,9 +1,11 @@
 // The vocabulary of the committed-statement outcome owner
-// (partition-committed-statement-outcome.js): its durable outcome table, the
-// named state of an entry key's record, which statement failures are
-// deterministic, and which result an applied statement retains (a pure rule,
-// here so the statement-admission owner can apply it without an import
-// cycle).
+// (partition-committed-statement-outcome.js): its durable outcome table and
+// its one format, the named state of an entry key's record, the identity an
+// owner command's record carries, which statement failures are
+// deterministic, and which result an applied statement retains (pure rules,
+// here so the statement-admission and command owners can apply them without
+// an import cycle).
+import {createHash} from 'node:crypto';
 
 // The durable record of every committed statement's terminal outcome, owned
 // by the partition's committed-entry application. One row per committed
@@ -19,6 +21,13 @@
 // committed entry that wrote them (`log_index`), so the table is compacted
 // together with the rs-raft log by the snapshot/log-bound quest; until then
 // it grows one row per committed statement, exactly like the log.
+//
+// An owner command (placement, formation, coordinator settlement) records its
+// typed result as `owner_result_text` and, with it, its command identity as
+// `command_digest` (committedCommandDigest): the CHECK makes an owner result
+// without its identity, or an identity without a result, impossible to write.
+// `last_insert_rowid` is only ever the inserted-row identity of an SQL
+// statement (the nullable insert-result contract).
 const PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL = Object.freeze({
   TABLE: '_partition_statement_outcomes',
   CREATE_TABLE: `
@@ -31,38 +40,106 @@ const PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL = Object.freeze({
         failure_message TEXT,
         changes INTEGER,
         last_insert_rowid INTEGER,
-        owner_result_text TEXT
+        owner_result_text TEXT,
+        command_digest TEXT,
+        CHECK ((owner_result_text IS NULL) = (command_digest IS NULL))
       )
     `,
   SELECT_BY_ENTRY_KEY:
     'SELECT outcome, log_index, term, failure_code, failure_message, ' +
-    'changes, last_insert_rowid, owner_result_text ' +
+    'changes, last_insert_rowid, owner_result_text, command_digest ' +
     'FROM _partition_statement_outcomes WHERE entry_key = ?',
   SELECT_ALL:
     'SELECT entry_key, outcome, log_index, term, failure_code, failure_message, ' +
-    'changes, last_insert_rowid, owner_result_text ' +
+    'changes, last_insert_rowid, owner_result_text, command_digest ' +
     'FROM _partition_statement_outcomes ORDER BY log_index, entry_key',
   INSERT:
     'INSERT INTO _partition_statement_outcomes ' +
     '(entry_key, outcome, log_index, term, failure_code, failure_message, ' +
-    'changes, last_insert_rowid, owner_result_text) ' +
-    'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    'changes, last_insert_rowid, owner_result_text, command_digest) ' +
+    'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
   TABLE_COLUMNS: 'PRAGMA table_info(_partition_statement_outcomes)',
+  // The store-open format probe: proves the table is readable without
+  // reading a row; the decision is the table's definition (CREATE_TABLE).
+  FORMAT_PROBE: 'SELECT 1 FROM _partition_statement_outcomes WHERE 0',
 });
 
-// The result an APPLIED row retains: the statement's affected-row count and
-// last insert rowid, written with the row. A table created before the result
-// was retained gains these columns when its partition opens (the rows it
-// already holds retain no result: their columns are NULL), so every row
-// written from then on retains its result. Column name -> its ADD COLUMN.
-const PARTITION_COMMITTED_STATEMENT_RESULT_COLUMNS = Object.freeze({
-  changes: 'ALTER TABLE _partition_statement_outcomes ' +
-    'ADD COLUMN changes INTEGER',
-  last_insert_rowid: 'ALTER TABLE _partition_statement_outcomes ' +
-    'ADD COLUMN last_insert_rowid INTEGER',
-  owner_result_text: 'ALTER TABLE _partition_statement_outcomes ' +
-    'ADD COLUMN owner_result_text TEXT',
+// The one table format is the owner's definition, CREATE_TABLE (its columns,
+// these, and its identity CHECK), decided by the same rule the cold census
+// applies (partition-retained-store-observation.js). A store whose table has
+// any other definition was written by a build of another format (every
+// released build, v0.2.6 to v0.4.0, created it without command_digest;
+// development builds before the identity column likewise) and is refused,
+// typed and read-only, when it opens - never migrated, never given a column.
+// Such a data directory is re-founded (docs/operations-readiness.md).
+const PARTITION_COMMITTED_STATEMENT_COLUMNS = Object.freeze([
+  'entry_key', 'outcome', 'log_index', 'term', 'failure_code', 'failure_message',
+  'changes', 'last_insert_rowid', 'owner_result_text', 'command_digest',
+]);
+
+// The format decision at store open (detectCommittedStatementOutcomeFormat).
+const PARTITION_COMMITTED_STATEMENT_FORMAT = Object.freeze({
+  ABSENT: 'absent',
+  CURRENT: 'current',
+  UNSUPPORTED: 'unsupported',
 });
+
+// The typed codes of the outcome owner's refusals: a store of another table
+// format, and an owner result recorded without its identity (or the reverse).
+const PARTITION_COMMITTED_STATEMENT_ERROR_CODE = Object.freeze({
+  FORMAT_UNSUPPORTED: 'partition_statement_outcome_format_unsupported',
+  OWNER_IDENTITY_INVALID: 'partition_statement_outcome_owner_identity_invalid',
+});
+
+// Whether a settled record settles one owner command (exact settlement): a
+// durable outcome settles only the exact command it proves.
+// - UNSETTLED: no record under the entry key.
+// - SAME_COMMAND: the record carries this command's digest.
+// - OTHER_RECORD: a record of anything else under the same entry key -
+//   another command of the same owner, another owner's command, or an SQL
+//   statement's record (which carries no digest).
+const PARTITION_SETTLED_COMMAND_STATE = Object.freeze({
+  UNSETTLED: 'unsettled',
+  SAME_COMMAND: 'same_command',
+  OTHER_RECORD: 'other_record',
+});
+
+// The class of a settled record (named for an OTHER_RECORD collision): an
+// owner command's record (it carries a command digest), an applied SQL
+// statement's record, or a deterministic statement failure's record.
+const PARTITION_COMMITTED_RECORD_CLASS = Object.freeze({
+  OWNER_COMMAND: 'owner_command',
+  STATEMENT: 'statement',
+  STATEMENT_FAILURE: 'statement_failure',
+});
+
+// The decision of the owner-command request prelude (ownerCommandPrelude):
+// ANSWERED (leadership, admission, exact replay, collision, pause or pending
+// join answered it) or PROPOSE (the command is to be proposed).
+const PARTITION_OWNER_COMMAND_PRELUDE = Object.freeze({
+  ANSWERED: 'answered',
+  PROPOSE: 'propose',
+});
+
+const COMMAND_DIGEST_ALGORITHM = 'sha256';
+const COMMAND_DIGEST_ENCODING = 'hex';
+const COMMAND_DIGEST_SEPARATOR = ':';
+
+/**
+ * The identity an owner command's outcome record carries: the digest of its
+ * type and its canonical text (the pinned body text of a placement or
+ * formation command, the settlement text of a coordinator settlement). The
+ * proposer's timestamp and address are not part of it, so a new leader's
+ * rebuilt command under the same entry is the same command.
+ * @param {string} type - The committed command type.
+ * @param {string} canonicalText - The command's canonical body text.
+ * @return {string} The command digest.
+ */
+function committedCommandDigest(type, canonicalText) {
+  return createHash(COMMAND_DIGEST_ALGORITHM)
+    .update(`${type}${COMMAND_DIGEST_SEPARATOR}${canonicalText}`)
+    .digest(COMMAND_DIGEST_ENCODING);
+}
 
 // What the answer to a settled APPLIED entry key is (R07: a named state, never
 // a count read as an outcome). A replay never executes the statement again,
@@ -70,9 +147,10 @@ const PARTITION_COMMITTED_STATEMENT_RESULT_COLUMNS = Object.freeze({
 // - OUTCOME_RETAINED: the row retains the applied statement's result; the
 //   replay answers that affected-row count and last insert rowid exactly as
 //   the statement's first answer did.
-// - OUTCOME_NOT_RETAINED: the row retains no result (written before results
-//   were retained). The statement was applied; its count is not known here,
-//   so the answer carries none - an unknown count is never zero rows.
+// - OUTCOME_NOT_RETAINED: the row retains no statement result: an owner
+//   command's record that carries only its typed owner result (a coordinator
+//   settlement). Its count is not known here, so the answer carries none - an
+//   unknown count is never zero rows.
 const PARTITION_SETTLED_REPLAY = Object.freeze({
   OUTCOME_RETAINED: 'applied-outcome-retained',
   OUTCOME_NOT_RETAINED: 'applied-outcome-not-retained',
@@ -155,10 +233,16 @@ function committedStatementResult(info, {retainsInsertRowid}) {
 }
 
 export {
+  committedCommandDigest,
   committedStatementResult,
+  PARTITION_COMMITTED_STATEMENT_COLUMNS,
+  PARTITION_COMMITTED_STATEMENT_ERROR_CODE,
+  PARTITION_COMMITTED_STATEMENT_FORMAT,
   PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL,
+  PARTITION_COMMITTED_RECORD_CLASS,
   PARTITION_COMMITTED_STATEMENT_RECORD_STATE,
-  PARTITION_COMMITTED_STATEMENT_RESULT_COLUMNS,
+  PARTITION_OWNER_COMMAND_PRELUDE,
+  PARTITION_SETTLED_COMMAND_STATE,
   PARTITION_DETERMINISTIC_STATEMENT_BINDING_ERRORS,
   PARTITION_DETERMINISTIC_STATEMENT_SQLITE_CODES,
   PARTITION_SETTLED_REPLAY,

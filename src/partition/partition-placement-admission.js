@@ -3,22 +3,20 @@ import {readPartitionAppliedIndex} from './partition-committed-log.js';
 // Required collaborators: PartitionService (replica_operations-p1), buildPlacementCommand, decidePlacementAdmission, decideHoldRelease.
 // Durable authority / commit point: replica_operations and _partition_statement_outcomes rows committed in applyCommittedEntrySliceTransaction.
 // Permitted post-commit work: resolveCommittedWrite and emit PARTITION_SERVICE_EVENT.ENTRY_COMMITTED via afterCommit; rejectCommittedWrite via afterRollback.
-// Recovery / wake entry: settled _partition_statement_outcomes rows replay identical command fingerprints and reject same-ID/different-command collisions.
+// Recovery / wake entry: a settled _partition_statement_outcomes row replays only the command whose digest it carries; any other record under the entry key is the collision.
 // Representative production tests: test/partition/placement-admission-apply.test.js, test/convergence/dt-placement-owner-formation-drain.test.js.
-import {createHash} from 'node:crypto';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {deliveryReadingOf} from '../transport/transport-semantic-outcome.js';
 import {OperationType} from '../rebalancer/replica-operation-progress.js';
 import {PLACEMENT_OUTCOME, PLACEMENT_REFUSAL, PLACEMENT_TRANSITION_KIND} from
   '../rebalancer/replica-placement-owner-constants.js';
-import {admitCommittedCommand, PARTITION_COMMITTED_COMMAND_ORIGIN,
-  committedCommandRefusalResult} from './partition-committed-command-admission.js';
+import {PARTITION_COMMITTED_COMMAND_ORIGIN} from './partition-committed-command-admission.js';
 import {partitionWriteLeadershipRefusalOf, startPartitionRaftWriteCommit} from
   './partition-service-raft-write-commit.js';
-import {readCommittedStatementOutcome, recordCommittedStatementOutcome} from
-  './partition-committed-statement-outcome.js';
-import {PARTITION_COMMITTED_STATEMENT_RECORD_STATE as RECORD} from
-  './partition-committed-statement-outcome-constants.js';
+import {ownerCommandPrelude, readSettledOwnerCommandIn, recordCommittedStatementOutcome,
+  trackPendingOwnerCommand} from './partition-committed-statement-outcome.js';
+import {PARTITION_OWNER_COMMAND_PRELUDE as PRELUDE, PARTITION_SETTLED_COMMAND_STATE as SETTLED}
+  from './partition-committed-statement-outcome-constants.js';
 import {PARTITION_COMMITTED_COMMAND_OUTCOME as APPLY, PARTITION_SERVICE_EVENT,
   PARTITION_SERVICE_OPERATION as OPERATION} from './partition-service-constants.js';
 import {advancePartitionWriteGeneration, isPartitionReserved} from
@@ -30,7 +28,7 @@ import {PARTITION_CDC_ADMISSION_STATE, admitCdcOwedWork} from
 import {recordCommittedOperationCdc} from './partition-cdc-obligation.js';
 import {PARTITION_CDC_EVENT_BUILD_STATE} from './partition-cdc-generator.js';
 import {eventCdcSourceScope} from '../cdc/cdc-source-scope-evidence.js';
-import {buildPlacementCommand, isPinnedPlacementCommand} from
+import {buildPlacementCommand, isPinnedPlacementCommand, placementCommandDigestOf} from
   './partition-placement-admission-command.js';
 import {LEDGER_PARTITION_ID, decideHoldRelease, decidePlacementAdmission} from
   './partition-placement-admission-decision.js';
@@ -40,37 +38,12 @@ import {PLACEMENT_REPAIR_TYPE, PLACEMENT_ADMISSION_ERROR as ERROR, PLACEMENT_ADM
   './partition-placement-admission-constants.js';
 
 const EVENT_KEY_SEPARATOR = ':';
-const FINGERPRINT_HEX_LENGTH = 12;
-const HEX_RADIX = 16;
-const HASH_ALGORITHM = 'sha256';
-const HASH_ENCODING = 'hex';
-const PENDING_FINGERPRINTS_FIELD = 'pendingPlacementCommandFingerprints';
 const OUTCOMES = Object.freeze(new Set(Object.values(PLACEMENT_OUTCOME)));
-
-function pendingFingerprintsOf(service) {
-  let map = service[PENDING_FINGERPRINTS_FIELD];
-  if (map === undefined) {
-    map = new Map();
-    service[PENDING_FINGERPRINTS_FIELD] = map;
-  }
-  return map;
-}
-
-function commandFingerprintOf(command) {
-  return Number.parseInt(createHash(HASH_ALGORITHM)
-    .update(`${command.type}:${command.bodyText}`)
-    .digest(HASH_ENCODING)
-    .slice(0, FINGERPRINT_HEX_LENGTH), HEX_RADIX);
-}
-
-// Old outcome rows have no immutable original command identity. Their format is
-// admitted explicitly as unresolved debt; mutable operation rows cannot supply
-// missing bytes. Never rewrite these rows or repeat effects to guess identity.
-function recordedReplayRefusal(recorded, command) {
-  if (recorded.lastInsertRowid === null) return ERROR.OUTCOME_IDENTITY_UNAVAILABLE;
-  return Number.isSafeInteger(recorded.lastInsertRowid) &&
-    recorded.lastInsertRowid === commandFingerprintOf(command) ? null : ERROR.BYTES;
-}
+// The write kernel's answers the owner-command prelude asks, in its order.
+const PLACEMENT_PRELUDE_KERNEL = Object.freeze({
+  leadershipRefusalOf: (service) => partitionWriteLeadershipRefusalOf(service),
+  pausedAnswerOf: (service) => pausedWriteAnswerOf(service),
+});
 
 function refusal(service, failureCode) {
   return {success: false, admitted: false, partitionId: service.partitionId,
@@ -104,42 +77,25 @@ function recordedAnswer(service, recorded, command) {
 }
 
 function recordedRequestAnswer(service, recorded, command) {
-  const replayRefusal = recordedReplayRefusal(recorded, command);
-  if (replayRefusal !== null) return refusal(service, replayRefusal);
   const answer = recordedAnswer(service, recorded, command);
   return command.type === PLACEMENT_ADMIT_TYPE &&
     command.body.transitionKind === PLACEMENT_TRANSITION_KIND.FOUND ?
     {...answer, observedLedgerAppliedIndex: readPartitionAppliedIndex(service)} : answer;
 }
 
-// The leader-local proposal of a built command: leadership, the cutover
-// pause, the committed-command admission, a settled answer replayed, a
-// pending one joined; the CDC owed admission counts its rows before it is
-// proposed (startPartitionRaftWriteCommit); a reserved partition parks it.
+// The leader-local proposal of a built command: the owner-command prelude
+// (leadership, admission, exact settled replay, cutover pause, pending join;
+// any other record or pending write under the entry is the BYTES collision);
+// the CDC owed admission counts its rows before it is proposed
+// (startPartitionRaftWriteCommit); a reserved partition parks it.
 function proposePlacementCommand(service, command) {
-  const leadership = partitionWriteLeadershipRefusalOf(service);
-  if (leadership !== null) return leadership;
-  const admission = admitCommittedCommand(command,
-    {origin: PARTITION_COMMITTED_COMMAND_ORIGIN.PLACEMENT_OWNER});
-  if (!admission.admitted) {
-    return committedCommandRefusalResult(admission, service.partitionId);
-  }
-  const entryKey = service.getCommittedEntryKey(command);
-  const recorded = readCommittedStatementOutcome(service, entryKey);
-  if (recorded.state === RECORD.SETTLED) {
-    return recordedRequestAnswer(service, recorded, command);
-  }
-  // A settled exact entry is a read of an existing outcome, not a new write.
-  // Cutover pause still refuses every uncommitted proposal or pending turn.
-  const paused = pausedWriteAnswerOf(service);
-  if (paused !== null) return paused;
-  const fingerprint = commandFingerprintOf(command);
-  const pendingFingerprints = pendingFingerprintsOf(service);
-  const pending = service.getPendingCommittedWriteOutcome(command.entryId);
-  if (pending !== null) {
-    return pendingFingerprints.get(command.entryId) === fingerprint ?
-      pending : refusal(service, ERROR.BYTES);
-  }
+  const commandDigest = placementCommandDigestOf(command);
+  const prelude = ownerCommandPrelude(service, {command, commandDigest,
+    origin: PARTITION_COMMITTED_COMMAND_ORIGIN.PLACEMENT_OWNER,
+    kernel: PLACEMENT_PRELUDE_KERNEL,
+    answerSettled: (recorded) => recordedRequestAnswer(service, recorded, command),
+    answerCollision: () => refusal(service, ERROR.BYTES)});
+  if (prelude.state === PRELUDE.ANSWERED) return prelude.answer;
   const body = command.body;
   if (command.type === PLACEMENT_ADMIT_TYPE &&
       body.transitionKind === PLACEMENT_TRANSITION_KIND.PLACEMENT &&
@@ -147,16 +103,9 @@ function proposePlacementCommand(service, command) {
         move.learnerRetirement === undefined && move.voterRetirement === undefined)) {
     return refusal(service, ERROR.REMOVE_INTENT_UNSCOPED);
   }
-  pendingFingerprints.set(command.entryId, fingerprint);
-  const commitPromise = startPartitionRaftWriteCommit(service, {entry: command,
-    phaseTimings: null, applyStartMs: service.timeSource.now(),
-    park: isPartitionReserved(service.db)});
-  Promise.resolve(commitPromise).finally(() => {
-    if (pendingFingerprints.get(command.entryId) === fingerprint) {
-      pendingFingerprints.delete(command.entryId);
-    }
-  }).catch(() => {});
-  return commitPromise;
+  return trackPendingOwnerCommand(service, {command, commandDigest},
+    startPartitionRaftWriteCommit(service, {entry: command, phaseTimings: null,
+      applyStartMs: service.timeSource.now(), park: isPartitionReserved(service.db)}));
 }
 
 async function requestPlacementCommand(service, type, payload) {
@@ -187,10 +136,11 @@ function requestPlacementRepair(service, payload) {
   const command = buildPlacementCommand(service, {type: PLACEMENT_REPAIR_TYPE,
     entryId: payload.entryId, body: payload.body});
   if (command === null) return refusal(service, ERROR.BYTES);
-  const repository = service.rebalancerLeadershipSink?.workflowOwner?.repository;
-  if (!repository?.acceptRetainedPlacementRepairRequest) {
-    return refusal(service, ERROR.OWNER_UNAVAILABLE);
-  }
+  // The repair owner is the attached placement owner's workflow repository. It
+  // is absent until the ledger attaches its placement owner
+  // (ensureReplicaPlacementOwnerAttached): a typed, retryable unavailability.
+  const repository = service.rebalancerLeadershipSink?.workflowOwner?.repository ?? null;
+  if (repository === null) return refusal(service, ERROR.OWNER_UNAVAILABLE);
   return repository.acceptRetainedPlacementRepairRequest(service,
     {entryId: command.entryId, body: command.body},
     (request) => requestPlacementCommand(service, PLACEMENT_REPAIR_TYPE, request));
@@ -279,12 +229,14 @@ function applyPlacementCommand(service, committed) {
     throw new Error(ERROR.BYTES);
   }
   const entryKey = service.getCommittedEntryKey(command);
-  const recorded = readCommittedStatementOutcome(service, entryKey);
-  if (recorded.state === RECORD.SETTLED) {
-    const replayRefusal = recordedReplayRefusal(recorded, command);
-    if (replayRefusal === ERROR.BYTES) throw new Error(ERROR.BYTES);
-    const answer = replayRefusal === null ? recordedAnswer(service, recorded, command) :
-      refusal(service, replayRefusal);
+  const commandDigest = placementCommandDigestOf(command);
+  const settled = readSettledOwnerCommandIn(service.db,
+    {entryId: command.entryId, commandDigest});
+  // Another record under this entry: fails the application closed, the same
+  // verdict on every replica (the record is replicated state).
+  if (settled.state === SETTLED.OTHER_RECORD) throw new Error(ERROR.BYTES);
+  if (settled.state === SETTLED.SAME_COMMAND) {
+    const answer = recordedAnswer(service, settled.recorded, command);
     afterCommit(() => service.resolveCommittedWrite(command.entryId, answer));
     return APPLY.REPLAYED;
   }
@@ -294,9 +246,8 @@ function applyPlacementCommand(service, committed) {
   try {
     const {result, rows, operation} = decide(service, committed);
     recordCommittedStatementOutcome(service, {entryKey, outcome: APPLY.APPLIED,
-      index, term, result: {changes: rows.length,
-        lastInsertRowid: commandFingerprintOf(command)},
-      ownerResultText: JSON.stringify(result)});
+      index, term, result: {changes: rows.length, lastInsertRowid: null},
+      ownerResultText: JSON.stringify(result), commandDigest});
     if (rows.length > 0) {
       recordCommittedOperationCdc(service, committed,
         cdcEventsOf(service, {command, index, term, entryKey}, rows, operation));

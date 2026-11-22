@@ -13,9 +13,9 @@ import {admitCommittedCommand, PARTITION_COMMITTED_COMMAND_ORIGIN,
   committedCommandRefusalResult} from './partition-committed-command-admission.js';
 import {partitionWriteLeadershipRefusalOf, startPartitionRaftWriteCommit} from
   './partition-service-raft-write-commit.js';
-import {readCommittedStatementOutcome, recordCommittedStatementOutcome} from
+import {readSettledOwnerCommandIn, recordCommittedStatementOutcome} from
   './partition-committed-statement-outcome.js';
-import {PARTITION_COMMITTED_STATEMENT_RECORD_STATE as RECORD} from
+import {PARTITION_SETTLED_COMMAND_STATE as SETTLED, committedCommandDigest} from
   './partition-committed-statement-outcome-constants.js';
 import {PARTITION_COMMITTED_COMMAND_OUTCOME as APPLY} from './partition-service-constants.js';
 import {advancePartitionWriteGeneration, isPartitionReserved} from
@@ -44,6 +44,17 @@ function recordedAnswer(service, recorded) {
     logIndex: recorded.logIndex, term: recorded.term});
 }
 
+// The settlement's identity in its outcome record (the outcome owner's digest):
+// a record under its entry key settles it only when it carries this digest.
+function settlementDigestOf(command) {
+  return committedCommandDigest(command.type, command.settlementText);
+}
+
+function settledSettlementOf(service, command) {
+  return readSettledOwnerCommandIn(service.db,
+    {entryId: command.entryId, commandDigest: settlementDigestOf(command)});
+}
+
 function requestCoordinatorSettlement(service, payload) {
   if (service.tableName !== SYSTEM_TABLE_NAME.SQL_TRANSACTIONS) {
     return refusal(service, ERROR.TARGET);
@@ -57,8 +68,9 @@ function requestCoordinatorSettlement(service, payload) {
   if (!admission.admitted) {
     return committedCommandRefusalResult(admission, service.partitionId);
   }
-  const recorded = readCommittedStatementOutcome(service, service.getCommittedEntryKey(command));
-  if (recorded.state === RECORD.SETTLED) return recordedAnswer(service, recorded);
+  const settled = settledSettlementOf(service, command);
+  if (settled.state === SETTLED.SAME_COMMAND) return recordedAnswer(service, settled.recorded);
+  if (settled.state === SETTLED.OTHER_RECORD) return refusal(service, ERROR.BYTES);
   const pending = service.getPendingCommittedWriteOutcome(command.entryId);
   if (pending !== null) return pending;
   const observed = observeTransactionSettlement(service.db, command.settlement);
@@ -77,9 +89,12 @@ function applyCoordinatorSettlement(service, committed) {
     throw new Error(ERROR.BYTES);
   }
   const entryKey = service.getCommittedEntryKey(command);
-  const recorded = readCommittedStatementOutcome(service, entryKey);
-  if (recorded.state === RECORD.SETTLED) {
-    const answer = recordedAnswer(service, recorded);
+  const settled = settledSettlementOf(service, command);
+  // Another record under this entry: fails the application closed, the same
+  // verdict on every replica (the record is replicated state).
+  if (settled.state === SETTLED.OTHER_RECORD) throw new Error(ERROR.BYTES);
+  if (settled.state === SETTLED.SAME_COMMAND) {
+    const answer = recordedAnswer(service, settled.recorded);
     afterCommit(() => service.resolveCommittedWrite(command.entryId, answer));
     return APPLY.REPLAYED;
   }
@@ -91,7 +106,7 @@ function applyCoordinatorSettlement(service, committed) {
       applyTransactionSettlement(service.db, command.settlement));
     if (result === null) throw new Error(ERROR.RESULT);
     recordCommittedStatementOutcome(service, {entryKey, outcome: APPLY.APPLIED, index, term,
-      ownerResultText: JSON.stringify(result)});
+      ownerResultText: JSON.stringify(result), commandDigest: settlementDigestOf(command)});
     if (result.outcome === SETTLEMENT.APPLIED) advancePartitionWriteGeneration(service.db);
     afterCommit(() => service.resolveCommittedWrite(command.entryId,
       settlementAnswer(service, result, {committed: true, logIndex: index, term})));

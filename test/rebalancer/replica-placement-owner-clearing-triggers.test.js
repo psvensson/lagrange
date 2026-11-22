@@ -24,12 +24,15 @@ import {PARTITION_SERVICE_EVENT} from '../../src/partition/partition-service-con
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
   '../../src/partition/partition-write-kernel.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
+import {PLACEMENT_ADMISSION_ERROR} from
+  '../../src/partition/partition-placement-admission-constants.js';
 import {requestPlacementAdmission} from
   '../../src/partition/partition-placement-admission.js';
 import {StorageCapacityAccountingService} from
   '../../src/rebalancer/storage-capacity-accounting-service.js';
 import {
-  PLACEMENT_CLEARING_TRIGGER, PLACEMENT_REFUSAL, PLACEMENT_TRIGGER, PLACEMENT_WAITING_REASON,
+  PLACEMENT_CLEARING_TRIGGER, PLACEMENT_DEFINITE_ANSWER_CODES, PLACEMENT_REFUSAL,
+  PLACEMENT_TRIGGER, PLACEMENT_WAITING_CLEARING_TRIGGER, PLACEMENT_WAITING_REASON,
 } from '../../src/rebalancer/replica-placement-owner-constants.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {
@@ -69,27 +72,79 @@ const TRIGGER_SOURCES = Object.freeze({
     typeof PartitionService.prototype.setRebalancerLeadershipSink === 'function',
 });
 
-test('F11: every refusal and waiting reason maps to a trigger whose subscription exists, ' +
-  'and none clears on RESYNC or a retry delay', () => {
-  const reasons = [...Object.values(PLACEMENT_REFUSAL),
-    ...Object.values(PLACEMENT_WAITING_REASON),
-    ...Object.values(PARTITION_WRITE_LEADERSHIP_REFUSAL)];
-  const unmapped = reasons.filter((reason) =>
-    !Object.hasOwn(PLACEMENT_CLEARING_TRIGGER, reason));
-  assert.deepEqual(unmapped, []);
+// Every code the admission path can answer, enumerated from its owners'
+// vocabularies (never hand-listed): the admission owner's own refusals, the
+// applier's committed refusals, the owner pass's waiting reasons and the write
+// kernel's answers the owner returns unchanged.
+const ADMISSION_PATH_VOCABULARIES = Object.freeze({
+  PLACEMENT_ADMISSION_ERROR,
+  PLACEMENT_REFUSAL,
+  PLACEMENT_WAITING_REASON,
+  PARTITION_WRITE_LEADERSHIP_REFUSAL,
+});
+const PROBE_VOCABULARY = 'PROBE';
+const PROBE_CODE = 'placement_probe_code_without_trigger_row';
+
+function unmappedCodesOf(vocabularies) {
+  return Object.entries(vocabularies).flatMap(([vocabulary, codes]) =>
+    Object.entries(codes)
+      .filter(([, code]) => !Object.hasOwn(PLACEMENT_CLEARING_TRIGGER, code))
+      .map(([name, code]) => `${vocabulary}.${name}=${code}`));
+}
+
+// The independent second statement of the DEFINITE set (N4): this test's own
+// list, one reason per code. A code moved into or out of the owner's
+// PLACEMENT_DEFINITE_ANSWER_CODES fails here until this list is changed too,
+// deliberately, with its reason.
+const PINNED_DEFINITE_ANSWERS = Object.freeze(new Map([
+  [PLACEMENT_ADMISSION_ERROR.ORIGIN, 'a command from another origin is never this owner\'s'],
+  [PLACEMENT_ADMISSION_ERROR.BYTES, 'invalid or colliding bytes never become valid by waiting'],
+  [PLACEMENT_ADMISSION_ERROR.TARGET, 'a command for another table never becomes this table\'s'],
+  [PLACEMENT_ADMISSION_ERROR.REMOVE_INTENT_UNSCOPED, 'an unscoped REMOVE stays unscoped'],
+  [PLACEMENT_ADMISSION_ERROR.RESULT, 'a settled record whose result is unreadable stays so'],
+  [PLACEMENT_REFUSAL.RETAINED_IDENTITY_CHANGED, 'the retained identity is replaced, not retried'],
+  [PLACEMENT_REFUSAL.RETAINED_ROW_CHANGED, 'the retained row changed: replaced, not retried'],
+  [PLACEMENT_REFUSAL.RETAINED_ADMISSION_REQUIRED, 'the grant belongs to the original owner'],
+  [PLACEMENT_REFUSAL.HOLD_NOT_HELD, 'a release of a row that holds nothing has nothing to wait for'],
+  [PLACEMENT_REFUSAL.TARGET_CLAIM_TAKEN, 'a runtime-service identity is claimed for ever'],
+  [PLACEMENT_REFUSAL.ALREADY_FOUNDED, 'the provisioning owner adopts the founders\' ids'],
+  [PLACEMENT_REFUSAL.SYSTEM_PARTITION_SEED_FOUNDED, 'permanent by partition kind'],
+  [PLACEMENT_REFUSAL.LEDGER_PARTITION_REQUIRED, 'the canonical ledger partition never changes'],
+]));
+
+test('F11: every code on the admission path maps to a definite answer (null) or a ' +
+  'trigger whose subscription exists, and none clears on RESYNC or a retry delay', () => {
+  assert.deepEqual(unmappedCodesOf(ADMISSION_PATH_VOCABULARIES), []);
+  // The check names a code added to a vocabulary without a row.
+  assert.ok(unmappedCodesOf({...ADMISSION_PATH_VOCABULARIES,
+    [PROBE_VOCABULARY]: {PROBE_CODE}})
+    .includes(`${PROBE_VOCABULARY}.PROBE_CODE=${PROBE_CODE}`));
+  // No row survives its code: every row names a code of a vocabulary.
+  const codes = new Set(Object.values(ADMISSION_PATH_VOCABULARIES)
+    .flatMap((vocabulary) => Object.values(vocabulary)));
+  assert.deepEqual(Object.keys(PLACEMENT_CLEARING_TRIGGER)
+    .filter((code) => !codes.has(code)), []);
+  // The DEFINITE set is exactly the owner's declaration: a code reaches null
+  // only through PLACEMENT_DEFINITE_ANSWER_CODES, never through a waiting row,
+  // and no code is declared both ways or twice.
+  const definite = new Set(PLACEMENT_DEFINITE_ANSWER_CODES);
+  assert.equal(definite.size, PLACEMENT_DEFINITE_ANSWER_CODES.length, 'declared once');
+  assert.deepEqual([...definite].sort(), [...PINNED_DEFINITE_ANSWERS.keys()].sort(),
+    'the owner\'s DEFINITE declaration equals this test\'s pinned list');
+  assert.ok([...PINNED_DEFINITE_ANSWERS.values()].every((reason) => reason.length > 0));
+  assert.deepEqual(Object.keys(PLACEMENT_CLEARING_TRIGGER)
+    .filter((code) => PLACEMENT_CLEARING_TRIGGER[code] === null).sort(),
+  [...definite].sort(), 'the null rows are exactly the declared DEFINITE codes');
+  assert.deepEqual(Object.keys(PLACEMENT_WAITING_CLEARING_TRIGGER)
+    .filter((code) => definite.has(code)), [], 'no code is both DEFINITE and waiting');
+  const declaredTriggers = new Set(Object.values(PLACEMENT_TRIGGER));
+  assert.deepEqual(Object.entries(PLACEMENT_WAITING_CLEARING_TRIGGER)
+    .filter(([, trigger]) => !declaredTriggers.has(trigger)), [],
+  'every waiting code names a declared trigger (never null)');
   const triggers = Object.values(PLACEMENT_CLEARING_TRIGGER);
-  assert.ok(triggers.every((trigger) => trigger === null ||
-    Object.values(PLACEMENT_TRIGGER).includes(trigger)));
   assert.equal(triggers.includes(PLACEMENT_TRIGGER.RESYNC), false);
   assert.equal(Object.keys(PLACEMENT_CLEARING_TRIGGER).some((reason) =>
     /retry/iu.test(reason)), false);
-  // A definite answer needs no trigger; every other reason has one.
-  assert.deepEqual(Object.entries(PLACEMENT_CLEARING_TRIGGER)
-    .filter(([, trigger]) => trigger === null).map(([reason]) => reason).sort(), [
-    PLACEMENT_REFUSAL.ALREADY_FOUNDED, PLACEMENT_REFUSAL.HOLD_NOT_HELD,
-    PLACEMENT_REFUSAL.LEDGER_PARTITION_REQUIRED,
-    PLACEMENT_REFUSAL.SYSTEM_PARTITION_SEED_FOUNDED, PLACEMENT_REFUSAL.TARGET_CLAIM_TAKEN,
-  ].sort());
   const used = new Set(triggers.filter((trigger) => trigger !== null));
   assert.deepEqual([...used].filter((trigger) => !TRIGGER_SOURCES[trigger]?.()), []);
 });

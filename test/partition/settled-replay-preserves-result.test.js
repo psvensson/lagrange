@@ -416,11 +416,13 @@ test('W2: the replay of an UPDATE of n rows, a DELETE, a multi-row INSERT, ' +
   });
 });
 
-// W5: a settled row that retains no result (an outcome row written before the
-// outcome was retained) answers the named not-retained state: applied, no
-// count - never zero rows.
-test('W5: an applied outcome row that retains no result answers the named ' +
-  'not-retained state, acknowledged and without a count, never zero rows',
+// W5: a store whose outcome table predates the retained result (a build that
+// kept only the outcome columns) is of another table format: reopening it is
+// refused typed at store open, read-only - never migrated, never given a
+// column - and its rows are left exactly as they were. In a supported store
+// every APPLIED statement row retains its result.
+test('W5: an outcome table that predates the retained result is refused typed ' +
+  'at store open, read-only, never migrated',
 {timeout: TEST_TIMEOUT_MS}, async () => {
   await withLonePartitions(async (open) => {
     const first = await open('w5-unretained');
@@ -430,43 +432,40 @@ test('W5: an applied outcome row that retains no result answers the named ' +
     const entryKey = first.partition.getCommittedEntryKey({
       sql: INSERT_SQL, entryId: 'w5-entry'});
     await first.partition.shutdown();
-    // The row as a build that retained no result wrote it: only the outcome
-    // columns that build had.
+    // The table as a build that retained no result created it: only the
+    // outcome columns that build had.
+    const legacyColumns = ['entry_key', 'outcome', 'log_index', 'term',
+      'failure_code', 'failure_message'];
     const legacy = new Database(first.dbPath);
     try {
-      const columns = legacy.prepare(`PRAGMA table_info(${OUTCOME_TABLE})`)
-        .all().map((column) => column.name);
-      const legacyColumns = ['entry_key', 'outcome', 'log_index', 'term',
-        'failure_code', 'failure_message'];
-      for (const column of columns) {
-        if (!legacyColumns.includes(column)) {
-          legacy.exec(`ALTER TABLE ${OUTCOME_TABLE} DROP COLUMN ${column}`);
-        }
-      }
+      legacy.exec(`ALTER TABLE ${OUTCOME_TABLE} RENAME TO w5_outcome_source`);
+      legacy.exec(`CREATE TABLE ${OUTCOME_TABLE} (entry_key TEXT PRIMARY KEY, ` +
+        'outcome TEXT NOT NULL, log_index INTEGER NOT NULL, term INTEGER NOT NULL, ' +
+        'failure_code TEXT, failure_message TEXT)');
+      legacy.exec(`INSERT INTO ${OUTCOME_TABLE} SELECT ${legacyColumns.join(', ')} ` +
+        'FROM w5_outcome_source');
+      legacy.exec('DROP TABLE w5_outcome_source');
     } finally {
       legacy.close();
     }
-    const reopened = await open('w5-unretained');
-    const retained = outcomeRowOf(reopened.dbPath, entryKey);
-    assert.ok(retained !== null, 'setup: the legacy outcome row is kept');
-    const answer = await write(reopened.partition, INSERT_SQL,
-      ['row-1', 'v'], 'w5-entry');
-    assert.equal(answer.success, true, 'the replay is acknowledged ' +
-      `(${JSON.stringify(answer)})`);
-    assert.ok(typeof REPLAY.OUTCOME_NOT_RETAINED === 'string' &&
-      answer.settledReplay === REPLAY.OUTCOME_NOT_RETAINED,
-    `it names the not-retained state (${JSON.stringify(answer)})`);
-    assert.equal(Object.hasOwn(answer, 'changes'), false,
-      'it carries no count: an unknown count is never reported as zero rows');
-    assert.equal(Object.hasOwn(answer, 'lastInsertRowid'), false,
-      'nor a rowid');
-    assert.equal(rowCount(reopened.dbPath), 1, 'nothing executed again');
-    const fresh = await write(reopened.partition, INSERT_SQL,
-      ['row-2', 'v'], 'w5-fresh');
-    assert.equal(fresh.changes, 1, 'a write after the migration applies');
-    assertRetainedReplay(await write(reopened.partition, INSERT_SQL,
-      ['row-2', 'v'], 'w5-fresh'), fresh,
-    'a write after the migration retains its outcome');
+    let refusal = null;
+    try {
+      await open('w5-unretained');
+    } catch (error) {
+      refusal = error;
+    }
+    assert.equal(refusal?.code,
+      outcomeConstants.PARTITION_COMMITTED_STATEMENT_ERROR_CODE?.FORMAT_UNSUPPORTED,
+      `the store of another table format is refused typed (${refusal})`);
+    const after = new Database(first.dbPath, {readonly: true});
+    try {
+      assert.deepEqual(after.prepare(`PRAGMA table_info(${OUTCOME_TABLE})`).all()
+        .map((column) => column.name), legacyColumns, 'never migrated');
+    } finally {
+      after.close();
+    }
+    assert.ok(outcomeRowOf(first.dbPath, entryKey) !== null, 'its row is left as it was');
+    assert.equal(rowCount(first.dbPath), 1, 'nothing executed again');
   });
 });
 

@@ -332,6 +332,28 @@ function decidePlacementAdmission(db, {command, statement, index}) {
     operationIds: Object.freeze(rows.map((row) => row.operation_id))}), rows};
 }
 
+// An engaged ledger hold: the move's row is incomplete and carries the
+// LEDGER_AWAITING_COPY_IDLE dispatch hold. The hold is set only when the move
+// is admitted (operationOf) and lifted only by a release; operation ids are
+// minted from the admitting log index, so a lifted hold is never re-engaged
+// under the same operation id by any owner.
+function isEngagedLedgerHold(row) {
+  return row !== undefined && row.incomplete &&
+    row.dispatchHold === PLACEMENT_DISPATCH_HOLD.LEDGER_AWAITING_COPY_IDLE;
+}
+
+/**
+ * Whether this store's committed ledger holds `operationId`'s dispatch hold
+ * engaged (a read; the caller owns the transaction).
+ * @param {Object} db - The ledger partition's connection.
+ * @param {string} operationId - The held ledger move.
+ * @return {boolean} True when the hold is engaged.
+ */
+function readEngagedLedgerHoldIn(db, operationId) {
+  const row = db.prepare(ROW_SQL).get(operationId);
+  return row !== undefined && isEngagedLedgerHold(censusRowOf(row));
+}
+
 /**
  * PLACEMENT_RELEASE_HOLD at this log position: the engaged ledger move's
  * hold is lifted when no other copy-phase row exists; removal-phase rows
@@ -345,8 +367,7 @@ function decideHoldRelease(db, {command, release}) {
   if (wrongPartition !== null) return {result: wrongPartition, rows: []};
   const census = readPlacementCensus(db);
   const held = census.find((row) => row.operationId === release.operationId);
-  if (held === undefined || !held.incomplete ||
-      held.dispatchHold !== PLACEMENT_DISPATCH_HOLD.LEDGER_AWAITING_COPY_IDLE) {
+  if (!isEngagedLedgerHold(held)) {
     return {result: refused(REFUSAL.HOLD_NOT_HELD), rows: []};
   }
   const copying = census.filter((row) => row.operationId !== held.operationId &&
@@ -373,6 +394,7 @@ export {
   decideHoldRelease,
   decidePlacementAdmission,
   isOccupyingCopy,
+  readEngagedLedgerHoldIn,
   readPlacementCensus,
   readPlacementCopyOccupancy,
   operationHoldsPlacementCopyCapacity,

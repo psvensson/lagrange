@@ -2296,6 +2296,28 @@
         "test/partition/placement-retained-real-publication.test.js",
         "test/partition/placement-retained-publication.test.js"
       ]
+    },
+    "committed-outcome-command-identity": {
+      "description": "An owner command's settled outcome record (placement admission, formation transition, coordinator settlement) carries the committed-statement outcome owner's command digest beside its typed result; the table format and its CHECK make one without the other impossible and last_insert_rowid is only an SQL statement's inserted-row identity. A store whose outcome table has another format is refused typed at store open (the step a snapshot install's replacement service also passes), never migrated. A record settles only the exact command whose digest it carries; any other record under the entry key is the owner's collision at request and fails the application closed at apply, and the placement owner's durable unresolved attempts are discharged only by their exact command's record. Placement and formation propose through the outcome owner's one prelude: leadership, committed-command admission, exact settled replay (original receipt), cutover pause, pending join.",
+      "owners": [
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-committed-statement-outcome-constants.js",
+        "src/partition/partition-placement-admission",
+        "src/control-plane/membership-publication-formation-transition-command.js",
+        "src/partition/partition-coordinator-settlement.js",
+        "src/rebalancer/replica-placement-owner-attempts.js",
+        "src/partition/partition-service-raft-init-base.js"
+      ],
+      "tests": [
+        "test/partition/committed-outcome-identity-boundary.test.js",
+        "test/partition/placement-outcome-format.test.js",
+        "test/partition/placement-settled-replay-cutover-pause.test.js",
+        "test/partition/placement-admission-apply.test.js",
+        "test/control-plane/formation-transition-settled-replay.test.js",
+        "test/partition/coordinator-settlement-exact-settlement.test.js",
+        "test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js",
+        "test/partition/committed-statement-outcome.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -4855,6 +4877,53 @@
       "contract": "retained-placement-repair-leadership-publication",
       "witnessTests": [
         "test/partition/placement-retained-real-publication.test.js"
+      ]
+    },
+    "committed-outcome-owner-placement-admission": {
+      "description": "The outcome owner's recorder, table format and exact-settlement read change together with the placement owner's replay and recording: a placement record keeps its command identity through store reopen and the checkpoint image, answers only the exact command's original receipt (also under the cutover pause), and any other record under its entry key is the BYTES collision at request and fails closed at apply.",
+      "endpoints": [
+        {
+          "id": "committed-outcome-owner",
+          "owners": [
+            "src/partition/partition-committed-statement-outcome.js",
+            "src/partition/partition-committed-statement-outcome-constants.js"
+          ]
+        },
+        {
+          "id": "placement-admission-replay",
+          "owners": [
+            "src/partition/partition-placement-admission"
+          ]
+        }
+      ],
+      "contract": "committed-outcome-command-identity",
+      "witnessTests": [
+        "test/partition/committed-outcome-identity-boundary.test.js",
+        "test/partition/placement-outcome-format.test.js",
+        "test/partition/placement-settled-replay-cutover-pause.test.js"
+      ]
+    },
+    "committed-outcome-owner-formation-transition": {
+      "description": "The outcome owner's recorder, table format, exact-settlement read and owner-command prelude change together with the formation transition command: a formation record keeps its command identity through store reopen and the checkpoint image, a settled E0 answers its original receipt under the cutover pause while a new command stays paused, leadership is decided first, and a different command under E0's entry key is INVALID_COMMAND at request and fails closed at apply.",
+      "endpoints": [
+        {
+          "id": "committed-outcome-owner",
+          "owners": [
+            "src/partition/partition-committed-statement-outcome.js",
+            "src/partition/partition-committed-statement-outcome-constants.js"
+          ]
+        },
+        {
+          "id": "formation-transition-command",
+          "owners": [
+            "src/control-plane/membership-publication-formation-transition-command.js"
+          ]
+        }
+      ],
+      "contract": "committed-outcome-command-identity",
+      "witnessTests": [
+        "test/partition/committed-outcome-identity-boundary.test.js",
+        "test/control-plane/formation-transition-settled-replay.test.js"
       ]
     }
   }

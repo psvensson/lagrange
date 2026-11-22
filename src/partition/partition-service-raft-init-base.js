@@ -248,7 +248,17 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
         throw legacyPartitionConsensusStateError(
           legacyConsensusState, this.partitionId);
       }
-      createCommittedStatementOutcomeTable(this.db);
+      // The outcome owner's one format decision, before any DDL: an outcome
+      // table of another format (a store written by another build format, or
+      // reached through a snapshot image of one) is refused typed, never
+      // migrated, and the handle is closed with the refusal.
+      try {
+        createCommittedStatementOutcomeTable(this.db, this.partitionId);
+      } catch (error) {
+        this.db.close();
+        this.db = null;
+        throw error;
+      }
       openParticipantTransactionStore(this.db);
       if (this.schema) {
         this.createTable();
