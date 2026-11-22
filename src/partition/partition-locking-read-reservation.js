@@ -1,17 +1,21 @@
 /**
- * Process-local locking-read mirror, key/error helpers, and read-only conflict
- * inspection for PostgreSQL SELECT ... FOR UPDATE (P1/P2 authoritative split).
+ * Process-local locking-read mirror and pure key/error outcome helpers for
+ * PostgreSQL SELECT ... FOR UPDATE (P1/P2 authoritative split).
  *
  * Capability boundary:
- * - Authoritative durable FOR_UPDATE acquisition and durable SQLite release live
- *   solely in partition-private `partition-locking-read-store.js` and are invoked
- *   only by partition owners (`partition-locking-read-service.js` and
- *   `partition-participant-transaction-apply.js`).
- * - Gateway/query consumers receive ONLY local bookkeeping helpers
- *   (`clearTransactionMemoryReservations`, `clearSessionMemoryReservations`,
- *   `stageLocalWriteReservation`), read-only inspection, and typed result builders.
- * - No authority-switching flag (`authoritativeDbOnly`) or unscoped durable delete
- *   helper exists on this surface.
+ * - Authoritative durable FOR_UPDATE acquisition, durable SQLite reads, and
+ *   durable SQLite release live solely in partition-private
+ *   `partition-locking-read-store.js` and are invoked only by partition owners
+ *   (`partition-locking-read-service.js`, `partition-locking-read-write-check.js`,
+ *   `partition-participant-transaction-apply.js`, and
+ *   `partition-participant-transaction-session.js`).
+ * - This module has ZERO imports from `partition-locking-read-store.js` and
+ *   ZERO SQLite database access or partition DB registry: it exposes ONLY
+ *   volatile process-local mirror bookkeeping (`clearTransactionMemoryReservations`,
+ *   `clearSessionMemoryReservations`, `clearMemoryReservations`,
+ *   `stageLocalWriteReservation`, `checkLocalStagedWriteConflict`,
+ *   `checkMemoryRowReservationConflict`, `hasLockingReadReservations`),
+ *   canonical key derivation (`deriveRowLockKey`), and typed result builders.
  *
  * @module partition/partition-locking-read-reservation
  */
@@ -25,13 +29,6 @@ import {
   LOCKING_READ_SQL_STATE,
 } from '../query/sql-locking-read-constants.js';
 import {encodeCanonicalPkTupleKey} from './partition-write-footprint-contract.js';
-import {
-  checkDbRowReservation,
-  ensureLockingReadTableInitialized,
-  hasDbTransactionReservations,
-  listDbTableReservationConflicts,
-  truncateDbReservations,
-} from './partition-locking-read-store.js';
 
 export {LOCKING_READ_RESERVATION_KIND};
 
@@ -42,9 +39,6 @@ const RESERVATIONS = new Map();
 
 // Map<transactionId, Set<rowKey>>
 const TRANSACTION_RESERVATIONS = new Map();
-
-// Map<partitionId, Database> (read-only lookup / test cleanup registry; never mutated for release)
-const PARTITION_DBS = new Map();
 
 /**
  * Derive the canonical row lock key for a primary-key tuple on a partition.
@@ -99,25 +93,6 @@ export function createReservationUnavailableResult(details = {}) {
     sqlState: LOCKING_READ_SQL_STATE.INTERNAL_ERROR,
     ...details,
   };
-}
-
-/**
- * Register a partition SQLite database for read-only conflict lookup and
- * test-harness cleanup. Never iterated for production reservation release.
- *
- * @param {string} partitionId - Partition identifier.
- * @param {Object} db - SQLite database instance.
- */
-export function registerPartitionDatabase(partitionId, db) {
-  if (partitionId && db && typeof db.prepare === 'function') {
-    PARTITION_DBS.set(partitionId, db);
-    ensureLockingReadTableInitialized(db, {readOnly: false});
-  }
-}
-
-function resolveReadOnlyStore(partitionId, explicitDb) {
-  const store = explicitDb || PARTITION_DBS.get(partitionId) || null;
-  return store && store.open !== false ? store : null;
 }
 
 function trackMemoryReservation(transactionId, rowKey, record) {
@@ -200,7 +175,7 @@ function recordLocalWriteStaged(options, rowKey) {
 
 /**
  * Record a process-local WRITE_STAGED mirror entry after an explicit transaction
- * stages a write statement. Never writes to SQLite or grants authoritative locks.
+ * stages a write statement. Purely volatile — never accesses SQLite.
  *
  * @param {Object} options - Staging metadata.
  * @return {Object} Local staging outcome.
@@ -208,18 +183,8 @@ function recordLocalWriteStaged(options, rowKey) {
 export function stageLocalWriteReservation(options) {
   const {tableName, partitionId, pkValues, transactionId} = options;
   const rowKey = deriveRowLockKey(tableName, partitionId, pkValues);
-  const store = resolveReadOnlyStore(partitionId, options.db || null);
-  const dbCheck = store ?
-    checkDbRowReservation(store, {partitionId, tableName, rowKey, transactionId}) :
-    null;
   const existing = RESERVATIONS.get(rowKey) || null;
-  if (dbCheck?.error) {
-    return createReservationUnavailableResult({rowKey, message: dbCheck.message});
-  } else if (dbCheck?.conflict) {
-    return buildStagedConflict(rowKey, dbCheck.conflictingTransactionId);
-  } else if (dbCheck?.reentrant) {
-    return buildStagedAlreadyOwned(rowKey);
-  } else if (existing) {
+  if (existing) {
     return existing.transactionId === transactionId ?
       buildStagedAlreadyOwned(rowKey) :
       buildStagedConflict(rowKey, existing.transactionId);
@@ -227,24 +192,8 @@ export function stageLocalWriteReservation(options) {
   return recordLocalWriteStaged(options, rowKey);
 }
 
-function checkMemoryReservationConflict(rowKey, transactionId, onlyForUpdate) {
-  const existing = RESERVATIONS.get(rowKey);
-  if (!existing || existing.transactionId === transactionId) {
-    return null;
-  }
-  if (onlyForUpdate && existing.kind !== LOCKING_READ_RESERVATION_KIND.FOR_UPDATE) {
-    return null;
-  }
-  return {
-    conflict: true,
-    rowKey,
-    conflictingTransactionId: existing.transactionId,
-  };
-}
-
 /**
  * Pure process-local check for a same-gateway WRITE_STAGED mirror conflict.
- * Never consults PARTITION_DBS or any SQLite database.
  *
  * @param {Object} options - {tableName, partitionId, pkValues, transactionId}.
  * @return {{conflict: boolean, rowKey: string, conflictingTransactionId?: string}}
@@ -272,57 +221,36 @@ export function checkLocalStagedWriteConflict({
 }
 
 /**
- * Pure read-only check whether a row lock key conflicts with another active transaction.
+ * Pure volatile memory-mirror check whether a row lock key conflicts with
+ * another active transaction in this process. Never accesses SQLite.
  *
  * @param {Object} options - Check options.
- * @return {{conflict: boolean, rowKey: string, conflictingTransactionId?: string, unavailable?: boolean}}
+ * @return {{conflict: boolean, rowKey: string, conflictingTransactionId?: string}}
  */
-export function checkRowReservationConflict({
+export function checkMemoryRowReservationConflict({
   tableName,
   partitionId,
   pkValues,
   transactionId = null,
-  db = null,
   onlyForUpdate = false,
 }) {
   const rowKey = deriveRowLockKey(tableName, partitionId, pkValues);
-  const store = resolveReadOnlyStore(partitionId, db);
-  if (store) {
-    const dbCheck = checkDbRowReservation(store, {partitionId, tableName, rowKey, transactionId});
-    if (dbCheck?.error) {
-      return {conflict: false, unavailable: true, error: dbCheck.message, rowKey};
-    }
-    if (dbCheck?.conflict) {
-      return {
-        conflict: true,
-        rowKey,
-        conflictingTransactionId: dbCheck.conflictingTransactionId,
-      };
-    }
+  const existing = RESERVATIONS.get(rowKey);
+  if (!existing || existing.transactionId === transactionId) {
+    return {conflict: false, rowKey};
   }
-  return checkMemoryReservationConflict(rowKey, transactionId, onlyForUpdate) ||
-    {conflict: false, rowKey};
-}
-
-/**
- * Pure read-only check for the first conflicting FOR_UPDATE reservation on a
- * table/partition in SQLite.
- *
- * @param {Object} db - SQLite database instance.
- * @param {Object} options - {partitionId, tableName, transactionId}.
- * @return {Object|null}
- */
-export function findTableDbReservationConflict(db, {partitionId, tableName, transactionId}) {
-  const listed = listDbTableReservationConflicts(db, {partitionId, tableName, transactionId});
-  if (!listed.ok) {
-    return {error: true, message: listed.error};
+  if (onlyForUpdate && existing.kind !== LOCKING_READ_RESERVATION_KIND.FOR_UPDATE) {
+    return {conflict: false, rowKey};
   }
-  return listed.rows[0] || null;
+  return {
+    conflict: true,
+    rowKey,
+    conflictingTransactionId: existing.transactionId,
+  };
 }
 
 /**
  * Clear ONLY process-local in-memory reservations for one partition and transaction.
- * Never touches PARTITION_DBS or any durable SQLite reservation rows.
  *
  * @param {string} partitionId - Partition identifier.
  * @param {string} transactionId - Transaction identifier.
@@ -356,7 +284,6 @@ export function clearPartitionTransactionMemoryReservations(partitionId, transac
 
 /**
  * Clear ONLY process-local in-memory reservations for one partition and session.
- * Never touches PARTITION_DBS or any durable SQLite reservation rows.
  *
  * @param {string} partitionId - Partition identifier.
  * @param {string} sessionId - Session identifier.
@@ -378,8 +305,7 @@ export function clearPartitionSessionMemoryReservations(partitionId, sessionId) 
 
 /**
  * Clear ONLY process-local in-memory reservations for a transaction across all
- * partitions. Gateway/coordinator cleanup uses this; it NEVER touches
- * PARTITION_DBS or deletes durable SQLite reservation rows.
+ * partitions. Gateway/coordinator cleanup uses this; it never touches durable state.
  *
  * @param {string} transactionId - Transaction identifier.
  * @return {number} Count of cleared in-memory reservations.
@@ -405,8 +331,7 @@ export function clearTransactionMemoryReservations(transactionId) {
 
 /**
  * Clear ONLY process-local in-memory reservations for a session across all
- * partitions. Gateway/coordinator cleanup uses this; it NEVER touches
- * PARTITION_DBS or deletes durable SQLite reservation rows.
+ * partitions. Gateway/coordinator cleanup uses this; it never touches durable state.
  *
  * @param {string} sessionId - Session identifier.
  * @return {number} Count of cleared in-memory reservations.
@@ -450,14 +375,13 @@ export function getTransactionReservations(transactionId) {
 }
 
 /**
- * Pure read-only check whether a transaction currently holds any FOR_UPDATE
- * reservations (in memory mirror or optional durable partition DB).
+ * Pure volatile memory-mirror check whether a transaction currently holds any
+ * FOR_UPDATE reservations in this process. Never accesses SQLite.
  *
  * @param {string} transactionId - Transaction identifier.
- * @param {Object|null} [db=null] - Optional partition SQLite DB.
  * @return {boolean}
  */
-export function hasLockingReadReservations(transactionId, db = null) {
+export function hasLockingReadReservations(transactionId) {
   if (!transactionId) {
     return false;
   }
@@ -470,25 +394,14 @@ export function hasLockingReadReservations(transactionId, db = null) {
       }
     }
   }
-  return db ? hasDbTransactionReservations(db, transactionId) : false;
+  return false;
 }
 
 /**
- * Clear ONLY process-local in-memory reservation maps, preserving all SQLite rows
- * and registered partition DB handles. Useful for restart/leader-failover tests.
+ * Clear ONLY process-local in-memory reservation maps, preserving all durable
+ * SQLite reservation rows.
  */
 export function clearMemoryReservations() {
   RESERVATIONS.clear();
   TRANSACTION_RESERVATIONS.clear();
-}
-
-/**
- * Clear all reservations across all transactions and registered test DBs. Test support only.
- */
-export function clearAllReservations() {
-  clearMemoryReservations();
-  for (const store of PARTITION_DBS.values()) {
-    truncateDbReservations(store);
-  }
-  PARTITION_DBS.clear();
 }

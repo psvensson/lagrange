@@ -1,7 +1,7 @@
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {answerParticipantTransactionRequest} from
   '../test-helpers/participant-protocol-double.js';
-import {clearAllReservations} from '../../src/partition/partition-locking-read-reservation.js';
+import {clearMemoryReservations} from '../../src/partition/partition-locking-read-reservation.js';
 
 function createMockMessageRouter(mockPartitionData) {
   return {
@@ -32,7 +32,7 @@ function createMockMessageRouter(mockPartitionData) {
  * Create a mock system cache with services for routing.
  */
 function createMockSystemCache(tables, partitions) {
-  clearAllReservations();
+  clearMemoryReservations();
   const normalizedTables = tables.map((t) => ({
     primary_key: 'id',
     primaryKey: 'id',

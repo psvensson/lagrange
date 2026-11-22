@@ -26,8 +26,8 @@ import {
 } from '../../src/partition/partition-committed-statement-outcome.js';
 import {buildLockingReadCommand} from '../../src/partition/partition-locking-read-command.js';
 import {
-  clearAllReservations,
   clearMemoryReservations,
+  deriveRowLockKey,
   stageLocalWriteReservation,
 } from '../../src/partition/partition-locking-read-reservation.js';
 import {
@@ -36,13 +36,11 @@ import {
 import {
   acquireDbForUpdateReservation,
   ensureLockingReadTableInitialized,
+  truncateDbReservations,
 } from '../../src/partition/partition-locking-read-store.js';
 import {
   readSettledOwnerCommandIn,
 } from '../../src/partition/partition-committed-statement-outcome.js';
-import {
-  deriveRowLockKey,
-} from '../../src/partition/partition-locking-read-reservation.js';
 import {
   listActiveParticipantSessions,
 } from '../../src/partition/partition-participant-transaction-session.js';
@@ -241,8 +239,15 @@ async function startPgWireNode(engine) {
   };
 }
 
+export function resetFixtureReservations(dbs = []) {
+  clearMemoryReservations();
+  for (const db of dbs) {
+    if (db) truncateDbReservations(db);
+  }
+}
+
 export async function setupTwoNodeCluster(options = {}) {
-  clearAllReservations();
+  clearMemoryReservations();
   initEnvironment('node-1');
   const members = [
     [`${ACCOUNTS_PARTITION_ID}-r1`, 'node-1'],
@@ -349,10 +354,11 @@ export async function setupTwoNodeCluster(options = {}) {
       await pg2.stop().catch(() => {});
       await node1.engine.shutdown().catch(() => {});
       await node2.engine.shutdown().catch(() => {});
+      resetFixtureReservations(group.services.map((svc) => svc.db));
       await releaseOwners.dispose().catch(() => {});
       await group.dispose().catch(() => {});
       gateway.db.close();
-      clearAllReservations();
+      clearMemoryReservations();
     },
   };
 }
@@ -684,7 +690,7 @@ const DISJOINT_DEPENDENT_STMT_1 = 'UPDATE accounts SET balance = 202 WHERE id = 
 const DISJOINT_DEPENDENT_STMT_2 =
   'UPDATE accounts SET balance = 350 WHERE id IN (SELECT 3 FROM accounts WHERE id = 2 AND balance = 202)';
 
-export const DEPENDENT_PREDICATE_OPS = Object.freeze([
+const DEPENDENT_PREDICATE_OPS = Object.freeze([
   Object.freeze({sql: DEPENDENT_PREDICATE_STMT_1, params: Object.freeze([])}),
   Object.freeze({sql: DEPENDENT_PREDICATE_STMT_2, params: Object.freeze([])}),
 ]);
@@ -721,12 +727,22 @@ function buildModelDecision(svc, txId, decision, preparedDigest) {
 
 function runModelAcquireFirstBranch(ctx) {
   const {
-    rA, label, disjointSlot, extra, settlement, acqT, prepW, applyBoth, runDisjointD, stats,
+    rA, label, writeShape, disjointSlot, extra, settlement, acqT, writeOps, prepW,
+    applyBoth, runDisjointD, stats,
   } = ctx;
   const acqAns = applyBoth(acqT);
   assert.equal(acqAns.success, true, `${label}: ACQUIRE(T) first must succeed`);
   if (disjointSlot === 'BETWEEN') runDisjointD();
-  const prepWAns = applyBoth(prepW);
+  let lockTestPrep = prepW;
+  if (writeShape === 'DEPENDENT_PREDICATE' && disjointSlot === 'BETWEEN') {
+    const staleAns = applyBoth(prepW);
+    assert.equal(staleAns.success, false, `${label}: stale unscoped PREPARE(W) must refuse`);
+    assert.equal(staleAns.refusalCause, 'conflict');
+    lockTestPrep = buildModelPrepareOps(
+      rA, 'tx-W-cur', writeOps, readPartitionWriteGeneration(rA.db),
+    );
+  }
+  const prepWAns = applyBoth(lockTestPrep);
   assert.equal(prepWAns.success, false, `${label}: conflicting PREPARE(W) must refuse`);
   assert.equal(prepWAns.refusalCause, 'lock_conflict');
   assert.equal(prepWAns.sqlState, LOCK_NOT_AVAILABLE_SQLSTATE);
@@ -744,7 +760,7 @@ function runModelAcquireFirstBranch(ctx) {
     assert.equal(reAns.reentrant, true);
     stats.reentrantSuccesses += 1;
   } else {
-    const dupPrep = applyBoth(prepW);
+    const dupPrep = applyBoth(lockTestPrep);
     assert.equal(dupPrep.success, false);
     stats.duplicateReplays += 1;
   }
@@ -921,7 +937,7 @@ function runSingleModelSchedule(params, stats) {
       rA, 'tx-W', writeOps, readPartitionWriteGeneration(rA.db),
     );
     const branchCtx = {
-      rA, rB, label, writeShape, disjointSlot, extra, settlement, acqT, prepW,
+      rA, rB, label, writeShape, disjointSlot, extra, settlement, acqT, writeOps, prepW,
       applyBoth, runDisjointD, tryDisjointDeferred, stats,
     };
     if (order === 'ACQUIRE_FIRST') runModelAcquireFirstBranch(branchCtx);

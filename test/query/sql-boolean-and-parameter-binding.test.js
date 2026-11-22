@@ -19,7 +19,8 @@ import {PartitionResolver} from '../../src/query/partition-resolver.js';
 import {DistributedQueryPlanner} from '../../src/query/distributed/distributed-query-planner.js';
 import {buildJoinPushdownPlan} from '../../src/query/distributed/join-pushdown-plan.js';
 import {WINDOW_NO_PARTITION_NAME} from '../../src/query/sql-parser-source-text.js';
-import {clearAllReservations} from '../../src/partition/partition-locking-read-reservation.js';
+import {clearMemoryReservations} from '../../src/partition/partition-locking-read-reservation.js';
+import {truncateDbReservations} from '../../src/partition/partition-locking-read-store.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {createMockSystemCache} from './sql-query-engine-test-support.js';
 import {createTransactionPersistenceGateway} from '../test-helpers/transaction-persistence-gateway.js';
@@ -354,7 +355,7 @@ test('Counterexample 3: DistributedQueryPlanner buildReadFragmentPlans slices pe
 });
 
 test('Counterexample 4: PostgreSQL $N _paramMapping is applied exactly once across parseCache hits and locking-read write footprint checks', async () => {
-  clearAllReservations();
+  clearMemoryReservations();
   const tables = [
     {table_name: 'orders', primaryKey: 'id', partition_key_type: 'INTEGER'},
   ];
@@ -437,7 +438,8 @@ test('Counterexample 4: PostgreSQL $N _paramMapping is applied exactly once acro
     assert.equal(disjointAttempt.success, true, disjointAttempt.error);
     await engine.transactionCoordinator.commit('s-writer-disjoint');
   } finally {
-    clearAllReservations();
+    truncateDbReservations(ordersDb);
+    clearMemoryReservations();
     ordersDb.close();
     gateway.db.close();
   }

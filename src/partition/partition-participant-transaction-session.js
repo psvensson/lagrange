@@ -17,6 +17,7 @@ import {
   recordPartitionWriteGenerationFootprint,
 } from './partition-participant-transaction-store.js';
 import {hasLockingReadReservations} from './partition-locking-read-reservation.js';
+import {hasDbTransactionReservations} from './partition-locking-read-store.js';
 import {extractStatementWriteFootprint} from './partition-write-footprint-contract.js';
 
 // Per partition service: participantId -> session.
@@ -730,15 +731,15 @@ function discardParticipantSessions(service) {
   notifyRowKeySettlementWaiters(service);
 }
 
-// Discard the sessions held past the hold window (design 4, hold sweep): an
-// ACTIVE, DOOMED or sealed session whose PREPARE is not in flight, on any
-// role, with no SQL; a PREPARE in flight owns its own commit deadline.
+// Discard sessions held past holdTimeoutMs (design 4, hold sweep); in-flight PREPARE owns its deadline.
 function sweepExpiredParticipantSessions(service, nowMs, holdTimeoutMs) {
   const sessions = SESSIONS.get(service);
   let discarded = 0;
   for (const session of [...(sessions?.values() ?? [])]) {
     if (!session.inFlight && nowMs - session.startedAt >= holdTimeoutMs) {
-      if (hasLockingReadReservations(session.identity?.transactionId, service.db)) continue;
+      const txId = session.identity?.transactionId;
+      if (hasLockingReadReservations(txId) ||
+          hasDbTransactionReservations(service.db, txId, service.partitionId)) continue;
       sessions?.delete(session.identity.participantId);
       discarded += 1;
       service.logger.info(LOG_MSG.SESSION_EXPIRED, {

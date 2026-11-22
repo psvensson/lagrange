@@ -655,8 +655,10 @@ function sessionStatementAnswer(service, payload) {
   // A sealed session stages no write; it still reads its sealed operations.
   if (transactionStatementKindOf(payload.sql) === TRANSACTION_STATEMENT_KIND.WRITE) {
     if (session.phase === PHASE.PREPARING) return refusalOf(service, payload, CODE.PREPARING);
-    const lockRefusal = checkPartitionWriteLockingReadConflict(service, payload);
-    if (lockRefusal !== null) return answerOf(service, payload, lockRefusal);
+    if (session.operations.length === 0) {
+      const lockRefusal = checkPartitionWriteLockingReadConflict(service, payload);
+      if (lockRefusal !== null) return answerOf(service, payload, lockRefusal);
+    }
   }
   return answerOf(service, payload,
     runParticipantSessionStatement(service, session, payload));
