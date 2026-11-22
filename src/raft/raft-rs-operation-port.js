@@ -26,7 +26,6 @@ import {captureOriginalRaftRsTiming} from './raft-rs-runtime-tuning.js';
 import {
   committedMembershipRefusal,
   normalizeCommittedLearnerRead,
-  readCommittedMembershipView,
   unavailableLearnerAction,
 } from './raft-rs-committed-membership-read.js';
 import {encodeCommittedLearnerAdmission} from
@@ -79,6 +78,7 @@ const EVENTS = new Set([
   RAFT_EVENT.MEMBERSHIP_CHANGED,
   RAFT_EVENT.GATE_OPENED,
   RAFT_EVENT.CONF_CHANGE_APPLIED,
+  RAFT_EVENT.STATUS_CHANGED,
 ]);
 const EVENT_ALIAS = Object.freeze({
   'term-change': RAFT_EVENT.TERM_CHANGE,
@@ -451,9 +451,9 @@ function createRaftRsOperationPort(request) {
     }),
     tick: () => executeTurn({type: 'tick'}),
     campaign: () => executeTurn({type: 'campaign'}),
-    // A status read never waits (the runtime's readStatusNow): its turn
-    // settles in this run, and the status is answered as is.
-    readStatus: () => execute({type: 'read-status'}).result,
+    // A status read never waits (the runtime's readStatusNow): returns the
+    // owner's last settled immutable observation without entering the core.
+    readStatus: () => execute({type: RUNTIME_COMMAND.READ_STATUS}).result,
     // The core as it is at this call, read and never driven (the runtime's
     // observeCurrentAuthority): no turn, nothing queued, nothing awaited.
     [RAFT_OPERATION.OBSERVE_CURRENT_AUTHORITY]: () =>
@@ -470,28 +470,19 @@ function createRaftRsOperationPort(request) {
         return turnChainValue(continueTurn(answered,
           (result) => settledTurn(bounded(result))));
       }
-      // A bootstrap read answers at once: a read still waiting on the group
-      // is the group held.
+      // A bootstrap/witness read answers at once from the settled observation.
       const answered = execute({
         type: RUNTIME_COMMAND.READ_COMMITTED_MEMBERSHIP,
         purpose: readRequest?.purpose ??
           COMMITTED_MEMBERSHIP_READ_PURPOSE.BOOTSTRAP,
+        replicaIdentity: readRequest?.replicaIdentity,
+        peerId: readRequest?.peerId,
+        includeRole: readRequest?.includeRole === true,
       });
       const committed = answered.settled ? answered.result : null;
       if (committed?.kind !== COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED &&
           committed?.kind !== COMMITTED_MEMBERSHIP_ANSWER_KIND.REFUSED) {
         return committedMembershipRefusal(COMMITTED_MEMBERSHIP_REFUSAL.HELD);
-      }
-      if (committed.kind === COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED &&
-          (readRequest?.replicaIdentity !== undefined ||
-            readRequest?.peerId !== undefined ||
-            readRequest?.includeRole === true)) {
-        const status = execute({type: RUNTIME_COMMAND.READ_STATUS}).result;
-        return readCommittedMembershipView(committed, {
-          replicaIdentity: readRequest.replicaIdentity,
-          peerId: readRequest.peerId,
-          confState: status?.confState,
-        });
       }
       return committed;
     },

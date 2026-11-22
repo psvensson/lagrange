@@ -7,9 +7,10 @@ import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from '../raft/raft-committed-membersh
 import {originEqual, participantReleaseGenerationValid,
   releaseAnswer, releaseCensusDefect, releaseIdentityValid, sameReplicaGeneration} from
   '../partition/partition-participant-release-contract.js';
-import {participantCutoverPauseOf, participantReleaseReplicaGenerationOf,
-  raiseParticipantCutoverPause, readParticipantReleaseFacts,
-  readParticipantReleaseObservationAssessment, resumeParticipantCutoverAdmission} from
+import {authorityMatchesSettledStatus, participantCutoverPauseOf,
+  participantReleaseReplicaGenerationOf, raiseParticipantCutoverPause,
+  readParticipantReleaseFacts, readParticipantReleaseObservationAssessment,
+  resumeParticipantCutoverAdmission} from
   '../partition/partition-participant-transaction-pause.js';
 import {enableParticipantTransactionAdmission} from
   '../partition/partition-participant-transaction-request.js';
@@ -228,7 +229,9 @@ function releaseRequestRefusal(_handler, service, request, facts) {
     return releaseAnswer(OUTCOME.BUILD_MISMATCH, request);
   }
   const status = service.raft.readStatus();
-  return releaseStatusMatches(service, request, status) ? null :
+  const authority = service.raft.observeCurrentAuthority();
+  return authorityMatchesSettledStatus(status, authority) &&
+    releaseStatusMatches(service, request, status) ? null :
     releaseAnswer(OUTCOME.STALE, request);
 }
 
@@ -291,12 +294,24 @@ function observationContextDisposition(handler, service, request, context, expec
   if (status?.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
     return OUTCOME.UNAVAILABLE;
   }
+  const authority = expectedPort.observeCurrentAuthority();
+  if (authority?.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
+    return OUTCOME.UNAVAILABLE;
+  }
   const disposition = observationStatusDisposition(handler, service, request,
     context, status);
+  if (disposition !== null) {
+    return disposition;
+  }
+  if (!authorityMatchesSettledStatus(status, authority) ||
+      !Number.isSafeInteger(authority.appliedIndex) ||
+      authority.appliedIndex < context.appliedIndex) {
+    return OUTCOME.STALE;
+  }
   if (!observationLifecycleCurrent(handler, service, request, expectedPort)) {
     return OUTCOME.STALE;
   }
-  return disposition;
+  return null;
 }
 
 function adjudicateParticipantReleaseObservation(handler, service, request,
@@ -341,7 +356,8 @@ function canFastPathPausedResume(handler, service, request) {
   }
   try {
     const status = service.raft?.readStatus?.();
-    if (status?.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK ||
+    const authority = service.raft?.observeCurrentAuthority?.();
+    if (!authorityMatchesSettledStatus(status, authority) ||
         !releaseStatusMatches(service, request, status)) {
       return false;
     }

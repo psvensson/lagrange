@@ -46,6 +46,7 @@ import {RAFT_RS_ENTRY_TYPE} from
   '../../../src/raft/raft-rs-ready-loop-constants.js';
 import {envelopeTo} from './identity-reuse-harness.js';
 import {PartitionNodeCluster} from './partition-node-cluster.js';
+import {settleDelivered} from './transfer-leadership-driver.js';
 import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 const ROOT = path.resolve(
@@ -83,12 +84,13 @@ function takeInbox(cluster, replicaId) {
   return cluster.replica(replicaId).inbox.splice(0);
 }
 
-// A replica processes what it was sent, through its own turn (a status read
-// drains delivered envelopes and never ticks).
+// A replica processes what it was sent, through its explicit settle turn
+// (LEARNER_ACTION drains delivered envelopes and never ticks).
 function processAt(cluster, replicaId) {
   for (const envelope of takeInbox(cluster, replicaId)) {
     cluster.node(replicaId).step(envelope);
   }
+  settleDelivered(cluster.node(replicaId), cluster.partitionId);
   return cluster.node(replicaId).readStatus();
 }
 
@@ -115,9 +117,11 @@ function deliverPending(cluster, replicaId, envelopes) {
   }
 }
 
-// The PROCESSED run processes the pending envelopes in their own turn first;
-// the status that turn answers must be a status, never a refusal.
+// The PROCESSED run processes the pending envelopes in their own explicit
+// settle turn (LEARNER_ACTION) first; the status afterwards must be a status,
+// never a refusal.
 function processFirst(cluster, replicaId) {
+  settleDelivered(cluster.node(replicaId), cluster.partitionId);
   const drained = cluster.node(replicaId).readStatus();
   assert.equal(drained.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
     `the processing turn answers a status (${JSON.stringify(drained)})`);
@@ -287,6 +291,7 @@ test('CA1 / M9: the envelopes after a refused one are stepped in the same ' +
     takeInbox(cluster, B);
     const appliedBefore = cluster.replica(A).appliedCommands.length;
     deliverPending(cluster, A, [refused, acknowledgement]);
+    settleDelivered(cluster.node(A), cluster.partitionId);
     const answered = cluster.node(A).readStatus();
     assert.equal(answered.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
       `the turn answers its own read (${JSON.stringify(answered)})`);
@@ -341,7 +346,7 @@ async () => {
       [MESSAGE_TYPE.MsgRequestVote, MESSAGE_TYPE.MsgAppend],
       'setup: B\'s vote request and B\'s first append are pending at A');
     deliverPending(cluster, A, envelopes);
-    const turn = port.readStatus();
+    const turn = settleDelivered(port, cluster.partitionId);
     outerTurnReturned = true;
     await turn;
     const core = port.readStatus();

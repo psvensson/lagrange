@@ -64,7 +64,7 @@ for (const hasWitness of [true, false]) {
           nodeId: 'serving-node',
           replicaId: 'services-p1-r1',
           role: 'leader',
-          raft: {readStatus: () => ({term: 7})},
+          raft: {observeCurrentAuthority: () => ({outcome: 'CORE_OK', role: 'leader', term: 7})},
           timeSource: {now: () => 12345},
         }, false);
       t.equal(witness.state, 'observed', 'remote owner supplies the witness');

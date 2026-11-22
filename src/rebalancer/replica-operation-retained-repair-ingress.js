@@ -3,6 +3,8 @@ import {REPAIR_READ_SCOPE} from './replica-operation-retained-repair-authority.j
 // authority reads and adoption. Exact-entry native ingress attaches the native
 // completer directly: its outer decision may already be awaiting this ingress.
 import {isDeepStrictEqual} from 'node:util';
+import {RAFT_ROLE} from '../raft/constants.js';
+import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
 import {readCommittedStatementOutcome} from '../partition/partition-committed-statement-outcome.js';
 import {PARTITION_COMMITTED_STATEMENT_RECORD_STATE as RECORD} from
   '../partition/partition-committed-statement-outcome-constants.js';
@@ -15,12 +17,19 @@ function unavailableReply(service, payload) {
   return retainedRepairObservationReply(service, payload, {state: DECISION.UNAVAILABLE});
 }
 
+function ingressAuthority(service) {
+  const authority = service.raft?.observeCurrentAuthority?.();
+  return authority?.outcome === RAFT_OPERATION_OUTCOME.CORE_OK &&
+    authority.role === RAFT_ROLE.LEADER &&
+    authority.currentTermApplied === true ? authority : null;
+}
+
 function ingressTerm(service) {
-  return service.raft.readStatus().term;
+  return ingressAuthority(service)?.term ?? null;
 }
 
 function ownsIngress(service, term) {
-  return service.isLeader && ingressTerm(service) === term;
+  return service.isLeader && term !== null && ingressTerm(service) === term;
 }
 
 function ownsNativeCompleter(attempt, payload) {

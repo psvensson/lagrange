@@ -28,7 +28,7 @@
   "censusSize": 2731,
   "digest": "fnv1a32-395bccc0",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-ce9a837d",
+  "observationDigest": "fnv1a32-e52e741f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -18053,6 +18053,7 @@
     "test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js": {
       "files": [
         "src/partition/partition-service-constants.js",
+        "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
@@ -18092,6 +18093,7 @@
       "files": [
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-conf-state-key.js",
         "src/raft/raft-rs-core-constants.js",
         "src/raft/raft-rs-durable-store-constants.js",
@@ -18226,6 +18228,7 @@
     },
     "test/raft/raft-rs-backend/transfer-leadership-attack-matrix.test.js": {
       "files": [
+        "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-durable-store-constants.js",
@@ -18239,6 +18242,7 @@
     },
     "test/raft/raft-rs-backend/transfer-leadership-decision-inputs.test.js": {
       "files": [
+        "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-durable-store-constants.js",
@@ -18251,6 +18255,7 @@
     "test/raft/raft-rs-backend/transfer-leadership-drain-anchors.test.js": {
       "files": [
         "src/partition/partition-service-constants.js",
+        "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-durable-store-constants.js",
@@ -18264,6 +18269,7 @@
     "test/raft/raft-rs-backend/transfer-leadership-drain-oracle.test.js": {
       "files": [
         "src/partition/partition-service-constants.js",
+        "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
@@ -18278,6 +18284,7 @@
     },
     "test/raft/raft-rs-backend/transfer-leadership-drain-order.test.js": {
       "files": [
+        "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-durable-store-constants.js",
@@ -18299,6 +18306,7 @@
     },
     "test/raft/raft-rs-backend/transfer-leadership-property.test.js": {
       "files": [
+        "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
@@ -18366,7 +18374,9 @@
     },
     "test/raft/raft-rs-current-authority-observation.test.js": {
       "files": [
+        "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",

@@ -29,6 +29,7 @@ import {
 } from './partition-statement-admission-constants.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL, pickTypedWriteAnswer} from
   './partition-write-kernel.js';
+import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 
 const READ_AUTHORITY_WITNESS_STATE = Object.freeze({
@@ -193,21 +194,22 @@ const PARTITION_SERVICE_REMOTE_QUERY_METHODS = Object.freeze({
     if (isWriteOperation) {
       return {state: READ_AUTHORITY_WITNESS_STATE.NOT_APPLICABLE};
     }
-    // The term is the consensus core's own, read through the port.
-    const status = this.raft?.readStatus();
+    // Uncached local runtime authority read from the consensus port.
+    const authority = this.raft?.observeCurrentAuthority();
+    const ok = authority?.outcome === RAFT_OPERATION_OUTCOME.CORE_OK;
     return {
       state: READ_AUTHORITY_WITNESS_STATE.OBSERVED,
       partitionId: this.partitionId,
       servingNodeId: this.nodeId,
       servingReplicaId: this.replicaId,
-      term: status?.term ?? null,
-      appliedIndex: Number.isSafeInteger(status?.appliedIndex) ?
-        status.appliedIndex :
+      term: ok && Number.isSafeInteger(authority.term) ? authority.term : null,
+      appliedIndex: ok && Number.isSafeInteger(authority.appliedIndex) ?
+        authority.appliedIndex :
         null,
-      commitIndex: Number.isSafeInteger(status?.commitIndex) ?
-        status.commitIndex :
+      commitIndex: ok && Number.isSafeInteger(authority.commitIndex) ?
+        authority.commitIndex :
         null,
-      role: this.role,
+      role: ok ? authority.role : null,
       // The witness records WHEN THIS REPLICA observed its own authority, so
       // it reads this replica's clock. This is the owner decision the metered
       // oracle's knownAmbientSiteOutsideProofCone reserved: the site had no

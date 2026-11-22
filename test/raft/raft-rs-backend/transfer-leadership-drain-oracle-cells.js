@@ -21,14 +21,12 @@ import assert from 'node:assert/strict';
 import {
   RAFT_MEMBERSHIP_OPERATION,
 } from '../../../src/raft/raft-operation-port-constants.js';
-import {RAFT_ROLE} from '../../../src/raft/constants.js';
 import {RAFT_RS_MESSAGE_TYPE} from
   '../../../src/raft/raft-rs-ingress-constants.js';
 import {
   SEND_MODE,
   TIMING_MODE,
   craft,
-  proposalEntry,
 } from './transfer-leadership-drain-oracle-harness.js';
 import {
   mostCaughtUp,
@@ -175,32 +173,6 @@ async function forwardedTransferToBAtA(run) {
     turnChainValue(run.driver.port(B).transferLeadership(namedSuccessor(B))));
 }
 
-// A runs a transfer to a cut-off C.
-async function leaderInTransfer(run) {
-  run.driver.isolate(C);
-  await run.propose(A, {lag: C});
-  await run.act(() =>
-    turnChainValue(run.driver.port(A).transferLeadership(namedSuccessor(C))));
-}
-
-// A's own removal is committed and applied while A led, and A stepped down
-// in the call that applied it (binding fork fix 5): a follower that knows no
-// leader and never campaigns.
-async function formerLeaderSelfRemoved(run) {
-  await selfRemovalAtA(run);
-  await run.deliverOnly([A]);
-  assert.equal(run.leads(A), false, 'setup: the removed leader stepped down');
-}
-
-// B stands for election and every vote request is lost.
-async function candidateB(run) {
-  await transferCampaignOfB(run);
-  run.driver.loseInTransit(A);
-  run.driver.loseInTransit(C);
-  assert.equal(run.inputsOf(B).role, RAFT_ROLE.CANDIDATE,
-    'setup: B is a candidate');
-}
-
 // C falls behind and its progress stalls; after reconnecting, C's
 // heartbeat response is on its way to A.
 async function laggingHeartbeatResponseAtA(run) {
@@ -251,41 +223,6 @@ const INPUT_EVENTS = Object.freeze([
 // Receiver predicates per message type (the event axis). Local-only types
 // and response types from a sender without progress are generated.
 const CATALOGUE = Object.freeze({
-  MsgPropose: [
-    {predicate: 'leader', requester: A, decisions: ['D1'],
-      moves: [INPUT.CATCHUP],
-      build: (run) => run.act(() =>
-        turnChainValue(run.driver.port(B).propose({forwardedBy: B})))},
-    {predicate: 'leader with a transfer in progress', requester: A,
-      decisions: ['D3'], refusedFrom: B,
-      build: async (run) => {
-        await leaderInTransfer(run);
-        await run.act(() => turnChainValue(run.driver.port(B).propose({forwardedBy: B})));
-      }},
-    {predicate: 'former leader that applied its own removal', requester: A,
-      decisions: ['D3'], refusedFrom: C,
-      build: async (run) => {
-        await formerLeaderSelfRemoved(run);
-        craft(run, {to: A, from: C, msgType: 2,
-          term: 0, entries: [proposalEntry({forwardedBy: C})]});
-      }},
-    {predicate: 'candidate', requester: B, decisions: ['D3'],
-      refusedFrom: C, timeoutDriven: true,
-      build: async (run) => {
-        await candidateB(run);
-        craft(run, {to: B, from: C, msgType: 2,
-          term: 0, entries: [proposalEntry({forwardedBy: C})]});
-      }},
-    {predicate: 'follower with a leader', requester: B, decisions: ['D1'],
-      control: 'forwarded to the leader unchanged: it moves no input of ' +
-        'the follower\'s decisions',
-      build: (run) => craft(run, {to: B, from: C, msgType: 2,
-        term: 0, entries: [proposalEntry({forwardedBy: C})]})},
-    {predicate: 'follower without a leader', requester: B, form: false,
-      decisions: ['D3'], refusedFrom: A, timeoutDriven: true,
-      build: (run) => craft(run, {to: B, from: A, msgType: 2,
-        term: 0, entries: [proposalEntry({forwardedBy: A})]})},
-  ],
   MsgAppend: [
     {predicate: 'stale leader, higher term', requester: A,
       decisions: ['D1', 'D2'], moves: [INPUT.ROLE],
@@ -364,6 +301,9 @@ const CATALOGUE = Object.freeze({
 
 // Types with no cell, and why (the census requires one or the other).
 const NO_CELL = Object.freeze({
+  MsgPropose: 'no production sender (a follower no longer forwards ' +
+    'proposals); the ingress refuses it before the guard and the core ' +
+    '(forwarded-proposal), so no envelope of it is pending',
   MsgSnapshot: 'no production sender: a leader sends it only for compacted ' +
     'entries, and the binding exports no compaction; a crafted snapshot ' +
     'fabricates a log prefix and a configuration no peer holds',
@@ -394,15 +334,13 @@ const NO_MOVE = Object.freeze({
 // announcement reads it (challenger A, CA8). Pairs are generated as their
 // product per predicate.
 const PREDICATES = Object.freeze({
-  'transfer in progress': {
-    movers: ['MsgTransferLeader'], readers: ['MsgPropose']},
   'sender has progress': {
     movers: ['MsgAppendResponse'],
     readers: ['MsgAppendResponse', 'MsgHeartbeatResponse']},
   'follower without a leader': {
-    movers: ['MsgRequestVote'], readers: ['MsgPropose', 'MsgTransferLeader']},
+    movers: ['MsgRequestVote'], readers: ['MsgTransferLeader']},
   'candidate': {
-    movers: ['MsgTimeoutNow'], readers: ['MsgPropose', 'MsgTransferLeader']},
+    movers: ['MsgTimeoutNow'], readers: ['MsgTransferLeader']},
   'leader identity (announcement)': {
     movers: ['MsgRequestVote'], readers: ['MsgAppend', 'MsgHeartbeat']},
   'transferee caught up': {
@@ -411,21 +349,12 @@ const PREDICATES = Object.freeze({
 // The challengers' named pairs; P4 (a pending conf change nulls a local
 // one) is CA3, out of the claim.
 const KNOWN_PAIRS = Object.freeze({
-  P1: 'MsgTransferLeader>MsgPropose@transfer in progress',
   P2: 'MsgAppendResponse>MsgAppendResponse@sender has progress',
   P3: 'MsgRequestVote>MsgAppend@leader identity (announcement)',
   P5: 'MsgTransferLeader>MsgAppendResponse@transferee caught up',
-  P6: 'MsgRequestVote>MsgPropose@follower without a leader',
-  P7: 'MsgTimeoutNow>MsgPropose@candidate',
 });
 
 const PAIR_BUILDS = Object.freeze({
-  'MsgTransferLeader>MsgPropose@transfer in progress': {
-    requester: A, decision: 'D3', refusedFrom: C,
-    build: async (run) => {
-      await forwardedTransferToBAtA(run);
-      await run.act(() => turnChainValue(run.driver.port(C).propose({forwardedBy: C})));
-    }},
   'MsgAppendResponse>MsgAppendResponse@sender has progress': {
     requester: A, decision: 'D1', target: B, refusedFrom: C,
     build: async (run) => {
@@ -442,26 +371,12 @@ const PAIR_BUILDS = Object.freeze({
       await run.tickUntilHeartbeat(A, C);
       await run.deliverOnly([C]);
     }},
-  'MsgRequestVote>MsgPropose@follower without a leader': {
-    requester: A, decision: 'D3', refusedFrom: C,
-    build: async (run) => {
-      await transferCampaignOfB(run);
-      await run.act(() => turnChainValue(run.driver.port(C).propose({forwardedBy: C})));
-    }},
   'MsgRequestVote>MsgTransferLeader@follower without a leader': {
     requester: A, decision: 'D1', moves: [INPUT.ROLE],
     build: async (run) => {
       await transferCampaignOfB(run);
       await run.act(() =>
         turnChainValue(run.driver.port(C).transferLeadership(namedSuccessor(C))));
-    }},
-  'MsgTimeoutNow>MsgPropose@candidate': {
-    requester: C, decision: 'D3', refusedFrom: B,
-    build: async (run) => {
-      await run.act(() =>
-        turnChainValue(run.driver.port(A).transferLeadership(namedSuccessor(C))));
-      craft(run, {to: C, from: B, msgType: 2,
-        term: 0, entries: [proposalEntry({forwardedBy: B})]});
     }},
   'MsgTimeoutNow>MsgTransferLeader@candidate': {
     requester: C, decision: 'D1', target: B, moves: [INPUT.ROLE],

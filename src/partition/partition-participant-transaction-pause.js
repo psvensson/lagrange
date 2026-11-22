@@ -244,6 +244,15 @@ function refuseStaleResume(handler, service) {
   return OUTCOME.STALE;
 }
 
+function authorityMatchesSettledStatus(status, authority) {
+  return status?.outcome === RAFT_OPERATION_OUTCOME.CORE_OK &&
+    authority?.outcome === RAFT_OPERATION_OUTCOME.CORE_OK &&
+    authority.term === status.term &&
+    authority.role === status.role &&
+    authority.lifecycleIncarnation === status.lifecycleIncarnation &&
+    authority.runtimeGeneration === status.runtimeGeneration;
+}
+
 function finalResumeFactsMatch(handler, service, facts, request, status) {
   return sameReplicaGeneration(facts.generation, replicaGenerationOf(handler, service, status)) &&
     status.term === facts.membership.term && status.leaderId === facts.leaderReplicaId &&
@@ -259,7 +268,10 @@ async function resumeParticipantCutoverAdmission(handler, service, request) {
     invalidateParticipantReleaseAdmission(service);
     const postStatusLifecycleRefusal = refuseStaleResume(handler, service);
     if (postStatusLifecycleRefusal !== null) return postStatusLifecycleRefusal;
-    if (participantReleaseAdmissionOf(service) === current &&
+    const status = service.raft?.readStatus?.();
+    const authority = service.raft?.observeCurrentAuthority?.();
+    if (authorityMatchesSettledStatus(status, authority) &&
+        participantReleaseAdmissionOf(service) === current &&
         current.releaseId === request.release?.releaseId) return OUTCOME.RESUMED;
     return OUTCOME.STALE;
   }
@@ -270,9 +282,12 @@ async function resumeParticipantCutoverAdmission(handler, service, request) {
   const defect = releaseCensusDefect(request.release, request.census, facts,
     {attempt: request.attempt, queryDrainProof: request.queryDrainProof});
   if (defect !== null) return defect;
-  // No await separates the final generation/leadership check from resume.
+  // No await separates the final generation, settled status and uncached
+  // authority check from resume.
   const status = service.raft.readStatus();
+  const authority = service.raft.observeCurrentAuthority();
   if (refuseStaleResume(handler, service) !== null ||
+      !authorityMatchesSettledStatus(status, authority) ||
       !finalResumeFactsMatch(handler, service, facts, request, status)) return OUTCOME.STALE;
   ADMISSIONS.set(service, Object.freeze({...current, state: ADMISSION.OPEN,
     releaseId: request.release.releaseId, proof: Object.freeze({term: status.term,
@@ -296,6 +311,7 @@ function pausedWriteAnswerOf(service) {
 }
 
 export {
+  authorityMatchesSettledStatus,
   invalidateParticipantReleaseAdmission, participantCutoverPauseOf,
   participantReleaseAdmissionOf, pausedWriteAnswerOf, raiseParticipantCutoverPause,
   readParticipantReleaseFacts, readParticipantReleaseObservationAssessment,

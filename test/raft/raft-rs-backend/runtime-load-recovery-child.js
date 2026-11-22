@@ -103,7 +103,7 @@ try {
       'disk changes cannot relabel already loaded artifacts');
     const count = scenario === 'repeated-refusal' ? 2 : 1;
     for (let index = 0; index < count; index += 1) {
-      const failure = await portA.readStatus();
+      const failure = await turnChainValue(portA.tick());
       receipt.failures.push(failure);
       assert.equal(failure.outcome, OUTCOME.HOST_FAILURE, 'failed reload must be typed');
       assert.equal(failure.recoveryRequired, true);
@@ -119,7 +119,7 @@ try {
     clock.advance(receipt.failures.at(-1).retryAfterMs ?? 0);
   }
   receipt.phase = 'recover-from-other-group';
-  const recoveredB = await portB.readStatus();
+  const recoveredB = await turnChainValue(portB.tick());
   receipt.recoveredB = recoveredB;
   assert.equal(recoveredB.outcome, OUTCOME.CORE_OK,
     'a different group must drive shared reconstruction, never enter a stale native handle');

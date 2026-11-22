@@ -22,15 +22,22 @@ import {setImmediate as nextEventLoopTurn} from 'node:timers/promises';
 
 import {
   RAFT_EVENT,
+  RAFT_MEMBERSHIP_TRANSITION_STAGE,
   RAFT_OPERATION,
   RAFT_OPERATION_OUTCOME,
 } from '../../../src/raft/raft-operation-port-constants.js';
+import {
+  COMMITTED_MEMBERSHIP_ANSWER_KIND,
+  COMMITTED_MEMBERSHIP_READ_PURPOSE,
+} from '../../../src/raft/raft-committed-membership-constants.js';
 import {
   HEALTHY,
   RECOVERY_REQUIRED,
   UNHEALTHY,
   USABLE,
 } from '../../../src/raft/raft-rs-runtime-owner-constants.js';
+import {deriveRaftRsPeerId} from '../../../src/raft/raft-rs-peer-identity.js';
+import {RaftRsDurableStore} from '../../../src/raft/raft-rs-durable-store.js';
 import {
   setActualCoreEntryObserver,
   setCoreFaultInjector,
@@ -57,6 +64,7 @@ const SUBSCRIBABLE_EVENTS = Object.freeze([
   RAFT_EVENT.MEMBERSHIP_CHANGED,
   RAFT_EVENT.GATE_OPENED,
   RAFT_EVENT.CONF_CHANGE_APPLIED,
+  RAFT_EVENT.STATUS_CHANGED,
 ]);
 const CORE_OP_STEP = 'step';
 const CORE_OP_CONF_STATE = 'conf_state';
@@ -438,6 +446,189 @@ async () => {
   } finally {
     console.error = originalConsoleError;
     setCoreFaultInjector(null);
+    setActualCoreEntryObserver(null);
+    cluster.dispose();
+  }
+});
+
+test('step (h): STATUS_CHANGED emits only when settled status changes and ' +
+  'reuses the same frozen object across no-op turns', async () => {
+  const replicaIds = ['steph-a', 'steph-b', 'steph-c'];
+  const {cluster, clocks, leader, followers} = await formThreeReplicaCluster({
+    partitionId: 'pure-read-step-h',
+    replicaIds,
+  });
+  const port = cluster.node(leader);
+  const events = [];
+  const unsubscribe = subscribeAllEvents(port, events);
+  try {
+    const before = port.readStatus();
+    const mark = events.length;
+    const ticked = await turnChainValue(port.tick());
+    assert.equal(ticked.outcome, CORE_OK);
+    quiesceWithClocks(cluster, clocks, [leader, ...followers]);
+    const afterNoop = port.readStatus();
+    assert.strictEqual(afterNoop, before,
+      'no-op tick/heartbeat keeps the exact same frozen status object reference');
+    const noopStatusEvents = events.slice(mark).filter((e) =>
+      [RAFT_EVENT.STATUS_CHANGED, RAFT_EVENT.LEADER, RAFT_EVENT.FOLLOWER,
+        RAFT_EVENT.CANDIDATE, RAFT_EVENT.TERM_CHANGE, RAFT_EVENT.LEADER_CHANGE]
+        .includes(e.eventName));
+    assert.deepEqual(noopStatusEvents, [],
+      'no-op turns emit 0 STATUS_CHANGED, role, term, or leader events');
+
+    const changeMark = events.length;
+    const proposed = await turnChainValue(port.propose({stepH: 'advance'}));
+    assert.equal(proposed.outcome, CORE_OK);
+    quiesceWithClocks(cluster, clocks, [leader, ...followers]);
+    const afterChange = port.readStatus();
+    assert.notStrictEqual(afterChange, before,
+      'a committed/applied write updates the settled status object');
+    assert.ok(afterChange.appliedIndex > before.appliedIndex);
+    const statusChanges = events.slice(changeMark)
+      .filter((e) => e.eventName === RAFT_EVENT.STATUS_CHANGED);
+    assert.ok(statusChanges.length >= 1,
+      'STATUS_CHANGED emits when settled status changes');
+    assert.strictEqual(statusChanges.at(-1).payload, afterChange,
+      'STATUS_CHANGED payload matches the settled readStatus() object');
+  } finally {
+    unsubscribe();
+    setActualCoreEntryObserver(null);
+    cluster.dispose();
+  }
+});
+
+test('progress, recovery, runtime replacement, and compaction sync continue ' +
+  'with zero readStatus() calls', async () => {
+  const failNextApply = {armed: false};
+  const replicaIds = ['nopoll-a', 'nopoll-b', 'nopoll-c'];
+  const clocks = new Map(replicaIds.map((id) =>
+    [id, new VirtualTimeSource({startMs: 1000})]));
+  const cluster = new PartitionNodeCluster({
+    partitionId: 'pure-read-zero-polling',
+    replicaIds,
+    substrateFor: (id) => ({timeSource: clocks.get(id)}),
+    applyFor: () => {
+      if (failNextApply.armed) {
+        failNextApply.armed = false;
+        throw new Error('injected zero-poll apply failure');
+      }
+    },
+  });
+  const originalConsoleError = console.error;
+  try {
+    const portA = cluster.node('nopoll-a');
+    assert.equal((await turnChainValue(portA.campaign())).outcome, CORE_OK);
+    for (let tick = 0; tick < 6; tick += 1) {
+      for (const id of replicaIds) {
+        const inbox = cluster.replica(id).inbox.splice(0);
+        for (const env of inbox) cluster.node(id).step(env);
+        clocks.get(id).advance(0);
+      }
+      await turnChainValue(portA.tick());
+    }
+    const firstWrite = await turnChainValue(portA.propose({zeroPoll: 1}));
+    assert.equal(firstWrite.outcome, CORE_OK);
+    quiesceWithClocks(cluster, clocks, replicaIds);
+    assert.equal(cluster.replica('nopoll-a').appliedCommands.length, 1);
+
+    // Group recovery via tick() with 0 readStatus() calls.
+    failNextApply.armed = true;
+    const failed = await turnChainValue(portA.propose({zeroPoll: 2}));
+    assert.equal(failed.outcome, HOST_FAILURE);
+    assert.equal(failed.recoveryRequired, true);
+    const reconstructed = await turnChainValue(portA.tick());
+    assert.equal(reconstructed.outcome, CORE_OK);
+    quiesceWithClocks(cluster, clocks, replicaIds);
+    assert.equal(cluster.replica('nopoll-a').appliedCommands.length, 2,
+      'group recovery replayed and applied entry without any readStatus() call');
+
+    // Runtime replacement via tick() with 0 readStatus() calls.
+    setCoreFaultInjector((groupId, operation) => {
+      if (groupId === 'pure-read-zero-polling' && operation === 'propose') {
+        setCoreFaultInjector(null);
+        throw new globalThis.WebAssembly.RuntimeError('zero-poll core trap');
+      }
+    });
+    console.error = () => undefined;
+    const fatal = await turnChainValue(portA.propose({zeroPoll: 'trap'}));
+    console.error = originalConsoleError;
+    assert.equal(fatal.outcome, CORE_FATAL);
+    const replaced = await turnChainValue(portA.tick());
+    assert.equal(replaced.outcome, CORE_OK);
+    const afterTrapWrite = await turnChainValue(portA.propose({zeroPoll: 3}));
+    assert.equal(afterTrapWrite.outcome, CORE_OK);
+    quiesceWithClocks(cluster, clocks, replicaIds);
+    assert.equal(cluster.replica('nopoll-a').appliedCommands.length, 3,
+      'runtime replacement and subsequent progress succeeded with 0 readStatus() calls');
+
+    // Compaction sync via tick() without any readStatus() call.
+    const storeA = new RaftRsDurableStore(cluster.replica('nopoll-a').db);
+    const progressBefore = storeA.readDurableProgress('pure-read-zero-polling');
+    const compacted = storeA.compactCommittedPrefix('pure-read-zero-polling', {
+      toIndex: progressBefore.appliedIndex,
+    });
+    assert.equal(compacted.compacted, true);
+    const syncedTick = await turnChainValue(portA.tick());
+    assert.equal(syncedTick.outcome, CORE_OK);
+  } finally {
+    console.error = originalConsoleError;
+    setCoreFaultInjector(null);
+    setActualCoreEntryObserver(null);
+    cluster.dispose();
+  }
+});
+
+test('readCommittedMembership BOOTSTRAP/WITNESS are pure settled reads while ' +
+  'LEARNER_ACTION remains an explicit settle-then-read turn', async () => {
+  const replicaIds = ['rcm-a', 'rcm-b', 'rcm-c'];
+  const {cluster, clocks, leader, followers} = await formThreeReplicaCluster({
+    partitionId: 'pure-read-rcm',
+    replicaIds,
+  });
+  try {
+    const port = cluster.node(leader);
+    const proposed = await turnChainValue(port.propose({rcm: 'pending'}));
+    assert.equal(proposed.outcome, CORE_OK);
+    for (const follower of followers) {
+      drainInboxThroughPort(cluster, clocks.get(follower), follower);
+    }
+    const delivered = deliverToInboundOnly(cluster, leader);
+    assert.ok(delivered >= followers.length);
+
+    const coreMark = cluster.coreEntries.length;
+    const bootstrap = port.readCommittedMembership({
+      purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.BOOTSTRAP,
+      includeRole: true,
+    });
+    const witness = port.readCommittedMembership({
+      purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.WITNESS,
+      replicaIdentity: leader,
+    });
+    assert.equal(bootstrap.kind, COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED);
+    assert.equal(witness.kind, COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED);
+    assert.equal(cluster.coreEntries.slice(coreMark).length, 0,
+      'BOOTSTRAP and WITNESS readCommittedMembership make 0 core entries');
+    assert.equal(port[OBSERVE]().inboundQueued, delivered);
+
+    const settleId = '__rcm_settle__';
+    const learnerTurn = await turnChainValue(port.readCommittedMembership({
+      purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.LEARNER_ACTION,
+      groupId: 'pure-read-rcm',
+      action: {
+        operationId: 'rcm-settle',
+        transitionIdentity: 'rcm-settle',
+        permitSequence: 1,
+        stage: RAFT_MEMBERSHIP_TRANSITION_STAGE.ADD_LEARNER,
+        replicaIdentity: settleId,
+        peerId: deriveRaftRsPeerId(settleId),
+        nodeId: 'rcm-node',
+      },
+    }));
+    assert.ok(typeof learnerTurn?.kind === 'string');
+    assert.equal(port[OBSERVE]().inboundQueued, 0,
+      'LEARNER_ACTION explicitly drained pending inbound');
+  } finally {
     setActualCoreEntryObserver(null);
     cluster.dispose();
   }

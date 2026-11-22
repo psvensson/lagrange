@@ -1199,6 +1199,11 @@ test(
       readStatus: () => deepFreeze({
         ...realPort.readStatus(), term: observedTerm,
       }),
+      observeCurrentAuthority: () => deepFreeze({
+        ...realPort.observeCurrentAuthority(),
+        role: partition.role,
+        term: observedTerm,
+      }),
     });
     const originalDateNow = Date.now;
     let nowMs = 100;

@@ -281,7 +281,7 @@ test('a replacement-time native drain preserves the admitted follower debt',
       assert.notEqual(trapped.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
       // Existing trigger-group recovery drives the shared replacement once;
       // no caller-side status read or tick touches the queued recipient.
-      second.node('trigger-r1').readStatus();
+      turnChainValue(second.node('trigger-r1').tick());
       assert.equal(advancedDuringReplacement, true,
         'the accepted timer fired inside the shared reconstruction barrier');
       assert.ok(stages.includes('callback') &&
@@ -378,7 +378,7 @@ test('failed shared reconstruction retains the exact admitted wake until a later
       const first = turnChainValue(triggerGroup.node('retry-trigger').tick());
       assert.equal(trappedTick, true, 'the real core tick traps once');
       assert.notEqual(first.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
-      const failed = triggerGroup.node('retry-trigger').readStatus();
+      const failed = turnChainValue(triggerGroup.node('retry-trigger').tick());
       assert.equal(trappedReplacement, true,
         'the first real shared reconstruction fails after accepted-wake callback');
       assert.equal(callbackInReplacement, true,
@@ -394,7 +394,7 @@ test('failed shared reconstruction retains the exact admitted wake until a later
       assert.equal(stepped, 0,
         'no old timer may claim the accepted work while reconstruction is held');
       triggerClock.advance(failed.retryAfterMs);
-      const resumed = triggerGroup.node('retry-trigger').readStatus();
+      const resumed = turnChainValue(triggerGroup.node('retry-trigger').tick());
       assert.equal(resumed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
         'a later allowed runtime retry reconstructs the original groups');
       scheduler.advance(0);
