@@ -1084,4 +1084,196 @@ describe('postgres-wire-description-contract (Package 5 / 0.4.1)', () => {
       raw.close();
     }
   });
+
+  it('numeric unary expressions emit numeric OIDs and values across Simple Query, Describe(S), Describe(P), Execute, NULL, and empty results', async () => {
+    const raw = new RawPgWireClient(port);
+    await raw.connect();
+    try {
+      await raw.roundTrip([
+        buildQueryMsg(
+          `INSERT INTO ${TABLE_NAME} (id, label, amount, ratio, active, note, meta) ` +
+          'VALUES (3001, \'null_num\', NULL, NULL, NULL, NULL, NULL)',
+        ),
+      ]);
+
+      const expectedUnaryFields = [
+        ['neg_lit', PG_OID.INT4],
+        ['pos_lit', PG_OID.INT4],
+        ['neg_paren', PG_OID.INT4],
+        ['pos_paren', PG_OID.INT4],
+        ['min_int4', PG_OID.INT4],
+        ['neg_int8', PG_OID.INT8],
+        ['neg_float_lit', PG_OID.FLOAT8],
+        ['neg_float_paren', PG_OID.FLOAT8],
+        ['neg_col', PG_OID.INT8],
+        ['pos_col', PG_OID.INT8],
+        ['neg_ratio', PG_OID.FLOAT8],
+        ['bit_not', PG_OID.INT4],
+        ['neg_null', PG_OID.TEXT],
+        ['neg_bool', PG_OID.BOOL],
+      ];
+
+      const simpleUnarySql = (whereClause) =>
+        'SELECT -1 AS neg_lit, +42 AS pos_lit, -(1) AS neg_paren, +(42) AS pos_paren, ' +
+        '-(2147483648) AS min_int4, -(2147483649) AS neg_int8, ' +
+        '-3.5 AS neg_float_lit, -(3.5) AS neg_float_paren, ' +
+        '-amount AS neg_col, +amount AS pos_col, -ratio AS neg_ratio, ' +
+        `~id AS bit_not, -NULL AS neg_null, NOT active AS neg_bool FROM ${TABLE_NAME} ${whereClause}`;
+
+      // 1. Simple Query with populated numeric row (id = 2001)
+      const simpleHit = await raw.roundTrip([buildQueryMsg(simpleUnarySql('WHERE id = 2001'))]);
+      const simpleHitRd = parseRowDescription(
+        simpleHit.find((f) => f.type === PG_BACKEND_MSG.ROW_DESCRIPTION).payload,
+      );
+      assert.deepEqual(
+        simpleHitRd.fields.map((f) => [f.name, f.dataTypeID]),
+        expectedUnaryFields,
+      );
+      const simpleHitRow = parseDataRow(
+        simpleHit.find((f) => f.type === PG_BACKEND_MSG.DATA_ROW).payload,
+      );
+      assert.deepEqual(simpleHitRow.values, [
+        '-1', '42', '-1', '42', '-2147483648', '-2147483649',
+        '-3.5', '-3.5', '-200', '200', '-2.25', '-2002', null, 't',
+      ]);
+
+      // 2. Simple Query with NULL column inputs (id = 3001) preserves exact numeric OIDs
+      const simpleNull = await raw.roundTrip([buildQueryMsg(simpleUnarySql('WHERE id = 3001'))]);
+      const simpleNullRd = parseRowDescription(
+        simpleNull.find((f) => f.type === PG_BACKEND_MSG.ROW_DESCRIPTION).payload,
+      );
+      assert.deepEqual(
+        simpleNullRd.fields.map((f) => [f.name, f.dataTypeID]),
+        expectedUnaryFields,
+      );
+      const simpleNullRow = parseDataRow(
+        simpleNull.find((f) => f.type === PG_BACKEND_MSG.DATA_ROW).payload,
+      );
+      assert.deepEqual(simpleNullRow.values, [
+        '-1', '42', '-1', '42', '-2147483648', '-2147483649',
+        '-3.5', '-3.5', null, null, null, '-3002', null, null,
+      ]);
+
+      // 3. Simple Query with 0-row result (WHERE 1 = 0) still preserves numeric OIDs
+      const simpleEmpty = await raw.roundTrip([buildQueryMsg(simpleUnarySql('WHERE 1 = 0'))]);
+      const simpleEmptyRd = parseRowDescription(
+        simpleEmpty.find((f) => f.type === PG_BACKEND_MSG.ROW_DESCRIPTION).payload,
+      );
+      assert.deepEqual(
+        simpleEmptyRd.fields.map((f) => [f.name, f.dataTypeID]),
+        expectedUnaryFields,
+      );
+      assert.equal(simpleEmpty.filter((f) => f.type === PG_BACKEND_MSG.DATA_ROW).length, 0);
+
+      // 4. Extended Query: Parse -> Describe(S) -> Bind -> Describe(P) -> Execute
+      //    Covers unary casts, unary column parameters (WHERE amount > -$3), hit, NULL, and 0-row
+      const extSql =
+        'SELECT -(1) AS neg_paren, -(2147483648) AS min_int4, -(2147483649) AS neg_int8, ' +
+        '-(3.5) AS neg_float, -amount AS neg_col, +amount AS pos_col, ~id AS bit_not, ' +
+        '-NULL AS neg_null, NOT active AS neg_bool, ' +
+        '-CAST($1 AS INTEGER) AS neg_cast_int, -CAST($2 AS NUMERIC) AS neg_cast_num ' +
+        `FROM ${TABLE_NAME} WHERE id = $4 AND amount > -$3`;
+      const expectedExtFields = [
+        ['neg_paren', PG_OID.INT4],
+        ['min_int4', PG_OID.INT4],
+        ['neg_int8', PG_OID.INT8],
+        ['neg_float', PG_OID.FLOAT8],
+        ['neg_col', PG_OID.INT8],
+        ['pos_col', PG_OID.INT8],
+        ['bit_not', PG_OID.INT4],
+        ['neg_null', PG_OID.TEXT],
+        ['neg_bool', PG_OID.BOOL],
+        ['neg_cast_int', PG_OID.INT4],
+        ['neg_cast_num', PG_OID.NUMERIC],
+      ];
+
+      const extHit = await raw.roundTrip([
+        buildParseMsg('s_unary', extSql),
+        buildDescribeMsg(PG_DESCRIBE_TYPE.STATEMENT, 's_unary'),
+        buildBindMsg({portal: 'p_unary_hit', statement: 's_unary', params: ['7', '12.5', '-150', '2001']}),
+        buildDescribeMsg(PG_DESCRIBE_TYPE.PORTAL, 'p_unary_hit'),
+        buildExecuteMsg('p_unary_hit', 0),
+        buildSyncMsg(),
+      ]);
+      const extParamDesc = parseParameterDescription(
+        extHit.find((f) => f.type === PG_BACKEND_MSG.PARAMETER_DESCRIPTION).payload,
+      );
+      assert.deepEqual(extParamDesc, {
+        count: 4,
+        oids: [PG_OID.INT4, PG_OID.NUMERIC, PG_OID.INT8, PG_OID.INT4],
+      });
+      const extRds = extHit.filter((f) => f.type === PG_BACKEND_MSG.ROW_DESCRIPTION);
+      assert.equal(extRds.length, 2, 'Describe(S) and Describe(P) must emit RowDescription');
+      for (const rd of extRds) {
+        assert.deepEqual(
+          parseRowDescription(rd.payload).fields.map((f) => [f.name, f.dataTypeID]),
+          expectedExtFields,
+        );
+      }
+      const extHitRow = parseDataRow(
+        extHit.find((f) => f.type === PG_BACKEND_MSG.DATA_ROW).payload,
+      );
+      assert.deepEqual(extHitRow.values, [
+        '-1', '-2147483648', '-2147483649', '-3.5',
+        '-200', '200', '-2002', null, 't', '-7', '-12.5',
+      ]);
+
+      // 5. Extended Query empty result preserves RowDescription from Describe(P)
+      const extEmpty = await raw.roundTrip([
+        buildBindMsg({portal: 'p_unary_empty', statement: 's_unary', params: ['7', '12.5', '-150', '-9999']}),
+        buildDescribeMsg(PG_DESCRIBE_TYPE.PORTAL, 'p_unary_empty'),
+        buildExecuteMsg('p_unary_empty', 0),
+        buildSyncMsg(),
+      ]);
+      const extEmptyRd = parseRowDescription(
+        extEmpty.find((f) => f.type === PG_BACKEND_MSG.ROW_DESCRIPTION).payload,
+      );
+      assert.deepEqual(
+        extEmptyRd.fields.map((f) => [f.name, f.dataTypeID]),
+        expectedExtFields,
+      );
+      assert.equal(extEmpty.filter((f) => f.type === PG_BACKEND_MSG.DATA_ROW).length, 0);
+
+      // 6. Extended Query with NULL numeric column (id = 3001) and explicit paramTypes on -$1
+      const extNullSql =
+        'SELECT -amount AS neg_col, +amount AS pos_col, -ratio AS neg_ratio, ' +
+        `NOT active AS neg_bool, -$1 AS neg_typed_param FROM ${TABLE_NAME} WHERE id = $2`;
+      const extNull = await raw.roundTrip([
+        buildParseMsg('s_unary_null', extNullSql, [PG_OID.INT4, PG_OID.INT4]),
+        buildDescribeMsg(PG_DESCRIBE_TYPE.STATEMENT, 's_unary_null'),
+        buildBindMsg({portal: 'p_unary_null', statement: 's_unary_null', params: ['9', '3001']}),
+        buildDescribeMsg(PG_DESCRIBE_TYPE.PORTAL, 'p_unary_null'),
+        buildExecuteMsg('p_unary_null', 0),
+        buildSyncMsg(),
+      ]);
+      assert.deepEqual(
+        parseParameterDescription(
+          extNull.find((f) => f.type === PG_BACKEND_MSG.PARAMETER_DESCRIPTION).payload,
+        ),
+        {count: 2, oids: [PG_OID.INT4, PG_OID.INT4]},
+      );
+      const extNullRd = parseRowDescription(
+        extNull.find((f) => f.type === PG_BACKEND_MSG.ROW_DESCRIPTION).payload,
+      );
+      assert.deepEqual(
+        extNullRd.fields.map((f) => [f.name, f.dataTypeID]),
+        [
+          ['neg_col', PG_OID.INT8],
+          ['pos_col', PG_OID.INT8],
+          ['neg_ratio', PG_OID.FLOAT8],
+          ['neg_bool', PG_OID.BOOL],
+          ['neg_typed_param', PG_OID.INT4],
+        ],
+      );
+      const extNullRow = parseDataRow(
+        extNull.find((f) => f.type === PG_BACKEND_MSG.DATA_ROW).payload,
+      );
+      assert.deepEqual(extNullRow.values, [null, null, null, null, '-9']);
+    } finally {
+      await raw.roundTrip([
+        buildQueryMsg(`DELETE FROM ${TABLE_NAME} WHERE id = 3001`),
+      ]).catch(() => {});
+      raw.close();
+    }
+  });
 });
