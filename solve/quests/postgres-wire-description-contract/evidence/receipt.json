@@ -1,0 +1,62 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "postgres-wire-description-contract",
+  "status": "pass",
+  "generatedAt": "2026-11-22T15:10:00.000Z",
+  "candidate": "6ed3626a190e5f2794074ce2f3405f8ec0c7ee47",
+  "base": "ca95a9090961c8279eb704628d000f06a9f0629a",
+  "testFileDigests": {
+    "test/query/pg/postgres-wire-description-contract.test.js": "81f4710de77b1f0f897b977a1e085efab29e5c611ef459b9cc94d2e9a940f2ff",
+    "test/query/q10-postgres-compatibility-certification-matrix.test.js": "2aedc3e4d8d849a64a03366d70fe9c07d242abb05ac0fcca4a3a26a2517c7d40"
+  },
+  "receipts": [
+    {
+      "id": "live-driver-description-red-witness",
+      "passed": true,
+      "testFile": "test/query/pg/postgres-wire-description-contract.test.js",
+      "detail": "Pre-repair red witnesses captured on home-lab tv-dator: initial wire-description red witness at c9815adc7c58a5268bda5c6fe3106e9905241ca1 (/mnt/data/peter/projects/lagrange-takeover-20261121/lab/package5-red-witness/c9815adc7c58-mwrpuvwy-3430751-tv-dator.log, 6/6 subtests red) and Directive #3 numeric unary red witness at 6adc66d607d913a397debc9ddfc709dcf61504de (/mnt/data/peter/projects/lagrange-takeover-20261121/lab/package5-unary-red/6adc66d607d9-mwrv6sn7-3626837-tv-dator.log, failing with PG_OID.BOOL=16 on unary numeric expressions). Live node-pg, pg.Pool, psql, and RawPgWireClient pass on green candidate 6ed3626a190e5f2794074ce2f3405f8ec0c7ee47 (/mnt/data/peter/projects/lagrange-takeover-20261121/lab/package5-unary-green/6ed3626a190e-mwrvho1v-3638248-adam-laptop.log).",
+      "redWitnessCommits": [
+        "c9815adc7c58a5268bda5c6fe3106e9905241ca1",
+        "6adc66d607d913a397debc9ddfc709dcf61504de"
+      ],
+      "evidence": "/mnt/data/peter/projects/lagrange-takeover-20261121/lab/package5-unary-green/6ed3626a190e-mwrvho1v-3638248-adam-laptop.log"
+    },
+    {
+      "id": "statement-portal-parameter-result-description",
+      "passed": true,
+      "testFile": "test/query/pg/postgres-wire-description-contract.test.js",
+      "detail": "Describe('S') emits ParameterDescription ('t') + RowDescription ('T') or NoData ('n'), and Describe('P') emits RowDescription ('T') or NoData ('n') using bound result formats across SELECT, WITH CTEs, EXPLAIN DISTRIBUTED, unary signed parameters/casts, DML, and BEGIN/COMMIT/ROLLBACK.",
+      "evidence": "/mnt/data/peter/projects/lagrange-takeover-20261121/lab/package5-unary-green/6ed3626a190e-mwrvho1v-3638248-adam-laptop.log"
+    },
+    {
+      "id": "empty-null-format-oid-row-agreement",
+      "passed": true,
+      "testFile": "test/query/pg/postgres-wire-description-contract.test.js",
+      "detail": "Describe('S'), Describe('P'), Simple Query ('Q'), and Execute ('E') agree on column names, OIDs (INT4=23, INT8=20, FLOAT8=701, NUMERIC=1700, TEXT=25, BOOL=16, JSONB=3802), format codes, and DataRow encodings across 0-row SELECT *, SQL NULL columns, CASE/COUNT(*) aggregates, and numeric unary expressions (-1, +42, -(2147483648), -(2147483649), -(3.5), -amount, +amount, -ratio, ~id, -NULL, NOT active) without emitting duplicate RowDescription frames during extended Execute.",
+      "evidence": "/mnt/data/peter/projects/lagrange-takeover-20261121/lab/package5-unary-green/6ed3626a190e-mwrvho1v-3638248-adam-laptop.log"
+    },
+    {
+      "id": "describe-no-effects-and-portal-lifetime",
+      "passed": true,
+      "testFile": "test/query/pg/postgres-wire-description-contract.test.js",
+      "detail": "Parse/Bind/Describe on INSERT/UPDATE/DELETE and lifecycle CALL BINDING / SHOW SERVICES executes zero DML or guest/executor effects; Close('P'), Close('S'), isolated statement/portal namespaces in PgWireSession, and pipelined extended error fencing until Sync preserve protocol lifetimes (26000/34000).",
+      "evidence": "/mnt/data/peter/projects/lagrange-takeover-20261121/lab/package5-unary-green/6ed3626a190e-mwrvhs5o-3638248-tv-dator.log"
+    },
+    {
+      "id": "unsupported-refusal-and-matrix-preservation",
+      "passed": true,
+      "testFile": "test/query/q10-postgres-compatibility-certification-matrix.test.js",
+      "detail": "Bind count mismatch (08P01), binary parameter/result formats (0A000), invalid format codes (08P01), Execute maxRows>0 portal suspension (0A000), unsupported SET/BEGIN ISOLATION LEVEL SERIALIZABLE / REPEATABLE READ (0A000), VALUES, SHOW <guc>, non-distributed EXPLAIN, and DML RETURNING (0A000) fail closed; sealed Q10 postgres-compatibility-certification-matrix passes 11 assertions verbatim.",
+      "evidence": "/mnt/data/peter/projects/lagrange-takeover-20261121/lab/package5-unary-green/6ed3626a190e-mwrvhq3x-3638248-adams-gamla.log"
+    },
+    {
+      "id": "red-on-removal-and-independent-review",
+      "passed": true,
+      "testFile": "test/query/pg/postgres-wire-description-contract.test.js",
+      "detail": "Independent verification subagent:7bda0874-663a-42be-bfda-2e36206ec118 recorded APPROVE on final candidate 6ed3626a190e5f2794074ce2f3405f8ec0c7ee47. Home-lab fleet verified 10/10 files (705 assertions, 0 failures) at 6ed3626a190e5f2794074ce2f3405f8ec0c7ee47 across adam-laptop (4 files, 152 assertions), adams-gamla (3 files, 93 assertions), and tv-dator (3 files, 460 assertions), plus earlier 31-file 5,125-assertion sweep at c1b6bb3a08d140a8dbb72c59bb654285b91c80ba and 9-file 701-assertion sweep at c6ddedcc1ef85dfb995cbb5fa08ffa6b0118a4b4. Scoped complexity (<=12), cognitive complexity (<=20), guideline audits, eslint, file-size, and depcruise all exit 0.",
+      "verifier": "subagent:7bda0874-663a-42be-bfda-2e36206ec118",
+      "verdict": "approve",
+      "evidence": "/mnt/data/peter/projects/lagrange-takeover-20261121/lab/package5-unary-green/6ed3626a190e-mwrvho1v-3638248-adam-laptop.log"
+    }
+  ]
+}
