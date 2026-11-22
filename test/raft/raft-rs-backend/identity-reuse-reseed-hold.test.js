@@ -344,7 +344,7 @@ test('W1: a runtime replacement after the hold does not reopen the held ' +
         dbFile: other.dbFileOf('w1t-y'), groupId: other.partitionId,
         status: victim, from: ids['w1t-x'], term: String(victim.term)})));
       await turnChainValue(other.node('w1t-y').tick());
-      cluster.node('w1r-a').readStatus();
+      await turnChainValue(cluster.node('w1r-a').tick());
     });
     const reopened = other.coreEntries.slice(from).filter((entry) =>
       entry.operation === 'create_node' &&

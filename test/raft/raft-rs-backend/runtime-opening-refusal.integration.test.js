@@ -41,7 +41,8 @@ for (const kind of KINDS) {
             throw new globalThis.WebAssembly.RuntimeError('opening-refusal restoration trap');
           }
         });
-        shared = await fixture.port.readStatus();
+        await turnChainValue(fixture.port.tick());
+        shared = fixture.port.readStatus();
         assert.equal(restoreTraps, 1, 'the native restoration fault must establish shared backoff');
         assert.equal(shared.outcome, OUTCOME.HOST_FAILURE);
         assert.ok(shared.retryAfterMs > 0, 'a real shared retry window must engage');
@@ -63,7 +64,8 @@ for (const kind of KINDS) {
         groupId: `opening-${kind}`, localReplicaIdentity: service.replicaId, joiningReplicaIdentity: JOINER,
       }).outcome, RESERVATION.NOT_MANAGED, 'failed startup leaves no membership reservation owner');
       if (shared !== null) fixture.clock.advance(shared.retryAfterMs);
-      const recovered = await fixture.port.readStatus();
+      await turnChainValue(fixture.port.tick());
+      const recovered = fixture.port.readStatus();
       assert.equal(recovered.outcome, OUTCOME.CORE_OK);
       assert.equal(recovered.runtimeGeneration,
         fixture.initial.runtimeGeneration + (backoff ? 2 : 1));
@@ -112,7 +114,7 @@ for (const phase of ['unhealthy', 'replacing']) {
             setCoreFaultInjector(null); attempt();
           }
         });
-        assert.equal((await fixture.port.readStatus()).outcome, OUTCOME.CORE_OK);
+        assert.equal((await turnChainValue(fixture.port.tick())).outcome, OUTCOME.CORE_OK);
       }
       assert.equal(attempts, 1, 'the intended constructor window engaged once');
       const reserved = raftRsMembershipAdministration.reservePeerIdentity({
@@ -129,7 +131,8 @@ for (const phase of ['unhealthy', 'replacing']) {
         assert.equal(reserved.outcome, RESERVATION.NOT_MANAGED,
           'no failed constructor may publish a membership reservation owner');
       }
-      assert.equal((await fixture.port.readStatus()).outcome, OUTCOME.CORE_OK);
+      await turnChainValue(fixture.port.tick());
+      assert.equal(fixture.port.readStatus().outcome, OUTCOME.CORE_OK);
     });
   }
 }
@@ -202,7 +205,8 @@ for (const kind of KINDS) {
           throw new globalThis.WebAssembly.RuntimeError('cleanup refusal retry-window trap');
         }
       });
-      const shared = await fixture.port.readStatus();
+      await turnChainValue(fixture.port.tick());
+      const shared = fixture.port.readStatus();
       assert.equal(restorationTraps, 1);
       assert.equal(shared.outcome, OUTCOME.HOST_FAILURE);
       assert.ok(shared.retryAfterMs > 0);
@@ -245,7 +249,8 @@ for (const kind of KINDS) {
         // Even after runtime healing, unfinished local cleanup cannot admit a
         // second opening that would overwrite its retained connection.
         fixture.clock.advance(shared.retryAfterMs);
-        assert.equal((await fixture.port.readStatus()).outcome, OUTCOME.CORE_OK);
+        await turnChainValue(fixture.port.tick());
+        assert.equal(fixture.port.readStatus().outcome, OUTCOME.CORE_OK);
         await assert.rejects(service.initialize(), (error) => error === failure,
           'pending cleanup refuses initialize with the retained failure');
         assert.equal(service.db, captured);

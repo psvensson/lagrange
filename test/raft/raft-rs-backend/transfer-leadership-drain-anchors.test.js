@@ -45,7 +45,7 @@ import {
   bindingEnumerations,
   craft,
 } from './transfer-leadership-drain-oracle-harness.js';
-import {namedSuccessor} from './transfer-leadership-driver.js';
+import {namedSuccessor, settleDelivered} from './transfer-leadership-driver.js';
 import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
 const {CORE_OK} = RAFT_OPERATION_OUTCOME;
@@ -124,7 +124,7 @@ async function refuseFrom(run, senders) {
       msgType: heartbeatResponse});
   }
   run.driver.stepUndrained(A);
-  run.driver.port(A).readStatus();
+  await settleDelivered(run.driver.port(A), run.driver.cluster.partitionId);
   await run.settle();
 }
 

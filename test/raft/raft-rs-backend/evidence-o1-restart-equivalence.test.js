@@ -49,6 +49,7 @@ import {
   trapSharedCore,
 } from './evidence-o1-model.js';
 import {durableLog} from './committed-membership-oracles.js';
+import {settleDelivered} from './transfer-leadership-driver.js';
 import {
   RAFT_MEMBERSHIP_OPERATION,
   RAFT_OPERATION_OUTCOME,
@@ -177,7 +178,7 @@ function applyRestartClass(cluster, restartClass, stamp) {
     assert.equal(trapped.outcome, RAFT_OPERATION_OUTCOME.CORE_FATAL,
       `setup: the shared core trapped (${JSON.stringify(trapped)})`);
     for (const replicaId of liveReplicas(cluster)) {
-      cluster.node(replicaId).readStatus();
+      settleDelivered(cluster.node(replicaId), PARTITION_ID);
     }
     return {replica: cluster.replica(TARGET)};
   }

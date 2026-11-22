@@ -28,7 +28,7 @@
   "censusSize": 2731,
   "digest": "fnv1a32-395bccc0",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-e52e741f",
+  "observationDigest": "fnv1a32-7f4f3351",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -17922,8 +17922,10 @@
     },
     "test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js": {
       "files": [
+        "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",
@@ -17935,8 +17937,10 @@
     },
     "test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js": {
       "files": [
+        "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-peer-identity.js",

@@ -22,6 +22,7 @@ import {setImmediate as nextEventLoopTurn} from 'node:timers/promises';
 
 import {
   RAFT_EVENT,
+  RAFT_LEADERSHIP_TRANSFER_SUCCESSOR,
   RAFT_MEMBERSHIP_TRANSITION_STAGE,
   RAFT_OPERATION,
   RAFT_OPERATION_OUTCOME,
@@ -504,12 +505,23 @@ async function electWithoutStatusRead(cluster, clocks, leaderId, replicaIds) {
       quiesceWithClocks(cluster, clocks, replicaIds);
       return;
     }
+    const sittingLeader = replicaIds.find((id) =>
+      id !== leaderId && cluster.node(id)[OBSERVE]().role === 'leader');
+    if (sittingLeader !== undefined) {
+      await turnChainValue(cluster.node(sittingLeader).transferLeadership({
+        successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
+        replicaIdentity: leaderId,
+      }));
+      quiesceWithClocks(cluster, clocks, replicaIds);
+      continue;
+    }
     for (const id of replicaIds) {
       await turnChainValue(cluster.node(id).tick());
       drainInboxThroughPort(cluster, clocks.get(id), id);
     }
-    if (cluster.node(leaderId)[OBSERVE]().role !== 'leader') {
+    if (round % 10 === 0 && cluster.node(leaderId)[OBSERVE]().role !== 'leader') {
       await turnChainValue(cluster.node(leaderId).campaign());
+      quiesceWithClocks(cluster, clocks, replicaIds);
     }
   }
   assert.fail(`setup: ${leaderId} did not become settled leader without readStatus()`);
