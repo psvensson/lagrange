@@ -204,6 +204,64 @@ describe('P4 Live-Query Remote CDC Owned Lifecycle and Coverage Witnesses', () =
     clearFixtureSingletons();
   });
 
+  async function setupTwoNodeWiring({
+    routerA,
+    routerB,
+    executeQuery,
+    leaderNodes = ['node-b'],
+  }) {
+    ({leader: leaderB} = await startLeader({
+      tableName: 'live_orders',
+      schema: TABLE_SCHEMA,
+      nodeId: 'node-b',
+      replicaId: 'p1',
+      transport: routerB,
+    }, 'p1'));
+    if (leaderNodes.includes('node-c')) {
+      ({leader: leaderC} = await startLeader({
+        tableName: 'live_orders',
+        schema: TABLE_SCHEMA,
+        nodeId: 'node-c',
+        replicaId: 'p1',
+        transport: routers.get('node-c'),
+      }, 'p1'));
+    }
+    let currentPartitions = [{
+      partition_id: 'p1',
+      table_name: 'live_orders',
+      partition_key_start: null,
+      partition_key_end: null,
+      partition_key_type: 'INTEGER',
+      leader_node_id: 'node-b',
+    }];
+    let currentReplicas = [{partition_id: 'p1', node_id: 'node-b'}];
+    const systemCache = createTopologyCache(() => currentPartitions, () => currentReplicas);
+    const parserEngine = new SQLQueryEngine();
+    const sqlEngine = {
+      callCount: 0,
+      parse: (sql) => parserEngine.parse(sql),
+      executeQuery: async (sql, params = []) => {
+        sqlEngine.callCount += 1;
+        if (executeQuery) return executeQuery(sql, params, oracleDb);
+        const rows = oracleDb.prepare(sql).all(...params);
+        return {rows, results: rows, count: rows.length};
+      },
+    };
+    wiringA = createLiveQueryStartupWiring({
+      nodeId: 'node-a',
+      systemTableCache: systemCache,
+      sqlQueryEngine: sqlEngine,
+      partitionServicesProvider: () => new Map(),
+      messageRouter: routerA,
+    });
+    const switchLeader = (nextLeaderId) => {
+      currentPartitions = [{...currentPartitions[0], leader_node_id: nextLeaderId}];
+      currentReplicas = [{partition_id: 'p1', node_id: nextLeaderId}];
+      systemCache.emitCacheChange(TABLES.PARTITIONS, 'UPDATE', currentPartitions[0]);
+    };
+    return {systemCache, sqlEngine, switchLeader};
+  }
+
   it('P4.3: older batch ACK cannot clear newer overflow debt created during the send await', async () => {
     routers = await createBridgedRouters(['node-a', 'node-b']);
     const routerA = routers.get('node-a');
@@ -236,41 +294,7 @@ describe('P4 Live-Query Remote CDC Owned Lifecycle and Coverage Witnesses', () =
       return origDeliverB(targetAddress, message, opts);
     };
 
-    ({leader: leaderB} = await startLeader({
-      tableName: 'live_orders',
-      schema: TABLE_SCHEMA,
-      nodeId: 'node-b',
-      replicaId: 'p1',
-      transport: routerB,
-    }, 'p1'));
-
-    const partitions = [{
-      partition_id: 'p1',
-      table_name: 'live_orders',
-      partition_key_start: null,
-      partition_key_end: null,
-      partition_key_type: 'INTEGER',
-      leader_node_id: 'node-b',
-    }];
-    const systemCache = createTopologyCache(
-      () => partitions,
-      () => [{partition_id: 'p1', node_id: 'node-b'}],
-    );
-    const parserEngine = new SQLQueryEngine();
-    const sqlEngine = {
-      parse: (sql) => parserEngine.parse(sql),
-      executeQuery: async (sql, params = []) => {
-        const rows = oracleDb.prepare(sql).all(...params);
-        return {rows, results: rows, count: rows.length};
-      },
-    };
-    wiringA = createLiveQueryStartupWiring({
-      nodeId: 'node-a',
-      systemTableCache: systemCache,
-      sqlQueryEngine: sqlEngine,
-      partitionServicesProvider: () => new Map(),
-      messageRouter: routerA,
-    });
+    await setupTwoNodeWiring({routerA, routerB});
 
     const client = createMockClient('overflow-during-await-client');
     const reg = await wiringA.liveQueryManager.registerLiveQuery(SELECT_OPEN_SQL, client);
@@ -339,41 +363,7 @@ describe('P4 Live-Query Remote CDC Owned Lifecycle and Coverage Witnesses', () =
       return origDeliverB(targetAddress, message, opts);
     };
 
-    ({leader: leaderB} = await startLeader({
-      tableName: 'live_orders',
-      schema: TABLE_SCHEMA,
-      nodeId: 'node-b',
-      replicaId: 'p1',
-      transport: routerB,
-    }, 'p1'));
-
-    const partitions = [{
-      partition_id: 'p1',
-      table_name: 'live_orders',
-      partition_key_start: null,
-      partition_key_end: null,
-      partition_key_type: 'INTEGER',
-      leader_node_id: 'node-b',
-    }];
-    const systemCache = createTopologyCache(
-      () => partitions,
-      () => [{partition_id: 'p1', node_id: 'node-b'}],
-    );
-    const parserEngine = new SQLQueryEngine();
-    const sqlEngine = {
-      parse: (sql) => parserEngine.parse(sql),
-      executeQuery: async (sql, params = []) => {
-        const rows = oracleDb.prepare(sql).all(...params);
-        return {rows, results: rows, count: rows.length};
-      },
-    };
-    wiringA = createLiveQueryStartupWiring({
-      nodeId: 'node-a',
-      systemTableCache: systemCache,
-      sqlQueryEngine: sqlEngine,
-      partitionServicesProvider: () => new Map(),
-      messageRouter: routerA,
-    });
+    await setupTwoNodeWiring({routerA, routerB});
 
     const client = createMockClient('empty-queue-resync-client');
     const reg = await wiringA.liveQueryManager.registerLiveQuery(SELECT_OPEN_SQL, client);
@@ -454,35 +444,15 @@ describe('P4 Live-Query Remote CDC Owned Lifecycle and Coverage Witnesses', () =
       return origDeliverA(targetAddress, message, opts);
     };
 
-    ({leader: leaderB} = await startLeader({
-      tableName: 'live_orders',
-      schema: TABLE_SCHEMA,
-      nodeId: 'node-b',
-      replicaId: 'p1',
-      transport: routerB,
-    }, 'p1'));
-
-    const partitions = [{
-      partition_id: 'p1',
-      table_name: 'live_orders',
-      partition_key_start: null,
-      partition_key_end: null,
-      partition_key_type: 'INTEGER',
-      leader_node_id: 'node-b',
-    }];
-    const systemCache = createTopologyCache(
-      () => partitions,
-      () => [{partition_id: 'p1', node_id: 'node-b'}],
-    );
-    const parserEngine = new SQLQueryEngine();
     let holdPreHandshakeRead = false;
     let releasePreHandshakeRead = null;
     const preHandshakeGate = new Promise((resolve) => {
       releasePreHandshakeRead = resolve;
     });
-    const sqlEngine = {
-      parse: (sql) => parserEngine.parse(sql),
-      executeQuery: async (sql, params = []) => {
+    await setupTwoNodeWiring({
+      routerA,
+      routerB,
+      executeQuery: async (sql, params, db) => {
         if (holdPreHandshakeRead) {
           holdPreHandshakeRead = false;
           // Capture stale empty pre-write snapshot before yielding!
@@ -490,16 +460,9 @@ describe('P4 Live-Query Remote CDC Owned Lifecycle and Coverage Witnesses', () =
           await preHandshakeGate;
           return {rows: staleRows, results: staleRows, count: 0};
         }
-        const rows = oracleDb.prepare(sql).all(...params);
+        const rows = db.prepare(sql).all(...params);
         return {rows, results: rows, count: rows.length};
       },
-    };
-    wiringA = createLiveQueryStartupWiring({
-      nodeId: 'node-a',
-      systemTableCache: systemCache,
-      sqlQueryEngine: sqlEngine,
-      partitionServicesProvider: () => new Map(),
-      messageRouter: routerA,
     });
 
     const client = createMockClient('coalesced-catchup-client');
@@ -541,7 +504,6 @@ describe('P4 Live-Query Remote CDC Owned Lifecycle and Coverage Witnesses', () =
     routers = await createBridgedRouters(['node-a', 'node-b', 'node-c']);
     const routerA = routers.get('node-a');
     const routerB = routers.get('node-b');
-    const routerC = routers.get('node-c');
 
     let notifyOldBRegistered = null;
     let releaseOldBResponse = null;
@@ -567,45 +529,10 @@ describe('P4 Live-Query Remote CDC Owned Lifecycle and Coverage Witnesses', () =
       return origDeliverA(targetAddress, message, opts);
     };
 
-    ({leader: leaderB} = await startLeader({
-      tableName: 'live_orders',
-      schema: TABLE_SCHEMA,
-      nodeId: 'node-b',
-      replicaId: 'p1',
-      transport: routerB,
-    }, 'p1'));
-    ({leader: leaderC} = await startLeader({
-      tableName: 'live_orders',
-      schema: TABLE_SCHEMA,
-      nodeId: 'node-c',
-      replicaId: 'p1',
-      transport: routerC,
-    }, 'p1'));
-
-    let currentPartitions = [{
-      partition_id: 'p1',
-      table_name: 'live_orders',
-      partition_key_start: null,
-      partition_key_end: null,
-      partition_key_type: 'INTEGER',
-      leader_node_id: 'node-b',
-    }];
-    let currentReplicas = [{partition_id: 'p1', node_id: 'node-b'}];
-    const systemCache = createTopologyCache(() => currentPartitions, () => currentReplicas);
-    const parserEngine = new SQLQueryEngine();
-    const sqlEngine = {
-      parse: (sql) => parserEngine.parse(sql),
-      executeQuery: async (sql, params = []) => {
-        const rows = oracleDb.prepare(sql).all(...params);
-        return {rows, results: rows, count: rows.length};
-      },
-    };
-    wiringA = createLiveQueryStartupWiring({
-      nodeId: 'node-a',
-      systemTableCache: systemCache,
-      sqlQueryEngine: sqlEngine,
-      partitionServicesProvider: () => new Map(),
-      messageRouter: routerA,
+    const {switchLeader} = await setupTwoNodeWiring({
+      routerA,
+      routerB,
+      leaderNodes: ['node-b', 'node-c'],
     });
 
     const client = createMockClient('replacement-binding-client');
@@ -614,9 +541,7 @@ describe('P4 Live-Query Remote CDC Owned Lifecycle and Coverage Witnesses', () =
     assert.equal(leaderB.cdcSubscribers.size, 1, 'old binding registered on node-b');
 
     // Fail over p1 to node-c while node-b's subscribe response is still held!
-    currentPartitions = [{...currentPartitions[0], leader_node_id: 'node-c'}];
-    currentReplicas = [{partition_id: 'p1', node_id: 'node-c'}];
-    systemCache.emitCacheChange(TABLES.PARTITIONS, 'UPDATE', currentPartitions[0]);
+    switchLeader('node-c');
 
     const replacementAttached = await waitForMatch(() => leaderC.cdcSubscribers.size === 1);
     assert.ok(replacementAttached, 'replacement binding attached on node-c');
@@ -788,7 +713,6 @@ describe('P4 Live-Query Remote CDC Owned Lifecycle and Coverage Witnesses', () =
     routers = await createBridgedRouters(['node-a', 'node-b', 'node-c', 'node-d']);
     const routerA = routers.get('node-a');
     const routerB = routers.get('node-b');
-    const routerC = routers.get('node-c');
     const routerD = routers.get('node-d');
 
     let notifyNodeCRegistered = null;
@@ -815,20 +739,11 @@ describe('P4 Live-Query Remote CDC Owned Lifecycle and Coverage Witnesses', () =
       return origDeliverA(targetAddress, message, opts);
     };
 
-    ({leader: leaderB} = await startLeader({
-      tableName: 'live_orders',
-      schema: TABLE_SCHEMA,
-      nodeId: 'node-b',
-      replicaId: 'p1',
-      transport: routerB,
-    }, 'p1'));
-    ({leader: leaderC} = await startLeader({
-      tableName: 'live_orders',
-      schema: TABLE_SCHEMA,
-      nodeId: 'node-c',
-      replicaId: 'p1',
-      transport: routerC,
-    }, 'p1'));
+    const {switchLeader} = await setupTwoNodeWiring({
+      routerA,
+      routerB,
+      leaderNodes: ['node-b', 'node-c'],
+    });
     const {leader: leaderD} = await startLeader({
       tableName: 'live_orders',
       schema: TABLE_SCHEMA,
@@ -838,32 +753,6 @@ describe('P4 Live-Query Remote CDC Owned Lifecycle and Coverage Witnesses', () =
     }, 'p1');
 
     try {
-      let currentPartitions = [{
-        partition_id: 'p1',
-        table_name: 'live_orders',
-        partition_key_start: null,
-        partition_key_end: null,
-        partition_key_type: 'INTEGER',
-        leader_node_id: 'node-b',
-      }];
-      let currentReplicas = [{partition_id: 'p1', node_id: 'node-b'}];
-      const systemCache = createTopologyCache(() => currentPartitions, () => currentReplicas);
-      const parserEngine = new SQLQueryEngine();
-      const sqlEngine = {
-        parse: (sql) => parserEngine.parse(sql),
-        executeQuery: async (sql, params = []) => {
-          const rows = oracleDb.prepare(sql).all(...params);
-          return {rows, results: rows, count: rows.length};
-        },
-      };
-      wiringA = createLiveQueryStartupWiring({
-        nodeId: 'node-a',
-        systemTableCache: systemCache,
-        sqlQueryEngine: sqlEngine,
-        partitionServicesProvider: () => new Map(),
-        messageRouter: routerA,
-      });
-
       const client = createMockClient('nested-failover-client');
       const reg = await wiringA.liveQueryManager.registerLiveQuery(SELECT_OPEN_SQL, client);
       const group = wiringA.liveQueryManager.findGroupByQueryId(reg.queryId);
@@ -871,17 +760,13 @@ describe('P4 Live-Query Remote CDC Owned Lifecycle and Coverage Witnesses', () =
       assert.equal(group.subscribedPartitions.has('p1'), true);
 
       // Failover 1 (node-b -> node-c): hold node-c subscribe response after remote registration.
-      currentPartitions = [{...currentPartitions[0], leader_node_id: 'node-c'}];
-      currentReplicas = [{partition_id: 'p1', node_id: 'node-c'}];
-      systemCache.emitCacheChange(TABLES.PARTITIONS, 'UPDATE', currentPartitions[0]);
+      switchLeader('node-c');
       await nodeCRegistered;
       assert.equal(leaderB.cdcSubscribers.size, 0, 'node-b retired on failover 1');
       assert.equal(leaderC.cdcSubscribers.size, 1, 'node-c registered during awaited failover 1');
 
       // Failover 2 (node-c -> node-d) completes while failover 1's node-c response is still held!
-      currentPartitions = [{...currentPartitions[0], leader_node_id: 'node-d'}];
-      currentReplicas = [{partition_id: 'p1', node_id: 'node-d'}];
-      systemCache.emitCacheChange(TABLES.PARTITIONS, 'UPDATE', currentPartitions[0]);
+      switchLeader('node-d');
 
       const attachedD = await waitForMatch(
         () => leaderD.cdcSubscribers.size === 1 && group.subscribedPartitions.has('p1'),
@@ -972,56 +857,27 @@ describe('P4 Live-Query Remote CDC Owned Lifecycle and Coverage Witnesses', () =
       return origDeliverB(targetAddress, message, opts);
     };
 
-    ({leader: leaderB} = await startLeader({
-      tableName: 'live_orders',
-      schema: TABLE_SCHEMA,
-      nodeId: 'node-b',
-      replicaId: 'p1',
-      transport: routerB,
-    }, 'p1'));
-
-    const partitions = [{
-      partition_id: 'p1',
-      table_name: 'live_orders',
-      partition_key_start: null,
-      partition_key_end: null,
-      partition_key_type: 'INTEGER',
-      leader_node_id: 'node-b',
-    }];
-    const systemCache = createTopologyCache(
-      () => partitions,
-      () => [{partition_id: 'p1', node_id: 'node-b'}],
-    );
-    const parserEngine = new SQLQueryEngine();
     let holdEpoch1CatchupRead = false;
     let epoch1ReadStarted = false;
     let releaseEpoch1Read = null;
     const epoch1ReadGate = new Promise((resolve) => {
       releaseEpoch1Read = resolve;
     });
-    const sqlEngine = {
-      callCount: 0,
-      parse: (sql) => parserEngine.parse(sql),
-      executeQuery: async (sql, params = []) => {
-        sqlEngine.callCount += 1;
+    const {sqlEngine} = await setupTwoNodeWiring({
+      routerA,
+      routerB,
+      executeQuery: async (sql, params, db) => {
         if (holdEpoch1CatchupRead) {
           holdEpoch1CatchupRead = false;
           // Snapshot ONLY pre-overflow Row 1 before yielding.
-          const staleEpoch1Rows = oracleDb.prepare(sql).all(...params);
+          const staleEpoch1Rows = db.prepare(sql).all(...params);
           epoch1ReadStarted = true;
           await epoch1ReadGate;
           return {rows: staleEpoch1Rows, results: staleEpoch1Rows, count: staleEpoch1Rows.length};
         }
-        const rows = oracleDb.prepare(sql).all(...params);
+        const rows = db.prepare(sql).all(...params);
         return {rows, results: rows, count: rows.length};
       },
-    };
-    wiringA = createLiveQueryStartupWiring({
-      nodeId: 'node-a',
-      systemTableCache: systemCache,
-      sqlQueryEngine: sqlEngine,
-      partitionServicesProvider: () => new Map(),
-      messageRouter: routerA,
     });
 
     const client = createMockClient('held-refresh-overflow-client');
@@ -1084,6 +940,253 @@ describe('P4 Live-Query Remote CDC Owned Lifecycle and Coverage Witnesses', () =
     assert.equal(sqlEngine.callCount, settledCalls, 'zero idle polling after epoch-2 settles');
 
     wiringA.liveQueryManager.unregisterLiveQuery(reg.queryId, client.id);
+  });
+
+  it('Finding 3B: older held catch-up snapshot cannot erase already-acknowledged ordinary CDC Row 2 while idle', async () => {
+    routers = await createBridgedRouters(['node-a', 'node-b']);
+    const routerA = routers.get('node-a');
+    const routerB = routers.get('node-b');
+
+    let failSubscribe = true;
+    const origDeliverA = routerA.deliver.bind(routerA);
+    routerA.deliver = async (targetAddress, message, opts = {}) => {
+      if (failSubscribe && message?.type === 'LIVE_QUERY_CDC_SUBSCRIBE') {
+        return buildDeliveryEnvelope({
+          acknowledged: false,
+          deferRetry: true,
+          noHandler: false,
+          retryAfterMs: 25,
+          error: 'defer initial subscribe',
+        });
+      }
+      return origDeliverA(targetAddress, message, opts);
+    };
+
+    let holdCatchupSnapshot = false;
+    let catchupSnapshotHeld = false;
+    let releaseCatchupSnapshot = null;
+    const catchupSnapshotGate = new Promise((resolve) => {
+      releaseCatchupSnapshot = resolve;
+    });
+    const {sqlEngine} = await setupTwoNodeWiring({
+      routerA,
+      routerB,
+      executeQuery: async (sql, params, db) => {
+        if (holdCatchupSnapshot) {
+          holdCatchupSnapshot = false;
+          const staleRows = db.prepare(sql).all(...params);
+          catchupSnapshotHeld = true;
+          await catchupSnapshotGate;
+          return {rows: staleRows, results: staleRows, count: staleRows.length};
+        }
+        const rows = db.prepare(sql).all(...params);
+        return {rows, results: rows, count: rows.length};
+      },
+    });
+
+    const client = createMockClient('held-snapshot-ordinary-cdc-client');
+    const reg = await wiringA.liveQueryManager.registerLiveQuery(SELECT_OPEN_SQL, client);
+    const group = wiringA.liveQueryManager.findGroupByQueryId(reg.queryId);
+    assert.deepEqual(client.messages[0].rows, [], 'initial snapshot empty while subscribe deferred');
+
+    // 1-2. Commit Row 1, let subscribe succeed, and hold catch-up snapshot containing ONLY Row 1.
+    oracleDb.prepare(INSERT_ORDER_SQL).run(1, 'Alice', 'OPEN', 100, 's1');
+    applyCommitted(
+      leaderB,
+      {...committedQueryOf('b3-1', INSERT_ORDER_SQL), params: [1, 'Alice', 'OPEN', 100, 's1']},
+    );
+    holdCatchupSnapshot = true;
+    failSubscribe = false;
+
+    const held = await waitForMatch(() => catchupSnapshotHeld && group.refreshInFlight);
+    assert.ok(held, 'catch-up refresh captured Row 1 and is held before applying');
+    const frontierBeforeRow2 = group.partitionFrontiers.get('p1') ?? 0;
+
+    // 3-4. Commit and deliver ordinary Row 2 while catch-up refresh remains held.
+    oracleDb.prepare(INSERT_ORDER_SQL).run(2, 'Bob', 'OPEN', 200, 's2');
+    applyCommitted(
+      leaderB,
+      {...committedQueryOf('b3-2', INSERT_ORDER_SQL), params: [2, 'Bob', 'OPEN', 200, 's2']},
+    );
+    const row2Acked = await waitForMatch(() => {
+      const diag = leaderB.getCDCSubscriptionDiagnostics().subscriptions[0];
+      return client.observedRows.has(2) &&
+        Number.isFinite(diag?.lastDeliveredSequenceNumber) &&
+        diag.lastDeliveredSequenceNumber >= 1 &&
+        (group.partitionFrontiers.get('p1') ?? 0) > frontierBeforeRow2;
+    });
+    assert.ok(row2Acked, 'ordinary CDC Row 2 delivered, acknowledged, and advanced frontier');
+    const remoteEntry = Array.from(leaderB.remoteLiveQueryCdcSubscribers.values())[0];
+    assert.equal(remoteEntry.overflowResyncRequired, false, 'Row 2 was ordinary CDC, not overflow');
+    const frontierAfterRow2 = group.partitionFrontiers.get('p1');
+
+    // 5-6. Release older held snapshot (Row 1 only) and leave the system idle.
+    releaseCatchupSnapshot();
+    const converged = await waitForMatch(
+      () => !group.refreshInFlight && client.observedRows.size === 2 && group.resultSet.size === 2,
+      1200,
+    );
+    assert.ok(
+      converged,
+      'older held catch-up snapshot must not erase already-acknowledged ordinary CDC Row 2 while idle',
+    );
+    const expectedRows = oracleDb.prepare(`${SELECT_OPEN_SQL} ORDER BY id`).all();
+    const observedSorted = Array.from(client.observedRows.values()).sort((a, b) => a.id - b.id);
+    assert.deepEqual(observedSorted, expectedRows, 'client-visible rows converge to {Row 1, Row 2}');
+    const resetMessages = client.messages.filter((m) => m.type === 'reset');
+    assert.ok(resetMessages.length >= 1, 'covering reset snapshot broadcast to client');
+    const latestResetRows = [...resetMessages.at(-1).rows].sort((a, b) => a.id - b.id);
+    assert.deepEqual(latestResetRows, expectedRows, 'latest client reset contains {Row 1, Row 2}');
+    assert.deepEqual(
+      Array.from(group.resultSet.keys()).sort((a, b) => a - b),
+      [1, 2],
+      'stored group.resultSet preserves both Row 1 and Row 2',
+    );
+    assert.equal(
+      group.partitionFrontiers.get('p1'),
+      frontierAfterRow2,
+      'partition frontier remains aligned at Row 2',
+    );
+
+    const settledCalls = sqlEngine.callCount;
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    assert.equal(sqlEngine.callCount, settledCalls, 'zero idle polling after convergence');
+
+    wiringA.liveQueryManager.unregisterLiveQuery(reg.queryId, client.id);
+  });
+
+  it('Finding 3F-1: uncertain subscribe failure retains cleanup custody so cancel before retry unsubscribes remote partition', async () => {
+    routers = await createBridgedRouters(['node-a', 'node-b']);
+    const routerA = routers.get('node-a');
+    const routerB = routers.get('node-b');
+
+    let loseFirstSubscribeReply = true;
+    let unsubscribeDeliveries = 0;
+    const origDeliverA = routerA.deliver.bind(routerA);
+    routerA.deliver = async (targetAddress, message, opts = {}) => {
+      if (message?.type === 'LIVE_QUERY_CDC_UNSUBSCRIBE') {
+        unsubscribeDeliveries += 1;
+        return origDeliverA(targetAddress, message, opts);
+      }
+      if (loseFirstSubscribeReply && message?.type === 'LIVE_QUERY_CDC_SUBSCRIBE') {
+        loseFirstSubscribeReply = false;
+        await origDeliverA(targetAddress, message, opts);
+        throw Object.assign(new Error('subscribe response lost'), {retryAfterMs: 400});
+      }
+      return origDeliverA(targetAddress, message, opts);
+    };
+
+    await setupTwoNodeWiring({routerA, routerB});
+
+    const client = createMockClient('uncertain-subscribe-cancel-client');
+    const reg = await wiringA.liveQueryManager.registerLiveQuery(SELECT_OPEN_SQL, client);
+    const group = wiringA.liveQueryManager.findGroupByQueryId(reg.queryId);
+
+    assert.equal(group.subscribedPartitions.has('p1'), false, 'client remains CONNECTING after lost reply');
+    assert.equal(leaderB.cdcSubscribers.size, 1, 'remote partition actually registered the subscriber');
+    assert.equal(leaderB.remoteLiveQueryCdcSubscribers.size, 1);
+
+    // Cancel BEFORE the 400ms subscribe retry runs.
+    wiringA.liveQueryManager.unregisterLiveQuery(reg.queryId, client.id);
+
+    const cleaned = await waitForMatch(
+      () => leaderB.cdcSubscribers.size === 0 && leaderB.remoteLiveQueryCdcSubscribers.size === 0,
+      1000,
+    );
+    assert.ok(
+      cleaned,
+      'cancel after uncertain subscribe failure must send remote unsubscribe and clear orphan',
+    );
+    assert.ok(unsubscribeDeliveries >= 1, 'LIVE_QUERY_CDC_UNSUBSCRIBE dispatched for uncertain binding');
+  });
+
+  it('Finding 3F-2: refused or deferred remote unsubscribe retains RETIRING retry obligation until confirmed while preserving replacement', async () => {
+    routers = await createBridgedRouters(['node-a', 'node-b', 'node-c']);
+    const routerA = routers.get('node-a');
+    const routerB = routers.get('node-b');
+
+    let nodeBUnsubAttempts = 0;
+    let nodeCUnsubAttempts = 0;
+    const origDeliverA = routerA.deliver.bind(routerA);
+    routerA.deliver = async (targetAddress, message, opts = {}) => {
+      if (message?.type === 'LIVE_QUERY_CDC_UNSUBSCRIBE') {
+        if (targetAddress.startsWith('node-b/')) {
+          nodeBUnsubAttempts += 1;
+          if (nodeBUnsubAttempts === 1) {
+            return buildDeliveryEnvelope({
+              acknowledged: false,
+              deferRetry: true,
+              noHandler: false,
+              retryAfterMs: 30,
+              error: 'unsubscribe transport deferred',
+            });
+          }
+          if (nodeBUnsubAttempts === 2) {
+            return buildDeliveryEnvelope(
+              {acknowledged: true},
+              {success: false, unsubscribed: false, retryAfterMs: 30, error: 'partition refused'},
+            );
+          }
+        } else if (targetAddress.startsWith('node-c/')) {
+          nodeCUnsubAttempts += 1;
+          if (nodeCUnsubAttempts === 1) {
+            throw Object.assign(new Error('unsubscribe response timeout'), {retryAfterMs: 30});
+          }
+        }
+      }
+      return origDeliverA(targetAddress, message, opts);
+    };
+
+    const {switchLeader} = await setupTwoNodeWiring({
+      routerA,
+      routerB,
+      leaderNodes: ['node-b', 'node-c'],
+    });
+
+    const client = createMockClient('unsubscribe-retry-client');
+    const reg = await wiringA.liveQueryManager.registerLiveQuery(SELECT_OPEN_SQL, client);
+    assert.equal(leaderB.cdcSubscribers.size, 1, 'subscribed initially on node-b');
+
+    // Failover p1 from node-b to node-c while node-b unsubscribe fails twice (defer + refusal).
+    switchLeader('node-c');
+
+    const replacementLive = await waitForMatch(() => leaderC.cdcSubscribers.size === 1);
+    assert.ok(replacementLive, 'replacement subscription attached on node-c');
+
+    oracleDb.prepare(INSERT_ORDER_SQL).run(1, 'Alice', 'OPEN', 100, 's1');
+    applyCommitted(
+      leaderC,
+      {...committedQueryOf('f3-1', INSERT_ORDER_SQL), params: [1, 'Alice', 'OPEN', 100, 's1']},
+    );
+    const row1Delivered = await waitForMatch(() => client.observedRows.has(1));
+    assert.ok(row1Delivered, 'replacement on node-c delivers writes while node-b cleanup retries');
+
+    const oldCleaned = await waitForMatch(
+      () => leaderB.cdcSubscribers.size === 0 && leaderB.remoteLiveQueryCdcSubscribers.size === 0,
+      1500,
+    );
+    assert.ok(oldCleaned, 'retiring node-b unsubscribe retried until confirmed removal');
+    assert.ok(nodeBUnsubAttempts >= 3, 'retried past both transport deferral and handler refusal');
+    assert.equal(leaderC.cdcSubscribers.size, 1, 'replacement node-c subscription preserved intact');
+
+    oracleDb.prepare(INSERT_ORDER_SQL).run(2, 'Bob', 'OPEN', 200, 's2');
+    applyCommitted(
+      leaderC,
+      {...committedQueryOf('f3-2', INSERT_ORDER_SQL), params: [2, 'Bob', 'OPEN', 200, 's2']},
+    );
+    const row2Delivered = await waitForMatch(() => client.observedRows.size === 2);
+    assert.ok(row2Delivered, 'replacement node-c subscription still delivers after old cleanup settles');
+
+    // Direct unregister when unsubscribe throws once must also retry while idle until confirmed.
+    wiringA.liveQueryManager.unregisterLiveQuery(reg.queryId, client.id);
+    assert.equal(wiringA.liveQueryManager.queryGroups.size, 0, 'local group removed');
+
+    const finalCleaned = await waitForMatch(
+      () => leaderC.cdcSubscribers.size === 0 && leaderC.remoteLiveQueryCdcSubscribers.size === 0,
+      1500,
+    );
+    assert.ok(finalCleaned, 'retiring node-c unsubscribe retried after throw until confirmed');
+    assert.ok(nodeCUnsubAttempts >= 2, 'node-c unsubscribe retried past initial throw');
   });
 
   it('P5.3: bounded exhaustive BFS exploration over transitionRemoteCdcSubscription preserves safety, custody, and convergence', () => {

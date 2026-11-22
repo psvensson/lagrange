@@ -930,6 +930,9 @@ describe('Unit J6: Multi-node remote producer CDC delivery and leader failover',
       parse: (sql) => parserEngine.parse(sql),
       executeQuery: async (sql, params = []) => {
         sqlEngine.callCount += 1;
+        if (options.executeQuery) {
+          return options.executeQuery(sql, params, oracleDb, sqlEngine);
+        }
         if (sqlEngine.failNextCount > 0) {
           sqlEngine.failNextCount -= 1;
           sqlEngine.failedCount += 1;
@@ -1362,5 +1365,115 @@ describe('Unit J6: Multi-node remote producer CDC delivery and leader failover',
     assert.ok(retiredRetry, 'late retry subscribe completion retires remote subscriber without CDC');
     assert.equal(wiringA.liveQueryManager.queryGroups.size, 0, 'local group retired on retry cancel');
     assert.ok(unsubscribeDeliveries >= 2, 'remote unsubscribe delivered for cancelled retry');
+  });
+
+  it('Schedule 3B-3: older held catch-up snapshot cannot erase already-acknowledged ordinary CDC Row 2 while idle', async () => {
+    let failSubscribe = true;
+    let holdCatchupSnapshot = false;
+    let catchupSnapshotHeld = false;
+    let releaseCatchupSnapshot = null;
+    const catchupSnapshotGate = new Promise((resolve) => {
+      releaseCatchupSnapshot = resolve;
+    });
+
+    const {sqlEngine, client, observedRows} = await createRemotePairHarness(
+      'held-snapshot-ordinary-row2-client',
+      {
+        configureRouters: ({routerA}) => {
+          const origDeliverA = routerA.deliver.bind(routerA);
+          routerA.deliver = async (targetAddress, message, opts = {}) => {
+            if (failSubscribe && message?.type === 'LIVE_QUERY_CDC_SUBSCRIBE') {
+              return buildDeliveryEnvelope({
+                acknowledged: false,
+                deferRetry: true,
+                noHandler: false,
+                retryAfterMs: 25,
+                error: 'initial subscribe deferred',
+              });
+            }
+            return origDeliverA(targetAddress, message, opts);
+          };
+        },
+        executeQuery: async (sql, params, db) => {
+          if (holdCatchupSnapshot) {
+            holdCatchupSnapshot = false;
+            const staleRows = db.prepare(sql).all(...params);
+            catchupSnapshotHeld = true;
+            await catchupSnapshotGate;
+            return {rows: staleRows, results: staleRows, count: staleRows.length};
+          }
+          const rows = db.prepare(sql).all(...params);
+          return {rows, results: rows, count: rows.length};
+        },
+      },
+    );
+
+    const sql = 'SELECT id, customer, total FROM live_orders WHERE status = \'OPEN\'';
+    const insertSql =
+      'INSERT INTO live_orders (id, customer, status, total, secret_note) VALUES (?, ?, ?, ?, ?)';
+    const reg = await wiringA.liveQueryManager.registerLiveQuery(sql, client);
+    const group = wiringA.liveQueryManager.findGroupByQueryId(reg.queryId);
+
+    oracleDb.prepare(insertSql).run(1, 'Alice', 'OPEN', 100, 's1');
+    applyCommitted(
+      leaderB,
+      {...committedQueryOf('j6-3b3-1', insertSql), params: [1, 'Alice', 'OPEN', 100, 's1']},
+    );
+    holdCatchupSnapshot = true;
+    failSubscribe = false;
+
+    const held = await waitForMessageMatch(() => catchupSnapshotHeld && group.refreshInFlight);
+    assert.ok(held, 'catch-up refresh captured Row 1 and is held before applying');
+    const frontierBeforeRow2 = group.partitionFrontiers.get('p1') ?? 0;
+
+    oracleDb.prepare(insertSql).run(2, 'Bob', 'OPEN', 200, 's2');
+    applyCommitted(
+      leaderB,
+      {...committedQueryOf('j6-3b3-2', insertSql), params: [2, 'Bob', 'OPEN', 200, 's2']},
+    );
+    const row2Delivered = await waitForMessageMatch(() => {
+      const diag = leaderB.getCDCSubscriptionDiagnostics().subscriptions[0];
+      return observedRows.has(2) &&
+        Number.isFinite(diag?.lastDeliveredSequenceNumber) &&
+        diag.lastDeliveredSequenceNumber >= 1 &&
+        (group.partitionFrontiers.get('p1') ?? 0) > frontierBeforeRow2;
+    });
+    assert.ok(row2Delivered, 'ordinary CDC Row 2 delivered, acknowledged, and advanced frontier');
+    const frontierAfterRow2 = group.partitionFrontiers.get('p1');
+
+    releaseCatchupSnapshot();
+    const converged = await waitForMessageMatch(
+      () => !group.refreshInFlight && observedRows.size === 2 && group.resultSet.size === 2,
+      1200,
+    );
+    assert.ok(
+      converged,
+      'older held catch-up snapshot must not erase already-acknowledged ordinary CDC Row 2 while idle',
+    );
+    const expectedRows = oracleDb.prepare(`${sql} ORDER BY id`).all();
+    assert.deepEqual(
+      Array.from(observedRows.values()).sort((a, b) => a.id - b.id),
+      expectedRows,
+      'client-visible rows converge to {Row 1, Row 2}',
+    );
+    const resets = client.messages.filter((m) => m.type === 'reset');
+    assert.ok(resets.length >= 1, 'covering reset broadcast to client');
+    assert.deepEqual(
+      [...resets.at(-1).rows].sort((a, b) => a.id - b.id),
+      expectedRows,
+      'latest client reset contains {Row 1, Row 2}',
+    );
+    assert.deepEqual(
+      Array.from(group.resultSet.keys()).sort((a, b) => a - b),
+      [1, 2],
+      'stored group.resultSet retains both Row 1 and Row 2',
+    );
+    assert.equal(group.partitionFrontiers.get('p1'), frontierAfterRow2, 'partition frontier stays at Row 2');
+
+    const settledCalls = sqlEngine.callCount;
+    await new Promise((r) => setTimeout(r, 80));
+    assert.equal(sqlEngine.callCount, settledCalls, 'zero idle polling after convergence');
+
+    wiringA.liveQueryManager.unregisterLiveQuery(reg.queryId, client.id);
   });
 });
