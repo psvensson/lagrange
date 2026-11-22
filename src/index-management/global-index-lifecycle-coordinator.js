@@ -142,7 +142,7 @@ function planMultiRowUpdate(maintenance, context) {
   return {operations, enlistedIndexPartitions: Array.from(enlistedSet).sort()};
 }
 
-function resolveWriteOperations(maintenance, context) {
+export function planGlobalIndexWriteOperations(maintenance, context) {
   const beforeCount = Array.isArray(context.beforeRows) ? context.beforeRows.length : 0;
   const afterCount = Array.isArray(context.afterRows) ? context.afterRows.length : 0;
   const opType = inferWriteType(context.statementType, beforeCount, afterCount);
@@ -712,7 +712,7 @@ export class GlobalIndexLifecycleCoordinator {
     }
 
     const activeIndexes = this.writeMaintenance.getActiveIndexesForTable(tableName);
-    const plan = resolveWriteOperations(this.writeMaintenance, effectiveContext);
+    const plan = planGlobalIndexWriteOperations(this.writeMaintenance, effectiveContext);
     const participants = Array.from(new Set([basePartitionId, ...plan.enlistedIndexPartitions]));
     const participantFanout = participants.length;
 

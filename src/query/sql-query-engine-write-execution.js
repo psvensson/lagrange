@@ -23,6 +23,9 @@ import {releaseTransactionReservations} from
 import {
   resolveWriteExecutionPlanWithAuthorityRefresh,
 } from './sql-query-engine-metadata-authority-refresh.js';
+import {
+  executeEngineWriteWithGlobalIndexes,
+} from './sql-query-engine-global-index-integration.js';
 
 
 const {
@@ -645,12 +648,14 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
           ),
         }),
         (executionSessionId, transactionIdentity) =>
-          this.distributedWriteCoordinator.executePlan(
+          executeEngineWriteWithGlobalIndexes(this, {
+            statement,
             writePlan,
             params,
-            {...writeExecutionOptions, sessionId: executionSessionId,
-              transactionIdentity},
-          ),
+            writeExecutionOptions,
+            executionSessionId,
+            transactionIdentity,
+          }),
       );
     } catch (error) {
       await this.rollbackOwnedWriteTransaction(writeTransaction);

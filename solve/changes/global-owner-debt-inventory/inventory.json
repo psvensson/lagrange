@@ -7,7 +7,7 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "7d7c7c0db6f2234cd080441f771c1149e65ae62a55159422d4692d5edf4e69d4"
+        "sha256": "d178592187d0820e13b24e4e59ec6725c05a11639bf626078007712feab28893"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -23,8 +23,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3831821,
-        "sha256": "f31d1fa7177ee7c817e2a486e3f1bf6ee5ddac02d0fc16dd0dee05547579acc3"
+        "bytes": 3832689,
+        "sha256": "d85686a2e2d0e50a6c68f89d1faea0d5199b09c76528fe6e59d67e51686c6cd5"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -33,7 +33,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "46959f74e67ab24adba34421ea3496ad6002b32f74af444fabab215f42dc9eef"
+        "sha256": "d9f0a3f693622b8d8d238a95e7512fade67ecb1bb662054b1dc90470825b2b02"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -65,7 +65,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "4ed75a3c8e070181b8674bb67e63244946bc820dc39950f56ea5e2cb2d74ca2a"
+    "inputDigest": "97615fe9e7762d8d121c46e826db816a2a46fbc3adcb26b9f73aa8a4a1c5c074"
   },
   "reconciliation": {
     "complexity": {
@@ -73,11 +73,11 @@
         "path": "test-output/analysis/complexity-src-test.json",
         "identityKind": "logical-json",
         "ignoredFields": [],
-        "sha256": "7d7c7c0db6f2234cd080441f771c1149e65ae62a55159422d4692d5edf4e69d4"
+        "sha256": "d178592187d0820e13b24e4e59ec6725c05a11639bf626078007712feab28893"
       },
-      "declaredCount": 1740,
-      "observedCount": 1740,
-      "assignedCount": 1740
+      "declaredCount": 1739,
+      "observedCount": 1739,
+      "assignedCount": 1739
     },
     "cognitive": {
       "identity": {
@@ -117,7 +117,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "46959f74e67ab24adba34421ea3496ad6002b32f74af444fabab215f42dc9eef"
+          "sha256": "d9f0a3f693622b8d8d238a95e7512fade67ecb1bb662054b1dc90470825b2b02"
         },
         "cloneGroups": 35,
         "duplicatedLines": 1109,
@@ -173,29 +173,29 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3831821,
-        "sha256": "f31d1fa7177ee7c817e2a486e3f1bf6ee5ddac02d0fc16dd0dee05547579acc3"
+        "bytes": 3832689,
+        "sha256": "d85686a2e2d0e50a6c68f89d1faea0d5199b09c76528fe6e59d67e51686c6cd5"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 7871,
         "sha256": "c74ac7531e8a59a48fcee584fa7767c7d6188e6489f4104eb404ded8e1400372"
       },
-      "sourceDigest": "ac8965f4b5381adeba45475a94f522b7a1406464ed9f51fc4749ed15a5fdc6f6",
-      "moduleCount": 6442,
-      "edgeCount": 38692,
+      "sourceDigest": "f0f4d235af2f8ab29b37e09c9a073303e103a2faebe36269046cbfbfd7c93d9a",
+      "moduleCount": 6443,
+      "edgeCount": 38703,
       "unresolvedCount": 39
     }
   },
   "assignment": {
-    "sourceSignalCount": 2413,
-    "assignedSignalCount": 2413,
-    "uniqueAssignmentCount": 2413,
-    "digest": "46794def7918392502c3766a281fc15b964028f55fce10a43143749b35986f20"
+    "sourceSignalCount": 2412,
+    "assignedSignalCount": 2412,
+    "uniqueAssignmentCount": 2412,
+    "digest": "d8df26da540046c81ab24de6ef5f6239111dc3507f754c5e94289b948c9d78e9"
   },
   "signalCounts": {
     "cognitive": 149,
-    "complexity": 1740,
+    "complexity": 1739,
     "duplication": 448,
     "fileSize": 36,
     "lintExclusion": 40
@@ -609,8 +609,8 @@
         "src/query"
       ],
       "fileCount": 14,
-      "signalCount": 38,
-      "complexity": 32,
+      "signalCount": 37,
+      "complexity": 31,
       "cognitive": 6,
       "oversizedFiles": 0,
       "duplicatedLines": 0,
@@ -618,14 +618,14 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 154,
-      "importOut": 98,
-      "score": 176,
+      "importOut": 99,
+      "score": 172,
       "topPaths": [
         "src/query/sql-query-engine-provision-target-methods.js",
         "src/query/sql-query-engine-provisioning-admission-methods.js",
         "src/query/sql-query-engine-bootstrap-routing-overlay.js",
         "src/query/sql-query-engine-write-failure-methods.js",
-        "src/query/sql-query-engine-select-execution.js"
+        "src/query/sql-query-engine.js"
       ]
     },
     {
@@ -673,7 +673,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 120,
+      "importIn": 121,
       "importOut": 121,
       "score": 160,
       "topPaths": [
@@ -3352,31 +3352,36 @@
           "src/query/sql-query-engine-bootstrap-routing-overlay.js",
           "src/query/sql-query-engine-provision-target-methods.js",
           "src/query/sql-query-engine-provisioning-admission-methods.js",
-          "src/query/sql-query-engine-select-execution.js",
           "src/query/sql-query-engine-write-failure-methods.js",
-          "test/partition/peer-admission-unparsable-address.test.js",
-          "test/query/coordinator-interim-refusals.test.js",
-          "test/rebalancer/placement-owner-authority-provisioner.test.js"
+          "src/query/sql-query-engine.js",
+          "test/bootstrap/fresh-join-registration-runtime-replacement.integration.test.js",
+          "test/bootstrap/fresh-join-via-non-seed-node.integration.test.js",
+          "test/bootstrap/node-bootstrap-consistency.property.test.js",
+          "test/bootstrap/node-host-identity-registration.integration.test.js",
+          "test/bootstrap/node-joining-service-final-sql-runtime-handoff.test.js",
+          "test/bootstrap/shared/startup-sql-runtime-handoff.test.js",
+          "test/cdc/current-epoch-propagation.integration.test.js",
+          "test/cli/q8-resumable-bulk-data-load.test.js"
         ],
         "ownerAreas": [
           "scripts/run-owner-complexity-sql-query-engine-owner-sql-query-planning-execution-scenarios.js",
           "solve/quests",
           "src/query",
-          "test/partition",
-          "test/query",
-          "test/rebalancer"
+          "test/bootstrap",
+          "test/cdc",
+          "test/cli"
         ],
         "engagementPaths": [
           "src/query/sql-query-engine-provision-target-methods.js",
           "src/query/sql-query-engine-provisioning-admission-methods.js",
           "src/query/sql-query-engine-bootstrap-routing-overlay.js",
           "src/query/sql-query-engine-write-failure-methods.js",
-          "src/query/sql-query-engine-select-execution.js"
+          "src/query/sql-query-engine.js"
         ],
         "engagementTargets": [],
         "baseline": {
-          "score": 176,
-          "complexity": 32,
+          "score": 172,
+          "complexity": 31,
           "cognitive": 6,
           "oversizedFiles": 0,
           "duplicatedLines": 0,

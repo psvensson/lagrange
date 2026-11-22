@@ -15,6 +15,9 @@ const LOCAL_STR_GTE = '>=';
 const LOCAL_STR_BETWEEN = 'BETWEEN';
 const LOCAL_STR_AND = 'AND';
 const LOCAL_STR_PARAM = 'param';
+const LOCAL_STR_PARAMETER = 'parameter';
+const LOCAL_STR_IS_NULL = 'IS NULL';
+const LOCAL_STR_BETWEEN_TYPE = 'between';
 const LOCAL_STR_STAR = '*';
 const LOCAL_STR_COLUMN = 'column';
 
@@ -67,21 +70,42 @@ function getColumnNodeName(colNode) {
 
 function resolvePredicateNodeValue(valNode, params) {
   if (!valNode) return undefined;
-  if (valNode.type === LOCAL_STR_PARAM && typeof valNode.index === 'number') {
+  const isParam = valNode.type === LOCAL_STR_PARAM || valNode.type === LOCAL_STR_PARAMETER;
+  if (isParam && typeof valNode.index === 'number') {
     return params ? params[valNode.index] : undefined;
   }
   return valNode.value;
 }
 
+function recordBetweenCondition(node, params, conditions) {
+  const colName = getColumnNodeName(node.expression);
+  if (!colName) return;
+  conditions.set(colName.toLowerCase(), {
+    column: colName,
+    operator: LOCAL_STR_BETWEEN,
+    value: [
+      resolvePredicateNodeValue(node.low, params),
+      resolvePredicateNodeValue(node.high, params),
+    ],
+    node,
+  });
+}
+
 function recordComparisonCondition(node, op, params, conditions) {
+  if (node.type === LOCAL_STR_BETWEEN_TYPE || (op === LOCAL_STR_BETWEEN && node.expression)) {
+    recordBetweenCondition(node, params, conditions);
+    return;
+  }
   const {colNode, valNode} = resolveColAndValNodes(node);
   const colName = getColumnNodeName(colNode);
   if (!colName) return;
 
+  const normalizedOp = op === LOCAL_STR_IS_NULL ? LOCAL_STR_IS : op;
+  const value = op === LOCAL_STR_IS_NULL ? null : resolvePredicateNodeValue(valNode, params);
   conditions.set(colName.toLowerCase(), {
     column: colName,
-    operator: op,
-    value: resolvePredicateNodeValue(valNode, params),
+    operator: normalizedOp,
+    value,
     node,
   });
 }
@@ -132,7 +156,7 @@ export function extractPredicateConditions(whereClause, params = []) {
       return;
     }
 
-    if (EQUALITY_OPERATORS.has(op) || RANGE_OPERATORS.has(op)) {
+    if (EQUALITY_OPERATORS.has(op) || RANGE_OPERATORS.has(op) || op === LOCAL_STR_IS_NULL) {
       recordComparisonCondition(node, op, params, conditions);
     }
   }
