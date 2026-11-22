@@ -82,6 +82,7 @@ function applyReplicaLeadership(replica, role) {
 function clearReplicaLeaderUpdateState(replica) {
   replica.pendingLeaderNodeUpdate = null;
   replica.persistedLeaderNodeId = null;
+  replica.publishedLeaderTerm = null;
   if (replica.leaderNodeUpdateRetryTimer) {
     clearTimeout(replica.leaderNodeUpdateRetryTimer);
     replica.leaderNodeUpdateRetryTimer = null;

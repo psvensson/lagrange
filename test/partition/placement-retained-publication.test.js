@@ -436,9 +436,10 @@ test('V1 a route-owed wait without a binding is a named, visible state: one log 
     }
   }, {initialEndpoints: 'leader-only'}));
 
-// T2: custody attests the receiver's ledger term, but the binding carries no
-// term. A tenure that ends by term only (same node, process incarnation,
-// replica and address) changes nothing any publication carries.
+// T2: custody attests the receiver's ledger term, and the PARTITIONS leader
+// publication carries leader_term into the sender's binding. A tenure that ends
+// by term only (same node, process incarnation, replica and address) publishes
+// the new term, voiding stale delegated custody so the sender rejoins.
 test('T2 a receiver tenure renewed by term only, with no caller, row or route change: the delegated sender resumes', () =>
   withRetainedLeadershipPair(async ({a, b}) => {
     attachRealPublication([a, b]);
@@ -460,12 +461,14 @@ test('T2 a receiver tenure renewed by term only, with no caller, row or route ch
       for (const node of [a, b]) node.leader.controllablePort.term += 1;
       a.leader.controllablePort.setRole(role);
       await settleTicks();
+      if (role === RAFT_ROLE.FOLLOWER) {
+        assert.equal(a.coordinator.repository.retainedPlacementRepairs.size, 0,
+          'A released the custody of its ended tenure');
+      }
     }
     assert.equal(a.leader.isLeader, true);
     assert.ok(a.leader.raft.readStatus().term > custodyTerm,
       'the custody tenure ended by term only');
-    assert.equal(a.coordinator.repository.retainedPlacementRepairs.size, 0,
-      'A released the custody of its ended tenure');
     await resumeFixtureParticipantAdmission(a.leader);
     await idle(a, b);
     await advanceContinuation(clock, [sender, a.coordinator.repository],

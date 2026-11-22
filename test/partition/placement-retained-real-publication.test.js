@@ -68,8 +68,12 @@ test('real leadership publication through CDC rebinds the retained owner A-B-A; 
     // Producer conformance: what the real publishers emitted for these raft
     // transitions is what the fixture primitives admit for routing.
     const leaders = emitted.filter((change) => change.tableName === 'partitions' &&
-      change.data.partition_id === LEDGER_PARTITION).map((change) => change.data.leader_node_id);
-    assert.deepEqual(leaders.slice(-2), [b.leader.nodeId, a.leader.nodeId]);
+      change.data.partition_id === LEDGER_PARTITION).map((change) => ({
+      nodeId: change.data.leader_node_id, term: change.data.leader_term}));
+    assert.deepEqual(leaders.slice(-2).map((row) => row.nodeId),
+      [b.leader.nodeId, a.leader.nodeId]);
+    assert.ok(leaders.slice(-2).every((row) => Number.isSafeInteger(row.term) && row.term > 0),
+      'the real PARTITIONS leadership publication carries the leader raft term');
     assert.equal(emitted.filter((change) => change.tableName === 'services' &&
       change.data.raft_role === RAFT_ROLE.LEADER).length, 0,
     'a partition SERVICES row never publishes leader');

@@ -329,6 +329,11 @@ function createRoleMutationHelper(owner) {
   });
 }
 
+function resolvePublishedLeaderTerm(owner) {
+  const term = owner.leadershipTenure?.term;
+  return Number.isSafeInteger(term) && term > 0 ? term : null;
+}
+
 function createLeaderNodeMutationHelper(owner) {
   return new AuthoritativeRowMutationHelper({
     // Mutation stamps and retry deadlines belong to the hosting node. A
@@ -353,15 +358,23 @@ function createLeaderNodeMutationHelper(owner) {
       }
       return whereClause;
     },
-    buildUpdateData: (leaderNodeId, updatedAt) => ({
-      [COLUMN.LEADER_NODE_ID]: leaderNodeId,
-      [COLUMN.UPDATED_AT]: updatedAt,
-    }),
+    buildUpdateData: (leaderNodeId, updatedAt) => {
+      const leaderTerm = resolvePublishedLeaderTerm(owner);
+      return {
+        [COLUMN.LEADER_NODE_ID]: leaderNodeId,
+        ...(leaderTerm !== null ? {[COLUMN.LEADER_TERM]: leaderTerm} : {}),
+        [COLUMN.UPDATED_AT]: updatedAt,
+      };
+    },
     buildUpdateOptions: (leaderNodeId, _updateData, context) =>
       buildLeaderNodeMutationDeliveryOptions(owner, context, leaderNodeId),
-    buildExpectedCacheFields: (leaderNodeId) => ({
-      [COLUMN.LEADER_NODE_ID]: leaderNodeId,
-    }),
+    buildExpectedCacheFields: (leaderNodeId) => {
+      const leaderTerm = resolvePublishedLeaderTerm(owner);
+      return {
+        [COLUMN.LEADER_NODE_ID]: leaderNodeId,
+        ...(leaderTerm !== null ? {[COLUMN.LEADER_TERM]: leaderTerm} : {}),
+      };
+    },
     readRowFromCache: (systemTableCache) =>
       systemTableCache?.get?.(TABLES.PARTITIONS, owner.partitionId) || null,
     readValueFromCache: (systemTableCache) => {
@@ -369,6 +382,10 @@ function createLeaderNodeMutationHelper(owner) {
         TABLES.PARTITIONS,
         owner.partitionId,
       );
+      const leaderTerm = resolvePublishedLeaderTerm(owner);
+      if (leaderTerm !== null && cached?.[COLUMN.LEADER_TERM] !== leaderTerm) {
+        return null;
+      }
       return cached?.[COLUMN.LEADER_NODE_ID] || null;
     },
     prepareFlush: () => ({

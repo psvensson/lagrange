@@ -62,9 +62,12 @@ function attachRealPublication(nodes) {
 }
 
 async function publishedLeader(nodes, next) {
+  const expectedTerm = next.leader.raft.readStatus().term;
   for (let turn = 0; turn < PUBLICATION_TURNS; turn += 1) {
-    if (nodes.every((node) => node.coordinator.systemTableCache.get('partitions',
-      LEDGER_PARTITION)?.leader_node_id === next.leader.nodeId)) return;
+    if (nodes.every((node) => {
+      const row = node.coordinator.systemTableCache.get('partitions', LEDGER_PARTITION);
+      return row?.leader_node_id === next.leader.nodeId && row.leader_term === expectedTerm;
+    })) return;
     await settleTicks();
   }
   assert.fail(`the real publisher's leader ${next.leader.nodeId} reaches every cache through CDC`);
@@ -125,7 +128,8 @@ async function withRetainedLeadershipPair(measure, {initialEndpoints} = {}) {
     }
     function publishLeader(next) {
       publishRow('partitions', {partition_id: next.leader.partitionId,
-        leader_node_id: next.leader.nodeId});
+        leader_node_id: next.leader.nodeId,
+        leader_term: next.leader.raft.readStatus().term});
       for (const receiver of nodes) {
         assert.equal(receiver.coordinator.systemTableCache.get('partitions',
           next.leader.partitionId).leader_node_id, next.leader.nodeId);

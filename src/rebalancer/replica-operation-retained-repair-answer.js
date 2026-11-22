@@ -71,7 +71,7 @@ function custodyMatches(custody, attempt, binding) {
   }
   const expected = {entryId: attempt.entry.entryId, operationId: attempt.operation.operationId,
     createdAt: attempt.operation.createdAt, bodyText: JSON.stringify(attempt.entry.body),
-    nodeId: binding.nodeId, replicaId: binding.replicaId,
+    nodeId: binding.nodeId, replicaId: binding.replicaId, ledgerTerm: binding.leaderTerm,
     nodeBootIncarnation: binding.nodeBootIncarnation, replicaCreatedAt: binding.replicaCreatedAt};
   return Object.keys(expected).every((key) => custody[key] === expected[key]) &&
     positivePosition(custody.ledgerTerm);

@@ -176,7 +176,8 @@ function remoteSender(world, nodeId = NODE.A) {
       `the sender cache admits the published ${table} row`);
   };
   publish('partitions', {partition_id: world.leader.partitionId,
-    leader_node_id: world.leader.nodeId});
+    leader_node_id: world.leader.nodeId,
+    leader_term: world.leader.raft.readStatus().term});
   publish('services', endpoint);
   assert.equal(coordinator.resolveRemoteLedgerLeader()?.replicaId, world.leader.replicaId,
     'the sender resolves the canonical ledger route');

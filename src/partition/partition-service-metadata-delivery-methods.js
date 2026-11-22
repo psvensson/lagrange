@@ -36,6 +36,14 @@ class PartitionServiceMetadataDeliveryMethods {
    * @private
    */
   queueLeaderNodeUpdate(leaderNodeId, raftTerm) {
+    if (
+      Number.isSafeInteger(raftTerm) &&
+      raftTerm > 0 &&
+      this.publishedLeaderTerm !== raftTerm
+    ) {
+      this.publishedLeaderTerm = raftTerm;
+      this.persistedLeaderNodeId = null;
+    }
     this.seedLocalCanonicalLeaderNodeId(leaderNodeId, raftTerm);
     this.leaderNodeMutationHelper.queue(leaderNodeId);
   }
