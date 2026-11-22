@@ -1,17 +1,25 @@
 ---
 audience: agent
 documentClass: planning
-status: proposed
+status: adopted
 ---
 
-# Implementation safety and prevention of recurring bugs: epic proposal
+# Implementation safety and prevention of recurring bugs
 
-**Status: proposed, 22 November 2026.** This is a proposed work programme within
-[operation integrity](../operation-integrity-and-reliable-formation.md).
-It makes the recent prevention recommendations concrete without registering a
-new Solver epic, changing a sealed predicate or assigning another runtime writer.
+**Adopted on 22 November 2026** following the user's request to verify, finalize
+and merge [PR #236](https://github.com/psvensson/lagrange/pull/236). This is the
+implementation-safety work programme within
+[operation integrity](../operation-integrity-and-reliable-formation.md), using
+the existing runtime owners, Quest workflow and integration sequence.
 The [agent start note](implementation-safety-start-here.md) explains how to fit it
 to current work.
+
+The six packages are approved scope for the existing owners. Each concrete
+assignment still records its actual candidate, writable interaction, genuine
+probe and applicable authority under the current workflow. Adoption creates no
+new Solver epic, writer, sealed predicate or runtime acceptance claim. This
+documentation unit adopts the plan and provides the handoff; runtime execution
+stays with the current implementing agents.
 
 ## 1. Objective and completion claim
 
@@ -19,7 +27,7 @@ Make the supported way of implementing an owner interaction carry its authority,
 identity, ordering and lifetime obligations, so fewer correctness conditions
 depend on a caller remembering a convention.
 
-For every recurring bug class in this proposal, demonstrate:
+For every recurring bug class in this plan, demonstrate:
 
 1. One formerly plausible invalid implementation or construction that the new
    boundary rejects before integration.
@@ -34,7 +42,7 @@ capability. Temporal mistakes require both a smaller implementation and adverse
 schedules. This does not claim protection against arbitrary trusted-host
 JavaScript or prove every distributed execution.
 
-All six packages below are required for this proposed scope. Their numbering is
+All six packages below are required for this adopted scope. Their numbering is
 a dependency map, not permission to drop later work. An already-satisfied item
 may receive an evidence-backed no-change disposition through its existing owner.
 An explicit scope decision must identify any obligation left outstanding.
@@ -45,16 +53,17 @@ The source analysis is pinned to runtime candidate
 [6a292acfd07c7384286296ef0c2693907b7f0e39](https://github.com/psvensson/lagrange/commit/6a292acfd07c7384286296ef0c2693907b7f0e39).
 Main was independently resolved to
 [223a9e30c0238b6ace2fa05ec703c5d6f75761e4](https://github.com/psvensson/lagrange/commit/223a9e30c0238b6ace2fa05ec703c5d6f75761e4),
-the base of this documentation change. These refs were checked on 22 November
-2026; they are a dated checkpoint, not a live assignment table.
+the base of this documentation change. These refs and the owner branches were
+rechecked during final verification on 22 November 2026 and were unchanged.
+They are a dated checkpoint, not a live assignment table.
 
 Rule-set revision 5 applies. Loaded owners include AGENTS, rules/router, Quest
 workflow, documentation lifecycle, delegation/review guidance, the alpha plan,
-ES6 owner safety and the core-convergence activation boundary. This proposal
+ES6 owner safety and the core-convergence activation boundary. This plan
 contains source-derived findings and design recommendations, not new runtime
 executions or proof of a failure on a later candidate.
 
-| Concern | Existing authority | Contribution of this proposal |
+| Concern | Existing authority | Contribution of this plan |
 | --- | --- | --- |
 | Current candidate, assignments and integration | Parent epic's integration owner and current summary | A bounded prevention programme; no second queue or replacement branch table |
 | Public feature completion | [Approved twelve-package alpha plan](usable-alpha-completion.md) and feature specifications | Improve delivery of packages 5, 6, 7 and 9, with proof/evidence support across the plan; retain all twelve packages |
@@ -112,7 +121,7 @@ and [remote sender](https://github.com/psvensson/lagrange/blob/6a292acfd07c73842
 **Output:** a bounded assignment in the existing active work record.
 
 Resolve actual main/candidate/owner refs and local WIP, outstanding review
-conditions, original run results and pending jobs. For each proposed item record
+conditions, original run results and pending jobs. For each scoped item record
 one disposition: already implemented with applicable proof; implementation
 present with proof/composition outstanding; demonstrated remaining gap; or
 unclassified pending a named discriminating observation.
@@ -281,20 +290,29 @@ completed correction. **Dependencies:** P0 and the relevant P1 outcome contract.
    results for current-state mutation, but clean up resources they actually
    created using the old binding, without deleting a replacement registration.
 3. Put initial CDC delivery and retries through the same per-subscriber ordered
-   lane. Enqueue and claim the attempt before the first await. Unrelated
+   lane. Record its actual source partition/incarnation and subscriber binding
+   from the owner contract; per-stream ordering does not claim a global snapshot
+   order. Enqueue and claim the attempt before the first await. Unrelated
    subscribers remain concurrent; cancellation and completion transitions must
-   remain processable while delivery I/O is outstanding.
+   remain processable while delivery I/O is outstanding. Capture the exact batch
+   and reset obligation covered by the attempt. A later ACK may retire only
+   covered work; a changed queue prefix or length is not acknowledgement evidence.
 4. Replace nullable refresh completion with explicit owner outcomes.
    Handshake acceptance is not completed catch-up. A coalesced request may join
    a completion only if its actual snapshot/binding/frontier covers the new
    requirement. Failed, stale or insufficient refresh retains catch-up/reset
    debt and its continuation. ACK/frontier advancement must represent delivered
    work or a successfully completed replacement snapshot under the contract.
+   New overflow/reset debt created while an effect is pending survives that
+   effect's completion unless its actual coverage establishes the new requirement.
+   Matching the attempt or binding alone does not establish that coverage.
 5. Derive wake scheduling from retained obligations. A pending obligation has
    execution in flight, an owned wake, or explicit transfer to its retirement
    owner. Use an absolute not-before decision shared by timer and event triggers;
    new input cannot reset or evade retry-after. Preserve queue/attempt/cleanup
-   bounds and the existing event-driven progression.
+   bounds and the existing event-driven progression. Retained reset debt remains
+   runnable even when event-history compaction leaves an empty event queue;
+   queue length alone cannot decide whether the owner has work to finish.
 6. Apply the cleanup invariant to the retained-reader owner only where a
    remaining gap is established. Preserve the already-corrected failed-first-
    acquisition reaper witness. Shutdown settles or transfers custody; it does
@@ -324,8 +342,14 @@ and [owned due time](https://github.com/psvensson/lagrange/blob/6a292acfd07c7384
 Hold the first send while the next event arrives; inject typed DEFERRED;
 fail/coalesce catch-up and then heal while otherwise idle; apply a long retry
 deadline while new events arrive; cancel after remote registration but before
-its response; complete an old attempt after a replacement exists. Retain the
-applicable failed-first-reader-close proof, re-executing only where a changed
+its response; complete an old attempt after a replacement exists. Also hold a
+send or refresh, create newer overflow/reset debt under the same live binding,
+then release the older ACK/completion. Assert that newer debt and unsent work
+survive until an adequate subsequent delivery/reset succeeds. The existing
+[delivered-batch path](https://github.com/psvensson/lagrange/blob/6a292acfd07c7384286296ef0c2693907b7f0e39/src/partition/partition-live-query-cdc-remote.js#L185-L211)
+clears the overflow flag after an awaited batch, so a counterexample must cover
+debt created during that await; restoring unconditional clearance must fail.
+Retain the applicable failed-first-reader-close proof, re-executing only where a changed
 interaction or required gate invalidates reuse. Assert ordering, no false
 ACK/frontier, eventual useful delivery/recovery, no deletion of the replacement,
 bounded attempts/queues and eventual cleanup. Reinstating the direct-send or
@@ -364,9 +388,9 @@ test-helper, pure-status and interaction-selection owners.
 | Await under control | Material interleaving | Required observations |
 | --- | --- | --- |
 | ACQUIRE proposal/application | Conflicting stage/PREPARE; leadership change | Exclusion, deterministic replay, legal/disjoint progress |
-| First CDC send | Next event; refusal; cancellation | Per-stream order, retained obligation, bounded cleanup |
+| First CDC send | Next event; refusal; overflow/reset debt; cancellation | Per-stream order, exact covered batch, newer debt retained, bounded cleanup |
 | Subscribe response | Remote acceptance; removal/replacement | Exact old-registration cleanup; replacement survives |
-| Catch-up read | Failure/coalescing; newer binding | Debt persists until a covering successful snapshot |
+| Catch-up read | Failure/coalescing; newer binding or reset debt | Old completion cannot discharge a newer requirement; a covering snapshot progresses |
 | Close/release | Failure; idle period; next acquisition | Handle remains owned, scheduled cleanup, eventual release |
 
 Every behavioral schedule asserts safety, useful progress after the finite fault
@@ -389,7 +413,7 @@ before carrying acceptance onto a changed composition.
 
 Continue approved W1/T2 work through its existing owner. Preserve its term-only
 tenure and post-pure-status composition obligations. Do not reopen completed
-Task I, pure-status, placement or CDC corrections merely to give this proposal
+Task I, pure-status, placement or CDC corrections merely to give this plan
 fresh work.
 
 ## 10. P6: generate evidence facts and close the composed claim
@@ -402,13 +426,20 @@ owner/verifier. **Dependencies:** P0 for reporting work; P1-P5 results for closu
 1. Extend the existing report producer to consume actual resolved refs and
    original job records: full source SHA, remote presence at observation time,
    run/job ID, execution source, exit/per-file result, and original artifact
-   location. Missing data stays unavailable or unmeasured.
+   location. Include the runtime/backend, actual executable or deployed artifact
+   identity on each participating host, and relevant configuration/workload
+   parameters from the existing original manifests. Use package, container,
+   WASM/native bundle or equivalent identity as applicable to that execution;
+   state non-applicability rather than inventing an artifact. A source SHA or
+   intended deployment does not establish what a host actually executed.
+   Missing data stays unavailable or unmeasured.
 2. Record topology and substitutions alongside the claim. Several hosts running
    independent test files are not proof of one distributed product; separate
    node caches/processes must exist for the corresponding claim.
 3. Bind independent review and affected execution to the resulting composed
    SHA/content. Reuse earlier evidence only through existing applicability
-   rules, including unchanged production/test inputs and their interaction.
+   rules, including production/test inputs, their interaction and relevant
+   runtime, artifact, configuration and environment applicability.
    A table renderer or digest alone does not establish semantic correctness.
 4. Generate factual branch/result sections while retaining reviewed human
    interpretation, unresolved obligations and the next owner/action. Update the
@@ -427,8 +458,11 @@ A moving ref cannot substitute for the measured SHA, and an unpushed commit
 cannot be reported as pushed; neither fact alone invalidates genuine retained
 execution on its exact source. A mismatched execution SHA, a failed original
 job, or a shared-cache substitution cannot establish the claimed composed or
-cross-node proof. Known invalid inputs must produce an explicit
-unavailable/mismatch/refusal under the existing evidence contract. Verify
+cross-node proof. A correct source SHA paired with the wrong per-host artifact
+or an incompatible runtime/configuration must also fail evidence admission for
+that claim; unchanged source alone is insufficient. Known invalid inputs must
+produce an explicit unavailable/mismatch/refusal under the existing evidence
+contract. Verify
 one-sided interaction selection and rejection of a missing required witness.
 
 Historical GCP measurements at f580579a5 remain historical, separate from current
@@ -436,7 +470,7 @@ candidate acceptance. This work does not change the existing three consecutive
 fresh-state passes on the original named three-host profile within 420 seconds,
 or its spread, quietness, public SQL, observation and cleanup predicates.
 Physical/corpus/comparative work remains with the approved alpha sequence and
-authorized runner. Creating or adopting this proposal starts none of those jobs.
+authorized runner. This documentation adoption does not itself start those jobs.
 
 ## 11. Integration sequence and reviewable slices
 
@@ -444,7 +478,7 @@ authorized runner. Creating or adopting this proposal starts none of those jobs.
 | --- | --- | --- |
 | P0 | Reconciled current candidate and disposition of each selected gap | Current integration owner; preserve all local WIP and pending jobs |
 | First locking slice | Reciprocal committed exclusion, genuine pending-ACQUIRE witness and required capability closure | Current locking/TX1 writer; independent review before dependent participant changes |
-| First GSI slice | Ordinary provisioner binding and a real production construction witness | GSI/schema owner; coordinate shared TX1 edits after locking |
+| First GSI slice | Ordinary provisioner binding and a real production construction witness | GSI/schema owner; independent construction work may proceed, while shared TX1 edits follow locking |
 | First live-query slice | One ordered initial/retry lane with held-first-send witness | Existing live-query writer may work independently of participant edits |
 | Remaining owner slices | Raw-capability removal, explicit recovery/retirement outcomes, wake/cleanup invariants | Each owner carries its P1 and P5 checks; migrate callers and delete replaced path together |
 | Evidence and final composition | Registered witnesses, generated facts, applicable proof and exact composed review | P6 can begin independently; final closure waits for all required owner slices |
@@ -463,7 +497,7 @@ outcome, retained obligation, wake/cleanup, exact writable scope and falsifier.
 The existing independent-review route applies; this adds no ceremony for routine
 local hypotheses.
 
-## 12. Proposed completion checklist
+## 12. Completion checklist
 
 - P0-P6 each have a disposition in existing work records, with all scoped
   obligations completed or explicitly narrowed by a recorded scope decision.
@@ -472,7 +506,8 @@ local hypotheses.
   attempted reintroduction.
 - Both lock/PREPARE orders, ordinary GSI provisioning/execution, and live-query
   ordering/catch-up/retirement satisfy their safety and finite-failure progress
-  contracts with resource bounds.
+  contracts with resource bounds. Older completions cannot discharge newer
+  overflow/reset obligations or discard work they did not cover.
 - Real construction and controlled schedules cover each repaired interaction;
   applicable bounded models connect to production. Negative controls
   discriminate the intended defect.
@@ -482,10 +517,12 @@ local hypotheses.
   independent approval and affected execution cover the final composition,
   retaining earlier proof only where applicable.
 - Current summary facts are derived from original refs/jobs and include actual
-  scope; historical measurements remain separate. No feature or release is
-  declared accepted beyond its existing contract.
+  scope, runtime, artifact and configuration applicability; historical
+  measurements remain separate. No feature or release is declared accepted
+  beyond its existing contract.
 
-This checklist is proposed completion meaning, not a sealed executable
-`doneWhen`. Adoption and subsequent implementation bind it to existing owners
-and genuine probes under the current workflow. Broad convergence and full alpha
-acceptance retain their separate conditions.
+This checklist defines the adopted scope and its required completion meaning.
+It is not a new sealed executable `doneWhen`; actual implementation units bind
+their bounded claims to existing owners and genuine probes under the current
+workflow. Broad convergence and full alpha acceptance retain their separate
+conditions.

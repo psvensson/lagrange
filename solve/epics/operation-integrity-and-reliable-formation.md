@@ -125,14 +125,17 @@ its dated source checkpoint. Continue the current bounded unit and preserve its
 writer; this adoption does not replace the integration owner's current summary,
 start a runtime task or lab run, change a sealed predicate, or establish a pass.
 
-## Implementation safety proposal (22 November 2026)
+## Implementation safety (adopted 22 November 2026)
 
-The [implementation-safety epic proposal](operation-integrity-and-reliable-formation/implementation-safety-proposal.md)
+The user authorized verification and adoption of the
+[implementation-safety plan](operation-integrity-and-reliable-formation/implementation-safety-proposal.md)
 and [agent start note](operation-integrity-and-reliable-formation/implementation-safety-start-here.md)
-translate the source review at 6a292acfd into bounded prevention work for existing
-owners. They remain proposed, preserve the approved ES6 and alpha constraints,
-and add no runtime assignment or acceptance claim. The current integration
-summary and actual owner records continue to govern sequencing and proof.
+through [PR #236](https://github.com/psvensson/lagrange/pull/236). Its six required
+packages turn the source review at 6a292acfd into bounded prevention work through
+the existing owners, preserving the approved ES6 and alpha constraints.
+The current integration summary and actual owner records continue to govern
+sequencing, assignments and proof; documentation adoption establishes no runtime
+acceptance.
 
 ## Current integration summary (12 November 2026)
 
