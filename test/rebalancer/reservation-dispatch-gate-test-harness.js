@@ -34,6 +34,7 @@ import {
 import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
 import {
+  buildMockPolicyAuthorityWitness,
   createCoordinatorSqlStore,
   createFixtureSystemMutationPort,
   createMockCache,
@@ -294,11 +295,21 @@ async function publishLedgerRoute(cache) {
   });
 }
 
-// A replica_operations owner read is served by the ledger leader: it carries
-// the witness the production builder gives the replica that served it.
+// An owner read is served by its table's leader: replica_operations carries the
+// witness built from LEDGER_LEADER, and services carries the services-p1 leader
+// witness.
 function servedByLedgerLeader(tableName, result, query) {
-  if (tableName !== TABLES.REPLICA_OPERATIONS || result?.success !== true ||
+  if (result?.success !== true ||
       query?.authoritativeReadMode !== READ_MODE.OWNER_RPC_REQUIRED) {
+    return result;
+  }
+  if (tableName === TABLES.SERVICES) {
+    return {
+      ...result,
+      readAuthorityWitness: buildMockPolicyAuthorityWitness('services-p1'),
+    };
+  }
+  if (tableName !== TABLES.REPLICA_OPERATIONS) {
     return result;
   }
   return {
