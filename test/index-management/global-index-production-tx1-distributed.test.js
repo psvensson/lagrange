@@ -37,6 +37,9 @@ import {
 import {
   createTransactionPersistenceGateway,
 } from '../test-helpers/transaction-persistence-gateway.js';
+import {
+  withLaggingFollowerEnvironment,
+} from './global-index-lagging-follower-witness-support.js';
 
 const USERS_SCHEMA = {
   columns: [
@@ -791,4 +794,125 @@ test('Dynamic index partition provisioning, distributed execution without local 
 
   await engineB.shutdown();
   await engineA.shutdown();
+});
+
+test('Hosted lagging follower replica routes GSI SELECT and backfill writes authoritatively and fails closed without leader (2B)', async (t) => {
+  await withLaggingFollowerEnvironment(async ({
+    oracleDb,
+    usersGroup,
+    idxGroup,
+    engineLeader,
+    engineFollower,
+    setFollowerUsersLag,
+    setFollowerIdxLag,
+    setLeaderDown,
+  }) => {
+    const insertSql = 'INSERT INTO users (id, email, name, status) VALUES (?, ?, ?, ?)';
+    oracleDb.prepare(insertSql).run(1, 'alice@example.com', 'AliceOne', 'active');
+    const row1Res = await engineLeader.executeQuery(
+      insertSql,
+      [1, 'alice@example.com', 'AliceOne', 'active'],
+    );
+    t.equal(row1Res.success, true, 'Row 1 committed on replicated base group');
+
+    await waitForCondition(
+      () => usersGroup.services[1].db.prepare('SELECT id FROM users WHERE id = 1').get() != null,
+      3000,
+      20,
+    );
+
+    // Pause Raft APPEND to node-follower's users_p0 replica so node-follower holds stale rows
+    // while leader+witness commit row 2.
+    setFollowerUsersLag(true);
+    oracleDb.prepare(insertSql).run(2, 'alice@example.com', 'AliceTwo', 'active');
+    const row2Res = await engineLeader.executeQuery(
+      insertSql,
+      [2, 'alice@example.com', 'AliceTwo', 'active'],
+    );
+    t.equal(row2Res.success, true, 'Row 2 committed with quorum on leader+witness');
+    t.equal(
+      usersGroup.services[1].db.prepare('SELECT id FROM users').all().length,
+      1,
+      'Hosted follower base replica genuinely lags with only 1 row',
+    );
+    t.equal(usersGroup.services[1].role, 'follower', 'Hosted base replica is a follower');
+
+    // Trigger backfill FROM engineFollower (which locally hosts follower replicas in
+    // partitionServicesProvider). Both base reads AND index backfill writes must route
+    // through authoritative partition owners and replicate across Raft to all replicas.
+    const createRes = await engineFollower.executeQuery(
+      'CREATE GLOBAL INDEX idx_users_email ON users (email)',
+    );
+    t.equal(createRes.success, true, 'CREATE GLOBAL INDEX succeeds from follower-hosting node');
+
+    const leaderIdxRows = idxGroup.services[0].db.prepare(
+      'SELECT __base_pk_id, email FROM __idx_users_idx_users_email ORDER BY __base_pk_id ASC',
+    ).all();
+    const followerIdxRows = idxGroup.services[1].db.prepare(
+      'SELECT __base_pk_id, email FROM __idx_users_idx_users_email ORDER BY __base_pk_id ASC',
+    ).all();
+    const witnessIdxRows = idxGroup.services[2].db.prepare(
+      'SELECT __base_pk_id, email FROM __idx_users_idx_users_email ORDER BY __base_pk_id ASC',
+    ).all();
+
+    t.same(
+      leaderIdxRows.map((r) => r.__base_pk_id),
+      [1, 2],
+      'Backfill replicated both base rows to authoritative index leader replica',
+    );
+    t.same(
+      witnessIdxRows.map((r) => r.__base_pk_id),
+      [1, 2],
+      'Backfill replicated both base rows via Raft to witness index replica',
+    );
+    t.same(
+      followerIdxRows.map((r) => r.__base_pk_id),
+      [1, 2],
+      'Backfill replicated both base rows via Raft to follower index replica',
+    );
+
+    // Pause Raft APPEND to node-follower on BOTH base and index groups, then insert row 3
+    // via TX1 on engineLeader so hosted follower replica has stale index & base SQLite state.
+    setFollowerIdxLag(true);
+    oracleDb.prepare(insertSql).run(3, 'alice@example.com', 'AliceThree', 'active');
+    const row3Res = await engineLeader.executeQuery(
+      insertSql,
+      [3, 'alice@example.com', 'AliceThree', 'active'],
+    );
+    t.equal(row3Res.success, true, 'Row 3 committed via TX1 while follower lags');
+    t.equal(
+      idxGroup.services[1].db.prepare('SELECT __base_pk_id FROM __idx_users_idx_users_email')
+        .all().length,
+      2,
+      'Hosted follower index replica genuinely lags behind authoritative leader (2 vs 3 rows)',
+    );
+
+    const selectSql = 'SELECT * FROM users WHERE email = ? ORDER BY id ASC';
+    const selectRes = await engineFollower.executeQuery(selectSql, ['alice@example.com']);
+    t.equal(selectRes.success, true, 'GSI SELECT from follower-hosting node succeeds');
+    t.equal(
+      selectRes.globalIndexPlan?.accessPath,
+      GLOBAL_INDEX_ACCESS_PATH.GLOBAL_SECONDARY_INDEX,
+      'GSI SELECT engages GLOBAL_SECONDARY_INDEX',
+    );
+    t.same(
+      selectRes.rows,
+      oracleDb.prepare(selectSql).all('alice@example.com'),
+      'GSI SELECT must read from authoritative leader, not hosted lagging follower',
+    );
+
+    // Make authoritative leader unavailable while hosted lagging follower stays alive locally:
+    // GSI SELECT must fail closed with typed unavailability instead of returning stale follower rows.
+    setLeaderDown(true);
+    const unavailableRes = await engineFollower.executeQuery(selectSql, ['alice@example.com']);
+    t.equal(
+      unavailableRes.success,
+      false,
+      'GSI SELECT fails closed instead of reading hosted lagging follower when leader unavailable',
+    );
+    t.ok(
+      unavailableRes.errorCode || unavailableRes.error,
+      'Unavailable authoritative read surfaces typed failure details',
+    );
+  });
 });

@@ -53,6 +53,8 @@ import {
 import {
   createTransactionPersistenceGateway,
 } from '../test-helpers/transaction-persistence-gateway.js';
+import {ledgerRows} from '../partition/placement-admission-fixture.js';
+import {withFoundingPlacementEnvironment} from './global-index-founding-witness-support.js';
 
 const USERS_SCHEMA = {
   columns: [
@@ -1069,4 +1071,124 @@ test('Production construction 5: SQLQueryEngine public DML and SELECT engage glo
   );
 
   await engine.shutdown();
+});
+
+test('Production construction 6 (2A positive): fresh global index provisioning through real provisionInitialTablePartition and placement admission', async (t) => {
+  await withFoundingPlacementEnvironment(async ({
+    engine,
+    leader,
+    gateway,
+    cache,
+    createdReplicas,
+  }) => {
+    await engine.executeQuery(
+      'INSERT INTO users (id, email, name, status) VALUES (?, ?, ?, ?)',
+      [10, 'alice@example.com', 'Alice', 'active'],
+    );
+    await engine.executeQuery(
+      'INSERT INTO users (id, email, name, status) VALUES (?, ?, ?, ?)',
+      [20, 'bob@example.com', 'Bob', 'pending'],
+    );
+
+    const preExisting = cache.filter(
+      TABLES.PARTITIONS,
+      (p) => p.table_name === '__idx_users_idx_users_email',
+    );
+    t.equal(preExisting.length, 0, 'No pre-created index partitions exist before CREATE GLOBAL INDEX');
+
+    const createRes = await engine.executeQuery(
+      'CREATE GLOBAL INDEX idx_users_email ON users (email)',
+    );
+    t.equal(createRes.success, true, 'Fresh CREATE GLOBAL INDEX succeeds with placement admission');
+    t.equal(createdReplicas.length, 1, 'Founding operation instantiated 1 real PartitionService');
+
+    const schemaOps = gateway.db.prepare('SELECT * FROM schema_operations').all();
+    const gsiJob = schemaOps.find((row) => row.table_name === '__idx_users_idx_users_email');
+    t.ok(gsiJob, 'Durable schema provisioning job row recorded for GSI dataset');
+    t.equal(gsiJob.status, 'SUCCEEDED', 'GSI durable schema provisioning job reached SUCCEEDED');
+
+    const rows = ledgerRows(leader);
+    t.ok(rows.length >= 1, 'Real placement admission ledger recorded native FOUND row(s)');
+    const foundedOp = rows.find((row) =>
+      row.partition_id === '__gsi_users_idx_users_email_p0',
+    );
+    t.ok(foundedOp, 'Ledger recorded native FOUND operation for GSI partition');
+    const [initialStep] = JSON.parse(foundedOp.steps_history);
+    t.equal(
+      initialStep.placementAdmission?.foundingIntentId,
+      `${gsiJob.job_id}:__gsi_users_idx_users_email_p0`,
+      'Founding admission intent binds deterministically to durable schema job identity',
+    );
+
+    const idxRecord = gateway.db.prepare(
+      'SELECT * FROM indices WHERE index_name = ?',
+    ).get('idx_users_email');
+    t.equal(idxRecord?.state, GLOBAL_INDEX_STATE.READ_WRITE, 'Fresh GSI reached READ_WRITE');
+    t.equal(idxRecord?.backfill_total_rows, 2, 'Backfilled existing base rows into founded GSI');
+
+    const selectRes = await engine.executeQuery(
+      'SELECT * FROM users WHERE email = ? ORDER BY id ASC',
+      ['alice@example.com'],
+    );
+    t.equal(selectRes.success, true);
+    t.equal(
+      selectRes.globalIndexPlan?.accessPath,
+      GLOBAL_INDEX_ACCESS_PATH.GLOBAL_SECONDARY_INDEX,
+      'Query after real founding engages GLOBAL_SECONDARY_INDEX',
+    );
+    t.same(
+      selectRes.rows.map((r) => ({id: r.id, email: r.email, name: r.name})),
+      [{id: 10, email: 'alice@example.com', name: 'Alice'}],
+      'Query against newly founded GSI partition returns authoritative row',
+    );
+  });
+});
+
+test('Production construction 7 (2A negative): missing/conflicting founding identity and unavailable placement authority fail closed', async (t) => {
+  await withFoundingPlacementEnvironment(async ({engine, leader, coordinator}) => {
+    await t.rejects(
+      engine.provisionInitialTablePartition({
+        tableId: '__idx_users_idx_missing_id',
+        tableName: '__idx_users_idx_missing_id',
+        partitionId: '__gsi_users_idx_missing_id_p0',
+        replicaCount: 1,
+        targetNodeIds: ['test-node'],
+      }),
+      {code: 'PLACEMENT_FOUND_IDENTITY_REQUIRED'},
+      'provisionInitialTablePartition rejects missing founding identity fail-closed',
+    );
+
+    await t.rejects(
+      engine.provisionInitialTablePartition({
+        tableId: '__idx_users_idx_conflict_id',
+        tableName: '__idx_users_idx_conflict_id',
+        partitionId: '__gsi_users_idx_conflict_id_p0',
+        replicaCount: 1,
+        targetNodeIds: ['test-node'],
+        schemaJobId: 'schema-job-1',
+        partitionWorkflowId: 'workflow-1',
+      }),
+      {code: 'PLACEMENT_FOUND_IDENTITY_REQUIRED'},
+      'provisionInitialTablePartition preserves XOR founding identity guard fail-closed',
+    );
+    t.same(ledgerRows(leader), [], 'Refused founding attempts leave zero ledger rows');
+
+    const originalNodeId = coordinator.nodeId;
+    coordinator.nodeId = '';
+    await t.rejects(
+      engine.indexService.createIndex('CREATE GLOBAL INDEX idx_users_no_host ON users (email)'),
+      {code: 'PLACEMENT_FOUND_IDENTITY_REQUIRED'},
+      'CREATE GLOBAL INDEX fails closed when placement coordinator lacks hosting nodeId',
+    );
+    coordinator.nodeId = originalNodeId;
+
+    coordinator.controlPlaneReadinessService.answerCommittedNodes = () => ({
+      formation: {state: 'UNAVAILABLE', latchEpoch: null},
+    });
+    await t.rejects(
+      engine.indexService.createIndex('CREATE GLOBAL INDEX idx_users_unlatched ON users (email)'),
+      {failureCode: 'FORMATION_NOT_LATCHED'},
+      'CREATE GLOBAL INDEX fails closed with typed placement refusal when formation unlatched',
+    );
+  });
 });
