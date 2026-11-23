@@ -21,6 +21,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import {performance} from 'node:perf_hooks';
 import Database from 'better-sqlite3';
 
 import {test} from '../../src/test-helpers/tap.js';
@@ -47,6 +48,9 @@ import {
   TABLES,
 } from '../../src/constants/index.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
+import {
+  resolveSelfPublishedLeaderTermFloor,
+} from '../../src/query/query-executor-self-leader-term-floor.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {QUERY_RESPONSE_TYPE} from '../../src/query/query-constants.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
@@ -112,6 +116,7 @@ function copyRealPartitionDbToDataDir(sourceDbPath, dataDir, partitionId, replic
 function createSyntheticReadSurface({
   nodeId,
   canonicalLeaderNodeId,
+  leaderClaimRaftTerm = null,
   services,
   dataDir = null,
   getLocalPartitionReplicas = () => [],
@@ -122,6 +127,7 @@ function createSyntheticReadSurface({
     partition_id: PARTITION,
     table_id: TABLE,
     ...(canonicalLeaderNodeId ? {leader_node_id: canonicalLeaderNodeId} : {}),
+    ...(leaderClaimRaftTerm !== null ? {leader_claim_raft_term: leaderClaimRaftTerm} : {}),
   });
   for (const svc of services) {
     cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
@@ -131,7 +137,7 @@ function createSyntheticReadSurface({
       partition_id: PARTITION,
       node_id: svc.nodeId,
       address: svc.address,
-      status: SERVICE_STATUS.ACTIVE,
+      status: svc.status ?? SERVICE_STATUS.ACTIVE,
     });
   }
   const messageRouter = {
@@ -591,4 +597,300 @@ test('Option A: SQLQueryEngine threads dataDir and local partition replicas ' +
     'SQLQueryEngine forwards dataDir to QueryExecutor');
   t.same(engine.queryExecutor.getLocalPartitionReplicas(PARTITION), [fakeReplica],
     'SQLQueryEngine resolves local partition replicas for QueryExecutor');
+});
+
+test('Option A adversarial hardening: exact replica-identity binding ignores ' +
+  'obsolete/retired .db files and fails closed without authoritative local SERVICES row',
+async (t) => {
+  const selfReplicaId = `${PARTITION}-r1-active`;
+  const retiredReplicaId = `${PARTITION}-r0-retired`;
+  const unlistedReplicaId = `${PARTITION}-r99-orphan`;
+
+  await t.test('obsolete/retired .db files with higher or lower terms are ignored',
+    async (t) => {
+      const dataDir = createTempDataDir(t, 'lagrange-opt-a-obsolete-');
+      seedHardStateDb(dataDir, PARTITION, selfReplicaId, 5);
+      seedHardStateDb(dataDir, PARTITION, retiredReplicaId, 99);
+      seedHardStateDb(dataDir, PARTITION, unlistedReplicaId, 100);
+
+      const services = [
+        {
+          nodeId: 'node-a',
+          replicaId: retiredReplicaId,
+          address: `node-a/partition/${PARTITION}`,
+          status: 'removed',
+        },
+        {
+          nodeId: 'node-a',
+          replicaId: selfReplicaId,
+          address: `node-a/partition/${PARTITION}`,
+          status: SERVICE_STATUS.ACTIVE,
+        },
+        {nodeId: 'node-b', replicaId: `${PARTITION}-r2`, address: `node-b/partition/${PARTITION}`},
+      ];
+
+      // Successor at term 6 MUST succeed (>= active replica term 5), proving retired term 99
+      // and orphan term 100 were completely ignored.
+      const surface = createSyntheticReadSurface({
+        nodeId: 'node-a',
+        canonicalLeaderNodeId: 'node-a',
+        leaderClaimRaftTerm: 5,
+        services,
+        dataDir,
+        getLocalPartitionReplicas: () => [],
+        async deliver(address, request) {
+          if (address.startsWith('node-b/')) {
+            return buildDeliveryEnvelope({acknowledged: true}, {
+              success: true,
+              rows: [{operation_id: OPERATION, workflow_step: 'term-6-successor'}],
+              rowSetComplete: true,
+              readAuthorityWitness: leaderWitness({
+                nodeId: 'node-b',
+                replicaId: `${PARTITION}-r2`,
+                term: 6,
+                leaderRead: request.leaderRead,
+              }),
+            });
+          }
+          return buildDeliveryEnvelope({acknowledged: false, noHandler: true});
+        },
+      });
+
+      const ownerFact = await readOwnerFact(
+        surface.readLeaderRequired,
+        ownerFactDraft([OPERATION]),
+      );
+      t.equal(ownerFact.state, STATE.READY,
+        'active replica term 5 permits term 6 successor despite retired/orphan term 99/100 files');
+      t.equal(ownerFact.witness?.term, 6);
+    });
+
+  await t.test('missing authoritative non-removed SERVICES row fails closed even if .db files exist',
+    async (t) => {
+      const dataDir = createTempDataDir(t, 'lagrange-opt-a-no-service-');
+      seedHardStateDb(dataDir, PARTITION, retiredReplicaId, 12);
+      seedHardStateDb(dataDir, PARTITION, unlistedReplicaId, 15);
+
+      const probed = [];
+      const surface = createSyntheticReadSurface({
+        nodeId: 'node-a',
+        canonicalLeaderNodeId: 'node-a',
+        services: [
+          {
+            nodeId: 'node-a',
+            replicaId: retiredReplicaId,
+            address: `node-a/partition/${PARTITION}`,
+            status: 'removed',
+          },
+          {nodeId: 'node-b', replicaId: `${PARTITION}-r2`, address: `node-b/partition/${PARTITION}`},
+        ],
+        dataDir,
+        getLocalPartitionReplicas: () => [],
+        async deliver(address) {
+          probed.push(address);
+          return buildDeliveryEnvelope({acknowledged: false, noHandler: true});
+        },
+      });
+
+      const ownerFact = await readOwnerFact(
+        surface.readLeaderRequired,
+        ownerFactDraft([OPERATION]),
+      );
+      t.equal(ownerFact.state, STATE.UNAVAILABLE);
+      t.equal(ownerFact.reason, REASON.PUBLISHED_LEADER_UNUSABLE,
+        'must fail closed when only removed/unlisted .db files exist');
+      t.same(probed, [], 'must not probe peers when no authoritative local SERVICES row exists');
+    });
+
+  await t.test('localTerm < published leader_claim_raft_term fails closed to PUBLISHED_LEADER_UNUSABLE',
+    async (t) => {
+      const dataDir = createTempDataDir(t, 'lagrange-opt-a-claim-term-');
+      seedHardStateDb(dataDir, PARTITION, selfReplicaId, 5);
+
+      const probed = [];
+      const surface = createSyntheticReadSurface({
+        nodeId: 'node-a',
+        canonicalLeaderNodeId: 'node-a',
+        leaderClaimRaftTerm: 8,
+        services: [
+          {nodeId: 'node-a', replicaId: selfReplicaId, address: `node-a/partition/${PARTITION}`},
+          {nodeId: 'node-b', replicaId: `${PARTITION}-r2`, address: `node-b/partition/${PARTITION}`},
+        ],
+        dataDir,
+        getLocalPartitionReplicas: () => [],
+        async deliver(address) {
+          probed.push(address);
+          return buildDeliveryEnvelope({acknowledged: false, noHandler: true});
+        },
+      });
+
+      const ownerFact = await readOwnerFact(
+        surface.readLeaderRequired,
+        ownerFactDraft([OPERATION]),
+      );
+      t.equal(ownerFact.state, STATE.UNAVAILABLE);
+      t.equal(ownerFact.reason, REASON.PUBLISHED_LEADER_UNUSABLE,
+        'localTerm (5) < leader_claim_raft_term (8) must fail closed');
+      t.same(
+        probed.filter((addr) => !addr.startsWith('node-a/')),
+        [],
+        'must not probe peers when localTerm lags published leader_claim_raft_term',
+      );
+    });
+
+  await t.test('lower-term peer leader is refused with BELOW_TERM_FLOOR when localTerm >= leader_claim_raft_term',
+    async (t) => {
+      const dataDir = createTempDataDir(t, 'lagrange-opt-a-lower-peer-');
+      seedHardStateDb(dataDir, PARTITION, selfReplicaId, 8);
+
+      const surface = createSyntheticReadSurface({
+        nodeId: 'node-a',
+        canonicalLeaderNodeId: 'node-a',
+        leaderClaimRaftTerm: 7,
+        services: [
+          {nodeId: 'node-a', replicaId: selfReplicaId, address: `node-a/partition/${PARTITION}`},
+          {nodeId: 'node-b', replicaId: `${PARTITION}-r2`, address: `node-b/partition/${PARTITION}`},
+        ],
+        dataDir,
+        getLocalPartitionReplicas: () => [],
+        async deliver(address, request) {
+          if (address.startsWith('node-b/')) {
+            return buildDeliveryEnvelope({acknowledged: true}, {
+              success: true,
+              rows: [{operation_id: OPERATION, workflow_step: 'stale-term-7'}],
+              rowSetComplete: true,
+              readAuthorityWitness: leaderWitness({
+                nodeId: 'node-b',
+                replicaId: `${PARTITION}-r2`,
+                term: 7,
+                leaderRead: request.leaderRead,
+              }),
+            });
+          }
+          return buildDeliveryEnvelope({acknowledged: false, noHandler: true});
+        },
+      });
+
+      const ownerFact = await readOwnerFact(
+        surface.readLeaderRequired,
+        ownerFactDraft([OPERATION]),
+      );
+      t.equal(ownerFact.state, STATE.UNAVAILABLE);
+      t.equal(ownerFact.reason, REASON.BELOW_TERM_FLOOR,
+        'peer witness term 7 < localTerm 8 must be refused with BELOW_TERM_FLOOR');
+    });
+});
+
+test('Option A adversarial hardening: 46-partition memoized disk term lookup avoids ' +
+  'repeated SQLite opens and invalidates once live PartitionService exists', async (t) => {
+  const dataDir = createTempDataDir(t, 'lagrange-opt-a-46p-perf-');
+  const cache = new SystemTableCache();
+  const partitions = [];
+  for (let i = 1; i <= 46; i += 1) {
+    const partitionId = `sys-part-${i}-p1`;
+    const replicaId = `${partitionId}-r1`;
+    seedHardStateDb(dataDir, partitionId, replicaId, i + 2);
+    cache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.INSERT, {
+      partition_id: partitionId,
+      table_id: `sys_part_${i}`,
+      leader_node_id: 'node-a',
+      leader_claim_raft_term: i + 2,
+    });
+    cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
+      service_id: replicaId,
+      replica_id: replicaId,
+      service_type: SERVICE_TYPE.PARTITION,
+      partition_id: partitionId,
+      node_id: 'node-a',
+      address: `node-a/partition/${partitionId}`,
+      status: SERVICE_STATUS.ACTIVE,
+    });
+    partitions.push({partitionId, replicaId, expectedTerm: i + 2});
+  }
+
+  let liveReplicasByPartition = new Map();
+  const executor = new QueryExecutor({
+    nodeId: 'node-a',
+    messageRouter: {nodeId: 'node-a', deliver: async () => null},
+    systemCache: cache,
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    dataDir,
+    getLocalPartitionReplicas: (partitionId) =>
+      liveReplicasByPartition.get(partitionId) || [],
+  });
+
+  // Cold pass across all 46 partitions populates memoized disk terms.
+  const snapshots = partitions.map(({partitionId}) =>
+    executor.getPartitionRoutingSnapshot(partitionId, DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE));
+  for (let i = 0; i < partitions.length; i += 1) {
+    const floor = resolveSelfPublishedLeaderTermFloor(
+      executor,
+      partitions[i].partitionId,
+      snapshots[i],
+    );
+    t.equal(floor.eligible, true);
+    t.equal(floor.termFloor, partitions[i].expectedTerm);
+  }
+
+  // Delete all 46 SQLite files on disk: subsequent lookups MUST still hit the
+  // memoized (partitionId, replicaId) cache with zero SQLite re-opens!
+  for (const {partitionId, replicaId} of partitions) {
+    fs.rmSync(getPartitionDbPath(dataDir, partitionId, replicaId), {force: true});
+  }
+
+  const warmStartMs = performance.now();
+  const ROUNDS = 10;
+  for (let round = 0; round < ROUNDS; round += 1) {
+    for (let i = 0; i < partitions.length; i += 1) {
+      const floor = resolveSelfPublishedLeaderTermFloor(
+        executor,
+        partitions[i].partitionId,
+        snapshots[i],
+      );
+      t.equal(floor.eligible, true);
+      t.equal(floor.termFloor, partitions[i].expectedTerm);
+    }
+  }
+  const warmElapsedMs = performance.now() - warmStartMs;
+  t.ok(
+    warmElapsedMs < 100,
+    `460 memoized 46-partition lookups must complete well under 100ms (observed ${warmElapsedMs.toFixed(2)}ms)`,
+  );
+
+  // Once a live PartitionService opens for partition 0, the memoized disk term is
+  // invalidated and the live Raft core authority governs instead.
+  const first = partitions[0];
+  liveReplicasByPartition.set(first.partitionId, [{
+    partitionId: first.partitionId,
+    replicaId: first.replicaId,
+    raft: {
+      observeCurrentAuthority: () => ({
+        outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+        groupId: first.partitionId,
+        replicaIdentity: first.replicaId,
+        role: RAFT_ROLE.FOLLOWER,
+        term: first.expectedTerm + 10,
+      }),
+    },
+  }]);
+  const liveFloor = resolveSelfPublishedLeaderTermFloor(
+    executor,
+    first.partitionId,
+    snapshots[0],
+  );
+  t.equal(liveFloor.eligible, true);
+  t.equal(liveFloor.hasLocalReplica, true);
+  t.equal(liveFloor.termFloor, first.expectedTerm + 10,
+    'live PartitionService supersedes and invalidates cached disk term');
+
+  // If the live replica later closes without a DB on disk, the invalidated disk
+  // cache must NOT serve the old pre-open term.
+  liveReplicasByPartition = new Map();
+  const afterCloseFloor = resolveSelfPublishedLeaderTermFloor(
+    executor,
+    first.partitionId,
+    snapshots[0],
+  );
+  t.equal(afterCloseFloor.eligible, false,
+    'invalidated disk cache must not serve stale term after live replica closes and file is absent');
 });

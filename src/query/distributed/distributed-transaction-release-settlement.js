@@ -21,15 +21,13 @@ import {deepFreeze} from '../../raft/raft-operation-port.js';
 import {COMMIT_MODE, isCanonicalTransactionEpoch, PARTICIPANT_SET_STATE,
   TRANSACTION_MODE} from
   '../../constants/transactions.js';
-import {PARTICIPANT_TRANSACTION_DECISION as DECISION,
-  PARTICIPANT_TRANSACTION_STATE as PARTICIPANT_STATE} from
+import {PARTICIPANT_TRANSACTION_DECISION as DECISION} from
   '../../partition/partition-participant-transaction-constants.js';
 import {buildDecisionRecord} from
   '../../partition/partition-participant-transaction-bytes.js';
 import {COORDINATOR_SETTLEMENT_TYPE, COORDINATOR_SETTLEMENT_RESULT} from
   '../../partition/partition-coordinator-settlement-constants.js';
 import {QUERY_OPERATION} from '../query-constants.js';
-import {PARTICIPANT_COMMIT_OUTCOME} from '../../constants/transactions.js';
 import {readParticipantSet} from './distributed-transaction-participant-manifest.js';
 import {decisionRecordOfRow, RECORDED_DECISION_STATE} from
   './distributed-transaction-decision-record.js';
@@ -43,8 +41,7 @@ import {TRANSACTION_RELEASE_CENSUS_STATE,
   TRANSACTION_RELEASE_TERMINAL_STATUS as TERMINAL_STATUS} from
   './distributed-transaction-release-census.js';
 import {
-  isBoundRollbackParticipantState,
-  participantAnswerSnapshotOf,
+  isTerminalParticipantDecisionAnswer,
 } from '../sql-query-engine-participant-wire.js';
 import {transactionReleaseProofValid} from
   '../../partition/partition-participant-release-contract.js';
@@ -274,19 +271,7 @@ async function ensureDecision(engine, service, authority, now) {
 }
 
 function participantAnswerComplete(decision, answer, expected) {
-  const captured = participantAnswerSnapshotOf(answer, expected);
-  if (captured?.success !== true) {
-    return false;
-  }
-  if (decision === DECISION.COMMIT) {
-    return captured.outcome === PARTICIPANT_COMMIT_OUTCOME.COMMITTED;
-  }
-  if (!isBoundRollbackParticipantState(captured.state)) {
-    return false;
-  }
-  return captured.state === PARTICIPANT_STATE.ROLLED_BACK ||
-    (captured.durable === true &&
-      captured.outcome === PARTICIPANT_COMMIT_OUTCOME.NOT_COMMITTED);
+  return isTerminalParticipantDecisionAnswer(decision, answer, expected);
 }
 
 async function settleSingleParticipant({

@@ -212,6 +212,8 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           {
             allowReadinessAuthoritativeRefresh,
             requireLeader: executionOptions?.requireLeader === true,
+            [QUERY_EXECUTOR_ROUTING_OPTION_FIELD.POST_ADMISSION_SETTLEMENT]:
+              executionOptions?.postAdmissionSettlement === true,
             [QUERY_EXECUTOR_ROUTING_OPTION_FIELD.READ_AUTHORITY]:
               executionOptions?.readAuthority || null,
             recoveryCandidateSelectionKey: executionOptions.recoveryCandidateSelectionKey,

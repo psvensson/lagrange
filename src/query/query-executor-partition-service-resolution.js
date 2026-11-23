@@ -105,6 +105,16 @@ function buildEvaluatedReadinessSummary(
   };
 }
 
+function isStructuralRoutingOptionBypass(routingOptions) {
+  return (
+    routingOptions?.[QUERY_EXECUTOR_ROUTING_OPTION_FIELD.READ_AUTHORITY]
+      ?.purpose === CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL ||
+    routingOptions?.[
+      QUERY_EXECUTOR_ROUTING_OPTION_FIELD.POST_ADMISSION_SETTLEMENT
+    ] === true
+  );
+}
+
 class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationRouting {
   /**
    * Find partition leader address from system cache.
@@ -208,12 +218,7 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
         reasonCode: QUERY_ROUTING_DIAGNOSTIC_REASON.SERVICE_ADDRESS_MISSING,
         readinessSummary: null,
       };
-    } else if (
-      routingOptions?.[
-        QUERY_EXECUTOR_ROUTING_OPTION_FIELD.READ_AUTHORITY
-      ]?.purpose ===
-        CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL
-    ) {
+    } else if (isStructuralRoutingOptionBypass(routingOptions)) {
       routabilityResult = this.evaluateSystemTableRoutability();
     }
     if (routabilityResult) {

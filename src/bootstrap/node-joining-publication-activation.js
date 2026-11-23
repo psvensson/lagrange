@@ -653,12 +653,15 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
     ); // Create SQL query engine with message router for transparent remote routing
     // The query engine will route queries to remote partitions via message router
     // System cache will be populated during phaseQuerySystemState()
+    const bootstrapTopologySnapshotOwner =
+      this.getBootstrapTopologySnapshotOwner?.() || null;
     const sqlQueryEngine = new SQLQueryEngine({
       systemCache: systemTableCache,
       messageRouter: this.messageRouter,
       nodeId: this.nodeId,
       dataDir: this.dataDir,
       partitionServicesProvider: () => this.partitionServices,
+      bootstrapTopologySnapshotOwner,
       rebalanceCoordinator: this.rebalanceCoordinator,
       controlPlaneReadinessService:
         this.rebalanceCoordinator?.controlPlaneReadinessService || null,

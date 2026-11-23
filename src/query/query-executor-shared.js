@@ -167,6 +167,7 @@ const CONTROL_PLANE_WRITE_RETRY_DECISION_STATE = Object.freeze({
 });
 const QUERY_EXECUTOR_ROUTING_OPTION_FIELD = Object.freeze({
   FOR_READ: 'forRead',
+  POST_ADMISSION_SETTLEMENT: 'postAdmissionSettlement',
   READ_AUTHORITY: 'readAuthority',
 });
 // A state field in the witness fingerprint: the first present spelling, or

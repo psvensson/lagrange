@@ -513,6 +513,8 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
       },
       routingReadinessDimension:
         deliveryProfile.routingReadinessDimension,
+      postAdmissionSettlement:
+        POST_ADMISSION_SETTLEMENT_OPERATIONS.has(operation),
       deliveryPriority: deliveryProfile.deliveryPriority,
       timeoutMs: deliveryProfile.timeoutMs,
       clearSessionPartitionAffinityOnSuccess:

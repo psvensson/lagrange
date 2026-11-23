@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 123,
     "architecture-governance": 21,
-    "bootstrap-membership": 359,
+    "bootstrap-membership": 360,
     "cdc-metadata": 81,
     "cli-tooling": 99,
     "control-plane": 242,
@@ -25,10 +25,10 @@
     "transport-messaging": 123,
     "wasm-toolchain": 74
   },
-  "censusSize": 2822,
-  "digest": "fnv1a32-9c49a26b",
+  "censusSize": 2823,
+  "digest": "fnv1a32-cad31d3d",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-3b338956",
+  "observationDigest": "fnv1a32-383e08db",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -235,6 +235,7 @@
     "test/bootstrap/node-joining-cdc-readiness-gate.test.js": "bootstrap-membership",
     "test/bootstrap/node-joining-cdc-subscription.test.js": "bootstrap-membership",
     "test/bootstrap/node-joining-control-plane-heartbeat.test.js": "bootstrap-membership",
+    "test/bootstrap/node-joining-control-plane-readiness-wiring.test.js": "bootstrap-membership",
     "test/bootstrap/node-joining-http-post-timeout.test.js": "bootstrap-membership",
     "test/bootstrap/node-joining-infrastructure-join-progress-witness.test.js": "bootstrap-membership",
     "test/bootstrap/node-joining-lease-registration.test.js": "bootstrap-membership",
@@ -3871,6 +3872,14 @@
         "src/bootstrap/node-joining-constants.js",
         "src/bootstrap/rejoin-hints-constants.js",
         "src/cdc/cdc-pipeline-readiness-gate.js"
+      ]
+    },
+    "test/bootstrap/node-joining-control-plane-readiness-wiring.test.js": {
+      "files": [
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/control-plane/serve-eligibility-test-support.js"
       ]
     },
     "test/bootstrap/node-joining-infrastructure-join-progress-witness.test.js": {

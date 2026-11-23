@@ -37,6 +37,7 @@ import {
   isWriteOutcomeUnknown,
 } from '../partition/partition-write-kernel.js';
 import {
+  PARTICIPANT_TRANSACTION_DECISION,
   PARTICIPANT_TRANSACTION_FAILURE_CODE,
   PARTICIPANT_TRANSACTION_STATE,
 } from '../partition/partition-participant-transaction-constants.js';
@@ -249,17 +250,22 @@ function preparedEvidenceOf(value) {
   return evidence;
 }
 
+function isValidCommittedAnswer(answer) {
+  return answer?.success === true &&
+    answer.durable === true &&
+    answer.state === PARTICIPANT_TRANSACTION_STATE.COMMITTED &&
+    answer.outcome === PARTICIPANT_COMMIT_OUTCOME.COMMITTED;
+}
+
 /**
- * A COMMIT answer is done only when it names the COMMITTED outcome.
- * @param {Object} answer - The COMMIT answer.
+ * A COMMIT answer is done only when it proves durable COMMITTED state and
+ * COMMITTED outcome.
+ * @param {Object} value - The COMMIT answer.
  * @return {Object} The answer.
  */
 function committedAnswerOf(value) {
   const answer = participantAnswerSnapshotOf(value);
-  if (answer?.success !== true ||
-      answer.durable !== true ||
-      answer.state !== PARTICIPANT_TRANSACTION_STATE.COMMITTED ||
-      answer.outcome !== PARTICIPANT_COMMIT_OUTCOME.COMMITTED) {
+  if (!isValidCommittedAnswer(answer)) {
     throw participantFailureOf(QUERY_OPERATION.COMMIT,
       {...(answer || {}), error: QUERY_ERROR_MSG.PARTICIPANT_ANSWER_UNTYPED},
       PARTICIPANT_ANSWER_DISPOSITION.REFUSED);
@@ -292,15 +298,17 @@ function isBoundRollbackParticipantState(state) {
 }
 
 function isValidBoundRollbackAnswer(answer) {
-  return answer?.durable === true &&
-    isBoundRollbackParticipantState(answer?.state) &&
-    answer?.outcome === PARTICIPANT_COMMIT_OUTCOME.NOT_COMMITTED;
+  return answer?.success === true &&
+    answer.durable === true &&
+    isBoundRollbackParticipantState(answer.state) &&
+    answer.outcome === PARTICIPANT_COMMIT_OUTCOME.NOT_COMMITTED;
 }
 
 function isValidUnboundRollbackAnswer(answer) {
-  return answer?.durable === false &&
-    answer?.state === PARTICIPANT_TRANSACTION_STATE.ABSENT &&
-    answer?.outcome === PARTICIPANT_COMMIT_OUTCOME.UNKNOWN;
+  return answer?.success === true &&
+    answer.durable === false &&
+    answer.state === PARTICIPANT_TRANSACTION_STATE.ABSENT &&
+    answer.outcome === PARTICIPANT_COMMIT_OUTCOME.UNKNOWN;
 }
 
 function rolledBackAnswerOf(value, bound = true) {
@@ -308,12 +316,39 @@ function rolledBackAnswerOf(value, bound = true) {
   const valid = bound ?
     isValidBoundRollbackAnswer(answer) :
     isValidUnboundRollbackAnswer(answer);
-  if (answer?.success !== true || !valid) {
+  if (!valid) {
     throw participantFailureOf(QUERY_OPERATION.ROLLBACK,
       {...(answer || {}), error: QUERY_ERROR_MSG.PARTICIPANT_ANSWER_UNTYPED},
       PARTICIPANT_ANSWER_DISPOSITION.REFUSED);
   }
   return answer;
+}
+
+/**
+ * Canonical terminal participant-answer validator shared across ordinary
+ * transaction completion and release settlement:
+ * - COMMIT requires success, durable, state=COMMITTED, outcome=COMMITTED
+ *   and matching expected identity when provided.
+ * - ROLLBACK requires success, durable, bound rollback state
+ *   (ROLLED_BACK or REFUSED), outcome=NOT_COMMITTED and matching identity.
+ * @param {string} decision - PARTICIPANT_TRANSACTION_DECISION.COMMIT or ROLLBACK.
+ * @param {Object} value - Participant answer payload.
+ * @param {Object|null} [expected=null] - Expected {operation, partitionId,
+ *   transactionId, participantId}.
+ * @return {boolean}
+ */
+function isTerminalParticipantDecisionAnswer(decision, value, expected = null) {
+  const answer = participantAnswerSnapshotOf(value, expected);
+  if (answer === null) {
+    return false;
+  }
+  if (decision === PARTICIPANT_TRANSACTION_DECISION.COMMIT) {
+    return isValidCommittedAnswer(answer);
+  }
+  if (decision === PARTICIPANT_TRANSACTION_DECISION.ROLLBACK) {
+    return isValidBoundRollbackAnswer(answer);
+  }
+  return false;
 }
 
 const DURABLE_OUTCOME_OF_STATE = Object.freeze({
@@ -363,9 +398,8 @@ function participantDeliveryKeyOf({transactionId, partitionId, operation}) {
 export {
   beginAnswerOf,
   committedAnswerOf,
-  isBoundRollbackParticipantState,
   isParticipantTransactionAnswer,
-  participantAnswerSnapshotOf,
+  isTerminalParticipantDecisionAnswer,
   participantDeliveryAnswerOf,
   participantDeliveryKeyOf,
   participantEntryIdOf,

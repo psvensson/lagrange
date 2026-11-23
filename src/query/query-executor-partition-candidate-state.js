@@ -90,6 +90,8 @@ function createPartitionCandidateDeliveryState({
       routingReadinessDimension,
       {
         allowReadinessAuthoritativeRefresh,
+        [QUERY_EXECUTOR_ROUTING_OPTION_FIELD.POST_ADMISSION_SETTLEMENT]:
+          executionOptions?.postAdmissionSettlement === true,
         [QUERY_EXECUTOR_ROUTING_OPTION_FIELD.READ_AUTHORITY]:
           executionOptions?.readAuthority || null,
         recoveryCandidateSelectionKey:

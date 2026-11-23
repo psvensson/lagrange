@@ -4,15 +4,20 @@
 // it does NOT currently hold RAFT_ROLE.LEADER (for example during
 // DURABLE_REJOIN before local replicas open, or as a local follower without a
 // leader redirect address), it can determine its own local durable Raft term
-// T_self >= T_pub from its live local Raft core or on-disk SQLite
-// _raft_rs_hard_state. By Raft Election Safety (at most one leader per term),
-// no honest deposed predecessor can hold term >= T_self, so peer probing
-// fenced by readAuthorityWitness.term >= T_self breaks restart deadlocks
-// without weakening S0 ruling Q1 for any other published leader or any case
-// where T_self cannot be durably established.
+// T_self >= T_pub from its live local Raft core or the exact authoritative
+// local replica's on-disk SQLite _raft_rs_hard_state. By Raft Election Safety
+// (at most one leader per term), no honest deposed predecessor can hold
+// term >= T_self, so peer probing fenced by readAuthorityWitness.term >= T_self
+// breaks restart deadlocks without weakening S0 ruling Q1 for any other
+// published leader or any case where T_self cannot be durably established or
+// lags the published leader_claim_raft_term.
 import fs from 'node:fs';
-import path from 'node:path';
 import Database from 'better-sqlite3';
+import {
+  COLUMN,
+  SERVICE_TYPE,
+  TABLES,
+} from '../constants/index.js';
 import {OWNER_FACT_UNAVAILABLE_REASON} from
   '../control-plane/control-plane-owner-fact-read-contract.js';
 import {RAFT_ROLE} from '../raft/constants.js';
@@ -22,11 +27,11 @@ import {
   RAFT_RS_TABLE,
 } from '../raft/raft-rs-durable-store-constants.js';
 import {getPartitionDbPath} from '../storage/data-directory-manager.js';
-import {STORAGE_DEFAULT} from '../storage/storage-constants.js';
 import {
   deliveryAnswerOf,
   deliveryReadingOf,
 } from '../transport/transport-semantic-outcome.js';
+import {readLowerStateField} from '../utils/state-field-read.js';
 
 const SELECT_HARD_STATE_TERM_SQL =
   `SELECT term FROM ${RAFT_RS_TABLE.HARD_STATE} WHERE group_id = ?`;
@@ -34,6 +39,9 @@ const HARD_STATE_TERM_OUTCOME = Object.freeze({
   OBSERVED: 'observed',
   ABSENT: 'absent',
   UNREADABLE: 'unreadable',
+});
+const ABSENT_TERM_OUTCOME = Object.freeze({
+  state: HARD_STATE_TERM_OUTCOME.ABSENT,
 });
 const TERM_FLOOR_CHECK_STATE = Object.freeze({
   ACCEPTED: 'accepted',
@@ -44,6 +52,7 @@ const INELIGIBLE_TERM_FLOOR = Object.freeze({
   hasLocalReplica: false,
   termFloor: null,
 });
+const REMOVED_SERVICE_STATUS = 'removed';
 const SELF_LEADER_TERM_READ_UNAVAILABLE_LOG =
   'Failed closed reading local durable Raft term for self-published leader probe';
 
@@ -70,18 +79,18 @@ function queryHardStateTermInDb(db, partitionId) {
   const hasTable = db.prepare(RAFT_RS_SCHEMA_SQL.SELECT_TABLE_PRESENT)
     .get(RAFT_RS_TABLE.HARD_STATE) !== undefined;
   if (!hasTable) {
-    return Object.freeze({state: HARD_STATE_TERM_OUTCOME.ABSENT});
+    return ABSENT_TERM_OUTCOME;
   }
   const row = db.prepare(SELECT_HARD_STATE_TERM_SQL).get(partitionId);
   const term = positiveSafeTerm(row?.term);
   return term !== null ?
     Object.freeze({state: HARD_STATE_TERM_OUTCOME.OBSERVED, term}) :
-    Object.freeze({state: HARD_STATE_TERM_OUTCOME.ABSENT});
+    ABSENT_TERM_OUTCOME;
 }
 
 function readHardStateTermFromDbFile(dbPath, partitionId, logger) {
   if (!dbPath || !fs.existsSync(dbPath)) {
-    return Object.freeze({state: HARD_STATE_TERM_OUTCOME.ABSENT});
+    return ABSENT_TERM_OUTCOME;
   }
   let db = null;
   try {
@@ -101,89 +110,115 @@ function readHardStateTermFromDbFile(dbPath, partitionId, logger) {
   }
 }
 
-function listPartitionDirDbPaths(dataDir, partitionId, logger) {
-  const partitionDir = path.join(
-    dataDir,
-    STORAGE_DEFAULT.PARTITIONS_DIRNAME,
-    partitionId,
-  );
-  if (!fs.existsSync(partitionDir)) {
-    return Object.freeze({state: HARD_STATE_TERM_OUTCOME.ABSENT, paths: []});
+function ensureExecutorDiskTermMemo(executor) {
+  if (!(executor.selfPublishedLeaderDiskTermMemo instanceof Map)) {
+    executor.selfPublishedLeaderDiskTermMemo = new Map();
   }
-  try {
-    const paths = fs.readdirSync(partitionDir)
-      .filter((entry) => entry.endsWith(STORAGE_DEFAULT.DB_EXT))
-      .map((entry) => path.join(partitionDir, entry));
-    return Object.freeze({state: HARD_STATE_TERM_OUTCOME.OBSERVED, paths});
-  } catch (error) {
-    logger?.debug?.(SELF_LEADER_TERM_READ_UNAVAILABLE_LOG, {
-      partitionId,
-      partitionDir,
-      error: error?.message || String(error),
-    });
-    return Object.freeze({state: HARD_STATE_TERM_OUTCOME.UNREADABLE, paths: [], error});
-  }
+  return executor.selfPublishedLeaderDiskTermMemo;
 }
 
-function addServiceRowDbPaths(paths, dataDir, partitionId, nodeId, routingSnapshot) {
-  const serviceRows = Array.isArray(routingSnapshot?.serviceRows) ?
-    routingSnapshot.serviceRows : [];
-  for (const row of serviceRows) {
-    const replicaId = row?.service_id || row?.replica_id || null;
-    if (row?.node_id === nodeId && replicaId) {
-      paths.add(getPartitionDbPath(dataDir, partitionId, replicaId));
+function lookupDiskTermMemo(executor, partitionId, memoKey) {
+  const byReplica = executor?.selfPublishedLeaderDiskTermMemo?.get(partitionId);
+  if (!byReplica || !byReplica.has(memoKey)) {
+    return ABSENT_TERM_OUTCOME;
+  }
+  return Object.freeze({
+    state: HARD_STATE_TERM_OUTCOME.OBSERVED,
+    term: byReplica.get(memoKey),
+  });
+}
+
+function storeDiskTermMemo(executor, partitionId, memoKey, term) {
+  const byPartition = ensureExecutorDiskTermMemo(executor);
+  let byReplica = byPartition.get(partitionId);
+  if (!byReplica) {
+    byReplica = new Map();
+    byPartition.set(partitionId, byReplica);
+  }
+  byReplica.set(memoKey, term);
+}
+
+function invalidatePartitionDiskTermMemo(executor, partitionId) {
+  executor?.selfPublishedLeaderDiskTermMemo?.delete(partitionId);
+}
+
+function isAuthoritativeLocalServiceRow(row, partitionId, nodeId) {
+  if (!row || row.partition_id !== partitionId || row.node_id !== nodeId) {
+    return false;
+  }
+  if (readLowerStateField(row.status) === REMOVED_SERVICE_STATUS) {
+    return false;
+  }
+  return !row.service_type || row.service_type === SERVICE_TYPE.PARTITION;
+}
+
+function readPartitionServiceRows(executor, partitionId, routingSnapshot) {
+  if (Array.isArray(routingSnapshot?.serviceRows)) {
+    return routingSnapshot.serviceRows;
+  }
+  return executor?.systemCache?.filter?.(
+    TABLES.SERVICES,
+    (row) => row?.partition_id === partitionId,
+  ) || [];
+}
+
+function collectAuthoritativeLocalReplicaIds(executor, partitionId, routingSnapshot) {
+  const rows = readPartitionServiceRows(executor, partitionId, routingSnapshot);
+  const replicaIds = new Set();
+  for (const row of rows) {
+    if (!isAuthoritativeLocalServiceRow(row, partitionId, executor.nodeId)) {
+      continue;
+    }
+    const replicaId = row.service_id || row.replica_id || null;
+    if (typeof replicaId === 'string' && replicaId.length > 0) {
+      replicaIds.add(replicaId);
     }
   }
+  return [...replicaIds];
 }
 
-function addLocalReplicaDbPaths(paths, dataDir, partitionId, localReplicas) {
-  for (const replica of localReplicas) {
-    if (replica?.replicaId) {
-      paths.add(getPartitionDbPath(dataDir, partitionId, replica.replicaId));
-    }
-  }
-}
-
-function collectLocalPartitionDbPaths(
-  dataDir,
-  partitionId,
-  nodeId,
-  routingSnapshot,
-  localReplicas,
-  logger,
-) {
+function readReplicaDiskTerm(executor, partitionId, replicaId) {
+  const dataDir = executor?.dataDir;
   if (!dataDir) {
-    return [];
+    return ABSENT_TERM_OUTCOME;
   }
-  const dirListing = listPartitionDirDbPaths(dataDir, partitionId, logger);
-  const paths = new Set(dirListing.paths);
-  addServiceRowDbPaths(paths, dataDir, partitionId, nodeId, routingSnapshot);
-  addLocalReplicaDbPaths(paths, dataDir, partitionId, localReplicas);
-  return [...paths];
+  const memoKey = `${dataDir}\0${replicaId}`;
+  const memoized = lookupDiskTermMemo(executor, partitionId, memoKey);
+  if (memoized.state === HARD_STATE_TERM_OUTCOME.OBSERVED) {
+    return memoized;
+  }
+  const dbPath = getPartitionDbPath(dataDir, partitionId, replicaId);
+  const outcome = readHardStateTermFromDbFile(dbPath, partitionId, executor.logger);
+  if (outcome.state === HARD_STATE_TERM_OUTCOME.OBSERVED) {
+    storeDiskTermMemo(executor, partitionId, memoKey, outcome.term);
+  }
+  return outcome;
 }
 
-function readDiskHardStateTermFloor(
-  executor,
-  partitionId,
-  routingSnapshot,
-  localReplicas,
-) {
-  const dbPaths = collectLocalPartitionDbPaths(
-    executor.dataDir,
+function readDiskHardStateTermFloor(executor, partitionId, routingSnapshot) {
+  if (!executor?.dataDir) {
+    return ABSENT_TERM_OUTCOME;
+  }
+  const replicaIds = collectAuthoritativeLocalReplicaIds(
+    executor,
     partitionId,
-    executor.nodeId,
     routingSnapshot,
-    localReplicas,
-    executor.logger,
   );
   let maxTerm = null;
-  for (const dbPath of dbPaths) {
-    const outcome = readHardStateTermFromDbFile(dbPath, partitionId, executor.logger);
+  for (const replicaId of replicaIds) {
+    const outcome = readReplicaDiskTerm(executor, partitionId, replicaId);
     if (outcome.state === HARD_STATE_TERM_OUTCOME.OBSERVED) {
       maxTerm = maxPositiveTerm(maxTerm, outcome.term);
     }
   }
-  return maxTerm;
+  return maxTerm !== null ?
+    Object.freeze({state: HARD_STATE_TERM_OUTCOME.OBSERVED, term: maxTerm}) :
+    ABSENT_TERM_OUTCOME;
+}
+
+function readPublishedLeaderClaimTerm(executor, partitionId) {
+  const partitionRow = executor?.getPartitionRecord?.(partitionId) ?? null;
+  return positiveSafeTerm(partitionRow?.[COLUMN.LEADER_CLAIM_RAFT_TERM]);
 }
 
 function isMatchingCoreAuthority(obs, partitionId, replicaId) {
@@ -220,27 +255,38 @@ function resolveSelfPublishedLeaderTermFloor(executor, partitionId, routingSnaps
   }
   const rawLocalReplicas = executor.getLocalPartitionReplicas?.(partitionId) ?? null;
   const localReplicas = Array.isArray(rawLocalReplicas) ? rawLocalReplicas : [];
-  const {isLocalLeader, liveTerm} = observeLocalReplicasTermState(
-    localReplicas,
-    partitionId,
-  );
-  if (isLocalLeader) {
+  let localTerm = null;
+  if (localReplicas.length > 0) {
+    invalidatePartitionDiskTermMemo(executor, partitionId);
+    const {isLocalLeader, liveTerm} = observeLocalReplicasTermState(
+      localReplicas,
+      partitionId,
+    );
+    if (isLocalLeader) {
+      return INELIGIBLE_TERM_FLOOR;
+    }
+    localTerm = liveTerm;
+  } else {
+    const diskOutcome = readDiskHardStateTermFloor(
+      executor,
+      partitionId,
+      routingSnapshot,
+    );
+    localTerm = diskOutcome.state === HARD_STATE_TERM_OUTCOME.OBSERVED ?
+      diskOutcome.term :
+      null;
+  }
+  if (localTerm === null) {
     return INELIGIBLE_TERM_FLOOR;
   }
-  const diskTerm = readDiskHardStateTermFloor(
-    executor,
-    partitionId,
-    routingSnapshot,
-    localReplicas,
-  );
-  const termFloor = maxPositiveTerm(liveTerm, diskTerm);
-  if (termFloor === null) {
+  const publishedClaimTerm = readPublishedLeaderClaimTerm(executor, partitionId);
+  if (publishedClaimTerm !== null && localTerm < publishedClaimTerm) {
     return INELIGIBLE_TERM_FLOOR;
   }
   return Object.freeze({
     eligible: true,
     hasLocalReplica: localReplicas.length > 0,
-    termFloor,
+    termFloor: localTerm,
   });
 }
 

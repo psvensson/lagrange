@@ -4,6 +4,20 @@ import {
 
 const LOCAL_STR_FUNCTION = 'function';
 
+function bindRebalanceCoordinatorToSqlEngines(owner, rebalanceCoordinator) {
+  if (!owner || !rebalanceCoordinator) {
+    return;
+  }
+  const engines = new Set([
+    owner.sqlQueryEngine,
+    owner.cdcIntegrationService?.sqlQueryEngine,
+    owner.seedRuntimeBridgeOwner?.sqlQueryEngine,
+  ]);
+  for (const engine of engines) {
+    engine?.setRebalanceCoordinator?.(rebalanceCoordinator);
+  }
+}
+
 class StartupRuntimeSurfaceOwner {
   constructor(options = {}) {
     this.delegates = options.delegates || {};
@@ -18,6 +32,9 @@ class StartupRuntimeSurfaceOwner {
         this.delegates.getTablePolicyService?.() || null;
       const rebalanceCoordinator =
         this.delegates.getRebalanceCoordinator?.() || null;
+      const owner = this.delegates.getOwner?.() || null;
+
+      bindRebalanceCoordinatorToSqlEngines(owner, rebalanceCoordinator);
 
       for (const messageGroupService of
         this.delegates.getMessageGroupServices?.()?.values?.() || []) {
