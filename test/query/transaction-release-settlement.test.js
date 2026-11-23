@@ -377,3 +377,127 @@ test('release settlement validates full live row via releaseRowOf and validates 
       null,
     );
   });
+
+test('release settlement accepts durable REFUSED participant answers on ROLLBACK (e.g. PREPARE write conflict) and memoizes',
+  async (t) => {
+    const partitions = ['district-p1', 'orders-p1', 'new_order-p1', 'order_line-p1', 'stock-p1'];
+    const manifest = participantSetTextOf(TX, partitions);
+    const pairs = JSON.parse(manifest);
+    const decision = buildDecisionRecord(
+      TX,
+      'ROLLBACK',
+      pairs.map(([participantId]) => [participantId, null]),
+    );
+    const refusedPartition = 'district-p1';
+    const f = fixture(t, baseRow({
+      status: 'ROLLED_BACK',
+      participant_set_state: 'FROZEN',
+      participant_set_text: manifest,
+      commit_mode: 'TWO_PHASE_COMMIT',
+      frozen_participant_count: pairs.length,
+      decision: decision.decision,
+      decision_text: decision.decisionText,
+      decision_digest: decision.decisionDigest,
+    }), () => ({success: true, durable: true, state: 'ROLLED_BACK', outcome: 'NOT_COMMITTED'}));
+    const baseDeliver = f.engine.deliverTransactionOperation;
+    f.engine.deliverTransactionOperation = async (sessionId, partitionId, operation, options) => {
+      if (partitionId === refusedPartition) {
+        f.deliveries.push({sessionId, partitionId, operation, options});
+        return {
+          operation,
+          partitionId,
+          transactionId: options.transactionId,
+          participantId: options.participantId,
+          success: true,
+          durable: true,
+          state: 'REFUSED',
+          outcome: 'NOT_COMMITTED',
+          refusalCause: 'conflict',
+        };
+      }
+      return baseDeliver(sessionId, partitionId, operation, options);
+    };
+
+    const census = readTransactionReleaseCensus(f.gateway.db);
+    const settled = await settleTransactionReleaseRows({
+      engine: f.engine,
+      service: f.service,
+      census,
+      now: NOW,
+    });
+    assert.ok(Array.isArray(settled), 'durable REFUSED participant must complete ROLLBACK release settlement');
+    assert.equal(settled.length, 1);
+    assert.equal(settled[0].decision, 'ROLLBACK');
+    assert.equal(settled[0].terminalStatus, 'ROLLED_BACK');
+    assert.equal(settled[0].participantIds.length, pairs.length);
+    assert.equal(f.deliveries.length, pairs.length);
+
+    const release = {releaseId: 'release-id'};
+    const attempt = {term: 4, leaderReplicaId: 'r1'};
+    const proof = transactionReleaseProofOf({release, attempt, census, transactions: settled});
+    assert.equal(transactionReleaseProofValid(proof, {release, attempt, census}), true);
+
+    // Second pass reuses the memo without re-driving any of the 5 participant partitions.
+    const second = await settleTransactionReleaseRows({
+      engine: f.engine,
+      service: f.service,
+      census,
+      now: NOW,
+    });
+    assert.deepEqual(second, settled);
+    assert.equal(f.deliveries.length, pairs.length);
+  });
+
+test('release settlement fails closed on non-durable or mismatched REFUSED participant answers',
+  async (t) => {
+    const rollbackDecision = buildDecisionRecord(TX, 'ROLLBACK', [[PARTICIPANT, null]]);
+    const rollbackRow = baseRow({
+      status: 'ROLLED_BACK',
+      participant_set_state: 'FROZEN',
+      commit_mode: 'TWO_PHASE_COMMIT',
+      frozen_participant_count: 1,
+      decision: rollbackDecision.decision,
+      decision_text: rollbackDecision.decisionText,
+      decision_digest: rollbackDecision.decisionDigest,
+    });
+
+    for (const badAnswer of [
+      {success: true, durable: false, state: 'REFUSED', outcome: 'NOT_COMMITTED'},
+      {success: true, durable: true, state: 'REFUSED', outcome: 'UNKNOWN'},
+      {success: true, state: 'REFUSED', outcome: 'NOT_COMMITTED'},
+      {success: false, durable: true, state: 'REFUSED', outcome: 'NOT_COMMITTED'},
+      {success: true, durable: true, state: 'PREPARED', outcome: 'UNKNOWN'},
+      {success: true, durable: true, state: 'COMMITTED', outcome: 'COMMITTED'},
+    ]) {
+      const f = fixture(t, rollbackRow, () => badAnswer);
+      const census = readTransactionReleaseCensus(f.gateway.db);
+      const result = await settleTransactionReleaseRows({
+        engine: f.engine,
+        service: f.service,
+        census,
+        now: NOW,
+      });
+      assert.equal(result, null, `ROLLBACK must reject ${JSON.stringify(badAnswer)}`);
+    }
+
+    const commitDecision = buildDecisionRecord(TX, 'COMMIT', [[PARTICIPANT, 'prepared']]);
+    const commitFixture = fixture(t, baseRow({
+      status: 'COMMITTING',
+      participant_set_state: 'FROZEN',
+      commit_mode: 'TWO_PHASE_COMMIT',
+      frozen_participant_count: 1,
+      decision: commitDecision.decision,
+      decision_text: commitDecision.decisionText,
+      decision_digest: commitDecision.decisionDigest,
+    }), () => ({success: true, durable: true, state: 'REFUSED', outcome: 'NOT_COMMITTED'}));
+    assert.equal(
+      await settleTransactionReleaseRows({
+        engine: commitFixture.engine,
+        service: commitFixture.service,
+        census: readTransactionReleaseCensus(commitFixture.gateway.db),
+        now: NOW,
+      }),
+      null,
+      'COMMIT must never accept a REFUSED participant answer',
+    );
+  });
