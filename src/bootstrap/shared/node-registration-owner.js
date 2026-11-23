@@ -22,6 +22,8 @@ import {
   LOG_RESUMING_JOIN_ADMISSION_PROGRESS,
   LOG_REUSING_DURABLE_REJOIN_MEMBERSHIP,
   NODE_REGISTRATION_ERROR,
+  assignRegistrationFailureCode,
+  buildRegistrationFailureError,
 } from './node-registration-owner-constants.js';
 import {requireDeclaredNodeHostId} from
   '../../topology/node-host-identity.js';
@@ -38,51 +40,36 @@ const REGISTRATION_ERROR_RETRY_HINT = Object.freeze({
   UNSPECIFIED: 'unspecified',
 });
 
-// The error code a registration failure surfaces: the direct `code` when
-// present, else the alternate `errorCode` carrier, else nothing.
-function resolveNodeRegistrationErrorCode(error) {
-  if (typeof error?.code === 'string' && error.code.length > 0) {
-    return error.code;
-  }
-  if (typeof error?.errorCode === 'string' && error.errorCode.length > 0) {
-    return error.errorCode;
-  }
-  return undefined;
-}
-
 // A superseded lifecycle (STALE_NODE_INCARNATION) carries its explicit boolean
 // verdict (`true` when retryable by a new lifecycle, `false` otherwise); any
-// other explicitly non-retryable refusal carries `false`.
+// other explicitly typed retryable boolean carries through unchanged.
 function classifyNodeRegistrationErrorRetryHint(error) {
   if (error?.code === STALE_NODE_INCARNATION_CODE) {
     return error.retryable === true ?
       REGISTRATION_ERROR_RETRY_HINT.RETRYABLE :
       REGISTRATION_ERROR_RETRY_HINT.NON_RETRYABLE;
   }
+  if (error?.retryable === true) {
+    return REGISTRATION_ERROR_RETRY_HINT.RETRYABLE;
+  }
   return error?.retryable === false ?
     REGISTRATION_ERROR_RETRY_HINT.NON_RETRYABLE :
     REGISTRATION_ERROR_RETRY_HINT.UNSPECIFIED;
 }
 
-// Carry the retry hints and diagnostics the joiner needs to classify the
-// failure (retryable, deferred, or terminal) onto the wrapped error.
-function carryNodeRegistrationErrorHints(wrappedError, error) {
-  if (Number.isFinite(error?.retryAfterMs)) {
-    wrappedError.retryAfterMs = Math.floor(error.retryAfterMs);
+function carryRegistrationFailureIdentityFields(wrappedError, error) {
+  if (typeof error?.failureCode === 'string' && error.failureCode.length > 0) {
+    wrappedError.failureCode = error.failureCode;
   }
-  if (error?.deferRetry === true) {
-    wrappedError.deferRetry = true;
+  if (typeof error?.outcome === 'string' && error.outcome.length > 0) {
+    wrappedError.outcome = error.outcome;
   }
-  const retryHint = classifyNodeRegistrationErrorRetryHint(error);
-  if (retryHint !== REGISTRATION_ERROR_RETRY_HINT.UNSPECIFIED) {
-    wrappedError.retryable =
-      retryHint === REGISTRATION_ERROR_RETRY_HINT.RETRYABLE;
+  if (typeof error?.entryId === 'string' && error.entryId.length > 0) {
+    wrappedError.entryId = error.entryId;
   }
-  if (error?.publicationDiagnostics &&
-    typeof error.publicationDiagnostics === 'object') {
-    wrappedError.publicationDiagnostics =
-      error.publicationDiagnostics;
-  }
+}
+
+function carryIncarnationConflictDiagnostics(wrappedError, error) {
   // A superseded lifecycle (node-registration-incarnation-write.js) is
   // retryable by a new lifecycle that reserves above the incarnation that
   // superseded it: the join failure carries knownIncarnation to the reattempt.
@@ -100,6 +87,29 @@ function carryNodeRegistrationErrorHints(wrappedError, error) {
   }
 }
 
+// Carry the retry hints and diagnostics the joiner needs to classify the
+// failure (retryable, deferred, or terminal) onto the wrapped error.
+function carryNodeRegistrationErrorHints(wrappedError, error) {
+  carryRegistrationFailureIdentityFields(wrappedError, error);
+  if (Number.isFinite(error?.retryAfterMs)) {
+    wrappedError.retryAfterMs = Math.floor(error.retryAfterMs);
+  }
+  if (error?.deferRetry === true) {
+    wrappedError.deferRetry = true;
+  }
+  const retryHint = classifyNodeRegistrationErrorRetryHint(error);
+  if (retryHint !== REGISTRATION_ERROR_RETRY_HINT.UNSPECIFIED) {
+    wrappedError.retryable =
+      retryHint === REGISTRATION_ERROR_RETRY_HINT.RETRYABLE;
+  }
+  if (error?.publicationDiagnostics &&
+    typeof error.publicationDiagnostics === 'object') {
+    wrappedError.publicationDiagnostics =
+      error.publicationDiagnostics;
+  }
+  carryIncarnationConflictDiagnostics(wrappedError, error);
+}
+
 // Wrap one registration failure, preserving the code, retry hints, and
 // diagnostics the joiner needs to classify it.
 function wrapNodeRegistrationError(error) {
@@ -107,10 +117,7 @@ function wrapNodeRegistrationError(error) {
     `${LOG_NODE_REGISTER_ERROR_PREFIX}${error.message}`,
   );
   wrappedError.cause = error;
-  const code = resolveNodeRegistrationErrorCode(error);
-  if (code !== undefined) {
-    wrappedError.code = code;
-  }
+  assignRegistrationFailureCode(wrappedError, error);
   carryNodeRegistrationErrorHints(wrappedError, error);
   return wrappedError;
 }
@@ -200,8 +207,9 @@ class NodeRegistrationOwner {
           },
         );
         if (nodeUpsertResult?.success !== true) {
-          throw new Error(
-            `Failed to register node: ${nodeUpsertResult?.error}`,
+          throw buildRegistrationFailureError(
+            LOG_NODE_REGISTER_ERROR_PREFIX,
+            nodeUpsertResult,
           );
         }
         const nodeOriginHlc =

@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2789,
+    "ordinary": 2790,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2815,
-  "digest": "fnv1a32-9c565724",
+  "censusSize": 2816,
+  "digest": "fnv1a32-3519bc2c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -257,6 +257,7 @@
     "test/bootstrap/register-service-move-handoff-refused.test.js": "ordinary",
     "test/bootstrap/register-service-retryable-refusal.test.js": "ordinary",
     "test/bootstrap/registered-service-row-raft-role.test.js": "ordinary",
+    "test/bootstrap/registration-failure-and-activation-deadline-hardening.test.js": "ordinary",
     "test/bootstrap/rejoin-hints.test.js": "ordinary",
     "test/bootstrap/release-version-fence.test.js": "ordinary",
     "test/bootstrap/removed-formation-barrier-and-handoff-census.test.js": "ordinary",

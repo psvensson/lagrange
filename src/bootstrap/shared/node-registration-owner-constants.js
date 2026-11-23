@@ -21,6 +21,10 @@ const LOG_META_ENDPOINT_REGISTER_FAILED =
   'Failed to register built-in meta service endpoints';
 const LOG_NODE_REGISTER_ERROR_PREFIX =
   'Failed to register node: ';
+const LOG_ENDPOINT_REGISTER_ERROR_PREFIX =
+  'Failed to register endpoint: ';
+const LOG_META_ENDPOINT_REGISTER_ERROR_PREFIX =
+  'Failed to register meta endpoint: ';
 const LOG_JOIN_ADMISSION_WRITE_RETRY =
   'Retrying join admission system-table write after retryable failure';
 const LOG_REUSING_DURABLE_REJOIN_MEMBERSHIP =
@@ -72,6 +76,72 @@ const hasFunction = (value) => typeof value === 'function';
 const normalizeString = (value) =>
   typeof value === 'string' ? value.trim() : '';
 
+const REGISTRATION_FAILURE_TEXT_FIELDS = Object.freeze([
+  'failureCode',
+  'outcome',
+  'entryId',
+]);
+const REGISTRATION_FAILURE_BOOL_FIELDS = Object.freeze([
+  'retryable',
+  'deferRetry',
+]);
+
+function assignRegistrationFailureCode(target, source) {
+  if (typeof source?.code === 'string' && source.code.length > 0) {
+    target.code = source.code;
+    return;
+  }
+  if (typeof source?.errorCode === 'string' && source.errorCode.length > 0) {
+    target.code = source.errorCode;
+  }
+}
+
+function copyStructuredRegistrationFailureFields(target, source) {
+  if (!source || typeof source !== 'object') {
+    return target;
+  }
+  assignRegistrationFailureCode(target, source);
+  for (const field of REGISTRATION_FAILURE_TEXT_FIELDS) {
+    if (typeof source[field] === 'string' && source[field].length > 0) {
+      target[field] = source[field];
+    }
+  }
+  for (const field of REGISTRATION_FAILURE_BOOL_FIELDS) {
+    if (typeof source[field] === 'boolean') {
+      target[field] = source[field];
+    }
+  }
+  if (Number.isFinite(source.retryAfterMs)) {
+    target.retryAfterMs = Math.floor(source.retryAfterMs);
+  }
+  if (source.publicationDiagnostics &&
+    typeof source.publicationDiagnostics === 'object') {
+    target.publicationDiagnostics = source.publicationDiagnostics;
+  }
+  return target;
+}
+
+function resolveRegistrationFailureDetail(result) {
+  if (typeof result?.error === 'string' && result.error.length > 0) {
+    return result.error;
+  }
+  if (typeof result?.outcome === 'string' && result.outcome.length > 0) {
+    return result.outcome;
+  }
+  return String(result?.error);
+}
+
+function buildRegistrationFailureError(prefix, result) {
+  const error = new Error(`${prefix}${resolveRegistrationFailureDetail(result)}`);
+  copyStructuredRegistrationFailureFields(error, result);
+  if (result?.cause !== undefined) {
+    error.cause = result.cause;
+  } else if (result && typeof result === 'object') {
+    error.cause = result;
+  }
+  return error;
+}
+
 export {
   AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE_MESSAGE,
   AUTHORITATIVE_ROW_UNAVAILABLE_RETRY_AFTER_MS,
@@ -89,13 +159,18 @@ export {
   LOCAL_STR_VWYJO,
   LOG_AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE,
   LOG_CLUSTER_INCARNATION_FENCE_UNAVAILABLE,
+  LOG_ENDPOINT_REGISTER_ERROR_PREFIX,
   LOG_JOIN_ADMISSION_WRITE_RETRY,
+  LOG_META_ENDPOINT_REGISTER_ERROR_PREFIX,
   LOG_META_ENDPOINT_REGISTER_FAILED,
   LOG_NODE_REGISTER_ERROR_PREFIX,
   LOG_RESUMING_JOIN_ADMISSION_PROGRESS,
   LOG_REUSING_DURABLE_REJOIN_MEMBERSHIP,
   NODE_REGISTRATION_ERROR,
   REUSABLE_JOIN_ADMISSION_CONNECTION_STATES,
+  assignRegistrationFailureCode,
+  buildRegistrationFailureError,
+  copyStructuredRegistrationFailureFields,
   hasFunction,
   normalizeString,
 };

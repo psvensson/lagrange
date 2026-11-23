@@ -59,9 +59,13 @@ import {
   LOCAL_STR_1S6CG,
   LOCAL_STR_UPSERT,
   LOCAL_STR_V0KZD,
+  LOG_ENDPOINT_REGISTER_ERROR_PREFIX,
   LOG_JOIN_ADMISSION_WRITE_RETRY,
+  LOG_META_ENDPOINT_REGISTER_ERROR_PREFIX,
   LOG_META_ENDPOINT_REGISTER_FAILED,
   NODE_REGISTRATION_ERROR,
+  buildRegistrationFailureError,
+  copyStructuredRegistrationFailureFields,
   hasFunction,
   normalizeString,
 } from './node-registration-owner-constants.js';
@@ -119,6 +123,23 @@ function normalizeOwnRetryAfterMs(primary, pressure) {
   return NULL_VALUE;
 }
 
+function attachEndpointFailureMetadata(normalized, endpointOutcome) {
+  if (normalized.success) {
+    return normalized;
+  }
+  const failureResult = endpointOutcome.result;
+  if (!failureResult || typeof failureResult !== 'object') {
+    return normalized;
+  }
+  copyStructuredRegistrationFailureFields(normalized, failureResult);
+  if (typeof failureResult.error === 'string' && failureResult.error.length > 0) {
+    normalized.error = failureResult.error;
+  }
+  normalized.outcome = endpointOutcome.outcome;
+  normalized.cause = failureResult;
+  return normalized;
+}
+
 function normalizeEndpointOutcomeResult(endpointOutcome) {
   const completed =
     isEndpointIncarnationOutcomeCompleted(endpointOutcome.outcome) &&
@@ -126,11 +147,14 @@ function normalizeEndpointOutcomeResult(endpointOutcome) {
   if (!completed && endpointOutcome.error) throw endpointOutcome.error;
   const originHlc = endpointOutcome.result?.originHlc ||
     endpointOutcome.result?.partitionResult?.originHlc || null;
-  return {
-    success: completed, outcome: endpointOutcome.outcome,
-    originHlc: typeof originHlc === 'string' && originHlc.length > 0 ? originHlc : null,
+  return attachEndpointFailureMetadata({
+    success: completed,
+    outcome: endpointOutcome.outcome,
+    originHlc: typeof originHlc === 'string' && originHlc.length > 0 ?
+      originHlc :
+      null,
     error: completed ? null : endpointOutcome.outcome,
-  };
+  }, endpointOutcome);
 }
 
 function classifyJoinAdmissionMutationAcceptance(result) {
@@ -244,9 +268,10 @@ class NodeRegistrationOwnerPublicationMethods {
         admissionTarget: JOIN_ADMISSION_PUBLICATION.NODE_ENDPOINT,
       },
     );
-    if (!endpointResult?.success) {
-      throw new Error(
-        `Failed to register endpoint: ${endpointResult?.error}`,
+    if (endpointResult?.success !== true) {
+      throw buildRegistrationFailureError(
+        LOG_ENDPOINT_REGISTER_ERROR_PREFIX,
+        endpointResult,
       );
     }
 
@@ -278,9 +303,11 @@ class NodeRegistrationOwnerPublicationMethods {
                 JOIN_ADMISSION_PUBLICATION.META_SERVICE_ENDPOINT,
             },
           );
-          if (result?.success === false) {
-            throw new Error(
-              `Failed to register meta endpoint: ${result.error}`);
+          if (result?.success !== true) {
+            throw buildRegistrationFailureError(
+              LOG_META_ENDPOINT_REGISTER_ERROR_PREFIX,
+              result,
+            );
           }
           endpointRows.push(withOriginHlcStamp(row, result?.originHlc));
           return result;

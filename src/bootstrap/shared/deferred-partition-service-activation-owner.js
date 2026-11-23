@@ -55,6 +55,25 @@ function defaultSleep(delayMs) {
   return new Promise((resolve) => setTimeout(resolve, delayMs));
 }
 
+function ignoreDetachedSettlement() {}
+
+function buildBoundedBatchOptions(expectedReplicaIncarnationByReplicaId, passOptions = {}) {
+  const batchOptions = {
+    deferTransientFailures: true,
+    retireSupersededReplicas: true,
+    skipMissingHandlerPreflight: true,
+    expectedReplicaIncarnationByReplicaId,
+  };
+  if (Number.isFinite(passOptions.timeoutMs) &&
+      passOptions.timeoutMs >= MIN_POSITIVE_MS) {
+    batchOptions.timeoutMs = Math.floor(passOptions.timeoutMs);
+  }
+  if (Number.isFinite(passOptions.deadlineMs)) {
+    batchOptions.deadlineMs = passOptions.deadlineMs;
+  }
+  return batchOptions;
+}
+
 /**
  * Owns deferred durable-rejoin partition replica activation obligations on a
  * joining node so transient authority loss is retained under each replica's
@@ -203,7 +222,7 @@ class DeferredPartitionServiceActivationOwner {
     return liveIds;
   }
 
-  async runSingleRetryPass() {
+  async runSingleRetryPass(passOptions = {}) {
     const liveIds = this.collectLivePendingReplicaIds();
     if (liveIds.length === 0) {
       this.clearRetryTimer();
@@ -218,17 +237,18 @@ class DeferredPartitionServiceActivationOwner {
         expectedReplicaIncarnationByReplicaId.set(replicaId, incarnation);
       }
     }
-    const activatedCount = await this.delegates.activateReplicaBatch(liveIds, {
-      deferTransientFailures: true,
-      retireSupersededReplicas: true,
-      skipMissingHandlerPreflight: true,
-      expectedReplicaIncarnationByReplicaId,
-    });
+    const activatedCount = await this.delegates.activateReplicaBatch(
+      liveIds,
+      buildBoundedBatchOptions(
+        expectedReplicaIncarnationByReplicaId,
+        passOptions,
+      ),
+    );
     this.syncRestoreState();
     return activatedCount;
   }
 
-  async retryPendingIfNeeded() {
+  async retryPendingIfNeeded(passOptions = {}) {
     if (this.isStopped() || !this.hasPending()) {
       this.clearRetryTimer();
       this.syncRestoreState();
@@ -237,11 +257,52 @@ class DeferredPartitionServiceActivationOwner {
     if (this.inFlightRetry !== null) {
       return this.inFlightRetry;
     }
-    const pass = this.runSingleRetryPass().finally(() => {
-      this.inFlightRetry = null;
+    let pass = null;
+    pass = this.runSingleRetryPass(passOptions).finally(() => {
+      if (this.inFlightRetry === pass) {
+        this.inFlightRetry = null;
+      }
     });
     this.inFlightRetry = pass;
     return pass;
+  }
+
+  detachTimedOutRetryPass(retryPass) {
+    if (this.inFlightRetry === retryPass) {
+      this.inFlightRetry = null;
+    }
+    // Absorb a late settlement from the detached pass so it cannot surface
+    // as an unhandled rejection after the deadline has already expired.
+    void retryPass.then(ignoreDetachedSettlement, ignoreDetachedSettlement);
+  }
+
+  async awaitRetryPassWithBudget(remainingMs, deadlineMs) {
+    const retryPass = this.retryPendingIfNeeded({
+      timeoutMs: remainingMs,
+      deadlineMs,
+    });
+    let timer = null;
+    let timedOut = false;
+    const timeoutPromise = new Promise((_, reject) => {
+      timer = this.scheduleTimer(() => {
+        timedOut = true;
+        this.detachTimedOutRetryPass(retryPass);
+        this.syncRestoreState();
+        reject(
+          buildPendingActivationTimeoutError(
+            this.pendingReplicaIds(),
+            this.getLastError(),
+          ),
+        );
+      }, remainingMs);
+    });
+    try {
+      await Promise.race([retryPass, timeoutPromise]);
+    } finally {
+      if (!timedOut && timer !== null) {
+        this.cancelTimer(timer);
+      }
+    }
   }
 
   async settleBeforeDeadline(deadlineMs, delayMs) {
@@ -256,7 +317,15 @@ class DeferredPartitionServiceActivationOwner {
         this.getLastError(),
       );
     }
-    await this.retryPendingIfNeeded();
+    const beforePassRemainingMs = deadlineMs - this.now();
+    if (beforePassRemainingMs <= 0) {
+      this.syncRestoreState();
+      throw buildPendingActivationTimeoutError(
+        this.pendingReplicaIds(),
+        this.getLastError(),
+      );
+    }
+    await this.awaitRetryPassWithBudget(beforePassRemainingMs, deadlineMs);
     if (!this.hasPending()) {
       this.clearRetryTimer();
       this.syncRestoreState();

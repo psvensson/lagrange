@@ -12,7 +12,7 @@ documentClass: generated
 - [cdc-integration-setup.js](cdc-integration-setup.js) - CDCIntegrationSetup - Shared CDC integration service creation and configuration. (importers: many)
 - [cdc-propagation-filter.js](cdc-propagation-filter.js) - Shared CDC propagation filter for bootstrap paths. (importers: few)
 - [control-plane-setup.js](control-plane-setup.js) - ControlPlaneSetup - Shared control plane service creation and configuration. (importers: many)
-- [deferred-partition-service-activation-owner.js](deferred-partition-service-activation-owner.js) - Owns deferred durable-rejoin partition replica activation obligations on a joining node so transient authority loss... (importers: one)
+- [deferred-partition-service-activation-owner.js](deferred-partition-service-activation-owner.js) - Owns deferred durable-rejoin partition replica activation obligations on a joining node so transient authority loss... (importers: few)
 - [durable-rejoin-partition-restore-planner.js](durable-rejoin-partition-restore-planner.js) - No leading comment; first export: buildDurableRejoinPartitionRestorePlans. (importers: few)
 - [guarded-runtime-service-handler.js](guarded-runtime-service-handler.js) - Initialize a node's RuntimeServiceHandler behind the PG wire safety gate, the one way the seed and every joiner do it. (importers: few)
 - [hosted-replica-authorities.js](hosted-replica-authorities.js) - The node-local authorities a replica hosted on this node inherits. (importers: many)

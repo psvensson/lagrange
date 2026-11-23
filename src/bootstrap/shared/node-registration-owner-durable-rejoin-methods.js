@@ -43,6 +43,7 @@ import {
   LOG_CLUSTER_INCARNATION_FENCE_UNAVAILABLE,
   NODE_REGISTRATION_ERROR,
   REUSABLE_JOIN_ADMISSION_CONNECTION_STATES,
+  buildRegistrationFailureError,
   hasFunction,
   normalizeString,
 } from './node-registration-owner-constants.js';
@@ -294,8 +295,11 @@ class NodeRegistrationOwnerDurableRejoinMethods {
     this.assertNodeBootIncarnationNotStale(observedIncarnation, bootIncarnation);
     if (observedIncarnation === bootIncarnation) return row;
     const result = await this.upsertSystemTableRowWithRetry(tableName, row);
-    if (result?.success === false) {
-      throw new Error(`${NODE_BOOT_INCARNATION_ADVANCE_NOT_OBSERVED}: ${tableName}`);
+    if (result?.success !== true) {
+      throw buildRegistrationFailureError(
+        `${NODE_BOOT_INCARNATION_ADVANCE_NOT_OBSERVED}: ${tableName}: `,
+        result,
+      );
     }
     return withOriginHlcStamp(
       withOriginHlcStamp(row, result?.partitionResult?.originHlc),
@@ -429,6 +433,7 @@ class NodeRegistrationOwnerDurableRejoinMethods {
     if (attemptError) throw attemptError;
     const error = new Error(`${NODE_REGISTRATION_ERROR
       .REGISTRATION_UNRESOLVED}: ${outcome}`);
+    error.outcome = outcome;
     error.deferRetry = true;
     error.retryAfterMs = AUTHORITATIVE_ROW_UNAVAILABLE_RETRY_AFTER_MS;
     throw error;
