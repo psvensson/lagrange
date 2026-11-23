@@ -8,15 +8,8 @@ import {
   CONTROL_PLANE_MUTATION_OPERATION,
 } from '../control-plane/control-plane-system-table-gateway-constants.js';
 import {
-  LEADER_READ_REQUEST_FIELD,
-  LEADER_REQUIRED_READ,
-} from '../control-plane/control-plane-owner-fact-read-contract.js';
-import {
   OWNER_CONTRACT_STATE,
 } from '../control-plane/owner-contract-outcome.js';
-import {
-  decodePartitionResponseRows,
-} from '../query/query-executor-partition-request-builders.js';
 import {
   SCHEMA_PROVISIONING_ERROR_CODE,
 } from '../query/schema-provisioning-job-constants.js';
@@ -40,16 +33,21 @@ import {
 } from './global-index-dataset-reconciliation.js';
 import {
   createParticipantUnavailableError,
-  resolveHostedPartitionService,
-  resolvePartitionDatabase,
+  createUnavailableError,
 } from './global-index-partition-discovery.js';
-import {GLOBAL_INDEX_STATEMENT_LABEL} from './index-constants.js';
+import {
+  GLOBAL_INDEX_ERROR_CODE,
+  GLOBAL_INDEX_STATEMENT_LABEL,
+} from './index-constants.js';
 
 const LOCAL_STR_TEXT = 'TEXT';
 const SQLITE_OBJECT_TYPE_TABLE = 'table';
 const SQL_SELECT_SQLITE_TABLE_DDL =
   'SELECT sql FROM sqlite_master WHERE type = ? AND name = ?';
 const GENERATION_ID_SUFFIX_RE = /-gen(\d+)$/u;
+const PARTITION_EXECUTOR_REQUIRED_MESSAGE =
+  'Canonical partitionExecutor implementing executeOnPartition is required for global ' +
+  'index partition execution';
 const GLOBAL_INDEX_STATE_ORDER = Object.freeze({
   [GLOBAL_INDEX_STATE.CREATING]: 0,
   [GLOBAL_INDEX_STATE.WRITE_ONLY]: 1,
@@ -79,118 +77,66 @@ function resolveFenceVersion(indexService, tableName) {
   return engine.resolveWriteFencePartitionVersion(info);
 }
 
-function createWriteExecutionUnavailableError(partitionId, res) {
+function createPartitionExecutionFailureError(partitionId, res) {
   const err = createParticipantUnavailableError(partitionId);
   if (res?.error) {
     err.message = `${err.message}: ${res.error}`;
   }
   if (res?.errorCode) err.errorCode = res.errorCode;
   if (res?.failureCode) err.failureCode = res.failureCode;
+  if (res?.refusalLayer) err.refusalLayer = res.refusalLayer;
   return err;
 }
 
-async function executeRemoteReadViaRouter(indexService, partitionId, sql, params) {
-  const routed = await indexService.queryRouter.executeReadOnPartition(partitionId, sql, params);
-  if (!routed || routed.success !== true) {
-    throw createWriteExecutionUnavailableError(partitionId, routed);
+function requirePartitionExecutor(indexService) {
+  const executor = indexService?.partitionExecutor;
+  const executeOnPartition = executor?.executeOnPartition;
+  if (!executor || typeof executeOnPartition !== 'function') {
+    throw createUnavailableError(
+      GLOBAL_INDEX_ERROR_CODE.DEPENDENCY_UNAVAILABLE,
+      PARTITION_EXECUTOR_REQUIRED_MESSAGE,
+    );
   }
-  return Array.isArray(routed.rows) ? routed.rows : [];
+  return {executor, executeOnPartition};
 }
 
-async function executeHostedServiceRead(service, partitionId, sql, params) {
-  const res = await service.handleRemoteQuery({
-    sql,
-    params,
-    [LEADER_READ_REQUEST_FIELD]: LEADER_REQUIRED_READ,
-  });
-  if (!res || res.success !== true) {
-    throw createWriteExecutionUnavailableError(partitionId, res);
-  }
-  return decodePartitionResponseRows(res).rows;
-}
-
-async function executeExecutorRead(executor, partitionId, sql, params, options) {
-  const readOptions = {
-    requireLeader: true,
-    ...(options.tableName ? {tableName: options.tableName} : {}),
-  };
-  const res = await executor.executeOnPartition(
+async function executePartitionStatement(
+  indexService,
+  {partitionId, sql, params = [], forRead, deliveryOptions = {}},
+) {
+  const {executor, executeOnPartition} = requirePartitionExecutor(indexService);
+  const normalizedParams = Array.isArray(params) ? params : [];
+  const res = await executeOnPartition.call(
+    executor,
     partitionId,
     sql,
-    params,
-    true,
+    normalizedParams,
+    Boolean(forRead),
     true,
     false,
-    readOptions,
+    {
+      ...deliveryOptions,
+      requireLeader: true,
+    },
   );
   if (!res || res.success !== true) {
-    throw createWriteExecutionUnavailableError(partitionId, res);
+    throw createPartitionExecutionFailureError(partitionId, res);
   }
-  return Array.isArray(res.rows) ? res.rows : [];
+  return res;
 }
 
 async function executePartitionReadSql(indexService, partitionId, sql, params = [], options = {}) {
-  if (indexService?.queryRouter?.executeReadOnPartition) {
-    return executeRemoteReadViaRouter(indexService, partitionId, sql, params);
-  }
-  const executor = indexService?.sqlQueryEngine?.queryExecutor;
-  if (executor?.executeOnPartition) {
-    return executeExecutorRead(executor, partitionId, sql, params, options);
-  }
-  const hostedService = resolveHostedPartitionService(indexService, partitionId);
-  if (hostedService) {
-    return executeHostedServiceRead(hostedService, partitionId, sql, params);
-  }
-  const unitTestDb = resolvePartitionDatabase(indexService, null, partitionId);
-  if (unitTestDb) {
-    return unitTestDb.prepare(sql).all(...params);
-  }
-  throw createParticipantUnavailableError(partitionId);
-}
-
-async function executeRemoteWriteViaRouter(indexService, partitionId, sql, params) {
-  const routed = await indexService.queryRouter.executeWriteOnPartition(partitionId, sql, params);
-  if (!routed || routed.success !== true) {
-    throw createWriteExecutionUnavailableError(partitionId, routed);
-  }
-  return routed;
-}
-
-async function executeExecutorWrite(indexService, executor, partitionId, sql, params, tableName) {
-  const expectedPartitionVersion = resolveFenceVersion(indexService, tableName);
-  const res = await executor.executeOnPartition(
+  const deliveryOptions = {
+    ...(options.tableName ? {tableName: options.tableName} : {}),
+  };
+  const res = await executePartitionStatement(indexService, {
     partitionId,
     sql,
     params,
-    false,
-    true,
-    false,
-    {tableName, expectedPartitionVersion},
-  );
-  if (!res || res.success !== true) {
-    throw createWriteExecutionUnavailableError(partitionId, res);
-  }
-  return res;
-}
-
-async function executeHostedServiceWrite(
-  indexService,
-  hostedService,
-  partitionId,
-  sql,
-  params,
-  tableName,
-) {
-  const expectedPartitionVersion = resolveFenceVersion(indexService, tableName);
-  const res = await hostedService.handleRemoteQuery({
-    sql,
-    params,
-    ...(expectedPartitionVersion !== null ? {expectedPartitionVersion} : {}),
+    forRead: true,
+    deliveryOptions,
   });
-  if (!res || res.success !== true) {
-    throw createWriteExecutionUnavailableError(partitionId, res);
-  }
-  return res;
+  return Array.isArray(res.rows) ? res.rows : [];
 }
 
 async function executePartitionWriteSql(
@@ -200,35 +146,29 @@ async function executePartitionWriteSql(
   params = [],
   tableName = null,
 ) {
-  if (indexService?.queryRouter?.executeWriteOnPartition) {
-    return executeRemoteWriteViaRouter(indexService, partitionId, sql, params);
-  }
-  const executor = indexService?.sqlQueryEngine?.queryExecutor;
-  if (executor?.executeOnPartition) {
-    return executeExecutorWrite(indexService, executor, partitionId, sql, params, tableName);
-  }
-  const hostedService = resolveHostedPartitionService(indexService, partitionId);
-  if (hostedService) {
-    return executeHostedServiceWrite(
-      indexService,
-      hostedService,
-      partitionId,
-      sql,
-      params,
-      tableName,
-    );
-  }
-  throw createParticipantUnavailableError(partitionId);
+  const resolvedTableName = typeof tableName === 'string' ?
+    tableName :
+    tableName?.tableName || null;
+  const expectedPartitionVersion = resolveFenceVersion(indexService, resolvedTableName);
+  const deliveryOptions = {
+    ...(resolvedTableName ? {tableName: resolvedTableName} : {}),
+    ...(expectedPartitionVersion !== null && expectedPartitionVersion !== undefined ?
+      {expectedPartitionVersion} :
+      {}),
+  };
+  return executePartitionStatement(indexService, {
+    partitionId,
+    sql,
+    params,
+    forRead: false,
+    deliveryOptions,
+  });
 }
 
 function hasDistributedPartitionRoute(indexService, partitionId = null) {
-  if (indexService?.queryRouter?.executeWriteOnPartition) {
-    return true;
-  }
-  if (indexService?.sqlQueryEngine?.queryExecutor?.executeOnPartition) {
-    return true;
-  }
-  return Boolean(partitionId && resolveHostedPartitionService(indexService, partitionId));
+  const executor = indexService?.partitionExecutor;
+  const executeOnPartition = executor?.executeOnPartition;
+  return Boolean(partitionId && executor && typeof executeOnPartition === 'function');
 }
 
 function recordPartitionDescriptorLocally(coordinator, runtimeState, partitionMetadata) {
@@ -341,9 +281,10 @@ async function reconcileRemoteSqliteDataset(
 async function reconcileDistributedIndexDatasetSchema(
   indexService, params, getCoordinator = null, onSyncRow = null,
 ) {
+  requirePartitionExecutor(indexService);
   const {
     tableName, indexName, columnNames, basePrimaryKeyColumns,
-    indexId = null, generation = null, partitionId, partition,
+    indexId = null, generation = null, partition,
   } = params;
   const coordinator = getCoordinator ? getCoordinator() : resolveCoordinatorForSync(indexService);
   const initialOwnership = await verifyAndSyncDatasetOwnership(
@@ -362,9 +303,6 @@ async function reconcileDistributedIndexDatasetSchema(
     basePrimaryKeyColumns,
   });
   await reconcilePartitionDatasetKeyType(indexService, partition, expectedKeyType);
-  if (!hasDistributedPartitionRoute(indexService, partitionId)) {
-    return {reconciled: true, dropped: false};
-  }
   return reconcileRemoteSqliteDataset(
     indexService, coordinator, params, datasetName, datasetSchema, onSyncRow,
   );
@@ -634,6 +572,7 @@ async function provisionIndexPartitionsWithRuntime(
   context,
 ) {
   const {indexName} = context;
+  requirePartitionExecutor(indexService);
   const provisioner = resolveProvisionerCallback(indexService);
   if (!provisioner) {
     throw new Error(`No index partitions available for global index '${indexName}'`);

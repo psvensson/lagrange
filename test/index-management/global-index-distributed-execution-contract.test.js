@@ -208,13 +208,13 @@ test('Absent partitionExecutor fails closed with DEPENDENCY_UNAVAILABLE and zero
   );
 
   await t.rejects(
-    wiredOptions.onDropIndexDatasetPartition({
+    wiredOptions.onDropIndexDataset({
       tableName: 'users',
       indexName: 'idx_email',
       partitionId: 'users_p0',
     }),
     {code: GLOBAL_INDEX_ERROR_CODE.DEPENDENCY_UNAVAILABLE},
-    'onDropIndexDatasetPartition fails closed instead of silent skip when executor missing',
+    'onDropIndexDataset fails closed instead of silent skip when executor missing',
   );
 
   t.same(
@@ -392,7 +392,7 @@ test('SQLite and PartitionService adapters exercise identical mandatory contract
     handleRemoteQuery: async (req) => {
       receivedRequests.push(req);
       return req.readonly ?
-        {success: true, rowSet: {columns: ['email'], rows: [['leader@x.dev']]}} :
+        {success: true, rows: [{email: 'leader@x.dev'}]} :
         {success: true, changes: 1};
     },
   };

@@ -2417,7 +2417,8 @@
         "src/query/query-executor-partition-request-builders.js"
       ],
       "tests": [
-        "test/index-management/global-index-production-tx1-distributed.test.js"
+        "test/index-management/global-index-production-tx1-distributed.test.js",
+        "test/index-management/global-index-distributed-execution-contract.test.js"
       ]
     },
     "live-query-remote-cdc-lifecycle": {
@@ -5230,7 +5231,8 @@
       ],
       "contract": "gsi-canonical-partition-execution",
       "witnessTests": [
-        "test/index-management/global-index-production-tx1-distributed.test.js"
+        "test/index-management/global-index-production-tx1-distributed.test.js",
+        "test/index-management/global-index-distributed-execution-contract.test.js"
       ]
     },
     "live-query-remote-delivery-and-refresh": {

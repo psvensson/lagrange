@@ -16,11 +16,29 @@ import {GLOBAL_INDEX_ERROR_CODE} from '../../src/index-management/index-constant
 const REFUSAL_LAYER_ADAPTER = 'PARTITION_EXECUTOR_TEST_ADAPTER';
 const LEADER_REQUIREMENT_ERROR_CODE = 'LEADER_REQUIREMENT_MISSING';
 const NOT_LEADER_ERROR_CODE = 'NOT_LEADER';
+const STALE_PARTITION_VERSION_CODE = 'STALE_PARTITION_VERSION';
+
+function adapterFailure(errorCode, error) {
+  return {
+    success: false,
+    errorCode,
+    failureCode: errorCode,
+    refusalLayer: REFUSAL_LAYER_ADAPTER,
+    error,
+  };
+}
+
+function getCandidatePartitionId(candidate) {
+  if (!candidate || typeof candidate !== 'object') return null;
+  if (candidate.partitionId) return candidate.partitionId;
+  const getId = candidate.getPartitionId;
+  return typeof getId === 'function' ? getId.call(candidate) : null;
+}
 
 function isLeaderService(service) {
   if (!service || typeof service !== 'object') return false;
-  if (service.role === 'leader' || service.state === 'leader') return true;
-  if (service.raftRole === 'leader' || service.raftNode?.role === 'leader') return true;
+  const role = service.role || service.state || service.raftRole || service.raftNode?.role;
+  if (role === 'leader') return true;
   const checkLeader = service.isLeader;
   return typeof checkLeader === 'function' ? Boolean(checkLeader.call(service)) : false;
 }
@@ -29,66 +47,133 @@ function unwrapPartitionServiceContainer(source) {
   if (!source) return null;
   const resolved = typeof source === 'function' ? source() : source;
   const getServices = resolved?.getPartitionServices;
-  if (typeof getServices === 'function') {
-    return getServices.call(resolved);
-  }
-  return resolved;
+  return typeof getServices === 'function' ? getServices.call(resolved) : resolved;
+}
+
+function normalizeEntryList(entry) {
+  if (Array.isArray(entry)) return entry;
+  return entry && typeof entry === 'object' ? [entry] : [];
+}
+
+function filterByPartitionId(candidates, partitionId) {
+  return candidates.filter((candidate) => getCandidatePartitionId(candidate) === partitionId);
 }
 
 function collectMatchingServices(source, partitionId) {
   const container = unwrapPartitionServiceContainer(source);
   if (!container) return [];
   if (container instanceof Map) {
-    const direct = container.get(partitionId);
-    if (Array.isArray(direct)) return direct;
-    if (direct && typeof direct === 'object') return [direct];
-    const matches = [];
-    for (const candidate of container.values()) {
-      const candidateId = candidate?.partitionId || candidate?.getPartitionId?.();
-      if (candidateId === partitionId) matches.push(candidate);
-    }
-    return matches;
+    const direct = normalizeEntryList(container.get(partitionId));
+    if (direct.length > 0) return direct;
+    return filterByPartitionId([...container.values()], partitionId);
   }
   if (Array.isArray(container)) {
-    return container.filter(
-      (candidate) => (candidate?.partitionId || candidate?.getPartitionId?.()) === partitionId,
-    );
+    return filterByPartitionId(container, partitionId);
   }
   if (typeof container === 'object') {
     if (Object.hasOwn(container, partitionId)) {
-      const entry = container[partitionId];
-      if (Array.isArray(entry)) return entry;
-      if (entry && typeof entry === 'object') return [entry];
+      return normalizeEntryList(container[partitionId]);
     }
-    const candidateId = container.partitionId || container.getPartitionId?.();
-    if (candidateId === partitionId) return [container];
-    return Object.values(container).filter(
-      (candidate) => (candidate?.partitionId || candidate?.getPartitionId?.()) === partitionId,
-    );
+    if (getCandidatePartitionId(container) === partitionId) return [container];
+    return filterByPartitionId(Object.values(container), partitionId);
   }
   return [];
 }
 
-function validateUniformLeaderContract(forRead, preferLeader, deliveryOptions, enforceContract) {
+function recordAndValidateExecutorCall(calls, call, enforceContract) {
+  calls.push(call);
   if (!enforceContract) return null;
-  if (preferLeader !== true || deliveryOptions?.requireLeader !== true) {
-    return {
-      success: false,
-      errorCode: LEADER_REQUIREMENT_ERROR_CODE,
-      failureCode: LEADER_REQUIREMENT_ERROR_CODE,
-      refusalLayer: REFUSAL_LAYER_ADAPTER,
-      error: `Partition ${forRead ? 'read' : 'write'} must require leader (preferLeader=true, ` +
-        'deliveryOptions.requireLeader=true)',
-    };
+  if (call.preferLeader !== true || call.deliveryOptions.requireLeader !== true) {
+    return adapterFailure(
+      LEADER_REQUIREMENT_ERROR_CODE,
+      `Partition ${call.forRead ? 'read' : 'write'} must require leader ` +
+        '(preferLeader=true, deliveryOptions.requireLeader=true)',
+    );
   }
   return null;
 }
 
+function normalizeExecutorCall(
+  partitionId,
+  sql,
+  params,
+  forRead,
+  preferLeader,
+  preferSameLatencyGroup,
+  deliveryOptions,
+) {
+  const normalizedOptions = deliveryOptions && typeof deliveryOptions === 'object' ?
+    {...deliveryOptions} :
+    {};
+  return {
+    partitionId,
+    sql,
+    params: Array.isArray(params) ? params : [],
+    forRead: Boolean(forRead),
+    preferLeader,
+    preferSameLatencyGroup,
+    deliveryOptions: normalizedOptions,
+  };
+}
+
+function buildRemotePartitionRequest(call) {
+  const {sql, params, forRead, deliveryOptions} = call;
+  const request = {
+    sql,
+    params,
+    readonly: forRead,
+    readOnly: forRead,
+  };
+  if (forRead) {
+    request[LEADER_READ_REQUEST_FIELD] = LEADER_REQUIRED_READ;
+  }
+  if (deliveryOptions.tableName) {
+    request.tableName = deliveryOptions.tableName;
+  }
+  if (deliveryOptions.expectedPartitionVersion !== undefined &&
+      deliveryOptions.expectedPartitionVersion !== null) {
+    request.expectedPartitionVersion = deliveryOptions.expectedPartitionVersion;
+  }
+  return request;
+}
+
+function resolveLeaderHandleRemoteQuery(partitionServicesSource, partitionId) {
+  const services = collectMatchingServices(partitionServicesSource, partitionId);
+  if (services.length === 0) {
+    return {
+      failure: adapterFailure(
+        GLOBAL_INDEX_ERROR_CODE.PARTICIPANT_UNAVAILABLE,
+        `Partition service unavailable: ${partitionId}`,
+      ),
+    };
+  }
+  const leader = services.find(isLeaderService) || null;
+  if (!leader) {
+    return {
+      failure: adapterFailure(
+        NOT_LEADER_ERROR_CODE,
+        `No leader available for partition ${partitionId}`,
+      ),
+    };
+  }
+  const handleRemoteQuery = leader.handleRemoteQuery;
+  if (typeof handleRemoteQuery !== 'function') {
+    return {
+      failure: adapterFailure(
+        GLOBAL_INDEX_ERROR_CODE.PARTICIPANT_UNAVAILABLE,
+        `Leader for ${partitionId} cannot handle remote queries`,
+      ),
+    };
+  }
+  return {leader, handleRemoteQuery};
+}
+
 function extractSqliteHandle(entry) {
   if (!entry) return null;
-  if (entry.db && typeof entry.db.prepare === 'function') return entry.db;
-  if (typeof entry.prepare === 'function') return entry;
-  return null;
+  const nestedPrepare = entry.db?.prepare;
+  if (typeof nestedPrepare === 'function') return entry.db;
+  const directPrepare = entry.prepare;
+  return typeof directPrepare === 'function' ? entry : null;
 }
 
 function lookupDatabaseEntry(databasesByPartition, partitionId) {
@@ -100,6 +185,28 @@ function lookupDatabaseEntry(databasesByPartition, partitionId) {
     return databasesByPartition[partitionId];
   }
   return null;
+}
+
+function executeSqliteStatement(db, call, validateWriteVersion) {
+  if (!call.forRead && validateWriteVersion) {
+    const versionErr = validateWriteVersion(
+      call.partitionId,
+      call.deliveryOptions.expectedPartitionVersion,
+    );
+    if (versionErr) {
+      return adapterFailure(STALE_PARTITION_VERSION_CODE, versionErr);
+    }
+  }
+  const stmt = db.prepare(call.sql);
+  if (call.forRead) {
+    return {success: true, rows: stmt.all(...call.params)};
+  }
+  const info = stmt.run(...call.params);
+  return {
+    success: true,
+    changes: info.changes ?? 0,
+    lastInsertRowid: info.lastInsertRowid ?? null,
+  };
 }
 
 /**
@@ -122,82 +229,28 @@ function createPartitionServiceExecutorAdapter(partitionServicesSource, options 
     preferSameLatencyGroup = false,
     deliveryOptions = {},
   ) {
-    const normalizedParams = Array.isArray(params) ? params : [];
-    const normalizedOptions = deliveryOptions && typeof deliveryOptions === 'object' ?
-      deliveryOptions :
-      {};
-    calls.push({
-      partitionId,
-      sql,
-      params: normalizedParams,
-      forRead: Boolean(forRead),
-      preferLeader,
-      preferSameLatencyGroup,
-      deliveryOptions: {...normalizedOptions},
-    });
-    const contractFailure = validateUniformLeaderContract(
-      forRead, preferLeader, normalizedOptions, enforceLeaderContract,
+    const call = normalizeExecutorCall(
+      partitionId, sql, params, forRead, preferLeader, preferSameLatencyGroup, deliveryOptions,
     );
+    const contractFailure = recordAndValidateExecutorCall(calls, call, enforceLeaderContract);
     if (contractFailure) return contractFailure;
 
-    const services = collectMatchingServices(partitionServicesSource, partitionId);
-    if (services.length === 0) {
-      return {
-        success: false,
-        errorCode: GLOBAL_INDEX_ERROR_CODE.PARTICIPANT_UNAVAILABLE,
-        failureCode: GLOBAL_INDEX_ERROR_CODE.PARTICIPANT_UNAVAILABLE,
-        refusalLayer: REFUSAL_LAYER_ADAPTER,
-        error: `Partition service unavailable: ${partitionId}`,
-      };
-    }
+    const resolved = resolveLeaderHandleRemoteQuery(partitionServicesSource, partitionId);
+    if (resolved.failure) return resolved.failure;
 
-    const leader = services.find(isLeaderService) || null;
-    if (!leader) {
-      return {
-        success: false,
-        errorCode: NOT_LEADER_ERROR_CODE,
-        failureCode: NOT_LEADER_ERROR_CODE,
-        refusalLayer: REFUSAL_LAYER_ADAPTER,
-        error: `No leader available for partition ${partitionId}`,
-      };
-    }
-
-    const handleRemoteQuery = leader.handleRemoteQuery;
-    if (typeof handleRemoteQuery !== 'function') {
-      return {
-        success: false,
-        errorCode: GLOBAL_INDEX_ERROR_CODE.PARTICIPANT_UNAVAILABLE,
-        failureCode: GLOBAL_INDEX_ERROR_CODE.PARTICIPANT_UNAVAILABLE,
-        refusalLayer: REFUSAL_LAYER_ADAPTER,
-        error: `Leader for ${partitionId} cannot handle remote queries`,
-      };
-    }
-
-    const request = {
-      sql,
-      params: normalizedParams,
-      readonly: Boolean(forRead),
-      readOnly: Boolean(forRead),
-      ...(forRead ? {[LEADER_READ_REQUEST_FIELD]: LEADER_REQUIRED_READ} : {}),
-      ...(normalizedOptions.tableName ? {tableName: normalizedOptions.tableName} : {}),
-      ...(normalizedOptions.expectedPartitionVersion !== undefined &&
-          normalizedOptions.expectedPartitionVersion !== null ?
-        {expectedPartitionVersion: normalizedOptions.expectedPartitionVersion} :
-        {}),
-    };
-    const rawResult = await handleRemoteQuery.call(leader, request);
+    const rawResult = await resolved.handleRemoteQuery.call(
+      resolved.leader,
+      buildRemotePartitionRequest(call),
+    );
     if (!rawResult || rawResult.success !== true) {
-      return rawResult || {
-        success: false,
-        errorCode: GLOBAL_INDEX_ERROR_CODE.PARTICIPANT_UNAVAILABLE,
-        failureCode: GLOBAL_INDEX_ERROR_CODE.PARTICIPANT_UNAVAILABLE,
-        refusalLayer: REFUSAL_LAYER_ADAPTER,
-        error: `Empty remote query response for ${partitionId}`,
-      };
+      return rawResult || adapterFailure(
+        GLOBAL_INDEX_ERROR_CODE.PARTICIPANT_UNAVAILABLE,
+        `Empty remote query response for ${partitionId}`,
+      );
     }
     return {
       ...rawResult,
-      rows: decodePartitionResponseRows(rawResult),
+      rows: decodePartitionResponseRows(rawResult).rows,
     };
   }
 
@@ -233,72 +286,23 @@ function createSqlitePartitionExecutorAdapter(databasesByPartition, options = {}
     preferSameLatencyGroup = false,
     deliveryOptions = {},
   ) {
-    const normalizedParams = Array.isArray(params) ? params : [];
-    const normalizedOptions = deliveryOptions && typeof deliveryOptions === 'object' ?
-      deliveryOptions :
-      {};
-    calls.push({
-      partitionId,
-      sql,
-      params: normalizedParams,
-      forRead: Boolean(forRead),
-      preferLeader,
-      preferSameLatencyGroup,
-      deliveryOptions: {...normalizedOptions},
-    });
-    const contractFailure = validateUniformLeaderContract(
-      forRead, preferLeader, normalizedOptions, enforceLeaderContract,
+    const call = normalizeExecutorCall(
+      partitionId, sql, params, forRead, preferLeader, preferSameLatencyGroup, deliveryOptions,
     );
+    const contractFailure = recordAndValidateExecutorCall(calls, call, enforceLeaderContract);
     if (contractFailure) return contractFailure;
 
     if (!isLeaderFn(partitionId)) {
-      return {
-        success: false,
-        errorCode: NOT_LEADER_ERROR_CODE,
-        failureCode: NOT_LEADER_ERROR_CODE,
-        refusalLayer: REFUSAL_LAYER_ADAPTER,
-        error: `Partition ${partitionId} is not leader`,
-      };
+      return adapterFailure(NOT_LEADER_ERROR_CODE, `Partition ${partitionId} is not leader`);
     }
-
     const db = extractSqliteHandle(lookupDatabaseEntry(databasesByPartition, partitionId));
     if (!db) {
-      return {
-        success: false,
-        errorCode: GLOBAL_INDEX_ERROR_CODE.PARTICIPANT_UNAVAILABLE,
-        failureCode: GLOBAL_INDEX_ERROR_CODE.PARTICIPANT_UNAVAILABLE,
-        refusalLayer: REFUSAL_LAYER_ADAPTER,
-        error: `Partition database unavailable: ${partitionId}`,
-      };
-    }
-
-    if (!forRead && validateWriteVersion) {
-      const versionErr = validateWriteVersion(
-        partitionId,
-        normalizedOptions.expectedPartitionVersion,
+      return adapterFailure(
+        GLOBAL_INDEX_ERROR_CODE.PARTICIPANT_UNAVAILABLE,
+        `Partition database unavailable: ${partitionId}`,
       );
-      if (versionErr) {
-        return {
-          success: false,
-          errorCode: 'STALE_PARTITION_VERSION',
-          failureCode: 'STALE_PARTITION_VERSION',
-          refusalLayer: REFUSAL_LAYER_ADAPTER,
-          error: versionErr,
-        };
-      }
     }
-
-    const stmt = db.prepare(sql);
-    if (forRead) {
-      const rows = stmt.all(...normalizedParams);
-      return {success: true, rows};
-    }
-    const info = stmt.run(...normalizedParams);
-    return {
-      success: true,
-      changes: info.changes ?? 0,
-      lastInsertRowid: info.lastInsertRowid ?? null,
-    };
+    return executeSqliteStatement(db, call, validateWriteVersion);
   }
 
   return {
