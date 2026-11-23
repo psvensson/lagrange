@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2788,
+    "ordinary": 2789,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2814,
-  "digest": "fnv1a32-ad1370b1",
+  "censusSize": 2815,
+  "digest": "fnv1a32-9c565724",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -594,6 +594,7 @@
     "test/control-plane/formation-placement-membership-handoff.test.js": "ordinary",
     "test/control-plane/formation-transition-settled-replay.test.js": "ordinary",
     "test/control-plane/gateway-sql-mutation-fallback-phase-scope.test.js": "ordinary",
+    "test/control-plane/gateway-sql-mutation-primary-key-update.test.js": "ordinary",
     "test/control-plane/heartbeat-joining-fence-preservation.test.js": "ordinary",
     "test/control-plane/heartbeat-liveness-at-commit.test.js": "ordinary",
     "test/control-plane/heartbeat-memory-trend-reporter-and-shutdown.test.js": "ordinary",

@@ -7,7 +7,7 @@
     "bootstrap-membership": 357,
     "cdc-metadata": 81,
     "cli-tooling": 99,
-    "control-plane": 241,
+    "control-plane": 242,
     "convergence-topology": 88,
     "distributed-harness": 223,
     "examples-e2e": 8,
@@ -25,8 +25,8 @@
     "transport-messaging": 123,
     "wasm-toolchain": 74
   },
-  "censusSize": 2814,
-  "digest": "fnv1a32-efebcf1a",
+  "censusSize": 2815,
+  "digest": "fnv1a32-1661f041",
   "observationSchemaVersion": 2,
   "observationDigest": "fnv1a32-ccfb78e6",
   "classes": {
@@ -614,6 +614,7 @@
     "test/control-plane/formation-placement-membership-handoff.test.js": "control-plane",
     "test/control-plane/formation-transition-settled-replay.test.js": "control-plane",
     "test/control-plane/gateway-sql-mutation-fallback-phase-scope.test.js": "control-plane",
+    "test/control-plane/gateway-sql-mutation-primary-key-update.test.js": "control-plane",
     "test/control-plane/heartbeat-joining-fence-preservation.test.js": "control-plane",
     "test/control-plane/heartbeat-liveness-at-commit.test.js": "control-plane",
     "test/control-plane/heartbeat-memory-trend-reporter-and-shutdown.test.js": "control-plane",

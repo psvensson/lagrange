@@ -1,5 +1,6 @@
-import {CDC_SQL} from './cdc-constants.js';
+import {CDC_ERROR_MSG, CDC_SQL} from './cdc-constants.js';
 import {CDC_OPERATION, SQL} from '../constants/index.js';
+import {resolveDeclaredPrimaryKeyColumns} from '../partition/partition-boundary-representation.js';
 
 const CDC_BATCH_UPSERT_ERROR_CODE = Object.freeze({
   EMPTY_ROWS: 'CDC_BATCH_UPSERT_EMPTY_ROWS',
@@ -154,4 +155,43 @@ function buildWhereParts(map) {
       .filter((columnName) => map[columnName] !== null)
       .map((columnName) => map[columnName]),
   };
+}
+
+function isSameValuePrimaryKeyPin(whereByColumn, column, value) {
+  return whereByColumn.has(column) &&
+    whereByColumn.get(column) !== null &&
+    whereByColumn.get(column) === value;
+}
+
+// The distributed planner fail-closes any UPDATE that assigns a partition key
+// column, even to its current value (assertUpdateDoesNotMutatePartitionKey).
+// When the WHERE clause already pins a declared primary key column to the
+// exact same non-null value, strip it from SET; any differing or unpinned
+// assignment is a row re-home and fails closed immediately. Shared by both
+// system-table SQL builders (CDCIntegrationService and
+// ControlPlaneSystemTableGateway.buildSqlMutationPlan).
+export function stripSameValuePrimaryKeysFromUpdateEntries(
+  schema,
+  whereEntries,
+  updateEntries,
+) {
+  const pkColumns = new Set(resolveDeclaredPrimaryKeyColumns({schema}));
+  if (pkColumns.size === ZERO_INDEX) {
+    return updateEntries;
+  }
+  const whereByColumn = new Map(whereEntries);
+  const filtered = [];
+  for (const [column, value] of updateEntries) {
+    if (!pkColumns.has(column)) {
+      filtered.push([column, value]);
+      continue;
+    }
+    if (!isSameValuePrimaryKeyPin(whereByColumn, column, value)) {
+      throw new Error(
+        `${CDC_ERROR_MSG.UPDATE_PRIMARY_KEY_REHOME_PREFIX}${column}` +
+          `${CDC_ERROR_MSG.UPDATE_PRIMARY_KEY_REHOME_SUFFIX}`,
+      );
+    }
+  }
+  return filtered;
 }

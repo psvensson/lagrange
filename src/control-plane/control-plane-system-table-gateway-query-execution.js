@@ -33,6 +33,9 @@ import {
   SYSTEM_TABLE_NAME,
 } from '../bootstrap/system-table-schemas-constants.js';
 import {
+  stripSameValuePrimaryKeysFromUpdateEntries,
+} from '../cdc/cdc-system-table-mutation-sql-helpers.js';
+import {
   CONTROL_PLANE_WRITE_ROUTE,
   controlPlaneWriteRoute,
   hasControlPlaneWriteName,
@@ -102,6 +105,81 @@ function buildSchemaFilteredSqlMutationEntries(tableName, data) {
         typeof value !== 'undefined';
     },
   );
+}
+
+function buildSqlInsertOrUpsertPlan(operation, tableName, mutation) {
+  if (!mutation?.row || typeof mutation.row !== 'object') {
+    throw new Error(GATEWAY_ERROR_MSG.MUTATION_ROW_REQUIRED);
+  }
+  const rowEntries = buildSchemaFilteredSqlMutationEntries(
+    tableName,
+    mutation.row,
+  );
+  if (rowEntries.length === 0) {
+    throw new Error(GATEWAY_ERROR_MSG.MUTATION_ROW_REQUIRED);
+  }
+  const columns = rowEntries.map(([key]) => key).join(', ');
+  const placeholders = rowEntries.map(() => '?').join(', ');
+  const verb = operation === CONTROL_PLANE_MUTATION_OPERATION.UPSERT ?
+    SQL.INSERT_OR_REPLACE_INTO :
+    SQL.INSERT_INTO;
+  return {
+    sql: `${verb} ${tableName} (${columns}) ${SQL.VALUES} (${placeholders})`,
+    params: rowEntries.map(([_key, value]) => value),
+  };
+}
+
+function buildSqlWherePlan(schema, mutation) {
+  if (!mutation?.whereClause || typeof mutation.whereClause !== 'object') {
+    throw new Error(GATEWAY_ERROR_MSG.MUTATION_WHERE_REQUIRED);
+  }
+  const allowedColumns = new Set(
+    schema.columns.map((column) => column.name),
+  );
+  const whereEntries = Object.entries(mutation.whereClause).filter(
+    ([key, value]) => allowedColumns.has(key) && typeof value !== 'undefined',
+  );
+  if (whereEntries.length === 0) {
+    throw new Error(GATEWAY_ERROR_MSG.MUTATION_WHERE_REQUIRED);
+  }
+  // Null-sentinel convention: a null where-value is a nullness predicate
+  // (`key IS NULL`, no bound parameter), not an equality. The
+  // replica_operations terminal-transition CAS uses it to guard on
+  // `completed_at IS NULL` so a losing terminal write changes zero rows
+  // instead of clobbering the winning terminal.
+  const whereClause = whereEntries
+    .map(([key, value]) => (value === null ? `${key} IS NULL` : `${key} = ?`))
+    .join(' AND ');
+  const whereParams = whereEntries
+    .filter(([_key, value]) => value !== null)
+    .map(([_key, value]) => value);
+  return {whereEntries, whereClause, whereParams};
+}
+
+function buildSqlUpdatePlan(tableName, schema, mutation, wherePlan) {
+  if (!mutation?.data || typeof mutation.data !== 'object') {
+    throw new Error(GATEWAY_ERROR_MSG.MUTATION_DATA_REQUIRED);
+  }
+  const rawUpdateEntries = buildSchemaFilteredSqlMutationEntries(
+    tableName,
+    mutation.data,
+  );
+  const updateEntries = stripSameValuePrimaryKeysFromUpdateEntries(
+    schema,
+    wherePlan.whereEntries,
+    rawUpdateEntries,
+  );
+  if (updateEntries.length === 0) {
+    throw new Error(GATEWAY_ERROR_MSG.MUTATION_DATA_REQUIRED);
+  }
+  const setClause = updateEntries.map(([key]) => `${key} = ?`).join(', ');
+  return {
+    sql: `${SQL.UPDATE} ${tableName} ${SQL.SET} ${setClause} ${SQL.WHERE} ${wherePlan.whereClause}`,
+    params: [
+      ...updateEntries.map(([_key, value]) => value),
+      ...wherePlan.whereParams,
+    ],
+  };
 }
 
 // The full read-authority token IS the execution identity: every field that
@@ -342,82 +420,21 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
       operation === CONTROL_PLANE_MUTATION_OPERATION.INSERT ||
       operation === CONTROL_PLANE_MUTATION_OPERATION.UPSERT
     ) {
-      if (!mutation?.row || typeof mutation.row !== 'object') {
-        throw new Error(GATEWAY_ERROR_MSG.MUTATION_ROW_REQUIRED);
-      }
-      const rowEntries = buildSchemaFilteredSqlMutationEntries(
-        tableName,
-        mutation.row,
-      );
-      if (rowEntries.length === 0) {
-        throw new Error(GATEWAY_ERROR_MSG.MUTATION_ROW_REQUIRED);
-      }
-      const columns = rowEntries.map(([key]) => key).join(', ');
-      const placeholders = rowEntries.map(() => '?').join(', ');
-      return {
-        sql: `${
-          operation === CONTROL_PLANE_MUTATION_OPERATION.UPSERT ?
-            SQL.INSERT_OR_REPLACE_INTO :
-            SQL.INSERT_INTO
-        } ${tableName} (${columns}) ${SQL.VALUES} (${placeholders})`,
-        params: rowEntries.map(([_key, value]) => value),
-      };
+      return buildSqlInsertOrUpsertPlan(operation, tableName, mutation);
     }
 
     const schema = getSchemaByTableName(tableName);
     if (!schema || !schema.columns) {
       throw new Error(GATEWAY_ERROR_MSG.MUTATION_TABLE_REQUIRED);
     }
-    const allowedColumns = new Set(
-      schema.columns.map((column) => column.name),
-    );
-    const whereEntries = Object.entries(mutation.whereClause).filter(
-      ([key, value]) => {
-        return allowedColumns.has(key) &&
-          typeof value !== 'undefined';
-      },
-    );
-    if (whereEntries.length === 0) {
-      throw new Error(GATEWAY_ERROR_MSG.MUTATION_WHERE_REQUIRED);
-    }
-    // Null-sentinel convention: a null where-value is a nullness predicate
-    // (`key IS NULL`, no bound parameter), not an equality. The
-    // replica_operations terminal-transition CAS uses it to guard on
-    // `completed_at IS NULL` so a losing terminal write changes zero rows
-    // instead of clobbering the winning terminal.
-    const whereClause = whereEntries
-      .map(([key, value]) => (value === null ? `${key} IS NULL` : `${key} = ?`))
-      .join(' AND ');
-
-    const whereParams = whereEntries
-      .filter(([_key, value]) => value !== null)
-      .map(([_key, value]) => value);
-
+    const wherePlan = buildSqlWherePlan(schema, mutation);
     if (operation === CONTROL_PLANE_MUTATION_OPERATION.DELETE) {
       return {
-        sql: `${SQL.DELETE_FROM} ${tableName} ${SQL.WHERE} ${whereClause}`,
-        params: whereParams,
+        sql: `${SQL.DELETE_FROM} ${tableName} ${SQL.WHERE} ${wherePlan.whereClause}`,
+        params: wherePlan.whereParams,
       };
     }
-
-    if (!mutation?.data || typeof mutation.data !== 'object') {
-      throw new Error(GATEWAY_ERROR_MSG.MUTATION_DATA_REQUIRED);
-    }
-    const updateEntries = buildSchemaFilteredSqlMutationEntries(
-      tableName,
-      mutation.data,
-    );
-    if (updateEntries.length === 0) {
-      throw new Error(GATEWAY_ERROR_MSG.MUTATION_DATA_REQUIRED);
-    }
-    const setClause = updateEntries.map(([key]) => `${key} = ?`).join(', ');
-    return {
-      sql: `${SQL.UPDATE} ${tableName} ${SQL.SET} ${setClause} ${SQL.WHERE} ${whereClause}`,
-      params: [
-        ...updateEntries.map(([_key, value]) => value),
-        ...whereParams,
-      ],
-    };
+    return buildSqlUpdatePlan(tableName, schema, mutation, wherePlan);
   },
 
   async executeStartupSqlMutation(mutation, writeOptions, attemptContext) {

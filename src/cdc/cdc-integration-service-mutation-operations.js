@@ -1,6 +1,9 @@
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
 import {committedWritePosition} from './cdc-committed-write-answer.js';
-import {buildSystemTableMutationSqlParts} from './cdc-system-table-mutation-sql-helpers.js';
+import {
+  buildSystemTableMutationSqlParts,
+  stripSameValuePrimaryKeysFromUpdateEntries,
+} from './cdc-system-table-mutation-sql-helpers.js';
 import {hydrateCdcPropagatedTablesFromAuthority} from
   './cdc-integration-service-authoritative-catchup.js';
 
@@ -59,6 +62,7 @@ const {
   METRICS_LOG_TAG,
   SQL,
   buildSystemTableMutationError,
+  getSchemaByTableName,
   getSystemCachePrimaryKeyFieldOrFallback,
   logSystemTableWriteFailure,
   shouldEmitTableWriteMetric,
@@ -362,28 +366,24 @@ class CDCIntegrationServiceMutationOperations {
           `${CDC_ERROR_MSG.UPDATE_PRIMARY_KEY_SUFFIX}`,
       );
     }
-    const updateData = this.filterDataForTable(tableName, {
+    const rawUpdateData = this.filterDataForTable(tableName, {
       ...data,
     });
-    // The distributed planner fail-closes any UPDATE that assigns the
-    // partition key column, even to its current value
-    // (assertUpdateDoesNotMutatePartitionKey). The whereClause already pins
-    // row identity, so a same-value key in data is stripped from SET; a
-    // differing value is a re-home and keeps the planner's refusal semantics.
-    if (Object.hasOwn(updateData, idField)) {
-      if (updateData[idField] !== id) {
-        throw new Error(
-          `${CDC_ERROR_MSG.UPDATE_PRIMARY_KEY_REHOME_PREFIX}${idField}` +
-            `${CDC_ERROR_MSG.UPDATE_PRIMARY_KEY_REHOME_SUFFIX}`,
-        );
-      }
-      delete updateData[idField];
+    const whereEntries = Object.entries(whereClause);
+    if (!Object.hasOwn(whereClause, idField)) {
+      whereEntries.push([idField, id]);
     }
-    if (Object.keys(updateData).length === 0) {
+    const strippedEntries = stripSameValuePrimaryKeysFromUpdateEntries(
+      getSchemaByTableName(tableName),
+      whereEntries,
+      Object.entries(rawUpdateData),
+    );
+    if (strippedEntries.length === 0) {
       throw new Error(
         `${CDC_ERROR_MSG.UPDATE_VALID_COLUMNS_PREFIX}${tableName}`,
       );
     }
+    const updateData = Object.fromEntries(strippedEntries);
     const singleFlightKey = this.buildMutationSingleFlightKey(
       CDC_OPERATION.UPDATE,
       tableName,
