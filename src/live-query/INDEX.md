@@ -13,6 +13,7 @@ documentClass: generated
 - [live-query-manager.js](live-query-manager.js) - Live Query Manager - Manages live query subscriptions and query grouping. (importers: few)
 - [live-query-refresh-outcome.js](live-query-refresh-outcome.js) - Explicit refresh outcome owner for QueryGroup snapshot re-execution. (importers: few)
 - [live-query-remote-cdc-lifecycle.js](live-query-remote-cdc-lifecycle.js) - Synchronous lifecycle transition owner for live-query remote CDC bindings. (importers: few)
-- [live-query-remote-cdc.js](live-query-remote-cdc.js) - Remote PartitionService CDC subscription and failover coordinator for live query startup wiring. (importers: one)
+- [live-query-remote-cdc.js](live-query-remote-cdc.js) - Remote PartitionService CDC subscription and failover coordinator for live query startup wiring. (importers: few)
+- [live-query-remote-target-resolver.js](live-query-remote-target-resolver.js) - Remote partition target and unified service-address resolution for live query remote CDC subscriptions. (importers: one)
 - [live-query-service.js](live-query-service.js) - Live Query Service - Core service for real-time streaming queries. (importers: many)
 - [live-query-startup-wiring.js](live-query-startup-wiring.js) - Live query startup wiring helpers. (importers: few)

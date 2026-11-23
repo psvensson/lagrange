@@ -8,7 +8,7 @@
 import {LoggingService} from '../logging/logging-service.js';
 import {CDC_OPERATION, TABLES} from '../constants/index.js';
 import {LiveQueryManager} from './live-query-manager.js';
-import {LIVE_QUERY_SUBSYSTEM} from './live-query-constants.js';
+import {LIVE_QUERY_CURSOR, LIVE_QUERY_SUBSYSTEM} from './live-query-constants.js';
 import {createRemoteLiveQueryCdcCoordinator} from './live-query-remote-cdc.js';
 
 const PARTITION_ID_FIELD = 'partition_id';
@@ -419,6 +419,16 @@ function subscribePartitionWithOptions(options, {
         partitionId, queryId, handler, subOptions,
       );
     }
+    const remoteCdc = getRemoteCdc();
+    if (remoteCdc.isShuttingDown()) {
+      return {
+        acknowledged: false,
+        success: false,
+        subscribed: false,
+        cancelled: true,
+        retryable: false,
+      };
+    }
     const subKey = `${queryId}:${partitionId}`;
     // The partition's one subscriber contract hands (events, deliveryContext),
     // events an ordered vector: every member reaches the query's handler in
@@ -427,7 +437,6 @@ function subscribePartitionWithOptions(options, {
     const wrappedHandler = createWrappedCdcHandler(handler, partitionId);
     partitionSubscribers.set(subKey, wrappedHandler);
 
-    const remoteCdc = getRemoteCdc();
     const partition = resolvePartition(options, partitionId);
     const remoteTarget = remoteCdc.resolveRemoteTarget(partitionId);
     if (partition && (partition.isLeader !== false || !remoteTarget)) {
@@ -531,6 +540,7 @@ function createLiveQueryStartupWiring(options = {}) {
     metadataStore: options.systemTableCache,
     messageRouter: options.messageRouter,
     timeSource: options.timeSource,
+    shutdownDrainTimeoutMs: options.shutdownDrainTimeoutMs,
     findGroupById: (id) => liveQueryManager.findGroupByQueryId(id),
     partitionSubscribers,
     resolveLocalPartition: (partitionId) => resolvePartition(options, partitionId),
@@ -546,18 +556,25 @@ function createLiveQueryStartupWiring(options = {}) {
     partitionServicesProvider: options.partitionServicesProvider,
     subscribeToPartition,
     unsubscribeFromPartition,
+    remoteCdcCoordinator: remoteCdc,
   });
 
-  let shutdownCompleted = false;
-  const shutdown = () => {
-    if (shutdownCompleted) {
-      return;
+  let shutdownPromise = null;
+  const shutdown = (shutdownOptions = {}) => {
+    if (shutdownPromise) {
+      return shutdownPromise;
     }
-    shutdownCompleted = true;
-    remoteCdc.shutdown();
+    const drainPromise = liveQueryManager.shutdown(shutdownOptions);
+    for (const [subKey, wrappedHandler] of partitionSubscribers.entries()) {
+      const separatorIndex = subKey.lastIndexOf(LIVE_QUERY_CURSOR.SEPARATOR);
+      const partitionId = separatorIndex >= 0 ? subKey.slice(separatorIndex + 1) : null;
+      const partition = partitionId ? resolvePartition(options, partitionId) : null;
+      partition?.unsubscribeFromCDC?.(wrappedHandler);
+    }
     partitionSubscribers.clear();
     cacheSubscriptionAdapter.shutdown();
-    liveQueryManager.shutdown();
+    shutdownPromise = drainPromise;
+    return shutdownPromise;
   };
 
   return {

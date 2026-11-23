@@ -2426,6 +2426,7 @@
         "src/partition/partition-live-query-cdc-remote.js",
         "src/live-query/live-query-remote-cdc.js",
         "src/live-query/live-query-remote-cdc-lifecycle.js",
+        "src/live-query/live-query-remote-target-resolver.js",
         "src/live-query/live-query-refresh-outcome.js",
         "src/live-query/live-query-group.js",
         "src/live-query/live-query-group-helpers.js",

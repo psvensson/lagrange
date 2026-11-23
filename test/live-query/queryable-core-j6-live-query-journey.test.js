@@ -134,7 +134,7 @@ describe('Unit J6: Live query results committed CDC delivery and lifecycle', () 
   });
 
   afterEach(async () => {
-    wiring?.shutdown();
+    await wiring?.shutdown();
     if (leader) {
       await leader.shutdown();
     }
@@ -518,7 +518,7 @@ describe('Unit J6: Multi-node remote producer CDC delivery and leader failover',
   });
 
   afterEach(async () => {
-    wiringA?.shutdown();
+    await wiringA?.shutdown();
     if (leaderB) await leaderB.shutdown();
     if (leaderC) await leaderC.shutdown();
     if (routers) {
