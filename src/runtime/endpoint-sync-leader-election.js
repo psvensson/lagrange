@@ -321,15 +321,6 @@ class EndpointSyncLeaseLeaderElector {
 }
 
 export {
-  LEADER_ELECTOR_ERROR,
-  LEADER_ELECTOR_REQUIRED_METHODS,
   EndpointSyncLeaderElectorError,
-  normalizeHolderIdentity,
-  resolveLeaseDurationSeconds,
-  resolveLeaseTransitions,
-  resolveLeaseRenewTimeMs,
-  isLeaseExpired,
-  buildLeaseManifest,
-  validateLeaderElectorOptions,
   EndpointSyncLeaseLeaderElector,
 };
