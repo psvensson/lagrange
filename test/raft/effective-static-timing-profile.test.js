@@ -16,8 +16,9 @@ import {
 import {RAFT_RS_GROUP_TUNING} from '../../src/raft/raft-rs-group-constants.js';
 import {resolveReplicaRaftTiming} from '../../src/raft/replica-raft-timing.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {CONFIG_KEY} from '../../src/config/config-constants.js';
+import {CONFIG_KEY, CONFIG_SEED_SOURCE} from '../../src/config/config-constants.js';
 import {TRANSPORT_CONFIG_KEY} from '../../src/constants/transport.js';
+import {DynamicConfigService} from '../../src/config/dynamic-config-service.js';
 import {
   NETWORK_TIMING_PROFILE,
   applyStaticNetworkTimingProfile,
@@ -35,6 +36,44 @@ import {
   applyRuntimeNetworkTimingProfile,
 } from '../../src/entrypoint-runtime-options.js';
 import {ENTRYPOINT_ENV} from '../../src/constants/entrypoint.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
+import {
+  AuthoritativeControlPlaneView,
+} from '../../src/control-plane/authoritative-control-plane-view.js';
+import {
+  AuthoritativeNodeEvidenceReconciler,
+} from '../../src/control-plane/authoritative-node-evidence-reconciler.js';
+import {
+  ControlPlaneReadinessService,
+} from '../../src/control-plane/control-plane-readiness-service.js';
+import {
+  MembershipSwimRuntime,
+} from '../../src/control-plane/membership-swim-runtime.js';
+import {
+  NodeReadyLeaseAuthority,
+} from '../../src/control-plane/node-ready-lease-authority.js';
+import {
+  resolveControlPlaneAuthoritativeQueryTimeoutMs,
+  resolveControlPlaneQueryTimeoutMs,
+} from '../../src/control-plane/timeout-budget.js';
+import {
+  ServiceLeaderReadinessOwner,
+} from '../../src/bootstrap/owners/service-leader-readiness-owner.js';
+import {
+  ReplicaOperationRepository,
+} from '../../src/rebalancer/replica-operation-repository.js';
+import {
+  ParallelQueryCoordinator,
+} from '../../src/query/distributed/parallel-query-coordinator.js';
+import {
+  createPartitionAttemptBudget,
+} from '../../src/query/query-executor-partition-attempt-budget.js';
+import {HeartbeatService} from '../../src/control-plane/heartbeat-service.js';
+import {PartitionService} from '../../src/partition/partition-service.js';
+import {genesisStamp} from '../../src/raft/raft-committed-membership-stamp.js';
+import {readPortEffectiveRaftTiming} from '../../src/raft/raft-rs-operation-port.js';
 
 function createLocalConfigSqlEngine(rowsByKey) {
   return {
@@ -530,4 +569,640 @@ test('applyRuntimeNetworkTimingProfile applies env preset and logs requested vs 
       'logs info when tick-aligned slow Wi-Fi profile has zero discrepancies');
     t.equal(config.get(CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MIN_MS), 9000);
     t.equal(config.get(CONFIG_KEY.TIMEOUT_CONTROL_PLANE_OPERATION_BUDGET_MS), 25000);
+  });
+
+function createRecordingSeedGateway() {
+  const inserted = new Map();
+  return {
+    inserted,
+    controlPlaneSystemTableGateway: {
+      async insertSystemTableRow(_tableName, row) {
+        inserted.set(row.config_key, row);
+        return {success: true, applied: true, affectedRows: 1};
+      },
+      async readRows() {
+        return {rows: []};
+      },
+    },
+  };
+}
+
+function createReadinessSystemTableCacheStub() {
+  return {
+    getAll: () => [],
+    getShared: () => [],
+    get: () => null,
+    filter: () => [],
+    getTableMutationVersion: () => 0,
+    onCacheChange: () => {},
+    offCacheChange: () => {},
+  };
+}
+
+test('DynamicConfigService.seedConfiguration respects experimental-wifi-slow and keeps unprofiled defaults untouched',
+  async (t) => {
+    const previousEnvProfile = process.env[ENTRYPOINT_ENV.NETWORK_TIMING_PROFILE];
+    delete process.env[ENTRYPOINT_ENV.NETWORK_TIMING_PROFILE];
+    ConfigurationManager.resetInstance();
+    t.teardown(() => {
+      if (previousEnvProfile === undefined) {
+        delete process.env[ENTRYPOINT_ENV.NETWORK_TIMING_PROFILE];
+      } else {
+        process.env[ENTRYPOINT_ENV.NETWORK_TIMING_PROFILE] = previousEnvProfile;
+      }
+      ConfigurationManager.resetInstance();
+    });
+
+    const unprofiledGateway = createRecordingSeedGateway();
+    const unprofiledService = new DynamicConfigService({
+      nodeId: 'seed-default-node',
+      controlPlaneSystemTableGateway: unprofiledGateway.controlPlaneSystemTableGateway,
+    });
+    await unprofiledService.initialize();
+    await unprofiledService.seedConfiguration(CONFIG_SEED_SOURCE.SYSTEM, {nowMs: 1000});
+    t.equal(unprofiledGateway.inserted.get(CONFIG_KEY.RAFT_TICK_INTERVAL_MS).config_value, '20');
+    t.equal(
+      unprofiledGateway.inserted.get(CONFIG_KEY.RAFT_HEARTBEAT_INTERVAL_MS).config_value, '50');
+    t.equal(
+      unprofiledGateway.inserted.get(CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MIN_MS).config_value,
+      '1000');
+    t.equal(
+      unprofiledGateway.inserted.get(CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MAX_MS).config_value,
+      '3000');
+    t.equal(
+      unprofiledGateway.inserted.get(CONFIG_KEY.QUERY_COORDINATOR_QUERY_TIMEOUT_MS).config_value,
+      '30000');
+
+    const config = ConfigurationManager.getInstance();
+    config.initialize({node: {id: 'seed-wifi-node'}});
+    applyStaticNetworkTimingProfile(config, NETWORK_TIMING_PROFILE.EXPERIMENTAL_WIFI_SLOW);
+    const profiledGateway = createRecordingSeedGateway();
+    const profiledService = new DynamicConfigService({
+      nodeId: 'seed-wifi-node',
+      controlPlaneSystemTableGateway: profiledGateway.controlPlaneSystemTableGateway,
+    });
+    await profiledService.initialize();
+    await profiledService.seedConfiguration(CONFIG_SEED_SOURCE.SYSTEM, {nowMs: 2000});
+    t.equal(profiledGateway.inserted.get(CONFIG_KEY.RAFT_TICK_INTERVAL_MS).config_value, '50');
+    t.equal(
+      profiledGateway.inserted.get(CONFIG_KEY.RAFT_HEARTBEAT_INTERVAL_MS).config_value, '150');
+    t.equal(
+      profiledGateway.inserted.get(CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MIN_MS).config_value, '9000');
+    t.equal(
+      profiledGateway.inserted.get(CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MAX_MS).config_value, '18000');
+    t.equal(
+      profiledGateway.inserted.get(CONFIG_KEY.QUERY_COORDINATOR_QUERY_TIMEOUT_MS).config_value,
+      '45000');
+
+    ConfigurationManager.resetInstance();
+    process.env[ENTRYPOINT_ENV.NETWORK_TIMING_PROFILE] =
+      NETWORK_TIMING_PROFILE.EXPERIMENTAL_WIFI_SLOW;
+    const envGateway = createRecordingSeedGateway();
+    const envService = new DynamicConfigService({
+      nodeId: 'seed-env-wifi-node',
+      controlPlaneSystemTableGateway: envGateway.controlPlaneSystemTableGateway,
+    });
+    await envService.initialize();
+    await envService.seedConfiguration(CONFIG_SEED_SOURCE.SYSTEM, {nowMs: 3000});
+    t.equal(envGateway.inserted.get(CONFIG_KEY.RAFT_TICK_INTERVAL_MS).config_value, '50');
+    t.equal(envGateway.inserted.get(CONFIG_KEY.RAFT_HEARTBEAT_INTERVAL_MS).config_value, '150');
+    t.equal(envGateway.inserted.get(CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MIN_MS).config_value, '9000');
+    t.equal(envGateway.inserted.get(CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MAX_MS).config_value, '18000');
+  });
+
+test('DynamicConfigService and startup wiring never overwrite experimental-wifi-slow with unprofiled system defaults',
+  async (t) => {
+    ConfigurationManager.resetInstance();
+    let wiring = null;
+    t.teardown(async () => {
+      if (wiring) {
+        await wiring.shutdown();
+      }
+      ConfigurationManager.resetInstance();
+    });
+
+    const config = ConfigurationManager.getInstance();
+    config.initialize({node: {id: 'preserve-wifi-node'}});
+    applyStaticNetworkTimingProfile(config, NETWORK_TIMING_PROFILE.EXPERIMENTAL_WIFI_SLOW);
+
+    const staleSystemRows = {
+      [CONFIG_KEY.RAFT_TICK_INTERVAL_MS]: {
+        config_key: CONFIG_KEY.RAFT_TICK_INTERVAL_MS,
+        config_value: '20',
+        value_type: 'number',
+        updated_by: CONFIG_SEED_SOURCE.SYSTEM,
+      },
+      [CONFIG_KEY.RAFT_HEARTBEAT_INTERVAL_MS]: {
+        config_key: CONFIG_KEY.RAFT_HEARTBEAT_INTERVAL_MS,
+        config_value: '50',
+        value_type: 'number',
+        updated_by: CONFIG_SEED_SOURCE.SYSTEM,
+      },
+      [CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MIN_MS]: {
+        config_key: CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MIN_MS,
+        config_value: '1000',
+        value_type: 'number',
+        updated_by: CONFIG_SEED_SOURCE.SYSTEM,
+      },
+      [CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MAX_MS]: {
+        config_key: CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MAX_MS,
+        config_value: '3000',
+        value_type: 'number',
+        updated_by: CONFIG_SEED_SOURCE.SYSTEM,
+      },
+      [CONFIG_KEY.QUERY_COORDINATOR_QUERY_TIMEOUT_MS]: {
+        config_key: CONFIG_KEY.QUERY_COORDINATOR_QUERY_TIMEOUT_MS,
+        config_value: '30000',
+        value_type: 'number',
+        updated_by: CONFIG_SEED_SOURCE.SYSTEM,
+      },
+    };
+
+    const sqlEngine = {
+      async executeQuery(sql, params = []) {
+        if (sql.includes('WHERE config_key = ?')) {
+          const row = staleSystemRows[params[0]];
+          return {rows: row ? [row] : []};
+        }
+        return {rows: Object.values(staleSystemRows)};
+      },
+    };
+
+    const dcs = new DynamicConfigService({nodeId: 'preserve-wifi-node', sqlQueryEngine: sqlEngine});
+    await dcs.initialize();
+    const observedWatcherUpdates = [];
+    dcs.watch(CONFIG_KEY.RAFT_TICK_INTERVAL_MS, (val) => observedWatcherUpdates.push(val));
+
+    t.equal(await dcs.get(CONFIG_KEY.RAFT_TICK_INTERVAL_MS), 50);
+    t.equal(await dcs.get(CONFIG_KEY.RAFT_HEARTBEAT_INTERVAL_MS), 150);
+    t.equal(await dcs.get(CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MIN_MS), 9000);
+    t.equal(await dcs.get(CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MAX_MS), 18000);
+    t.equal(await dcs.get(CONFIG_KEY.QUERY_COORDINATOR_QUERY_TIMEOUT_MS), 45000);
+
+    const all = await dcs.getAll();
+    t.equal(all[CONFIG_KEY.RAFT_TICK_INTERVAL_MS], 50);
+    t.equal(all[CONFIG_KEY.RAFT_HEARTBEAT_INTERVAL_MS], 150);
+    t.equal(all[CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MIN_MS], 9000);
+    t.equal(all[CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MAX_MS], 18000);
+    t.equal(all[CONFIG_KEY.QUERY_COORDINATOR_QUERY_TIMEOUT_MS], 45000);
+
+    await dcs.handleCDCEvent({
+      operation: 'UPSERT',
+      data: {
+        config_key: CONFIG_KEY.RAFT_TICK_INTERVAL_MS,
+        config_value: '20',
+        value_type: 'number',
+        updated_by: CONFIG_SEED_SOURCE.SYSTEM,
+      },
+    });
+    t.equal(await dcs.get(CONFIG_KEY.RAFT_TICK_INTERVAL_MS), 50,
+      'system-seeded unprofiled CDC event must not clobber active profile');
+    t.same(observedWatcherUpdates, []);
+
+    await dcs.handleCDCEvent({
+      operation: 'UPSERT',
+      data: {
+        config_key: CONFIG_KEY.RAFT_TICK_INTERVAL_MS,
+        config_value: '40',
+        value_type: 'number',
+        updated_by: 'operator',
+      },
+    });
+    t.equal(await dcs.get(CONFIG_KEY.RAFT_TICK_INTERVAL_MS), 40,
+      'explicit non-system operator update remains honored');
+    t.same(observedWatcherUpdates, [40]);
+
+    const messageGroupService = new EventEmitter();
+    wiring = await createDynamicConfigStartupWiring({
+      nodeId: 'preserve-wifi-node',
+      sqlQueryEngine: sqlEngine,
+      messageGroupServices: [messageGroupService],
+      networkTimingProfile: NETWORK_TIMING_PROFILE.EXPERIMENTAL_WIFI_SLOW,
+    });
+    messageGroupService.emit('cdcApplied', {
+      tableName: 'config',
+      operation: 'UPDATE',
+      data: {
+        config_key: CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MAX_MS,
+        config_value: '2000',
+        value_type: 'number',
+        updated_by: CONFIG_SEED_SOURCE.SYSTEM,
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    t.equal(config.get(CONFIG_KEY.RAFT_TICK_INTERVAL_MS), 50);
+    t.equal(config.get(CONFIG_KEY.RAFT_HEARTBEAT_INTERVAL_MS), 150);
+    t.equal(config.get(CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MIN_MS), 9000);
+    t.equal(config.get(CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MAX_MS), 18000);
+    t.equal(config.get(TRANSPORT_CONFIG_KEY.MESSAGE_TIMEOUT_MS), 12000);
+    t.equal(config.get(CONFIG_KEY.TIMEOUT_CONTROL_PLANE_OPERATION_BUDGET_MS), 25000);
+    t.same(wiring.effectiveRaftTiming().requested, {
+      tickIntervalMs: 50,
+      heartbeatMs: 150,
+      electionMinMs: 9000,
+      electionMaxMs: 18000,
+    });
+  });
+
+async function snapshotProfileBounds(t, profileName) {
+  ConfigurationManager.resetInstance();
+  const config = ConfigurationManager.getInstance();
+  config.initialize({node: {id: `bounds-${profileName}`}});
+  applyStaticNetworkTimingProfile(config, profileName);
+
+  const relayCalls = [];
+  const registeredHandlers = new Map();
+  const routerStub = {
+    reconnectIntervalMs: config.get(TRANSPORT_CONFIG_KEY.RECONNECT_INTERVAL_MS),
+    connections: new Map([['n2', {state: 'connected'}]]),
+    getConnectionState: () => 'connected',
+    register: (addr, fn) => registeredHandlers.set(addr, fn),
+    pingNode: async (targetNodeId, timeoutMs) => {
+      relayCalls.push({targetNodeId, timeoutMs});
+      return true;
+    },
+  };
+  const swimRuntime = new MembershipSwimRuntime({
+    nodeId: `bounds-${profileName}`,
+    messageRouter: routerStub,
+  });
+  swimRuntime.start();
+  const relayFn = registeredHandlers.get(`bounds-${profileName}/service/swim-relay`);
+  await relayFn({payload: {targetNodeId: 'n2'}});
+  await swimRuntime.stop();
+
+  const view = new AuthoritativeControlPlaneView({nodeId: `bounds-${profileName}`});
+  const readiness = new ControlPlaneReadinessService({
+    nodeId: `bounds-${profileName}`,
+    systemTableCache: createReadinessSystemTableCacheStub(),
+  });
+  const reconciler = new AuthoritativeNodeEvidenceReconciler({
+    nodeId: `bounds-${profileName}`,
+    workflowCoordinator: {runExclusive: async (_name, fn) => fn()},
+  });
+  const leaderOwner = new ServiceLeaderReadinessOwner({});
+  const repo = new ReplicaOperationRepository({
+    nodeId: `bounds-${profileName}`,
+    systemTableCache: createReadinessSystemTableCacheStub(),
+    cdcIntegrationService: {},
+    controlPlaneSystemTableGateway: {submitMutation: async () => ({success: true})},
+    logger: console,
+    repairRetainedPlacement: async () => {},
+    resolveRetainedPlacementRepairRoute: async () => null,
+    prepareRetainedPlacementRepair: async () => null,
+    reportRetainedRepairVerdict: () => {},
+  });
+  const leaseAuthority = NodeReadyLeaseAuthority.fromConfiguration();
+  const heartbeatService = new HeartbeatService({
+    nodeId: `bounds-${profileName}`,
+    bootIncarnation: 1,
+    systemTableCache: createReadinessSystemTableCacheStub(),
+  });
+  const coordinator = new ParallelQueryCoordinator({nodeId: `bounds-${profileName}`});
+
+  const recoveryExecutor = {
+    nodeId: `bounds-${profileName}`,
+    nowFn: () => 1000,
+    queryTimeoutMs: config.get(CONFIG_KEY.TIMEOUT_CONTROL_PLANE_OPERATION_BUDGET_MS),
+    messageRouter: routerStub,
+    getPartitionRecord: () => null,
+  };
+  const recoveryCandidate = {
+    nodeId: 'n2',
+    address: 'n2/service/control_plane_publications-p1-r1',
+  };
+  const writeAttemptBudget = createPartitionAttemptBudget({
+    executor: recoveryExecutor,
+    partitionId: 'control_plane_publications-p1',
+    forRead: false,
+    executionOptions: {
+      timeoutMs: config.get(CONFIG_KEY.TIMEOUT_CONTROL_PLANE_OPERATION_BUDGET_MS),
+    },
+    routingReadinessDimension:
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+  });
+  const delivery = writeAttemptBudget.buildRouterDeliveryOptions(
+    [recoveryCandidate],
+    0,
+    new Set(),
+  );
+  const readAttemptBudget = createPartitionAttemptBudget({
+    executor: recoveryExecutor,
+    partitionId: 'control_plane_publications-p1',
+    forRead: true,
+    executionOptions: {
+      timeoutMs: config.get(CONFIG_KEY.TIMEOUT_CONTROL_PLANE_OPERATION_BUDGET_MS),
+    },
+    routingReadinessDimension:
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+  });
+  const readDelivery = readAttemptBudget.buildRouterDeliveryOptions(
+    [recoveryCandidate],
+    0,
+    new Set(),
+  );
+
+  // Also test real startup initial read bound behavior with deterministic release.
+  const resolvers = [];
+  let released = false;
+  const keepAliveTimer = setTimeout(() => {}, 15000);
+  const slowEngine = {
+    executeQuery() {
+      if (released) {
+        return Promise.resolve({rows: []});
+      }
+      return new Promise((resolve) => {
+        resolvers.push(() => resolve({rows: []}));
+      });
+    },
+  };
+  const releaseTimer =
+    profileName === NETWORK_TIMING_PROFILE.EXPERIMENTAL_WIFI_SLOW ?
+      setTimeout(() => {
+        released = true;
+        while (resolvers.length > 0) {
+          resolvers.shift()();
+        }
+      }, 350) :
+      null;
+  let startupWiring;
+  try {
+    startupWiring = await createDynamicConfigStartupWiring({
+      nodeId: `bounds-${profileName}`,
+      sqlQueryEngine: slowEngine,
+      networkTimingProfile: profileName,
+    });
+  } finally {
+    released = true;
+    if (releaseTimer) {
+      clearTimeout(releaseTimer);
+    }
+    clearTimeout(keepAliveTimer);
+  }
+  t.teardown(() => startupWiring.shutdown());
+  const immediateStartupTickOutcome =
+    startupWiring.startupOutcome().reads[CONFIG_KEY.RAFT_TICK_INTERVAL_MS];
+  while (resolvers.length > 0) {
+    resolvers.shift()();
+  }
+  await new Promise((resolve) => setTimeout(resolve, 25));
+
+  return {
+    messageTimeoutMs: config.get(TRANSPORT_CONFIG_KEY.MESSAGE_TIMEOUT_MS),
+    pingTimeoutMs: config.get(TRANSPORT_CONFIG_KEY.PING_TIMEOUT_MS),
+    reconnectIntervalMs: config.get(TRANSPORT_CONFIG_KEY.RECONNECT_INTERVAL_MS),
+    startupInitialReadTimeoutMs:
+      config.get(CONFIG_KEY.TIMEOUT_DYNAMIC_CONFIG_STARTUP_INITIAL_READ_MS),
+    swimProbeTimeoutMs: swimRuntime._detector.scaledProbeTimeoutMs(),
+    swimProbeIntervalMs: swimRuntime._detector._config.baseProbeIntervalMs,
+    swimRelayPingTimeoutMs: relayCalls[0].timeoutMs,
+    controlPlaneSqlTimeoutMs: resolveControlPlaneQueryTimeoutMs({}),
+    controlPlaneQueryTimeoutMs: resolveControlPlaneAuthoritativeQueryTimeoutMs(1500),
+    authoritativeViewQueryTimeoutMs: view.queryTimeoutMs,
+    readinessRepairQueryTimeoutMs: readiness.authoritativeReadinessRepairQueryTimeoutMs,
+    readinessDiagnosticsProbeMs: readiness.membershipPublicationDiagnosticsQueryTimeoutMs,
+    reconcilerQueryTimeoutMs: reconciler.authoritativeReadinessRepairQueryTimeoutMs,
+    leaderRefreshQueryTimeoutMs:
+      leaderOwner.resolveAuthoritativeLeaderRefreshQueryTimeoutMs({}),
+    replicaReadRetryTimeoutMs: repo.replicaOperationReadRetryTimeoutMs,
+    operationPersistRetryTimeoutMs: repo.operationPersistRetryTimeoutMs,
+    replicaMutationQueryTimeoutMs: repo.replicaOperationMutationQueryTimeoutMs,
+    readyLeaseMs: leaseAuthority.readyLeaseMs,
+    leaseRenewalIntervalMs: leaseAuthority.renewalIntervalMs,
+    heartbeatIntervalMs: heartbeatService.heartbeatIntervalMs,
+    heartbeatAttemptTimeoutMs: heartbeatService.heartbeatAttemptTimeoutMs,
+    clusterMemberStaleHeartbeatMaxAgeMs: readiness.clusterMemberStaleHeartbeatMaxAgeMs,
+    repairStaleHeartbeatMaxAgeMs: reconciler.authoritativeReadinessRepairStaleHeartbeatMaxAgeMs,
+    coordinatorQueryTimeoutMs: coordinator.queryTimeoutMs,
+    recoveryCandidateDeliveryTimeoutMs: delivery.timeoutMs,
+    recoveryReadProbeMs:
+      readAttemptBudget.recoveryReadProbeMs(readDelivery, recoveryCandidate),
+    dispatchReadinessRefreshTimeoutMs:
+      ReplicaDispatchReplayHealthReadiness.prototype
+        .normalizeDispatchReadinessRefreshTimeoutMs.call({
+          operationDispatchRetryAfterMs: 250,
+        }),
+    readinessObservationProbeTimeoutMs:
+      config.get(CONFIG_KEY.TIMEOUT_READINESS_OBSERVATION_PROBE_TIMEOUT_MS),
+    immediateStartupTickOutcome,
+    startupTickOutcome:
+      startupWiring.startupOutcome().reads[CONFIG_KEY.RAFT_TICK_INTERVAL_MS],
+  };
+}
+
+test('Stage 3 timeout bounds resolve to experimental-wifi-slow profile values while default and 1000ms readiness probes remain unchanged',
+  async (t) => {
+    t.teardown(() => ConfigurationManager.resetInstance());
+    const defaults = await snapshotProfileBounds(t, NETWORK_TIMING_PROFILE.DEFAULT);
+    t.same(defaults, {
+      messageTimeoutMs: 5000,
+      pingTimeoutMs: 1000,
+      reconnectIntervalMs: 1000,
+      startupInitialReadTimeoutMs: 300,
+      swimProbeTimeoutMs: 500,
+      swimProbeIntervalMs: 1000,
+      swimRelayPingTimeoutMs: 1000,
+      controlPlaneSqlTimeoutMs: 5000,
+      controlPlaneQueryTimeoutMs: 1500,
+      authoritativeViewQueryTimeoutMs: 1500,
+      readinessRepairQueryTimeoutMs: 1500,
+      readinessDiagnosticsProbeMs: 1000,
+      reconcilerQueryTimeoutMs: 1500,
+      leaderRefreshQueryTimeoutMs: 1500,
+      replicaReadRetryTimeoutMs: 1000,
+      operationPersistRetryTimeoutMs: 15000,
+      replicaMutationQueryTimeoutMs: 15000,
+      readyLeaseMs: 15000,
+      leaseRenewalIntervalMs: 5000,
+      heartbeatIntervalMs: 5000,
+      heartbeatAttemptTimeoutMs: 6000,
+      clusterMemberStaleHeartbeatMaxAgeMs: 30000,
+      repairStaleHeartbeatMaxAgeMs: 10000,
+      coordinatorQueryTimeoutMs: 30000,
+      recoveryCandidateDeliveryTimeoutMs: 1000,
+      recoveryReadProbeMs: 1000,
+      dispatchReadinessRefreshTimeoutMs: 1000,
+      readinessObservationProbeTimeoutMs: 1000,
+      immediateStartupTickOutcome: DYNAMIC_CONFIG_STARTUP_OUTCOME.PENDING,
+      startupTickOutcome: DYNAMIC_CONFIG_STARTUP_OUTCOME.APPLIED_LATE,
+    }, 'default profile preserves all existing baseline timeouts and triggers 300ms startup bound');
+
+    const slow = await snapshotProfileBounds(
+      t,
+      NETWORK_TIMING_PROFILE.EXPERIMENTAL_WIFI_SLOW,
+    );
+    t.same(slow, {
+      messageTimeoutMs: 12000,
+      pingTimeoutMs: 3000,
+      reconnectIntervalMs: 5000,
+      startupInitialReadTimeoutMs: 10000,
+      swimProbeTimeoutMs: 5000,
+      swimProbeIntervalMs: 8000,
+      swimRelayPingTimeoutMs: 3000,
+      controlPlaneSqlTimeoutMs: 25000,
+      controlPlaneQueryTimeoutMs: 8000,
+      authoritativeViewQueryTimeoutMs: 8000,
+      readinessRepairQueryTimeoutMs: 8000,
+      readinessDiagnosticsProbeMs: 1000,
+      reconcilerQueryTimeoutMs: 8000,
+      leaderRefreshQueryTimeoutMs: 8000,
+      replicaReadRetryTimeoutMs: 10000,
+      operationPersistRetryTimeoutMs: 30000,
+      replicaMutationQueryTimeoutMs: 25000,
+      readyLeaseMs: 90000,
+      leaseRenewalIntervalMs: 30000,
+      heartbeatIntervalMs: 15000,
+      heartbeatAttemptTimeoutMs: 30000,
+      clusterMemberStaleHeartbeatMaxAgeMs: 90000,
+      repairStaleHeartbeatMaxAgeMs: 35000,
+      coordinatorQueryTimeoutMs: 45000,
+      recoveryCandidateDeliveryTimeoutMs: 5000,
+      recoveryReadProbeMs: 5000,
+      dispatchReadinessRefreshTimeoutMs: 1000,
+      readinessObservationProbeTimeoutMs: 1000,
+      immediateStartupTickOutcome: DYNAMIC_CONFIG_STARTUP_OUTCOME.APPLIED,
+      startupTickOutcome: DYNAMIC_CONFIG_STARTUP_OUTCOME.APPLIED,
+    }, 'experimental-wifi-slow applies profiled bounds while keeping readiness probes short at 1000ms');
+
+    t.ok(slow.leaseRenewalIntervalMs > 28000,
+      'experimental-wifi-slow renewal cadence exceeds ~28s jittered Raft election window');
+    t.ok(slow.readyLeaseMs >= slow.leaseRenewalIntervalMs * 3,
+      'experimental-wifi-slow readyLeaseMs provides 3x margin over renewal & election window');
+    t.ok(slow.repairStaleHeartbeatMaxAgeMs > 28000,
+      'repair stale-heartbeat threshold exceeds ~28s jittered Raft election window');
+    t.ok(slow.clusterMemberStaleHeartbeatMaxAgeMs >= slow.readyLeaseMs,
+      'cluster member stale-heartbeat threshold covers readyLeaseMs under slow Wi-Fi');
+  });
+
+test('immutable live native core createdCoreTuning rejects tick-changing in-place reconfig and effectiveRaftTiming reads live core truth',
+  async (t) => {
+    ConfigurationManager.resetInstance();
+    let service = null;
+    let wiring = null;
+    t.teardown(async () => {
+      if (wiring) {
+        await wiring.shutdown();
+      }
+      if (service) {
+        await service.shutdown();
+      }
+      ConfigurationManager.resetInstance();
+    });
+
+    const config = ConfigurationManager.getInstance();
+    config.initialize({node: {id: 'live-core-timing-node'}});
+    applyStaticNetworkTimingProfile(config, NETWORK_TIMING_PROFILE.DEFAULT);
+
+    service = new PartitionService({
+      partitionId: 'live-core-timing-p1',
+      tableId: 'live_core_timing_table',
+      tableName: 'live_core_timing',
+      replicaId: 'live-core-timing-r1',
+      replicaIds: ['live-core-timing-r1'],
+      bootstrapMembership: genesisStamp(['live-core-timing-r1'], {}),
+      nodeId: 'live-core-timing-node',
+      dbPath: ':memory:',
+      deferElection: true,
+    });
+    await service.initialize();
+
+    const bootTruth = readPortEffectiveRaftTiming(service.raft);
+    t.same(bootTruth.createdCoreTiming, {
+      heartbeatMs: 50,
+      tickIntervalMs: 20,
+      electionMinMs: 1000,
+      electionMaxMs: 2000,
+    });
+    t.same(bootTruth.createdCoreTuning, {
+      electionTick: 50,
+      heartbeatTick: 3,
+      preVote: true,
+      checkQuorum: true,
+    });
+    t.equal(bootTruth.pendingRecreation, false);
+
+    // Identical native ticks (heartbeatTick=3, electionTick=50) apply in place.
+    const sameTicksTurn = await service.raft.configureTick({
+      tickIntervalMs: 20,
+      heartbeatMs: 60,
+      electionMinMs: 1000,
+      electionMaxMs: 2000,
+    });
+    t.equal(sameTicksTurn.settled, true);
+    t.equal(sameTicksTurn.result.outcome, 'CORE_OK');
+    t.equal(sameTicksTurn.result.appliedToExistingCore, true);
+    t.equal(sameTicksTurn.result.pendingRecreation, false);
+
+    // Changing native ticks (electionTick 50 -> 180) must NOT claim in-place core change.
+    const changedTicksTurn = await service.raft.configureTick({
+      tickIntervalMs: 50,
+      heartbeatMs: 150,
+      electionMinMs: 9000,
+      electionMaxMs: 18000,
+    });
+    t.equal(changedTicksTurn.settled, true);
+    t.equal(changedTicksTurn.result.outcome, 'CORE_OK');
+    t.equal(changedTicksTurn.result.appliedToExistingCore, false);
+    t.equal(changedTicksTurn.result.pendingRecreation, true);
+    t.equal(changedTicksTurn.result.createdCoreTuning.electionTick, 50);
+    t.equal(changedTicksTurn.result.createdCoreTuning.heartbeatTick, 3);
+    t.equal(changedTicksTurn.result.effective.electionTick, 50);
+    t.equal(
+      changedTicksTurn.result.configuredForFutureReplicas.effective.electionTick,
+      180,
+    );
+
+    const appliedInPlace = service.applyRaftTimingConfig({
+      tickIntervalMs: 50,
+      heartbeatIntervalMs: 150,
+      electionTimeoutMinMs: 9000,
+      electionTimeoutMaxMs: 18000,
+    });
+    t.equal(appliedInPlace, false,
+      'applyRaftTimingConfig returns false when live native core requires recreation');
+
+    const serviceTruth = service.effectiveRaftTiming();
+    t.equal(serviceTruth.effective.electionTick, 50);
+    t.equal(serviceTruth.effective.effectiveElectionMinMs, 1000);
+    t.equal(serviceTruth.pendingRecreation, true);
+
+    const slowRows = {
+      [CONFIG_KEY.RAFT_TICK_INTERVAL_MS]: {
+        config_key: CONFIG_KEY.RAFT_TICK_INTERVAL_MS,
+        config_value: '50',
+        value_type: 'number',
+      },
+      [CONFIG_KEY.RAFT_HEARTBEAT_INTERVAL_MS]: {
+        config_key: CONFIG_KEY.RAFT_HEARTBEAT_INTERVAL_MS,
+        config_value: '150',
+        value_type: 'number',
+      },
+      [CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MIN_MS]: {
+        config_key: CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MIN_MS,
+        config_value: '9000',
+        value_type: 'number',
+      },
+      [CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MAX_MS]: {
+        config_key: CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MAX_MS,
+        config_value: '18000',
+        value_type: 'number',
+      },
+    };
+    wiring = await createDynamicConfigStartupWiring({
+      nodeId: 'live-core-timing-node',
+      sqlQueryEngine: createLocalConfigSqlEngine(slowRows),
+      partitionServices: new Map([['live-core-timing-p1', service]]),
+    });
+
+    const wiringTruth = wiring.effectiveRaftTiming();
+    t.equal(wiringTruth.appliedToExistingCore, false);
+    t.equal(wiringTruth.pendingRecreation, true);
+    t.equal(wiringTruth.effective.electionTick, 50,
+      'effectiveRaftTiming reads back running group createdCoreTuning');
+    t.equal(wiringTruth.effective.effectiveElectionMinMs, 1000);
+    t.equal(wiringTruth.configuredForFutureReplicas.effective.electionTick, 180,
+      'distinguishes configuredForFutureReplicas from live core effective tuning');
+    t.equal(config.get(CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MIN_MS), 9000,
+      'ConfigurationManager retains slow timing for future replicas');
   });

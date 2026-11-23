@@ -94,16 +94,19 @@ class HeartbeatService extends EventEmitter {
         Math.floor(configuredReadyLeaseMs) :
         HEARTBEAT_DEFAULT.READY_LEASE_MS;
     const renewalCadenceMs = resolveRenewalIntervalMs(this.readyLeaseMs);
-    const configuredHeartbeatIntervalMs =
-      Number.isFinite(options.heartbeatIntervalMs) &&
-      options.heartbeatIntervalMs > ZERO ?
-        Math.floor(options.heartbeatIntervalMs) :
-        config.get(HEARTBEAT_CONFIG_KEY.INTERVAL_MS);
-    this.heartbeatIntervalMs =
+    const configuredHeartbeatIntervalMs = config.get(
+      HEARTBEAT_CONFIG_KEY.INTERVAL_MS,
+    );
+    const defaultHeartbeatIntervalMs =
       Number.isFinite(configuredHeartbeatIntervalMs) &&
       configuredHeartbeatIntervalMs > ZERO ?
         Math.floor(configuredHeartbeatIntervalMs) :
-        Math.min(HEARTBEAT_DEFAULT.INTERVAL_MS, renewalCadenceMs);
+        HEARTBEAT_DEFAULT.INTERVAL_MS;
+    this.heartbeatIntervalMs =
+      Number.isFinite(options.heartbeatIntervalMs) &&
+      options.heartbeatIntervalMs > ZERO ?
+        Math.floor(options.heartbeatIntervalMs) :
+        Math.min(defaultHeartbeatIntervalMs, renewalCadenceMs);
     this.endpointRefreshIntervalMs =
       Number.isFinite(options.endpointRefreshIntervalMs) &&
       options.endpointRefreshIntervalMs > ZERO ?

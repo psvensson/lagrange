@@ -113,6 +113,7 @@ class ConfigurationManager {
     // setByPath, initialize's node id): a reader keyed on it re-reads exactly
     // when a value may have changed.
     this.revision = 0;
+    this.networkTimingProfile = null;
   }
 
   /**

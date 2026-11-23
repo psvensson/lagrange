@@ -122,6 +122,9 @@ const DEFAULT_CONFIG = {
     httpRequestMs: 10000,
     controlPlaneOperationBudgetMs: 10000,
     readinessObservationProbeTimeoutMs: 1000,
+    controlPlaneQueryTimeoutMs: 1500,
+    controlPlaneSqlQueryTimeoutMs: 5000,
+    dynamicConfigStartupInitialReadMs: 300,
   },
   worker: {
     minThreads: 2,
@@ -157,6 +160,8 @@ const DEFAULT_CONFIG = {
     messageGroupReplicaOverheadBytes: 1048576, // 1 MiB
     serviceReplicaOverheadBytes: 5242880, // 5 MiB
     storageAdmissionMode: 'enforce',
+    replicaOperationReadRetryTimeoutMs: 1000,
+    operationPersistRetryTimeoutMs: 15000,
   },
   replicaHandler: {
     syncTimeoutMs: 60000, // 60 seconds to wait for voter-ready activation
@@ -196,6 +201,14 @@ const DEFAULT_CONFIG = {
   },
   formation: {
     declaredHostCount: null,
+  },
+  controlPlane: {
+    readyLeaseMs: 15000,
+    heartbeatIntervalMs: 5000,
+    swimProbeTimeoutMs: 500,
+    swimProbeIntervalMs: 1000,
+    staleHeartbeatMaxAgeMs: 30000,
+    repairStaleHeartbeatMaxAgeMs: 10000,
   },
 };
 

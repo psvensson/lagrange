@@ -214,9 +214,211 @@ function captureOriginalRaftRsTiming(timing = {}) {
   });
 }
 
+function mergeDefinedTimingFields(baseTiming = {}, patchTiming = {}) {
+  const safeBase = baseTiming && typeof baseTiming === 'object' ? baseTiming : {};
+  const safePatch = patchTiming && typeof patchTiming === 'object' ? patchTiming : {};
+  const merged = {...safeBase};
+  for (const field of [
+    RAFT_RS_TIMING_DISCREPANCY_FIELD.TICK_INTERVAL_MS,
+    RAFT_RS_TIMING_DISCREPANCY_FIELD.HEARTBEAT_MS,
+    RAFT_RS_TIMING_DISCREPANCY_FIELD.ELECTION_MIN_MS,
+    RAFT_RS_TIMING_DISCREPANCY_FIELD.ELECTION_MAX_MS,
+  ]) {
+    const candidate = finiteNumberOrNull(safePatch[field]);
+    if (candidate !== null) {
+      merged[field] = candidate;
+    }
+  }
+  return merged;
+}
+
+function describeCreatedCoreTiming({
+  createdCoreTiming,
+  createdCoreTuning,
+  currentTickIntervalMs = null,
+  pendingConfiguredTiming = null,
+}) {
+  const requested = extractRequestedTiming(createdCoreTiming);
+  const derivedTickMs =
+    Number.isFinite(currentTickIntervalMs) && currentTickIntervalMs > 0 ?
+      currentTickIntervalMs :
+      deriveTickMsFromRequested(requested);
+  const {heartbeatTick, electionTick} = createdCoreTuning;
+  const effectiveHeartbeatMs = heartbeatTick * derivedTickMs;
+  const effectiveElectionMinMs = electionTick * derivedTickMs;
+  const effectiveElectionMaxMs =
+    NATIVE_ELECTION_MAX_MULTIPLIER * electionTick * derivedTickMs;
+  const effective = Object.freeze({
+    tickIntervalMs: derivedTickMs,
+    heartbeatTick,
+    electionTick,
+    effectiveHeartbeatMs,
+    effectiveElectionMinMs,
+    effectiveElectionMaxMs,
+    electionMaxControlledByCore: false,
+  });
+  return Object.freeze({
+    requested,
+    effective,
+    discrepancies: buildDiscrepancies(requested, effective),
+    createdCoreTiming,
+    createdCoreTuning,
+    configuredForFutureReplicas: pendingConfiguredTiming ?
+      describeEffectiveRaftRsTiming(pendingConfiguredTiming) :
+      null,
+    pendingRecreation: pendingConfiguredTiming !== null &&
+      pendingConfiguredTiming !== undefined,
+  });
+}
+
+function evaluateCoreTimingUpdate({
+  currentTiming,
+  createdCoreTiming,
+  createdCoreTuning,
+  incomingTiming,
+}) {
+  const nextTiming = Object.freeze(
+    mergeDefinedTimingFields(currentTiming, incomingTiming),
+  );
+  const nextTuning = Object.freeze(tuningOf(nextTiming));
+  const ticksChanged =
+    createdCoreTuning !== null &&
+    createdCoreTuning !== undefined &&
+    (nextTuning.electionTick !== createdCoreTuning.electionTick ||
+      nextTuning.heartbeatTick !== createdCoreTuning.heartbeatTick);
+  if (ticksChanged) {
+    const coreSnapshot = describeCreatedCoreTiming({
+      createdCoreTiming,
+      createdCoreTuning,
+      pendingConfiguredTiming: nextTiming,
+    });
+    return Object.freeze({
+      applied: false,
+      appliedToExistingCore: false,
+      pendingRecreation: true,
+      nextTiming,
+      nextTuning,
+      ...coreSnapshot,
+    });
+  }
+  const coreSnapshot =
+    createdCoreTuning && createdCoreTiming ?
+      describeCreatedCoreTiming({
+        createdCoreTiming,
+        createdCoreTuning,
+        currentTickIntervalMs: nextTiming.tickIntervalMs ?? null,
+        pendingConfiguredTiming: null,
+      }) :
+      describeEffectiveRaftRsTiming(nextTiming);
+  return Object.freeze({
+    applied: true,
+    appliedToExistingCore: true,
+    pendingRecreation: false,
+    nextTiming,
+    nextTuning,
+    createdCoreTiming: createdCoreTiming || null,
+    createdCoreTuning: createdCoreTuning || null,
+    configuredForFutureReplicas: null,
+    ...coreSnapshot,
+  });
+}
+
+function summarizeLiveCoreEffectiveRaftTiming(
+  configuredForFutureReplicas,
+  liveCoreTimings = [],
+) {
+  if (!Array.isArray(liveCoreTimings) || liveCoreTimings.length === 0) {
+    return Object.freeze({
+      ...configuredForFutureReplicas,
+      appliedToExistingCore: true,
+      pendingRecreation: false,
+      configuredForFutureReplicas,
+    });
+  }
+  const primaryLive = liveCoreTimings[0];
+  const pendingRecreation = liveCoreTimings.some(
+    (entry) => entry.pendingRecreation === true ||
+      entry.effective?.heartbeatTick !==
+        configuredForFutureReplicas.effective.heartbeatTick ||
+      entry.effective?.electionTick !==
+        configuredForFutureReplicas.effective.electionTick,
+  );
+  return Object.freeze({
+    requested: primaryLive.requested,
+    effective: primaryLive.effective,
+    discrepancies: primaryLive.discrepancies,
+    createdCoreTiming: primaryLive.createdCoreTiming,
+    createdCoreTuning: primaryLive.createdCoreTuning,
+    appliedToExistingCore: !pendingRecreation,
+    pendingRecreation,
+    configuredForFutureReplicas,
+    liveCores: Object.freeze([...liveCoreTimings]),
+  });
+}
+
+function recordGroupCreatedCoreTiming(group) {
+  group.createdCoreTiming = captureOriginalRaftRsTiming(group.timing);
+  group.createdCoreTuning = Object.freeze(tuningOf(group.timing));
+  group.pendingConfiguredTiming = null;
+}
+
+function describeGroupTimingSnapshot(group) {
+  if (group.createdCoreTuning && group.createdCoreTiming) {
+    const snapshot = describeCreatedCoreTiming({
+      createdCoreTiming: group.createdCoreTiming,
+      createdCoreTuning: group.createdCoreTuning,
+      currentTickIntervalMs: group.timing?.tickIntervalMs ?? null,
+      pendingConfiguredTiming: group.pendingConfiguredTiming ?? null,
+    });
+    return Object.freeze({
+      appliedToExistingCore: !snapshot.pendingRecreation,
+      ...snapshot,
+    });
+  }
+  return Object.freeze({
+    appliedToExistingCore: true,
+    pendingRecreation: false,
+    createdCoreTiming: null,
+    createdCoreTuning: null,
+    configuredForFutureReplicas: null,
+    ...describeEffectiveRaftRsTiming(group.timing),
+  });
+}
+
+function applyGroupTimingUpdate(group, timing, deepFreeze) {
+  if (
+    !timing ||
+    typeof timing !== 'object' ||
+    Object.keys(timing).length === 0
+  ) {
+    return describeGroupTimingSnapshot(group);
+  }
+  const evaluation = evaluateCoreTimingUpdate({
+    currentTiming: group.timing,
+    createdCoreTiming: group.createdCoreTiming ?? null,
+    createdCoreTuning: group.createdCoreTuning ?? null,
+    incomingTiming: timing,
+  });
+  if (evaluation.appliedToExistingCore) {
+    group.timing = deepFreeze(evaluation.nextTiming);
+    group.pendingConfiguredTiming = null;
+  } else {
+    group.pendingConfiguredTiming = deepFreeze(evaluation.nextTiming);
+  }
+  return evaluation;
+}
+
+const groupCoreTiming = Object.freeze({
+  apply: applyGroupTimingUpdate,
+  recordCreated: recordGroupCreatedCoreTiming,
+  snapshot: describeGroupTimingSnapshot,
+});
+
 export {
   captureOriginalRaftRsTiming,
   describeEffectiveRaftRsTiming,
+  groupCoreTiming,
   recoveryRetryWindowMsOf,
+  summarizeLiveCoreEffectiveRaftTiming,
   tuningOf,
 };

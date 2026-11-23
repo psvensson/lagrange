@@ -144,14 +144,17 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
       }
 
       const startedAtMs = this.timeSource.now();
+      const configuredReadRetryTimeoutMs =
+        this.replicaOperationReadRetryTimeoutMs ??
+        REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS;
       const enclosingRemainingMs = queryOptions.timeoutBudget &&
         typeof queryOptions.timeoutBudget === 'object' ?
         getRemainingBudgetMs(queryOptions.timeoutBudget, {
           now: () => this.timeSource.now(),
         }) :
-        REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS;
+        configuredReadRetryTimeoutMs;
       const retryBoundMs = Math.min(
-        REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS,
+        configuredReadRetryTimeoutMs,
         enclosingRemainingMs,
       );
       const deadlineAtMs = startedAtMs + retryBoundMs;

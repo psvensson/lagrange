@@ -12,6 +12,11 @@ import {
   NODE_LIVENESS_SEMANTIC_STATE,
   NODE_LIVENESS_SEMANTIC_THRESHOLD_DEFAULT,
 } from './node-liveness-semantic-projection.js';
+import {
+  resolveConfiguredControlPlaneTimeoutMs,
+  resolveControlPlaneAuthoritativeQueryTimeoutMs,
+} from './timeout-budget.js';
+import {CONFIG_KEY} from '../config/config-constants.js';
 
 const LOCAL_STR_MAXIMUM_CALL_STACK_SIZE_EXCEEDED = 'Maximum call stack size exceeded';
 
@@ -236,12 +241,17 @@ class AuthoritativeNodeEvidenceReconciler {
     this.authoritativeReadinessRepairQueryTimeoutMs =
       normalizePositiveInteger(
         options.authoritativeReadinessRepairQueryTimeoutMs,
-        DEFAULT_REPAIR_QUERY_TIMEOUT_MS,
+        resolveControlPlaneAuthoritativeQueryTimeoutMs(
+          DEFAULT_REPAIR_QUERY_TIMEOUT_MS,
+        ),
       );
     this.authoritativeReadinessRepairStaleHeartbeatMaxAgeMs =
       normalizePositiveInteger(
         options.authoritativeReadinessRepairStaleHeartbeatMaxAgeMs,
-        DEFAULT_REPAIR_STALE_HEARTBEAT_MAX_AGE_MS,
+        resolveConfiguredControlPlaneTimeoutMs(
+          CONFIG_KEY.CONTROL_PLANE_REPAIR_STALE_HEARTBEAT_MAX_AGE_MS,
+          DEFAULT_REPAIR_STALE_HEARTBEAT_MAX_AGE_MS,
+        ),
       );
     this.lastRepairAtMsByKey = new Map();
     this.lastRepairCooldownMsByKey = new Map();

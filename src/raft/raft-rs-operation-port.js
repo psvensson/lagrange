@@ -87,6 +87,70 @@ const EVENT_ALIAS = Object.freeze({
 const HEARTBEAT_TICK_DIVISOR = 3;
 const ALREADY_CLOSED = 'already-closed';
 const CLOSED_WITHOUT_RUNTIME = 'closed-without-runtime';
+const TIMING_CONFIGURED = 'timing-configured';
+const TIMING_PENDING_RECREATION = 'timing-pending-recreation';
+
+function formatConfigureTickReport(report) {
+  const safe = report || {};
+  const applied = safe.appliedToExistingCore !== false;
+  return coreOk(
+    applied ? TIMING_CONFIGURED : TIMING_PENDING_RECREATION,
+    {
+      appliedToExistingCore: applied,
+      pendingRecreation: safe.pendingRecreation === true,
+      createdCoreTiming: safe.createdCoreTiming || null,
+      createdCoreTuning: safe.createdCoreTuning || null,
+      requested: safe.requested || null,
+      effective: safe.effective || null,
+      configuredForFutureReplicas: safe.configuredForFutureReplicas || null,
+    },
+  );
+}
+
+function readPortEffectiveRaftTiming(port) {
+  const turn = port?.configureTick?.();
+  return turn?.settled && turn.result?.createdCoreTuning ?
+    turn.result :
+    null;
+}
+
+function resolvePortTickApplyOutcome(replica, coreReport, params) {
+  if (coreReport?.appliedToExistingCore === false) {
+    return {
+      applied: false,
+      logExtra: {
+        appliedToExistingCore: false,
+        pendingRecreation: true,
+        createdCoreTuning: coreReport.createdCoreTuning || null,
+      },
+    };
+  }
+  const tickChanged =
+    params.hasTickInterval &&
+    params.tickIntervalMs !== params.previousTickIntervalMs;
+  const tickRuntimeApplied =
+    !tickChanged ||
+    coreReport?.appliedToExistingCore === true ||
+    replica.applyRuntimeTickInterval(params.tickIntervalMs);
+  return {applied: tickRuntimeApplied, logExtra: {tickRuntimeApplied}};
+}
+
+function applyPortRaftTimingConfig(replica, params) {
+  const timingArg = {
+    heartbeatMs: params.heartbeatMs,
+    electionMinMs: params.electionMinMs,
+    electionMaxMs: params.electionMaxMs,
+    rearmTimer: params.rearmTimer,
+  };
+  if (params.hasTickInterval) {
+    timingArg.tickIntervalMs = params.tickIntervalMs;
+  }
+  const applied = replica.raft?.configureTick?.(timingArg);
+  if (!applied) {
+    return {applied: false, logExtra: null};
+  }
+  return resolvePortTickApplyOutcome(replica, applied.result, params);
+}
 
 function required(request, field) {
   const value = request?.[field];
@@ -498,17 +562,20 @@ function createRaftRsOperationPort(request) {
       }),
     configureTick: (nextTiming) => dispatch(() => {
       const command = typeof nextTiming === 'number' ?
-        {tickIntervalMs: nextTiming} : nextTiming;
+        {tickIntervalMs: nextTiming} : (nextTiming || {});
       const wasScheduling = timer !== null;
-      if (Number.isFinite(command?.tickIntervalMs) &&
-          command.tickIntervalMs > 0) {
+      const report = dispatcher.configureTiming(command);
+      if (
+        report?.appliedToExistingCore !== false &&
+        Number.isFinite(command?.tickIntervalMs) &&
+        command.tickIntervalMs > 0
+      ) {
         tickIntervalMs = command.tickIntervalMs;
+        if (wasScheduling) {
+          scheduleTicks();
+        }
       }
-      dispatcher.configureTiming(command || {});
-      if (wasScheduling) {
-        scheduleTicks();
-      }
-      return settledTurn(coreOk('timing-configured'));
+      return settledTurn(formatConfigureTickReport(report));
     }),
     startScheduling,
     stopScheduling,
@@ -551,4 +618,9 @@ function createRaftRsOperationPort(request) {
 // The runtime owner is private to this constructor (the operation-boundary
 // audit), so the binding verdict a dry run reports is passed through here: a
 // digest and load check that returns a state and never dispatches.
-export {createRaftRsOperationPort, verifyRaftRsBinding};
+export {
+  applyPortRaftTimingConfig,
+  createRaftRsOperationPort,
+  readPortEffectiveRaftTiming,
+  verifyRaftRsBinding,
+};

@@ -17,13 +17,17 @@ function assignReplicaOperationRepositoryMutationBudgetMethods(
       if (timeoutBudget && typeof timeoutBudget ===
           REPLICA_OPERATION_REPOSITORY_LITERAL.OBJECT) return timeoutBudget;
       return createTimeoutBudget({
-        configuredBudgetMs: OPERATION_PERSIST_RETRY_TIMEOUT_MS,
+        configuredBudgetMs:
+          this.operationPersistRetryTimeoutMs ??
+          OPERATION_PERSIST_RETRY_TIMEOUT_MS,
         now: () => this.timeSource.now(),
       });
     }
 
     resolveOperationMutationRemainingRetryMs(elapsedMs, timeoutBudget = null) {
-      const localRemainingMs = OPERATION_PERSIST_RETRY_TIMEOUT_MS - elapsedMs;
+      const localRemainingMs =
+        (this.operationPersistRetryTimeoutMs ??
+          OPERATION_PERSIST_RETRY_TIMEOUT_MS) - elapsedMs;
       if (
         !timeoutBudget ||
         typeof timeoutBudget !== REPLICA_OPERATION_REPOSITORY_LITERAL.OBJECT
@@ -36,11 +40,14 @@ function assignReplicaOperationRepositoryMutationBudgetMethods(
     }
 
     resolveOperationMutationQueryTimeoutMs(timeoutBudget = null) {
+      const mutationQueryTimeoutMs =
+        this.replicaOperationMutationQueryTimeoutMs ??
+        REPLICA_OPERATION_MUTATION_QUERY_TIMEOUT_MS;
       if (
         !timeoutBudget ||
         typeof timeoutBudget !== REPLICA_OPERATION_REPOSITORY_LITERAL.OBJECT
       ) {
-        return REPLICA_OPERATION_MUTATION_QUERY_TIMEOUT_MS;
+        return mutationQueryTimeoutMs;
       }
       const budgetRemainingMs = getRemainingBudgetMs(
         timeoutBudget, {now: () => this.timeSource.now()});
@@ -48,7 +55,7 @@ function assignReplicaOperationRepositoryMutationBudgetMethods(
       return Math.max(
         1,
         Math.min(
-          REPLICA_OPERATION_MUTATION_QUERY_TIMEOUT_MS,
+          mutationQueryTimeoutMs,
           budgetRemainingMs,
         ),
       );

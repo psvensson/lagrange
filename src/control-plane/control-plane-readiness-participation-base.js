@@ -8,6 +8,11 @@ import {
 import {resolveTimeSource} from '../time/time-source.js';
 import {assertReadinessServiceCollaborators} from './control-plane-readiness-collaborators.js';
 import {ReadinessPlanningSnapshotOwner} from './readiness-planning-snapshot-owner.js';
+import {
+  resolveConfiguredControlPlaneTimeoutMs,
+  resolveControlPlaneAuthoritativeQueryTimeoutMs,
+} from './timeout-budget.js';
+import {CONFIG_KEY} from '../config/config-constants.js';
 const LOCAL_STR_CONTROL_PLANE_READINESS_EVALUATION = 'control-plane-readiness-evaluation';
 const numberIsFinite = Number.isFinite;
 const objectFreeze = Object.freeze;
@@ -54,13 +59,18 @@ function initializeReadinessTimingOptions(service, options) {
     numberIsFinite(options.authoritativeReadinessRepairQueryTimeoutMs) &&
     options.authoritativeReadinessRepairQueryTimeoutMs > 0 ?
       Math.floor(options.authoritativeReadinessRepairQueryTimeoutMs) :
-      AUTHORITATIVE_READINESS_REPAIR.QUERY_TIMEOUT_MS;
+      resolveControlPlaneAuthoritativeQueryTimeoutMs(
+        AUTHORITATIVE_READINESS_REPAIR.QUERY_TIMEOUT_MS,
+      );
   service.authoritativeReadinessRepairStaleHeartbeatMaxAgeMs =
     numberIsFinite(
       options.authoritativeReadinessRepairStaleHeartbeatMaxAgeMs,
     ) && options.authoritativeReadinessRepairStaleHeartbeatMaxAgeMs > 0 ?
       Math.floor(options.authoritativeReadinessRepairStaleHeartbeatMaxAgeMs) :
-      AUTHORITATIVE_READINESS_REPAIR.STALE_HEARTBEAT_MAX_AGE_MS;
+      resolveConfiguredControlPlaneTimeoutMs(
+        CONFIG_KEY.CONTROL_PLANE_REPAIR_STALE_HEARTBEAT_MAX_AGE_MS,
+        AUTHORITATIVE_READINESS_REPAIR.STALE_HEARTBEAT_MAX_AGE_MS,
+      );
   service.membershipPublicationDiagnosticsQueryTimeoutMs =
     numberIsFinite(options.membershipPublicationDiagnosticsQueryTimeoutMs) &&
     options.membershipPublicationDiagnosticsQueryTimeoutMs > 0 ?
@@ -103,7 +113,10 @@ function initializeControlPlaneReadinessState(service, options = {}) {
     numberIsFinite(options.clusterMemberStaleHeartbeatMaxAgeMs) &&
     options.clusterMemberStaleHeartbeatMaxAgeMs > 0 ?
       Math.floor(options.clusterMemberStaleHeartbeatMaxAgeMs) :
-      CONTROL_PLANE_READINESS_DEFAULT.CLUSTER_MEMBER_STALE_HEARTBEAT_MAX_AGE_MS;
+      resolveConfiguredControlPlaneTimeoutMs(
+        CONFIG_KEY.CONTROL_PLANE_STALE_HEARTBEAT_MAX_AGE_MS,
+        CONTROL_PLANE_READINESS_DEFAULT.CLUSTER_MEMBER_STALE_HEARTBEAT_MAX_AGE_MS,
+      );
   initializeReadinessTimingOptions(service, options);
   // DT4 seam: one TimeSource backs this subsystem's clock + timers. The default
   // is a RealTimeSource that delegates to the platform globals, so behavior is

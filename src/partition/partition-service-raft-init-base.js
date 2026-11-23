@@ -3,6 +3,10 @@ import {trackSyncSection} from '../diagnostics/event-loop-gap-watchdog.js';
 import {
   RAFT_OPERATION_OUTCOME,
 } from '../raft/raft-operation-port-constants.js';
+import {
+  applyPortRaftTimingConfig,
+  readPortEffectiveRaftTiming,
+} from '../raft/raft-rs-operation-port.js';
 
 // Watchdog sync-section site for the closed-handle partition replica boot
 // block (round-10 bootstrap-batch stall attribution).
@@ -594,31 +598,32 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     const shouldRearmTimer =
       this.replicaIds.length > 1 &&
       (!this.deferElection || this.electionStarted);
-    const applied = this.raft?.configureTick?.({
+    const outcome = applyPortRaftTimingConfig(this, {
       heartbeatMs,
       electionMinMs,
       electionMaxMs,
+      hasTickInterval,
+      tickIntervalMs,
+      previousTickIntervalMs,
       rearmTimer: shouldRearmTimer,
     });
-    if (!applied) {
-      return false;
+    if (outcome.logExtra) {
+      this.logger.info(PARTITION_SERVICE_LOG_MSG.APPLIED_RUNTIME_RAFT_TIMING, {
+        partitionId: this.partitionId,
+        replicaId: this.replicaId,
+        heartbeatMs,
+        electionMinMs,
+        electionMaxMs,
+        tickIntervalMs: hasTickInterval ? tickIntervalMs : null,
+        ...outcome.logExtra,
+        jitterMs,
+        rearmTimer: shouldRearmTimer,
+      });
     }
-    const tickChanged =
-      hasTickInterval && tickIntervalMs !== previousTickIntervalMs;
-    const tickRuntimeApplied =
-      !tickChanged || this.applyRuntimeTickInterval(tickIntervalMs);
-    this.logger.info(PARTITION_SERVICE_LOG_MSG.APPLIED_RUNTIME_RAFT_TIMING, {
-      partitionId: this.partitionId,
-      replicaId: this.replicaId,
-      heartbeatMs,
-      electionMinMs,
-      electionMaxMs,
-      tickIntervalMs: hasTickInterval ? tickIntervalMs : null,
-      tickRuntimeApplied,
-      jitterMs,
-      rearmTimer: shouldRearmTimer,
-    });
-    return tickRuntimeApplied;
+    return outcome.applied;
+  }
+  effectiveRaftTiming() {
+    return readPortEffectiveRaftTiming(this.raft);
   }
   /**
    * Apply raft provider tick interval when supported by the active provider.

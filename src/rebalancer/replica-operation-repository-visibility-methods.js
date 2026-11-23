@@ -64,9 +64,12 @@ function assignReplicaOperationRepositoryVisibilityMethods(
     getRetryableReplicaOperationReadRetryDelayMs(result) {
       const retryAfterMs = getControlPlaneRetryAfterMs(result);
       if (Number.isFinite(retryAfterMs) && retryAfterMs > 0) {
+        const readRetryTimeoutMs =
+          this.replicaOperationReadRetryTimeoutMs ??
+          REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS;
         return Math.max(
           REPLICA_OPERATION_READ_RETRY_DELAY_MS,
-          Math.min(REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS, retryAfterMs),
+          Math.min(readRetryTimeoutMs, retryAfterMs),
         );
       }
       return REPLICA_OPERATION_READ_RETRY_DELAY_MS;

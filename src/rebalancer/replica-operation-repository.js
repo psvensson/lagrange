@@ -33,6 +33,8 @@ import {
   CONTROL_PLANE_READINESS_REASON,
 } from '../control-plane/control-plane-readiness-constants.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
+import {CONFIG_KEY} from '../config/config-constants.js';
+import {ConfigurationManager} from '../config/configuration-manager.js';
 import {
   buildControlPlaneWorkloadProfile,
   CONTROL_PLANE_WORKLOAD_CLASS,
@@ -482,11 +484,36 @@ class ReplicaOperationRepository {
     this.retainedPlacementRepairWakes = new Map();
     this.retainedPlacementRepairDrain = null;
     this.retainedPlacementRepairReleaseSequence = 0;
+    const configManager = ConfigurationManager.getInstance();
+    const resolveTimeoutOption = (explicitValue, configKey, defaultTimeoutMs) => {
+      const candidate = Number(explicitValue ?? configManager.get(configKey));
+      return Number.isFinite(candidate) && candidate > 0 ?
+        Math.floor(candidate) :
+        defaultTimeoutMs;
+    };
+    this.replicaOperationReadRetryTimeoutMs = resolveTimeoutOption(
+      options.replicaOperationReadRetryTimeoutMs,
+      CONFIG_KEY.REBALANCER_REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS,
+      REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS,
+    );
+    this.operationPersistRetryTimeoutMs = resolveTimeoutOption(
+      options.operationPersistRetryTimeoutMs,
+      CONFIG_KEY.REBALANCER_OPERATION_PERSIST_RETRY_TIMEOUT_MS,
+      OPERATION_PERSIST_RETRY_TIMEOUT_MS,
+    );
+    this.replicaOperationMutationQueryTimeoutMs = Math.max(
+      REPLICA_OPERATION_MUTATION_QUERY_TIMEOUT_MS,
+      resolveTimeoutOption(
+        options.replicaOperationMutationQueryTimeoutMs,
+        CONFIG_KEY.TIMEOUT_CONTROL_PLANE_SQL_QUERY_TIMEOUT_MS,
+        REPLICA_OPERATION_MUTATION_QUERY_TIMEOUT_MS,
+      ),
+    );
     // The retained owner's continuation bounds: the existing owner-read retry
     // delays and the rebalance operation budget as its bounded window.
     this.retainedRepairContinuationPolicy = Object.freeze({
       minDelayMs: REPLICA_OPERATION_READ_RETRY_DELAY_MS,
-      maxDelayMs: REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS,
+      maxDelayMs: this.replicaOperationReadRetryTimeoutMs,
       windowMs: TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS});
     this.systemTableCache = options.systemTableCache;
     this.cdcIntegrationService = options.cdcIntegrationService;

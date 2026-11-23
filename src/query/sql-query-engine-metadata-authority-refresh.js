@@ -19,6 +19,8 @@ import {
   collectAllBaseTableNames,
   hasSubqueryCteOrCompound,
 } from './distributed/distributed-select-fanout-soundness.js';
+import {resolveControlPlaneAuthoritativeQueryTimeoutMs} from
+  '../control-plane/timeout-budget.js';
 
 const {
   QUERY_ERROR_CODE,
@@ -115,7 +117,8 @@ function resolveRemainingLookupBudgetMs(engine, queryOptions = {}) {
   ].filter((value) => value !== null);
   return candidates.length > 0 ?
     Math.min(...candidates) :
-    DEFAULT_METADATA_LOOKUP_TIMEOUT_MS;
+    resolveControlPlaneAuthoritativeQueryTimeoutMs(
+      DEFAULT_METADATA_LOOKUP_TIMEOUT_MS, {floorAtDefault: true});
 }
 
 function buildTableNotFoundFailureResult(tableName) {

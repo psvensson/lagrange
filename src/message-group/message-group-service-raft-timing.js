@@ -6,6 +6,10 @@
  */
 import {RAFT_ELECTION_TIMING} from '../raft/constants.js';
 import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
+import {
+  applyPortRaftTimingConfig,
+  readPortEffectiveRaftTiming,
+} from '../raft/raft-rs-operation-port.js';
 import {computeReplicaElectionTimeouts} from
   '../raft/replica-election-timeouts.js';
 import {normalizeCauseId} from '../utils/cause-id.js';
@@ -138,34 +142,35 @@ function assignRaftTiming(serviceClass) {
       const shouldRearmTimer =
         this.replicaIds.length > 1 &&
         (!this.deferElection || this.electionStarted);
-      const applied = this.raft?.configureTick?.({
+      const outcome = applyPortRaftTimingConfig(this, {
         heartbeatMs,
         electionMinMs,
         electionMaxMs,
+        hasTickInterval,
+        tickIntervalMs,
+        previousTickIntervalMs,
         rearmTimer: shouldRearmTimer,
       });
-      if (!applied) {
-        return false;
+      if (outcome.logExtra) {
+        this.logger.info(
+          MESSAGE_GROUP_SERVICE_LITERAL.APPLIED_RUNTIME_RAFT_TIMING_CONFIGURATION,
+          {
+            groupId: this.groupId,
+            replicaId: this.replicaId,
+            heartbeatMs,
+            electionMinMs,
+            electionMaxMs,
+            tickIntervalMs: hasTickInterval ? tickIntervalMs : null,
+            ...outcome.logExtra,
+            jitterMs,
+            rearmTimer: shouldRearmTimer,
+          },
+        );
       }
-      const tickChanged =
-        hasTickInterval && tickIntervalMs !== previousTickIntervalMs;
-      const tickRuntimeApplied =
-        !tickChanged || this.applyRuntimeTickInterval(tickIntervalMs);
-      this.logger.info(
-        MESSAGE_GROUP_SERVICE_LITERAL.APPLIED_RUNTIME_RAFT_TIMING_CONFIGURATION,
-        {
-          groupId: this.groupId,
-          replicaId: this.replicaId,
-          heartbeatMs,
-          electionMinMs,
-          electionMaxMs,
-          tickIntervalMs: hasTickInterval ? tickIntervalMs : null,
-          tickRuntimeApplied,
-          jitterMs,
-          rearmTimer: shouldRearmTimer,
-        },
-      );
-      return tickRuntimeApplied;
+      return outcome.applied;
+    },
+    effectiveRaftTiming() {
+      return readPortEffectiveRaftTiming(this.raft);
     },
     /**
      * Apply a tick interval to the live port.

@@ -5,7 +5,13 @@
  * effective raft-rs tick-quantized timing.
  */
 
-import {CONFIG_KEY} from './config-constants.js';
+import {
+  CONFIG_KEY,
+  CONFIG_SEED_SOURCE,
+  CONFIG_TABLE_COLUMN,
+} from './config-constants.js';
+import {ConfigurationManager} from './configuration-manager.js';
+import {ENTRYPOINT_ENV} from '../constants/entrypoint.js';
 import {TRANSPORT_CONFIG_KEY} from '../constants/transport.js';
 import {describeEffectiveRaftRsTiming} from '../raft/raft-rs-runtime-tuning.js';
 
@@ -31,7 +37,25 @@ const PROFILE_FIELD = Object.freeze({
   ELECTION_TIMEOUT_MIN_MS: 'electionTimeoutMinMs',
   ELECTION_TIMEOUT_MAX_MS: 'electionTimeoutMaxMs',
   TRANSPORT_MESSAGE_TIMEOUT_MS: 'transportMessageTimeoutMs',
+  TRANSPORT_PING_TIMEOUT_MS: 'transportPingTimeoutMs',
+  TRANSPORT_RECONNECT_INTERVAL_MS: 'transportReconnectIntervalMs',
   CONTROL_PLANE_OPERATION_BUDGET_MS: 'controlPlaneOperationBudgetMs',
+  CONTROL_PLANE_READY_LEASE_MS: 'controlPlaneReadyLeaseMs',
+  CONTROL_PLANE_HEARTBEAT_INTERVAL_MS: 'controlPlaneHeartbeatIntervalMs',
+  CONTROL_PLANE_STALE_HEARTBEAT_MAX_AGE_MS:
+    'controlPlaneStaleHeartbeatMaxAgeMs',
+  CONTROL_PLANE_REPAIR_STALE_HEARTBEAT_MAX_AGE_MS:
+    'controlPlaneRepairStaleHeartbeatMaxAgeMs',
+  CONTROL_PLANE_QUERY_TIMEOUT_MS: 'controlPlaneQueryTimeoutMs',
+  CONTROL_PLANE_SQL_QUERY_TIMEOUT_MS: 'controlPlaneSqlQueryTimeoutMs',
+  SWIM_PROBE_TIMEOUT_MS: 'swimProbeTimeoutMs',
+  SWIM_PROBE_INTERVAL_MS: 'swimProbeIntervalMs',
+  DYNAMIC_CONFIG_STARTUP_INITIAL_READ_TIMEOUT_MS:
+    'dynamicConfigStartupInitialReadTimeoutMs',
+  REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS:
+    'replicaOperationReadRetryTimeoutMs',
+  OPERATION_PERSIST_RETRY_TIMEOUT_MS: 'operationPersistRetryTimeoutMs',
+  COORDINATOR_QUERY_TIMEOUT_MS: 'coordinatorQueryTimeoutMs',
   READINESS_OBSERVATION_PROBE_TIMEOUT_MS:
     'readinessObservationProbeTimeoutMs',
 });
@@ -51,7 +75,21 @@ const STATIC_NETWORK_TIMING_PROFILES = Object.freeze({
     [PROFILE_FIELD.ELECTION_TIMEOUT_MIN_MS]: 1000,
     [PROFILE_FIELD.ELECTION_TIMEOUT_MAX_MS]: 2000,
     [PROFILE_FIELD.TRANSPORT_MESSAGE_TIMEOUT_MS]: 5000,
+    [PROFILE_FIELD.TRANSPORT_PING_TIMEOUT_MS]: 1000,
+    [PROFILE_FIELD.TRANSPORT_RECONNECT_INTERVAL_MS]: 1000,
     [PROFILE_FIELD.CONTROL_PLANE_OPERATION_BUDGET_MS]: 10000,
+    [PROFILE_FIELD.CONTROL_PLANE_READY_LEASE_MS]: 15000,
+    [PROFILE_FIELD.CONTROL_PLANE_HEARTBEAT_INTERVAL_MS]: 5000,
+    [PROFILE_FIELD.CONTROL_PLANE_STALE_HEARTBEAT_MAX_AGE_MS]: 30000,
+    [PROFILE_FIELD.CONTROL_PLANE_REPAIR_STALE_HEARTBEAT_MAX_AGE_MS]: 10000,
+    [PROFILE_FIELD.CONTROL_PLANE_QUERY_TIMEOUT_MS]: 1500,
+    [PROFILE_FIELD.CONTROL_PLANE_SQL_QUERY_TIMEOUT_MS]: 5000,
+    [PROFILE_FIELD.SWIM_PROBE_TIMEOUT_MS]: 500,
+    [PROFILE_FIELD.SWIM_PROBE_INTERVAL_MS]: 1000,
+    [PROFILE_FIELD.DYNAMIC_CONFIG_STARTUP_INITIAL_READ_TIMEOUT_MS]: 300,
+    [PROFILE_FIELD.REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS]: 1000,
+    [PROFILE_FIELD.OPERATION_PERSIST_RETRY_TIMEOUT_MS]: 15000,
+    [PROFILE_FIELD.COORDINATOR_QUERY_TIMEOUT_MS]: 30000,
     [PROFILE_FIELD.READINESS_OBSERVATION_PROBE_TIMEOUT_MS]: 1000,
   }),
   [NETWORK_TIMING_PROFILE.EXPERIMENTAL_WIFI_SLOW]: Object.freeze({
@@ -60,10 +98,111 @@ const STATIC_NETWORK_TIMING_PROFILES = Object.freeze({
     [PROFILE_FIELD.ELECTION_TIMEOUT_MIN_MS]: 9000,
     [PROFILE_FIELD.ELECTION_TIMEOUT_MAX_MS]: 18000,
     [PROFILE_FIELD.TRANSPORT_MESSAGE_TIMEOUT_MS]: 12000,
+    [PROFILE_FIELD.TRANSPORT_PING_TIMEOUT_MS]: 3000,
+    [PROFILE_FIELD.TRANSPORT_RECONNECT_INTERVAL_MS]: 5000,
     [PROFILE_FIELD.CONTROL_PLANE_OPERATION_BUDGET_MS]: 25000,
+    [PROFILE_FIELD.CONTROL_PLANE_READY_LEASE_MS]: 90000,
+    [PROFILE_FIELD.CONTROL_PLANE_HEARTBEAT_INTERVAL_MS]: 15000,
+    [PROFILE_FIELD.CONTROL_PLANE_STALE_HEARTBEAT_MAX_AGE_MS]: 90000,
+    [PROFILE_FIELD.CONTROL_PLANE_REPAIR_STALE_HEARTBEAT_MAX_AGE_MS]: 35000,
+    [PROFILE_FIELD.CONTROL_PLANE_QUERY_TIMEOUT_MS]: 8000,
+    [PROFILE_FIELD.CONTROL_PLANE_SQL_QUERY_TIMEOUT_MS]: 25000,
+    [PROFILE_FIELD.SWIM_PROBE_TIMEOUT_MS]: 5000,
+    [PROFILE_FIELD.SWIM_PROBE_INTERVAL_MS]: 8000,
+    [PROFILE_FIELD.DYNAMIC_CONFIG_STARTUP_INITIAL_READ_TIMEOUT_MS]: 10000,
+    [PROFILE_FIELD.REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS]: 10000,
+    [PROFILE_FIELD.OPERATION_PERSIST_RETRY_TIMEOUT_MS]: 30000,
+    [PROFILE_FIELD.COORDINATOR_QUERY_TIMEOUT_MS]: 45000,
     [PROFILE_FIELD.READINESS_OBSERVATION_PROBE_TIMEOUT_MS]: 1000,
   }),
 });
+
+const PROFILE_FIELD_CONFIG_KEY_MAP = Object.freeze([
+  [PROFILE_FIELD.TICK_INTERVAL_MS, CONFIG_KEY.RAFT_TICK_INTERVAL_MS],
+  [PROFILE_FIELD.HEARTBEAT_INTERVAL_MS, CONFIG_KEY.RAFT_HEARTBEAT_INTERVAL_MS],
+  [
+    PROFILE_FIELD.ELECTION_TIMEOUT_MIN_MS,
+    CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MIN_MS,
+  ],
+  [
+    PROFILE_FIELD.ELECTION_TIMEOUT_MAX_MS,
+    CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MAX_MS,
+  ],
+  [
+    PROFILE_FIELD.TRANSPORT_MESSAGE_TIMEOUT_MS,
+    TRANSPORT_CONFIG_KEY.MESSAGE_TIMEOUT_MS,
+  ],
+  [
+    PROFILE_FIELD.TRANSPORT_PING_TIMEOUT_MS,
+    TRANSPORT_CONFIG_KEY.PING_TIMEOUT_MS,
+  ],
+  [
+    PROFILE_FIELD.TRANSPORT_RECONNECT_INTERVAL_MS,
+    TRANSPORT_CONFIG_KEY.RECONNECT_INTERVAL_MS,
+  ],
+  [
+    PROFILE_FIELD.CONTROL_PLANE_OPERATION_BUDGET_MS,
+    CONFIG_KEY.TIMEOUT_CONTROL_PLANE_OPERATION_BUDGET_MS,
+  ],
+  [
+    PROFILE_FIELD.CONTROL_PLANE_READY_LEASE_MS,
+    CONFIG_KEY.CONTROL_PLANE_READY_LEASE_MS,
+  ],
+  [
+    PROFILE_FIELD.CONTROL_PLANE_HEARTBEAT_INTERVAL_MS,
+    CONFIG_KEY.CONTROL_PLANE_HEARTBEAT_INTERVAL_MS,
+  ],
+  [
+    PROFILE_FIELD.CONTROL_PLANE_STALE_HEARTBEAT_MAX_AGE_MS,
+    CONFIG_KEY.CONTROL_PLANE_STALE_HEARTBEAT_MAX_AGE_MS,
+  ],
+  [
+    PROFILE_FIELD.CONTROL_PLANE_REPAIR_STALE_HEARTBEAT_MAX_AGE_MS,
+    CONFIG_KEY.CONTROL_PLANE_REPAIR_STALE_HEARTBEAT_MAX_AGE_MS,
+  ],
+  [
+    PROFILE_FIELD.CONTROL_PLANE_QUERY_TIMEOUT_MS,
+    CONFIG_KEY.TIMEOUT_CONTROL_PLANE_QUERY_TIMEOUT_MS,
+  ],
+  [
+    PROFILE_FIELD.CONTROL_PLANE_SQL_QUERY_TIMEOUT_MS,
+    CONFIG_KEY.TIMEOUT_CONTROL_PLANE_SQL_QUERY_TIMEOUT_MS,
+  ],
+  [
+    PROFILE_FIELD.SWIM_PROBE_TIMEOUT_MS,
+    CONFIG_KEY.CONTROL_PLANE_SWIM_PROBE_TIMEOUT_MS,
+  ],
+  [
+    PROFILE_FIELD.SWIM_PROBE_INTERVAL_MS,
+    CONFIG_KEY.CONTROL_PLANE_SWIM_PROBE_INTERVAL_MS,
+  ],
+  [
+    PROFILE_FIELD.DYNAMIC_CONFIG_STARTUP_INITIAL_READ_TIMEOUT_MS,
+    CONFIG_KEY.TIMEOUT_DYNAMIC_CONFIG_STARTUP_INITIAL_READ_MS,
+  ],
+  [
+    PROFILE_FIELD.REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS,
+    CONFIG_KEY.REBALANCER_REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS,
+  ],
+  [
+    PROFILE_FIELD.OPERATION_PERSIST_RETRY_TIMEOUT_MS,
+    CONFIG_KEY.REBALANCER_OPERATION_PERSIST_RETRY_TIMEOUT_MS,
+  ],
+  [
+    PROFILE_FIELD.COORDINATOR_QUERY_TIMEOUT_MS,
+    CONFIG_KEY.QUERY_COORDINATOR_QUERY_TIMEOUT_MS,
+  ],
+  [
+    PROFILE_FIELD.READINESS_OBSERVATION_PROBE_TIMEOUT_MS,
+    CONFIG_KEY.TIMEOUT_READINESS_OBSERVATION_PROBE_TIMEOUT_MS,
+  ],
+]);
+
+const CONFIG_KEY_TO_PROFILE_FIELD = Object.freeze(
+  Object.fromEntries(
+    PROFILE_FIELD_CONFIG_KEY_MAP.map(([field, configKey]) => [configKey, field]),
+  ),
+);
 
 const NETWORK_TIMING_ERROR_CODE = 'INVALID_NETWORK_TIMING_PROFILE';
 
@@ -298,6 +437,7 @@ function resolveStaticNetworkTimingProfile(profileNameOrOverrides) {
     raft: raftTiming.requested,
   });
   const effective = Object.freeze({
+    ...merged,
     ...raftTiming.effective,
     [PROFILE_FIELD.HEARTBEAT_INTERVAL_MS]:
       raftTiming.effective.effectiveHeartbeatMs,
@@ -305,12 +445,6 @@ function resolveStaticNetworkTimingProfile(profileNameOrOverrides) {
       raftTiming.effective.effectiveElectionMinMs,
     [PROFILE_FIELD.ELECTION_TIMEOUT_MAX_MS]:
       raftTiming.effective.effectiveElectionMaxMs,
-    [PROFILE_FIELD.TRANSPORT_MESSAGE_TIMEOUT_MS]:
-      merged[PROFILE_FIELD.TRANSPORT_MESSAGE_TIMEOUT_MS],
-    [PROFILE_FIELD.CONTROL_PLANE_OPERATION_BUDGET_MS]:
-      merged[PROFILE_FIELD.CONTROL_PLANE_OPERATION_BUDGET_MS],
-    [PROFILE_FIELD.READINESS_OBSERVATION_PROBE_TIMEOUT_MS]:
-      merged[PROFILE_FIELD.READINESS_OBSERVATION_PROBE_TIMEOUT_MS],
   });
   return Object.freeze({
     profileId,
@@ -338,40 +472,121 @@ function applyStaticNetworkTimingProfile(configManager, profileNameOrOverrides) 
   const descriptor =
     resolveStaticNetworkTimingProfile(profileNameOrOverrides);
   const {requested} = descriptor;
-  configManager.setByPath(
-    CONFIG_KEY.RAFT_TICK_INTERVAL_MS,
-    requested[PROFILE_FIELD.TICK_INTERVAL_MS],
-  );
-  configManager.setByPath(
-    CONFIG_KEY.RAFT_HEARTBEAT_INTERVAL_MS,
-    requested[PROFILE_FIELD.HEARTBEAT_INTERVAL_MS],
-  );
-  configManager.setByPath(
-    CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MIN_MS,
-    requested[PROFILE_FIELD.ELECTION_TIMEOUT_MIN_MS],
-  );
-  configManager.setByPath(
-    CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MAX_MS,
-    requested[PROFILE_FIELD.ELECTION_TIMEOUT_MAX_MS],
-  );
-  configManager.setByPath(
-    TRANSPORT_CONFIG_KEY.MESSAGE_TIMEOUT_MS,
-    requested[PROFILE_FIELD.TRANSPORT_MESSAGE_TIMEOUT_MS],
-  );
-  configManager.setByPath(
-    CONFIG_KEY.TIMEOUT_CONTROL_PLANE_OPERATION_BUDGET_MS,
-    requested[PROFILE_FIELD.CONTROL_PLANE_OPERATION_BUDGET_MS],
-  );
-  configManager.setByPath(
-    CONFIG_KEY.TIMEOUT_READINESS_OBSERVATION_PROBE_TIMEOUT_MS,
-    requested[PROFILE_FIELD.READINESS_OBSERVATION_PROBE_TIMEOUT_MS],
-  );
+  for (const [field, configKey] of PROFILE_FIELD_CONFIG_KEY_MAP) {
+    configManager.setByPath(configKey, requested[field]);
+  }
+  if (!Object.isFrozen(configManager)) {
+    configManager.networkTimingProfile = descriptor;
+  }
   return descriptor;
+}
+
+function isResolvedProfileDescriptor(candidate) {
+  return Boolean(
+    candidate &&
+    typeof candidate === TYPE_OBJECT &&
+    typeof candidate.profileId === TYPE_STRING &&
+    candidate.requested &&
+    typeof candidate.requested === TYPE_OBJECT,
+  );
+}
+
+function pickActiveProfileCandidate(context = {}) {
+  const {networkTimingProfile, configManager, environment} = context;
+  if (networkTimingProfile !== undefined && networkTimingProfile !== null) {
+    return networkTimingProfile;
+  }
+  const manager = configManager || ConfigurationManager.getInstance();
+  if (
+    manager.networkTimingProfile !== undefined &&
+    manager.networkTimingProfile !== null
+  ) {
+    return manager.networkTimingProfile;
+  }
+  const env = environment || process.env;
+  return env[ENTRYPOINT_ENV.NETWORK_TIMING_PROFILE];
+}
+
+function resolveActiveStaticNetworkTimingProfile(context = {}) {
+  const candidate = pickActiveProfileCandidate(context);
+  if (candidate === undefined || candidate === null || candidate === '') {
+    return null;
+  }
+  return isResolvedProfileDescriptor(candidate) ?
+    candidate :
+    resolveStaticNetworkTimingProfile(candidate);
+}
+
+function getProfileValueForConfigKey(descriptor, key) {
+  if (!descriptor || typeof descriptor !== TYPE_OBJECT || !descriptor.requested) {
+    return undefined;
+  }
+  const field = CONFIG_KEY_TO_PROFILE_FIELD[key];
+  return field ? descriptor.requested[field] : undefined;
+}
+
+function resolveDynamicConfigSeedValue(key, definition, context = {}) {
+  const descriptor = resolveActiveStaticNetworkTimingProfile(context);
+  const profileValue = getProfileValueForConfigKey(descriptor, key);
+  return profileValue !== undefined ? profileValue : definition?.defaultValue;
+}
+
+function resolveDynamicConfigReadValue(
+  key,
+  value,
+  updatedBy,
+  definition,
+  context = {},
+) {
+  const descriptor = resolveActiveStaticNetworkTimingProfile(context);
+  const profileValue = getProfileValueForConfigKey(descriptor, key);
+  if (profileValue === undefined || value === profileValue) {
+    return value;
+  }
+  const isSystemOrUnattributed =
+    updatedBy === undefined ||
+    updatedBy === null ||
+    updatedBy === CONFIG_SEED_SOURCE.SYSTEM;
+  if (!isSystemOrUnattributed) {
+    return value;
+  }
+  const field = CONFIG_KEY_TO_PROFILE_FIELD[key];
+  const defaultProfileValue =
+    STATIC_NETWORK_TIMING_PROFILES[NETWORK_TIMING_PROFILE.DEFAULT]?.[field];
+  if (
+    value === definition?.defaultValue ||
+    (descriptor.profileId !== NETWORK_TIMING_PROFILE.DEFAULT &&
+      value === defaultProfileValue)
+  ) {
+    return profileValue;
+  }
+  return value;
+}
+
+function createDynamicConfigProfileResolver(options = {}) {
+  const context = {
+    networkTimingProfile: options.networkTimingProfile ?? null,
+    configManager: options.configManager || null,
+    environment: options.environment,
+  };
+  return {
+    seedDefault: (key, definition) =>
+      resolveDynamicConfigSeedValue(key, definition, context),
+    resolveRead: (key, value, rowOrPayload, definition) =>
+      resolveDynamicConfigReadValue(
+        key,
+        value,
+        rowOrPayload?.[CONFIG_TABLE_COLUMN.UPDATED_BY],
+        definition,
+        context,
+      ),
+  };
 }
 
 export {
   NETWORK_TIMING_PROFILE,
   applyStaticNetworkTimingProfile,
+  createDynamicConfigProfileResolver,
   isValidStaticRaftTimingValues,
   resolveStaticNetworkTimingProfile,
 };

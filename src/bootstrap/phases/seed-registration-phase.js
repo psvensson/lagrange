@@ -16,6 +16,7 @@ import {
   publishOriginalSeedClusterIdentity,
   publishOriginalSeedFormationDeclaration,
 } from '../seed-original-registration.js';
+import {ConfigurationManager} from '../../config/configuration-manager.js';
 import {DynamicConfigService} from '../../config/dynamic-config-service.js';
 import {
   CONFIG_SEED_SOURCE,
@@ -537,9 +538,12 @@ class SeedRegistrationPhase {
     const cdcIntegrationService =
       d.ensureBootstrapCdcIntegrationService();
 
+    const configManager = ConfigurationManager.getInstance();
     const dynamicConfigService = new DynamicConfigService({
       cdcIntegrationService,
       systemTableCache,
+      configManager,
+      networkTimingProfile: configManager.networkTimingProfile ?? null,
       nodeId: d.getNodeId(),
       now: resolveHostedNodeClock(d),
     });

@@ -1,3 +1,6 @@
+import {CONFIG_KEY} from '../config/config-constants.js';
+import {ConfigurationManager} from '../config/configuration-manager.js';
+
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
 const TIMEOUT_ERROR_CODE = 'TIMEOUT';
@@ -73,10 +76,34 @@ function getRemainingBudgetMs(budget, options = {}) {
   return getBudgetTiming(budget, options.now).remainingBudgetMs;
 }
 
+function resolveConfiguredControlPlaneTimeoutMs(configKey, defaultTimeoutMs) {
+  return normalizePositiveInteger(
+    ConfigurationManager.getInstance().get(configKey),
+    defaultTimeoutMs,
+  );
+}
+
+function resolveControlPlaneAuthoritativeQueryTimeoutMs(
+  defaultTimeoutMs,
+  {floorAtDefault = false} = {},
+) {
+  const configuredMs = resolveConfiguredControlPlaneTimeoutMs(
+    CONFIG_KEY.TIMEOUT_CONTROL_PLANE_QUERY_TIMEOUT_MS,
+    defaultTimeoutMs,
+  );
+  return floorAtDefault ?
+    Math.max(defaultTimeoutMs, configuredMs) :
+    configuredMs;
+}
+
 function resolveControlPlaneQueryTimeoutMs(options = {}) {
+  const configuredSqlTimeoutMs = resolveConfiguredControlPlaneTimeoutMs(
+    CONFIG_KEY.TIMEOUT_CONTROL_PLANE_SQL_QUERY_TIMEOUT_MS,
+    CONTROL_PLANE_TIMEOUT_DEFAULT.SQL_QUERY_TIMEOUT_MS,
+  );
   const requestedTimeoutMs = normalizePositiveInteger(
     options.requestedTimeoutMs,
-    CONTROL_PLANE_TIMEOUT_DEFAULT.SQL_QUERY_TIMEOUT_MS,
+    configuredSqlTimeoutMs,
   );
   const timeoutBudget = options.timeoutBudget;
   if (!timeoutBudget || typeof timeoutBudget !== LOCAL_STR_OBJECT) {
@@ -202,5 +229,7 @@ export {
   createTimeoutBudgetError,
   createTopLevelOperationBudget,
   getRemainingBudgetMs,
+  resolveConfiguredControlPlaneTimeoutMs,
+  resolveControlPlaneAuthoritativeQueryTimeoutMs,
   resolveControlPlaneQueryTimeoutMs,
 };

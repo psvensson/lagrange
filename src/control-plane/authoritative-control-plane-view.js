@@ -27,6 +27,9 @@ import {
   buildControlPlaneWorkloadProfile,
   resolveControlPlaneWorkloadClass,
 } from './control-plane-workload-profile.js';
+import {
+  resolveControlPlaneAuthoritativeQueryTimeoutMs,
+} from './timeout-budget.js';
 
 const LOCAL_STR_SQL_QUERY_ENGINE = 'sql_query_engine';
 const LOCAL_STR_CDCINTEGRATIONSERVICE = 'cdcIntegrationService';
@@ -278,7 +281,9 @@ class AuthoritativeControlPlaneView {
       () => Date.now();
     this.queryTimeoutMs = normalizePositiveInteger(
       options.queryTimeoutMs,
-      AUTHORITATIVE_CONTROL_PLANE_DEFAULT_QUERY_TIMEOUT_MS,
+      resolveControlPlaneAuthoritativeQueryTimeoutMs(
+        AUTHORITATIVE_CONTROL_PLANE_DEFAULT_QUERY_TIMEOUT_MS,
+      ),
     );
     this.inFlightReadsByKey = new Map();
   }

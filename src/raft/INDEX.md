@@ -58,7 +58,7 @@ documentClass: generated
 - [raft-rs-membership-transition-runtime.js](raft-rs-membership-transition-runtime.js) - No leading comment; first export: proposeMembershipTransition. (importers: few)
 - [raft-rs-membership-transition.js](raft-rs-membership-transition.js) - No leading comment; first export: normalizeMembershipTransition. (importers: few)
 - [raft-rs-opening-history-constants.js](raft-rs-opening-history-constants.js) - Exact-incarnation native opening history, owned by the lifecycle row. (importers: many)
-- [raft-rs-operation-port.js](raft-rs-operation-port.js) - No leading comment; first export: createRaftRsOperationPort. (importers: hub)
+- [raft-rs-operation-port.js](raft-rs-operation-port.js) - No leading comment; first export: applyPortRaftTimingConfig. (importers: hub)
 - [raft-rs-original-allocation-constants.js](raft-rs-original-allocation-constants.js) - The original seed allocation is a fact of the existing replica lifecycle row. (importers: hub)
 - [raft-rs-original-allocation-preparation.js](raft-rs-original-allocation-preparation.js) - A complete original allocation is prepared by the existing lifecycle owner before native opening. (importers: many)
 - [raft-rs-participation-gate.js](raft-rs-participation-gate.js) - The participation gate of one rs-raft replica group (owner decision O1, committed-read amendment 1, section 3.3), as... (importers: few)

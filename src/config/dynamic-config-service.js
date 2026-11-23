@@ -19,6 +19,7 @@ import {requireConfirmedSingleRowMutation} from
 import {createControlPlaneRuntimeBundle} from
   '../control-plane/control-plane-runtime-bundle.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
+import {createDynamicConfigProfileResolver} from './network-timing-profile-resolver.js';
 import {
   CONFIG_DEFINITIONS,
   CONFIG_ENV,
@@ -109,6 +110,7 @@ class DynamicConfigService extends EventEmitter {
     // clock. Unsupplied, it is the host clock exactly as before.
     this.now = typeof options.now === 'function' ? options.now : null;
     this.nodeId = options.nodeId || STRING.UNKNOWN;
+    this.profileTiming = createDynamicConfigProfileResolver(options);
 
     // Local cache of configuration values
     this.configCache = new Map();
@@ -185,23 +187,22 @@ class DynamicConfigService extends EventEmitter {
       const envValue = process.env[envKey];
       const value = envValue !== undefined ?
         this.parseEnvValue(envValue, definition.type) :
-        definition.defaultValue;
+        this.profileTiming.seedDefault(key, definition);
       const row = {
         [CONFIG_TABLE_COLUMN.KEY]: key,
         [CONFIG_TABLE_COLUMN.VALUE]: this.serializeValue(value, definition.type),
         [CONFIG_TABLE_COLUMN.VALUE_TYPE]: definition.type,
         [CONFIG_TABLE_COLUMN.REQUIRES_RESTART]: definition.requiresRestart ? 1 : 0,
         [CONFIG_TABLE_COLUMN.DESCRIPTION]: definition.description,
-        [CONFIG_TABLE_COLUMN.DEFAULT_VALUE]: this.serializeValue(
-          definition.defaultValue, definition.type),
+        [CONFIG_TABLE_COLUMN.DEFAULT_VALUE]:
+          this.serializeValue(definition.defaultValue, definition.type),
         [CONFIG_TABLE_COLUMN.UPDATED_BY]: updatedBy,
         [CONFIG_TABLE_COLUMN.UPDATED_AT]: now,
         [CONFIG_TABLE_COLUMN.CREATED_AT]: now,
       };
       const writeOptions = {
         workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-        deliveryPriority: CONFIG_MUTATION_DELIVERY_PRIORITY,
-        ignoreExisting: true,
+        deliveryPriority: CONFIG_MUTATION_DELIVERY_PRIORITY, ignoreExisting: true,
       };
       const mutationResult = await this.getControlPlaneSystemTableGateway()
         .insertSystemTableRow(SYSTEM_TABLE_NAME.CONFIG, row, writeOptions);
@@ -227,7 +228,6 @@ class DynamicConfigService extends EventEmitter {
     return classifyControlPlaneMutationResult(mutationResult).applied;
   }
 
-
   /**
    * Get a configuration value.
    * Requirements: 30.3
@@ -245,23 +245,24 @@ class DynamicConfigService extends EventEmitter {
     // Try system table cache. A CDC apply for the key while this read was in
     // flight is newer than anything it returns: the cache keeps the CDC value
     // and this answers from it.
+    const definition = CONFIG_DEFINITIONS[key];
     const cdcSeqAtStart = this.cdcApplySequence(key);
     const config = await this.getConfigFromTable(key);
     if (this.cdcApplySequence(key) !== cdcSeqAtStart) {
       return this.configCache.has(key) ?
         this.configCache.get(key) :
-        CONFIG_DEFINITIONS[key]?.defaultValue;
+        this.profileTiming.seedDefault(key, definition);
     }
     if (config) {
-      const value = this.deserializeValue(config.config_value, config.value_type);
+      const rawValue = this.deserializeValue(config.config_value, config.value_type);
+      const value = this.profileTiming.resolveRead(key, rawValue, config, definition);
       this.configCache.set(key, value);
       return value;
     }
 
     // Return default if defined
-    const definition = CONFIG_DEFINITIONS[key];
     if (definition) {
-      return definition.defaultValue;
+      return this.profileTiming.seedDefault(key, definition);
     }
 
     return undefined;
@@ -368,24 +369,22 @@ class DynamicConfigService extends EventEmitter {
       );
       const configs = queryResult.rows || [];
       for (const config of configs) {
-        result[config[CONFIG_TABLE_COLUMN.KEY]] =
-          this.deserializeValue(
-            config[CONFIG_TABLE_COLUMN.VALUE],
-            config[CONFIG_TABLE_COLUMN.VALUE_TYPE],
-          );
+        const key = config[CONFIG_TABLE_COLUMN.KEY];
+        const val = this.deserializeValue(
+          config[CONFIG_TABLE_COLUMN.VALUE], config[CONFIG_TABLE_COLUMN.VALUE_TYPE]);
+        result[key] = this.profileTiming.resolveRead(key, val, config, CONFIG_DEFINITIONS[key]);
       }
     }
 
     // Fill in defaults for missing keys
     for (const [key, definition] of Object.entries(CONFIG_DEFINITIONS)) {
       if (!(key in result)) {
-        result[key] = definition.defaultValue;
+        result[key] = this.profileTiming.seedDefault(key, definition);
       }
     }
 
     return result;
   }
-
 
   /**
    * Register a watcher for configuration changes.
@@ -475,7 +474,8 @@ class DynamicConfigService extends EventEmitter {
       op === CDC_OPERATION.UPSERT
     ) {
       const valueType = this.resolveValueType(key, data[CONFIG_TABLE_COLUMN.VALUE_TYPE]);
-      const newValue = this.deserializeValue(data[CONFIG_TABLE_COLUMN.VALUE], valueType);
+      const rawNew = this.deserializeValue(data[CONFIG_TABLE_COLUMN.VALUE], valueType);
+      const newValue = this.profileTiming.resolveRead(key, rawNew, data, CONFIG_DEFINITIONS[key]);
       const oldValue = this.configCache.get(key);
       this.configCache.set(key, newValue);
       if (oldValue !== newValue) {

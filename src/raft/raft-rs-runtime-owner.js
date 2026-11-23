@@ -39,7 +39,7 @@ import {
   ROLE, ROLE_LEADER, RUNTIME_COMMAND, RUNTIME_FAULT_REPORT, RUNTIME_EVENT,
   RUNTIME_PHASE, RUNTIME_REASON, RUNTIME_RESUME_DELAY_MS, UNHEALTHY, USABLE,
 } from './raft-rs-runtime-owner-constants.js';
-import {recoveryRetryWindowMsOf, tuningOf} from './raft-rs-runtime-tuning.js';
+import {groupCoreTiming, recoveryRetryWindowMsOf, tuningOf} from './raft-rs-runtime-tuning.js';
 import {
   UNSHAPED_STATUS, cachedShapedGroupStatus, lightReadyChangesStatus,
   messageMayChangeLeaderProgress, readyChangesStatus, reseedHoldStatus,
@@ -481,6 +481,7 @@ function openGroupInCurrentRuntime(group, opening) {
   const created = invokeCore(group, 'create_node', createNodeArguments(group, opening));
   if (!created.ok) return created.result;
   group.handle = created.value;
+  groupCoreTiming.recordCreated(group);
   const snapAnchored = anchorOpenedSnapshotState(group, opening);
   if (!snapAnchored.ok) return snapAnchored.result;
   // Every (re)construction and restore announces its first observed
@@ -1570,7 +1571,7 @@ function configuredPeerOf(group, confState, replicaIdentity) {
 // what makes the leader send it the append its matched index lacks. The
 // binding exposes no per-peer send, so this is the one core path to a probe.
 function driveOneHeartbeat(group, expectedGeneration) {
-  const heartbeatTicks = tuningOf(group.timing).heartbeatTick;
+  const heartbeatTicks = (group.createdCoreTuning || tuningOf(group.timing)).heartbeatTick;
   for (let tick = 0; tick < heartbeatTicks; tick += 1) {
     const ticked = invokeCoreAt(group, expectedGeneration, 'tick');
     if (!ticked.ok) {
@@ -2253,10 +2254,8 @@ function createRuntimeDispatcher(request) {
       })),
     participationGateOpen: Object.freeze(() => runtimeHealth === HEALTHY &&
       group.health === USABLE && group.gateOpen === true),
-    configureTiming: Object.freeze((timing) => {
-      group.timing = deepFreeze({...group.timing, ...timing});
-      return true;
-    }),
+    configureTiming: Object.freeze((timing) => groupCoreTiming.apply(group, timing, deepFreeze)),
+    effectiveRaftTiming: Object.freeze(() => groupCoreTiming.snapshot(group)),
     containUnexpectedThrow: Object.freeze((error) =>
       containUnexpectedThrow(group, error)),
     close: Object.freeze(({enterCore}) => {

@@ -105,6 +105,10 @@ const CONFIG_KEY = Object.freeze({
   LOGGING_MAX_DELETES_PER_RUN: 'logging.maxDeletesPerRun',
 
   REBALANCER_PERIODIC_CHECK_INTERVAL_MS: 'rebalancer.periodicCheckIntervalMs',
+  REBALANCER_REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS:
+    'rebalancer.replicaOperationReadRetryTimeoutMs',
+  REBALANCER_OPERATION_PERSIST_RETRY_TIMEOUT_MS:
+    'rebalancer.operationPersistRetryTimeoutMs',
   REBALANCER_MAX_CONCURRENT_MOVES: 'rebalancer.maxConcurrentMoves',
   REBALANCER_SYSTEM_PARTITION_START_DELAY_MS:
     'rebalancer.systemPartitionStartDelayMs',
@@ -135,6 +139,12 @@ const CONFIG_KEY = Object.freeze({
   CONTROL_PLANE_READY_LEASE_MS: 'controlPlane.readyLeaseMs',
   CONTROL_PLANE_HEARTBEAT_INTERVAL_MS: 'controlPlane.heartbeatIntervalMs',
   CONTROL_PLANE_LEASE_SWEEP_INTERVAL_MS: 'controlPlane.leaseSweepIntervalMs',
+  CONTROL_PLANE_SWIM_PROBE_TIMEOUT_MS: 'controlPlane.swimProbeTimeoutMs',
+  CONTROL_PLANE_SWIM_PROBE_INTERVAL_MS: 'controlPlane.swimProbeIntervalMs',
+  CONTROL_PLANE_STALE_HEARTBEAT_MAX_AGE_MS:
+    'controlPlane.staleHeartbeatMaxAgeMs',
+  CONTROL_PLANE_REPAIR_STALE_HEARTBEAT_MAX_AGE_MS:
+    'controlPlane.repairStaleHeartbeatMaxAgeMs',
 
   HLC_MAX_DRIFT_MS: 'hlc.maxDriftMs',
   HLC_MAX_LOGICAL_COUNTER: 'hlc.maxLogicalCounter',
@@ -222,6 +232,12 @@ const CONFIG_KEY = Object.freeze({
     'timeout.controlPlaneOperationBudgetMs',
   TIMEOUT_READINESS_OBSERVATION_PROBE_TIMEOUT_MS:
     'timeout.readinessObservationProbeTimeoutMs',
+  TIMEOUT_CONTROL_PLANE_QUERY_TIMEOUT_MS:
+    'timeout.controlPlaneQueryTimeoutMs',
+  TIMEOUT_CONTROL_PLANE_SQL_QUERY_TIMEOUT_MS:
+    'timeout.controlPlaneSqlQueryTimeoutMs',
+  TIMEOUT_DYNAMIC_CONFIG_STARTUP_INITIAL_READ_MS:
+    'timeout.dynamicConfigStartupInitialReadMs',
 
   // Founding cluster formation declaration (seed-only)
   FORMATION_DECLARED_HOST_COUNT: 'formation.declaredHostCount',

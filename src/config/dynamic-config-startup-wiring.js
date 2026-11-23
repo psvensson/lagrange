@@ -20,7 +20,10 @@ import {
 import {RaftAdaptiveTimingController} from
   './raft-adaptive-timing-controller.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
-import {describeEffectiveRaftRsTiming} from '../raft/raft-rs-runtime-tuning.js';
+import {
+  describeEffectiveRaftRsTiming,
+  summarizeLiveCoreEffectiveRaftTiming,
+} from '../raft/raft-rs-runtime-tuning.js';
 import {
   applyStaticNetworkTimingProfile,
   isValidStaticRaftTimingValues,
@@ -81,30 +84,44 @@ const STARTUP_CONTROLLER_INIT_WAIT = Object.freeze({
   awaited: 'adaptive timing controller initialize (still owned; adopted when it completes)',
 });
 
+function resolveConfiguredStartupReadTimeoutMs(configManager) {
+  const configured = Number(
+    (configManager || ConfigurationManager.getInstance())
+      ?.get?.(CONFIG_KEY.TIMEOUT_DYNAMIC_CONFIG_STARTUP_INITIAL_READ_MS),
+  );
+  return Number.isFinite(configured) && configured > 0 ?
+    Math.floor(configured) :
+    null;
+}
+
 /**
  * Resolve startup read timeout for initial dynamic-config hydration.
  * @param {Object} options
+ * @param {Object|null} [configManager]
  * @return {number}
  */
-function resolveInitialReadTimeoutMs(options = {}) {
+function resolveInitialReadTimeoutMs(options = {}, configManager = null) {
   const timeoutMs = Number(options.initialReadTimeoutMs);
   if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
     return Math.floor(timeoutMs);
   }
-  return DYNAMIC_CONFIG_STARTUP_INITIAL_READ_TIMEOUT_MS;
+  return resolveConfiguredStartupReadTimeoutMs(configManager) ??
+    DYNAMIC_CONFIG_STARTUP_INITIAL_READ_TIMEOUT_MS;
 }
 
 /**
  * Resolve startup timeout for adaptive timing controller initialization.
  * @param {Object} options
+ * @param {Object|null} [configManager]
  * @return {number}
  */
-function resolveControllerInitTimeoutMs(options = {}) {
+function resolveControllerInitTimeoutMs(options = {}, configManager = null) {
   const timeoutMs = Number(options.controllerInitTimeoutMs);
   if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
     return Math.floor(timeoutMs);
   }
-  return DYNAMIC_CONFIG_STARTUP_CONTROLLER_INIT_TIMEOUT_MS;
+  return resolveConfiguredStartupReadTimeoutMs(configManager) ??
+    DYNAMIC_CONFIG_STARTUP_CONTROLLER_INIT_TIMEOUT_MS;
 }
 
 /**
@@ -276,21 +293,25 @@ async function createDynamicConfigStartupWiring(options = {}) {
     loggingService.forSubsystem(CONFIG_SUBSYSTEM.DYNAMIC_CONFIG) :
     console;
 
+  const configManager = ConfigurationManager.getInstance();
+  applyOptionalNetworkTimingProfile(configManager, options);
   const dynamicConfigService = new DynamicConfigService({
     nodeId: options.nodeId || null,
     systemTableCache: options.systemTableCache || null,
     sqlQueryEngine: options.sqlQueryEngine || null,
+    configManager,
+    networkTimingProfile: configManager.networkTimingProfile,
   });
   await dynamicConfigService.initialize();
-  const configManager = ConfigurationManager.getInstance();
-  applyOptionalNetworkTimingProfile(configManager, options);
   const raftServices = [
     ...normalizeServicesCollection(options.messageGroupServices),
     ...normalizeServicesCollection(options.partitionServices),
   ];
   const watcherUnsubscribers = [];
-  const initialReadTimeoutMs = resolveInitialReadTimeoutMs(options);
-  const controllerInitTimeoutMs = resolveControllerInitTimeoutMs(options);
+  const initialReadTimeoutMs =
+    resolveInitialReadTimeoutMs(options, configManager);
+  const controllerInitTimeoutMs =
+    resolveControllerInitTimeoutMs(options, configManager);
 
   const raftTimingConfig = getRaftTimingConfig(configManager);
 
@@ -707,8 +728,13 @@ async function createDynamicConfigStartupWiring(options = {}) {
       reads: Object.fromEntries(readOutcomes),
       controller: controllerOutcome,
     }),
-    effectiveRaftTiming: () => describeEffectiveRaftRsTiming(
-      toRaftRsTimingInput(getRaftTimingConfig(configManager)),
+    effectiveRaftTiming: () => summarizeLiveCoreEffectiveRaftTiming(
+      describeEffectiveRaftRsTiming(
+        toRaftRsTimingInput(getRaftTimingConfig(configManager)),
+      ),
+      raftServices
+        .map((service) => service?.effectiveRaftTiming?.())
+        .filter(Boolean),
     ),
     shutdown: () => {
       closed = true;

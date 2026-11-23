@@ -7,6 +7,8 @@ import {selectCurrentEndpointRows} from
 import {SERVE_ELIGIBILITY_STATE} from '../control-plane/serve-eligibility-owner.js';
 import {projectNodeLivenessSemantics} from
   '../control-plane/node-liveness-semantic-projection.js';
+import {resolveControlPlaneAuthoritativeQueryTimeoutMs} from
+  '../control-plane/timeout-budget.js';
 
 const {
   COLUMN,
@@ -512,7 +514,10 @@ class UnifiedRebalancerCriticalTopologyMethods {
           CONTROL_PLANE_AUTHORITATIVE_READ_MODE
             .OWNER_LOCAL_PREFERRED_OWNER_RPC_FALLBACK,
         owner: CRITICAL_SYSTEM_ENDPOINT_VISIBILITY_AUTHORITATIVE_READ.OWNER,
-        queryTimeoutMs: this.criticalCheckDelayMs,
+        queryTimeoutMs: resolveControlPlaneAuthoritativeQueryTimeoutMs(
+          this.criticalCheckDelayMs,
+          {floorAtDefault: true},
+        ),
         routingReadinessDimension:
           CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
       },

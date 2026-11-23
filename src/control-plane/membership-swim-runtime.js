@@ -10,6 +10,9 @@ import {
   MembershipSwimDetector,
   computeSwimActiveMemberSet,
 } from './membership-swim-detector.js';
+import {CONFIG_KEY} from '../config/config-constants.js';
+import {ConfigurationManager} from '../config/configuration-manager.js';
+import {TRANSPORT_CONFIG_KEY} from '../constants/transport.js';
 import {
   MembershipSwimProber,
   buildSwimRelayHandler,
@@ -19,17 +22,43 @@ import {
   buildSwimPingAddress,
 } from './membership-swim-prober.js';
 
+function pickPositiveTimeoutMs(value) {
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function resolveSwimRuntimeConfigOptions(options = {}) {
+  const configManager = ConfigurationManager.getInstance();
+  const probeTimeoutMs = pickPositiveTimeoutMs(
+    configManager.get(CONFIG_KEY.CONTROL_PLANE_SWIM_PROBE_TIMEOUT_MS),
+  );
+  const probeIntervalMs = pickPositiveTimeoutMs(
+    configManager.get(CONFIG_KEY.CONTROL_PLANE_SWIM_PROBE_INTERVAL_MS),
+  );
+  const pingTimeoutMs = options.pingTimeoutMs ?? pickPositiveTimeoutMs(
+    configManager.get(TRANSPORT_CONFIG_KEY.PING_TIMEOUT_MS),
+  );
+  const detectorConfig = {
+    ...(probeTimeoutMs !== null ? {baseProbeTimeoutMs: probeTimeoutMs} : {}),
+    ...(probeIntervalMs !== null ? {baseProbeIntervalMs: probeIntervalMs} : {}),
+    ...(options.config && typeof options.config === 'object' ?
+      options.config :
+      {}),
+  };
+  return {detectorConfig, pingTimeoutMs};
+}
+
 class MembershipSwimRuntime {
   constructor(options = {}) {
     this._nodeId = String(options.nodeId || '').trim() || null;
     this._messageRouter = options.messageRouter || null;
     this._logger = options.logger || null;
-    const pingTimeoutMs = options.pingTimeoutMs ?? null;
+    const {detectorConfig, pingTimeoutMs} =
+      resolveSwimRuntimeConfigOptions(options);
     this._detector = new MembershipSwimDetector({
       timeSource: options.timeSource,
       randomSource: options.randomSource,
       localNodeId: this._nodeId,
-      config: options.config,
+      config: detectorConfig,
       logger: this._logger,
     });
     this._transport = buildSwimMessageRouterTransport({

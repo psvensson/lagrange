@@ -103,7 +103,9 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         if (remainingMs <= 0) {
           reportOperationMutationRetrySpent(this, result,
             {elapsedMs, remainingMs, retryAttempt, options},
-            getControlPlaneErrorCode, OPERATION_PERSIST_RETRY_TIMEOUT_MS);
+            getControlPlaneErrorCode,
+            this.operationPersistRetryTimeoutMs ??
+              OPERATION_PERSIST_RETRY_TIMEOUT_MS);
           return result;
         }
         if (this.shouldRotateOperationMutationSessionOnRetry(result, options)) {
@@ -247,7 +249,9 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         if (remainingMs <= 0) {
           reportOperationMutationRetrySpent(this, scanResult,
             {elapsedMs, remainingMs, retryAttempt, options},
-            getControlPlaneErrorCode, OPERATION_PERSIST_RETRY_TIMEOUT_MS);
+            getControlPlaneErrorCode,
+            this.operationPersistRetryTimeoutMs ??
+              OPERATION_PERSIST_RETRY_TIMEOUT_MS);
           return scanResult;
         }
         if (this.shouldRotateOperationMutationSessionOnRetry(scanResult, options)) {

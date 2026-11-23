@@ -20,8 +20,10 @@ import {buildControlPlaneReadAuthority} from
   '../../control-plane/control-plane-system-table-gateway-read-contracts.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
   '../../control-plane/control-plane-system-table-gateway-constants.js';
-import {getRemainingBudgetMs} from
-  '../../control-plane/timeout-budget.js';
+import {
+  getRemainingBudgetMs,
+  resolveControlPlaneAuthoritativeQueryTimeoutMs,
+} from '../../control-plane/timeout-budget.js';
 import {
   BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT,
 } from '../bootstrap-constants.js';
@@ -420,14 +422,16 @@ class ServiceLeaderReadinessOwner {
   }
 
   resolveAuthoritativeLeaderRefreshQueryTimeoutMs(options = {}) {
+    const defaultTimeoutMs = resolveControlPlaneAuthoritativeQueryTimeoutMs(
+      AUTHORITATIVE_LEADER_REFRESH_QUERY_TIMEOUT_MS,
+    );
     const suppliedQueryTimeoutMs = options.queryTimeoutMs;
     const configuredTimeoutMs =
       typeof suppliedQueryTimeoutMs === 'number' &&
       suppliedQueryTimeoutMs >= 1 &&
-      suppliedQueryTimeoutMs <=
-        AUTHORITATIVE_LEADER_REFRESH_QUERY_TIMEOUT_MS ?
+      suppliedQueryTimeoutMs <= defaultTimeoutMs ?
         Math.floor(suppliedQueryTimeoutMs) :
-        AUTHORITATIVE_LEADER_REFRESH_QUERY_TIMEOUT_MS;
+        defaultTimeoutMs;
     if (!options.timeoutBudget || typeof options.timeoutBudget !== 'object') {
       return configuredTimeoutMs;
     }
