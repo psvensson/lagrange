@@ -16,7 +16,7 @@
     "query-sql": 219,
     "release-packaging": 15,
     "runtime-primitives": 24,
-    "services-runtime": 161,
+    "services-runtime": 162,
     "solver-tooling": 7,
     "storage-partition": 256,
     "storage-raft": 170,
@@ -25,10 +25,10 @@
     "transport-messaging": 123,
     "wasm-toolchain": 74
   },
-  "censusSize": 2806,
-  "digest": "fnv1a32-950cb979",
+  "censusSize": 2807,
+  "digest": "fnv1a32-6e20d20d",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-150c560b",
+  "observationDigest": "fnv1a32-16ad224c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2604,6 +2604,7 @@
     "test/service/service-deployment-record-generator.test.js": "services-runtime",
     "test/service/service-descriptor.test.js": "services-runtime",
     "test/service/service-dispatcher.test.js": "services-runtime",
+    "test/service/service-installation-readiness.test.js": "services-runtime",
     "test/service/service-installation-reconciler.test.js": "services-runtime",
     "test/service/service-lifecycle-command-owner.test.js": "services-runtime",
     "test/service/service-lifecycle-errors.test.js": "services-runtime",
@@ -28763,6 +28764,12 @@
     "test/service/service-consensus-creation-recovery.integration.test.js": {
       "files": [
         "test/service/service-consensus-creation-recovery-child.js"
+      ]
+    },
+    "test/service/service-installation-readiness.test.js": {
+      "files": [
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js"
       ]
     },
     "test/service/service-lifecycle-command-owner.test.js": {

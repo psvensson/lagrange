@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2780,
+    "ordinary": 2781,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2806,
-  "digest": "fnv1a32-0e9e76eb",
+  "censusSize": 2807,
+  "digest": "fnv1a32-68294a0a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -2584,6 +2584,7 @@
     "test/service/service-deployment-record-generator.test.js": "ordinary",
     "test/service/service-descriptor.test.js": "ordinary",
     "test/service/service-dispatcher.test.js": "ordinary",
+    "test/service/service-installation-readiness.test.js": "ordinary",
     "test/service/service-installation-reconciler.test.js": "ordinary",
     "test/service/service-lifecycle-command-owner.test.js": "ordinary",
     "test/service/service-lifecycle-errors.test.js": "ordinary",
