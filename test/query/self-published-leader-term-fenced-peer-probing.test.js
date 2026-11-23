@@ -840,6 +840,7 @@ test('Option A adversarial hardening: 46-partition memoized disk term lookup avo
 
   const warmStartMs = performance.now();
   const ROUNDS = 10;
+  let mismatches = 0;
   for (let round = 0; round < ROUNDS; round += 1) {
     for (let i = 0; i < partitions.length; i += 1) {
       const floor = resolveSelfPublishedLeaderTermFloor(
@@ -847,11 +848,14 @@ test('Option A adversarial hardening: 46-partition memoized disk term lookup avo
         partitions[i].partitionId,
         snapshots[i],
       );
-      t.equal(floor.eligible, true);
-      t.equal(floor.termFloor, partitions[i].expectedTerm);
+      if (floor.eligible !== true || floor.termFloor !== partitions[i].expectedTerm) {
+        mismatches += 1;
+      }
     }
   }
   const warmElapsedMs = performance.now() - warmStartMs;
+  t.equal(mismatches, 0,
+    'all 460 memoized 46-partition lookups must return eligible with exact cached term');
   t.ok(
     warmElapsedMs < 100,
     `460 memoized 46-partition lookups must complete well under 100ms (observed ${warmElapsedMs.toFixed(2)}ms)`,
