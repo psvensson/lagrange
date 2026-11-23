@@ -330,6 +330,9 @@ function summarizeLiveCoreEffectiveRaftTiming(
   if (!Array.isArray(liveCoreTimings) || liveCoreTimings.length === 0) {
     return Object.freeze({
       ...configuredForFutureReplicas,
+      discrepancies: Array.isArray(configuredForFutureReplicas?.discrepancies) ?
+        configuredForFutureReplicas.discrepancies :
+        Object.freeze([]),
       appliedToExistingCore: true,
       pendingRecreation: false,
       configuredForFutureReplicas,
@@ -346,7 +349,9 @@ function summarizeLiveCoreEffectiveRaftTiming(
   return Object.freeze({
     requested: primaryLive.requested,
     effective: primaryLive.effective,
-    discrepancies: primaryLive.discrepancies,
+    discrepancies: Array.isArray(primaryLive.discrepancies) ?
+      primaryLive.discrepancies :
+      Object.freeze([]),
     createdCoreTiming: primaryLive.createdCoreTiming,
     createdCoreTuning: primaryLive.createdCoreTuning,
     appliedToExistingCore: !pendingRecreation,

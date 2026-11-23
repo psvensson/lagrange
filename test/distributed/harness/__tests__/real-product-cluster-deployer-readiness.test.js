@@ -1373,3 +1373,89 @@ test('summarizePartitionSpread counts RF=3, RF=2, RF=1 and lists twoHostPartitio
     twoHostPartitionIds: ['p-rf2-a', 'p-rf2-b'],
   });
 });
+
+test('evaluateLagrangeClusterReadiness enforces strict 15000ms default lease and honors declared experimental-wifi-slow 90000ms lease',
+  () => {
+    const now = 1_700_000_000_000;
+    const baseFixture = (nodes) => ({
+      nodes,
+      now,
+      endpoints: [{service_id: 'sys-postgres-wire', health_status: 'healthy'}],
+      partitions: [{partition_id: 'p1', table_name: 'stock', replica_count: '1',
+        leader_node_id: 'n1'}],
+      services: [{partition_id: 'p1', node_id: 'n1', status: 'active', raft_role: 'leader'}],
+      expectedNodeIds: ['n1'],
+      requiredServiceIds: ['sys-postgres-wire'],
+      requiredTables: ['stock'],
+    });
+    const nodeRow = (heartbeatAgeMs, leaseRemainingMs) => [{
+      node_id: 'n1',
+      status: 'active',
+      connection_state: 'ready',
+      last_heartbeat: String(now - heartbeatAgeMs),
+      ready_lease_expires_at: String(now + leaseRemainingMs),
+    }];
+
+    // Default profile (omitted and explicit 'default'): strict 15,000 ms bound.
+    for (const profileOpts of [{}, {networkTimingProfile: 'default'}]) {
+      const atBound = evaluateLagrangeClusterReadiness({
+        ...baseFixture(nodeRow(15000, 1000)),
+        ...profileOpts,
+      });
+      assert.equal(atBound.ready, true, '15,000ms heartbeat is fresh on default profile');
+      assert.deepEqual(atBound.denials, []);
+
+      const staleDefault = evaluateLagrangeClusterReadiness({
+        ...baseFixture(nodeRow(15001, 74999)),
+        ...profileOpts,
+      });
+      assert.equal(staleDefault.ready, false,
+        '15,001ms heartbeat must be stale on default profile even with 90s lease expiry');
+      assert.deepEqual(staleDefault.denials, ['node_heartbeat_stale:n1']);
+    }
+
+    // experimental-wifi-slow profile: declared 90,000 ms ready lease.
+    const wifiFresh = evaluateLagrangeClusterReadiness({
+      ...baseFixture(nodeRow(60000, 30000)),
+      networkTimingProfile: 'experimental-wifi-slow',
+    });
+    assert.equal(wifiFresh.ready, true, '60,000ms heartbeat is fresh under experimental-wifi-slow');
+    assert.deepEqual(wifiFresh.denials, []);
+
+    const wifiAtBound = evaluateLagrangeClusterReadiness({
+      ...baseFixture(nodeRow(90000, 1000)),
+      networkTimingProfile: 'experimental-wifi-slow',
+    });
+    assert.equal(wifiAtBound.ready, true, '90,000ms heartbeat is at declared wifi-slow bound');
+
+    const wifiStale = evaluateLagrangeClusterReadiness({
+      ...baseFixture(nodeRow(90001, 5000)),
+      networkTimingProfile: 'experimental-wifi-slow',
+    });
+    assert.equal(wifiStale.ready, false, '90,001ms heartbeat must be stale under wifi-slow');
+    assert.deepEqual(wifiStale.denials, ['node_heartbeat_stale:n1']);
+
+    const wifiExpiredLease = evaluateLagrangeClusterReadiness({
+      ...baseFixture(nodeRow(60000, -1000)),
+      networkTimingProfile: 'experimental-wifi-slow',
+    });
+    assert.equal(wifiExpiredLease.ready, false, 'expired lease still fails under wifi-slow');
+    assert.ok(arrayIncludes(wifiExpiredLease.denials, 'node_ready_lease_or_status:n1'));
+
+    // Explicit readyLeaseMs override works; invalid inputs fail closed.
+    const explicitLease = evaluateLagrangeClusterReadiness({
+      ...baseFixture(nodeRow(45000, 45000)),
+      readyLeaseMs: 90000,
+    });
+    assert.equal(explicitLease.ready, true);
+    for (const badLease of [0, -10, Number.NaN, '90000']) {
+      assert.throws(() => evaluateLagrangeClusterReadiness({
+        ...baseFixture(nodeRow(1000, 10000)),
+        readyLeaseMs: badLease,
+      }), RangeError);
+    }
+    assert.throws(() => evaluateLagrangeClusterReadiness({
+      ...baseFixture(nodeRow(1000, 10000)),
+      networkTimingProfile: 'nonexistent-profile',
+    }), {code: 'INVALID_NETWORK_TIMING_PROFILE'});
+  });

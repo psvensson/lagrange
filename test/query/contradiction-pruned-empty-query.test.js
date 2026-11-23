@@ -20,6 +20,7 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {SQLParser} from '../../src/query/sql-parser.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {METADATA_AUTHORITY_ERROR_CODE} from
   '../../src/query/sql-query-engine-metadata-authority-refresh.js';
@@ -66,7 +67,7 @@ const UNPARTITIONED_MISSING_SCHEMA = Object.freeze({
   primaryKey: ['id'],
 });
 
-function createEngineFixture() {
+function createEngineFixture({orderLineRows = []} = {}) {
   const cache = new SystemTableCache();
   cache.applySystemTableChange(TABLES.TABLES, 'INSERT', {
     table_id: 'tbl-order-line',
@@ -141,7 +142,7 @@ function createEngineFixture() {
       }
       return buildDeliveryEnvelope({acknowledged: true}, {
         success: true,
-        rows: [],
+        rows: orderLineRows,
       });
     },
   };
@@ -266,4 +267,248 @@ async (t) => {
   t.equal(result.success, false,
     'missing partition metadata must never be masked by contradiction pruning');
   t.equal(result.errorCode, METADATA_AUTHORITY_ERROR_CODE.ROUTING_METADATA_UNAVAILABLE);
+});
+
+test('HAVING clauses and nested/function aggregates over contradiction-pruned ' +
+  'empty relations preserve SQL semantics with zero RPCs', async (t) => {
+  const {engine, deliveries} = createEngineFixture();
+  const emptyWhere =
+    'WHERE warehouse_id = 1 AND district_id = 1 AND order_id >= 1 AND order_id < 1';
+
+  const havingUnsatisfied = await engine.executeQuery(
+    `SELECT COUNT(*) AS c FROM order_line ${emptyWhere} HAVING COUNT(*) > 0`,
+  );
+  t.equal(havingUnsatisfied.success, true, `HAVING > 0 failed: ${havingUnsatisfied.error}`);
+  t.same(havingUnsatisfied.rows, [], 'HAVING COUNT(*) > 0 over empty relation returns []');
+
+  const havingSatisfied = await engine.executeQuery(
+    `SELECT COUNT(*) AS c FROM order_line ${emptyWhere} HAVING COUNT(*) = 0`,
+  );
+  t.equal(havingSatisfied.success, true, `HAVING = 0 failed: ${havingSatisfied.error}`);
+  t.same(havingSatisfied.rows, [{c: 0}], 'HAVING COUNT(*) = 0 over empty relation returns [{c: 0}]');
+
+  const havingAliasSatisfied = await engine.executeQuery(
+    `SELECT COUNT(*) AS c FROM order_line ${emptyWhere} HAVING c = 0`,
+  );
+  t.equal(havingAliasSatisfied.success, true,
+    `HAVING alias = 0 failed: ${havingAliasSatisfied.error}`);
+  t.same(havingAliasSatisfied.rows, [{c: 0}],
+    'HAVING referencing SELECT aggregate alias returns [{c: 0}]');
+
+  const havingAliasUnsatisfied = await engine.executeQuery(
+    `SELECT COUNT(*) AS c FROM order_line ${emptyWhere} HAVING c > 0`,
+  );
+  t.equal(havingAliasUnsatisfied.success, true);
+  t.same(havingAliasUnsatisfied.rows, [],
+    'HAVING referencing SELECT aggregate alias returns [] when unsatisfied');
+
+  const havingSumNull = await engine.executeQuery(
+    `SELECT COUNT(*) AS c, SUM(amount_cents) AS total FROM order_line ${emptyWhere} ` +
+    'HAVING SUM(amount_cents) IS NULL',
+  );
+  t.equal(havingSumNull.success, true, `HAVING SUM IS NULL failed: ${havingSumNull.error}`);
+  t.same(havingSumNull.rows, [{c: 0, total: null}]);
+
+  const havingSumGtZero = await engine.executeQuery(
+    `SELECT COUNT(*) AS c, SUM(amount_cents) AS total FROM order_line ${emptyWhere} ` +
+    'HAVING SUM(amount_cents) > 0',
+  );
+  t.equal(havingSumGtZero.success, true);
+  t.same(havingSumGtZero.rows, []);
+
+  const nestedCoalesceSum = await engine.executeQuery(
+    `SELECT COALESCE(SUM(amount_cents), 0) AS total FROM order_line ${emptyWhere} ` +
+    'HAVING COALESCE(SUM(amount_cents), 0) = 0',
+  );
+  t.equal(nestedCoalesceSum.success, true,
+    `COALESCE(SUM) failed: ${nestedCoalesceSum.error}`);
+  t.same(nestedCoalesceSum.rows, [{total: 0}],
+    'nested COALESCE(SUM(...), 0) aggregate over empty relation evaluates in SQLite');
+
+  const totalFnAgg = await engine.executeQuery(
+    `SELECT TOTAL(amount_cents) AS total FROM order_line ${emptyWhere}`,
+  );
+  t.equal(totalFnAgg.success, true, `TOTAL() failed: ${totalFnAgg.error}`);
+  t.same(totalFnAgg.rows, [{total: 0}],
+    'TOTAL() function-call aggregate over empty relation returns 0');
+
+  const exprCountAgg = await engine.executeQuery(
+    `SELECT COUNT(*) + 1 AS c FROM order_line ${emptyWhere}`,
+  );
+  t.equal(exprCountAgg.success, true, `COUNT(*) + 1 failed: ${exprCountAgg.error}`);
+  t.same(exprCountAgg.rows, [{c: 1}],
+    'binary expression wrapping COUNT(*) evaluates over empty relation');
+
+  const groupedHavingEqZero = await engine.executeQuery(
+    `SELECT item_id, COUNT(*) AS c FROM order_line ${emptyWhere} ` +
+    'GROUP BY item_id HAVING COUNT(*) = 0',
+  );
+  t.equal(groupedHavingEqZero.success, true);
+  t.same(groupedHavingEqZero.rows, [],
+    'GROUP BY ... HAVING COUNT(*) = 0 over empty relation produces zero groups');
+
+  const groupedHavingGtZero = await engine.executeQuery(
+    `SELECT item_id, COUNT(*) AS c FROM order_line ${emptyWhere} ` +
+    'GROUP BY item_id HAVING COUNT(*) > 0',
+  );
+  t.equal(groupedHavingGtZero.success, true);
+  t.same(groupedHavingGtZero.rows, [],
+    'GROUP BY ... HAVING COUNT(*) > 0 over empty relation produces zero groups');
+
+  t.equal(deliveries.length, 0,
+    'all contradiction-pruned HAVING and aggregate queries issue zero partition RPCs');
+});
+
+test('LEFT JOIN and LEFT OUTER JOIN when left (preserved) table is ' +
+  'contradiction-pruned return exact SQL results with zero RPCs', async (t) => {
+  const {engine, deliveries} = createEngineFixture();
+  const emptyLeftWhere =
+    'WHERE ol.warehouse_id = 1 AND ol.district_id = 1 AND ol.order_id >= 1 AND ol.order_id < 1';
+
+  for (const joinKeyword of ['LEFT JOIN', 'LEFT OUTER JOIN']) {
+    const plainRes = await engine.executeQuery(
+      `SELECT ol.order_id, s.quantity FROM order_line AS ol ${joinKeyword} stock AS s ` +
+      `ON s.warehouse_id = ol.warehouse_id AND s.item_id = ol.item_id ${emptyLeftWhere}`,
+    );
+    t.equal(plainRes.success, true, `${joinKeyword} plain failed: ${plainRes.error}`);
+    t.same(plainRes.rows, [], `${joinKeyword} with empty preserved left table returns []`);
+
+    const unqualifiedRightCol = await engine.executeQuery(
+      `SELECT quantity FROM order_line AS ol ${joinKeyword} stock AS s ` +
+      `ON s.warehouse_id = ol.warehouse_id AND s.item_id = ol.item_id ${emptyLeftWhere}`,
+    );
+    t.equal(unqualifiedRightCol.success, true,
+      `${joinKeyword} unqualified right column failed: ${unqualifiedRightCol.error}`);
+    t.same(unqualifiedRightCol.rows, []);
+
+    const aggHavingEqZero = await engine.executeQuery(
+      'SELECT COUNT(*) AS c, COUNT(s.item_id) AS matched ' +
+      `FROM order_line AS ol ${joinKeyword} stock AS s ` +
+      `ON s.warehouse_id = ol.warehouse_id AND s.item_id = ol.item_id ${emptyLeftWhere} ` +
+      'HAVING COUNT(*) = 0',
+    );
+    t.equal(aggHavingEqZero.success, true,
+      `${joinKeyword} HAVING = 0 failed: ${aggHavingEqZero.error}`);
+    t.same(aggHavingEqZero.rows, [{c: 0, matched: 0}]);
+
+    const aggHavingGtZero = await engine.executeQuery(
+      `SELECT COUNT(*) AS c FROM order_line AS ol ${joinKeyword} stock AS s ` +
+      `ON s.warehouse_id = ol.warehouse_id AND s.item_id = ol.item_id ${emptyLeftWhere} ` +
+      'HAVING COUNT(*) > 0',
+    );
+    t.equal(aggHavingGtZero.success, true);
+    t.same(aggHavingGtZero.rows, []);
+
+    const aggHavingAlias = await engine.executeQuery(
+      `SELECT COUNT(*) AS c FROM order_line AS ol ${joinKeyword} stock AS s ` +
+      `ON s.warehouse_id = ol.warehouse_id AND s.item_id = ol.item_id ${emptyLeftWhere} ` +
+      'HAVING c = 0',
+    );
+    t.equal(aggHavingAlias.success, true,
+      `${joinKeyword} HAVING alias failed: ${aggHavingAlias.error}`);
+    t.same(aggHavingAlias.rows, [{c: 0}]);
+
+    const groupedRes = await engine.executeQuery(
+      `SELECT ol.item_id, COUNT(*) AS c FROM order_line AS ol ${joinKeyword} stock AS s ` +
+      `ON s.warehouse_id = ol.warehouse_id AND s.item_id = ol.item_id ${emptyLeftWhere} ` +
+      'GROUP BY ol.item_id HAVING COUNT(*) = 0',
+    );
+    t.equal(groupedRes.success, true);
+    t.same(groupedRes.rows, []);
+  }
+
+  t.equal(deliveries.length, 0,
+    'LEFT JOIN with contradiction-pruned left table must issue zero RPCs to either table');
+});
+
+test('LEFT JOIN and LEFT OUTER JOIN when right (nullable) table is ' +
+  'contradiction-pruned handle NULL-rejecting WHERE, NULL-preserving ON, and prunedEmpty plans',
+async (t) => {
+  const {engine, deliveries} = createEngineFixture({
+    orderLineRows: [{
+      warehouse_id: 1,
+      district_id: 1,
+      order_id: 10,
+      line_number: 1,
+      item_id: 7,
+      amount_cents: 500,
+      delivered: 0,
+    }],
+  });
+
+  // 1. Contradiction on nullable right table in WHERE rejects NULL-extended rows and skips right RPCs.
+  for (const joinKeyword of ['LEFT JOIN', 'LEFT OUTER JOIN']) {
+    deliveries.length = 0;
+    const wherePruned = await engine.executeQuery(
+      `SELECT s.item_id, ol.order_id FROM stock AS s ${joinKeyword} order_line AS ol ` +
+      'ON s.warehouse_id = ol.warehouse_id AND s.item_id = ol.item_id ' +
+      'WHERE s.warehouse_id = 1 AND ol.warehouse_id = 1 AND ol.district_id = 1 ' +
+      'AND ol.order_id >= 1 AND ol.order_id < 1',
+    );
+    t.equal(wherePruned.success, true, `${joinKeyword} WHERE-pruned failed: ${wherePruned.error}`);
+    t.same(wherePruned.rows, [],
+      `${joinKeyword} with NULL-rejecting contradiction in WHERE returns []`);
+    t.equal(
+      deliveries.filter((d) => d.address.includes('order-line')).length,
+      0,
+      `${joinKeyword} skips RPCs to contradiction-pruned right table`,
+    );
+
+    const wherePrunedAgg = await engine.executeQuery(
+      'SELECT COUNT(*) AS c, COUNT(ol.order_id) AS matched ' +
+      `FROM stock AS s ${joinKeyword} order_line AS ol ` +
+      'ON s.warehouse_id = ol.warehouse_id AND s.item_id = ol.item_id ' +
+      'WHERE s.warehouse_id = 1 AND ol.warehouse_id = 1 AND ol.district_id = 1 ' +
+      'AND ol.order_id >= 1 AND ol.order_id < 1 HAVING COUNT(*) = 0',
+    );
+    t.equal(wherePrunedAgg.success, true);
+    t.same(wherePrunedAgg.rows, [{c: 0, matched: 0}]);
+
+    // 2. Contradiction on nullable right table in ON preserves left row with NULL right columns.
+    const onContradiction = await engine.executeQuery(
+      `SELECT s.item_id, ol.order_id FROM stock AS s ${joinKeyword} order_line AS ol ` +
+      'ON s.warehouse_id = ol.warehouse_id AND s.item_id = ol.item_id ' +
+      'AND ol.warehouse_id = 1 AND ol.district_id = 1 AND ol.order_id >= 1 AND ol.order_id < 1 ' +
+      'WHERE s.warehouse_id = 1',
+    );
+    t.equal(onContradiction.success, true,
+      `${joinKeyword} ON-contradiction failed: ${onContradiction.error}`);
+    t.same(onContradiction.rows, [{item_id: 7, order_id: null}],
+      `${joinKeyword} with ON contradiction preserves left row with NULL right columns`);
+
+    const onContradictionAgg = await engine.executeQuery(
+      'SELECT COUNT(*) AS c, COUNT(ol.order_id) AS matched ' +
+      `FROM stock AS s ${joinKeyword} order_line AS ol ` +
+      'ON s.warehouse_id = ol.warehouse_id AND s.item_id = ol.item_id ' +
+      'AND ol.warehouse_id = 1 AND ol.district_id = 1 AND ol.order_id >= 1 AND ol.order_id < 1 ' +
+      'WHERE s.warehouse_id = 1 HAVING COUNT(ol.order_id) = 0',
+    );
+    t.equal(onContradictionAgg.success, true);
+    t.same(onContradictionAgg.rows, [{c: 1, matched: 0}]);
+
+    // 3. Direct prunedEmpty right table plan (0 right RPCs) preserves left row with NULL right columns.
+    deliveries.length = 0;
+    const prunedRightSql =
+      `SELECT s.item_id, ol.order_id FROM stock AS s ${joinKeyword} order_line AS ol ` +
+      'ON s.warehouse_id = ol.warehouse_id AND s.item_id = ol.item_id ' +
+      'WHERE s.warehouse_id = 1';
+    const ast = new SQLParser(prunedRightSql).parse();
+    const directRes = await engine.queryExecutor.executeSelect(ast, ['tbl-stock-p1'], [], {
+      distributedPlan: {
+        tablePlans: new Map([
+          ['s', {tableName: 'stock', tableAlias: 's', partitions: ['tbl-stock-p1'], prunedEmpty: false}],
+          ['ol', {tableName: 'order_line', tableAlias: 'ol', partitions: [], prunedEmpty: true}],
+        ]),
+      },
+    });
+    t.equal(directRes.success, true,
+      `${joinKeyword} direct prunedEmpty right plan failed: ${directRes.error}`);
+    t.same(directRes.rows, [{item_id: 7, order_id: null}],
+      `${joinKeyword} with prunedEmpty right table preserves left row with NULL right columns`);
+    t.equal(
+      deliveries.filter((d) => d.address.includes('order-line')).length,
+      0,
+      `${joinKeyword} direct prunedEmpty right table issues zero RPCs to right table`,
+    );
+  }
 });

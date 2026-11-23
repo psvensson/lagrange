@@ -73,7 +73,15 @@ import {
 import {HeartbeatService} from '../../src/control-plane/heartbeat-service.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {genesisStamp} from '../../src/raft/raft-committed-membership-stamp.js';
-import {readPortEffectiveRaftTiming} from '../../src/raft/raft-rs-operation-port.js';
+import {RAFT_OPERATION_OUTCOME} from '../../src/raft/raft-operation-port-constants.js';
+import {
+  applyPortRaftTimingConfig,
+  readPortEffectiveRaftTiming,
+} from '../../src/raft/raft-rs-operation-port.js';
+import {
+  retireReplicaLifecycle,
+} from '../../src/raft/raft-rs-replica-lifecycle-owner.js';
+import {pendingTurn, settledTurn} from '../../src/raft/raft-rs-turn-answer.js';
 
 function createLocalConfigSqlEngine(rowsByKey) {
   return {
@@ -1198,6 +1206,8 @@ test('immutable live native core createdCoreTuning rejects tick-changing in-plac
     const wiringTruth = wiring.effectiveRaftTiming();
     t.equal(wiringTruth.appliedToExistingCore, false);
     t.equal(wiringTruth.pendingRecreation, true);
+    t.equal(Array.isArray(wiringTruth.discrepancies), true,
+      'summarizeLiveCoreEffectiveRaftTiming always returns a discrepancies array');
     t.equal(wiringTruth.effective.electionTick, 50,
       'effectiveRaftTiming reads back running group createdCoreTuning');
     t.equal(wiringTruth.effective.effectiveElectionMinMs, 1000);
@@ -1205,4 +1215,238 @@ test('immutable live native core createdCoreTuning rejects tick-changing in-plac
       'distinguishes configuredForFutureReplicas from live core effective tuning');
     t.equal(config.get(CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MIN_MS), 9000,
       'ConfigurationManager retains slow timing for future replicas');
+  });
+
+test('applyPortRaftTimingConfig refuses pending, held-lifecycle, closed, refused, failed, and result-less turns',
+  async (t) => {
+    ConfigurationManager.resetInstance();
+    let heldService = null;
+    let closedService = null;
+    const heldResolvers = [];
+    const releaseHeldDeliveries = () => {
+      while (heldResolvers.length > 0) {
+        heldResolvers.shift()({acknowledged: true});
+      }
+    };
+    t.teardown(async () => {
+      releaseHeldDeliveries();
+      if (heldService) {
+        await heldService.shutdown();
+      }
+      if (closedService) {
+        await closedService.shutdown();
+      }
+      ConfigurationManager.resetInstance();
+    });
+
+    const config = ConfigurationManager.getInstance();
+    config.initialize({node: {id: 'timing-turn-verify-node'}});
+    applyStaticNetworkTimingProfile(config, NETWORK_TIMING_PROFILE.DEFAULT);
+
+    // 1. Real operation port with held Raft lifecycle turn queue + pending retirement.
+    const registeredTransportHandlers = new Map();
+    const holdingTransport = {
+      register: (address, handler) => registeredTransportHandlers.set(address, handler),
+      getRegisteredHandler: (address) => registeredTransportHandlers.get(address) || null,
+      unregisterExact: (address, handler) => {
+        if (registeredTransportHandlers.get(address) !== handler) {
+          return false;
+        }
+        registeredTransportHandlers.delete(address);
+        return true;
+      },
+      deliver: () => new Promise((resolve) => {
+        heldResolvers.push(resolve);
+      }),
+    };
+    heldService = new PartitionService({
+      partitionId: 'timing-turn-held-p1',
+      tableId: 'timing_turn_held',
+      tableName: 'timing_turn_held',
+      replicaId: 'timing-turn-held-r1',
+      replicaIds: ['timing-turn-held-r1', 'timing-turn-held-r2'],
+      bootstrapMembership: genesisStamp(
+        ['timing-turn-held-r1', 'timing-turn-held-r2'],
+        {'timing-turn-held-r1': 'timing-turn-verify-node', 'timing-turn-held-r2': 'peer-2'},
+      ),
+      nodeId: 'timing-turn-verify-node',
+      transport: holdingTransport,
+      dbPath: ':memory:',
+      deferElection: true,
+    });
+    await heldService.initialize();
+
+    const campaignTurn = heldService.raft.campaign();
+    t.equal(campaignTurn.settled, false,
+      'real operation port campaign stays pending while outbound transport delivery is held');
+    const retirePromise = retireReplicaLifecycle({
+      runtime: heldService.raft,
+      groupId: 'timing-turn-held-p1',
+      replicaIdentity: 'timing-turn-held-r1',
+      reason: 'test-held-turn-queue',
+    });
+
+    const baseParams = {
+      heartbeatMs: 50,
+      electionMinMs: 1000,
+      electionMaxMs: 2000,
+      hasTickInterval: true,
+      tickIntervalMs: 20,
+      previousTickIntervalMs: 20,
+      rearmTimer: false,
+    };
+    const heldOutcome = applyPortRaftTimingConfig(heldService, baseParams);
+    t.equal(heldOutcome.applied, false,
+      'held-lifecycle refused turn must never count as applied');
+    t.equal(heldOutcome.appliedToExistingCore, false,
+      'held-lifecycle refused turn must report appliedToExistingCore: false');
+    t.equal(heldOutcome.outcome, RAFT_OPERATION_OUTCOME.CORE_REFUSED);
+    t.equal(heldOutcome.reason, 'retired');
+    t.equal(heldOutcome.logExtra, null);
+    t.equal(
+      heldService.applyRaftTimingConfig({
+        heartbeatIntervalMs: 50,
+        electionTimeoutMinMs: 1000,
+        electionTimeoutMaxMs: 2000,
+        tickIntervalMs: 20,
+      }),
+      false,
+      'PartitionService.applyRaftTimingConfig returns false on held-lifecycle refusal',
+    );
+    t.equal(readPortEffectiveRaftTiming(heldService.raft), null,
+      'readPortEffectiveRaftTiming returns null when port refuses configureTick');
+
+    releaseHeldDeliveries();
+    await retirePromise;
+
+    // 2. Real operation port after close -> CORE_REFUSED ('closed').
+    closedService = new PartitionService({
+      partitionId: 'timing-turn-closed-p1',
+      tableId: 'timing_turn_closed',
+      tableName: 'timing_turn_closed',
+      replicaId: 'timing-turn-closed-r1',
+      replicaIds: ['timing-turn-closed-r1'],
+      bootstrapMembership: genesisStamp(['timing-turn-closed-r1'], {}),
+      nodeId: 'timing-turn-verify-node',
+      dbPath: ':memory:',
+      deferElection: true,
+    });
+    await closedService.initialize();
+    closedService.raft.close();
+
+    const closedOutcome = applyPortRaftTimingConfig(closedService, baseParams);
+    t.equal(closedOutcome.applied, false);
+    t.equal(closedOutcome.appliedToExistingCore, false);
+    t.equal(closedOutcome.outcome, RAFT_OPERATION_OUTCOME.CORE_REFUSED);
+    t.equal(closedOutcome.reason, 'closed');
+    t.equal(
+      closedService.applyRaftTimingConfig({
+        heartbeatIntervalMs: 50,
+        electionTimeoutMinMs: 1000,
+        electionTimeoutMaxMs: 2000,
+        tickIntervalMs: 20,
+      }),
+      false,
+      'closed operation port must never report applied: true',
+    );
+
+    // 3. Pending, refused, failed, and malformed configureTick turns never count as applied.
+    const negativeCases = [
+      ['pending turn', pendingTurn(new Promise(() => {})), 'pending', 'turn-pending'],
+      ['refused lowercase outcome', {outcome: 'refused', reason: 'queue-held'}, 'refused', 'queue-held'],
+      [
+        'settled CORE_REFUSED turn',
+        settledTurn({outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED, reason: 'retired'}),
+        RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+        'retired',
+      ],
+      [
+        'settled HOST_FAILURE turn',
+        settledTurn({outcome: RAFT_OPERATION_OUTCOME.HOST_FAILURE, reason: 'disk-io'}),
+        RAFT_OPERATION_OUTCOME.HOST_FAILURE,
+        'disk-io',
+      ],
+      [
+        'CORE_FATAL structured turn',
+        {outcome: RAFT_OPERATION_OUTCOME.CORE_FATAL, reason: 'corrupt-store'},
+        RAFT_OPERATION_OUTCOME.CORE_FATAL,
+        'corrupt-store',
+      ],
+      [
+        'CORE_OK turn with absent result',
+        {outcome: RAFT_OPERATION_OUTCOME.CORE_OK, result: null, reason: 'unsettled'},
+        RAFT_OPERATION_OUTCOME.CORE_OK,
+        'missing-turn-result',
+      ],
+      [
+        'settled turn with missing result',
+        settledTurn(null),
+        'unavailable',
+        'missing-turn-result',
+      ],
+      ['empty object report', {}, 'unavailable', 'invalid-configure-tick-report'],
+      ['null response', null, 'unavailable', 'configure-tick-unavailable'],
+    ];
+    for (const [label, turnAnswer, expectedOutcome, expectedReason] of negativeCases) {
+      const stubReplica = {
+        raft: {configureTick: () => turnAnswer},
+        applyRuntimeTickInterval: () => {
+          throw new Error(`applyRuntimeTickInterval must not run on ${label}`);
+        },
+      };
+      const outcome = applyPortRaftTimingConfig(stubReplica, baseParams);
+      t.equal(outcome.applied, false, `${label}: applied must be false`);
+      t.equal(outcome.appliedToExistingCore, false,
+        `${label}: appliedToExistingCore must be false`);
+      t.equal(outcome.outcome, expectedOutcome, `${label}: preserves outcome`);
+      t.equal(outcome.reason, expectedReason, `${label}: preserves reason`);
+      t.equal(outcome.logExtra, null, `${label}: emits no applied log payload`);
+    }
+
+    // 4. Positive controls: valid CORE_OK structured turn and direct report.
+    const okStructured = applyPortRaftTimingConfig(
+      {
+        raft: {
+          configureTick: () => ({
+            outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+            reason: 'timing-configured',
+            result: {appliedToExistingCore: true},
+          }),
+        },
+      },
+      baseParams,
+    );
+    t.equal(okStructured.applied, true);
+    t.equal(okStructured.appliedToExistingCore, true);
+    t.equal(okStructured.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
+
+    const pendingRecreationStructured = applyPortRaftTimingConfig(
+      {
+        raft: {
+          configureTick: () => ({
+            outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+            reason: 'timing-pending-recreation',
+            result: {appliedToExistingCore: false, pendingRecreation: true},
+          }),
+        },
+      },
+      baseParams,
+    );
+    t.equal(pendingRecreationStructured.applied, false);
+    t.equal(pendingRecreationStructured.appliedToExistingCore, false);
+    t.equal(pendingRecreationStructured.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
+
+    const okDirectReport = applyPortRaftTimingConfig(
+      {
+        raft: {
+          configureTick: () => ({
+            appliedToExistingCore: true,
+            createdCoreTuning: {heartbeatTick: 3, electionTick: 50},
+          }),
+        },
+      },
+      baseParams,
+    );
+    t.equal(okDirectReport.applied, true);
+    t.equal(okDirectReport.appliedToExistingCore, true);
   });

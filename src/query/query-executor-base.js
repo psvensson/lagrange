@@ -404,8 +404,14 @@ class QueryExecutorBase {
       extraFetch.extraTables,
       requestDeadlineMs,
     );
+    const schemaCols = Array.isArray(effectivePlan.coordinatorTableSchema?.columns) ?
+      effectivePlan.coordinatorTableSchema.columns.map((c) => c.name).filter(Boolean) :
+      [];
+    const emptyFragments = schemaCols.length > 0 ?
+      [{success: true, rows: [], columns: schemaCols}] :
+      [];
     const aggregated = await this.mergeEngine.mergePartitionResults(
-      [],
+      emptyFragments,
       ast,
       this,
       effectivePlan,

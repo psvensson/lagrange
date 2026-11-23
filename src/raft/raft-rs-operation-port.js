@@ -13,6 +13,7 @@ import {
 import {
   RAFT_EVENT,
   RAFT_OPERATION,
+  RAFT_OPERATION_OUTCOME,
   RAFT_MEMBERSHIP_TRANSITION_STAGE,
 } from './raft-operation-port-constants.js';
 import {
@@ -89,50 +90,203 @@ const ALREADY_CLOSED = 'already-closed';
 const CLOSED_WITHOUT_RUNTIME = 'closed-without-runtime';
 const TIMING_CONFIGURED = 'timing-configured';
 const TIMING_PENDING_RECREATION = 'timing-pending-recreation';
+const TURN_RESULT_FIELD = 'result';
+const TIMING_TURN_OUTCOME = Object.freeze({
+  PENDING: 'pending',
+  UNAVAILABLE: 'unavailable',
+});
+const TIMING_TURN_REASON = Object.freeze({
+  PENDING: 'turn-pending',
+  MISSING_RESULT: 'missing-turn-result',
+  INVALID_REPORT: 'invalid-configure-tick-report',
+  UNAVAILABLE: 'configure-tick-unavailable',
+  REFUSED: 'turn-refused',
+});
+
+function isRecordObject(value) {
+  return value !== null && typeof value === 'object';
+}
+
+function normalizeNonEmptyString(value, defaultValue) {
+  return typeof value === 'string' && value.length > 0 ? value : defaultValue;
+}
+
+function buildConfigureTickSnapshotFields(safe) {
+  return {
+    createdCoreTiming: safe.createdCoreTiming || null,
+    createdCoreTuning: safe.createdCoreTuning || null,
+    requested: safe.requested || null,
+    effective: safe.effective || null,
+    discrepancies: Array.isArray(safe.discrepancies) ? safe.discrepancies : [],
+    configuredForFutureReplicas: safe.configuredForFutureReplicas || null,
+  };
+}
 
 function formatConfigureTickReport(report) {
-  const safe = report || {};
-  const applied = safe.appliedToExistingCore !== false;
+  const safe = isRecordObject(report) ? report : {};
+  const applied = safe.appliedToExistingCore === true;
   return coreOk(
     applied ? TIMING_CONFIGURED : TIMING_PENDING_RECREATION,
     {
       appliedToExistingCore: applied,
       pendingRecreation: safe.pendingRecreation === true,
-      createdCoreTiming: safe.createdCoreTiming || null,
-      createdCoreTuning: safe.createdCoreTuning || null,
-      requested: safe.requested || null,
-      effective: safe.effective || null,
-      configuredForFutureReplicas: safe.configuredForFutureReplicas || null,
+      ...buildConfigureTickSnapshotFields(safe),
     },
   );
 }
 
 function readPortEffectiveRaftTiming(port) {
   const turn = port?.configureTick?.();
-  return turn?.settled && turn.result?.createdCoreTuning ?
+  return turn?.settled === true &&
+    turn.result?.outcome === RAFT_OPERATION_OUTCOME.CORE_OK &&
+    turn.result?.createdCoreTuning ?
     turn.result :
     null;
 }
 
-function resolvePortTickApplyOutcome(replica, coreReport, params) {
-  if (coreReport?.appliedToExistingCore === false) {
-    return {
-      applied: false,
-      logExtra: {
-        appliedToExistingCore: false,
-        pendingRecreation: true,
-        createdCoreTuning: coreReport.createdCoreTuning || null,
-      },
-    };
+function buildUnwrappedTurn(ok, outcome, reason, report = null) {
+  return {ok, outcome, reason, report};
+}
+
+function isDirectConfigureTickReport(value) {
+  return isRecordObject(value) && (
+    typeof value.appliedToExistingCore === 'boolean' ||
+    isRecordObject(value.createdCoreTuning)
+  );
+}
+
+function unwrapCoreOkResultObject(result) {
+  const reason = normalizeNonEmptyString(result.reason, TIMING_CONFIGURED);
+  if (!Object.hasOwn(result, TURN_RESULT_FIELD)) {
+    return buildUnwrappedTurn(true, result.outcome, reason, result);
   }
-  const tickChanged =
-    params.hasTickInterval &&
-    params.tickIntervalMs !== params.previousTickIntervalMs;
-  const tickRuntimeApplied =
-    !tickChanged ||
-    coreReport?.appliedToExistingCore === true ||
-    replica.applyRuntimeTickInterval(params.tickIntervalMs);
-  return {applied: tickRuntimeApplied, logExtra: {tickRuntimeApplied}};
+  return isRecordObject(result.result) ?
+    buildUnwrappedTurn(true, result.outcome, reason, result.result) :
+    buildUnwrappedTurn(false, result.outcome, TIMING_TURN_REASON.MISSING_RESULT);
+}
+
+function unwrapSettledTurnAnswer(turn) {
+  let unwrapped;
+  if (!turn.settled) {
+    unwrapped = buildUnwrappedTurn(
+      false,
+      TIMING_TURN_OUTCOME.PENDING,
+      TIMING_TURN_REASON.PENDING,
+    );
+  } else if (!isRecordObject(turn.result)) {
+    unwrapped = buildUnwrappedTurn(
+      false,
+      TIMING_TURN_OUTCOME.UNAVAILABLE,
+      TIMING_TURN_REASON.MISSING_RESULT,
+    );
+  } else if (turn.result.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
+    unwrapped = buildUnwrappedTurn(
+      false,
+      normalizeNonEmptyString(turn.result.outcome, TIMING_TURN_OUTCOME.UNAVAILABLE),
+      normalizeNonEmptyString(turn.result.reason, TIMING_TURN_REASON.REFUSED),
+    );
+  } else {
+    unwrapped = unwrapCoreOkResultObject(turn.result);
+  }
+  return unwrapped;
+}
+
+function unwrapOutcomeTurnAnswer(turn) {
+  let unwrapped;
+  if (turn.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
+    unwrapped = buildUnwrappedTurn(
+      false,
+      turn.outcome,
+      normalizeNonEmptyString(turn.reason, TIMING_TURN_REASON.REFUSED),
+    );
+  } else if (isRecordObject(turn.result)) {
+    unwrapped = buildUnwrappedTurn(
+      true,
+      turn.outcome,
+      normalizeNonEmptyString(turn.reason, TIMING_CONFIGURED),
+      turn.result,
+    );
+  } else if (!Object.hasOwn(turn, TURN_RESULT_FIELD) && isDirectConfigureTickReport(turn)) {
+    unwrapped = buildUnwrappedTurn(
+      true,
+      turn.outcome,
+      normalizeNonEmptyString(turn.reason, TIMING_CONFIGURED),
+      turn,
+    );
+  } else {
+    unwrapped = buildUnwrappedTurn(
+      false,
+      turn.outcome,
+      TIMING_TURN_REASON.MISSING_RESULT,
+    );
+  }
+  return unwrapped;
+}
+
+function unwrapConfigureTickTurn(turn) {
+  let unwrapped;
+  if (!isRecordObject(turn)) {
+    unwrapped = buildUnwrappedTurn(
+      false,
+      TIMING_TURN_OUTCOME.UNAVAILABLE,
+      TIMING_TURN_REASON.UNAVAILABLE,
+    );
+  } else if (typeof turn.settled === 'boolean') {
+    unwrapped = unwrapSettledTurnAnswer(turn);
+  } else if (typeof turn.outcome === 'string') {
+    unwrapped = unwrapOutcomeTurnAnswer(turn);
+  } else if (isDirectConfigureTickReport(turn)) {
+    unwrapped = buildUnwrappedTurn(
+      true,
+      RAFT_OPERATION_OUTCOME.CORE_OK,
+      normalizeNonEmptyString(turn.reason, TIMING_CONFIGURED),
+      turn,
+    );
+  } else {
+    unwrapped = buildUnwrappedTurn(
+      false,
+      TIMING_TURN_OUTCOME.UNAVAILABLE,
+      TIMING_TURN_REASON.INVALID_REPORT,
+    );
+  }
+  return unwrapped;
+}
+
+function buildPortTickApplyOutcome(applied, unwrapped, logExtra) {
+  return {
+    applied,
+    appliedToExistingCore: applied,
+    outcome: unwrapped.outcome,
+    reason: unwrapped.reason,
+    logExtra,
+  };
+}
+
+function resolvePortTickApplyOutcome(replica, unwrapped, params) {
+  let resolved;
+  if (!unwrapped.ok) {
+    resolved = buildPortTickApplyOutcome(false, unwrapped, null);
+  } else if (unwrapped.report?.appliedToExistingCore === false) {
+    resolved = buildPortTickApplyOutcome(false, unwrapped, {
+      appliedToExistingCore: false,
+      pendingRecreation: true,
+      createdCoreTuning: unwrapped.report.createdCoreTuning || null,
+    });
+  } else {
+    const tickChanged =
+      params.hasTickInterval &&
+      params.tickIntervalMs !== params.previousTickIntervalMs;
+    const tickRuntimeApplied =
+      !tickChanged ||
+      unwrapped.report?.appliedToExistingCore === true ||
+      replica.applyRuntimeTickInterval(params.tickIntervalMs);
+    resolved = buildPortTickApplyOutcome(
+      tickRuntimeApplied,
+      unwrapped,
+      {tickRuntimeApplied},
+    );
+  }
+  return resolved;
 }
 
 function applyPortRaftTimingConfig(replica, params) {
@@ -145,11 +299,12 @@ function applyPortRaftTimingConfig(replica, params) {
   if (params.hasTickInterval) {
     timingArg.tickIntervalMs = params.tickIntervalMs;
   }
-  const applied = replica.raft?.configureTick?.(timingArg);
-  if (!applied) {
-    return {applied: false, logExtra: null};
-  }
-  return resolvePortTickApplyOutcome(replica, applied.result, params);
+  const turn = replica.raft?.configureTick?.(timingArg);
+  return resolvePortTickApplyOutcome(
+    replica,
+    unwrapConfigureTickTurn(turn),
+    params,
+  );
 }
 
 function required(request, field) {
@@ -566,7 +721,7 @@ function createRaftRsOperationPort(request) {
       const wasScheduling = timer !== null;
       const report = dispatcher.configureTiming(command);
       if (
-        report?.appliedToExistingCore !== false &&
+        report?.appliedToExistingCore === true &&
         Number.isFinite(command?.tickIntervalMs) &&
         command.tickIntervalMs > 0
       ) {
