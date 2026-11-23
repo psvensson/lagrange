@@ -459,22 +459,10 @@ class EndpointSyncK8sClient {
 }
 
 export {
-  K8S_DEFAULT,
-  K8S_PATH,
-  HTTP_METHOD,
-  HTTP_STATUS,
-  HEADER,
   K8S_CLIENT_ERROR,
-  URL_TEMPLATE_PARAM,
   EndpointSyncK8sClientError,
-  encodePathPart,
   buildPath,
   buildLabelSelector,
-  buildApiServerUrl,
   withQuery,
-  parseK8sErrorMessage,
-  readOptionalFile,
-  readK8sServiceAccountFiles,
-  buildEventManifest,
   EndpointSyncK8sClient,
 };

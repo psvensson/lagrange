@@ -432,12 +432,6 @@ async function reconcilePlannedExports(options) {
 }
 
 export {
-  K8S_KIND,
-  K8S_API_VERSION,
-  K8S_PROTOCOL,
-  K8S_LABEL,
-  K8S_RECONCILE_ERROR,
-  REQUIRED_CLIENT_METHOD,
   RECONCILE_SUMMARY_DEFAULT,
   EndpointSyncReconcilerError,
   buildManagedLabels,
@@ -446,6 +440,5 @@ export {
   isManagedResource,
   collectStaleManagedResourceNames,
   validateReconcileOptions,
-  createReconcileSummary,
   reconcilePlannedExports,
 };
