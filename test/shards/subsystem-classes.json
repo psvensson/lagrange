@@ -13,7 +13,7 @@
     "examples-e2e": 8,
     "pgwire-compat": 23,
     "placement-rebalance": 312,
-    "query-sql": 219,
+    "query-sql": 220,
     "release-packaging": 15,
     "runtime-primitives": 24,
     "services-runtime": 163,
@@ -25,8 +25,8 @@
     "transport-messaging": 123,
     "wasm-toolchain": 74
   },
-  "censusSize": 2808,
-  "digest": "fnv1a32-23a0c5e2",
+  "censusSize": 2809,
+  "digest": "fnv1a32-bddfcd84",
   "observationSchemaVersion": 2,
   "observationDigest": "fnv1a32-b5a3c486",
   "classes": {
@@ -1124,6 +1124,7 @@
     "test/function/query-then-invoke-continuation.property.test.js": "services-runtime",
     "test/helm/lagrange-node-admin-default-deny.test.js": "release-packaging",
     "test/hlc/hlc.test.js": "runtime-primitives",
+    "test/index-management/global-index-distributed-execution-contract.test.js": "query-sql",
     "test/index-management/global-index-maintenance-mode-seal.test.js": "query-sql",
     "test/index-management/global-index-production-construction.test.js": "query-sql",
     "test/index-management/global-index-production-tx1-distributed.test.js": "query-sql",

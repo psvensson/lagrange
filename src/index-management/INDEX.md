@@ -11,7 +11,7 @@ documentClass: generated
 - [global-index-catalog-contract.js](global-index-catalog-contract.js) - Global Secondary Index catalog contract and lifecycle state machine. (importers: many)
 - [global-index-dataset-manager.js](global-index-dataset-manager.js) - Global Secondary Index dataset lifecycle and physical representation manager. (importers: many)
 - [global-index-dataset-reconciliation.js](global-index-dataset-reconciliation.js) - Metadata reconciliation and control-plane gateway persistence helpers for Global Secondary Index datasets. (importers: few)
-- [global-index-distributed-execution.js](global-index-distributed-execution.js) - Distributed runtime execution, dynamic index-partition provisioning, and SystemTableCache catalog propagation... (importers: one)
+- [global-index-distributed-execution.js](global-index-distributed-execution.js) - Distributed runtime execution, dynamic index-partition provisioning, and SystemTableCache catalog propagation... (importers: few)
 - [global-index-lifecycle-coordinator.js](global-index-lifecycle-coordinator.js) - Global Secondary Index lifecycle coordinator. (importers: few)
 - [global-index-partition-discovery.js](global-index-partition-discovery.js) - Partition discovery, SQLite database resolution, and base-table schema metadata lookup for Global Secondary Index... (importers: few)
 - [global-index-predicate-matcher.js](global-index-predicate-matcher.js) - Predicate extraction, row-level condition evaluation, and base row projection helpers for Global Secondary Index... (importers: few)
