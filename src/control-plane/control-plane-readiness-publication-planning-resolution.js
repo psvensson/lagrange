@@ -139,7 +139,7 @@ function resolveMembershipPublicationPlanningSnapshot(service, context = {}) {
     directCanAcceptProvidedCountOnlyAckDebt;
   const publicationConvergenceForEvidence =
     shouldUseProvidedAckNodeList ?
-      {
+      Object.freeze({
         ...directPlanningSnapshot,
         requiredAckNodeIds: providedPlanningSnapshot.requiredAckNodeIds,
         acknowledgedNodeIds: Array.isArray(
@@ -170,7 +170,7 @@ function resolveMembershipPublicationPlanningSnapshot(service, context = {}) {
           ) ?
             providedPlanningSnapshot.pendingAckNodeIds :
             directPlanningSnapshot.pendingAckNodeIds;
-          return {
+          return Object.freeze({
             ...gate,
             requiredAckNodeIds: requiredAckIds,
             acknowledgedNodeIds: acknowledgedIds,
@@ -179,7 +179,7 @@ function resolveMembershipPublicationPlanningSnapshot(service, context = {}) {
             pendingAckEvidenceState:
               PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
                 .REQUIRED_ACK_NODE_LIST,
-            publicationOwnerStream: gate.publicationOwnerStream ? {
+            publicationOwnerStream: gate.publicationOwnerStream ? Object.freeze({
               ...gate.publicationOwnerStream,
               requiredAckNodeIds: requiredAckIds,
               acknowledgedNodeIds: acknowledgedIds,
@@ -188,12 +188,12 @@ function resolveMembershipPublicationPlanningSnapshot(service, context = {}) {
               pendingAckEvidenceState:
                 PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE
                   .REQUIRED_ACK_NODE_LIST,
-            } : null,
-          };
+            }) : null,
+          });
         })(),
-      } :
+      }) :
       shouldUseProvidedCountOnlyAckDebt ?
-        {
+        Object.freeze({
           ...directPlanningSnapshot,
           pendingAckCount: providedPendingAckCount,
           pendingAckEvidenceState:
@@ -210,22 +210,22 @@ function resolveMembershipPublicationPlanningSnapshot(service, context = {}) {
             ) ?
               providedPlanningSnapshot.pendingAckNodeIds :
               directPlanningSnapshot.pendingAckNodeIds;
-            return {
+            return Object.freeze({
               ...gate,
               pendingAckCount: providedPendingAckCount,
               pendingAckEvidenceState:
                 PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY,
               pendingAckNodeIds: pendingAckIds,
-              publicationOwnerStream: gate.publicationOwnerStream ? {
+              publicationOwnerStream: gate.publicationOwnerStream ? Object.freeze({
                 ...gate.publicationOwnerStream,
                 pendingAckCount: providedPendingAckCount,
                 pendingAckEvidenceState:
                   PUBLICATION_RECOVERY_PENDING_ACK_EVIDENCE_STATE.COUNT_ONLY,
                 pendingAckNodeIds: pendingAckIds,
-              } : null,
-            };
+              }) : null,
+            });
           })(),
-        } :
+        }) :
         directPlanningSnapshot;
   const publicationConvergenceGateForMerge =
     publicationConvergenceForEvidence.publicationRecoveryGate ||
@@ -249,6 +249,9 @@ function resolveMembershipPublicationPlanningSnapshot(service, context = {}) {
     shouldUseProvidedPriorityRecoveryDecisionSnapshots ?
       providedPlanningSnapshot.priorityRecoveryDecisionSnapshots || null :
       null;
+  if (!service.publicationEvidenceByConvergence) {
+    service.publicationEvidenceByConvergence = new WeakMap();
+  }
   const publicationEvidence = buildCanonicalPublicationRecoveryEvidence({
     publicationConvergence: publicationConvergenceForEvidence,
     publicationConvergenceGate:
@@ -269,7 +272,7 @@ function resolveMembershipPublicationPlanningSnapshot(service, context = {}) {
       null,
     priorityRecoveryInvariants:
       providedPlanningSnapshot.priorityRecoveryInvariants || null,
-  });
+  }, service.publicationEvidenceByConvergence);
   const diagnosticPublicationEvidence =
     preferDirectReadyGate ?
       buildCanonicalPublicationRecoveryEvidence({
@@ -285,7 +288,7 @@ function resolveMembershipPublicationPlanningSnapshot(service, context = {}) {
           providedPlanningSnapshot.priorityRecoveryClosureWitness || null,
         priorityRecoveryInvariants:
           providedPlanningSnapshot.priorityRecoveryInvariants || null,
-      }) :
+      }, service.publicationEvidenceByConvergence) :
       null;
   const publicationConvergenceGate =
     publicationEvidence.publicationConvergenceGate ||
@@ -380,7 +383,7 @@ function resolveMembershipPublicationPlanningSnapshot(service, context = {}) {
       publicationConvergenceGate?.reasonCodes ??
       directPlanningSnapshot.priorityRecoveryReasonCodes ??
       providedPlanningSnapshot.priorityRecoveryReasonCodes ??
-      [],
+      Object.freeze([]),
     priorityPartitionSummary:
       priorityRecoveryObservation?.priorityPartitionSummary ??
       publicationConvergenceGate?.priorityPartitionSummary ??
@@ -401,7 +404,7 @@ function resolveMembershipPublicationPlanningSnapshot(service, context = {}) {
       providedPlanningSnapshot.publicationRecoveryGate
         ?.priorityRecoveryClosureWitness ||
       null,
-    diagnosticPriorityRecoveryReasonCodes:
+    diagnosticPriorityRecoveryReasonCodes: Object.freeze(
       Array.isArray(
         providedPlanningSnapshot.diagnosticPriorityRecoveryReasonCodes,
       ) ?
@@ -412,6 +415,7 @@ function resolveMembershipPublicationPlanningSnapshot(service, context = {}) {
             ?.reasonCodes) ?
             [...providedPlanningSnapshot.publicationRecoveryGate.reasonCodes] :
             [],
+    ),
     publicationRecoveryGate: publicationConvergenceGate,
     priorityRecoveryObservation,
   });

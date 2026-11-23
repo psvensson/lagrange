@@ -301,6 +301,52 @@ function canonicalRecordDigest(value, trace, depth, topLevelExclusions) {
   return out + DIGEST_TAG.OBJECT_CLOSE;
 }
 
+function updateTraceMaxDepth(trace, depth) {
+  if (trace.maxDepth !== undefined && depth > trace.maxDepth) {
+    trace.maxDepth = depth;
+  }
+}
+
+function readMemoizedFrozenSubtreeDigest(memo, value, trace, depth) {
+  const stored = memo.get(value);
+  if (stored === undefined) return null;
+  if (stored.rejected) {
+    trace.rejected = true;
+    return DIGEST_TAG.REJECTED;
+  }
+  if (stored.overflow || depth + stored.maxRelativeDepth >= DIGEST_MAX_DEPTH) {
+    return null;
+  }
+  updateTraceMaxDepth(trace, depth + stored.maxRelativeDepth);
+  return stored.digest;
+}
+
+function digestFrozenSubtree(value, trace, depth) {
+  const memo = trace.frozenDigestMemo;
+  const existing = readMemoizedFrozenSubtreeDigest(memo, value, trace, depth);
+  if (existing !== null) return existing;
+  const local = {
+    overflow: false, rejected: false, trackFrozen: true, unfrozen: false,
+    maxDepth: depth, frozenDigestMemo: memo,
+  };
+  const digest = Array.isArray(value) ?
+    canonicalArrayDigest(value, local, depth) :
+    canonicalRecordDigest(value, local, depth, null);
+  if (local.unfrozen) trace.unfrozen = true;
+  if (local.overflow) trace.overflow = true;
+  if (local.rejected) trace.rejected = true;
+  updateTraceMaxDepth(trace, local.maxDepth);
+  if (!local.unfrozen && !local.overflow) {
+    memo.set(value, {
+      digest,
+      overflow: false,
+      rejected: local.rejected,
+      maxRelativeDepth: local.maxDepth - depth,
+    });
+  }
+  return digest;
+}
+
 function canonicalDigest(value, trace, depth = 0, topLevelExclusions = null) {
   const scalar = canonicalScalarDigest(value, depth, trace);
   if (scalar !== null) return scalar;
@@ -308,11 +354,17 @@ function canonicalDigest(value, trace, depth = 0, topLevelExclusions = null) {
     trace.rejected = true;
     return DIGEST_TAG.REJECTED;
   }
-  if (trace.trackFrozen === true && !Object.isFrozen(value)) {
+  updateTraceMaxDepth(trace, depth);
+  const frozen = Object.isFrozen(value);
+  if (frozen && topLevelExclusions === null && trace.frozenDigestMemo) {
+    return digestFrozenSubtree(value, trace, depth);
+  }
+  if (trace.trackFrozen === true && !frozen) {
     trace.unfrozen = true;
   }
-  if (Array.isArray(value)) return canonicalArrayDigest(value, trace, depth);
-  return canonicalRecordDigest(value, trace, depth, topLevelExclusions);
+  return Array.isArray(value) ?
+    canonicalArrayDigest(value, trace, depth) :
+    canonicalRecordDigest(value, trace, depth, topLevelExclusions);
 }
 
 // membershipPublication diagnostics (control-plane-readiness-publication-
@@ -443,12 +495,20 @@ function incompleteGeneration(reason) {
 
 // The typed generation the owner seam consumes: COMPLETE with a key, or
 // INCOMPLETE with the fail-closed reason.
-function buildProjectionReadinessGeneration(inputs, source) {
+function buildProjectionReadinessGeneration(
+  inputs,
+  source,
+  frozenDigestMemo = null,
+) {
   if (listUnclassifiedProjectionReadinessSourceFields(source).length > 0) {
     return incompleteGeneration(
       PROJECTION_READINESS_GENERATION_INCOMPLETE_REASON.UNCLASSIFIED_SOURCE_FIELD);
   }
-  const trace = {overflow: false, rejected: false};
+  const trace = {
+    overflow: false,
+    rejected: false,
+    frozenDigestMemo,
+  };
   const segments = renderProjectionReadinessGenerationSegments(inputs, trace);
   if (trace.overflow) {
     return incompleteGeneration(

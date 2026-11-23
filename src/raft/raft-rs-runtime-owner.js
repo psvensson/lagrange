@@ -43,7 +43,9 @@ import {
 } from './raft-rs-runtime-owner-constants.js';
 import {recoveryRetryWindowMsOf, tuningOf} from './raft-rs-runtime-tuning.js';
 import {
-  UNSHAPED_STATUS, cachedShapedGroupStatus, reseedHoldStatus, validateObservationIdentities,
+  UNSHAPED_STATUS, cachedShapedGroupStatus, lightReadyChangesStatus,
+  messageMayChangeLeaderProgress, readyChangesStatus, reseedHoldStatus,
+  shouldAnnounceOnDrain, validateObservationIdentities,
 } from './raft-rs-status-observation.js';
 import {countedTick, observeCurrentAuthority} from './raft-rs-current-authority.js';
 import {PROPOSE_COMMAND, proposeUnderSubmittedTerm, withSubmittedTerm} from './raft-rs-proposal-term.js';
@@ -1194,7 +1196,7 @@ function persistMemCommitIndex(group, expectedGeneration, ready, lightValue) {
     group, expectedGeneration, CORE_OPERATION.PERSIST_COMMIT_INDEX, memCommit);
 }
 
-function finishReady(group, expectedGeneration, ready) {
+function finishReady(group, expectedGeneration, ready, drainState) {
   const persisted = invokeCoreAt(
     group, expectedGeneration, 'persist_ready');
   if (!persisted.ok) {
@@ -1215,6 +1217,7 @@ function finishReady(group, expectedGeneration, ready) {
     if (!light.ok) {
       return settledTurn(light.result);
     }
+    if (drainState && lightReadyChangesStatus(light.value)) drainState.readyChanged = true;
     try {
       if (light.value.commitIndex !== undefined) {
         group.store.putCommitIndex(group.groupId, light.value.commitIndex);
@@ -1273,7 +1276,7 @@ function syncTakenSnapshot(group, expectedGeneration, snapshot) {
   return ENTRY_APPLY_DURABLE_OK;
 }
 
-function processReadyCycle(group, expectedGeneration) {
+function processReadyCycle(group, expectedGeneration, drainState) {
   // Before take_ready: a refused Ready stays whole in the core.
   if (!persistenceAdmitted(group)) {
     return {done: true, result: outcome(CORE_OK, {reason: RUNTIME_REASON.READY_DEFERRED})};
@@ -1282,6 +1285,7 @@ function processReadyCycle(group, expectedGeneration) {
   if (!taken.ok) {
     return {done: true, result: taken.result};
   }
+  if (drainState && readyChangesStatus(taken.value)) drainState.readyChanged = true;
   try {
     group.store.persistReady(group.groupId, taken.value);
     const snapSynced = syncTakenSnapshot(
@@ -1292,54 +1296,49 @@ function processReadyCycle(group, expectedGeneration) {
   } catch (error) {
     return {done: true, result: groupHostFailure(group, RUNTIME_PHASE.READY_PERSISTENCE, error)};
   }
-  const finished = finishReady(group, expectedGeneration, taken.value);
+  const finished = finishReady(group, expectedGeneration, taken.value, drainState);
   return {done: false, finished};
 }
 
 function drainReady(group, expectedGeneration, startCycles = 0,
-  announceOnDrain = true) {
-  for (
-    let cycles = startCycles;
-    cycles < RAFT_RS_READY_DRAIN_MAX_CYCLES;
-    cycles += 1
-  ) {
+  announceOnDrain = true, drainState = null) {
+  const state = drainState ?? {readyChanged: true, steppedLeaderProgress: false};
+  for (let cycles = startCycles; cycles < RAFT_RS_READY_DRAIN_MAX_CYCLES; cycles += 1) {
     const hasReady = invokeCoreAt(group, expectedGeneration, 'has_ready');
-    if (!hasReady.ok) {
-      return settledTurn(hasReady.result);
-    }
+    if (!hasReady.ok) return settledTurn(hasReady.result);
     if (!hasReady.value) {
       if (announceOnDrain) {
+        const mustAnnounce = shouldAnnounceOnDrain(group, {
+          expectedGeneration, runtimeHealth, runtimeGeneration,
+          participation: participationObservation(group.gate, group.appliedIndex),
+          readyChanged: state.readyChanged, steppedLeaderProgress: state.steppedLeaderProgress,
+        });
         group.resumingRuntime = false;
-        const announced = announce(group, expectedGeneration);
-        if (!announced.ok) return settledTurn(announced.result);
+        if (mustAnnounce) {
+          const announced = announce(group, expectedGeneration);
+          if (!announced.ok) return settledTurn(announced.result);
+        }
       }
       return settledTurn(outcome(CORE_OK, {reason: RUNTIME_REASON.DRAINED}));
     }
-
-    const cycle = processReadyCycle(group, expectedGeneration);
-    if (cycle.done) {
-      return settledTurn(cycle.result);
-    }
+    const cycle = processReadyCycle(group, expectedGeneration, state);
+    if (cycle.done) return settledTurn(cycle.result);
     const nextCycles = cycles + 1;
     if (!cycle.finished.settled) {
-      return pendingTurn(cycle.finished.pending.then((result) => {
-        if (result.outcome !== CORE_OK) {
-          return result;
-        }
-        return turnChainValue(
-          drainReady(group, expectedGeneration, nextCycles, announceOnDrain));
-      }));
+      return pendingTurn(cycle.finished.pending.then((result) => (
+        result.outcome !== CORE_OK ?
+          result :
+          turnChainValue(drainReady(
+            group, expectedGeneration, nextCycles, announceOnDrain, state,
+          ))
+      )));
     }
-    if (cycle.finished.result.outcome !== CORE_OK) {
-      return cycle.finished;
-    }
+    if (cycle.finished.result.outcome !== CORE_OK) return cycle.finished;
   }
-  reportWaitBoundExceeded(group,
-    RUNTIME_FAULT_REPORT.READY_DRAIN_BOUND_EXCEEDED,
+  reportWaitBoundExceeded(group, RUNTIME_FAULT_REPORT.READY_DRAIN_BOUND_EXCEEDED,
     {cycles: RAFT_RS_READY_DRAIN_MAX_CYCLES, maxCycles: RAFT_RS_READY_DRAIN_MAX_CYCLES});
   return settledTurn(hostFailure(
-    RUNTIME_PHASE.READY_DRAIN,
-    new Error(RUNTIME_REASON.READY_DRAIN_BOUND_EXCEEDED),
+    RUNTIME_PHASE.READY_DRAIN, new Error(RUNTIME_REASON.READY_DRAIN_BOUND_EXCEEDED),
   ));
 }
 
@@ -1717,7 +1716,8 @@ function settlePrimitiveInvocation(group, command, expectedGeneration, invoked) 
     return finishBatchedPropose(group, expectedGeneration, invoked, command.extraBatch);
   }
   if (invoked.ok) {
-    return drainReady(group, expectedGeneration);
+    return drainReady(group, expectedGeneration, 0, true, command.type === TICK_COMMAND ?
+      {readyChanged: false, steppedLeaderProgress: false} : null);
   }
   return settledTurn(PROPOSAL_COMMANDS.has(command.type) ?
     answerRefusedProposal(group, expectedGeneration, invoked.result) :
@@ -1840,7 +1840,10 @@ function stepOneInbound(group, expectedGeneration, envelope) {
     }
     recordInboundStepRefusal(group, envelope, stepped.result);
   }
-  return {done: false, ready: drainReady(group, expectedGeneration)};
+  return {done: false, ready: drainReady(group, expectedGeneration, 0, true, {
+    readyChanged: false,
+    steppedLeaderProgress: messageMayChangeLeaderProgress(envelope.message),
+  })};
 }
 
 function drainInbound(group, expectedGeneration, remaining, continuation) {

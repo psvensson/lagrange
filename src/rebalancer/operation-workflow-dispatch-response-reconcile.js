@@ -41,6 +41,7 @@ import {
   reconcileUnscopedPlacementRemoval, settleSupersededRemoval,
 } from
   './operation-workflow-placement-learner-retirement.js';
+import {recordAcknowledgedCreateInFlight} from './operation-workflow-create-ack-state.js';
 import {deliverAdmittedOperationEffect, holdReplaceSourceRemovalEffect, prepareReplaceRemovalEffectTurn} from
   './operation-workflow-remove-effect-admission.js';
 const {
@@ -873,37 +874,27 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
         return growthReconciled;
       }
     }
-    if (
-      response.status === ReplicaOperationResponseStatus.INITIATED ||
-      response.status === ReplicaOperationResponseStatus.IN_PROGRESS
-    ) {
-      if (
-        response.status === ReplicaOperationResponseStatus.IN_PROGRESS &&
-        await this.reconcileCreateInProgressDispatchResponse(
-          operation,
-          response,
-          replaceRemovePhase,
-        )
-      ) {
+    if (response.status === ReplicaOperationResponseStatus.INITIATED ||
+        response.status === ReplicaOperationResponseStatus.IN_PROGRESS) {
+      recordAcknowledgedCreateInFlight(this, operation, replaceRemovePhase);
+      if (response.status === ReplicaOperationResponseStatus.IN_PROGRESS &&
+          await this.reconcileCreateInProgressDispatchResponse(
+            operation, response, replaceRemovePhase)) {
         return this.buildSuccessfulOperationResult(operation.operationId, {
           status: OPERATION_WORKFLOW_OWNER_LITERAL.IN_PROGRESS,
         });
       }
       if (isReplaceRemovalIntentDurable(operation)) {
-        // The intent is already durable; the STOPPING owner now waits on the
-        // source's lifecycle and membership (and arms its wake).
         return this.runReplaceStoppingOwner(operation);
       }
-      let nextStep = WORKFLOW_STEP.CREATING;
-      if (
-        operation.type === OperationType.REMOVE ||
-        (operation.type === OperationType.REPLACE && replaceRemovePhase)
-      ) {
-        nextStep = WORKFLOW_STEP.STOPPING;
-      }
-      const progress = await this.updateStep(operation, nextStep);
-      if (!didOperationReconcileAdvanceOrComplete(progress)) {
-        return this.buildSkippedOperationResult(progress, operation.operationId);
+      const nextStep = (operation.type === OperationType.REMOVE ||
+        (operation.type === OperationType.REPLACE && replaceRemovePhase)) ?
+        WORKFLOW_STEP.STOPPING : WORKFLOW_STEP.CREATING;
+      if (operation.workflowStep !== nextStep) {
+        const progress = await this.updateStep(operation, nextStep);
+        if (!didOperationReconcileAdvanceOrComplete(progress)) {
+          return this.buildSkippedOperationResult(progress, operation.operationId);
+        }
       }
       return this.buildSuccessfulOperationResult(operation.operationId, {
         status: OPERATION_WORKFLOW_OWNER_LITERAL.IN_PROGRESS,

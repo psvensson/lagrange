@@ -28,6 +28,7 @@ import {
   CRITICAL_VOTER_READY_GATED_OPERATION_TYPES,
   VOTER_READY_CHECK_INTERVAL_MS,
 } from './replica-handler-transition-policy.js';
+import {waitForReadinessEventOrTimeout} from './replica-handler-readiness-wake.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const LOCAL_STR_PLACEMENT_ADMISSION_KEY = '"placementAdmission"';
@@ -87,16 +88,6 @@ const VOTER_READY_ACTIVATION_WAIT = Object.freeze({
 
 function readHandlerNowMs(handler) {
   return handler?.timeSource?.now ? handler.timeSource.now() : Date.now();
-}
-
-function sleepHandlerMs(handler, delayMs) {
-  return new Promise((resolve) => {
-    if (handler?.timeSource?.setTimeout) {
-      handler.timeSource.setTimeout(resolve, delayMs);
-    } else {
-      setTimeout(resolve, delayMs);
-    }
-  });
 }
 
 function clearHandlerTimer(handler, timerId) {
@@ -391,7 +382,11 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
         }
         const remainingMs = deadline - readHandlerNowMs(this);
         if (remainingMs <= 0) break;
-        await sleepHandlerMs(this, Math.min(VOTER_READY_CHECK_INTERVAL_MS, remainingMs));
+        await waitForReadinessEventOrTimeout(
+          this, replicaId, expectedService ?? this.getTrackedService(replicaId),
+          Math.min(VOTER_READY_CHECK_INTERVAL_MS, remainingMs),
+          {watchServicesCache: true},
+        );
       }
       reportVoterReadyActivationSpent(this, {
         replicaId,
@@ -574,7 +569,7 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
           VOTER_READY_CHECK_INTERVAL_MS,
           Math.max(1, deadline - nowAfterCheckMs),
         );
-        await sleepHandlerMs(this, sleepMs);
+        await waitForReadinessEventOrTimeout(this, replicaId, expectedService, sleepMs);
       }
     }
     /**

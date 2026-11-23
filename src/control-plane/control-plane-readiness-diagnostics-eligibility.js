@@ -322,6 +322,9 @@ function computeProjectionReadinessGeneration(service, context, source, verdicts
     baseDimensions, priorityControlPlaneRecovery,
     runtimeAuthority, runtimeServeEligible,
   } = verdicts || {};
+  if (!service.projectionFrozenDigestMemo) {
+    service.projectionFrozenDigestMemo = new WeakMap();
+  }
   return buildProjectionReadinessGeneration({
     membershipPublication: context?.membershipPublication,
     nodeEvidence: context?.nodeEvidence,
@@ -330,7 +333,7 @@ function computeProjectionReadinessGeneration(service, context, source, verdicts
     priorityControlPlaneRecovery,
     runtimeServeEligible,
     publication: context?.publication,
-  }, source);
+  }, source, service.projectionFrozenDigestMemo);
 }
 
 function buildDimensionsEvaluation(service, context) {

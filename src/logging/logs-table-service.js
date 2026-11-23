@@ -54,6 +54,7 @@ import {
 } from './logs-table-service-constants.js';
 import {
   scheduleContinuationFlush,
+  writeBatchWithRetry,
   writeEntryWithRetry,
   isWriteDeferred,
   getRemainingWriteDeferMs,
@@ -462,28 +463,30 @@ class LogsTableService extends EventEmitter {
 
     let writtenCount = LOCAL_NUM_ZERO;
 
+    const batchLimit = Math.max(
+      MIN_CHUNK_SIZE,
+      Math.min(this.flushChunkSize, LOGS_TABLE_DEFAULT.MAX_UPSERT_BATCH_ROWS),
+    );
+
     try {
-      for (let index = LOCAL_NUM_ZERO; index < entriesToWrite.length; index += LOCAL_NUM_ONE) {
-        const entry = entriesToWrite[index];
+      for (let index = LOCAL_NUM_ZERO; index < entriesToWrite.length; index += batchLimit) {
+        const batch = entriesToWrite.slice(index, index + batchLimit);
         try {
-          const success = await this.writeEntryWithRetry(entry);
+          const success = await this.writeBatchWithRetry(batch);
           if (success) {
             this.consecutiveDeferredWriteFailures = LOCAL_NUM_ZERO;
-            writtenCount++;
-            this.writeCount++;
+            writtenCount += batch.length;
+            this.writeCount += batch.length;
           } else {
-            this.errorCount++;
+            this.errorCount += batch.length;
           }
         } catch (writeError) {
           if (this.shouldDeferWriteError(writeError)) {
             this.errorCount++;
-            this.deferPendingWrites(
-              entriesToWrite.slice(index),
-              writeError,
-            );
+            this.deferPendingWrites(entriesToWrite.slice(index), writeError);
             break;
           }
-          this.errorCount++;
+          this.errorCount += batch.length;
           console.warn(LOGGING_ERROR_MSG.WRITE_ENTRY_FAILED, writeError);
         }
       }
@@ -494,7 +497,7 @@ class LogsTableService extends EventEmitter {
     } finally {
       this.isWriting = false;
       if (yieldPending &&
-          this.pendingWrites.length > LOCAL_NUM_ZERO &&
+          this.pendingWrites.length >= this.flushChunkSize &&
           !this.isWriteDeferred()) {
         this.scheduleContinuationFlush();
       }
@@ -503,14 +506,21 @@ class LogsTableService extends EventEmitter {
     return writtenCount;
   }
 
-  /**
-   * Write a single entry to the logs table.
-   * @param {Object} entry - Log entry to write.
-   * @return {Promise<void>}
-   * @private
-   */
   async writeEntryToTable(entry) {
-    const row = {
+    return this.writeEntriesToTable([entry]);
+  }
+
+  async writeEntriesToTable(entries) {
+    if (!this.logsOwner) {
+      throw createSystemMetadataOwnerRequiredError({
+        serviceName: LOGS_TABLE_OWNER,
+        ownerName: LOCAL_STR_LOGSOWNER,
+        tableName: LOCAL_STR_LOGS,
+        operation: LOCAL_STR_WRITE,
+        message: LOGGING_ERROR_MSG.OWNER_REQUIRED,
+      });
+    }
+    const rows = entries.map((entry) => ({
       log_id: entry.logId,
       timestamp: entry.timestamp,
       level: entry.level,
@@ -521,27 +531,14 @@ class LogsTableService extends EventEmitter {
       trace_id: entry.traceId || null,
       metadata: entry.metadata ? JSON.stringify(entry.metadata) : null,
       created_at: entry.createdAt || Date.now(),
-    };
-
-    // Log rows are append-only (write-once, never updated). UPSERT is used
-    // solely for idempotent replay of duplicate log_id values; it effectively
-    // acts as INSERT since no fields are ever mutated after creation.
-    if (this.logsOwner) {
-      await this.logsOwner.upsertLog(row, {
-        workClass: PRESSURE_WORK_CLASS.BACKGROUND,
-        workloadClass: CONTROL_PLANE_WORKLOAD_CLASS.LOGS_TABLE_BACKGROUND_WRITE,
-        deliveryPriority: LOCAL_STR_BACKGROUND,
-        pressureRetryAfterMs: this.retryDelayMs,
-      });
-      return;
-    }
-
-    throw createSystemMetadataOwnerRequiredError({
-      serviceName: LOGS_TABLE_OWNER,
-      ownerName: LOCAL_STR_LOGSOWNER,
-      tableName: LOCAL_STR_LOGS,
-      operation: LOCAL_STR_WRITE,
-      message: LOGGING_ERROR_MSG.OWNER_REQUIRED,
+    }));
+    // Log rows are append-only (write-once, never updated). Batched multi-row
+    // UPSERT amortizes Raft fsync across the chunk with idempotent log_id replay.
+    await this.logsOwner.upsertLogs(rows, {
+      workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+      workloadClass: CONTROL_PLANE_WORKLOAD_CLASS.LOGS_TABLE_BACKGROUND_WRITE,
+      deliveryPriority: LOCAL_STR_BACKGROUND,
+      pressureRetryAfterMs: this.retryDelayMs,
     });
   }
 
@@ -644,6 +641,7 @@ class LogsTableService extends EventEmitter {
 
 for (const [methodName, method] of Object.entries({
   scheduleContinuationFlush,
+  writeBatchWithRetry,
   writeEntryWithRetry,
   isWriteDeferred,
   getRemainingWriteDeferMs,

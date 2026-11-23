@@ -2,7 +2,11 @@ import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.j
 import {committedWritePosition} from './cdc-committed-write-answer.js';
 import {classifyControlPlaneMutationResult} from
   '../control-plane/control-plane-mutation-outcome-classifier.js';
-import {buildSystemTableMutationSqlParts, buildSystemTableUpsert} from './cdc-system-table-mutation-sql-helpers.js';
+import {
+  buildSystemTableBatchUpsert,
+  buildSystemTableMutationSqlParts,
+  buildSystemTableUpsert,
+} from './cdc-system-table-mutation-sql-helpers.js';
 import {TABLES} from '../constants/index.js';
 import {
   CONTROL_PLANE_GATEWAY_ERROR_CODE,
@@ -87,22 +91,9 @@ export async function deleteSystemTableRow(context, tableName, whereClause, opti
       const {whereStr, values} =
         buildSystemTableMutationSqlParts(CDC_OPERATION.DELETE, whereClause);
       const sql = `${SQL.DELETE_FROM} ${tableName} ${SQL.WHERE} ${whereStr}`;
-      const result = await context.executeSQL(sql, values, {
-        queryTimeoutMs: options?.queryTimeoutMs,
-        cancellationToken: options?.cancellationToken || null,
-        sessionId: options?.sessionId,
-        disableSystemWriteSession: options?.disableSystemWriteSession,
-        coalescingKey: options?.coalescingKey,
-        recoveryCandidateSelectionKey: options?.recoveryCandidateSelectionKey,
-        idempotencyKey: options?.idempotencyKey,
-        routingReadinessDimension: options?.routingReadinessDimension,
-        workloadClass: options?.workloadClass,
-        workClass: options?.workClass,
-        pressureRetryAfterMs: options?.pressureRetryAfterMs,
-        deliveryPriority: options?.deliveryPriority,
-        deliverySource: options?.deliverySource,
-        replacePendingKey: options?.replacePendingKey,
-      });
+      const result = await context.executeSQL(
+        sql, values, buildSqlExecutionOptions(options),
+      );
       if (!result.success) {
         throw buildSystemTableMutationError(
           result,
@@ -209,22 +200,9 @@ export async function upsertSystemTableRow(context, tableName, data, options = {
   return context.runCoalescedMutation(singleFlightKey, async () => {
     try {
       const {sql, params: values} = buildSystemTableUpsert(tableName, upsertData);
-      const result = await context.executeSQL(sql, values, {
-        queryTimeoutMs: options?.queryTimeoutMs,
-        cancellationToken: options?.cancellationToken || null,
-        sessionId: options?.sessionId,
-        disableSystemWriteSession: options?.disableSystemWriteSession,
-        coalescingKey: options?.coalescingKey,
-        recoveryCandidateSelectionKey: options?.recoveryCandidateSelectionKey,
-        idempotencyKey: options?.idempotencyKey,
-        routingReadinessDimension: options?.routingReadinessDimension,
-        workloadClass: options?.workloadClass,
-        workClass: options?.workClass,
-        pressureRetryAfterMs: options?.pressureRetryAfterMs,
-        deliveryPriority: options?.deliveryPriority,
-        deliverySource: options?.deliverySource,
-        replacePendingKey: options?.replacePendingKey,
-      });
+      const result = await context.executeSQL(
+        sql, values, buildSqlExecutionOptions(options),
+      );
       if (!result.success) {
         throw buildSystemTableMutationError(
           result,
@@ -283,4 +261,104 @@ export async function upsertSystemTableRow(context, tableName, data, options = {
       throw error;
     }
   });
+}
+
+function prepareBatchUpsertRows(context, tableName, rows) {
+  const idField = context.getPrimaryKeyField(tableName);
+  return rows.map((row) => {
+    context.validateData(row, CDC_OPERATION_LABEL.UPSERT);
+    const prepared = context.prepareInsertData(tableName, row, {
+      generatePrimaryKey: false,
+    });
+    if (!prepared[idField]) {
+      throw new Error(
+        `${CDC_ERROR_MSG.UPSERT_PRIMARY_KEY_PREFIX}${idField}` +
+          `${CDC_ERROR_MSG.UPSERT_PRIMARY_KEY_SUFFIX}`,
+      );
+    }
+    return prepared;
+  });
+}
+
+function buildSqlExecutionOptions(options = {}) {
+  return {
+    queryTimeoutMs: options?.queryTimeoutMs,
+    cancellationToken: options?.cancellationToken || null,
+    sessionId: options?.sessionId,
+    disableSystemWriteSession: options?.disableSystemWriteSession,
+    coalescingKey: options?.coalescingKey,
+    recoveryCandidateSelectionKey: options?.recoveryCandidateSelectionKey,
+    idempotencyKey: options?.idempotencyKey,
+    routingReadinessDimension: options?.routingReadinessDimension,
+    workloadClass: options?.workloadClass,
+    workClass: options?.workClass,
+    pressureRetryAfterMs: options?.pressureRetryAfterMs,
+    deliveryPriority: options?.deliveryPriority,
+    deliverySource: options?.deliverySource,
+    replacePendingKey: options?.replacePendingKey,
+  };
+}
+
+/**
+ * Upsert multiple rows in a single multi-row SQL statement on a system table.
+ * @param {Object} context - Service context.
+ * @param {string} tableName - System table name.
+ * @param {Array<Object>} rows - Non-empty list of rows with identical columns.
+ * @param {Object} [options={}] - Options.
+ * @return {Promise<Object>} Batch upsert result.
+ */
+export async function upsertSystemTableRows(context, tableName, rows, options = {}) {
+  context.validateTableName(tableName);
+  if (tableName === TABLES.SERVICES) {
+    const error = new Error(GATEWAY_ERROR_MSG.SERVICES_UPSERT_FORBIDDEN);
+    error.code = CONTROL_PLANE_GATEWAY_ERROR_CODE.SERVICES_UPSERT_FORBIDDEN;
+    throw error;
+  }
+  if (!Array.isArray(rows) || rows.length === 0) {
+    throw new Error(GATEWAY_ERROR_MSG.MUTATION_ROW_REQUIRED);
+  }
+  const preparedRows = prepareBatchUpsertRows(context, tableName, rows);
+  const idField = context.getPrimaryKeyField(tableName);
+  const firstId = preparedRows[0][idField];
+  try {
+    const {sql, params} = buildSystemTableBatchUpsert(tableName, preparedRows);
+    const result = await context.executeSQL(sql, params, buildSqlExecutionOptions(options));
+    if (!result.success) {
+      throw buildSystemTableMutationError(result, CDC_ERROR_MSG.UPSERT_FAILED);
+    }
+    context.stats.updates += preparedRows.length;
+    for (const data of preparedRows) {
+      context.emit(CDC_EVENT.UPSERT, {tableName, data, result});
+    }
+    return {
+      success: true,
+      committed: true,
+      position: committedWritePosition(tableName, firstId, result),
+      operation: CDCOperationType.UPSERT,
+      tableName,
+      rows: preparedRows,
+      partitionResult: result,
+    };
+  } catch (error) {
+    context.stats.failures++;
+    if (shouldLogTableWriteFailure(tableName)) {
+      logSystemTableWriteFailure(context, CDC_LOG_MSG.UPSERT_FAILED, {
+        tableName,
+        id: firstId,
+        batchSize: preparedRows.length,
+        error: error.message,
+        nodeId: context.nodeId,
+        causeId: typeof options?.causeId === 'string' ? options.causeId : null,
+        operation: CDC_OPERATION.UPSERT,
+        primaryKey: {[idField]: firstId},
+      }, error);
+    }
+    context.emitErrorEvent({
+      operation: CDCOperationType.UPSERT,
+      tableName,
+      data: preparedRows[0],
+      error: error.message,
+    });
+    throw error;
+  }
 }

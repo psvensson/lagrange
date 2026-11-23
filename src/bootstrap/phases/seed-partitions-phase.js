@@ -382,6 +382,7 @@ class SeedPartitionsPhase {
         d.assertOriginalSeedContinuation(messageGroup.replicaId);
         messageGroup.startElection();
       }
+      void messageGroupReplicas[0]?.raft?.campaign?.();
 
       await d.waitForMessageGroupLeadership(
         INITIAL_MESSAGE_GROUP_ID,
@@ -444,10 +445,9 @@ class SeedPartitionsPhase {
         for (const partition of remainingReplicas) {
           d.assertOriginalSeedContinuation(partition.replicaId);
           partition.startElection();
-          if (!campaignedPartitions.has(partition.partitionId) &&
-              typeof partition.raft?.campaign === 'function') {
+          if (!campaignedPartitions.has(partition.partitionId)) {
             campaignedPartitions.add(partition.partitionId);
-            void partition.raft.campaign();
+            void partition.raft?.campaign?.();
           }
         }
       }

@@ -1,4 +1,5 @@
 import {STATE_ABSENT, readStateField} from '../utils/state-field-read.js';
+import {deepFreeze} from '../utils/deep-freeze.js';
 import {CONTROL_PLANE_READINESS_PLANNING_SHARED as SHARED} from './control-plane-readiness-planning-shared.js';
 import {readPublishedMembershipEpoch} from './published-membership-epoch-reading.js';
 import {
@@ -611,7 +612,7 @@ function buildMembershipPublicationDiagnostics(service, row, observedAt) {
   const updatedAt = normalizeDiagnosticTimestampMs(
     row.updatedAt ?? row.updated_at ?? createdAt,
   );
-  return Object.freeze({
+  return deepFreeze({
     publicationEpoch: publicationEpoch ?? protocolSnapshot.publicationEpoch,
     sourceSnapshotVersion: Number.isFinite(sourceSnapshotVersion) ?
       sourceSnapshotVersion :
@@ -661,8 +662,10 @@ function buildMembershipPublicationProtocolInput(service, context) {
   if (!memo.protocolSnapshotsByNodeId) memo.protocolSnapshotsByNodeId = new Map();
   if (!memo.protocolSnapshotsByNodeId.has(context.nodeId)) {
     memo.protocolSnapshotsByNodeId.set(context.nodeId,
-      buildPublicationRecoveryProtocolSnapshot(context.membershipPublication,
-        {targetNodeId: context.nodeId}));
+      deepFreeze(buildPublicationRecoveryProtocolSnapshot(
+        context.membershipPublication,
+        {targetNodeId: context.nodeId},
+      )));
   }
   return memo.protocolSnapshotsByNodeId.get(context.nodeId);
 }

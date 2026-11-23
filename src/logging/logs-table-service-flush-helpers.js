@@ -120,17 +120,30 @@ const logsTableServiceFlushHelperMethods = {
   },
 
   /**
-   * Write a single entry with retry logic.
-   * @param {Object} entry - Log entry to write.
+   * Write a batch of entries with retry logic.
+   * @param {Array<Object>} entries - Log entries to write.
    * @return {Promise<boolean>} True if write succeeded.
    * @private
    */
-  async writeEntryWithRetry(entry) {
+  async writeBatchWithRetry(entries) {
+    return this.writeEntryWithRetry(entries);
+  },
+
+  /**
+   * Write a single entry or batch of entries with retry logic.
+   * @param {Object|Array<Object>} entryOrEntries - Log entry or batch to write.
+   * @return {Promise<boolean>} True if write succeeded.
+   * @private
+   */
+  async writeEntryWithRetry(entryOrEntries) {
+    const entries = Array.isArray(entryOrEntries) ?
+      entryOrEntries :
+      [entryOrEntries];
     let lastError = null;
 
     for (let attempt = LOCAL_NUM_ZERO; attempt < this.maxRetries; attempt++) {
       try {
-        await this.writeEntryToTable(entry);
+        await this.writeEntriesToTable(entries);
         return true;
       } catch (error) {
         lastError = error;
@@ -290,6 +303,7 @@ const logsTableServiceFlushHelperMethods = {
 
 const {
   scheduleContinuationFlush,
+  writeBatchWithRetry,
   writeEntryWithRetry,
   isWriteDeferred,
   getRemainingWriteDeferMs,
@@ -302,6 +316,7 @@ const {
 
 export {
   scheduleContinuationFlush,
+  writeBatchWithRetry,
   writeEntryWithRetry,
   isWriteDeferred,
   getRemainingWriteDeferMs,

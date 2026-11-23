@@ -45,6 +45,8 @@ import {
 const ABSENT_SHAPE = Object.freeze({exists: false, withoutRowid: false,
   columns: Object.freeze([]), primaryKey: Object.freeze([]),
   notNull: Object.freeze([]), integerPrimaryKey: null, maxRowid: null});
+const SCHEMA_VERSION_SQL = 'SELECT schema_version AS sv FROM pragma_schema_version';
+const TABLE_SHAPE_FACT = 'partition-table-shape';
 
 function quoteIdentifier(name) {
   return CHAR.DOUBLE_QUOTE +
@@ -69,26 +71,9 @@ function aliasKeyColumn(statements, tableName, keys) {
   return asciiLower(keys[0].name);
 }
 
-/**
- * The shape of a main-database table on a connection, read now: whether it
- * exists, is a WITHOUT ROWID table, its columns (ASCII lower-case,
- * declaration order), its primary-key columns (in key order), its NOT NULL
- * columns, its INTEGER PRIMARY KEY alias column (or null), and its
- * maximum-rowid read (null without a rowid, or when a column shadows each of
- * the three alias names).
- * @param {Object} db - The partition's connection.
- * @param {string|null} tableName - The table.
- * @return {Object} The frozen shape.
- */
-function readTableShape(db, tableName) {
-  if (typeof tableName !== 'string' || tableName.length === 0) {
-    return ABSENT_SHAPE;
-  }
-  const statements = sqliteConnectionState(db);
+function computeTableShape(statements, tableName) {
   const listed = statements.statement(SHAPE_SQL.TABLE_LIST).get(tableName);
-  if (listed === undefined) {
-    return ABSENT_SHAPE;
-  }
+  if (listed === undefined) return ABSENT_SHAPE;
   const withoutRowid = listed.wr === 1;
   const columns = statements.statement(SHAPE_SQL.TABLE_INFO).all(tableName);
   const names = columns.map((column) => asciiLower(column.name));
@@ -103,11 +88,24 @@ function readTableShape(db, tableName) {
       .map((column) => asciiLower(column.name))),
     notNull: Object.freeze(columns.filter((column) => column.notNullFlag === 1)
       .map((column) => asciiLower(column.name))),
-    integerPrimaryKey: withoutRowid ? null : aliasKeyColumn(statements, tableName,
-      columns.filter((column) => column.pk > 0)),
-    maxRowid: rowidName === null ? null :
-      maxRowidStatement(statements, rowidName, tableName),
+    integerPrimaryKey: withoutRowid ? null : aliasKeyColumn(statements, tableName, keyColumns),
+    maxRowid: rowidName === null ? null : maxRowidStatement(statements, rowidName, tableName),
   });
+}
+
+function readTableShape(db, tableName) {
+  if (typeof tableName !== 'string' || tableName.length === 0) return ABSENT_SHAPE;
+  const statements = sqliteConnectionState(db);
+  if (db.open !== true) {
+    return computeTableShape(statements, tableName);
+  }
+  const {sv} = statements.statement(SCHEMA_VERSION_SQL).get();
+  return statements.schemaVersionedFact(
+    TABLE_SHAPE_FACT,
+    tableName,
+    sv,
+    () => computeTableShape(statements, tableName),
+  );
 }
 
 /**

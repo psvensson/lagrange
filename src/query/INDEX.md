@@ -90,6 +90,7 @@ documentClass: generated
 - [sql-locking-read-grammar.js](sql-locking-read-grammar.js) - Locking read grammar and AST validation for PostgreSQL SELECT ... (importers: few)
 - [sql-locking-read-remote.js](sql-locking-read-remote.js) - Remote and cluster-authoritative locking-read reservation helpers. (importers: one)
 - [sql-parse-cache.js](sql-parse-cache.js) - LRU cache for parsed SQL ASTs keyed on (sql, dialect). (importers: few)
+- [sql-parser-ast-memo.js](sql-parser-ast-memo.js) - Bounded pure-function memo for converted SQL ASTs, keyed by `(dialect, sql)`. (importers: one)
 - [sql-parser-expression-methods.js](sql-parser-expression-methods.js) - Refuse a node-sql-parser node that carries a key this converter does not read. (importers: one)
 - [sql-parser-schema-mutation-methods.js](sql-parser-schema-mutation-methods.js) - Convert a RETURNING clause from node-sql-parser AST. (importers: one)
 - [sql-parser-select-methods.js](sql-parser-select-methods.js) - SQL Parser select-statement conversion methods. (importers: one)

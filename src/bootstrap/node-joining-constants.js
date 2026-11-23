@@ -18,7 +18,7 @@ const JOINING_DEFAULT = Object.freeze({
   httpTimeoutMs: 10000,
   leadershipWaitTimeoutMs: 30000,
   leadershipWaitInitialDelayMs: 100,
-  leadershipWaitMaxDelayMs: 5000,
+  leadershipWaitMaxDelayMs: 1000,
   leadershipWaitBackoffMultiplier: 2,
   leadershipWaitJitterRatio: 0.2,
   autoResumeRetryableFailures: false,

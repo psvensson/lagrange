@@ -173,16 +173,17 @@ function readRecordTable(table, read) {
  * @param {Function} work - The transaction's work.
  * @return {*} Whatever the work returned.
  */
+const READ_SYNCHRONOUS_SQL = 'PRAGMA synchronous';
+
 function commitDurably(db, work) {
   if (db.inTransaction) {
     throw Object.assign(
       new Error(RAFT_RS_STORE_ERROR_MSG.DURABLE_COMMIT_INSIDE_TRANSACTION),
       {code: RAFT_RS_STORE_ERROR_CODE.DURABLE_COMMIT_INSIDE_TRANSACTION});
   }
-  const level = db.pragma(RAFT_RS_SYNCHRONOUS_PRAGMA.READ, {simple: true});
-  if (level >= RAFT_RS_SYNCHRONOUS_PRAGMA.FULL_LEVEL) {
-    return db.transaction(work)();
-  }
+  const level = sqliteConnectionState(db)
+    .statement(READ_SYNCHRONOUS_SQL).pluck(true).get();
+  if (level >= RAFT_RS_SYNCHRONOUS_PRAGMA.FULL_LEVEL) return db.transaction(work)();
   db.pragma(RAFT_RS_SYNCHRONOUS_PRAGMA.SET_FULL);
   try {
     return db.transaction(work)();
@@ -473,18 +474,17 @@ class RaftRsDurableStore {
       return;
     }
     const statements = sqliteConnectionState(this.db);
-    statements.statement(RAFT_RS_SQL.DELETE_LOG_FROM)
-      .run(groupId, toExactInteger(entries[0].index));
+    statements.runNonApplication(
+      RAFT_RS_SQL.DELETE_LOG_FROM, groupId, toExactInteger(entries[0].index));
     const insert = statements.statement(RAFT_RS_SQL.INSERT_LOG_ENTRY);
+    let inserted = 0;
     for (const entry of entries) {
-      insert.run(
-        groupId,
-        toExactInteger(entry.index),
-        toExactInteger(entry.term),
-        entry.entryType,
-        entry.data === undefined ? null : entry.data,
-      );
+      const result = insert.run(
+        groupId, toExactInteger(entry.index), toExactInteger(entry.term),
+        entry.entryType, entry.data === undefined ? null : entry.data);
+      if (result && result.changes > 0) inserted += result.changes;
     }
+    statements.recordNonApplicationChanges(inserted);
     this.record(RAFT_RS_HOST_WRITE.ENTRIES, {
       groupId,
       firstIndex: entries[0].index,
@@ -499,7 +499,8 @@ class RaftRsDurableStore {
    */
   putHardState(groupId, hardState) {
     this.admitWrite();
-    sqliteConnectionState(this.db).statement(RAFT_RS_SQL.UPSERT_HARD_STATE).run(
+    sqliteConnectionState(this.db).runNonApplication(
+      RAFT_RS_SQL.UPSERT_HARD_STATE,
       groupId,
       toExactInteger(hardState.term),
       toExactInteger(hardState.vote),
@@ -515,8 +516,8 @@ class RaftRsDurableStore {
    */
   putCommitIndex(groupId, commitIndex) {
     this.admitWrite();
-    sqliteConnectionState(this.db).statement(RAFT_RS_SQL.UPSERT_COMMIT_INDEX)
-      .run(groupId, toExactInteger(commitIndex));
+    sqliteConnectionState(this.db).runNonApplication(
+      RAFT_RS_SQL.UPSERT_COMMIT_INDEX, groupId, toExactInteger(commitIndex));
     this.record(RAFT_RS_HOST_WRITE.COMMIT_INDEX, {groupId, commitIndex});
   }
 
@@ -535,7 +536,8 @@ class RaftRsDurableStore {
     this.admitWrite();
     const generation = membershipGenerationIndex === null ? null :
       toExactInteger(membershipGenerationIndex);
-    sqliteConnectionState(this.db).statement(RAFT_RS_SQL.UPSERT_APPLIED_STATE).run(
+    sqliteConnectionState(this.db).runNonApplication(
+      RAFT_RS_SQL.UPSERT_APPLIED_STATE,
       groupId,
       toExactInteger(appliedIndex),
       ...confStateColumns(confState),
@@ -560,9 +562,8 @@ class RaftRsDurableStore {
   putBootstrapAppliedState(groupId, confState, {bootstrapIndex,
     admissionIndex, membershipGenerationIndex = RAFT_RS_ZERO_INDEX}) {
     this.admitWrite();
-    const upsert = sqliteConnectionState(this.db)
-      .statement(RAFT_RS_SQL.UPSERT_BOOTSTRAP_APPLIED_STATE);
-    upsert.run(
+    sqliteConnectionState(this.db).runNonApplication(
+      RAFT_RS_SQL.UPSERT_BOOTSTRAP_APPLIED_STATE,
       groupId,
       toExactInteger(RAFT_RS_ZERO_INDEX),
       ...confStateColumns(confState),
@@ -583,8 +584,9 @@ class RaftRsDurableStore {
    */
   putAdmissionIndex(groupId, admissionIndex) {
     this.admitWrite();
-    sqliteConnectionState(this.db).statement(RAFT_RS_SQL.UPDATE_ADMISSION_INDEX)
-      .run(toExactInteger(admissionIndex), groupId);
+    sqliteConnectionState(this.db).runNonApplication(
+      RAFT_RS_SQL.UPDATE_ADMISSION_INDEX,
+      toExactInteger(admissionIndex), groupId);
   }
 
   /**
@@ -607,7 +609,8 @@ class RaftRsDurableStore {
       .get(groupId);
     const exactGeneration = exactSnapshotMembershipGeneration({generation,
       snapshotIndex: exactSnapshotIndex, confState, appliedRow});
-    statements.statement(RAFT_RS_SQL.UPSERT_SNAPSHOT).run(
+    statements.runNonApplication(
+      RAFT_RS_SQL.UPSERT_SNAPSHOT,
       groupId,
       exactSnapshotIndex,
       toExactInteger(metadata.term || RAFT_RS_ZERO_INDEX),

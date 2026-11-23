@@ -33,6 +33,10 @@ import {
 
 const DEFAULT_SNAPSHOT_INDEX = '0';
 const DELIVERY_RECORDED = settledTurn(null);
+const DELIVERED_PEER_OBSERVATION = Object.freeze({
+  outcome: PEER_DELIVERY_OUTCOME.DELIVERED,
+  consecutiveFailures: 0,
+});
 
 // A delivery to one peer is that peer's transport outcome. Raft re-sends
 // what a peer did not receive (the next append or heartbeat), so a failed
@@ -42,8 +46,21 @@ const DELIVERY_RECORDED = settledTurn(null);
 // failed are dropped with it rather than waited on again.
 function recordPeerDelivery(group, raftPeerId, observation) {
   const key = String(raftPeerId);
+  if (observation === DELIVERED_PEER_OBSERVATION &&
+      group.peerDelivery.get(key) === DELIVERED_PEER_OBSERVATION) {
+    if (group.peerDelivery.size >= PEER_DELIVERY_OBSERVATION_LIMIT) {
+      group.peerDelivery.delete(key);
+      group.peerDelivery.set(key, DELIVERED_PEER_OBSERVATION);
+    }
+    return;
+  }
   group.peerDelivery.delete(key);
-  group.peerDelivery.set(key, deepFreeze(observation));
+  group.peerDelivery.set(
+    key,
+    observation === DELIVERED_PEER_OBSERVATION ?
+      DELIVERED_PEER_OBSERVATION :
+      deepFreeze(observation),
+  );
   if (group.peerDelivery.size > PEER_DELIVERY_OBSERVATION_LIMIT) {
     group.peerDelivery.delete(group.peerDelivery.keys().next().value);
   }
@@ -101,9 +118,7 @@ function settlePeerDelivery(group, raftPeerId, delivery, failedPeers) {
         RUNTIME_PHASE.SEND_NO_HANDLER : RUNTIME_PHASE.SEND,
       outcome?.error || outcome?.reasonCode, failedPeers);
   }
-  recordPeerDelivery(group, raftPeerId, {
-    outcome: PEER_DELIVERY_OUTCOME.DELIVERED, consecutiveFailures: 0,
-  });
+  recordPeerDelivery(group, raftPeerId, DELIVERED_PEER_OBSERVATION);
   return null;
 }
 

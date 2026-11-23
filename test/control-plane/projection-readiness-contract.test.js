@@ -22,6 +22,13 @@ import {
   buildStartupAuthoritySnapshotFromPlanningAnswer,
   STARTUP_AUTHORITY_STATE,
 } from '../../src/control-plane/startup-authority-snapshot-owner.js';
+import {
+  buildCanonicalPublicationRecoveryEvidence,
+} from '../../src/control-plane/publication-recovery-evidence.js';
+import {
+  buildProjectionReadinessGeneration,
+} from '../../src/control-plane/projection-readiness-evidence-generation.js';
+import {deepFreeze} from '../../src/utils/deep-freeze.js';
 
 const TEST_NODE_ID = 'node-projection-ready';
 const TEST_PUBLICATION_REVISION = Object.freeze({
@@ -251,3 +258,56 @@ test('Startup authority consumes projection readiness active gate',
     );
     t.end();
   });
+
+test('Owner-held publication evidence and frozen-digest memos reuse deep-frozen ' +
+  'snapshots identically and skip mutable inputs', (t) => {
+  const frozenSnapshot = deepFreeze({
+    publicationEpoch: 3,
+    publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+    requiredAckNodeIds: ['n0', 'n1', 'n2'],
+    acknowledgedNodeIds: ['n0', 'n1', 'n2'],
+    pendingAckNodeIds: [],
+    priorityPartitionSummary: {totalCount: 16, spreadCount: 16},
+  });
+  const evidenceMemo = new WeakMap();
+  const first = buildCanonicalPublicationRecoveryEvidence(
+    {publicationConvergence: frozenSnapshot}, evidenceMemo,
+  );
+  const second = buildCanonicalPublicationRecoveryEvidence(
+    {publicationConvergence: frozenSnapshot}, evidenceMemo,
+  );
+  t.equal(second, first, 'reuses exact frozen evidence for immutable input');
+  t.equal(Object.isFrozen(first.publicationConvergenceGate), true);
+
+  const mutableSnapshot = {
+    publicationEpoch: 3,
+    publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+    pendingAckNodeIds: [],
+  };
+  const m1 = buildCanonicalPublicationRecoveryEvidence(
+    {publicationConvergence: mutableSnapshot}, evidenceMemo,
+  );
+  mutableSnapshot.publicationEpoch = 4;
+  const m2 = buildCanonicalPublicationRecoveryEvidence(
+    {publicationConvergence: mutableSnapshot}, evidenceMemo,
+  );
+  t.not(m2, m1, 'mutable input bypasses memo and observes mutation');
+  t.equal(m2.publicationConvergenceGate.publicationEpoch, 4);
+
+  const digestMemo = new WeakMap();
+  const inputs = {
+    membershipPublication: frozenSnapshot,
+    nodeEvidence: deepFreeze({nodeId: TEST_NODE_ID, ready: true}),
+    dimensions: deepFreeze({...TEST_READY_DIMENSIONS}),
+    runtimeAuthority: deepFreeze({state: STARTUP_AUTHORITY_STATE.READY}),
+    priorityControlPlaneRecovery: deepFreeze({active: false, enteredAt: 100}),
+    runtimeServeEligible: deepFreeze({serveEligible: true}),
+    publication: frozenSnapshot,
+  };
+  const uncachedGen = buildProjectionReadinessGeneration(inputs, {});
+  const memoGen1 = buildProjectionReadinessGeneration(inputs, {}, digestMemo);
+  const memoGen2 = buildProjectionReadinessGeneration(inputs, {}, digestMemo);
+  t.same(memoGen1, uncachedGen, 'memoized digest matches uncached digest');
+  t.same(memoGen2, uncachedGen, 'cached frozen-subtree hit matches uncached');
+  t.end();
+});

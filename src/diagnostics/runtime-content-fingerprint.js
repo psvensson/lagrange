@@ -13,34 +13,83 @@ const OPTIONAL_ABSENT = 'optional-package-absent';
 const DIRECTORY_CYCLE = 'runtime dependency directory cycle';
 const RUNTIME_BUILD_MANIFEST = 'runtime-content-manifest.json';
 const MISSING_FILE_CODE = 'ENOENT';
+const MAX_FS_CONCURRENCY = 16;
 
-async function contentRecords(directory, prefix, ancestors = new Set(), skipNested = true) {
-  const actual = await realpath(directory);
+async function mapBounded(items, limit, worker) {
+  if (items.length === 0) return [];
+  const results = new Array(items.length);
+  let nextIndex = 0;
+  const runWorker = async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await worker(items[index], index);
+    }
+  };
+  const workers = Array.from(
+    {length: Math.min(limit, items.length)},
+    () => runWorker(),
+  );
+  await Promise.all(workers);
+  return results;
+}
+
+async function collectEntries(
+  directory,
+  prefix,
+  ancestors,
+  skipNested,
+  fileTargets,
+  resolvedDir = null,
+) {
+  const actual = resolvedDir ?? await realpath(directory);
   if (ancestors.has(actual)) {
     throw new Error(DIRECTORY_CYCLE);
   }
   const lineage = new Set([...ancestors, actual]);
-  const records = [];
-  for (const entry of await readdir(directory, {withFileTypes: true})) {
+  const dirEntries = await readdir(directory, {withFileTypes: true});
+  for (const entry of dirEntries) {
     // Nested dependency packages each have their own lock entry. Do not
     // accidentally include a dev dependency hoisted beneath a runtime one.
     if (skipNested && entry.name === DEPENDENCY_DIRECTORY) continue;
     const absolute = path.join(directory, entry.name);
     const relativePath = `${prefix}/${entry.name}`;
-    const shape = await stat(absolute);
-    if (shape.isDirectory()) {
-      records.push(...await contentRecords(absolute, relativePath, lineage, skipNested));
-    } else if (shape.isFile()) {
+    if (entry.isDirectory()) {
+      await collectEntries(
+        absolute, relativePath, lineage, skipNested, fileTargets,
+        path.join(actual, entry.name),
+      );
+    } else if (entry.isFile()) {
+      fileTargets.push({absolute, relativePath});
+    } else {
       // Follow installed symlinks: the running module consumes their body,
       // so hashing only the link text would not identify executable bytes.
-      records.push({relativePath, content: await readFile(absolute)});
+      const shape = await stat(absolute);
+      if (shape.isDirectory()) {
+        await collectEntries(absolute, relativePath, lineage, skipNested, fileTargets);
+      } else if (shape.isFile()) {
+        fileTargets.push({absolute, relativePath});
+      }
     }
   }
-  return records;
+}
+
+async function readFileTargets(fileTargets) {
+  return mapBounded(fileTargets, MAX_FS_CONCURRENCY, async ({absolute, relativePath}) => ({
+    relativePath,
+    content: await readFile(absolute),
+  }));
+}
+
+async function contentRecords(directory, prefix, ancestors = new Set(), skipNested = true) {
+  const fileTargets = [];
+  await collectEntries(directory, prefix, ancestors, skipNested, fileTargets);
+  return readFileTargets(fileTargets);
 }
 
 async function productionDependencyRecords(root, lock) {
-  const records = [];
+  const fileTargets = [];
+  const absentRecords = [];
   for (const [relativePath, entry] of Object.entries(lock.packages)) {
     if (!relativePath || entry.dev === true) continue;
     const directory = path.join(root, relativePath);
@@ -50,12 +99,13 @@ async function productionDependencyRecords(root, lock) {
       if (error.code !== MISSING_FILE_CODE || entry.optional !== true) throw error;
       // An absent optional package is an explicit part of this deployment,
       // distinct from a package that is present and executes on another node.
-      records.push({relativePath, content: Buffer.from(OPTIONAL_ABSENT)});
+      absentRecords.push({relativePath, content: Buffer.from(OPTIONAL_ABSENT)});
       continue;
     }
-    records.push(...await contentRecords(directory, relativePath));
+    await collectEntries(directory, relativePath, new Set(), true, fileTargets);
   }
-  return records;
+  const presentRecords = await readFileTargets(fileTargets);
+  return [...absentRecords, ...presentRecords];
 }
 
 /**
@@ -66,13 +116,18 @@ async function productionDependencyRecords(root, lock) {
  * @return {Promise<Object>} Immutable measured content facts.
  */
 async function measureRuntimeContent(root) {
-  const lockBytes = await readFile(path.join(root, DEPENDENCY_LOCK));
+  const [lockBytes, manifestBytes] = await Promise.all([
+    readFile(path.join(root, DEPENDENCY_LOCK)),
+    readFile(path.join(root, PACKAGE_MANIFEST)),
+  ]);
   const lock = JSON.parse(lockBytes);
-  const source = await contentRecords(path.join(root, SOURCE_DIRECTORY), SOURCE_DIRECTORY);
-  const dependencies = await productionDependencyRecords(root, lock);
+  const [source, dependencies] = await Promise.all([
+    contentRecords(path.join(root, SOURCE_DIRECTORY), SOURCE_DIRECTORY),
+    productionDependencyRecords(root, lock),
+  ]);
   const manifests = [
     {relativePath: DEPENDENCY_LOCK, content: lockBytes},
-    {relativePath: PACKAGE_MANIFEST, content: await readFile(path.join(root, PACKAGE_MANIFEST))},
+    {relativePath: PACKAGE_MANIFEST, content: manifestBytes},
   ];
   return Object.freeze({
     sourceDigest: computeContentRecordsFingerprint(source),

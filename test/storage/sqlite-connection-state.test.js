@@ -15,6 +15,8 @@ import {test} from 'node:test';
 import Database from 'better-sqlite3';
 
 import {sqliteConnectionState} from '../../src/storage/sqlite-connection-state.js';
+import {preparePartitionReadStatement} from
+  '../../src/partition/partition-read-statement-owner.js';
 
 const SELECT_VALUE = 'SELECT value FROM facts WHERE id = ?';
 const SELECT_ALL = 'SELECT * FROM facts WHERE id = ?';
@@ -152,4 +154,79 @@ test('a fact forgotten inside a transaction is read through until it ends, ' +
       'after a rolled-back savepoint the outer transaction reads its rows');
   })();
   assert.equal(factValue(db), 7);
+});
+
+test('applicationStampedFact reuses across non-application writes and ' +
+  'invalidates on application writes or rollbacks', (t) => {
+  const {db} = countedConnection(t);
+  db.exec('CREATE TABLE raft_log (id INTEGER PRIMARY KEY, val TEXT)');
+  const state = sqliteConnectionState(db);
+  const stampSql = 'SELECT total_changes() AS tc, ' +
+    '(SELECT data_version FROM pragma_data_version) AS dv, ' +
+    '(SELECT schema_version FROM pragma_schema_version) AS sv';
+  let derivations = 0;
+  const readAppFact = () => state.applicationStampedFact(
+    'app-census',
+    state.statement(stampSql).get(),
+    () => {
+      derivations += 1;
+      return state.statement(SELECT_VALUE).get(SUBJECT).value;
+    },
+  );
+
+  assert.equal(readAppFact(), 1);
+  assert.equal(derivations, 1);
+
+  // Raft-store-only writes advance total_changes() and nonApplicationChanges together.
+  state.runNonApplication('INSERT INTO raft_log (val) VALUES (?)', 'entry-1');
+  state.runNonApplication('INSERT INTO raft_log (val) VALUES (?)', 'entry-2');
+  assert.equal(readAppFact(), 1);
+  assert.equal(derivations, 1, 'non-application writes keep app stamp stable');
+
+  // Inside a transaction before any app write, read still hits committed value.
+  db.transaction(() => {
+    assert.equal(readAppFact(), 1);
+    assert.equal(derivations, 1, 'in-tx read hits before any app mutation');
+  })();
+
+  // An uncommitted app write invalidates inside the tx and after rollback.
+  assert.throws(() => db.transaction(() => {
+    state.statement(UPDATE_VALUE).run(99, SUBJECT);
+    assert.equal(readAppFact(), 99, 'sees uncommitted app write in tx');
+    assert.equal(derivations, 2);
+    throw new Error('abort-tx');
+  })(), /abort-tx/u);
+  assert.equal(readAppFact(), 1, 'rolled-back value is never retained');
+  assert.equal(derivations, 3);
+});
+
+test('schemaVersionedFact invalidates on DDL and boundedStatement resets ' +
+  'read/write statement modes safely', (t) => {
+  const {db} = countedConnection(t);
+  const state = sqliteConnectionState(db);
+  const svSql = 'SELECT schema_version AS sv FROM pragma_schema_version';
+  let builds = 0;
+  const readCols = () => state.schemaVersionedFact(
+    'cols',
+    'facts',
+    state.statement(svSql).get().sv,
+    () => {
+      builds += 1;
+      return db.pragma('table_info(facts)').map((c) => c.name);
+    },
+  );
+
+  assert.deepEqual(readCols(), ['id', 'value']);
+  assert.deepEqual(readCols(), ['id', 'value']);
+  assert.equal(builds, 1);
+
+  db.exec('ALTER TABLE facts ADD COLUMN note TEXT');
+  assert.deepEqual(readCols(), ['id', 'value', 'note']);
+  assert.equal(builds, 2, 'DDL advances schema_version and invalidates');
+
+  const writeStmt = preparePartitionReadStatement(db, UPDATE_VALUE);
+  assert.equal(writeStmt.reader, false);
+  writeStmt.run(42, SUBJECT);
+  const readStmt = preparePartitionReadStatement(db, SELECT_VALUE);
+  assert.equal(readStmt.get(SUBJECT).value, 42);
 });

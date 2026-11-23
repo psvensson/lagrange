@@ -82,6 +82,18 @@ function buildControlPlaneMutationIntent(
   };
 }
 
+function filterCanonicalRow(tableName, inputRow, allowedColumns) {
+  const canonicalized = canonicalizeSystemTableRow(tableName, inputRow);
+  if (!allowedColumns) return canonicalized;
+  const filtered = {};
+  for (const [key, value] of Object.entries(canonicalized)) {
+    if (allowedColumns.has(key) && typeof value !== 'undefined') {
+      filtered[key] = value;
+    }
+  }
+  return filtered;
+}
+
 function canonicalizeControlPlaneMutation(
   mutation = {},
   operation,
@@ -99,17 +111,19 @@ function canonicalizeControlPlaneMutation(
     (operation === CONTROL_PLANE_MUTATION_OPERATION.INSERT ||
       operation === CONTROL_PLANE_MUTATION_OPERATION.UPSERT)
   ) {
-    const canonicalized = canonicalizeSystemTableRow(tableName, row);
-    if (allowedColumns) {
-      row = {};
-      for (const [key, value] of Object.entries(canonicalized)) {
-        if (allowedColumns.has(key) && typeof value !== 'undefined') {
-          row[key] = value;
-        }
-      }
-    } else {
-      row = canonicalized;
-    }
+    row = filterCanonicalRow(tableName, row, allowedColumns);
+  }
+
+  let rows = mutation?.rows;
+  if (
+    Array.isArray(rows) &&
+    operation === CONTROL_PLANE_MUTATION_OPERATION.UPSERT_BATCH
+  ) {
+    rows = rows.map((entry) =>
+      entry && typeof entry === 'object' ?
+        filterCanonicalRow(tableName, entry, allowedColumns) :
+        entry,
+    );
   }
 
   let data = mutation?.data;
@@ -118,17 +132,7 @@ function canonicalizeControlPlaneMutation(
     typeof data === 'object' &&
     operation === CONTROL_PLANE_MUTATION_OPERATION.UPDATE
   ) {
-    const canonicalized = canonicalizeSystemTableRow(tableName, data);
-    if (allowedColumns) {
-      data = {};
-      for (const [key, value] of Object.entries(canonicalized)) {
-        if (allowedColumns.has(key) && typeof value !== 'undefined') {
-          data[key] = value;
-        }
-      }
-    } else {
-      data = canonicalized;
-    }
+    data = filterCanonicalRow(tableName, data, allowedColumns);
   }
 
   const whereClause = mutation?.whereClause;
@@ -149,6 +153,7 @@ function canonicalizeControlPlaneMutation(
     operation,
     tableName,
     row,
+    rows,
     data,
     whereClause,
   };

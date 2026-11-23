@@ -7,6 +7,11 @@ import {
 import {
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
+import {
+  clearAcknowledgedCreateInFlight,
+  isAcknowledgedCreateStillInFlight,
+  recordAcknowledgedCreateInFlight,
+} from '../../src/rebalancer/operation-workflow-create-ack-state.js';
 import {createTestCoordinator} from './test-helpers.js';
 
 const SOURCE_NODE_ID = 'source-node';
@@ -393,5 +398,59 @@ test(
     } finally {
       await coordinator.shutdown();
     }
+  },
+);
+
+test(
+  'generation-fenced acknowledged CREATE state suppresses duplicate ' +
+  'CREATING re-dispatch under matching boot incarnation and clears on ' +
+  'incarnation change or explicit rearm boundary',
+  async (t) => {
+    let currentBoot = 1;
+    const owner = {
+      systemTableCache: {
+        get: (tableName) => (tableName === 'nodes' ? {
+          node_id: TARGET_NODE_ID,
+          boot_incarnation: currentBoot,
+        } : null),
+      },
+    };
+    const op = buildRuntimeOperation({
+      workflowStep: WORKFLOW_STEP.CREATING,
+    });
+
+    recordAcknowledgedCreateInFlight(owner, op);
+    t.equal(
+      isAcknowledgedCreateStillInFlight(owner, op, {boundary: 'cdc_echo'}),
+      true,
+      'suppresses duplicate re-dispatch for matching boot incarnation',
+    );
+
+    t.equal(
+      isAcknowledgedCreateStillInFlight(owner, op, {boundary: 'dispatch_retry'}),
+      false,
+      'dispatch_retry clears acknowledged in-flight CREATE',
+    );
+    t.equal(
+      isAcknowledgedCreateStillInFlight(owner, op, {boundary: 'cdc_echo'}),
+      false,
+      'entry remains cleared after dispatch_retry',
+    );
+
+    recordAcknowledgedCreateInFlight(owner, op);
+    currentBoot = 2;
+    t.equal(
+      isAcknowledgedCreateStillInFlight(owner, op, {boundary: 'cdc_echo'}),
+      false,
+      'target boot incarnation change clears acknowledged in-flight CREATE',
+    );
+
+    recordAcknowledgedCreateInFlight(owner, op);
+    clearAcknowledgedCreateInFlight(owner, op.operationId);
+    t.equal(
+      isAcknowledgedCreateStillInFlight(owner, op, {boundary: 'cdc_echo'}),
+      false,
+      'explicit clear removes acknowledged entry',
+    );
   },
 );

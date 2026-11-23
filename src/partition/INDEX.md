@@ -112,7 +112,7 @@ documentClass: generated
 - [partition-placement-repair-preparation.js](partition-placement-repair-preparation.js) - No leading comment; first export: requestPlacementRepairPreparation. (importers: few)
 - [partition-placement-retained-repair.js](partition-placement-retained-repair.js) - No leading comment; first export: canonicalRetainedPlacementRepair. (importers: few)
 - [partition-raft-storage.js](partition-raft-storage.js) - Partition Raft Storage - SQLite-backed Raft log storage for partitions. (importers: many)
-- [partition-read-statement-owner.js](partition-read-statement-owner.js) - Retain one most-recent SELECT statement per SQLite database handle. (importers: one)
+- [partition-read-statement-owner.js](partition-read-statement-owner.js) - Retain a bounded per-connection LRU of prepared SQL statements through the connection's state owner. (importers: few)
 - [partition-reopen-options.js](partition-reopen-options.js) - A replacement of an existing local replica opens its durable membership record. (importers: one)
 - [partition-replica-admission.js](partition-replica-admission.js) - Replica admission from the committed replica operation (quest replica-admission-from-committed-operation; R2 request... (importers: many)
 - [partition-replica-membership-constants.js](partition-replica-membership-constants.js) - What a replica's own committed configuration says about one voter (quest replace-source-removal-owner, amendment-1... (importers: many)

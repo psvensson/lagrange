@@ -298,7 +298,8 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
 
   assertSystemTableMutationAllowed(operation, tableName) {
     if (tableName === SYSTEM_TABLE_NAME.SERVICES &&
-        operation === CONTROL_PLANE_MUTATION_OPERATION.UPSERT) {
+        (operation === CONTROL_PLANE_MUTATION_OPERATION.UPSERT ||
+          operation === CONTROL_PLANE_MUTATION_OPERATION.UPSERT_BATCH)) {
       const error = new Error(GATEWAY_ERROR_MSG.SERVICES_UPSERT_FORBIDDEN);
       error.code =
         CONTROL_PLANE_GATEWAY_ERROR_CODE.SERVICES_UPSERT_FORBIDDEN;

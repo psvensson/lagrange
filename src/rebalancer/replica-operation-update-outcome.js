@@ -74,23 +74,45 @@ function requireOutcome(condition, reason) {
   if (!condition) throw invalidOperationPersistenceOutcome(reason);
 }
 
+class FrozenOperationDataMemo {
+  #validated = new WeakSet();
+
+  has(value) {
+    return this.#validated.has(value);
+  }
+
+  add(value) {
+    this.#validated.add(value);
+  }
+}
+
+const validatedFrozenOperationData = new FrozenOperationDataMemo();
+
 function assertOperationData(value, visited = new Set()) {
   if (value === null || typeof value !== 'object') return;
+  if (validatedFrozenOperationData.has(value)) return;
   requireOutcome(!visited.has(value), INVALID_REASON.CYCLIC_DATA);
   visited.add(value);
   const prototype = Object.getPrototypeOf(value);
   // Committed membership stamps use null-prototype data records.
   requireOutcome(Array.isArray(value) || prototype === Object.prototype || prototype === null,
     INVALID_REASON.DATA_PROTOTYPE);
+  let allChildrenFrozenValid = Object.isFrozen(value);
   for (const key of Reflect.ownKeys(value)) {
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
     requireOutcome(typeof key === 'string' && Object.hasOwn(descriptor, DESCRIPTOR_VALUE_FIELD),
       INVALID_REASON.ACCESSOR_OR_SYMBOL);
     const {value: child} = descriptor;
     requireOutcome(typeof child !== 'function', INVALID_REASON.DATA_FUNCTION);
-    assertOperationData(child, visited);
+    if (child !== null && typeof child === 'object') {
+      assertOperationData(child, visited);
+      if (allChildrenFrozenValid && !validatedFrozenOperationData.has(child)) {
+        allChildrenFrozenValid = false;
+      }
+    }
   }
   visited.delete(value);
+  if (allChildrenFrozenValid) validatedFrozenOperationData.add(value);
 }
 
 function decodePersistedOperationHistory(raw) {
@@ -102,7 +124,6 @@ function decodePersistedOperationHistory(raw) {
     throw invalidOperationPersistenceOutcome(INVALID_REASON.HISTORY_INVALID_JSON);
   }
   requireOutcome(Array.isArray(history), INVALID_REASON.HISTORY_NOT_ARRAY);
-  assertOperationData(history);
   return history;
 }
 
@@ -112,7 +133,9 @@ function copyOperationOutcomeData(operation) {
   function freeze(value) {
     if (value === null || typeof value !== 'object') return value;
     for (const item of Object.values(value)) freeze(item);
-    return Object.freeze(value);
+    Object.freeze(value);
+    validatedFrozenOperationData.add(value);
+    return value;
   }
   return freeze(copy);
 }

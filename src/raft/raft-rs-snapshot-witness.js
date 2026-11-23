@@ -285,7 +285,7 @@ function compactRaftRsCommittedPrefix(store, groupId, options = {}) {
       },
     });
     const deleted = sqliteConnectionState(store.db)
-      .statement(RAFT_RS_SQL.DELETE_LOG_UP_TO).run(groupId, exactToIndex);
+      .runNonApplication(RAFT_RS_SQL.DELETE_LOG_UP_TO, groupId, exactToIndex);
     return Object.freeze({
       outcome: RAFT_COMPACTION_OUTCOME.COMPACTED,
       changed: true,

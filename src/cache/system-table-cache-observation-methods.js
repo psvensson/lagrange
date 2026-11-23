@@ -141,6 +141,7 @@ class SystemTableCacheObservationMethods {
       tableName,
       next,
     );
+    this._frozenRowsSnapshotByTable?.delete(tableName);
     return next;
   }
 
@@ -468,15 +469,45 @@ class SystemTableCacheObservationMethods {
   /** @return {Object} */
   readView(record) {
     sharedRowReadEngagements += 1;
-    return deepFreeze(record);
+    return Object.isFrozen(record) ? record : deepFreeze(record);
+  }
+
+  /** @private */
+  readFrozenRows(tableName) {
+    const table = this.tables.get(tableName);
+    const version = this.mutationVersionByTableName.get(tableName) || 0;
+    const cached = this._frozenRowsSnapshotByTable?.get(tableName);
+    if (cached !== undefined &&
+        cached.version === version &&
+        cached.size === table.size) {
+      return cached.rows;
+    }
+    const rows = new Array(table.size);
+    let index = 0;
+    for (const record of table.values()) {
+      rows[index] = Object.isFrozen(record) ? record : deepFreeze(record);
+      index += 1;
+    }
+    if (!this._frozenRowsSnapshotByTable) {
+      this._frozenRowsSnapshotByTable = new Map();
+    }
+    this._frozenRowsSnapshotByTable.set(tableName, {
+      version,
+      size: table.size,
+      rows,
+    });
+    return rows;
   }
 
   filter(tableName, predicate) {
     this.validateTableName(tableName);
+    const rows = this.readFrozenRows(tableName);
     const results = [];
-    for (const record of this.tables.get(tableName).values()) {
+    for (let index = 0; index < rows.length; index += 1) {
+      const record = rows[index];
       if (predicate(record)) {
-        results.push(this.readView(record));
+        sharedRowReadEngagements += 1;
+        results.push(record);
       }
     }
     return results;
@@ -484,8 +515,9 @@ class SystemTableCacheObservationMethods {
 
   getAll(tableName) {
     this.validateTableName(tableName);
-    return Array.from(this.tables.get(tableName).values())
-      .map((record) => this.readView(record));
+    const rows = this.readFrozenRows(tableName);
+    sharedRowReadEngagements += rows.length;
+    return rows.slice();
   }
 
   getAllShared(tableName) {

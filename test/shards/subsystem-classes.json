@@ -28,7 +28,7 @@
   "censusSize": 2806,
   "digest": "fnv1a32-950cb979",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-150c560b",
+  "observationDigest": "fnv1a32-b5ac762b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -12348,6 +12348,17 @@
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
+    "test/logging/logs-table-service.test.js": {
+      "files": [
+        "src/control-plane/control-plane-workload-profile.js"
+      ]
+    },
+    "test/logging/wait-bound-spent-logs-path.test.js": {
+      "files": [
+        "src/cdc/cdc-integration-service.js",
+        "src/cdc/cdc-system-table-mutation-sql-helpers.js"
+      ]
+    },
     "test/logging/wait-bound-spent.test.js": {
       "files": [
         "src/logging/wait-bound-spent.js"
@@ -13500,7 +13511,10 @@
     },
     "test/node/replica-handler-voter-ready-wait-bound-spent.test.js": {
       "files": [
-        "src/logging/wait-bound-spent.js"
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/logging/wait-bound-spent.js",
+        "src/node/replica-handler-readiness-wake.js",
+        "src/partition/partition-service-constants.js"
       ]
     },
     "test/node/replica-handler.test.js": {
@@ -29153,6 +29167,11 @@
       ],
       "directories": [
         "data/storage-load"
+      ]
+    },
+    "test/storage/sqlite-connection-state.test.js": {
+      "files": [
+        "src/partition/partition-read-statement-owner.js"
       ]
     },
     "test/test-helpers/committed-write-answer.test.js": {
