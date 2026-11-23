@@ -279,15 +279,35 @@ function beginAnswerOf(value) {
   return answer;
 }
 
+/**
+ * Whether a durable participant state satisfies a bound ROLLBACK decision
+ * (either ROLLED_BACK or a durably REFUSED PREPARE row, which never mutates
+ * to ROLLED_BACK and carries outcome NOT_COMMITTED).
+ * @param {string|undefined|null} state - Participant state.
+ * @return {boolean}
+ */
+function isBoundRollbackParticipantState(state) {
+  return state === PARTICIPANT_TRANSACTION_STATE.ROLLED_BACK ||
+    state === PARTICIPANT_TRANSACTION_STATE.REFUSED;
+}
+
+function isValidBoundRollbackAnswer(answer) {
+  return answer?.durable === true &&
+    isBoundRollbackParticipantState(answer?.state) &&
+    answer?.outcome === PARTICIPANT_COMMIT_OUTCOME.NOT_COMMITTED;
+}
+
+function isValidUnboundRollbackAnswer(answer) {
+  return answer?.durable === false &&
+    answer?.state === PARTICIPANT_TRANSACTION_STATE.ABSENT &&
+    answer?.outcome === PARTICIPANT_COMMIT_OUTCOME.UNKNOWN;
+}
+
 function rolledBackAnswerOf(value, bound = true) {
   const answer = participantAnswerSnapshotOf(value);
-  const boundState = answer?.state === PARTICIPANT_TRANSACTION_STATE.ROLLED_BACK ||
-    answer?.state === PARTICIPANT_TRANSACTION_STATE.REFUSED;
-  const valid = bound ? answer?.durable === true && boundState &&
-    answer?.outcome === PARTICIPANT_COMMIT_OUTCOME.NOT_COMMITTED :
-    answer?.durable === false &&
-      answer?.state === PARTICIPANT_TRANSACTION_STATE.ABSENT &&
-      answer?.outcome === PARTICIPANT_COMMIT_OUTCOME.UNKNOWN;
+  const valid = bound ?
+    isValidBoundRollbackAnswer(answer) :
+    isValidUnboundRollbackAnswer(answer);
   if (answer?.success !== true || !valid) {
     throw participantFailureOf(QUERY_OPERATION.ROLLBACK,
       {...(answer || {}), error: QUERY_ERROR_MSG.PARTICIPANT_ANSWER_UNTYPED},
@@ -343,6 +363,7 @@ function participantDeliveryKeyOf({transactionId, partitionId, operation}) {
 export {
   beginAnswerOf,
   committedAnswerOf,
+  isBoundRollbackParticipantState,
   isParticipantTransactionAnswer,
   participantAnswerSnapshotOf,
   participantDeliveryAnswerOf,
