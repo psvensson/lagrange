@@ -56,6 +56,7 @@ documentClass: generated
 - [service-descriptor.js](service-descriptor.js) - Canonical service descriptor normalization and validation. (importers: few)
 - [service-dispatcher.js](service-dispatcher.js) - Canonical dispatcher for Service_Message envelopes. (importers: few)
 - [service-entry-generator.js](service-entry-generator.js) - Owner of generated component-entry emission from a normalized service IR (the compiler's `generate` output). (importers: many)
+- [service-installation-readiness.js](service-installation-readiness.js) - Canonical achieved-readiness projection for service installations. (importers: many)
 - [service-installation-reconciler.js](service-installation-reconciler.js) - No leading comment; first export: ServiceInstallationReconciler. (importers: few)
 - [service-lifecycle-command-contract.js](service-lifecycle-command-contract.js) - Semantic command vocabulary shared by SQL ingress and lifecycle ownership. (importers: many)
 - [service-lifecycle-command-failure.js](service-lifecycle-command-failure.js) - Failure vocabulary and result projection of the service lifecycle command owner (extracted from... (importers: few)

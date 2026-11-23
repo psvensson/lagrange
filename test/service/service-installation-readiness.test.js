@@ -21,8 +21,8 @@ import {
 import {
   buildActivatedRequestBindingServiceDefinition,
   buildRequestBindingServiceDefinition,
-  deriveRequestServiceDefinitionId,
 } from '../../src/control-plane/owners/request-binding-service-definition-contract.js';
+import {runServiceCommand} from '../../src/cli/service-command-router.js';
 import {runInspect} from '../../src/cli/service-pipeline-command.js';
 import {
   runServicePipelineCommand,
@@ -35,6 +35,16 @@ import {
   PGWIRE_AUTH_HANDLER_MODE,
 } from '../../src/runtime/pgwire-auth-constants.js';
 import {PgWireAuthHandler} from '../../src/runtime/pgwire-auth-handler.js';
+import {
+  PACKAGE_BINDING_READINESS,
+  SERVICE_READINESS_REASON,
+  SERVICE_READINESS_STATE,
+  createBindingCellReadinessObserver,
+  evaluateServiceInstallationReadiness,
+} from '../../src/service/service-installation-readiness.js';
+import {
+  ServiceInstallationReconciler,
+} from '../../src/service/service-installation-reconciler.js';
 import {
   SERVICE_LIFECYCLE_DEFAULT_SIGNATURE_POLICY,
   ServiceLifecycleCommandOwner,
@@ -755,5 +765,182 @@ describe('Q4 service-inspect-achieved-readiness', () => {
       serviceName: SERVICE_NAME,
     });
     assert.equal(inspectedBogus.ready, false);
+  });
+
+  it('reconciles wasm_component binding-cell readiness while preserving oci activation_unsupported and desired installed-only', async (t) => {
+    const fx = await createProductionReadinessFixture();
+    const observer = createBindingCellReadinessObserver(fx.systemTableCache);
+    const reconciler = new ServiceInstallationReconciler({
+      catalogOwner: fx.catalogOwner,
+      cellReadinessObserver: observer,
+      logger: {debug() {}, error() {}, info() {}, warn() {}},
+    });
+    t.after(() => reconciler.shutdown());
+    await reconciler.setLeader(true);
+
+    // 1. Active wasm_component with zero bindings stays recorded_not_running (no activation_unsupported!)
+    const wasmInst = await fx.installService({
+      idempotencyKey: 'q4-reconciler-wasm-active',
+      manifest: wasmManifest(),
+    });
+    await reconciler.reconcileNow();
+    let inspected = await runInspect({
+      createSqlClient: fx.createSqlClient,
+      serviceName: SERVICE_NAME,
+    });
+    assert.equal(inspected.ready, false);
+    assert.equal(inspected.row.rollout_state, SERVICE_INSTALL_ROLLOUT_STATE.RECORDED_NOT_RUNNING);
+    assert.equal(inspected.row.latest_failure_id, null);
+    assert.equal(inspected.readinessState, SERVICE_READINESS_STATE.NOT_READY);
+    assert.equal(inspected.readinessReason, SERVICE_READINESS_REASON.ROLLOUT_NOT_READY);
+
+    // 2. Installed-only (desired_state: 'installed') wasm_component never converges or fails
+    const installedSeed = await fx.installService({
+      idempotencyKey: 'q4-reconciler-wasm-installed-seed',
+      manifest: wasmManifest({name: 'installed-only-svc'}),
+    });
+    await fx.catalogOwner.requestInstallation({
+      desiredState: SERVICE_INSTALL_DESIRED_STATE.INSTALLED,
+      installationId: 'installation-wasm-installed-only',
+      operationId: 'operation-wasm-installed-only',
+      revisionId: installedSeed.row.revision_id,
+      serviceDefinitionId: installedSeed.row.service_definition_id,
+    });
+    await reconciler.reconcileNow();
+    const installedOnly = await runInspect({
+      createSqlClient: fx.createSqlClient,
+      serviceName: 'installed-only-svc',
+    });
+    assert.equal(installedOnly.ready, false);
+    assert.equal(installedOnly.row.desired_state, SERVICE_INSTALL_DESIRED_STATE.INSTALLED);
+    assert.equal(installedOnly.row.latest_failure_id, null);
+    assert.equal(installedOnly.readinessReason, SERVICE_READINESS_REASON.DESIRED_NOT_ACTIVE);
+
+    // 3. OCI container still records activation_unsupported and settles to recorded_not_running
+    await fx.installService({
+      idempotencyKey: 'q4-reconciler-oci-unsupported',
+      manifest: ociManifest(),
+    });
+    await reconciler.reconcileNow();
+    const ociInspected = await runInspect({
+      createSqlClient: fx.createSqlClient,
+      serviceName: 'oci-unsupported-svc',
+    });
+    assert.equal(ociInspected.ready, false);
+    assert.equal(
+      ociInspected.row.rollout_state,
+      SERVICE_INSTALL_ROLLOUT_STATE.RECORDED_NOT_RUNNING,
+    );
+    assert.ok(ociInspected.row.latest_failure_id);
+    assert.equal(ociInspected.readinessReason, SERVICE_READINESS_REASON.INSTALLATION_FAILED);
+
+    // 4. Non-invocable call binding (no statement) stays no_invocable_bindings / recorded_not_running
+    await fx.executeSql('CREATE BINDING $1', {
+      budgets: DEFAULT_BUDGETS,
+      name: 'amounts-readiness-svc--call--no-stmt',
+      schema_version: 3,
+      source: {kind: 'call', name: 'amounts-readiness-svc--call--no-stmt'},
+      target: {
+        handler_id: 'summarizeAmounts',
+        interface: 'call_v2',
+        manifest_digest: wasmInst.manifestDigest,
+        package_id: wasmInst.packageId,
+      },
+    });
+    await reconciler.reconcileNow();
+    assert.equal(
+      observer.evaluatePackage({
+        manifestDigest: wasmInst.manifestDigest,
+        packageId: wasmInst.packageId,
+      }).state,
+      PACKAGE_BINDING_READINESS.NO_INVOCABLE_BINDINGS,
+    );
+    inspected = await runInspect({
+      createSqlClient: fx.createSqlClient,
+      serviceName: SERVICE_NAME,
+    });
+    assert.equal(inspected.ready, false);
+    assert.equal(inspected.row.rollout_state, SERVICE_INSTALL_ROLLOUT_STATE.RECORDED_NOT_RUNNING);
+
+    // 5. Public request binding created without ready Cell -> reconciling (not ready)
+    const req = await fx.createRequestBinding({
+      manifestDigest: wasmInst.manifestDigest,
+      packageId: wasmInst.packageId,
+    });
+    await reconciler.reconcileNow();
+    inspected = await runInspect({
+      createSqlClient: fx.createSqlClient,
+      serviceName: SERVICE_NAME,
+    });
+    assert.equal(inspected.ready, false);
+    assert.equal(inspected.row.rollout_state, SERVICE_INSTALL_ROLLOUT_STATE.RECONCILING);
+
+    // 6. Active definition + ready ACTIVE Cell -> reconciler converges -> READY!
+    const def = await fx.publishBindingDefinition(req.bindingRow, {active: true});
+    fx.publishCellActual(def.serviceId, {status: ReplicaStatus.ACTIVE});
+    await reconciler.reconcileNow();
+    inspected = await runInspect({
+      createSqlClient: fx.createSqlClient,
+      serviceName: SERVICE_NAME,
+    });
+    assert.equal(inspected.ready, true);
+    assert.equal(inspected.row.rollout_state, SERVICE_INSTALL_ROLLOUT_STATE.CONVERGED);
+    assert.equal(inspected.readinessState, SERVICE_READINESS_STATE.READY);
+    assert.equal(inspected.readinessReason, SERVICE_READINESS_REASON.READY);
+
+    // 7. Cell drops -> immediate not_ready + reconciler moves converged -> reconciling
+    fx.removeCellActual(def.serviceId);
+    inspected = await runInspect({
+      createSqlClient: fx.createSqlClient,
+      serviceName: SERVICE_NAME,
+    });
+    assert.equal(inspected.ready, false);
+    await reconciler.reconcileNow();
+    inspected = await runInspect({
+      createSqlClient: fx.createSqlClient,
+      serviceName: SERVICE_NAME,
+    });
+    assert.equal(inspected.ready, false);
+    assert.equal(inspected.row.rollout_state, SERVICE_INSTALL_ROLLOUT_STATE.RECONCILING);
+
+    // 8. Corrupt binding row targeting package fails closed via evaluateServiceInstallationReadiness
+    fx.systemTableCache.applySystemTableChange(
+      TABLES.SERVICE_BINDINGS,
+      CDC_OPERATION.UPSERT,
+      {
+        binding_digest: 'corrupt',
+        binding_id: 'binding-corrupt-1',
+        binding_name: 'corrupt-binding',
+        binding_version_id: 'binding-corrupt-1-v1',
+        created_at: 1,
+        created_by: 'test',
+        export_name: 'handle-request',
+        generation: 1,
+        manifest_digest: wasmInst.manifestDigest,
+        normalized_binding: '{not-json',
+        package_id: wasmInst.packageId,
+        source_kind: 'request',
+        tenant_id: TENANT_ID,
+      },
+    );
+    const corruptDecision = evaluateServiceInstallationReadiness({
+      installation: {
+        desiredState: SERVICE_INSTALL_DESIRED_STATE.ACTIVE,
+        latestFailureId: null,
+        rolloutState: SERVICE_INSTALL_ROLLOUT_STATE.CONVERGED,
+      },
+      servicePackage: {
+        manifestDigest: wasmInst.manifestDigest,
+        packageId: wasmInst.packageId,
+      },
+      systemTableCache: fx.systemTableCache,
+      tenantId: TENANT_ID,
+    });
+    assert.equal(corruptDecision.readinessState, SERVICE_READINESS_STATE.NOT_READY);
+    assert.equal(corruptDecision.readinessReason, SERVICE_READINESS_REASON.ROUTE_UNAVAILABLE);
+
+    // 9. Top-level CLI router recognizes `lagrange service inspect --help`
+    const helpExitCode = await runServiceCommand(['inspect', '--help']);
+    assert.equal(helpExitCode, 0);
   });
 });

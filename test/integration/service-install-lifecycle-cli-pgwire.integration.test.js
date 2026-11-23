@@ -74,6 +74,8 @@ const STATUS_ROW = Object.freeze({
   installation_id: 'installation-status',
   latest_failure_id: null,
   operation_id: 'operation-status',
+  readiness_reason: 'desired_not_active',
+  readiness_state: 'not_ready',
   revision_id: 'revision-status',
   rollout_state: 'recorded_not_running',
   service_definition_id: 'definition-status',

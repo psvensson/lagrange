@@ -55,6 +55,9 @@ import {
   ServiceComponentBuildError,
 } from '../service/service-component-build.js';
 import {
+  buildServiceInspectionOutput,
+} from '../service/service-installation-readiness.js';
+import {
   normalizeServiceSource,
 } from '../service/service-source-contract.js';
 
@@ -69,7 +72,6 @@ const SERVICE_PIPELINE_STAGE = Object.freeze({
   NORMALIZE: 'normalize',
   RECORDS: 'records',
 });
-const ACTIVE_STATE = 'active';
 const SINGLE_OPERATION_RESTRICTION_CODE = 'single_operation_restriction';
 const CALL_BINDING_SCHEMA_VERSION = 2;
 const CALL_SQL = 'CALL BINDING $1';
@@ -722,11 +724,6 @@ async function resolveInspectServiceName(
   }
 }
 
-function isInspectReady(statusRow) {
-  return statusRow?.rollout_state === ACTIVE_STATE ||
-    statusRow?.desired_state === ACTIVE_STATE;
-}
-
 async function runInspect(options = {}) {
   const stage = SERVICE_PIPELINE_STAGE.INSPECT;
   const candidate = options.target || options.projectDirectory || null;
@@ -747,14 +744,8 @@ async function runInspect(options = {}) {
     stage,
   );
   const rows = result?.rows || [];
-  const statusRow = rows[0] || null;
-  const ready = isInspectReady(statusRow);
-  const inspection = {
-    ready,
-    row: statusRow,
-    rows,
-    service: effectiveName,
-  };
+  const inspection = buildServiceInspectionOutput(
+    effectiveName, rows[0] || null, rows);
   if (typeof options.writeOutput === 'function') {
     await options.writeOutput(JSON.stringify(inspection));
   }

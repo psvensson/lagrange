@@ -250,24 +250,28 @@ npx lagrange service deploy --package-id pkg_01jbc45d6e7f8a9b0c1d2e3f4a --idempo
 
 ## 5. Inspect Service Readiness
 
-Inspect the deployment status through the CLI:
+Inspect achieved service readiness through the CLI:
 
 ```bash
-npx lagrange service inspect pkg_01jbc45d6e7f8a9b0c1d2e3f4a
+npx lagrange service inspect .
 ```
 
 Or query the service catalog directly through SQL:
 
 ```sql
-SHOW SERVICE 'my-service';
+SHOW SERVICE $1;
 ```
 
-Expected output confirms the service is installed and ready:
+Expected output separates desired intent (`desired_state`), durable rollout
+progress (`rollout_state`), and achieved invocable readiness
+(`readiness_state` / `readiness_reason`). Until the service's Cells are active
+and converged, `inspect` reports `"ready": false` and `SHOW SERVICE` reports
+`readiness_state = not_ready`. Once activated and converged:
 
 ```text
- service_name | desired_state | rollout_state | revision_id | package_id
---------------+---------------+---------------+-------------+-------------------------------
- my-service   | installed     | active        | rev_01...   | pkg_01jbc45d6e7f8a9b0c1d2e3f4a
+ service_name | desired_state | rollout_state | readiness_state | readiness_reason | revision_id
+--------------+---------------+---------------+-----------------+------------------+-------------
+ my-service   | active        | converged     | ready           | ready            | rev_01...
 ```
 
 ---

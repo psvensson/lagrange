@@ -73,6 +73,8 @@ const STATUS_ROW_FIELDS = Object.freeze(new Set([
   'installation_id',
   'latest_failure_id',
   'operation_id',
+  'readiness_reason',
+  'readiness_state',
   'revision_id',
   'rollout_state',
   'service_definition_id',

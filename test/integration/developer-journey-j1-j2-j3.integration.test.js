@@ -103,6 +103,14 @@ import {
 import {
   RequestCellHttpAdapter,
 } from '../../src/service/request-cell-http-adapter.js';
+import {
+  SERVICE_READINESS_REASON,
+  SERVICE_READINESS_STATE,
+  createBindingCellReadinessObserver,
+} from '../../src/service/service-installation-readiness.js';
+import {
+  ServiceInstallationReconciler,
+} from '../../src/service/service-installation-reconciler.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const TENANT_ID = 'default';
@@ -328,6 +336,7 @@ describe('developer-journey-j1-j2-j3.integration', () => {
   let systemTableCache;
   let gateway;
   let commandOwner;
+  let installationReconciler;
   let pgAdapter;
   let createSqlClient;
   let routeResolver;
@@ -360,6 +369,7 @@ describe('developer-journey-j1-j2-j3.integration', () => {
     const systemMetadataOwners = createSystemMetadataOwners({
       controlPlaneSystemTableGateway: gateway,
       now: () => Date.now(),
+      systemTableCache,
     });
     systemMetadataOwners.deploymentBindingOwner.artifactPayloadStore = artifactPayloadStore;
 
@@ -372,6 +382,13 @@ describe('developer-journey-j1-j2-j3.integration', () => {
       runtimeAccessPolicyOwner: systemMetadataOwners.runtimeAccessPolicyOwner,
       signaturePolicy: SERVICE_LIFECYCLE_DEFAULT_SIGNATURE_POLICY,
     });
+    installationReconciler = new ServiceInstallationReconciler({
+      catalogOwner: systemMetadataOwners.serviceInstallCatalogOwner,
+      cellReadinessObserver:
+        createBindingCellReadinessObserver(systemTableCache),
+      logger: {debug() {}, error() {}, info() {}, warn() {}},
+    });
+    await installationReconciler.setLeader(true);
 
     // PG Wire SQL client
     const engine = new SQLQueryEngine({
@@ -511,6 +528,7 @@ describe('developer-journey-j1-j2-j3.integration', () => {
   });
 
   after(async () => {
+    installationReconciler?.shutdown();
     if (httpServer) {
       await new Promise((resolve) => httpServer.close(resolve));
     }
@@ -598,13 +616,22 @@ describe('developer-journey-j1-j2-j3.integration', () => {
       assert.equal(deployResult.packageId, initialReceipt.packageId);
       assert.ok(deployResult.bindings.length >= 1);
 
-      // Inspect readiness
-      const inspectResult = await runInspect({
+      // Inspect readiness before any Cell is activated: intent alone is never ready
+      const inspectBeforeActivation = await runInspect({
         createSqlClient,
         projectDirectory: projectDir,
       });
-      assert.equal(inspectResult.ready, true);
-      assert.equal(inspectResult.service, 'amounts-service-j1');
+      assert.equal(inspectBeforeActivation.ready, false);
+      assert.equal(inspectBeforeActivation.desiredState, 'active');
+      assert.equal(
+        inspectBeforeActivation.readinessState,
+        SERVICE_READINESS_STATE.NOT_READY,
+      );
+      assert.equal(
+        inspectBeforeActivation.readinessReason,
+        SERVICE_READINESS_REASON.ROLLOUT_NOT_READY,
+      );
+      assert.equal(inspectBeforeActivation.service, 'amounts-service-j1');
 
       // Load compiled modules to register in active dispatcher
       const handlerPath = path.join(projectDir, 'src', 'handler.js');
@@ -613,6 +640,7 @@ describe('developer-journey-j1-j2-j3.integration', () => {
       const serviceModule = (await import(pathToFileURL(servicePath).href)).default;
 
       const bindingName = deployResult.bindings.find((b) => b.includes('--request--'));
+      const callBindingName = deployResult.bindings.find((b) => b.includes('--call--'));
       const manifest = JSON.parse(await readFile(
         path.join(projectDir, '.lagrange', 'deployment', 'manifest.json'),
         'utf8',
@@ -631,18 +659,49 @@ describe('developer-journey-j1-j2-j3.integration', () => {
         summarizeRun: summarizeOp.run,
       };
 
+      const gen1Artifact = {
+        artifactDigest: initialReceipt.artifactDigest,
+        manifest,
+        manifestDigest: initialReceipt.manifestDigest,
+        packageId: initialReceipt.packageId,
+      };
       const activated = activateBindingGeneration({
-        artifact: {
-          artifactDigest: initialReceipt.artifactDigest,
-          manifest,
-          manifestDigest: initialReceipt.manifestDigest,
-          packageId: initialReceipt.packageId,
-        },
+        artifact: gen1Artifact,
         bindingRow: gen1BindingRow,
         generation: 1,
         handlers: gen1Handlers,
       });
       gen1Binding = activated.binding;
+
+      if (callBindingName) {
+        const callRows = await commandOwner.bindingOwner.readBindingRowsByName(
+          TENANT_ID,
+          callBindingName,
+        );
+        activateBindingGeneration({
+          artifact: gen1Artifact,
+          bindingRow: callRows[callRows.length - 1],
+          generation: 1,
+          handlers: gen1Handlers,
+        });
+      }
+      await installationReconciler.reconcileNow();
+
+      const inspectAfterActivation = await runInspect({
+        createSqlClient,
+        projectDirectory: projectDir,
+      });
+      assert.equal(inspectAfterActivation.ready, true);
+      assert.equal(
+        inspectAfterActivation.readinessState,
+        SERVICE_READINESS_STATE.READY,
+      );
+      assert.equal(
+        inspectAfterActivation.readinessReason,
+        SERVICE_READINESS_REASON.READY,
+      );
+      assert.equal(inspectAfterActivation.rolloutState, 'converged');
+      assert.equal(inspectAfterActivation.service, 'amounts-service-j1');
     });
 
     it('invokes POST /amounts/summary with distinct account IDs and asserts accurately filtered sums', async () => {
@@ -937,13 +996,23 @@ describe('developer-journey-j1-j2-j3.integration', () => {
       });
       assert.equal(deployResult.packageId, publishedReceipt.packageId);
 
-      // Inspect readiness
+      // Inspect readiness before any Cell is activated: recorded deployment is not ready yet
       const inspectResult = await runInspect({
         createSqlClient,
         projectDirectory: client2Dir,
         registration,
       });
-      assert.equal(inspectResult.ready, true);
+      assert.equal(inspectResult.ready, false);
+      assert.equal(inspectResult.desiredState, 'active');
+      assert.equal(
+        inspectResult.readinessState,
+        SERVICE_READINESS_STATE.NOT_READY,
+      );
+      assert.equal(
+        inspectResult.readinessReason,
+        SERVICE_READINESS_REASON.ROLLOUT_NOT_READY,
+      );
+      assert.equal(inspectResult.service, publishedReceipt.service);
     });
 
     it('activation loads sealed bytes exclusively from ArtifactPayloadStore (loadComponentPayloadThroughStore)', async () => {

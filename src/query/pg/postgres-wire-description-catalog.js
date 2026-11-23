@@ -135,6 +135,8 @@ const LIFECYCLE_STATUS_COLUMNS = buildColumns([
   ['installation_id', PG_OID.TEXT],
   ['latest_failure_id', PG_OID.TEXT],
   ['operation_id', PG_OID.TEXT],
+  ['readiness_reason', PG_OID.TEXT],
+  ['readiness_state', PG_OID.TEXT],
   ['revision_id', PG_OID.TEXT],
   ['rollout_state', PG_OID.TEXT],
   ['service_definition_id', PG_OID.TEXT],

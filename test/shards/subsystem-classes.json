@@ -16,7 +16,7 @@
     "query-sql": 219,
     "release-packaging": 15,
     "runtime-primitives": 24,
-    "services-runtime": 162,
+    "services-runtime": 163,
     "solver-tooling": 7,
     "storage-partition": 256,
     "storage-raft": 170,
@@ -25,8 +25,8 @@
     "transport-messaging": 123,
     "wasm-toolchain": 74
   },
-  "censusSize": 2807,
-  "digest": "fnv1a32-6e20d20d",
+  "censusSize": 2808,
+  "digest": "fnv1a32-23a0c5e2",
   "observationSchemaVersion": 2,
   "observationDigest": "fnv1a32-16ad224c",
   "classes": {
@@ -1209,6 +1209,7 @@
     "test/integration/seed-migration-process-loss.integration.test.js": "bootstrap-membership",
     "test/integration/seed-node-bootstrap.integration.test.js": "bootstrap-membership",
     "test/integration/seed-owner-read-diagnosis.integration.test.js": "bootstrap-membership",
+    "test/integration/service-inspect-achieved-readiness.integration.test.js": "services-runtime",
     "test/integration/service-install-lifecycle-cli-pgwire.integration.test.js": "services-runtime",
     "test/integration/services-p1-self-referential-write.integration.test.js": "services-runtime",
     "test/integration/single-node-default-replica-count-refusal.integration.test.js": "placement-rebalance",

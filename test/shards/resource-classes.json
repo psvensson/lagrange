@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2781,
+    "ordinary": 2782,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2807,
-  "digest": "fnv1a32-68294a0a",
+  "censusSize": 2808,
+  "digest": "fnv1a32-7139c84e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1189,6 +1189,7 @@
     "test/integration/seed-migration-process-loss.integration.test.js": "ordinary",
     "test/integration/seed-node-bootstrap.integration.test.js": "ordinary",
     "test/integration/seed-owner-read-diagnosis.integration.test.js": "ordinary",
+    "test/integration/service-inspect-achieved-readiness.integration.test.js": "ordinary",
     "test/integration/service-install-lifecycle-cli-pgwire.integration.test.js": "ordinary",
     "test/integration/services-p1-self-referential-write.integration.test.js": "ordinary",
     "test/integration/single-node-default-replica-count-refusal.integration.test.js": "ordinary",
