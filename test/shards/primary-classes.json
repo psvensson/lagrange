@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2445,
+    "unit": 2447,
     "integration": 132,
     "bootstrap": 235,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2819,
-  "digest": "fnv1a32-f2ae6f3a",
+  "censusSize": 2821,
+  "digest": "fnv1a32-e8884f4d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1575,6 +1575,7 @@
     "test/partition/replicated-sql-determinism-three-replica.test.js": "unit",
     "test/partition/retiring-source-resume-refusal.test.js": "unit",
     "test/partition/routing-key-comparator.test.js": "unit",
+    "test/partition/seed-single-replica-raft-scheduling.test.js": "unit",
     "test/partition/settled-replay-preserves-result.test.js": "unit",
     "test/partition/split-abort-fence-parity.test.js": "unit",
     "test/partition/split-ack-constants.test.js": "unit",
@@ -1709,6 +1710,7 @@
     "test/query/query-executor-no-handler-quarantine-clock.test.js": "unit",
     "test/query/query-executor-recovery-owned-routing.test.js": "unit",
     "test/query/query-executor-recovery-read-lifetime.test.js": "unit",
+    "test/query/query-executor-redirect-no-handler-quarantine.test.js": "unit",
     "test/query/query-executor-routable-services-and-read-delivery.test.js": "unit",
     "test/query/query-executor-serve-eligibility-routing.test.js": "unit",
     "test/query/query-executor-session-binding-and-build-sql.test.js": "unit",

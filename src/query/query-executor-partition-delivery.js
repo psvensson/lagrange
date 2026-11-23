@@ -461,11 +461,16 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               }
               deliverySubmitted = true;
               unknownOutcome.recordDelivery();
-              const redirectRequest = buildRequest({
-                partitionId, address: response.leaderAddress, redirectedFromAddress: address,
-                leaderAddress: response.leaderAddress, sql, params, executionOptions,
-              });
+              const redirectedFromAddress = address;
               const redirectAddress = response.leaderAddress;
+              const redirectParticipantNodeId = resolveRedirectParticipantNodeId(
+                redirectAddress, serviceInfo?.nodeId);
+              const redirectRequest = buildRequest({
+                partitionId, address: redirectAddress, redirectedFromAddress,
+                leaderAddress: redirectAddress, sql, params, executionOptions,
+              });
+              address = redirectAddress;
+              serviceInfo = {nodeId: redirectParticipantNodeId, address: redirectAddress};
               const redirectDelivery = readDelivery ? await readDelivery.redirect({
                 origin: readTicket, address: redirectAddress, request: redirectRequest,
                 routerOptions: redirectRouterDeliveryOptions, submit: markRecoverySubmission,
@@ -484,57 +489,32 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
                   redirectDelivery, isSuccessfulResponse, selfPublishedLeaderTermFloor);
               if (redirectAccepted) {
                 applySuccessfulCandidateAffinity(
-                  this,
-                  executionOptions,
-                  partitionId,
-                  response.leaderAddress,
-                  forRead,
-                );
+                  this, executionOptions, partitionId, redirectAddress, forRead);
                 return buildSuccessResult(deliveryAnswerOf(redirectDelivery), {
-                  partitionId,
-                  address: response.leaderAddress,
-                  redirectedFromAddress: address,
-                  executionOptions,
+                  partitionId, address: redirectAddress, redirectedFromAddress, executionOptions,
                 });
               }
 
               // Redirect target also failed - continue to next candidate
-              const redirectFailureMessage =
-                redirectResponse.error || ERRORS.QUERY_FAILED;
-              const redirectParticipantNodeId = resolveRedirectParticipantNodeId(
-                response.leaderAddress,
-                serviceInfo?.nodeId,
-              );
-              const redirectUnknownDecision =
-                unknownOutcome.observeAnswer(redirectResponse);
+              await candidateState.handleRedirectTransportNoHandler(
+                redirectDelivery, serviceInfo, redirectAddress, candidateIndex);
+              const redirectFailureMessage = redirectResponse.error || ERRORS.QUERY_FAILED;
+              const redirectUnknownDecision = unknownOutcome.observeAnswer(redirectResponse);
               if (redirectUnknownDecision !== UNKNOWN_OUTCOME_DECISION.NONE) {
                 recordCandidateFailure(
-                  redirectFailureMessage,
-                  redirectResponse,
-                  redirectParticipantNodeId,
-                  response.leaderAddress,
-                );
-                if (
-                  redirectUnknownDecision ===
-                  UNKNOWN_OUTCOME_DECISION.UNRESOLVABLE
-                ) {
+                  redirectFailureMessage, redirectResponse,
+                  redirectParticipantNodeId, redirectAddress);
+                if (redirectUnknownDecision === UNKNOWN_OUTCOME_DECISION.UNRESOLVABLE) {
                   return buildLastFailureResult();
                 }
                 candidateState.requestRetryCurrentAddress();
                 break;
               }
-              const redirectRetryDecision =
-                this.resolveControlPlaneWriteRetryDecision(
-                  partitionId,
-                  redirectResponse,
-                  forRead,
-                );
+              const redirectRetryDecision = this.resolveControlPlaneWriteRetryDecision(
+                partitionId, redirectResponse, forRead);
               recordCandidateFailure(
-                redirectFailureMessage,
-                redirectResponse,
-                redirectParticipantNodeId,
-                response.leaderAddress,
-              );
+                redirectFailureMessage, redirectResponse,
+                redirectParticipantNodeId, redirectAddress);
               if (
                 redirectRetryDecision.state !==
                 CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.NONE

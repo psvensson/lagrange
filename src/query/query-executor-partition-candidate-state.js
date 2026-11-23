@@ -1,4 +1,8 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
+import {
+  TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
+  deliveryTransportOf,
+} from '../transport/transport-semantic-outcome.js';
 
 const {
   QUERY_EXECUTOR_LITERAL,
@@ -218,6 +222,25 @@ function createPartitionCandidateDeliveryState({
           candidateQueue.push(...refreshedRecoveryCandidates);
         }
       }
+    },
+    async handleRedirectTransportNoHandler(
+      delivery,
+      serviceInfo,
+      address,
+      candidateIndex,
+    ) {
+      if (
+        deliveryTransportOf(delivery).reasonCode !==
+        TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER
+      ) {
+        return false;
+      }
+      await this.handleNoHandlerCandidate(serviceInfo, address);
+      this.queueLeaderRecoveryCandidates(
+        candidateIndex,
+        serviceInfo?.nodeId || null,
+      );
+      return true;
     },
   };
 }

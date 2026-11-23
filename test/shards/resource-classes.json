@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2793,
+    "ordinary": 2795,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2819,
-  "digest": "fnv1a32-f88c72a3",
+  "censusSize": 2821,
+  "digest": "fnv1a32-7474158e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1574,6 +1574,7 @@
     "test/partition/replicated-sql-determinism-three-replica.test.js": "ordinary",
     "test/partition/retiring-source-resume-refusal.test.js": "ordinary",
     "test/partition/routing-key-comparator.test.js": "ordinary",
+    "test/partition/seed-single-replica-raft-scheduling.test.js": "ordinary",
     "test/partition/settled-replay-preserves-result.test.js": "ordinary",
     "test/partition/split-abort-fence-parity.test.js": "ordinary",
     "test/partition/split-ack-constants.test.js": "ordinary",
@@ -1708,6 +1709,7 @@
     "test/query/query-executor-no-handler-quarantine-clock.test.js": "ordinary",
     "test/query/query-executor-recovery-owned-routing.test.js": "ordinary",
     "test/query/query-executor-recovery-read-lifetime.test.js": "ordinary",
+    "test/query/query-executor-redirect-no-handler-quarantine.test.js": "ordinary",
     "test/query/query-executor-routable-services-and-read-delivery.test.js": "ordinary",
     "test/query/query-executor-serve-eligibility-routing.test.js": "ordinary",
     "test/query/query-executor-session-binding-and-build-sql.test.js": "ordinary",

@@ -210,7 +210,9 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
       const useCanonicalLocalStrictIngress =
         strictIngressDecision?.localIngress === true;
       const isSingleReplicaGroup =
-        Array.isArray(this.replicaIds) && this.replicaIds.length <= 1;
+        Array.isArray(this.replicaIds) &&
+        this.replicaIds.length <= 1 &&
+        (this.raft?.readStatus?.()?.peerCount || 0) === 0;
       const requiresRaftReplication =
         !skipReplication &&
         !useCanonicalLocalStrictIngress &&

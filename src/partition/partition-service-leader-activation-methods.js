@@ -109,7 +109,7 @@ const PARTITION_SERVICE_LEADER_ACTIVATION_METHODS = Object.freeze({
         });
       }),
       {
-        immediate: this.replicaIds.length === 1,
+        immediate: this.isSoloReplicaGroup(),
         shouldActivate: () => !this.isShutdown && this.isLeader,
       },
     );

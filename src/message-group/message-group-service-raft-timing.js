@@ -140,7 +140,7 @@ function assignRaftTiming(serviceClass) {
           this.raftTimingConfig?.tickIntervalMs || null,
       };
       const shouldRearmTimer =
-        this.replicaIds.length > 1 &&
+        !this.shouldSuppressJoinPhaseRaftParticipation() &&
         (!this.deferElection || this.electionStarted);
       const outcome = applyPortRaftTimingConfig(this, {
         heartbeatMs,

@@ -298,7 +298,9 @@ function assignRaftLifecycle(serviceClass) {
       this.reconcileRaftPeersFromCache();
       if (this.replicaIds.length === 1) {
         await leadLoneMessageGroup(this);
-        this.electionStarted = true;
+        if (!this.deferElection && !this.shouldSuppressJoinPhaseRaftParticipation()) {
+          this.electionStarted = true;
+        }
       }
     },
     /**
@@ -363,7 +365,7 @@ function assignRaftLifecycle(serviceClass) {
         return;
       }
       this.electionStarted = true;
-      if (!this.raft || this.replicaIds.length === 1) {
+      if (!this.raft) {
         return;
       }
       this.logger.debug(
@@ -371,7 +373,7 @@ function assignRaftLifecycle(serviceClass) {
         {
           groupId: this.groupId,
           replicaId: this.replicaId,
-          peerCount: this.replicaIds.length - 1,
+          peerCount: this.raft.readStatus().peerCount,
         },
       );
       this.raft.startScheduling();

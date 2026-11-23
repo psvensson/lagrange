@@ -532,16 +532,12 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     if (this.electionStarted) {
       return;
     }
-    if (this.replicaIds.length === 1) {
-      this.electionStarted = true;
-      return;
-    }
     this.electionStarted = true;
     if (this.raft) {
       this.logger.info(PARTITION_SERVICE_LOG_MSG.STARTING_ELECTION_TIMER, {
         replicaId: this.replicaId,
         partitionId: this.partitionId,
-        peerCount: this.replicaIds.length - 1,
+        peerCount: this.raft.readStatus().peerCount,
       });
       this.raft.startScheduling();
     }
@@ -596,8 +592,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
         this.raftTimingConfig?.tickIntervalMs || null,
     };
     const shouldRearmTimer =
-      this.replicaIds.length > 1 &&
-      (!this.deferElection || this.electionStarted);
+      !this.defersElectionScheduling() || this.electionStarted;
     const outcome = applyPortRaftTimingConfig(this, {
       heartbeatMs,
       electionMinMs,

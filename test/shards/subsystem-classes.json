@@ -13,22 +13,22 @@
     "examples-e2e": 8,
     "pgwire-compat": 23,
     "placement-rebalance": 312,
-    "query-sql": 221,
+    "query-sql": 222,
     "release-packaging": 15,
     "runtime-primitives": 24,
     "services-runtime": 163,
     "solver-tooling": 7,
-    "storage-partition": 256,
+    "storage-partition": 257,
     "storage-raft": 171,
     "test-infrastructure": 169,
     "transactions": 17,
     "transport-messaging": 123,
     "wasm-toolchain": 74
   },
-  "censusSize": 2819,
-  "digest": "fnv1a32-a5f5f4a4",
+  "censusSize": 2821,
+  "digest": "fnv1a32-e67d6dfc",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-30657985",
+  "observationDigest": "fnv1a32-9de6d729",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1594,6 +1594,7 @@
     "test/partition/replicated-sql-determinism-three-replica.test.js": "storage-partition",
     "test/partition/retiring-source-resume-refusal.test.js": "storage-partition",
     "test/partition/routing-key-comparator.test.js": "storage-partition",
+    "test/partition/seed-single-replica-raft-scheduling.test.js": "storage-partition",
     "test/partition/settled-replay-preserves-result.test.js": "storage-partition",
     "test/partition/split-abort-fence-parity.test.js": "storage-partition",
     "test/partition/split-ack-constants.test.js": "storage-partition",
@@ -1728,6 +1729,7 @@
     "test/query/query-executor-no-handler-quarantine-clock.test.js": "query-sql",
     "test/query/query-executor-recovery-owned-routing.test.js": "query-sql",
     "test/query/query-executor-recovery-read-lifetime.test.js": "query-sql",
+    "test/query/query-executor-redirect-no-handler-quarantine.test.js": "query-sql",
     "test/query/query-executor-routable-services-and-read-delivery.test.js": "query-sql",
     "test/query/query-executor-serve-eligibility-routing.test.js": "query-sql",
     "test/query/query-executor-session-binding-and-build-sql.test.js": "query-sql",
@@ -16836,6 +16838,23 @@
         "test/partition/partition-rs-raft-restart-fixture.js"
       ]
     },
+    "test/partition/seed-single-replica-raft-scheduling.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/config/configuration-manager.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/replica-operation-progress.js",
+        "test/partition/committed-operation-gateway-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
     "test/partition/settled-replay-preserves-result.test.js": {
       "files": [
         "src/bootstrap/shared/partition-service-construction.js",
@@ -17655,6 +17674,14 @@
         "test/test-helpers/participant-transaction-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js",
         "test/transport/router-envelope-witness-fixture.js"
+      ]
+    },
+    "test/query/query-executor-redirect-no-handler-quarantine.test.js": {
+      "files": [
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/control-plane/serve-eligibility-test-support.js"
       ]
     },
     "test/query/query-executor-routable-services-and-read-delivery.test.js": {

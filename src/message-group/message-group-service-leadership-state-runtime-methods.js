@@ -87,7 +87,9 @@ function createMessageGroupServiceLeadershipStateRuntimeMethods(deps = {}) {
           });
         },
         {
-          immediate: this.replicaIds.length === 1,
+          immediate:
+            this.replicaIds.length === 1 &&
+            (this.raft?.readStatus?.()?.peerCount || 0) === 0,
           shouldActivate: () => this.raft !== null && this.isLeaderReplica(),
         },
       );
