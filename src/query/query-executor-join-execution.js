@@ -24,6 +24,7 @@ import {
   extractCatalogSchema,
   resolveExpectedOutputColumns,
 } from './distributed/distributed-select-fanout-plan.js';
+import {classifySingleTableStatement} from './distributed/distributed-select-fanout-soundness.js';
 import {
   SEMI_FILTER_KIND,
   andCombineConjuncts,
@@ -46,7 +47,6 @@ const {
   QUERY_AST_TYPE,
   QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
-  QUERY_EXECUTOR_LITERAL,
   QUERY_LOG_MSG,
   buildDistributedFailureSummary,
 } = QUERY_EXECUTOR_SHARED;
@@ -136,10 +136,17 @@ function collectAstColumnsForQualifier(ast, qualifiers, includeUnqualified = fal
   return [...columns];
 }
 
-function buildEdgeDeclaredColumns(ast, edgePlan, fragments) {
+function buildEmptySchemaFragments(schema) {
+  const cols = Array.isArray(schema?.columns) ?
+    schema.columns.map((c) => c.name).filter(Boolean) : [];
+  return cols.length > 0 ? [{success: true, rows: [], columns: cols}] : [];
+}
+
+function buildEdgeDeclaredColumns(ast, edgePlan, fragments, edgeSchema = null) {
   const fromFragments = collectFragmentColumnNames(fragments);
-  if (fromFragments.length > 0) {
-    return fromFragments;
+  if (fromFragments.length > 0) return fromFragments;
+  if (Array.isArray(edgeSchema?.columns) && edgeSchema.columns.length > 0) {
+    return edgeSchema.columns.map((c) => c.name).filter(Boolean);
   }
   if (Array.isArray(edgePlan.projection) && edgePlan.projection.length > 0) {
     return edgePlan.projection;
@@ -191,11 +198,8 @@ function remainingBudgetLimit(totalLimit, usedAmount) {
 
 const queryExecutorJoinExecutionMethods = {
   hasAggregates(ast) {
-    return Array.isArray(ast?.columns) && ast.columns.some(
-      (col) =>
-        col?.expression?.type === QUERY_EXECUTOR_LITERAL.STRING_AGGREGATE ||
-        col?.type === QUERY_EXECUTOR_LITERAL.STRING_AGGREGATE,
-    );
+    const classified = classifySingleTableStatement(ast);
+    return classified.aggregates.length > 0 || Boolean(ast?.having);
   },
 
   isPartitionCapExhaustedFailure(result) {
@@ -472,7 +476,7 @@ const queryExecutorJoinExecutionMethods = {
       extraTable: {
         tableName: edgePlan.coordinatorTableName,
         schema: edgeSchema,
-        declaredColumns: buildEdgeDeclaredColumns(ast, edgePlan, edgeResults),
+        declaredColumns: buildEdgeDeclaredColumns(ast, edgePlan, edgeResults, edgeSchema),
         fragments: edgeResults,
       },
     };
@@ -577,7 +581,7 @@ const queryExecutorJoinExecutionMethods = {
       requestDeadlineMs,
     );
     const aggregated = await this.mergeEngine.mergePartitionResults(
-      mainFetch.results,
+      mainFetch.results.length > 0 ? mainFetch.results : buildEmptySchemaFragments(mainSchema),
       ast,
       this,
       coordinatorPlan,

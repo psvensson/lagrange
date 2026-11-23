@@ -22,6 +22,9 @@
  */
 import {DEFAULT_READY_LEASE_MS} from '../../../src/control-plane/control-plane-constants.js';
 import {
+  resolveStaticNetworkTimingProfile,
+} from '../../../src/config/network-timing-profile-resolver.js';
+import {
   isNodeRecordReady,
   wasNodeRecordReadyWhenWritten,
 } from '../../../src/node/node-readiness-policy.js';
@@ -32,7 +35,9 @@ import {
   arrayIncludes,
   arrayMap,
   arraySome,
+  numberIsFinite,
   stringToLowerCase,
+  toNumber,
 } from './real-product-captured-intrinsics.js';
 
 const ACTIVE = 'active';
@@ -68,7 +73,25 @@ function text(value) {
   return stringToLowerCase(String(value ?? ''));
 }
 
-function nodeDenials(nodes, expectedNodeIds, now) {
+function resolveDeclaredReadyLeaseMs({readyLeaseMs, networkTimingProfile}) {
+  if (readyLeaseMs !== undefined && readyLeaseMs !== null) {
+    if (typeof readyLeaseMs !== 'number' || !numberIsFinite(readyLeaseMs) || readyLeaseMs <= 0) {
+      throw new RangeError(
+        `readyLeaseMs must be a positive finite number, got ${String(readyLeaseMs)}`,
+      );
+    }
+    return readyLeaseMs;
+  }
+  if (networkTimingProfile !== undefined &&
+      networkTimingProfile !== null &&
+      networkTimingProfile !== '') {
+    return resolveStaticNetworkTimingProfile(networkTimingProfile)
+      .effective.controlPlaneReadyLeaseMs;
+  }
+  return DEFAULT_READY_LEASE_MS;
+}
+
+function nodeDenials(nodes, expectedNodeIds, now, declaredReadyLeaseMs = DEFAULT_READY_LEASE_MS) {
   const denials = [];
   for (const nodeId of expectedNodeIds) {
     const row = arrayFind(nodes, (one) => one.node_id === nodeId);
@@ -76,16 +99,17 @@ function nodeDenials(nodes, expectedNodeIds, now) {
       denials.push(`${DENIAL.NODE_MISSING}:${nodeId}`);
       continue;
     }
-    const lease = {...row, ready_lease_expires_at: Number(row.ready_lease_expires_at)};
+    const lease = {...row, ready_lease_expires_at: toNumber(row.ready_lease_expires_at)};
     if (!isNodeRecordReady(lease, {now, requireActiveStatus: true})) {
       denials.push(`${DENIAL.NODE_NOT_READY}:${nodeId}`);
     }
-    // The heartbeat the lease was written on, no older than the product's own
-    // ready-lease duration (src/control-plane/control-plane-constants.js).
-    const heartbeatAt = Number(row.last_heartbeat);
+    // The heartbeat the lease was written on, no older than the declared
+    // ready-lease contract (DEFAULT_READY_LEASE_MS = 15,000 ms for the default
+    // profile, or the explicit profile/declared readyLeaseMs).
+    const heartbeatAt = toNumber(row.last_heartbeat);
     if (!wasNodeRecordReadyWhenWritten({...lease, last_heartbeat: heartbeatAt},
-      {now, requireActiveStatus: true}) || !Number.isFinite(heartbeatAt) ||
-        now - heartbeatAt > DEFAULT_READY_LEASE_MS) {
+      {now, requireActiveStatus: true}) || !numberIsFinite(heartbeatAt) ||
+        now - heartbeatAt > declaredReadyLeaseMs) {
       denials.push(`${DENIAL.NODE_HEARTBEAT_STALE}:${nodeId}`);
     }
     if (text(row.connection_state) !== CONNECTION_READY) {
@@ -128,12 +152,18 @@ function partitionDenials(partition, services, expectedNodeIds) {
  * @param {{nodes: Array<Object>, endpoints: Array<Object>,
  *   partitions: Array<Object>, services: Array<Object>,
  *   expectedNodeIds: Array<string>, requiredServiceIds: Array<string>,
- *   requiredTables?: Array<string>|null, now: number}} input
+ *   requiredTables?: Array<string>|null, now: number,
+ *   readyLeaseMs?: number|null, networkTimingProfile?: string|Object|null}} input
  * @return {{ready: boolean, denials: Array<string>}}
  */
 function evaluateLagrangeClusterReadiness({nodes, endpoints, partitions, services,
-  expectedNodeIds, requiredServiceIds, requiredTables = null, now}) {
-  const denials = [...nodeDenials(nodes, expectedNodeIds, now),
+  expectedNodeIds, requiredServiceIds, requiredTables = null, now,
+  readyLeaseMs = undefined, networkTimingProfile = undefined}) {
+  const declaredReadyLeaseMs = resolveDeclaredReadyLeaseMs({
+    readyLeaseMs,
+    networkTimingProfile,
+  });
+  const denials = [...nodeDenials(nodes, expectedNodeIds, now, declaredReadyLeaseMs),
     ...serviceEndpointDenials(endpoints, requiredServiceIds)];
   const scope = partitionScopeOf(partitions, requiredTables);
   denials.push(...scope.denials);
