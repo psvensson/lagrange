@@ -405,13 +405,12 @@ const indexServiceGlobalMethods = {
     }
     const coordinator = this.getGlobalIndexCoordinator();
     const intents = await jobOwner.listSucceededGlobalIndexIntents();
-    const outcomes = [];
-    for (const intent of intents) {
-      if (isMatchingRecoverableGsiIntent(coordinator, incompleteNames, intent)) {
-        outcomes.push(await this.completeRecoveredGlobalIndexProvisioning(intent));
-      }
-    }
-    return outcomes;
+    const matchingIntents = intents.filter(
+      (intent) => isMatchingRecoverableGsiIntent(coordinator, incompleteNames, intent),
+    );
+    return Promise.all(
+      matchingIntents.map((intent) => this.completeRecoveredGlobalIndexProvisioning(intent)),
+    );
   },
 
   /**

@@ -340,6 +340,8 @@ async function setupStrictCluster(t, options = {}) {
     gateway,
     cdcService,
     systemCache,
+    messageRouter,
+    provisioner,
     createStrictEngine,
   };
 }
@@ -1000,6 +1002,16 @@ test('Concurrent identical CREATE GLOBAL INDEX at replica-visible / CREATING bou
     releaseBReconcile();
     const createBRes = await createBPromise;
     t.equal(createBRes.success, true, 'Client B CREATE GLOBAL INDEX settles cleanly');
+    t.equal(
+      createBRes.indexId,
+      createARes.indexId,
+      'Client B shares exact logical index generation ID with Client A',
+    );
+    const finalCatalogA = env.gateway.db.prepare(
+      'SELECT index_id, state FROM indices WHERE index_name = ?',
+    ).get('idx_users_email');
+    t.equal(finalCatalogA?.index_id, createARes.indexId, 'Catalog keeps same generation index_id');
+    t.equal(finalCatalogA?.state, GLOBAL_INDEX_STATE.READ_WRITE, 'Catalog stays READ_WRITE');
 
     const idxReplicas = [...env.partitionServices.values()].filter(
       (ps) => ps.tableName === '__idx_users_idx_users_email',
@@ -1036,6 +1048,20 @@ test('Concurrent identical CREATE GLOBAL INDEX at replica-visible / CREATING bou
         `Indexed row for ${name} remains queryable after concurrent CREATE`,
       );
     }
+
+    const postWriteSql = 'INSERT INTO users (id, email, name, status) VALUES (?, ?, ?, ?)';
+    env.oracleDb.prepare(postWriteSql).run(30, 'carol@example.com', 'Carol', 'active');
+    const postWriteRes = await engineB.executeQuery(
+      postWriteSql,
+      [30, 'carol@example.com', 'Carol', 'active'],
+    );
+    t.equal(postWriteRes.success, true, 'Post-concurrent-CREATE TX1 INSERT succeeds');
+    const carolSelect = await engineB.executeQuery(selectSql, ['carol@example.com']);
+    t.equal(
+      carolSelect.globalIndexPlan?.accessPath,
+      GLOBAL_INDEX_ACCESS_PATH.GLOBAL_SECONDARY_INDEX,
+    );
+    t.same(carolSelect.rows, env.oracleDb.prepare(selectSql).all('carol@example.com'));
   } finally {
     await engineB.shutdown();
     await engineA.shutdown();
@@ -1099,5 +1125,228 @@ test('Same-node concurrent identical CREATE GLOBAL INDEX joins in-flight creatio
     t.same(selectRes.rows, env.oracleDb.prepare(selectSql).all('zoe@example.com'));
   } finally {
     await engine.shutdown();
+  }
+});
+
+test('Destructive reconciliation refuses stale/wrong operation authority and late READ_WRITE effects while preserving generation replacement (Q1)', async (t) => {
+  const env = await setupStrictCluster(t, {includeIndexPartitions: false});
+  seedUsers(env, [
+    {id: 10, email: 'alice@example.com', name: 'Alice', status: 'active'},
+    {id: 120, email: 'zoe@example.com', name: 'Zoe', status: 'pending'},
+  ]);
+
+  const engine = await env.createStrictEngine({attachProvisioner: true});
+  try {
+    const createGen1 = await engine.executeQuery(
+      'CREATE GLOBAL INDEX idx_users_email ON users (email)',
+    );
+    t.equal(createGen1.success, true);
+    const coord = engine.indexService.getGlobalIndexCoordinator();
+    const parts = coord.getIndexPartitions('idx_users_email');
+    t.equal(parts.length, 1);
+    const partId = parts[0].partition_id;
+
+    const baseReconcileParams = {
+      tableName: 'users',
+      indexName: 'idx_users_email',
+      columnNames: ['email'],
+      basePrimaryKeyColumns: ['id'],
+      columnTypes: {id: 'INTEGER', email: 'TEXT'},
+      partitionId: partId,
+      partition: parts[0],
+    };
+
+    const wrongIdOutcome = await coord.onReconcileIndexDataset({
+      ...baseReconcileParams,
+      indexId: 'idx_users_email-wrong',
+      generation: 1,
+    });
+    t.equal(wrongIdOutcome?.reconciled, false, 'Wrong indexId refused at reconciliation boundary');
+    t.equal(wrongIdOutcome?.skipped, true);
+
+    const wrongGenOutcome = await coord.onReconcileIndexDataset({
+      ...baseReconcileParams,
+      indexId: createGen1.indexId,
+      generation: 99,
+    });
+    t.equal(wrongGenOutcome?.reconciled, false, 'Wrong generation refused even with valid indexId');
+    t.equal(wrongGenOutcome?.skipped, true);
+
+    const lateReadWriteOutcome = await coord.onReconcileIndexDataset({
+      ...baseReconcileParams,
+      indexId: createGen1.indexId,
+      generation: 1,
+    });
+    t.equal(
+      lateReadWriteOutcome?.reconciled,
+      false,
+      'Late reconciliation with matching gen1 indexId refused once catalog is READ_WRITE',
+    );
+    t.equal(lateReadWriteOutcome?.skipped, true);
+
+    const idxReplica = [...env.partitionServices.values()].find(
+      (ps) => ps.partitionId === partId,
+    );
+    const countGen1 = idxReplica.db.prepare(
+      'SELECT COUNT(*) AS cnt FROM "__idx_users_idx_users_email"',
+    ).get().cnt;
+    t.equal(countGen1, 2, 'Refused reconciliations leave gen1 indexed rows intact');
+
+    t.equal((await engine.executeQuery('DROP INDEX idx_users_email')).success, true);
+    const createGen2 = await engine.executeQuery(
+      'CREATE GLOBAL INDEX idx_users_email ON users (name)',
+    );
+    t.equal(createGen2.success, true, 'Replaced gen2 CREATE succeeds');
+    t.equal(createGen2.generation, 2);
+
+    const gen2Parts = coord.getIndexPartitions('idx_users_email');
+    const staleGen1AfterReplace = await coord.onReconcileIndexDataset({
+      ...baseReconcileParams,
+      partitionId: gen2Parts[0].partition_id,
+      partition: gen2Parts[0],
+      indexId: createGen1.indexId,
+      generation: 1,
+    });
+    t.equal(staleGen1AfterReplace?.reconciled, false, 'Stale gen1 refused after gen2 replaced it');
+    t.equal(staleGen1AfterReplace?.skipped, true);
+
+    const nameSql = 'SELECT * FROM users WHERE name = ? ORDER BY id ASC';
+    const nameRes = await engine.executeQuery(nameSql, ['Zoe']);
+    t.equal(nameRes.globalIndexPlan?.accessPath, GLOBAL_INDEX_ACCESS_PATH.GLOBAL_SECONDARY_INDEX);
+    t.same(nameRes.rows, env.oracleDb.prepare(nameSql).all('Zoe'));
+  } finally {
+    await engine.shutdown();
+  }
+});
+
+test('Crash during active backfill recovers without client CREATE and fences dropped/replaced incarnations (Q2)', async (t) => {
+  const env = await setupStrictCluster(t, {includeIndexPartitions: false});
+  seedUsers(env, [
+    {id: 10, email: 'alice@example.com', name: 'Alice', status: 'active'},
+    {id: 20, email: 'bob@example.com', name: 'Bob', status: 'active'},
+    {id: 120, email: 'zoe@example.com', name: 'Zoe', status: 'pending'},
+  ]);
+
+  let abortedMidBackfill = false;
+  const origSubmit = env.gateway.submitMutation.bind(env.gateway);
+  let abortActive = true;
+  const abortableGateway = new Proxy(env.gateway, {
+    get(target, prop, receiver) {
+      if (prop === 'submitMutation') {
+        return async (mutation, opts) => {
+          if (abortActive && abortedMidBackfill) {
+            throw Object.assign(
+              new Error('Simulated mid-backfill process crash'),
+              {code: 'PROCESS_ABORTED'},
+            );
+          }
+          const res = await origSubmit(mutation, opts);
+          if (abortActive &&
+              !abortedMidBackfill &&
+              mutation?.tableName === TABLES.INDICES &&
+              mutation?.data?.state === GLOBAL_INDEX_STATE.BACKFILLING &&
+              Number(mutation?.data?.backfill_total_rows || 0) >= 2) {
+            abortedMidBackfill = true;
+          }
+          return res;
+        };
+      }
+      return Reflect.get(target, prop, receiver);
+    },
+  });
+
+  const engine1 = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    systemCache: env.systemCache,
+    messageRouter: env.messageRouter,
+    cdcIntegrationService: env.cdcService,
+    controlPlaneSystemTableGateway: abortableGateway,
+    tablePartitionProvisioner: env.provisioner,
+    autoStartDistributedTransactionRecovery: false,
+  });
+  await engine1.indexService.initialize();
+
+  let createRes = null;
+  let createErr = null;
+  try {
+    createRes = await engine1.executeQuery('CREATE GLOBAL INDEX idx_users_email ON users (email)');
+  } catch (err) {
+    createErr = err;
+  } finally {
+    await engine1.shutdown().catch(() => {});
+  }
+  t.ok(
+    createErr || createRes?.success === false,
+    'Engine1 aborted mid-backfill after first partition checkpoint committed',
+  );
+  t.equal(abortedMidBackfill, true);
+
+  abortActive = false;
+  const crashedJob = env.gateway.db.prepare(
+    'SELECT * FROM schema_operations ORDER BY created_at DESC LIMIT 1',
+  ).get();
+  const crashedIdx = env.gateway.db.prepare(
+    'SELECT * FROM indices WHERE index_name = ?',
+  ).get('idx_users_email');
+  t.equal(crashedJob?.status, 'SUCCEEDED', 'Schema job already committed SUCCEEDED before crash');
+  t.equal(crashedIdx?.state, GLOBAL_INDEX_STATE.BACKFILLING, 'GSI interrupted during BACKFILLING');
+  t.equal(crashedIdx?.backfill_total_rows, 2, 'Partial backfill checkpoint (2 rows) persisted');
+  const gen1IndexId = crashedIdx.index_id;
+
+  const engine2 = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    systemCache: env.systemCache,
+    messageRouter: env.messageRouter,
+    cdcIntegrationService: env.cdcService,
+    controlPlaneSystemTableGateway: env.gateway,
+    tablePartitionProvisioner: env.provisioner,
+    autoStartDistributedTransactionRecovery: true,
+  });
+  try {
+    await engine2.indexService.initialize();
+    const recovered = await waitForCondition(() => {
+      const row = env.gateway.db.prepare(
+        'SELECT state, backfill_total_rows FROM indices WHERE index_name = ?',
+      ).get('idx_users_email');
+      return row?.state === GLOBAL_INDEX_STATE.READ_WRITE;
+    }, 3000, 15);
+    t.equal(recovered, true, 'Restart recovers BACKFILLING GSI to READ_WRITE without client CREATE');
+
+    const finalIdx = env.gateway.db.prepare(
+      'SELECT * FROM indices WHERE index_name = ?',
+    ).get('idx_users_email');
+    t.equal(finalIdx?.index_id, gen1IndexId, 'Recovered same generation index_id');
+    t.equal(finalIdx?.backfill_total_rows, 3, 'Completed remaining partition row (total 3)');
+
+    const selectSql = 'SELECT * FROM users WHERE email = ? ORDER BY id ASC';
+    const zoeRes = await engine2.executeQuery(selectSql, ['zoe@example.com']);
+    t.equal(zoeRes.globalIndexPlan?.accessPath, GLOBAL_INDEX_ACCESS_PATH.GLOBAL_SECONDARY_INDEX);
+    t.same(zoeRes.rows, env.oracleDb.prepare(selectSql).all('zoe@example.com'));
+
+    const postSql = 'INSERT INTO users (id, email, name, status) VALUES (?, ?, ?, ?)';
+    env.oracleDb.prepare(postSql).run(30, 'carol@example.com', 'Carol', 'active');
+    const postWriteRes = await engine2.executeQuery(
+      postSql,
+      [30, 'carol@example.com', 'Carol', 'active'],
+    );
+    t.equal(postWriteRes.success, true);
+    const carolRes = await engine2.executeQuery(selectSql, ['carol@example.com']);
+    t.equal(carolRes.globalIndexPlan?.accessPath, GLOBAL_INDEX_ACCESS_PATH.GLOBAL_SECONDARY_INDEX);
+    t.same(carolRes.rows, env.oracleDb.prepare(selectSql).all('carol@example.com'));
+
+    t.equal((await engine2.executeQuery('DROP INDEX idx_users_email')).success, true);
+    const droppedLate = await engine2.indexService.completeRecoveredGlobalIndexProvisioning({
+      globalIndex: {indexName: 'idx_users_email', indexId: gen1IndexId, generation: 1},
+    });
+    t.equal(droppedLate?.fenced, true, 'Late completion for dropped incarnation is fenced');
+
+    const gen2Res = await engine2.executeQuery('CREATE GLOBAL INDEX idx_users_email ON users (name)');
+    t.equal(gen2Res.success, true, 'Replacement gen2 CREATE succeeds');
+    const replacedLate = await engine2.indexService.completeRecoveredGlobalIndexProvisioning({
+      globalIndex: {indexName: 'idx_users_email', indexId: gen1IndexId, generation: 1},
+    });
+    t.equal(replacedLate?.fenced, true, 'Late completion for gen1 is fenced once gen2 exists');
+  } finally {
+    await engine2.shutdown();
   }
 });

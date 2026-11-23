@@ -311,54 +311,16 @@ async function replaceDistributedIndexTable(
   await createDistributedIndexTable(indexService, partitionId, datasetName, datasetSchema);
 }
 
-async function reconcileDistributedIndexDatasetSchema(
+async function reconcileRemoteSqliteDataset(
   indexService,
-  {
-    tableName,
-    indexName,
-    columnNames,
-    basePrimaryKeyColumns,
-    columnTypes,
-    indexId = null,
-    generation = null,
-    isRedrive = false,
-    partitionId,
-    partition,
-  },
-  getCoordinator = null,
-  onSyncRow = null,
+  coordinator,
+  params,
+  datasetName,
+  datasetSchema,
+  onSyncRow,
 ) {
-  const coordinator = getCoordinator ? getCoordinator() : resolveCoordinatorForSync(indexService);
-  const initialOwnership = await verifyAndSyncDatasetOwnership(
-    indexService,
-    coordinator,
-    {indexName, indexId, generation},
-    onSyncRow,
-  );
-  if (!initialOwnership.owned) {
-    return {reconciled: false, skipped: true, reason: initialOwnership.reason};
-  }
-  const datasetName = getGlobalIndexDatasetName(tableName, indexName);
-  const baseTable = indexService?.sqlQueryEngine?.getTableInfo?.(tableName) || null;
-  const resolvedTypes = mergeColumnTypesWithBaseTable(baseTable, columnTypes);
-  const datasetSchema = buildIndexDatasetSchema({
-    tableName,
-    indexName,
-    columnNames,
-    basePrimaryKeyColumns,
-    columnTypes: resolvedTypes,
-  });
-  await ensureIndexDatasetTableInGateway(indexService, {
-    table_name: tableName,
-    index_name: indexName,
-    column_names: JSON.stringify(columnNames),
-    basePrimaryKeyColumns,
-  });
-  const expectedKeyType = resolvedTypes?.[columnNames[0]] || LOCAL_STR_TEXT;
-  await reconcilePartitionDatasetKeyType(indexService, partition, expectedKeyType);
-  if (!hasDistributedPartitionRoute(indexService, partitionId)) {
-    return {reconciled: true, dropped: false};
-  }
+  const {tableName, indexName, indexId = null, generation = null, isRedrive = false, partitionId} =
+    params;
   const schemaRows = await executePartitionReadSql(
     indexService,
     partitionId,
@@ -392,6 +354,64 @@ async function reconcileDistributedIndexDatasetSchema(
     datasetSchema,
   });
   return {reconciled: true, dropped: true};
+}
+
+async function reconcileDistributedIndexDatasetSchema(
+  indexService,
+  params,
+  getCoordinator = null,
+  onSyncRow = null,
+) {
+  const {
+    tableName,
+    indexName,
+    columnNames,
+    basePrimaryKeyColumns,
+    columnTypes,
+    indexId = null,
+    generation = null,
+    partitionId,
+    partition,
+  } = params;
+  const coordinator = getCoordinator ? getCoordinator() : resolveCoordinatorForSync(indexService);
+  const initialOwnership = await verifyAndSyncDatasetOwnership(
+    indexService,
+    coordinator,
+    {indexName, indexId, generation},
+    onSyncRow,
+  );
+  if (!initialOwnership.owned) {
+    return {reconciled: false, skipped: true, reason: initialOwnership.reason};
+  }
+  const datasetName = getGlobalIndexDatasetName(tableName, indexName);
+  const baseTable = indexService?.sqlQueryEngine?.getTableInfo?.(tableName) || null;
+  const resolvedTypes = mergeColumnTypesWithBaseTable(baseTable, columnTypes);
+  const datasetSchema = buildIndexDatasetSchema({
+    tableName,
+    indexName,
+    columnNames,
+    basePrimaryKeyColumns,
+    columnTypes: resolvedTypes,
+  });
+  await ensureIndexDatasetTableInGateway(indexService, {
+    table_name: tableName,
+    index_name: indexName,
+    column_names: JSON.stringify(columnNames),
+    basePrimaryKeyColumns,
+  });
+  const expectedKeyType = resolvedTypes?.[columnNames[0]] || LOCAL_STR_TEXT;
+  await reconcilePartitionDatasetKeyType(indexService, partition, expectedKeyType);
+  if (!hasDistributedPartitionRoute(indexService, partitionId)) {
+    return {reconciled: true, dropped: false};
+  }
+  return reconcileRemoteSqliteDataset(
+    indexService,
+    coordinator,
+    params,
+    datasetName,
+    datasetSchema,
+    onSyncRow,
+  );
 }
 
 function buildWorkflowFailureError(outcome, defaultMessage) {

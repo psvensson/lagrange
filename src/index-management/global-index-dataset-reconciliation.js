@@ -332,6 +332,27 @@ function resolveCatalogRowForOwnership(indexService, coordinator, indexName, aut
   return null;
 }
 
+const OWNERSHIP_CHECK_RULES = Object.freeze([
+  {
+    reason: OWNERSHIP_REASON.MISSING_CATALOG,
+    matches: (row) => !row,
+  },
+  {
+    reason: OWNERSHIP_REASON.STALE_GENERATION,
+    matches: (row, coordinator, {indexName, indexId, generation}) =>
+      Boolean(
+        (indexId && row.index_id !== indexId) ||
+        (coordinator &&
+         generation !== null &&
+         !coordinator._isGenerationCurrent(indexName, generation, row.index_id)),
+      ),
+  },
+  {
+    reason: OWNERSHIP_REASON.CATALOG_NOT_CREATING,
+    matches: (row) => row.state !== GLOBAL_INDEX_STATE.CREATING,
+  },
+]);
+
 async function verifyGlobalIndexCatalogOwnership(
   indexService,
   coordinator,
@@ -339,22 +360,14 @@ async function verifyGlobalIndexCatalogOwnership(
 ) {
   const authoritative = await readAuthoritativeGlobalIndexRow(indexService, indexName);
   const row = resolveCatalogRowForOwnership(indexService, coordinator, indexName, authoritative);
-  if (!row) {
-    return {owned: false, reason: OWNERSHIP_REASON.MISSING_CATALOG, row: null};
-  }
-  if (indexId && row.index_id !== indexId) {
-    return {owned: false, reason: OWNERSHIP_REASON.STALE_GENERATION, row};
-  }
-  if (coordinator &&
-      generation !== null &&
-      !coordinator._isGenerationCurrent(indexName, generation, row.index_id)) {
-    return {owned: false, reason: OWNERSHIP_REASON.STALE_GENERATION, row};
-  }
-  if (row.state !== GLOBAL_INDEX_STATE.CREATING) {
+  const matchedRule = OWNERSHIP_CHECK_RULES.find(
+    (rule) => rule.matches(row, coordinator, {indexName, indexId, generation}),
+  );
+  if (matchedRule) {
     return {
       owned: false,
-      reason: OWNERSHIP_REASON.CATALOG_NOT_CREATING,
-      state: row.state,
+      reason: matchedRule.reason,
+      ...(row?.state !== undefined ? {state: row.state} : {}),
       row,
     };
   }
