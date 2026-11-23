@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2438,
+    "unit": 2440,
     "integration": 132,
     "bootstrap": 231,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2808,
-  "digest": "fnv1a32-459fee61",
+  "censusSize": 2810,
+  "digest": "fnv1a32-aecb2eaf",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -42,6 +42,7 @@
     "test/admin/admin-control-snapshot-served-handoff-writer-coupling.test.js": "unit",
     "test/admin/admin-control-snapshot.test.js": "unit",
     "test/admin/admin-deprecation.test.js": "unit",
+    "test/admin/admin-diagnostics-payload-bounds.test.js": "unit",
     "test/admin/admin-meta-command-handlers.test.js": "unit",
     "test/admin/admin-meta-delegator.test.js": "unit",
     "test/admin/admin-meta-endpoint-builder.test.js": "unit",
@@ -391,6 +392,7 @@
     "test/cdc/cdc-routed-mutation-wait-bound-spent.test.js": "unit",
     "test/cdc/cdc-shutdown-terminal-owner-write.test.js": "unit",
     "test/cdc/cdc-sql-builder.test.js": "unit",
+    "test/cdc/cdc-system-table-batch-upsert-shape.test.js": "unit",
     "test/cdc/cdc-system-table-write-failure-participant-detail.test.js": "unit",
     "test/cdc/cdc-terminal-gate-inflight.test.js": "unit",
     "test/cdc/current-epoch-propagation.integration.test.js": "integration",

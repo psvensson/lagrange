@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2782,
+    "ordinary": 2784,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2808,
-  "digest": "fnv1a32-7139c84e",
+  "censusSize": 2810,
+  "digest": "fnv1a32-1a9d2c16",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -41,6 +41,7 @@
     "test/admin/admin-control-snapshot-served-handoff-writer-coupling.test.js": "ordinary",
     "test/admin/admin-control-snapshot.test.js": "ordinary",
     "test/admin/admin-deprecation.test.js": "ordinary",
+    "test/admin/admin-diagnostics-payload-bounds.test.js": "ordinary",
     "test/admin/admin-meta-command-handlers.test.js": "ordinary",
     "test/admin/admin-meta-delegator.test.js": "ordinary",
     "test/admin/admin-meta-endpoint-builder.test.js": "ordinary",
@@ -390,6 +391,7 @@
     "test/cdc/cdc-routed-mutation-wait-bound-spent.test.js": "ordinary",
     "test/cdc/cdc-shutdown-terminal-owner-write.test.js": "ordinary",
     "test/cdc/cdc-sql-builder.test.js": "ordinary",
+    "test/cdc/cdc-system-table-batch-upsert-shape.test.js": "ordinary",
     "test/cdc/cdc-system-table-write-failure-participant-detail.test.js": "ordinary",
     "test/cdc/cdc-terminal-gate-inflight.test.js": "ordinary",
     "test/cdc/current-epoch-propagation.integration.test.js": "ordinary",

@@ -54,6 +54,7 @@ documentClass: generated
 - [admin-preflight-snapshot.js](admin-preflight-snapshot.js) - Preflight critical path snapshot building for the admin WebSocket API. (importers: few)
 - [admin-query-result-message-envelope.js](admin-query-result-message-envelope.js) - No leading comment; first export: createAdminQueryResultBaseEnvelope. (importers: many)
 - [admin-quota-enforcer.js](admin-quota-enforcer.js) - Quota enforcement for WASM module operations. (importers: few)
+- [admin-replica-operation-summary-compaction.js](admin-replica-operation-summary-compaction.js) - Bounds outward admin replica-operation summaries produced by AdminControlSnapshot so partition diagnostics, service... (importers: one)
 - [admin-runtime-service-view-constants.js](admin-runtime-service-view-constants.js) - Constants for admin runtime-service view helpers. (importers: few)
 - [admin-runtime-service-views.js](admin-runtime-service-views.js) - Admin view helpers for runtime-service replicas. (importers: one)
 - [admin-service-discovery-authoritative-repair-failures.js](admin-service-discovery-authoritative-repair-failures.js) - No leading comment; first export: computeAuthoritativeRepairFailureRetryAfterMs. (importers: one)

@@ -28,6 +28,7 @@ import {
   uniqueSorted,
 } from './admin-helpers.js';
 import {AdminControlSnapshotMembershipPublicationReconcile} from './admin-control-snapshot-membership-publication-reconcile.js';
+import {compactReplicaOperationSummary} from './admin-replica-operation-summary-compaction.js';
 // ── file-local constants ────────────────────────────────────────────────────
 const ADMIN_CONTROL_SNAPSHOT_LITERAL = Object.freeze({
   VALUE: '',
@@ -516,6 +517,11 @@ class AdminControlSnapshot extends AdminControlSnapshotMembershipPublicationReco
       0,
       livenessSummary.staleInFlightCount - staleInFlightDiscountCount,
     );
+    const compacted = compactReplicaOperationSummary({
+      livenessSummary,
+      livenessOptions,
+      priorityPartitionIds: ADMIN_PRIORITY_RECOVERY_PARTITION_IDS,
+    });
     return {
       inFlightCount: livenessSummary.inFlightCount,
       statusHistogram: livenessSummary.statusHistogram,
@@ -526,8 +532,10 @@ class AdminControlSnapshot extends AdminControlSnapshotMembershipPublicationReco
       staleInFlightDiscountCount,
       effectiveStaleInFlightCount,
       inFlightOperationIds: livenessSummary.inFlightOperationIds,
-      operationTimelineById: livenessSummary.operationTimelineById,
-      rows: livenessSummary.rows,
+      operationTimelineById: compacted.operationTimelineById,
+      rows: compacted.rows,
+      totalRowCount: compacted.totalRowCount,
+      omittedTerminalRowCount: compacted.omittedTerminalRowCount,
       inFlightExcludedStatuses:
         ADMIN_CONTROL_SNAPSHOT.IN_FLIGHT_EXCLUDED_STATUSES,
     };

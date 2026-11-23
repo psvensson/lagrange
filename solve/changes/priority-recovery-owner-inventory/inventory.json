@@ -2,7 +2,7 @@
   "schemaVersion": "priority-recovery-owner-inventory-v1",
   "generatedFrom": {
     "root": "src",
-    "sourceSha256": "efc9c761ccc36ed176cb37f0259f4b9a7111da8560ef374a096000ec3d469544"
+    "sourceSha256": "7cf707cb002efdadc4b43e5b730344f95823d9d2411f02dced327af3f0fe59e8"
   },
   "layerDirection": [
     "raw_observation",
@@ -18,8 +18,8 @@
   },
   "metrics": {
     "moduleCount": 67,
-    "publicExportCount": 775,
-    "importEdgeCount": 326,
+    "publicExportCount": 776,
+    "importEdgeCount": 327,
     "crossLayerEdgeCount": 96,
     "layerDirectionViolationCount": 48,
     "largestStronglyConnectedComponent": 1,
@@ -1357,10 +1357,12 @@
       "exports": [
         "buildCanonicalPriorityRecoveryObservation",
         "buildCanonicalPublicationConvergence",
-        "buildCanonicalPublicationConvergenceGate"
+        "buildCanonicalPublicationConvergenceGate",
+        "isRecursivelyImmutableOwnData"
       ],
       "localExports": [
-        "buildCanonicalPriorityRecoveryObservation"
+        "buildCanonicalPriorityRecoveryObservation",
+        "isRecursivelyImmutableOwnData"
       ]
     },
     {
@@ -4396,6 +4398,16 @@
       "targetLayer": "raw_observation",
       "crossLayer": false,
       "conformsToLayerDirection": true
+    },
+    {
+      "from": "src/control-plane/publication-recovery-evidence.js",
+      "specifier": "../utils/deep-freeze.js",
+      "to": "src/utils/deep-freeze.js",
+      "targetModule": false,
+      "sourceLayer": "raw_observation",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
     },
     {
       "from": "src/control-plane/publication-recovery-evidence.js",

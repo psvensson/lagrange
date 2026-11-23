@@ -247,7 +247,8 @@ function lagrangeHealthyRules(ledger, {hosts = ['10.0.0.1', '10.0.0.2', '10.0.0.
       replicas: [{serviceId: 'sys-postgres-wire', nodeId: LAGRANGE_NODE_IDS[0],
         address: hosts[0], port: 5433, healthStatus: 'healthy'}]}]})],
     // The product's partition diagnostics shape (admin-control-snapshot-local-
-    // diagnostics-methods.js): view=leaders answers compact leaders, full includes partitionsById.
+    // diagnostics-methods.js): view=leaders answers compact leaders;
+    // view=placement answers partitionsById without replicaOperations.
     [/\/api\/admin\/diagnostics\/partitions/u, (command) => {
       if (stringIncludes(command, 'view=leaders')) {
         return http(200, {partitionCount: 1, leaders: {p1: LAGRANGE_NODE_IDS[0]}});

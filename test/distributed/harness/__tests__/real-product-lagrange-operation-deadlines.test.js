@@ -167,12 +167,12 @@ test('observePlacement, observeRoles, and awaitReady enforce own budgets and fai
   let advanceOnLeadersMs = 0;
   let advanceOnSystemTablesMs = 0;
   const ledger = createContainerLedger();
-  const {sshRun: baseSshRun} = createScriptedSsh([
+  const {sshRun: baseSshRun, calls} = createScriptedSsh([
     [/\/api\/admin\/diagnostics\/partitions\?view=leaders/u, () => {
       clockMs += advanceOnLeadersMs;
       return http(200, {partitionCount: 1, leaders: {p1: '00000000-0000-4000-8000-000000000001'}});
     }],
-    [/\/api\/admin\/diagnostics\/partitions/u, () => {
+    [/\/api\/admin\/diagnostics\/partitions\?view=placement/u, () => {
       clockMs += advanceOnPartitionsMs;
       if (failPartitions503) return http(503, {error: 'admin unavailable'});
       return http(200, {
@@ -209,6 +209,20 @@ test('observePlacement, observeRoles, and awaitReady enforce own budgets and fai
       readiness: {stablePolls: 1, attempts: 3, intervalMs: 0},
     },
   });
+
+  const partitionCalls = arrayFilter(calls, (call) =>
+    stringIncludes(call.command, '/api/admin/diagnostics/partitions'));
+  assert.ok(
+    arraySome(partitionCalls, (call) =>
+      stringIncludes(call.command, '/api/admin/diagnostics/partitions?view=placement')),
+    'readPartitions must request bounded view=placement',
+  );
+  assert.ok(
+    arrayEvery(partitionCalls, (call) =>
+      stringIncludes(call.command, 'view=leaders') ||
+      stringIncludes(call.command, 'view=placement')),
+    'deployer must never request unbounded full partition diagnostics',
+  );
 
   // 1. readPartitions returning 503 throws typed identity_unverified (never {routable} alone).
   failPartitions503 = true;

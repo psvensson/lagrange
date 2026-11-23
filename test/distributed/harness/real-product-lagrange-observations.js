@@ -493,7 +493,7 @@ async function readPartitions(ctx, seedHost, pollContext = null) {
   try {
     answer = await getJson(
       ctx,
-      `http://${seedHost}:${PORT.ADMIN}/api/admin/diagnostics/partitions`,
+      `http://${seedHost}:${PORT.ADMIN}/api/admin/diagnostics/partitions?view=placement`,
       pollContext,
     );
   } catch (error) {

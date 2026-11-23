@@ -316,6 +316,11 @@ const ADMIN_CONTROL_SNAPSHOT = Object.freeze({
   MAX_HTTP_QUERY_TIMEOUT_MS: 30000,
   SCHEMA_VERSION: 1,
   TABLE_NAME: 'control_snapshot_local',
+  // Bounds outward admin snapshot / diagnostics replica-operation payloads
+  // while keeping all in-flight operations and full aggregate histograms.
+  REPLICA_OPERATION_TERMINAL_ROWS_LIMIT: 32,
+  REPLICA_OPERATION_IN_FLIGHT_STEPS_LIMIT: 16,
+  REPLICA_OPERATION_STEP_SCALAR_MAX_LENGTH: 256,
   IN_FLIGHT_EXCLUDED_STATUSES: Object.freeze([
     'removed',
     'failed',
@@ -326,6 +331,7 @@ export const ADMIN_PARTITION_DIAGNOSTICS_VIEW = Object.freeze({
   QUERY_KEY: 'view',
   FULL: 'full',
   LEADERS: 'leaders',
+  PLACEMENT: 'placement',
 });
 
 const ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE = Object.freeze({
