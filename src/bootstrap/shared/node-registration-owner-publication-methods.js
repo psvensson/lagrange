@@ -330,6 +330,9 @@ class NodeRegistrationOwnerPublicationMethods {
 
   getMembershipPublicationRuntimeOwner() {
     if (this.membershipPublicationRuntimeOwner) {
+      if (this.joinAdmissionControlPlaneSystemTableGateway) {
+        this.getJoinAdmissionControlPlaneSystemTableGateway();
+      }
       return this.membershipPublicationRuntimeOwner;
     }
     this.membershipPublicationRuntimeOwner =
@@ -360,18 +363,20 @@ class NodeRegistrationOwnerPublicationMethods {
     const joinAdmissionSqlQueryEngine = this.resolveJoinAdmissionSqlQueryEngine();
     if (!joinAdmissionSqlQueryEngine) return null;
 
-    // Contract: when a join-admission SQL query engine exists (guaranteed
-    // above), the gateway drives CDC through that engine; a direct
-    // cdcIntegrationService delegate is never wired on this path.
-    const cdcIntegrationService = null;
+    // JOIN-scoped mutations run through joinAdmissionSqlQueryEngine via
+    // startupSqlMutationPhase, while OWNER_RPC_REQUIRED authoritative reads
+    // (node/endpoint incarnation and withdrawal authority) require the live
+    // cdcIntegrationService owner.
+    const cdcIntegrationService =
+      this.delegates.getCdcIntegrationService?.() || null;
     const systemTableCache = this.getSystemTableCache();
     const messageRouter = this.delegates.getMessageRouter?.() || null;
     const existing = this.joinAdmissionControlPlaneSystemTableGateway;
     if (existing) {
-      existing.setSqlQueryEngine?.(joinAdmissionSqlQueryEngine);
-      existing.setCdcIntegrationService?.(cdcIntegrationService);
-      existing.setSystemTableCache?.(systemTableCache);
-      existing.setMessageRouter?.(messageRouter);
+      existing.setSqlQueryEngine(joinAdmissionSqlQueryEngine);
+      existing.setCdcIntegrationService(cdcIntegrationService);
+      existing.setSystemTableCache(systemTableCache);
+      existing.setMessageRouter(messageRouter);
       return existing;
     }
 

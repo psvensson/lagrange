@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 123,
     "architecture-governance": 21,
-    "bootstrap-membership": 356,
+    "bootstrap-membership": 357,
     "cdc-metadata": 81,
     "cli-tooling": 99,
     "control-plane": 241,
@@ -25,10 +25,10 @@
     "transport-messaging": 123,
     "wasm-toolchain": 74
   },
-  "censusSize": 2813,
-  "digest": "fnv1a32-b7a7e189",
+  "censusSize": 2814,
+  "digest": "fnv1a32-efebcf1a",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-53a245d9",
+  "observationDigest": "fnv1a32-ccfb78e6",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -188,6 +188,7 @@
     "test/bootstrap/fresh-seed-activation.integration.test.js": "bootstrap-membership",
     "test/bootstrap/guarded-runtime-service-handler.test.js": "bootstrap-membership",
     "test/bootstrap/hydrate-system-cache-from-bootstrap.test.js": "bootstrap-membership",
+    "test/bootstrap/join-admission-gateway-authoritative-read-wiring.test.js": "bootstrap-membership",
     "test/bootstrap/join-checkpoint-progression-characterization.test.js": "bootstrap-membership",
     "test/bootstrap/join-cleanup.property.test.js": "bootstrap-membership",
     "test/bootstrap/join-coordinator.test.js": "bootstrap-membership",
@@ -3652,6 +3653,20 @@
       "files": [
         "src/bootstrap/shared/guarded-runtime-service-handler.js",
         "src/node/runtime-service-definition-resolution.js"
+      ]
+    },
+    "test/bootstrap/join-admission-gateway-authoritative-read-wiring.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/membership-lifecycle-controller.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/partition/partition-write-kernel.js",
+        "src/query/distributed/distributed-write-coordinator.js",
+        "src/query/query-execution-budget.js",
+        "src/query/query-executor-partition-failure.js",
+        "test/test-helpers/committed-write-answer.js"
       ]
     },
     "test/bootstrap/join-checkpoint-progression-characterization.test.js": {

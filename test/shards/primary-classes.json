@@ -4,12 +4,12 @@
   "counts": {
     "unit": 2442,
     "integration": 132,
-    "bootstrap": 232,
+    "bootstrap": 233,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2813,
-  "digest": "fnv1a32-9b48aba2",
+  "censusSize": 2814,
+  "digest": "fnv1a32-75ceee74",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -169,6 +169,7 @@
     "test/bootstrap/fresh-seed-activation.integration.test.js": "bootstrap",
     "test/bootstrap/guarded-runtime-service-handler.test.js": "bootstrap",
     "test/bootstrap/hydrate-system-cache-from-bootstrap.test.js": "bootstrap",
+    "test/bootstrap/join-admission-gateway-authoritative-read-wiring.test.js": "bootstrap",
     "test/bootstrap/join-checkpoint-progression-characterization.test.js": "bootstrap",
     "test/bootstrap/join-cleanup.property.test.js": "bootstrap",
     "test/bootstrap/join-coordinator.test.js": "bootstrap",
