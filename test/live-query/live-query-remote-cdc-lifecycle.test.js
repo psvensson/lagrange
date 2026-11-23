@@ -981,6 +981,9 @@ describe('P4 Live-Query Remote CDC Owned Lifecycle and Coverage Witnesses', () =
     assert.equal(leaderB.remoteLiveQueryCdcSubscribers.size, 1);
 
     wiringA.liveQueryManager.unregisterLiveQuery(reg1.queryId, client1.id);
+    // Let attempt 1 settle into pendingCleanupBindings so shutdown drains queued retries.
+    assert.ok(await waitForMatch(() => unsubAttempts === 1), 'initial deferred unsubscribe sent');
+    await new Promise((resolve) => setTimeout(resolve, 5));
     const summary1 = await wiringA.shutdown({timeoutMs: 1500});
     assert.deepEqual(
       summary1,

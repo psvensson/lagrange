@@ -49,10 +49,18 @@ const REMOTE_CDC_EFFECT = Object.freeze({
   RETIRE_RECORD: 'retire_record',
 });
 
+const REMOTE_CDC_COORDINATOR_STATE = Object.freeze({
+  ACTIVE: 'active',
+  DRAINING_SHUTDOWN: 'draining_shutdown',
+  SHUT_DOWN: 'shut_down',
+});
+
 // ends-on: pending remote live-query subscription succeeds or group is retired
 const DEFAULT_RETRY_DELAY_MS = 50;
 // ends-on: pending remote live-query subscription retry backoff cap is reached
 const MAX_RETRY_DELAY_MS = 500;
+// ends-on: retiring remote live-query subscriptions settle or shutdown drain budget expires
+const DEFAULT_SHUTDOWN_DRAIN_TIMEOUT_MS = 1500;
 const UNSUBSCRIBE_NOT_CONFIRMED_ERROR = 'Remote live query CDC unsubscribe not confirmed';
 const PRE_SEND_SUBSCRIBE_REASON_CODES = new Set([
   TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER,
@@ -364,7 +372,7 @@ function handleRefreshSettled(sub, event) {
 
 function handleCancel(sub) {
   const effects = [];
-  if (sub.phase === REMOTE_CDC_PHASE.CLOSED) {
+  if (sub.phase === REMOTE_CDC_PHASE.CLOSED || sub.phase === REMOTE_CDC_PHASE.RETIRING) {
     return {effects};
   }
   sub.phase = REMOTE_CDC_PHASE.RETIRING;
@@ -491,6 +499,35 @@ function computeEarliestRemoteCdcDeadline(activeSubscriptions, retiringSubscript
   return earliest;
 }
 
+function hasPendingRemoteCdcRetirement(sub) {
+  if (!sub || sub.phase === REMOTE_CDC_PHASE.CLOSED) return false;
+  return sub.inFlightSubscribe !== null ||
+    sub.inFlightCleanups > 0 ||
+    sub.pendingCleanupBindings.length > 0;
+}
+
+function countRemainingRetiringSubscriptions(retiringSubscriptions) {
+  let count = 0;
+  for (const sub of retiringSubscriptions) {
+    if (hasPendingRemoteCdcRetirement(sub)) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+function collectDueRetiringRemoteCdcSubscriptions(retiringSubscriptions, nowMs) {
+  const dueRetiring = [];
+  for (const sub of retiringSubscriptions) {
+    if (hasOutstandingRemoteCdcObligation(sub) &&
+        sub.inFlightCleanups === 0 &&
+        sub.retryNotBeforeMs <= nowMs) {
+      dueRetiring.push(sub);
+    }
+  }
+  return dueRetiring;
+}
+
 function collectDueRemoteCdcSubscriptions(activeSubscriptions, retiringSubscriptions, nowMs) {
   const dueActive = [];
   for (const sub of activeSubscriptions.values()) {
@@ -501,15 +538,22 @@ function collectDueRemoteCdcSubscriptions(activeSubscriptions, retiringSubscript
       dueActive.push(sub);
     }
   }
-  const dueRetiring = [];
-  for (const sub of retiringSubscriptions) {
-    if (hasOutstandingRemoteCdcObligation(sub) &&
-        sub.inFlightCleanups === 0 &&
-        sub.retryNotBeforeMs <= nowMs) {
-      dueRetiring.push(sub);
-    }
-  }
+  const dueRetiring = collectDueRetiringRemoteCdcSubscriptions(retiringSubscriptions, nowMs);
   return {dueActive, dueRetiring};
+}
+
+function normalizeShutdownDrainTimeoutMs(
+  rawTimeoutMs,
+  defaultTimeoutMs = DEFAULT_SHUTDOWN_DRAIN_TIMEOUT_MS,
+) {
+  if (rawTimeoutMs === undefined || rawTimeoutMs === null) {
+    return defaultTimeoutMs;
+  }
+  const parsed = Number(rawTimeoutMs);
+  if (!Number.isFinite(parsed)) {
+    return defaultTimeoutMs;
+  }
+  return Math.max(0, Math.floor(parsed));
 }
 
 function isUncertainSubscribeDelivery(delivery) {
@@ -710,7 +754,9 @@ function buildResyncFailureAnswer(errorMessage, retryAfterMs = null) {
 
 export {
   DEFAULT_RETRY_DELAY_MS,
+  DEFAULT_SHUTDOWN_DRAIN_TIMEOUT_MS,
   MAX_RETRY_DELAY_MS,
+  REMOTE_CDC_COORDINATOR_STATE,
   REMOTE_CDC_EFFECT,
   REMOTE_CDC_EVENT,
   REMOTE_CDC_PHASE,
@@ -722,7 +768,9 @@ export {
   classifyUnsubscribeDeliveryError,
   classifyUnsubscribeDeliveryOutcome,
   collectDueRemoteCdcSubscriptions,
+  collectDueRetiringRemoteCdcSubscriptions,
   computeEarliestRemoteCdcDeadline,
+  countRemainingRetiringSubscriptions,
   createRemoteCdcSubscriptionState,
   extractRemoteDeliveryAnswer,
   hasInboundSequenceGap,
@@ -734,6 +782,7 @@ export {
   isUncertainSubscribeError,
   markGroupPending,
   markGroupSubscribed,
+  normalizeShutdownDrainTimeoutMs,
   transitionRemoteCdcSubscription,
   updateLastReceivedSeq,
 };

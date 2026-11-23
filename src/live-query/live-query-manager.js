@@ -189,12 +189,15 @@ class LiveQueryManager extends EventEmitter {
     // CDC subscription functions (injected)
     this.subscribeToPartition = null;
     this.unsubscribeFromPartition = null;
+    this.remoteCdcCoordinator = options.remoteCdcCoordinator || null;
 
     // Partition topology handler
     this.partitionTopologyHandler = null;
 
     // Status
     this.initialized = false;
+    this.shuttingDown = false;
+    this._shutdownPromise = null;
 
     // Logging
     this.logger = this.initLogger();
@@ -222,24 +225,17 @@ class LiveQueryManager extends EventEmitter {
    * @param {Object} options - Initialization options.
    */
   initialize(options = {}) {
-    if (options.systemCache) {
-      this.systemCache = options.systemCache;
-    }
-    if (options.sqlQueryEngine) {
-      this.sqlQueryEngine = options.sqlQueryEngine;
-    }
-    if (options.subscribeToPartition) {
-      this.subscribeToPartition = options.subscribeToPartition;
-    }
+    if (options.systemCache) this.systemCache = options.systemCache;
+    if (options.sqlQueryEngine) this.sqlQueryEngine = options.sqlQueryEngine;
+    if (options.subscribeToPartition) this.subscribeToPartition = options.subscribeToPartition;
     if (options.unsubscribeFromPartition) {
       this.unsubscribeFromPartition = options.unsubscribeFromPartition;
     }
-
-    // Start cleanup loop
+    if (options.remoteCdcCoordinator) this.remoteCdcCoordinator = options.remoteCdcCoordinator;
     this.startCleanupLoop();
-
+    this.shuttingDown = false;
+    this._shutdownPromise = null;
     this.initialized = true;
-
     this.logger.info(LIVE_QUERY_LOG_MSG.MANAGER_INITIALIZED, {
       nodeId: this.nodeId,
       maxQueriesPerClient: this.maxQueriesPerClient,
@@ -267,6 +263,9 @@ class LiveQueryManager extends EventEmitter {
    * @return {Promise<Object>} Registration result.
    */
   async registerLiveQuery(parsedQuery, client, options = {}) {
+    if (this.shuttingDown) {
+      throw new Error(LIVE_QUERY_ERROR_MSG.MANAGER_SHUTTING_DOWN);
+    }
     const clientId = client.id || client.clientId;
 
     const currentCount = this.clientQueryCounts.get(clientId) || 0;
@@ -296,6 +295,9 @@ class LiveQueryManager extends EventEmitter {
         clientCount: group.clients.size,
       });
       await this.sendSnapshotToClient(group, client, options);
+      if (this.shuttingDown || group.lifecycleState === LIVE_QUERY_GROUP_STATE.CLOSED) {
+        return {queryId: group.queryId, cancelled: true, partitions: []};
+      }
     } else {
       group = new QueryGroup({
         parsedQuery: ast,
@@ -447,6 +449,9 @@ class LiveQueryManager extends EventEmitter {
    * @return {Promise<Object>} Resume result.
    */
   async resumeLiveQuery(queryId, clientId, cursor) {
+    if (this.shuttingDown) {
+      throw new Error(LIVE_QUERY_ERROR_MSG.MANAGER_SHUTTING_DOWN);
+    }
     const group = this.findGroupByQueryId(queryId);
     if (!group) {
       throw new Error(`${LIVE_QUERY_ERROR_MSG.QUERY_GROUP_NOT_FOUND_PREFIX}${queryId}`);
@@ -560,6 +565,27 @@ class LiveQueryManager extends EventEmitter {
     return null;
   }
 
+  unsubscribeGroupPartitions(group) {
+    if (!this.unsubscribeFromPartition) return;
+    const trackedPartitions = new Set([
+      ...group.subscribedPartitions,
+      ...(group.pendingSubscriptions || []),
+      ...group.cdcHandlers.keys(),
+    ]);
+    for (const partitionId of trackedPartitions) {
+      try {
+        // The wiring's unsubscribe is asynchronous I/O and answers a
+        // promise on every path (live-query-startup-wiring.js).
+        this.unsubscribeFromPartition(partitionId, group.queryId)
+          .catch(() => undefined);
+      } catch (error) {
+        this.logger.debug(LIVE_QUERY_LOG_MSG.UNSUBSCRIBE_PARTITION_FAILED, {
+          partitionId, queryId: group.queryId, error: error?.message,
+        });
+      }
+    }
+  }
+
   /**
    * Remove a query group.
    * @param {QueryGroup} group - Query group to remove.
@@ -567,39 +593,13 @@ class LiveQueryManager extends EventEmitter {
    */
   removeGroup(group) {
     const groupKey = group.groupKey || group.getQuerySignature();
-    if (this.unsubscribeFromPartition) {
-      const trackedPartitions = new Set([
-        ...group.subscribedPartitions,
-        ...(group.pendingSubscriptions || []),
-        ...group.cdcHandlers.keys(),
-      ]);
-      for (const partitionId of trackedPartitions) {
-        try {
-          // The wiring's unsubscribe is asynchronous I/O and answers a
-          // promise on every path (live-query-startup-wiring.js).
-          this.unsubscribeFromPartition(partitionId, group.queryId)
-            .catch(() => undefined);
-        } catch (error) {
-          this.logger.debug(LIVE_QUERY_LOG_MSG.UNSUBSCRIBE_PARTITION_FAILED, {
-            partitionId,
-            queryId: group.queryId,
-            error: error?.message,
-          });
-        }
-      }
-    }
+    this.unsubscribeGroupPartitions(group);
     group.cleanup();
     this.queryGroups.delete(groupKey);
     for (const [key, g] of this.queryGroups.entries()) {
-      if (g === group || g.queryId === group.queryId) {
-        this.queryGroups.delete(key);
-      }
+      if (g === group || g.queryId === group.queryId) this.queryGroups.delete(key);
     }
-
-    this.logger.info(LIVE_QUERY_LOG_MSG.GROUP_REMOVED, {
-      queryId: group.queryId,
-      groupKey,
-    });
+    this.logger.info(LIVE_QUERY_LOG_MSG.GROUP_REMOVED, {queryId: group.queryId, groupKey});
   }
 
 
@@ -667,58 +667,29 @@ class LiveQueryManager extends EventEmitter {
     }
   }
 
-  /**
-   * Start the cleanup loop for expired subscriptions.
-   * @private
-   */
   startCleanupLoop() {
-    if (this.cleanupInterval) {
-      clearInterval(this.cleanupInterval);
-    }
-
-    this.cleanupInterval = setInterval(() => {
-      this.cleanupExpiredSubscriptions();
-    }, this.cleanupIntervalMs);
+    if (this.cleanupInterval) clearInterval(this.cleanupInterval);
+    this.cleanupInterval = setInterval(() => this.cleanupExpiredSubscriptions(),
+      this.cleanupIntervalMs);
     this.cleanupInterval.unref();
   }
 
-  /**
-   * Clean up expired subscriptions.
-   * @private
-   */
   cleanupExpiredSubscriptions() {
     for (const [groupKey, group] of this.queryGroups) {
-      const expiredClients = group.getExpiredClients();
-
-      for (const clientId of expiredClients) {
+      for (const clientId of group.getExpiredClients()) {
         group.removeClient(clientId);
-
-        // Update tracking
         const subscriptions = this.clientSubscriptions.get(clientId);
         if (subscriptions) {
           subscriptions.delete(group.queryId);
-          if (subscriptions.size === 0) {
-            this.clientSubscriptions.delete(clientId);
-          }
+          if (subscriptions.size === 0) this.clientSubscriptions.delete(clientId);
         }
-
         const currentCount = this.clientQueryCounts.get(clientId) || 0;
-        if (currentCount > 0) {
-          this.clientQueryCounts.set(clientId, currentCount - 1);
-        }
-
+        if (currentCount > 0) this.clientQueryCounts.set(clientId, currentCount - 1);
         this.logger.info(LIVE_QUERY_LOG_MSG.SUBSCRIPTION_EXPIRED, {
-          queryId: group.queryId,
-          clientId,
+          queryId: group.queryId, clientId,
         });
-
-        this.emit(LIVE_QUERY_EMIT.SUBSCRIPTION_EXPIRED, {
-          queryId: group.queryId,
-          clientId,
-        });
+        this.emit(LIVE_QUERY_EMIT.SUBSCRIPTION_EXPIRED, {queryId: group.queryId, clientId});
       }
-
-      // Remove empty groups
       if (group.clients.size === 0) {
         this.removeGroup(group);
         this.queryGroups.delete(groupKey);
@@ -764,28 +735,41 @@ class LiveQueryManager extends EventEmitter {
   }
 
   /**
-   * Shutdown the manager.
+   * Shutdown the manager and drain wired remote CDC retirements within a bound.
+   * @param {Object} [options] - Shutdown drain options.
+   * @param {number} [options.timeoutMs] - Bounded remote unsubscribe drain timeout.
+   * @return {Promise<{settled: boolean, remainingRetiringCount: number}>}
    */
-  shutdown() {
+  shutdown(options = {}) {
+    if (this._shutdownPromise) return this._shutdownPromise;
+    this.shuttingDown = true;
     if (this.cleanupInterval) {
       clearInterval(this.cleanupInterval);
       this.cleanupInterval = null;
     }
-
-    // Clean up all groups
-    for (const group of this.queryGroups.values()) {
+    const groupsSnapshot = Array.from(this.queryGroups.values());
+    for (const group of groupsSnapshot) {
+      this.unsubscribeGroupPartitions(group);
       group.cleanup();
     }
     this.queryGroups.clear();
     this.clientSubscriptions.clear();
     this.clientQueryCounts.clear();
-
     this.initialized = false;
     this.removeAllListeners();
 
-    this.logger.info(LIVE_QUERY_LOG_MSG.MANAGER_SHUTDOWN, {
-      nodeId: this.nodeId,
+    const drainPromise = this.remoteCdcCoordinator ?
+      this.remoteCdcCoordinator.shutdown(options) :
+      Promise.resolve({settled: true, remainingRetiringCount: 0});
+    this._shutdownPromise = drainPromise.then((summary) => {
+      this.logger.info(LIVE_QUERY_LOG_MSG.MANAGER_SHUTDOWN, {
+        nodeId: this.nodeId,
+        settled: summary.settled,
+        remainingRetiringCount: summary.remainingRetiringCount,
+      });
+      return summary;
     });
+    return this._shutdownPromise;
   }
 }
 

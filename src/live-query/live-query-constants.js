@@ -117,6 +117,7 @@ const LIVE_QUERY_ERROR_MSG = Object.freeze({
   MAX_QUERIES_EXCEEDED_PREFIX: 'Maximum concurrent live queries exceeded (',
   MAX_QUERIES_EXCEEDED_SUFFIX: ')',
   QUERY_GROUP_NOT_FOUND_PREFIX: 'Query group not found: ',
+  MANAGER_SHUTTING_DOWN: 'Live query manager is shutting down',
 });
 
 const LIVE_QUERY_DEFAULT_VALUE = Object.freeze({

@@ -674,7 +674,7 @@ async function shutdownAdminRuntimeComposition(adminRuntime) {
     await adminRuntime.adminAPI.shutdown();
   }
   if (typeof adminRuntime.liveQueryWiring?.shutdown === LOCAL_STR_FUNCTION) {
-    adminRuntime.liveQueryWiring.shutdown();
+    await adminRuntime.liveQueryWiring.shutdown();
   }
 }
 
