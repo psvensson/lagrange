@@ -207,7 +207,9 @@ test('NodeJoiningService - full join with CREATE_SELF_HOSTED', async (t) => {
       return this.cdcIntegrationService;
     };
     service.initializeControlPlaneService = async function() {
-      // Skip control plane service initialization
+      // Skip control plane service initialization; wire the mocked writer as
+      // the canonical control-plane gateway that message-group activation uses.
+      this.controlPlaneSystemTableGateway = this.cdcIntegrationService;
     };
     service.initializeRuntimeServiceHandler = function() {
       // Skip runtime service handler initialization
