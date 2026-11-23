@@ -67,6 +67,18 @@ function hasDecidedCreateReadiness(handler, service, replicaId, voterRequired, e
     (!voterRequired && isLearnerAdmittedToGroup(service, replicaId));
 }
 
+function matchesVoterReadyServicesRow(replicaId, row, createAdmissionEvidence) {
+  if (!row || row.service_id !== replicaId || !row.address) return false;
+  if (row.status === ReplicaStatus.FAILED ||
+      row.status === ReplicaStatus.REMOVING ||
+      row.status === ReplicaStatus.REMOVED) {
+    return false;
+  }
+  if (!createAdmissionEvidence) return true;
+  return row.create_attempt_token === createAdmissionEvidence.attemptToken &&
+    row.cleanup_token === null;
+}
+
 function isExactCreateVoterRow(row, service, evidence) {
   return service && !service.isShutdown &&
     row.service_type === SERVICE_TYPE.PARTITION && row.service_id === evidence.replicaId &&
@@ -382,10 +394,23 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
         }
         const remainingMs = deadline - readHandlerNowMs(this);
         if (remainingMs <= 0) break;
+        const activeService = expectedService ?? this.getTrackedService(replicaId);
+        const alreadyVoter = isVoterRaftRole(this.getTrackedReplicaRole(replicaId));
         await waitForReadinessEventOrTimeout(
-          this, replicaId, expectedService ?? this.getTrackedService(replicaId),
+          this, replicaId, activeService,
           Math.min(VOTER_READY_CHECK_INTERVAL_MS, remainingMs),
-          {watchServicesCache: true},
+          {
+            watchConsensus: !alreadyVoter,
+            shouldWakeOnConsensus: () =>
+              isVoterRaftRole(this.getTrackedReplicaRole(replicaId)),
+            watchServicesCache: true,
+            matchesServicesRow: (row) => matchesVoterReadyServicesRow(
+              replicaId, row, options.createAdmissionEvidence),
+            shouldWakeOnAdmissionSettled: () =>
+              isReplicaAdmissionRefused(activeService) ||
+              (!alreadyVoter &&
+                isVoterRaftRole(this.getTrackedReplicaRole(replicaId))),
+          },
         );
       }
       reportVoterReadyActivationSpent(this, {
@@ -569,7 +594,17 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
           VOTER_READY_CHECK_INTERVAL_MS,
           Math.max(1, deadline - nowAfterCheckMs),
         );
-        await waitForReadinessEventOrTimeout(this, replicaId, expectedService, sleepMs);
+        await waitForReadinessEventOrTimeout(
+          this,
+          replicaId,
+          expectedService,
+          sleepMs,
+          {
+            shouldWakeOnConsensus: () =>
+              isLearnerAdmittedToGroup(expectedService, replicaId) ||
+              isVoterRaftRole(this.getTrackedReplicaRole(replicaId)),
+          },
+        );
       }
     }
     /**

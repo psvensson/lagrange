@@ -84,9 +84,9 @@ const AFTER_HEAVY_BUILDS = 565;
 // the failing seed (586/s). It must not regress: measured 4118 -> 3184 builds
 // over the same sequence after frozen observation gates gained identity reuse.
 const PRE_CHANGE_GATE_BUILDS = 4118;
-// R09 direct-publication custody tightened 3184 -> 3164; cluster-wide sync
-// candidate reuse across unchanged global planning state tightens further to 3142.
-const AFTER_GATE_BUILDS = 1492;
+// R09 direct-publication custody tightened 3184 -> 3164; per-publisher sync
+// candidate reuse across unchanged global planning state tightens to 1500.
+const AFTER_GATE_BUILDS = 1500;
 // The publications winner read is the one live read the planning memo version
 // key performs. The identity owner adds none: it reuses the floored source
 // generation the normalizer already computed.

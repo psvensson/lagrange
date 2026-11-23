@@ -12,6 +12,7 @@ import {assertOperationUpdateSubject} from '../rebalancer/replica-operation-upda
 
 const {
   COLUMN,
+  ControlPlaneField,
   DISPATCH_LOG_MSG,
   RECONCILE_REASON,
   REPLICA_DISPATCH_SERVICE_LITERAL,
@@ -20,6 +21,23 @@ const {
   isCoordinatorOwnedOperationType,
   wasNodeRecordReadyWhenWritten,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
+
+const ROUTINE_CREATE_REARM_WAKE_REASONS = Object.freeze(new Set([
+  RECONCILE_REASON.COORDINATOR_OPERATION_CREATED,
+  RECONCILE_REASON.CDC_OPERATION_PENDING,
+  RECONCILE_REASON.REPLICA_OPERATIONS_CACHE_PENDING,
+  RECONCILE_REASON.NODE_READY_DISPATCH_RETRY,
+  RECONCILE_REASON.MESSAGE_DISPATCH_REQUEST,
+]));
+
+function isRoutineCreateRearmWake(context, reasons) {
+  if (!Array.isArray(reasons) || reasons.length === 0) return false;
+  if (context?.[REPLICA_DISPATCH_SERVICE_LITERAL.DEFERRED_RETRY_PROVENANCE] === true ||
+      context?.[ControlPlaneField.HANDOFF_MODE]) {
+    return false;
+  }
+  return reasons.every((reason) => ROUTINE_CREATE_REARM_WAKE_REASONS.has(reason));
+}
 
 const READY_NODE_DISPATCH_RETRY_CONTEXT_FIELD = Object.freeze({
   FORCE_READY_WATERMARK: 'forceReadyWatermark',
@@ -226,7 +244,7 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
    * @param {Object} [context] - Context from the enqueue call.
    * @private
    */
-  async reconcileOperationDispatch(operationId, context) {
+  async reconcileOperationDispatch(operationId, context, reasons = []) {
     if (!this.rebalanceCoordinator) {
       return;
     }
@@ -260,6 +278,9 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
             cause: REPLICA_DISPATCH_SERVICE_LITERAL.REPLICA_OPERATION_DISPATCH,
             ...(this.isRuntimeTargetProgressWakeOperation(row, context) ?
               {ownerTurnPolicy: OPERATION_OWNER_TURN_POLICY.RETAIN} :
+              {}),
+            ...(isRoutineCreateRearmWake(context, reasons) ?
+              {routineCreateRearmWake: true} :
               {}),
           });
         } else {

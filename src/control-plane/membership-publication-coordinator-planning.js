@@ -76,7 +76,7 @@ function resolveCoordinatorPublisherNodeId(options, coordinator) {
   return coordinator.nodeId;
 }
 
-function readClusterCandidateSyncMemoKey(coordinator, options) {
+function readClusterCandidateSyncMemoKey(coordinator, options, publisherNodeId) {
   if (!isDefaultClusterCandidateSyncOptions(options)) return null;
   const cache = coordinator.systemTableCache;
   const pubVersion = cache?.getTableMutationVersion?.(
@@ -86,7 +86,6 @@ function readClusterCandidateSyncMemoKey(coordinator, options) {
   const readiness = coordinator.controlPlaneReadinessService;
   const owner = readiness?.readinessPlanningSnapshotOwner;
   if (!owner || owner.stopped) return null;
-  const publisherNodeId = resolveCoordinatorPublisherNodeId(options, coordinator);
   const nowMs = normalizePositiveInteger(options.nowMs, coordinator.now());
   const identity = readiness.readCurrentPlanningProjectionIdentity?.(
     publisherNodeId,
@@ -95,7 +94,8 @@ function readClusterCandidateSyncMemoKey(coordinator, options) {
   if (!identity) return null;
   const token = owner.captureToken();
   if (!token || token.transportTopologyValid === false) return null;
-  return `${identity.globalPlanningGeneration}:` +
+  return `${publisherNodeId}:` +
+    `${identity.globalPlanningGeneration}:` +
     `${owner.recoveryEpochRevision}:` +
     `${owner.readinessSnapshotGeneration}:` +
     `${token.transportTopologyGeneration}:` +
@@ -107,16 +107,17 @@ function readClusterCandidateSyncMemoKey(coordinator, options) {
 class MembershipPublicationCoordinatorPlanning extends
   MembershipPublicationCoordinatorReads {
   deriveClusterMembershipCandidateSync(options = {}) {
-    const memoKey = readClusterCandidateSyncMemoKey(this, options);
     const publisherNodeId = resolveCoordinatorPublisherNodeId(options, this);
-    if (memoKey !== null && this._clusterCandidateSyncMemo?.key === memoKey) {
-      const {candidate, byPublisher} = this._clusterCandidateSyncMemo;
-      let published = byPublisher.get(publisherNodeId);
-      if (published === undefined) {
-        published = Object.freeze({...candidate, publisherNodeId});
-        byPublisher.set(publisherNodeId, published);
+    const memoKey = readClusterCandidateSyncMemoKey(
+      this, options, publisherNodeId,
+    );
+    if (memoKey !== null) {
+      const cached = this._clusterCandidateSyncMemoByPublisher?.get(
+        publisherNodeId,
+      );
+      if (cached?.key === memoKey) {
+        return cached.candidate;
       }
-      return published;
     }
     const planningSnapshot =
       options.planningSnapshot && typeof options.planningSnapshot === 'object' ?
@@ -127,13 +128,16 @@ class MembershipPublicationCoordinatorPlanning extends
       planningSnapshot,
     });
     if (memoKey !== null &&
-        readClusterCandidateSyncMemoKey(this, options) === memoKey) {
+        readClusterCandidateSyncMemoKey(this, options, publisherNodeId) ===
+          memoKey) {
       const frozenCandidate = deepFreeze(candidate);
-      this._clusterCandidateSyncMemo = {
+      if (!this._clusterCandidateSyncMemoByPublisher) {
+        this._clusterCandidateSyncMemoByPublisher = new Map();
+      }
+      this._clusterCandidateSyncMemoByPublisher.set(publisherNodeId, {
         key: memoKey,
         candidate: frozenCandidate,
-        byPublisher: new Map([[publisherNodeId, frozenCandidate]]),
-      };
+      });
       return frozenCandidate;
     }
     return candidate;

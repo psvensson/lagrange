@@ -20,9 +20,10 @@ const EXPLICIT_REARM_BOUNDARIES = Object.freeze(new Set([
 ]));
 
 function currentTargetBootIncarnation(owner, targetNodeId) {
-  if (!targetNodeId || !owner?.systemTableCache) return null;
+  const systemTableCache = owner?.repository?.systemTableCache;
+  if (!targetNodeId || !systemTableCache) return null;
   return resolveTargetNodeIncarnationSnapshot(
-    owner.systemTableCache, targetNodeId,
+    systemTableCache, targetNodeId,
   ).bootIncarnation;
 }
 
@@ -31,13 +32,22 @@ function recordAcknowledgedCreateInFlight(owner, operation, replaceRemovePhase =
   if (operation.type !== OperationType.ADD && operation.type !== OperationType.REPLACE) {
     return;
   }
+  const targetBootIncarnation = currentTargetBootIncarnation(
+    owner, operation.targetNodeId,
+  );
+  // Fail closed: without an authoritative target boot incarnation we cannot
+  // generation-fence an in-flight CREATE against target restarts.
+  if (targetBootIncarnation === null) {
+    clearAcknowledgedCreateInFlight(owner, operation.operationId);
+    return;
+  }
   if (!owner.acknowledgedCreateByOperationId) {
     owner.acknowledgedCreateByOperationId = new Map();
   }
   owner.acknowledgedCreateByOperationId.set(operation.operationId, {
     targetNodeId: operation.targetNodeId ?? null,
     replicaId: operation.replicaId ?? null,
-    targetBootIncarnation: currentTargetBootIncarnation(owner, operation.targetNodeId),
+    targetBootIncarnation,
   });
 }
 
@@ -52,22 +62,29 @@ function ackMatchesOperation(owner, ack, operation) {
     return false;
   }
   const currentBoot = currentTargetBootIncarnation(owner, operation.targetNodeId);
-  return ack.targetBootIncarnation === null || currentBoot === null ||
+  return ack.targetBootIncarnation !== null &&
+    currentBoot !== null &&
     ack.targetBootIncarnation === currentBoot;
 }
 
+function isRoutineCreateWakeOptions(options) {
+  return options?.routineCreateRearmWake === true &&
+    !EXPLICIT_REARM_BOUNDARIES.has(options?.boundary);
+}
+
 function isAcknowledgedCreateStillInFlight(owner, operation, options = {}) {
-  if (!operation?.operationId || operation.workflowStep !== WORKFLOW_STEP.CREATING) {
+  const operationId = operation?.operationId;
+  if (!operationId || operation.workflowStep !== WORKFLOW_STEP.CREATING) {
     return false;
   }
-  if (EXPLICIT_REARM_BOUNDARIES.has(options?.boundary)) {
-    clearAcknowledgedCreateInFlight(owner, operation.operationId);
+  if (!isRoutineCreateWakeOptions(options)) {
+    clearAcknowledgedCreateInFlight(owner, operationId);
     return false;
   }
-  const ack = owner?.acknowledgedCreateByOperationId?.get(operation.operationId);
+  const ack = owner?.acknowledgedCreateByOperationId?.get(operationId);
   if (!ack) return false;
   if (!ackMatchesOperation(owner, ack, operation)) {
-    clearAcknowledgedCreateInFlight(owner, operation.operationId);
+    clearAcknowledgedCreateInFlight(owner, operationId);
     return false;
   }
   return true;

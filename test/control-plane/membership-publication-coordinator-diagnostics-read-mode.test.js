@@ -198,3 +198,76 @@ test('getLatestPublishedClusterPublication uses owner-rpc publication history fo
       'diagnostics published-membership reads should return the authoritative published row',
     );
   });
+
+test('deriveClusterMembershipCandidateSync isolates memo entries per publisherNodeId',
+  (t) => {
+    let tableVersion = 1;
+    const nodeRows = [
+      {node_id: NODE_ONE_ID, status: 'active', last_heartbeat: 1000, ready_lease_expires_at: 99999},
+      {node_id: NODE_TWO_ID, status: 'active', last_heartbeat: 1000, ready_lease_expires_at: 99999},
+    ];
+    const pubRows = [
+      buildPublicationRow({
+        publicationId: PUBLICATION_ID_TWELVE,
+        publicationEpoch: PUBLICATION_EPOCH_TWELVE,
+        publishedActiveNodeIds: [NODE_ONE_ID],
+        status: STATUS_PUBLISHED,
+      }),
+    ];
+    const coordinator = new MembershipPublicationCoordinator({
+      nodeId: NODE_ONE_ID,
+      now: () => 1000,
+      systemTableCache: {
+        getTableMutationVersion: () => tableVersion,
+        getAll(tableName) {
+          if (tableName === PUBLICATIONS_TABLE) return pubRows;
+          if (tableName === 'nodes') return nodeRows;
+          return EMPTY_ROWS;
+        },
+      },
+      controlPlaneReadinessService: {
+        readinessPlanningSnapshotOwner: {
+          stopped: false,
+          recoveryEpochRevision: 1,
+          readinessSnapshotGeneration: 1,
+          captureToken: () => ({transportTopologyValid: true, transportTopologyGeneration: 1}),
+        },
+        readCurrentPlanningProjectionIdentity: () => ({globalPlanningGeneration: 'gen-1'}),
+        getAllNodeReadinessSync: () => [],
+      },
+    });
+
+    const nodeOneFirst = coordinator.deriveClusterMembershipCandidateSync({
+      deferNestedPriorityRecoveryPlanning: true,
+      publisherNodeId: NODE_ONE_ID,
+    });
+    const nodeTwoFirst = coordinator.deriveClusterMembershipCandidateSync({
+      deferNestedPriorityRecoveryPlanning: true,
+      publisherNodeId: NODE_TWO_ID,
+    });
+    const nodeOneSecond = coordinator.deriveClusterMembershipCandidateSync({
+      deferNestedPriorityRecoveryPlanning: true,
+      publisherNodeId: NODE_ONE_ID,
+    });
+    const nodeTwoSecond = coordinator.deriveClusterMembershipCandidateSync({
+      deferNestedPriorityRecoveryPlanning: true,
+      publisherNodeId: NODE_TWO_ID,
+    });
+
+    t.equal(nodeOneFirst.publisherNodeId, NODE_ONE_ID);
+    t.equal(nodeOneFirst.targetNodeId, NODE_ONE_ID);
+    t.equal(nodeTwoFirst.publisherNodeId, NODE_TWO_ID);
+    t.equal(nodeTwoFirst.targetNodeId, NODE_TWO_ID,
+      'distinct publisherNodeId must derive its own targetNodeId rather than reusing another publisher');
+    t.not(nodeTwoFirst, nodeOneFirst, 'distinct publishers do not share a candidate object');
+    t.equal(nodeOneSecond, nodeOneFirst, 'same publisher reuses its frozen candidate');
+    t.equal(nodeTwoSecond, nodeTwoFirst, 'second publisher reuses its own frozen candidate');
+
+    tableVersion = 2;
+    const nodeOneInvalidated = coordinator.deriveClusterMembershipCandidateSync({
+      deferNestedPriorityRecoveryPlanning: true,
+      publisherNodeId: NODE_ONE_ID,
+    });
+    t.not(nodeOneInvalidated, nodeOneFirst, 'table mutation invalidates per-publisher memo');
+    t.end();
+  });

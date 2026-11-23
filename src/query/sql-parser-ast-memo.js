@@ -53,4 +53,4 @@ class SqlAstParseMemo {
 
 const SHARED_SQL_AST_PARSE_MEMO = new SqlAstParseMemo();
 
-export {SHARED_SQL_AST_PARSE_MEMO, SqlAstParseMemo, cloneAstValue};
+export {SHARED_SQL_AST_PARSE_MEMO};

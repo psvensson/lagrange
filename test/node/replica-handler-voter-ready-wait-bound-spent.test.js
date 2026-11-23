@@ -105,13 +105,19 @@ test('waitForReadinessEventOrTimeout wakes immediately on consensus, ' +
     },
   };
 
-  // Wake on matching consensus event.
+  // Wake on matching consensus event only when predicate accepts it.
+  let consensusReady = false;
   const startConsensus = Date.now();
   const waitConsensus = waitForReadinessEventOrTimeout(
-    handler, REPLICA_ID, service, 5000, {watchServicesCache: true},
+    handler, REPLICA_ID, service, 5000, {
+      watchServicesCache: true,
+      shouldWakeOnConsensus: () => consensusReady,
+    },
   );
   for (const fn of consensusListeners) fn({replicaId: 'other-replica'});
-  t.equal(consensusListeners.size, 1, 'unrelated replica event does not wake');
+  for (const fn of consensusListeners) fn({replicaId: REPLICA_ID});
+  t.equal(consensusListeners.size, 1, 'non-ready consensus event does not wake');
+  consensusReady = true;
   for (const fn of consensusListeners) fn({replicaId: REPLICA_ID});
   await waitConsensus;
   t.ok(Date.now() - startConsensus < 1000, 'woke immediately on consensus event');
@@ -127,12 +133,26 @@ test('waitForReadinessEventOrTimeout wakes immediately on consensus, ' +
   await waitAdmission;
   t.equal(service.listenerCount(PARTITION_SERVICE_EVENT.REPLICA_ADMISSION_SETTLED), 0);
 
-  // Wake on matching SERVICES cache update.
+  // Wake on matching SERVICES cache update while ignoring non-matching rows
+  // and skipping consensus subscription when watchConsensus is false.
   const waitCache = waitForReadinessEventOrTimeout(
-    handler, REPLICA_ID, service, 5000, {watchServicesCache: true},
+    handler, REPLICA_ID, service, 5000, {
+      watchConsensus: false,
+      watchServicesCache: true,
+      matchesServicesRow: (row) => row.create_attempt_token === 'attempt-1',
+    },
   );
+  t.equal(consensusListeners.size, 0, 'watchConsensus:false skips consensus subscription');
   for (const fn of cacheListeners) {
-    fn(SYSTEM_TABLE_NAME.SERVICES, 'UPSERT', {service_id: REPLICA_ID});
+    fn(SYSTEM_TABLE_NAME.SERVICES, 'UPSERT', {
+      service_id: REPLICA_ID, create_attempt_token: 'another-attempt',
+    });
+  }
+  t.equal(cacheListeners.size, 1, 'wrong-attempt SERVICES row does not wake');
+  for (const fn of cacheListeners) {
+    fn(SYSTEM_TABLE_NAME.SERVICES, 'UPSERT', {
+      service_id: REPLICA_ID, create_attempt_token: 'attempt-1',
+    });
   }
   await waitCache;
   t.equal(cacheListeners.size, 0, 'cache listener cleaned up after wake');
