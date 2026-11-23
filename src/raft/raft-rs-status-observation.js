@@ -185,12 +185,17 @@ function validateProgressIdentities(group, progress) {
   }
 }
 
+function validatePeerListIdentities(group, ids) {
+  for (const id of ids) {
+    if (id !== group.peerId) group.resolvePeerIdentity(id);
+  }
+}
+
 function validateObservationIdentities(group, status, confState, onError) {
   try {
     if (status.lead !== NO_LEADER) group.resolvePeerIdentity(status.lead);
-    for (const id of [...confState.voters, ...confState.learners]) {
-      if (id !== group.peerId) group.resolvePeerIdentity(id);
-    }
+    validatePeerListIdentities(group, confState.voters);
+    validatePeerListIdentities(group, confState.learners);
     validateProgressIdentities(group, status?.progress);
     return null;
   } catch (error) {

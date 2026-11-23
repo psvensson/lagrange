@@ -1300,6 +1300,23 @@ function processReadyCycle(group, expectedGeneration, drainState) {
   return {done: false, finished};
 }
 
+function finishAnnounceOnDrain(group, expectedGeneration, state) {
+  const mustAnnounce = shouldAnnounceOnDrain(group, {
+    expectedGeneration, runtimeHealth, runtimeGeneration,
+    participation: participationObservation(group.gate, group.appliedIndex),
+    readyChanged: state.readyChanged, steppedLeaderProgress: state.steppedLeaderProgress,
+  });
+  group.resumingRuntime = false;
+  if (mustAnnounce) {
+    const announced = announce(group, expectedGeneration);
+    return announced.ok ? null : announced.result;
+  }
+  const observation = group.statusObservation;
+  return validateObservationIdentities(group, observation.status,
+    observation.confState, (error) =>
+      groupHostFailure(group, RUNTIME_PHASE.ADDRESS_RESOLUTION, error));
+}
+
 function drainReady(group, expectedGeneration, startCycles = 0,
   announceOnDrain = true, drainState = null) {
   const state = drainState ?? {readyChanged: true, steppedLeaderProgress: false};
@@ -1308,16 +1325,8 @@ function drainReady(group, expectedGeneration, startCycles = 0,
     if (!hasReady.ok) return settledTurn(hasReady.result);
     if (!hasReady.value) {
       if (announceOnDrain) {
-        const mustAnnounce = shouldAnnounceOnDrain(group, {
-          expectedGeneration, runtimeHealth, runtimeGeneration,
-          participation: participationObservation(group.gate, group.appliedIndex),
-          readyChanged: state.readyChanged, steppedLeaderProgress: state.steppedLeaderProgress,
-        });
-        group.resumingRuntime = false;
-        if (mustAnnounce) {
-          const announced = announce(group, expectedGeneration);
-          if (!announced.ok) return settledTurn(announced.result);
-        }
+        const failed = finishAnnounceOnDrain(group, expectedGeneration, state);
+        if (failed !== null) return settledTurn(failed);
       }
       return settledTurn(outcome(CORE_OK, {reason: RUNTIME_REASON.DRAINED}));
     }
