@@ -15,7 +15,8 @@
  *   `GET :8081/api/admin/discovery/services?serviceId=sys-postgres-wire`
  *   (src/admin/admin-websocket-diagnostics-route-methods.js);
  * - partition leaders and replica placement
- *   `GET :8081/api/admin/diagnostics/partitions`
+ *   `GET :8081/api/admin/diagnostics/partitions?view=leaders` and
+ *   `GET :8081/api/admin/diagnostics/partitions?view=placement`
  *   (src/admin/admin-control-snapshot-local-diagnostics-methods.js);
  * - cluster readiness from the system tables over the public PG wire
  *   (real-product-lagrange-readiness-evaluation.js): live ready leases and

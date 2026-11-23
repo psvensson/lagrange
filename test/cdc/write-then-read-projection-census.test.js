@@ -224,6 +224,9 @@ const OWN_CACHE_CHANGE_WAITS = Object.freeze({
     'timer; no production code constructs the tracker',
   'bootstrap/shared/startup-convergence-gate.js': 'startup convergence ' +
     'wake source; waits on readiness conditions, not a write position',
+  'node/replica-handler-readiness-wake.js': 'replica-handler learner/voter ' +
+    'readiness wake source; wakes on SERVICES row, consensus, or lifecycle ' +
+    'readiness transitions, not a write position',
 });
 
 test('no wait over onCacheChange exists outside the named modules',

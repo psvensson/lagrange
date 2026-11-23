@@ -269,6 +269,48 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
     ]);
     return {partitionMetadataById, replicasByPartitionId, partitionIds};
   }
+  function buildPartitionDiagnosticsById({
+    partitionIds,
+    partitionMetadataById,
+    replicasByPartitionId,
+    leaderSummary,
+    voterCounts,
+  }) {
+    const partitionsById = {};
+    for (const partitionId of partitionIds) {
+      const metadata = Object.hasOwn(partitionMetadataById, partitionId) ?
+        partitionMetadataById[partitionId] :
+        {};
+      const replicas = Object.hasOwn(replicasByPartitionId, partitionId) ?
+        replicasByPartitionId[partitionId] :
+        ADMIN_CACHE_DUMP.EMPTY;
+      const activeReplicaCount = replicas.filter(
+        (replica) => readLowerStateField(replica?.status) === STATUS_ACTIVE,
+      ).length;
+      partitionsById[partitionId] = {
+        partitionId,
+        tableId: metadata.tableId || null,
+        tableName: metadata.tableName || null,
+        state: metadata.state || PARTITION_STATE_UNKNOWN,
+        leaderNodeId: leaderSummary.leaders[partitionId] || null,
+        voterCount: toNonNegativeInteger(voterCounts[partitionId]),
+        replicaCount: replicas.length,
+        activeReplicaCount,
+        replicaRoles: leaderSummary.replicaRoles[partitionId] || {},
+        replicaRoleDiagnostics: leaderSummary.replicaRoleDiagnostics[
+          partitionId
+        ] || {
+          canonicalLeaderNodeId: null,
+          source: TABLES.PARTITIONS,
+          inconsistentReplicaRoles: false,
+          replicaLeaderNodeIds: ADMIN_CACHE_DUMP.EMPTY,
+          issues: ADMIN_CACHE_DUMP.EMPTY,
+        },
+        replicas,
+      };
+    }
+    return partitionsById;
+  }
   class AdminControlSnapshotLocalDiagnosticsMethods {
     buildLocalCdcTelemetry() {
       const partitionServices = this.resolveLocalPartitionServices ?
@@ -445,7 +487,8 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
           options.view;
       if (
         requestedView !== ADMIN_PARTITION_DIAGNOSTICS_VIEW.FULL &&
-        requestedView !== ADMIN_PARTITION_DIAGNOSTICS_VIEW.LEADERS
+        requestedView !== ADMIN_PARTITION_DIAGNOSTICS_VIEW.LEADERS &&
+        requestedView !== ADMIN_PARTITION_DIAGNOSTICS_VIEW.PLACEMENT
       ) {
         throw new Error(
           ADMIN_ERROR_MESSAGE.PARTITION_DIAGNOSTICS_VIEW_UNSUPPORTED,
@@ -478,44 +521,15 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
           leaders: leaderSummary.leaders,
         };
       }
-      const replicaOperationRows = this.systemTableCache.getAll(
-        TABLES.REPLICA_OPERATIONS,
-      );
       const voterCounts = this.buildControlSnapshotVoterCounts(serviceRows);
-      const replicaOperations =
-        this.buildControlSnapshotReplicaOperationSummary(replicaOperationRows);
-      const partitionsById = {};
-      for (const partitionId of partitionIds) {
-        const metadata = partitionMetadataById[partitionId] || {};
-        const replicas =
-          replicasByPartitionId[partitionId] || ADMIN_CACHE_DUMP.EMPTY;
-        const activeReplicaCount = replicas.filter(
-          (replica) =>
-            readLowerStateField(replica?.status) === STATUS_ACTIVE,
-        ).length;
-        partitionsById[partitionId] = {
-          partitionId,
-          tableId: metadata.tableId || null,
-          tableName: metadata.tableName || null,
-          state: metadata.state || PARTITION_STATE_UNKNOWN,
-          leaderNodeId: leaderSummary.leaders[partitionId] || null,
-          voterCount: toNonNegativeInteger(voterCounts[partitionId]),
-          replicaCount: replicas.length,
-          activeReplicaCount,
-          replicaRoles: leaderSummary.replicaRoles[partitionId] || {},
-          replicaRoleDiagnostics: leaderSummary.replicaRoleDiagnostics[
-            partitionId
-          ] || {
-            canonicalLeaderNodeId: null,
-            source: TABLES.PARTITIONS,
-            inconsistentReplicaRoles: false,
-            replicaLeaderNodeIds: ADMIN_CACHE_DUMP.EMPTY,
-            issues: ADMIN_CACHE_DUMP.EMPTY,
-          },
-          replicas,
-        };
-      }
-      return {
+      const partitionsById = buildPartitionDiagnosticsById({
+        partitionIds,
+        partitionMetadataById,
+        replicasByPartitionId,
+        leaderSummary,
+        voterCounts,
+      });
+      const placementPayload = {
         schemaVersion: ADMIN_OPERATIONAL_DIAGNOSTICS.PARTITION_SCHEMA_VERSION,
         nodeId: this.nodeId,
         capturedAt,
@@ -523,8 +537,18 @@ function assignAdminControlSnapshotLocalDiagnosticsMethods(
         leaders: leaderSummary.leaders,
         voterCounts,
         replicaRoleDiagnostics: leaderSummary.replicaRoleDiagnostics,
-        replicaOperations,
         partitionsById,
+      };
+      if (requestedView === ADMIN_PARTITION_DIAGNOSTICS_VIEW.PLACEMENT) {
+        return placementPayload;
+      }
+      const replicaOperationRows = this.systemTableCache.getAll(
+        TABLES.REPLICA_OPERATIONS,
+      );
+      return {
+        ...placementPayload,
+        replicaOperations:
+          this.buildControlSnapshotReplicaOperationSummary(replicaOperationRows),
       };
     }
     /**

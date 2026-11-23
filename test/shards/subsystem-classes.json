@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "test-subsystem-classification",
   "counts": {
-    "admin-diagnostics": 122,
+    "admin-diagnostics": 123,
     "architecture-governance": 21,
     "bootstrap-membership": 355,
-    "cdc-metadata": 80,
+    "cdc-metadata": 81,
     "cli-tooling": 99,
     "control-plane": 240,
     "convergence-topology": 88,
@@ -25,10 +25,10 @@
     "transport-messaging": 123,
     "wasm-toolchain": 74
   },
-  "censusSize": 2809,
-  "digest": "fnv1a32-bddfcd84",
+  "censusSize": 2811,
+  "digest": "fnv1a32-ef346026",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b5a3c486",
+  "observationDigest": "fnv1a32-3c1e1759",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -61,6 +61,7 @@
     "test/admin/admin-control-snapshot-served-handoff-writer-coupling.test.js": "admin-diagnostics",
     "test/admin/admin-control-snapshot.test.js": "admin-diagnostics",
     "test/admin/admin-deprecation.test.js": "admin-diagnostics",
+    "test/admin/admin-diagnostics-payload-bounds.test.js": "admin-diagnostics",
     "test/admin/admin-meta-command-handlers.test.js": "admin-diagnostics",
     "test/admin/admin-meta-delegator.test.js": "admin-diagnostics",
     "test/admin/admin-meta-endpoint-builder.test.js": "admin-diagnostics",
@@ -410,6 +411,7 @@
     "test/cdc/cdc-routed-mutation-wait-bound-spent.test.js": "cdc-metadata",
     "test/cdc/cdc-shutdown-terminal-owner-write.test.js": "cdc-metadata",
     "test/cdc/cdc-sql-builder.test.js": "cdc-metadata",
+    "test/cdc/cdc-system-table-batch-upsert-shape.test.js": "cdc-metadata",
     "test/cdc/cdc-system-table-write-failure-participant-detail.test.js": "cdc-metadata",
     "test/cdc/cdc-terminal-gate-inflight.test.js": "cdc-metadata",
     "test/cdc/current-epoch-propagation.integration.test.js": "cdc-metadata",
@@ -2944,6 +2946,12 @@
         "src/control-plane/control-plane-system-table-gateway.js"
       ]
     },
+    "test/admin/admin-diagnostics-payload-bounds.test.js": {
+      "files": [
+        "src/control-plane/eligibility-snapshot.js",
+        "src/rebalancer/operation-step-age.js"
+      ]
+    },
     "test/admin/admin-mutation-guard.pbt.test.js": {
       "files": [
         "src/admin/admin-deprecation.js"
@@ -5012,6 +5020,13 @@
       ],
       "directories": [
         "src/cdc"
+      ]
+    },
+    "test/cdc/cdc-system-table-batch-upsert-shape.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/cdc/cdc-system-table-mutation-sql-helpers.js",
+        "test/cdc/cdc-integration-service-test-support.js"
       ]
     },
     "test/cdc/cdc-system-table-write-failure-participant-detail.test.js": {
