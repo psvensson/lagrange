@@ -12,8 +12,12 @@ import {
 } from './partition-participant-transaction-request.js';
 import {PARTICIPANT_TRANSACTION_FAILURE_CODE as PARTICIPANT_CODE} from
   './partition-participant-transaction-constants.js';
-import {waitForConflictingRowKeyHolderToSettle} from
-  './partition-participant-transaction-session.js';
+import {
+  notifyRowKeySettlementWaiters,
+  waitForConflictingRowKeyHolderToSettle,
+} from './partition-participant-transaction-session.js';
+import {prepareWaitingRowKeySessionForReevaluation} from
+  './partition-participant-transaction-staging.js';
 import {coordinatorTableSchemaRefusal} from
   '../query/distributed/distributed-transaction-schema-enforcement.js';
 import {QUERY_RESULT_REQUEST_FIELD} from '../query/query-result-budget.js';
@@ -49,6 +53,63 @@ const READ_AUTHORITY_WITNESS_STATE = Object.freeze({
 });
 
 const DDL_STATEMENT_HEADS = new Set(['CREATE', 'ALTER', 'DROP']);
+const DEFAULT_PARTICIPANT_CONFLICT_WAIT_MS = 15000; // ends-on: conflicting row-key holder settlement
+const MAX_PARTICIPANT_CONFLICT_REEVAL_ATTEMPTS = 16;
+
+function resolveParticipantConflictWaitBudgetMs(service) {
+  if (Number.isFinite(service?.conflictSettleWaitMs) &&
+      service.conflictSettleWaitMs > 0) {
+    return Math.min(
+      Math.floor(service.conflictSettleWaitMs),
+      DEFAULT_PARTICIPANT_CONFLICT_WAIT_MS,
+    );
+  }
+  return DEFAULT_PARTICIPANT_CONFLICT_WAIT_MS;
+}
+
+async function resolveParticipantRemoteQueryAnswer(service, payload) {
+  let participantAnswer = answerParticipantSessionQuery(service, payload);
+  if (participantAnswer === null) return null;
+  let deadlineMs = null;
+  for (
+    let attempt = 0;
+    attempt < MAX_PARTICIPANT_CONFLICT_REEVAL_ATTEMPTS;
+    attempt += 1
+  ) {
+    if (participantAnswer.failureCode !== PARTICIPANT_CODE.ALREADY_ACTIVE ||
+        typeof participantAnswer.detail !== 'string') {
+      return participantAnswer;
+    }
+    if (deadlineMs === null) {
+      deadlineMs = service.timeSource.now() +
+        resolveParticipantConflictWaitBudgetMs(service);
+    }
+    const remainingMs = deadlineMs - service.timeSource.now();
+    if (remainingMs <= 0) return participantAnswer;
+    const waitOutcome = await waitForConflictingRowKeyHolderToSettle(
+      service,
+      payload,
+      participantAnswer.detail,
+      remainingMs,
+    );
+    if (!waitOutcome.settled) return participantAnswer;
+    if (!prepareWaitingRowKeySessionForReevaluation(service, payload)) {
+      notifyRowKeySettlementWaiters(service);
+      return participantAnswer;
+    }
+    const reevaluated = answerParticipantSessionQuery(service, payload);
+    if (reevaluated === null) return null;
+    if (reevaluated.failureCode !== PARTICIPANT_CODE.ALREADY_ACTIVE) {
+      if (reevaluated.success !== true) {
+        notifyRowKeySettlementWaiters(service);
+      }
+      return reevaluated;
+    }
+    participantAnswer = reevaluated;
+  }
+  notifyRowKeySettlementWaiters(service);
+  return participantAnswer;
+}
 
 const {
   ERRORS,
@@ -505,18 +566,11 @@ const PARTITION_SERVICE_REMOTE_QUERY_METHODS = Object.freeze({
     const ddlSchemaRefusal = isDdlRemoteQuery(payload, sql) ?
       resolveSystemTableSchemaRefusal(this, payload) : null;
     if (ddlSchemaRefusal !== null) return ddlSchemaRefusal;
-    const participantAnswer = answerParticipantSessionQuery(this, payload);
-    if (participantAnswer !== null) {
-      if (participantAnswer.failureCode === PARTICIPANT_CODE.ALREADY_ACTIVE &&
-          typeof participantAnswer.detail === 'string') {
-        await waitForConflictingRowKeyHolderToSettle(
-          this,
-          payload,
-          participantAnswer.detail,
-        );
-      }
-      return participantAnswer;
-    }
+    const participantAnswer = await resolveParticipantRemoteQueryAnswer(
+      this,
+      payload,
+    );
+    if (participantAnswer !== null) return participantAnswer;
     if (requestsLeaderQualifiedRead(payload, isWriteOperation)) {
       return answerLeaderQualifiedRead(this, payload, sql);
     }

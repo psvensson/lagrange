@@ -117,6 +117,7 @@ documentClass: generated
 - [partition-replica-admission.js](partition-replica-admission.js) - Replica admission from the committed replica operation (quest replica-admission-from-committed-operation; R2 request... (importers: many)
 - [partition-replica-membership-constants.js](partition-replica-membership-constants.js) - What a replica's own committed configuration says about one voter (quest replace-source-removal-owner, amendment-1... (importers: many)
 - [partition-retained-store-observation.js](partition-retained-store-observation.js) - Read-only SQLite mechanics shared by the existing retained application stores. (importers: many)
+- [partition-row-key-waiters.js](partition-row-key-waiters.js) - FIFO settlement waiter queue for partition row-key session concurrency. (importers: one)
 - [partition-service-assembly.js](partition-service-assembly.js) - No leading comment; first export: PartitionService. (importers: few)
 - [partition-service-cdc-stream-base.js](partition-service-cdc-stream-base.js) - Report a spent commit deadline for one pending write. (importers: few)
 - [partition-service-constants.js](partition-service-constants.js) - No leading comment; first export: PARTITION_LEADER_ADDRESS_REFUSAL. (importers: hub)

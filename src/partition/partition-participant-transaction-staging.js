@@ -50,7 +50,9 @@ import {
   PARTICIPANT_TRANSACTION_SESSION_PHASE as PHASE,
 } from './partition-participant-transaction-constants.js';
 import {
+  canAdvanceRowKeySessionGeneration,
   checkAndRecordSessionRowKey,
+  findParticipantSession,
   revertSessionRowKeyCheck,
 } from './partition-participant-transaction-session.js';
 import {
@@ -370,12 +372,16 @@ function readInSession(service, session, request, params) {
     maxRows: request[QUERY_RESULT_REQUEST_FIELD.MAX_ROWS],
   };
   if (session.operations.length === ZERO) {
-    return executeDirectEmptyRead(
+    const directRead = executeDirectEmptyRead(
       service,
       classified.statement,
       params,
       rowBudgetOptions,
     );
+    if (directRead?.success === true) {
+      session.hasExecutedRead = true;
+    }
+    return directRead;
   }
   const outcome = validateOverReplay(service, session, () =>
     collectBoundedTypedRowSet(classified.statement, params, rowBudgetOptions));
@@ -389,7 +395,46 @@ function readInSession(service, session, request, params) {
       error: String(outcome.failure?.message ?? outcome.failure),
       errorCode: outcome.failure?.code ?? null});
   }
+  session.hasExecutedRead = true;
   return buildSessionReadAnswer(service, outcome.ran);
+}
+
+/**
+ * Prepare a waiting active session for in-place re-evaluation after its
+ * conflicting row-key holder settles. Sessions without prior reads rebase
+ * generationBase when empty (and schema unchanged) or when prior staged
+ * operations pass canAdvanceRowKeySessionGeneration; sessions that already
+ * executed a read proceed only when partition generation is unchanged.
+ * @param {Object} service - The partition leader.
+ * @param {Object} payload - The remote QUERY payload.
+ * @return {boolean} True when answerParticipantSessionQuery may re-run.
+ */
+function prepareWaitingRowKeySessionForReevaluation(service, payload) {
+  const session = findParticipantSession(service, payload);
+  if (session === null || session.phase !== PHASE.ACTIVE) {
+    return true;
+  }
+  const currentGeneration = readPartitionWriteGeneration(service.db);
+  if (currentGeneration === session.generationBase) {
+    return true;
+  }
+  if (session.hasExecutedRead === true) {
+    return false;
+  }
+  if (session.operations.length === ZERO) {
+    if (typeof session.schemaVersionBase === 'number' &&
+        readSchemaVersion(service.db) !== session.schemaVersionBase) {
+      return false;
+    }
+    session.generationBase = currentGeneration;
+    session.lastValidatedGeneration = currentGeneration;
+    return true;
+  }
+  if (canAdvanceRowKeySessionGeneration(service, session, currentGeneration)) {
+    session.generationBase = currentGeneration;
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -416,5 +461,6 @@ function runParticipantSessionStatement(service, session, request) {
 
 export {
   getStagingReplayStats,
+  prepareWaitingRowKeySessionForReevaluation,
   runParticipantSessionStatement,
 };

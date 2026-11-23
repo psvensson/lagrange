@@ -19,6 +19,10 @@ import {
 import {hasLockingReadReservations} from './partition-locking-read-reservation.js';
 import {hasDbTransactionReservations} from './partition-locking-read-store.js';
 import {extractStatementWriteFootprint} from './partition-write-footprint-contract.js';
+import {
+  enqueueBoundedRowKeyWaiter,
+  notifyFifoRowKeyWaiters,
+} from './partition-row-key-waiters.js';
 
 // Per partition service: participantId -> session.
 const SESSIONS = new WeakMap();
@@ -29,7 +33,7 @@ const COMMITTED_ROW_KEY_GENERATIONS = new WeakMap();
 const PREPARED_PARTICIPANT_ROW_KEYS = new WeakMap();
 const SCOPED_COMMIT_GENERATIONS = new WeakMap();
 
-const DEFAULT_CONFLICT_SETTLE_WAIT_MS = 30000;
+const DEFAULT_CONFLICT_SETTLE_WAIT_MS = 15000; // ends-on: conflicting row-key holder settlement
 const MAX_RETAINED_COMMITTED_GENERATIONS = 1024;
 const MAX_RETAINED_COMMITTED_ROW_KEYS = 16384;
 const UNSCOPED_CONFLICT_SENTINEL = '*';
@@ -108,36 +112,27 @@ function hasRowKeyConflictWithOtherSession(service, session, rowKey) {
     PREPARED_PARTICIPANT_ROW_KEYS.get(service), session?.identity?.participantId, rowKey);
 }
 
-function rowKeySettlementWaitersOf(service) {
-  if (!(service._rowKeySettlementWaiters instanceof Set)) {
-    service._rowKeySettlementWaiters = new Set();
-  }
-  return service._rowKeySettlementWaiters;
+function isWaiterSessionClosed(service, session) {
+  if (session === null || session === undefined) return false;
+  return session.phase === PHASE.DOOMED ||
+    sessionsOf(service).get(session.identity?.participantId) !== session;
 }
 
 function notifyRowKeySettlementWaiters(service) {
-  const waiters = service?._rowKeySettlementWaiters;
-  if (!(waiters instanceof Set) || waiters.size === 0) return;
-  for (const waiter of [...waiters]) {
-    if (!hasRowKeyConflictWithOtherSession(service, waiter.session, waiter.rowKey)) {
-      waiters.delete(waiter);
-      waiter.resolve();
-    }
-  }
+  notifyFifoRowKeyWaiters(service, {
+    isSessionClosed: (session) => isWaiterSessionClosed(service, session),
+    hasConflict: (session, rowKey) => hasRowKeyConflictWithOtherSession(service, session, rowKey),
+    unscopedSentinel: UNSCOPED_CONFLICT_SENTINEL,
+  });
 }
 
 function releaseEmptyWaiterSessionClaims(service, session) {
   if (!session || (Array.isArray(session.operations) && session.operations.length > 0)) return;
-  let changed = false;
-  if (session.touchedRowKeys instanceof Set && session.touchedRowKeys.size > 0) {
-    session.touchedRowKeys.clear();
-    changed = true;
-  }
-  if (session.hasUnscopedWrite === true) {
-    session.hasUnscopedWrite = false;
-    changed = true;
-  }
-  if (changed) notifyRowKeySettlementWaiters(service);
+  const hadKeys = session.touchedRowKeys instanceof Set && session.touchedRowKeys.size > 0;
+  if (hadKeys) session.touchedRowKeys.clear();
+  const hadUnscoped = session.hasUnscopedWrite === true;
+  if (hadUnscoped) session.hasUnscopedWrite = false;
+  if (hadKeys || hadUnscoped) notifyRowKeySettlementWaiters(service);
 }
 
 function waitForConflictingRowKeyHolderToSettle(
@@ -145,27 +140,23 @@ function waitForConflictingRowKeyHolderToSettle(
 ) {
   if (!isRowKeyConcurrencyEnabled(service) || !service.cdcIntegrationService ||
       typeof rowKey !== 'string' || rowKey.length === 0) {
-    return Promise.resolve();
+    return Promise.resolve({waited: false, settled: false});
   }
   hydrateDurablePreparedAndCommittedState(service);
-  const session = findParticipantSession(service, {
-    transactionId: payload?.transactionId, participantId: payload?.participantId,
-  });
-  if (!hasRowKeyConflictWithOtherSession(service, session, rowKey)) return Promise.resolve();
+  const session = findParticipantSession(service, payload);
+  if (!hasRowKeyConflictWithOtherSession(service, session, rowKey)) {
+    return Promise.resolve({waited: false, settled: true});
+  }
   releaseEmptyWaiterSessionClaims(service, session);
-  const boundedWaitMs = Math.max(1, Math.min(timeoutMs, DEFAULT_CONFLICT_SETTLE_WAIT_MS));
-  return new Promise((resolve) => {
-    const waiters = rowKeySettlementWaitersOf(service);
-    let timer = null;
-    const waiter = {session, rowKey, resolve() {
-      if (timer !== null) clearTimeout(timer);
-      timer = null;
-      waiters.delete(waiter);
-      resolve(undefined);
-    }};
-    waiters.add(waiter);
-    timer = setTimeout(() => waiter.resolve(), boundedWaitMs);
-  });
+  const capMs = Number.isFinite(service?.conflictSettleWaitMs) && service.conflictSettleWaitMs > 0 ?
+    Math.min(Math.floor(service.conflictSettleWaitMs), DEFAULT_CONFLICT_SETTLE_WAIT_MS) :
+    DEFAULT_CONFLICT_SETTLE_WAIT_MS;
+  return enqueueBoundedRowKeyWaiter(
+    service,
+    session,
+    rowKey,
+    Math.max(1, Math.min(Math.floor(timeoutMs), capMs)),
+  );
 }
 
 function findConflictingScopedRowKey(service, session, rowKeys) {
@@ -680,7 +671,7 @@ function openParticipantSession(service, identity, base) {
     generationBase: base.generationBase, lastValidatedGeneration: base.generationBase,
     lastValidatedSchemaVersion: null, schemaVersionBase, originIndex: base.originIndex,
     startedAt: service.timeSource.now(), phase: PHASE.ACTIVE, sealed: null,
-    inFlight: false, doomCode: null,
+    inFlight: false, doomCode: null, hasExecutedRead: false,
   };
   sessionsOf(service).set(identity.participantId, session);
   return session;
@@ -791,9 +782,11 @@ export {
   discardParticipantSessions, endParticipantSession, extractOperationsRowKeyFootprint,
   findParticipantSession, getRetainedRowKeyHistoryStats, hasParticipantSession,
   inspectRetainedPreparedObligations, isPartitionReservedForPrepare, isRowKeyConcurrencyEnabled,
-  listActiveParticipantSessions, openParticipantSession, participantRoutingSessionCollision,
-  participantTransactionActive, recordCommittedAutocommitRowKeys,
-  recordCommittedParticipantRowKeys, resetParticipantRowKeyHistory, revertSessionRowKeyCheck,
+  listActiveParticipantSessions, notifyRowKeySettlementWaiters, openParticipantSession,
+  participantRoutingSessionCollision, participantTransactionActive,
+  recordCommittedAutocommitRowKeys,
+  recordCommittedParticipantRowKeys, resetParticipantRowKeyHistory,
+  revertSessionRowKeyCheck,
   stagePreparedParticipantRowKeys, sweepParticipantTransactionHolds,
   waitForConflictingRowKeyHolderToSettle,
 };
