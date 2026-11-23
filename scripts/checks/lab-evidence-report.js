@@ -41,6 +41,7 @@ import {
   arrayJoin,
   arrayMap,
   arraySome,
+  isAdmissibleExecutionRow,
   isPlainObject,
   isValidSha,
   stringSplit,
@@ -49,6 +50,8 @@ import {
 } from './lab-evidence-report-constants.js';
 import {
   inspectGitBranchState,
+} from './lab-evidence-report-git.js';
+import {
   inspectLabJobDirectory,
 } from './lab-evidence-report-inputs.js';
 
@@ -374,28 +377,48 @@ function validateTopologyScope(claimKind, topologyScope, problems) {
   };
 }
 
-function validateRequiredFilesCoverage(jobs, requiredFiles, requireAllPlannedFiles, problems) {
-  const executed = new Map();
-  const expectedFiles = new Set(Array.isArray(requiredFiles) ? requiredFiles : []);
+function isValidatedHostEntry(hostEntry, manifestMap, claimedSha) {
+  if (!hostEntry || !hostEntry.logValid) return false;
+  if (hostEntry.plannedCount !== hostEntry.executedRows.length) return false;
+  const manifest = manifestMap.get(hostEntry.host);
+  return Boolean(manifest) && manifest.sourceSha === claimedSha;
+}
 
-  for (const job of jobs) {
-    for (const [file, row] of job.executedFiles.entries()) {
-      executed.set(file, row);
-    }
-    if (requireAllPlannedFiles) {
-      for (const planned of job.plannedFiles) {
-        expectedFiles.add(planned);
-      }
+function addHostExecutedFiles(executed, hostEntry, allowRetries) {
+  for (const row of hostEntry.executedRows) {
+    if (row?.file && isAdmissibleExecutionRow(row, allowRetries)) {
+      executed.set(row.file, row);
     }
   }
+}
 
+function collectAdmissibleExecutedFiles(jobs, manifestMap, claimedSha, allowRetries) {
+  const executed = new Map();
+  for (const job of jobs) {
+    const hostEntries = job.hostsByName ? [...job.hostsByName.values()] : job.hosts;
+    for (const hostEntry of hostEntries) {
+      if (!isValidatedHostEntry(hostEntry, manifestMap, claimedSha)) continue;
+      addHostExecutedFiles(executed, hostEntry, allowRetries);
+    }
+  }
+  return executed;
+}
+
+function validateRequiredFilesCoverage(jobs, options, problems) {
+  const {requiredFiles, requireAllPlannedFiles, manifestMap, claimedSha, allowRetries} = options;
+  const executed = collectAdmissibleExecutedFiles(jobs, manifestMap, claimedSha, allowRetries);
+  const expectedFiles = new Set(Array.isArray(requiredFiles) ? requiredFiles : []);
+  if (requireAllPlannedFiles) {
+    for (const job of jobs) {
+      for (const planned of job.plannedFiles) expectedFiles.add(planned);
+    }
+  }
   for (const file of expectedFiles) {
-    const row = executed.get(file);
-    if (!row || row.ok !== true || !(Number(row.assertions) > ZERO)) {
+    if (!executed.has(file)) {
       addProblem(
         problems,
         PROBLEM_CODE.REQUIRED_FILE_MISSING_OR_FAILED,
-        `required file missing, failed, or zero assertions: ${file}`,
+        `required file missing, failed, retried, or unbacked: ${file}`,
         {file},
       );
     }
@@ -624,8 +647,13 @@ function evaluateLabEvidence(input) {
 
   validateRequiredFilesCoverage(
     jobs,
-    safeInput.requiredFiles,
-    safeInput.requireAllPlannedFiles !== false,
+    {
+      requiredFiles: safeInput.requiredFiles,
+      requireAllPlannedFiles: safeInput.requireAllPlannedFiles !== false,
+      manifestMap,
+      claimedSha,
+      allowRetries: safeInput.allowRetries === true,
+    },
     problems,
   );
   const topology = validateTopologyScope(safeInput.claimKind, safeInput.topologyScope, problems);

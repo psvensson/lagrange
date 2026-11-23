@@ -15,6 +15,7 @@ const arraySome = Function.call.bind(Array.prototype.some);
 const arrayEvery = Function.call.bind(Array.prototype.every);
 const regexExec = Function.call.bind(RegExp.prototype.exec);
 const regexTest = Function.call.bind(RegExp.prototype.test);
+const numberIsFinite = Number.isFinite;
 
 const LAB_EVIDENCE_SCHEMA = 'lagrange-p6-lab-evidence-report/v1';
 
@@ -59,6 +60,7 @@ const PROBLEM_CODE = Object.freeze({
   PLACEMENT_SUMMARY_FAILED: 'placement_summary_failed',
   TEST_CASE_FAILED: 'test_case_failed',
   RESULTS_MISMATCH: 'results_mismatch',
+  UNBACKED_MERGED_RESULT: 'unbacked_merged_result',
   REQUIRED_FILE_MISSING_OR_FAILED: 'required_file_missing_or_failed',
   RETRY_POLICY_VIOLATED: 'retry_policy_violated',
   HOST_MANIFEST_MISSING: 'host_manifest_missing',
@@ -154,6 +156,7 @@ const TEXT = Object.freeze({
   UNVERIFIED: 'unverified',
   UNKNOWN: 'unknown',
   TYPE_STRING: 'string',
+  TYPE_NUMBER: 'number',
   TYPE_OBJECT: 'object',
 });
 
@@ -207,6 +210,26 @@ function addProblem(problems, code, detail, extra = {}) {
   problems.push({code, detail, ...extra});
 }
 
+function isSingleAttempt(attempt) {
+  return typeof attempt === TEXT.TYPE_NUMBER &&
+    numberIsFinite(attempt) &&
+    attempt >= ZERO &&
+    attempt <= ONE;
+}
+
+function isPositiveFiniteNumber(value) {
+  return typeof value === TEXT.TYPE_NUMBER &&
+    numberIsFinite(value) &&
+    value > ZERO;
+}
+
+function isAdmissibleExecutionRow(row, allowRetries) {
+  if (!isPlainObject(row)) return false;
+  if (row.ok !== true || !isPositiveFiniteNumber(row.assertions)) return false;
+  if (allowRetries) return true;
+  return row.retriedOnce === false && isSingleAttempt(row.attempt);
+}
+
 export {
   ARTIFACT_STATUS,
   CLAIM_KIND,
@@ -250,8 +273,12 @@ export {
   arrayJoin,
   arrayMap,
   arraySome,
+  isAdmissibleExecutionRow,
   isPlainObject,
+  isPositiveFiniteNumber,
+  isSingleAttempt,
   isValidSha,
+  numberIsFinite,
   regexExec,
   stringEndsWith,
   stringIndexOf,

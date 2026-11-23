@@ -1,18 +1,14 @@
 // Input resolution and artifact parsing for P6 lab evidence reports.
 //
-// Owns repository git ref inspection, symlink-safe job directory reading,
-// placement log/NDJSON cross-checking, and the canonical P6 vocabulary.
+// Owns symlink-safe job directory reading, placement log/NDJSON cross-checking,
+// and original per-host execution validation.
 
 import fs from 'node:fs';
 import path from 'node:path';
 
-import {spawnGit} from './git-invocation.js';
-import {gitProcessEnvironment} from './git-process-environment.js';
-
 import {
   EXIT_JSON_NAME,
   FOURTH_INDEX,
-  GIT_ARGS,
   LINE_BREAK_PATTERN,
   LOG_HEADER,
   LOG_HOST_PATTERN,
@@ -23,7 +19,6 @@ import {
   PLACEMENT_LOG_EXT,
   PLANNED_LINE_PATTERN,
   PROBLEM_CODE,
-  REMOTE_STATE,
   SELECTION_JSON_NAME,
   TEN,
   TEXT,
@@ -34,8 +29,12 @@ import {
   ZERO,
   addProblem,
   arrayFilter,
+  isAdmissibleExecutionRow,
   isPlainObject,
+  isPositiveFiniteNumber,
+  isSingleAttempt,
   isValidSha,
+  numberIsFinite,
   regexExec,
   stringEndsWith,
   stringIndexOf,
@@ -44,14 +43,6 @@ import {
   stringStartsWith,
   stringTrim,
 } from './lab-evidence-report-constants.js';
-
-function runDefaultGit(cwd, args) {
-  return spawnGit(args, {
-    cwd,
-    encoding: TEXT.UTF8,
-    env: gitProcessEnvironment(),
-  });
-}
 
 function readVerifiedFile(rootDir, filePath) {
   try {
@@ -94,162 +85,6 @@ function parseJsonContent(filePath, content) {
       value: null,
     };
   }
-}
-
-function parseLsRemoteSha(stdout) {
-  const trimmed = stringTrim(String(stdout || TEXT.EMPTY));
-  if (trimmed.length === ZERO) return TEXT.EMPTY;
-  const firstLine = stringSplit(trimmed, LINE_BREAK_PATTERN)[ZERO] || TEXT.EMPTY;
-  const tabIndex = stringIndexOf(firstLine, TEXT.TAB);
-  if (tabIndex <= ZERO) return stringTrim(firstLine);
-  return stringTrim(stringSlice(firstLine, ZERO, tabIndex));
-}
-
-function classifyRemoteState(lsRemoteResult, claimedSha) {
-  let classified = null;
-  if (lsRemoteResult.status !== ZERO) {
-    const errText = lsRemoteResult.stderr || lsRemoteResult.error?.message || TEXT.UNKNOWN;
-    classified = {
-      remoteState: REMOTE_STATE.UNAVAILABLE,
-      remoteSha: TEXT.UNAVAILABLE,
-      detail: stringTrim(String(errText)),
-    };
-  } else {
-    const remoteSha = parseLsRemoteSha(lsRemoteResult.stdout);
-    if (remoteSha.length === ZERO) {
-      classified = {remoteState: REMOTE_STATE.UNPUSHED, remoteSha: TEXT.EMPTY, detail: TEXT.EMPTY};
-    } else if (remoteSha === claimedSha) {
-      classified = {remoteState: REMOTE_STATE.PUSHED_MATCH, remoteSha, detail: TEXT.EMPTY};
-    } else {
-      classified = {remoteState: REMOTE_STATE.REMOTE_DIVERGED, remoteSha, detail: TEXT.EMPTY};
-    }
-  }
-  return classified;
-}
-
-function unavailableGitState(targetRef, remote, remoteRef) {
-  return {
-    available: false,
-    headSha: TEXT.UNAVAILABLE,
-    headBranch: TEXT.UNAVAILABLE,
-    targetRef,
-    targetRefSha: TEXT.UNAVAILABLE,
-    remote,
-    remoteRef,
-    remoteState: REMOTE_STATE.UNAVAILABLE,
-    remoteSha: TEXT.UNAVAILABLE,
-    originMainSha: TEXT.UNAVAILABLE,
-    pushed: false,
-  };
-}
-
-function readGitStdout(gitRunner, repoRoot, args, fallbackValue) {
-  const res = gitRunner(repoRoot, args);
-  return res.status === ZERO ? stringTrim(String(res.stdout || TEXT.EMPTY)) : fallbackValue;
-}
-
-function inspectRemoteBranchRefs(gitRunner, repoRoot, options, problems) {
-  const {remote, refToCheck, originMainRef, claimedSha, requireRemotePushed} = options;
-  const lsRemoteRes = gitRunner(repoRoot, [GIT_ARGS.LS_REMOTE, remote, refToCheck]);
-  const remoteInfo = classifyRemoteState(lsRemoteRes, claimedSha);
-  const pushed = remoteInfo.remoteState === REMOTE_STATE.PUSHED_MATCH;
-
-  if (requireRemotePushed && !pushed) {
-    addProblem(
-      problems,
-      PROBLEM_CODE.REMOTE_REF_NOT_PUSHED,
-      `remote ${remote} ${refToCheck} state=${remoteInfo.remoteState} sha=${remoteInfo.remoteSha}`,
-    );
-  }
-
-  const mainRes = gitRunner(repoRoot, [GIT_ARGS.LS_REMOTE, remote, originMainRef]);
-  const mainSha = mainRes.status === ZERO ? parseLsRemoteSha(mainRes.stdout) : TEXT.UNAVAILABLE;
-  return {
-    remoteState: remoteInfo.remoteState,
-    remoteSha: remoteInfo.remoteSha,
-    remoteDetail: remoteInfo.detail,
-    originMainSha: mainSha.length > ZERO ? mainSha : TEXT.UNAVAILABLE,
-    pushed,
-  };
-}
-
-function normalizeGitInspectOptions(options) {
-  return {
-    repoRoot: options.repoRoot,
-    claimedSha: options.claimedSha,
-    targetRef: options.targetRef || GIT_ARGS.HEAD_REF,
-    remote: options.remote || GIT_ARGS.ORIGIN,
-    remoteRef: options.remoteRef || TEXT.EMPTY,
-    originMainRef: options.originMainRef || GIT_ARGS.ORIGIN_MAIN_REF,
-    requireRemotePushed: options.requireRemotePushed === true,
-    gitRunner: options.gitRunner || runDefaultGit,
-  };
-}
-
-function inspectGitBranchState(options, problems) {
-  const opts = normalizeGitInspectOptions(options);
-  const headRes = opts.gitRunner(opts.repoRoot, GIT_ARGS.HEAD_REV);
-  if (headRes.status !== ZERO) {
-    const errText = headRes.stderr || headRes.error?.message || TEXT.UNKNOWN;
-    addProblem(
-      problems,
-      PROBLEM_CODE.GIT_STATE_UNAVAILABLE,
-      `git rev-parse HEAD failed: ${stringTrim(String(errText))}`,
-    );
-    return unavailableGitState(opts.targetRef, opts.remote, opts.remoteRef);
-  }
-
-  const headSha = stringTrim(String(headRes.stdout || TEXT.EMPTY));
-  const headBranch = readGitStdout(
-    opts.gitRunner,
-    opts.repoRoot,
-    GIT_ARGS.HEAD_BRANCH,
-    TEXT.DETACHED,
-  );
-  const targetRevArgs = [
-    GIT_ARGS.REV_PARSE,
-    GIT_ARGS.VERIFY,
-    `${opts.targetRef}${GIT_ARGS.COMMIT_SUFFIX}`,
-  ];
-  const targetRefSha = readGitStdout(
-    opts.gitRunner,
-    opts.repoRoot,
-    targetRevArgs,
-    TEXT.UNAVAILABLE,
-  );
-
-  if (targetRefSha !== opts.claimedSha) {
-    addProblem(
-      problems,
-      PROBLEM_CODE.TARGET_REF_SHA_MISMATCH,
-      `target ref ${opts.targetRef} resolved to ${targetRefSha}, expected ${opts.claimedSha}`,
-    );
-  }
-
-  const refToCheck = opts.remoteRef.length > ZERO ? opts.remoteRef : opts.targetRef;
-  const remoteFacts = inspectRemoteBranchRefs(
-    opts.gitRunner,
-    opts.repoRoot,
-    {
-      remote: opts.remote,
-      refToCheck,
-      originMainRef: opts.originMainRef,
-      claimedSha: opts.claimedSha,
-      requireRemotePushed: opts.requireRemotePushed,
-    },
-    problems,
-  );
-
-  return {
-    available: true,
-    headSha,
-    headBranch,
-    targetRef: opts.targetRef,
-    targetRefSha,
-    remote: opts.remote,
-    remoteRef: refToCheck,
-    ...remoteFacts,
-  };
 }
 
 function parsePlacementEnv(rawEnv) {
@@ -320,12 +155,14 @@ function applyLogBodyLine(state, line) {
   }
   const totalsMatch = regexExec(TOTALS_LINE_PATTERN, line);
   if (totalsMatch) {
-    state.summaryTotals = {
+    const entry = {
       total: Number.parseInt(totalsMatch[ONE], TEN),
       pass: Number.parseInt(totalsMatch[TWO], TEN),
       fail: Number.parseInt(totalsMatch[THREE], TEN),
       assertions: Number.parseInt(totalsMatch[FOURTH_INDEX], TEN),
     };
+    state.summaryTotals = entry;
+    state.summaryTotalsList.push(entry);
   }
 }
 
@@ -338,6 +175,7 @@ function parsePlacementLogContent(content, defaultHost) {
     placementEnvRaw: TEXT.EMPTY,
     plannedCount: null,
     summaryTotals: null,
+    summaryTotalsList: [],
     results: [],
     parseErrors: [],
   };
@@ -398,25 +236,44 @@ function summarizeResultsMatch(logResults, ndjsonRows) {
   return TEXT.EMPTY;
 }
 
-function validatePlacementSummaryTotals(summaryTotals, ctx, problems) {
-  if (summaryTotals === null) return;
-  const {total, pass, fail, assertions} = summaryTotals;
+function validateSingleSummaryEntry(entry, ctx, problems) {
+  const {total, pass, fail, assertions} = entry;
   const hasFailure = fail !== ZERO || pass !== total;
   const missingAssertions = total > ZERO && assertions <= ZERO;
-  if (hasFailure || missingAssertions) {
+  if (!hasFailure && !missingAssertions) return true;
+  addProblem(
+    problems,
+    PROBLEM_CODE.PLACEMENT_SUMMARY_FAILED,
+    `${ctx.jobName}/${ctx.host}: summary total=${total} pass=${pass} fail=${fail} ` +
+    `assertions=${assertions}`,
+    {host: ctx.host, job: ctx.jobName},
+  );
+  return false;
+}
+
+function validatePlacementSummaryTotals(summaryTotalsList, executedCount, ctx, problems) {
+  if (summaryTotalsList.length === ZERO) return true;
+  let allValid = true;
+  let totalSum = ZERO;
+  for (const entry of summaryTotalsList) {
+    if (!validateSingleSummaryEntry(entry, ctx, problems)) allValid = false;
+    totalSum += entry.total;
+  }
+  if (totalSum !== executedCount) {
     addProblem(
       problems,
-      PROBLEM_CODE.PLACEMENT_SUMMARY_FAILED,
-      `${ctx.jobName}/${ctx.host}: summary total=${total} pass=${pass} fail=${fail} ` +
-      `assertions=${assertions}`,
+      PROBLEM_CODE.RESULTS_MISMATCH,
+      `${ctx.jobName}/${ctx.host}: summary total (${totalSum}) != executed rows (${executedCount})`,
       {host: ctx.host, job: ctx.jobName},
     );
+    allValid = false;
   }
+  return allValid;
 }
 
 function validateRowPassed(row, ctx, problems) {
   const safeRow = isPlainObject(row) ? row : {};
-  const passed = safeRow.ok === true && Number(safeRow.assertions) > ZERO;
+  const passed = safeRow.ok === true && isPositiveFiniteNumber(safeRow.assertions);
   if (passed) return;
   const fileLabel = safeRow.file || TEXT.UNKNOWN;
   addProblem(
@@ -430,13 +287,14 @@ function validateRowPassed(row, ctx, problems) {
 function validateRowRetryPolicy(row, ctx, allowRetries, problems) {
   if (allowRetries) return;
   const safeRow = isPlainObject(row) ? row : {};
-  const retried = safeRow.retriedOnce === true || Number(safeRow.attempt) > ONE;
-  if (!retried) return;
+  const singleAttempt = safeRow.retriedOnce === false && isSingleAttempt(safeRow.attempt);
+  if (singleAttempt) return;
   const fileLabel = safeRow.file || TEXT.UNKNOWN;
   addProblem(
     problems,
     PROBLEM_CODE.RETRY_POLICY_VIOLATED,
-    `${ctx.jobName}/${ctx.host}: retry observed for ${fileLabel} (attempt=${safeRow.attempt})`,
+    `${ctx.jobName}/${ctx.host}: retry or invalid attempt for ${fileLabel} ` +
+    `(attempt=${safeRow.attempt}, retriedOnce=${safeRow.retriedOnce})`,
     {host: ctx.host, job: ctx.jobName, file: safeRow.file},
   );
 }
@@ -446,18 +304,17 @@ function validateSingleResultRow(row, ctx, allowRetries, problems) {
   validateRowRetryPolicy(row, ctx, allowRetries, problems);
 }
 
-function validateHostExecutionFacts(hostRecord, options, problems) {
-  const ctx = {host: hostRecord.host, jobName: options.jobName};
-  const {parsedLog, ndjsonRows} = hostRecord;
+function validateLogHeadAndErrors(parsedLog, ctx, claimedSha, problems) {
+  let valid = true;
   const foundHead = parsedLog.placementHead || TEXT.UNAVAILABLE;
-
-  if (!isValidSha(parsedLog.placementHead) || parsedLog.placementHead !== options.claimedSha) {
+  if (!isValidSha(parsedLog.placementHead) || parsedLog.placementHead !== claimedSha) {
     addProblem(
       problems,
       PROBLEM_CODE.EXECUTION_SHA_MISMATCH,
-      `${ctx.jobName}/${ctx.host}: placement-head=${foundHead} != ${options.claimedSha}`,
+      `${ctx.jobName}/${ctx.host}: placement-head=${foundHead} != ${claimedSha}`,
       {host: ctx.host, job: ctx.jobName},
     );
+    valid = false;
   }
   for (const err of parsedLog.parseErrors) {
     addProblem(
@@ -466,10 +323,14 @@ function validateHostExecutionFacts(hostRecord, options, problems) {
       `${ctx.jobName}/${ctx.host}: ${err}`,
       {host: ctx.host, job: ctx.jobName},
     );
+    valid = false;
   }
-  validatePlacementSummaryTotals(parsedLog.summaryTotals, ctx, problems);
+  return valid;
+}
 
-  if (parsedLog.results.length > ZERO && ndjsonRows !== null) {
+function validateLogNdjsonAndCounts(parsedLog, ndjsonRows, effectiveRows, ctx, problems) {
+  let valid = true;
+  if (ndjsonRows !== null) {
     const mismatch = summarizeResultsMatch(parsedLog.results, ndjsonRows);
     if (mismatch.length > ZERO) {
       addProblem(
@@ -478,15 +339,49 @@ function validateHostExecutionFacts(hostRecord, options, problems) {
         `${ctx.jobName}/${ctx.host}: ${mismatch}`,
         {host: ctx.host, job: ctx.jobName},
       );
+      valid = false;
     }
   }
+  if (parsedLog.plannedCount === null || parsedLog.plannedCount !== effectiveRows.length) {
+    addProblem(
+      problems,
+      PROBLEM_CODE.RESULTS_MISMATCH,
+      `${ctx.jobName}/${ctx.host}: planned count (${parsedLog.plannedCount}) != ` +
+      `executed rows (${effectiveRows.length})`,
+      {host: ctx.host, job: ctx.jobName},
+    );
+    valid = false;
+  }
+  return valid;
+}
 
+function validateHostExecutionFacts(hostRecord, options, problems) {
+  const ctx = {host: hostRecord.host, jobName: options.jobName};
+  const {parsedLog, ndjsonRows} = hostRecord;
   const effectiveRows = ndjsonRows !== null ? ndjsonRows : parsedLog.results;
+  const headOk = validateLogHeadAndErrors(parsedLog, ctx, options.claimedSha, problems);
+  const summaryOk = validatePlacementSummaryTotals(
+    parsedLog.summaryTotalsList,
+    effectiveRows.length,
+    ctx,
+    problems,
+  );
+  const countsOk = validateLogNdjsonAndCounts(
+    parsedLog,
+    ndjsonRows,
+    effectiveRows,
+    ctx,
+    problems,
+  );
   const allowRetries = options.allowRetries === true;
   for (const row of effectiveRows) {
     validateSingleResultRow(row, ctx, allowRetries, problems);
   }
-  return effectiveRows;
+  return {
+    effectiveRows,
+    plannedCount: parsedLog.plannedCount,
+    logValid: headOk && summaryOk && countsOk,
+  };
 }
 
 function readJobNdjsonByHost(jobDir, jobName, dirEntries, problems) {
@@ -549,10 +444,41 @@ function readJobExitAndSelection(jobDir, jobName, claimedSha, problems) {
   return {...exitInfo, ...selectionInfo};
 }
 
+function recordHostEntry(hosts, hostsByName, hostEntry, jobName, problems) {
+  if (hostsByName.has(hostEntry.host)) {
+    hostsByName.get(hostEntry.host).logValid = false;
+    hostEntry.logValid = false;
+    addProblem(
+      problems,
+      PROBLEM_CODE.RESULTS_MISMATCH,
+      `${jobName}/${hostEntry.host}: duplicate placement log ${hostEntry.logFile}`,
+      {host: hostEntry.host, job: jobName},
+    );
+  } else {
+    hostsByName.set(hostEntry.host, hostEntry);
+  }
+  hosts.push(hostEntry);
+}
+
+function validateOrphanHostNdjson(jobName, ndjsonByHost, hostsByName, problems) {
+  for (const host of ndjsonByHost.keys()) {
+    if (!hostsByName.has(host)) {
+      addProblem(
+        problems,
+        PROBLEM_CODE.PLACEMENT_LOG_MISSING,
+        `${jobName}/${host}: ${NDJSON_PREFIX}${host}${NDJSON_EXT} has no matching placement log`,
+        {host, job: jobName},
+      );
+    }
+  }
+}
+
 function readJobHostLogs(jobDir, jobName, ndjsonByHost, logFiles, options, problems) {
   const knownHosts = [...ndjsonByHost.keys()];
   const hosts = [];
+  const hostsByName = new Map();
   const executedFiles = new Map();
+  const allowRetries = options.allowRetries === true;
 
   for (const logFile of logFiles) {
     const rawLog = readVerifiedFile(jobDir, path.join(jobDir, logFile));
@@ -565,15 +491,12 @@ function readJobHostLogs(jobDir, jobName, ndjsonByHost, logFiles, options, probl
       inferHostFromLogName(logFile, knownHosts),
     );
     const ndjsonRows = ndjsonByHost.get(parsedLog.host) || null;
-    const effectiveRows = validateHostExecutionFacts(
+    const factOutcome = validateHostExecutionFacts(
       {host: parsedLog.host, logFile, parsedLog, ndjsonRows},
       {...options, jobName},
       problems,
     );
-    for (const row of effectiveRows) {
-      if (row?.file) executedFiles.set(row.file, row);
-    }
-    hosts.push({
+    const hostEntry = {
       job: jobName,
       host: parsedLog.host,
       logFile,
@@ -582,21 +505,106 @@ function readJobHostLogs(jobDir, jobName, ndjsonByHost, logFiles, options, probl
       placementEnv: parsedLog.placementEnv,
       placementEnvRaw: parsedLog.placementEnvRaw,
       summaryTotals: parsedLog.summaryTotals,
-      executedRows: effectiveRows,
-    });
+      plannedCount: factOutcome.plannedCount,
+      executedRows: factOutcome.effectiveRows,
+      logValid: factOutcome.logValid,
+    };
+    recordHostEntry(hosts, hostsByName, hostEntry, jobName, problems);
+    if (hostEntry.logValid) {
+      for (const row of factOutcome.effectiveRows) {
+        if (row?.file && isAdmissibleExecutionRow(row, allowRetries)) {
+          executedFiles.set(row.file, row);
+        }
+      }
+    }
   }
 
-  return {hosts, executedFiles};
+  validateOrphanHostNdjson(jobName, ndjsonByHost, hostsByName, problems);
+  return {hosts, hostsByName, executedFiles};
 }
 
-function mergeFallbackNdjson(jobDir, ndjsonByHost, executedFiles) {
-  const mergedPath = path.join(jobDir, MERGED_NDJSON_NAME);
-  if (ndjsonByHost.size > ZERO || !fs.existsSync(mergedPath)) return;
-  const mergedRaw = readVerifiedFile(jobDir, mergedPath);
-  if (!mergedRaw.ok) return;
-  for (const row of parseNdjsonContent(mergedRaw.content).rows) {
-    if (row?.file && !executedFiles.has(row.file)) executedFiles.set(row.file, row);
+function collectValidatedHostRows(hosts) {
+  const hostRows = [];
+  let plannedTotal = ZERO;
+  for (const hostEntry of hosts) {
+    if (!hostEntry.logValid) continue;
+    if (numberIsFinite(hostEntry.plannedCount)) {
+      plannedTotal += hostEntry.plannedCount;
+    }
+    for (const row of hostEntry.executedRows) hostRows.push(row);
   }
+  return {hostRows, plannedTotal};
+}
+
+function findAndConsumeMatchingRow(targetRow, hostRows, consumedIndices) {
+  for (let i = ZERO; i < hostRows.length; i += ONE) {
+    if (consumedIndices.has(i)) continue;
+    if (rowsMatchExactly(hostRows[i], targetRow)) {
+      consumedIndices.add(i);
+      return true;
+    }
+  }
+  return false;
+}
+
+function checkMergedRowCounts(jobName, mergedCount, hostCount, plannedTotal, problems) {
+  if (mergedCount <= plannedTotal && mergedCount === hostCount) return;
+  addProblem(
+    problems,
+    PROBLEM_CODE.UNBACKED_MERGED_RESULT,
+    `${jobName}/${MERGED_NDJSON_NAME}: row count (${mergedCount}) does not match ` +
+    `validated per-host records (${hostCount}, planned=${plannedTotal})`,
+    {job: jobName},
+  );
+}
+
+function crossCheckMergedRows(jobName, mergedRows, hostRows, allowRetries, problems) {
+  const ctx = {host: MERGED_NDJSON_NAME, jobName};
+  const consumedIndices = new Set();
+  for (const row of mergedRows) {
+    if (findAndConsumeMatchingRow(row, hostRows, consumedIndices)) continue;
+    const fileLabel = row?.file || TEXT.UNKNOWN;
+    addProblem(
+      problems,
+      PROBLEM_CODE.UNBACKED_MERGED_RESULT,
+      `${jobName}/${MERGED_NDJSON_NAME}: ${fileLabel} has no matching validated per-host record`,
+      {job: jobName, file: row?.file},
+    );
+    validateSingleResultRow(row, ctx, allowRetries, problems);
+  }
+}
+
+function reconcileMergedNdjson(jobDir, jobName, hosts, options, problems) {
+  const mergedPath = path.join(jobDir, MERGED_NDJSON_NAME);
+  if (!fs.existsSync(mergedPath)) return;
+  const mergedRaw = readVerifiedFile(jobDir, mergedPath);
+  if (!mergedRaw.ok) {
+    addProblem(
+      problems,
+      PROBLEM_CODE.JOB_PATH_UNSAFE,
+      `${jobName}/${MERGED_NDJSON_NAME}: ${mergedRaw.reason}`,
+      {job: jobName},
+    );
+    return;
+  }
+  const parsedMerged = parseNdjsonContent(mergedRaw.content);
+  for (const err of parsedMerged.parseErrors) {
+    addProblem(
+      problems,
+      PROBLEM_CODE.JOB_FAILED,
+      `${jobName}/${MERGED_NDJSON_NAME}: ${err}`,
+      {job: jobName},
+    );
+  }
+  const {hostRows, plannedTotal} = collectValidatedHostRows(hosts);
+  checkMergedRowCounts(jobName, parsedMerged.rows.length, hostRows.length, plannedTotal, problems);
+  crossCheckMergedRows(
+    jobName,
+    parsedMerged.rows,
+    hostRows,
+    options.allowRetries === true,
+    problems,
+  );
 }
 
 function inspectLabJobDirectory(jobDir, options, problems) {
@@ -614,7 +622,7 @@ function inspectLabJobDirectory(jobDir, options, problems) {
     addProblem(problems, PROBLEM_CODE.PLACEMENT_LOG_MISSING, `${jobName}: no placement *.log files`);
   }
 
-  const {hosts, executedFiles} = readJobHostLogs(
+  const {hosts, hostsByName, executedFiles} = readJobHostLogs(
     jobDir,
     jobName,
     ndjsonByHost,
@@ -622,18 +630,18 @@ function inspectLabJobDirectory(jobDir, options, problems) {
     options,
     problems,
   );
-  mergeFallbackNdjson(jobDir, ndjsonByHost, executedFiles);
+  reconcileMergedNdjson(jobDir, jobName, hosts, options, problems);
 
   return {
     jobName,
     jobDir,
     ...meta,
     hosts,
+    hostsByName,
     executedFiles,
   };
 }
 
 export {
-  inspectGitBranchState,
   inspectLabJobDirectory,
 };

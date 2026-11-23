@@ -582,3 +582,162 @@ test('CLI admits pushed multi-host evidence and writes markdown output file', (t
   assert.match(rendered, /\| Outcome \| `ADMITTED` \|/u);
   assert.match(rendered, /files=2 pass=2 fail=0 assertions=23/u);
 });
+
+test('negative control 5 (4C): refuses merged-only test-results.ndjson rows without original per-host log', (t) => {
+  const [testA, testB] = TEST_FILES;
+  const setupSingleHostWithMergedB = (withPerHostNdjson, mergedBRow) => {
+    const {root, repo, candidateSha, mainSha, hostRows} = createLabFixture(t);
+    const partialJobDir = path.join(root, withPerHostNdjson ? 'job-4c-perhost' : 'job-4c-no-perhost');
+    const rowA = hostRows['tv-dator'][0];
+    writeFile(
+      partialJobDir,
+      'exit.json',
+      JSON.stringify({status: 0, finishedAt: '2026-11-22T20:00:00.000Z'}),
+    );
+    writeFile(
+      partialJobDir,
+      'selection.json',
+      JSON.stringify({
+        sha: candidateSha,
+        requestedHost: 'split',
+        split: true,
+        checkBase: mainSha,
+        files: [testA, testB],
+      }),
+    );
+    const short = candidateSha.slice(0, 12);
+    writeFile(
+      partialJobDir,
+      `${short}-run1-100-tv-dator.log`,
+      buildPlacementLog({headSha: candidateSha, pid: 41001, rows: [rowA]}),
+    );
+    if (withPerHostNdjson) {
+      writeFile(partialJobDir, 'test-results-tv-dator.ndjson', `${JSON.stringify(rowA)}\n`);
+    }
+    writeFile(
+      partialJobDir,
+      'test-results.ndjson',
+      `${JSON.stringify(rowA)}\n${JSON.stringify(mergedBRow)}\n`,
+    );
+    return {
+      repo,
+      candidateSha,
+      partialJobDir,
+      manifests: makeHostManifests(candidateSha).filter((item) => item.host === 'tv-dator'),
+    };
+  };
+
+  const mergedBRetried = {
+    file: testB,
+    attempt: 2,
+    ok: true,
+    assertions: 9,
+    durationMs: 850,
+    retriedOnce: true,
+    firstFailureLine: 'not ok 1 - first attempt failed',
+  };
+  const mergedBSingleAttempt = {
+    file: testB,
+    attempt: 1,
+    ok: true,
+    assertions: 9,
+    durationMs: 850,
+    retriedOnce: false,
+    firstFailureLine: null,
+  };
+
+  for (const withPerHostNdjson of [false, true]) {
+    for (const [label, rowB, expectRetryProblem] of [
+      ['attempt=2 retriedOnce=true', mergedBRetried, true],
+      ['attempt=1 retriedOnce=false', mergedBSingleAttempt, false],
+    ]) {
+      const {repo, candidateSha, partialJobDir, manifests} =
+        setupSingleHostWithMergedB(withPerHostNdjson, rowB);
+      const report = evaluateLabEvidence({
+        repoRoot: repo,
+        claimedSha: candidateSha,
+        remoteRef: 'refs/heads/work/candidate',
+        jobDirs: [partialJobDir],
+        hostManifests: manifests,
+        requiredFiles: [testA, testB],
+        claimKind: CLAIM_KIND.COMPOSED_LAB_PROOF,
+        topologyScope: {
+          topology: 'multi-host-split',
+          isolatedNodeCaches: true,
+          sharedCache: false,
+          nodeCount: 2,
+        },
+      });
+      const tag = `withPerHostNdjson=${withPerHostNdjson} (${label})`;
+      assert.equal(report.outcome, OUTCOME.REFUSED, `expected REFUSED for ${tag}`);
+      assert.equal(report.totals.files, 1, `totals must only count original host rows for ${tag}`);
+      assert.ok(
+        report.problems.some(
+          (p) => p.code === PROBLEM_CODE.REQUIRED_FILE_MISSING_OR_FAILED && p.file === testB,
+        ),
+        `expected REQUIRED_FILE_MISSING_OR_FAILED for ${testB} under ${tag}`,
+      );
+      assert.ok(
+        report.problems.some((p) => p.code === PROBLEM_CODE.UNBACKED_MERGED_RESULT),
+        `expected UNBACKED_MERGED_RESULT under ${tag}`,
+      );
+      if (expectRetryProblem) {
+        assert.ok(
+          report.problems.some((p) => p.code === PROBLEM_CODE.RETRY_POLICY_VIOLATED),
+          `expected RETRY_POLICY_VIOLATED under ${tag}`,
+        );
+      }
+    }
+  }
+
+  // Even when requiredFiles/selection only asks for A, an extra unbacked row in
+  // merged test-results.ndjson or an orphan per-host ndjson must be refused.
+  const {repo, candidateSha, partialJobDir, manifests} =
+    setupSingleHostWithMergedB(true, mergedBSingleAttempt);
+  writeFile(
+    partialJobDir,
+    'selection.json',
+    JSON.stringify({sha: candidateSha, files: [testA]}),
+  );
+  const extraMergedReport = evaluateLabEvidence({
+    repoRoot: repo,
+    claimedSha: candidateSha,
+    remoteRef: 'refs/heads/work/candidate',
+    jobDirs: [partialJobDir],
+    hostManifests: manifests,
+    requiredFiles: [testA],
+  });
+  assert.equal(extraMergedReport.outcome, OUTCOME.REFUSED);
+  assert.ok(
+    extraMergedReport.problems.some((p) => p.code === PROBLEM_CODE.UNBACKED_MERGED_RESULT),
+  );
+
+  // Orphan per-host ndjson without a matching placement log must be refused.
+  const {
+    repo: orphanRepo,
+    candidateSha: orphanSha,
+    partialJobDir: orphanJobDir,
+    manifests: orphanManifests,
+  } = setupSingleHostWithMergedB(false, mergedBSingleAttempt);
+  fs.unlinkSync(path.join(orphanJobDir, 'test-results.ndjson'));
+  writeFile(
+    orphanJobDir,
+    'test-results-adam-laptop.ndjson',
+    `${JSON.stringify(mergedBSingleAttempt)}\n`,
+  );
+  const orphanReport = evaluateLabEvidence({
+    repoRoot: orphanRepo,
+    claimedSha: orphanSha,
+    remoteRef: 'refs/heads/work/candidate',
+    jobDirs: [orphanJobDir],
+    hostManifests: orphanManifests,
+    requiredFiles: [testA, testB],
+  });
+  assert.equal(orphanReport.outcome, OUTCOME.REFUSED);
+  assert.ok(orphanReport.problems.some((p) => p.code === PROBLEM_CODE.PLACEMENT_LOG_MISSING));
+  assert.ok(
+    orphanReport.problems.some(
+      (p) => p.code === PROBLEM_CODE.REQUIRED_FILE_MISSING_OR_FAILED && p.file === testB,
+    ),
+  );
+});
