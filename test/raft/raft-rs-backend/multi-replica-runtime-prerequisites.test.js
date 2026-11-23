@@ -23,8 +23,7 @@ import {test} from 'node:test';
 import Database from 'better-sqlite3';
 
 import {RaftRsDurableStore} from '../../../src/raft/raft-rs-durable-store.js';
-import {RAFT_RS_GROUP_TUNING} from
-  '../../../src/raft/raft-rs-group-constants.js';
+import {tuningOf} from '../../../src/raft/raft-rs-runtime-tuning.js';
 import {RaftRsPeerIdentityRegistry} from
   '../../../src/raft/raft-rs-peer-identity.js';
 import {
@@ -392,7 +391,7 @@ test('F18: the progress probe sends one heartbeat round to an idle ' +
     assert.equal(probe.reason, PROGRESS_PROBE_SENT,
       `a peer behind the commit index is probed ${JSON.stringify(probe)}`);
     assert.ok(tickEntries(cluster) - ticksBefore <=
-      RAFT_RS_GROUP_TUNING.HEARTBEAT_TICK,
+      tuningOf(cluster.replica(leader).request.timing).heartbeatTick,
     'the probe drives at most one heartbeat interval of the leader');
     const ticksAfterProbe = tickEntries(cluster);
     await deliverByStepsOnly(cluster);

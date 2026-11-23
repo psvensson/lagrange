@@ -20,6 +20,11 @@ import {
 import {RaftAdaptiveTimingController} from
   './raft-adaptive-timing-controller.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {describeEffectiveRaftRsTiming} from '../raft/raft-rs-runtime-tuning.js';
+import {
+  applyStaticNetworkTimingProfile,
+  isValidStaticRaftTimingValues,
+} from './network-timing-profile-resolver.js';
 
 const DYNAMIC_CONFIG_STARTUP_EVENT = Object.freeze({
   CDC_APPLIED: 'cdcApplied',
@@ -29,6 +34,8 @@ const DYNAMIC_CONFIG_STARTUP_LOG_MSG = Object.freeze({
   INITIAL_APPLY_FAILED: 'Failed to apply initial dynamic config setting',
   CDC_APPLY_FAILED: 'Failed to apply dynamic config CDC update',
   RAFT_TIMING_APPLY_FAILED: 'Failed to apply runtime raft timing config',
+  RAFT_TIMING_EFFECTIVE_DISCREPANCY:
+    'Configured Raft timing differs from effective raft-rs tick timing',
   ADAPTIVE_CONTROLLER_INIT_FAILED:
     'Failed to initialize raft adaptive timing controller',
   ADAPTIVE_CONTROLLER_SHUTDOWN_FAILED:
@@ -199,21 +206,29 @@ function getRaftTimingConfig(configManager) {
  * @return {boolean}
  */
 function isValidRaftTimingConfig(raftTimingConfig) {
-  const heartbeatMs =
-    raftTimingConfig[DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_FIELD.HEARTBEAT_INTERVAL_MS];
-  const electionTimeoutMinMs =
-    raftTimingConfig[DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_FIELD.ELECTION_TIMEOUT_MIN_MS];
-  const electionTimeoutMaxMs =
-    raftTimingConfig[DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_FIELD.ELECTION_TIMEOUT_MAX_MS];
-  const tickIntervalMs =
-    raftTimingConfig[DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_FIELD.TICK_INTERVAL_MS];
+  return isValidStaticRaftTimingValues(raftTimingConfig);
+}
 
-  return Number.isFinite(heartbeatMs) &&
-    Number.isFinite(electionTimeoutMinMs) &&
-    Number.isFinite(electionTimeoutMaxMs) &&
-    Number.isFinite(tickIntervalMs) &&
-    tickIntervalMs > 0 &&
-    electionTimeoutMinMs <= electionTimeoutMaxMs;
+function toRaftRsTimingInput(raftTimingConfig) {
+  return {
+    tickIntervalMs:
+      raftTimingConfig[DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_FIELD.TICK_INTERVAL_MS],
+    heartbeatMs:
+      raftTimingConfig[DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_FIELD.HEARTBEAT_INTERVAL_MS],
+    electionMinMs:
+      raftTimingConfig[DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_FIELD.ELECTION_TIMEOUT_MIN_MS],
+    electionMaxMs:
+      raftTimingConfig[DYNAMIC_CONFIG_STARTUP_RAFT_TIMING_FIELD.ELECTION_TIMEOUT_MAX_MS],
+  };
+}
+
+function applyOptionalNetworkTimingProfile(configManager, options) {
+  if (
+    options.networkTimingProfile !== undefined &&
+    options.networkTimingProfile !== null
+  ) {
+    applyStaticNetworkTimingProfile(configManager, options.networkTimingProfile);
+  }
 }
 
 /**
@@ -268,6 +283,7 @@ async function createDynamicConfigStartupWiring(options = {}) {
   });
   await dynamicConfigService.initialize();
   const configManager = ConfigurationManager.getInstance();
+  applyOptionalNetworkTimingProfile(configManager, options);
   const raftServices = [
     ...normalizeServicesCollection(options.messageGroupServices),
     ...normalizeServicesCollection(options.partitionServices),
@@ -289,6 +305,17 @@ async function createDynamicConfigStartupWiring(options = {}) {
         runtimeAppliedCount: 0,
         deferredCount: raftServices.length,
       };
+    }
+
+    const effectiveTiming = describeEffectiveRaftRsTiming(
+      toRaftRsTimingInput(nextRaftTimingConfig),
+    );
+    if (effectiveTiming.discrepancies.length > 0) {
+      logger.warn(DYNAMIC_CONFIG_STARTUP_LOG_MSG.RAFT_TIMING_EFFECTIVE_DISCREPANCY, {
+        requested: effectiveTiming.requested,
+        effective: effectiveTiming.effective,
+        discrepancies: effectiveTiming.discrepancies,
+      });
     }
 
     writeRaftTimingConfig(configManager, nextRaftTimingConfig);
@@ -680,6 +707,9 @@ async function createDynamicConfigStartupWiring(options = {}) {
       reads: Object.fromEntries(readOutcomes),
       controller: controllerOutcome,
     }),
+    effectiveRaftTiming: () => describeEffectiveRaftRsTiming(
+      toRaftRsTimingInput(getRaftTimingConfig(configManager)),
+    ),
     shutdown: () => {
       closed = true;
       for (const timer of timers) {

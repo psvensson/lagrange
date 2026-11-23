@@ -120,6 +120,8 @@ const DEFAULT_CONFIG = {
     transactionMs: 60000,
     websocketConnectMs: 5000,
     httpRequestMs: 10000,
+    controlPlaneOperationBudgetMs: 10000,
+    readinessObservationProbeTimeoutMs: 1000,
   },
   worker: {
     minThreads: 2,

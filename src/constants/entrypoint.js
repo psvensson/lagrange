@@ -46,6 +46,7 @@ const ENTRYPOINT_ENV = Object.freeze({
     'CONTROL_PLANE_WORK_CLASS_SCHEDULER_REQUIRED',
   CONTROL_PLANE_DURABLE_JOIN_SESSIONS_REQUIRED:
     'CONTROL_PLANE_DURABLE_JOIN_SESSIONS_REQUIRED',
+  NETWORK_TIMING_PROFILE: 'LAGRANGE_NETWORK_TIMING_PROFILE',
 });
 
 const ENTRYPOINT_DEFAULT = Object.freeze({
@@ -113,6 +114,7 @@ const ENTRYPOINT_LOG_MSG = Object.freeze({
   DYNAMIC_CONFIG_WIRING_FAILED: 'Failed to initialize runtime dynamic config wiring',
   DYNAMIC_CONFIG_WIRING_SHUTDOWN_FAILED: 'Failed to shutdown dynamic config wiring',
   STARTING_SEED: 'Starting as seed node',
+  NETWORK_TIMING_PROFILE_APPLIED: 'Applied static network timing profile',
   HOST_IDENTITY_DECLARED: 'Node host identity declared',
   BOOTSTRAP_FAILED: 'Bootstrap failed',
   BOOTSTRAP_COMPLETED: 'Bootstrap completed',

@@ -25,6 +25,9 @@ const TIMEOUT_BUDGET_DEFAULT = Object.freeze({
 
 const CONTROL_PLANE_TIMEOUT_DEFAULT = Object.freeze({
   // ends-on: the partition returns the control-plane query result
+  // Note: CDC routed mutation retries split queryTimeoutMs across up to 6
+  // attempts (clamped to a 1,000ms floor); 5,000ms yields 1,000ms per-attempt
+  // partition_execution_deadline unless callers pass a larger operation budget.
   SQL_QUERY_TIMEOUT_MS: 5000,
 });
 

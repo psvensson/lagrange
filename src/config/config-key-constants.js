@@ -217,6 +217,12 @@ const CONFIG_KEY = Object.freeze({
   LATENCY_SMOOTHING_ALPHA: 'latency.smoothingAlpha',
   LATENCY_PROPAGATION_MODE: 'latency.propagationMode',
 
+  // Timeout keys
+  TIMEOUT_CONTROL_PLANE_OPERATION_BUDGET_MS:
+    'timeout.controlPlaneOperationBudgetMs',
+  TIMEOUT_READINESS_OBSERVATION_PROBE_TIMEOUT_MS:
+    'timeout.readinessObservationProbeTimeoutMs',
+
   // Founding cluster formation declaration (seed-only)
   FORMATION_DECLARED_HOST_COUNT: 'formation.declaredHostCount',
 });

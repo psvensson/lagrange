@@ -138,6 +138,8 @@ const CONFIG_SCHEMA = {
         transactionMs: {type: 'number', minimum: 1000},
         websocketConnectMs: {type: 'number', minimum: 1000},
         httpRequestMs: {type: 'number', minimum: 1000},
+        controlPlaneOperationBudgetMs: {type: 'number', minimum: 100},
+        readinessObservationProbeTimeoutMs: {type: 'number', minimum: 100},
       },
       additionalProperties: false,
     },

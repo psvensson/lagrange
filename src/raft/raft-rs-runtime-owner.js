@@ -29,9 +29,7 @@ import {
   decideLeadershipTransfer, droppedByLeadershipTransfer, leadershipTransferInProgress,
 } from './raft-rs-leadership-transfer.js';
 import {RAFT_RS_CONF_CHANGE_ENTRY_TYPES} from './raft-rs-ready-loop-constants.js';
-import {
-  RAFT_RS_GROUP_TUNING, RAFT_RS_INITIAL_APPLIED, RAFT_RS_READY_DRAIN_MAX_CYCLES,
-} from './raft-rs-group-constants.js';
+import {RAFT_RS_INITIAL_APPLIED, RAFT_RS_READY_DRAIN_MAX_CYCLES} from './raft-rs-group-constants.js';
 import {RAFT_RS_PEER_IDENTITY_RESOLUTION} from './raft-rs-peer-identity-constants.js';
 import {
   CONF_STATE_NOT_ANNOUNCED, CORE_CALL_WITHOUT_HANDLE, CORE_OPERATION,
@@ -1572,7 +1570,8 @@ function configuredPeerOf(group, confState, replicaIdentity) {
 // what makes the leader send it the append its matched index lacks. The
 // binding exposes no per-peer send, so this is the one core path to a probe.
 function driveOneHeartbeat(group, expectedGeneration) {
-  for (let tick = 0; tick < RAFT_RS_GROUP_TUNING.HEARTBEAT_TICK; tick += 1) {
+  const heartbeatTicks = tuningOf(group.timing).heartbeatTick;
+  for (let tick = 0; tick < heartbeatTicks; tick += 1) {
     const ticked = invokeCoreAt(group, expectedGeneration, 'tick');
     if (!ticked.ok) {
       return settledTurn(ticked.result);

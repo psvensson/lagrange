@@ -10,8 +10,12 @@ import {
   ENTRYPOINT_DEFAULT,
   ENTRYPOINT_ENV,
   ENTRYPOINT_FLAG,
+  ENTRYPOINT_LOG_MSG,
   ENTRYPOINT_TEXT,
 } from './constants/entrypoint.js';
+import {
+  applyStaticNetworkTimingProfile,
+} from './config/network-timing-profile-resolver.js';
 
 const LOCAL_STR_OPTIONS = 'Options:';
 const LOCAL_STR_ENVIRONMENT = 'Environment:';
@@ -154,7 +158,38 @@ function resolveRuntimeHostId(config) {
   return requireDeclaredNodeHostId(config.get(CONFIG_KEY.NODE_HOST_ID));
 }
 
+function applyRuntimeNetworkTimingProfile({
+  config,
+  environment,
+  networkTimingProfile,
+  logger,
+}) {
+  const requestedProfile =
+    networkTimingProfile ?? environment?.[ENTRYPOINT_ENV.NETWORK_TIMING_PROFILE];
+  if (
+    requestedProfile === undefined ||
+    requestedProfile === null ||
+    String(requestedProfile).length === 0
+  ) {
+    return null;
+  }
+  const descriptor = applyStaticNetworkTimingProfile(config, requestedProfile);
+  const logPayload = {
+    profileId: descriptor.profileId,
+    requested: descriptor.requested,
+    effective: descriptor.effective,
+    discrepancies: descriptor.discrepancies,
+  };
+  if (descriptor.discrepancies.length > 0) {
+    logger.warn(ENTRYPOINT_LOG_MSG.NETWORK_TIMING_PROFILE_APPLIED, logPayload);
+  } else {
+    logger.info(ENTRYPOINT_LOG_MSG.NETWORK_TIMING_PROFILE_APPLIED, logPayload);
+  }
+  return descriptor;
+}
+
 export {
+  applyRuntimeNetworkTimingProfile,
   checkVersionFlag,
   parseCommandLineArgs,
   parsePositiveTimeoutMs,

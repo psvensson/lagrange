@@ -27,7 +27,7 @@ import Database from 'better-sqlite3';
 
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
-import {RAFT_RS_GROUP_TUNING} from '../../src/raft/raft-rs-group-constants.js';
+import {tuningOf} from '../../src/raft/raft-rs-runtime-tuning.js';
 import {RAFT_RS_MESSAGE_TYPE} from '../../src/raft/raft-rs-ingress-constants.js';
 import {
   RAFT_RS_CONF_CHANGE_ENTRY_TYPES,
@@ -156,7 +156,10 @@ class EmptyReadyPersistenceScenario {
   }
 
   leaderTicksOneHeartbeat() {
-    for (let tick = 0; tick < RAFT_RS_GROUP_TUNING.HEARTBEAT_TICK; tick += 1) {
+    const heartbeatTicks = tuningOf(
+      this.cluster.replica(LEADER).request.timing,
+    ).heartbeatTick;
+    for (let tick = 0; tick < heartbeatTicks; tick += 1) {
       this.port(LEADER).tick();
     }
   }

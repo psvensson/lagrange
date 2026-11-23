@@ -122,6 +122,7 @@ beforeEach(() => {
   ConfigurationManager.getInstance().initialize({
     node: {id: NODE_ID},
     raft: {
+      tickIntervalMs: Math.floor(HUGE_HEARTBEAT_MS / 3),
       heartbeatIntervalMs: HUGE_HEARTBEAT_MS,
       electionTimeoutMinMs: HUGE_ELECTION_MIN_MS,
       electionTimeoutMaxMs: HUGE_ELECTION_MAX_MS,

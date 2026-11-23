@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2789,
+    "ordinary": 2790,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2815,
-  "digest": "fnv1a32-9c565724",
+  "censusSize": 2816,
+  "digest": "fnv1a32-9c3a6a13",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1803,6 +1803,7 @@
     "test/raft/authoritative-row-mutation-helper.test.js": "ordinary",
     "test/raft/authoritative-row-mutation-outcome-classifier.test.js": "ordinary",
     "test/raft/bulk-transfer-socket-adapter.test.js": "ordinary",
+    "test/raft/effective-static-timing-profile.test.js": "ordinary",
     "test/raft/leader-activation-gate.test.js": "ordinary",
     "test/raft/leader-activation-scheduler.test.js": "ordinary",
     "test/raft/leadership-transfer-single-path.test.js": "ordinary",

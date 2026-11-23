@@ -9,6 +9,12 @@
 export * from './query/index.js';
 export * from './partition/index.js';
 export * from './config/configuration-manager.js';
+export {
+  NETWORK_TIMING_PROFILE,
+  applyStaticNetworkTimingProfile,
+  resolveStaticNetworkTimingProfile,
+} from './config/network-timing-profile-resolver.js';
+export {describeEffectiveRaftRsTiming} from './raft/raft-rs-runtime-tuning.js';
 export * from './logging/logging-service.js';
 export * from './hlc/index.js';
 export * from './cache/index.js';

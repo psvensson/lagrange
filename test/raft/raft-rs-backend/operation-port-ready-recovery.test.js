@@ -11,6 +11,7 @@ import {applyCommittedEntrySliceTransaction} from
 import {RAFT_RS_ENTRY_TYPE} from
   '../../../src/raft/raft-rs-ready-loop-constants.js';
 import {PartitionNodeCluster} from './partition-node-cluster.js';
+import {tuningOf} from '../../../src/raft/raft-rs-runtime-tuning.js';
 import {coreTrappingAppend} from './core-trap-envelope.js';
 import {turnChainValue} from '../../../src/raft/raft-rs-turn-answer.js';
 
@@ -146,7 +147,9 @@ test('every Ready delivery failure is a per-peer outcome and never reconstructs 
         transportFault.armed = true;
         const outcomes = [await turnChainValue(cluster.propose(leader,
           `force-${phase}-delivery`))];
-        for (let index = 0; index < 12 && transportFault.armed; index += 1) {
+        const maxTicks =
+          tuningOf(cluster.replica(leader).request.timing).heartbeatTick * 4;
+        for (let index = 0; index < maxTicks && transportFault.armed; index += 1) {
           outcomes.push(await turnChainValue(cluster.tick(leader)));
         }
         assert.equal(transportFault.armed, false,
@@ -165,6 +168,9 @@ test('every Ready delivery failure is a per-peer outcome and never reconstructs 
         assert.ok(after.peers.some((peer) =>
           peer.delivery.outcome === 'failed' && peer.delivery.phase === phase),
         `the failed peer carries the ${phase} delivery outcome`);
+        // Drain follower replies between fault phases so checkQuorum stays
+        // satisfied across all three sequential delivery faults.
+        cluster.deliverAll();
       }
     } finally {
       cluster.dispose();

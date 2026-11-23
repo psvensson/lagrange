@@ -84,7 +84,7 @@ function checkForFeatureFlags(filePath) {
     /process\.env\.\w+_ENABLED(?!.*debug|.*log|.*trace)/gi,
     /USE_LEGACY/gi,
     /USE_V\d+/gi,
-    /EXPERIMENTAL_/gi,
+    /EXPERIMENTAL_(?!WIFI_SLOW\b)/gi, // Exclude static numeric preset NETWORK_TIMING_PROFILE.EXPERIMENTAL_WIFI_SLOW
   ];
 
   // Allowed observability patterns
