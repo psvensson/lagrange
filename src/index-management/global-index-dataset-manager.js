@@ -487,6 +487,21 @@ export function parseDatasetTableDdlSchema(ddlSql) {
   };
 }
 
+function doesDatasetColumnMatch(actualCol, expectedCol) {
+  if (!actualCol || !expectedCol || actualCol.name !== expectedCol.name) {
+    return false;
+  }
+  const actualType = String(actualCol.type || LOCAL_STR_TEXT).toUpperCase();
+  const expectedType = String(expectedCol.type || LOCAL_STR_TEXT).toUpperCase();
+  return actualType === expectedType &&
+    Boolean(actualCol.notNull) === Boolean(expectedCol.notNull);
+}
+
+function doesPrimaryKeyMatch(actualPk = [], expectedPk = []) {
+  return actualPk.length === expectedPk.length &&
+    expectedPk.every((pkCol, idx) => actualPk[idx] === pkCol);
+}
+
 /**
  * Compare an observed physical dataset schema against an expected schema descriptor.
  * @param {Object|null} actualSchema - Schema from inspectLocalDatasetSchema or parseDatasetTableDdlSchema.
@@ -494,7 +509,7 @@ export function parseDatasetTableDdlSchema(ddlSql) {
  * @return {boolean} True when columns, types, nullability, and primary key order match.
  */
 export function doesDatasetSchemaMatch(actualSchema, expectedSchema) {
-  if (!actualSchema || actualSchema.exists !== true || !expectedSchema) {
+  if (actualSchema?.exists !== true || !expectedSchema) {
     return false;
   }
   const actualCols = actualSchema.columns || [];
@@ -502,20 +517,9 @@ export function doesDatasetSchemaMatch(actualSchema, expectedSchema) {
   if (actualCols.length !== expectedCols.length) {
     return false;
   }
-  for (let i = 0; i < expectedCols.length; i++) {
-    const actualCol = actualCols[i];
-    const expectedCol = expectedCols[i];
-    if (actualCol.name !== expectedCol.name) return false;
-    if (String(actualCol.type || LOCAL_STR_TEXT).toUpperCase() !==
-        String(expectedCol.type || LOCAL_STR_TEXT).toUpperCase()) {
-      return false;
-    }
-    if (Boolean(actualCol.notNull) !== Boolean(expectedCol.notNull)) return false;
-  }
-  const actualPk = actualSchema.primaryKey || [];
-  const expectedPk = expectedSchema.primaryKey || [];
-  if (actualPk.length !== expectedPk.length) {
-    return false;
-  }
-  return expectedPk.every((pkCol, idx) => actualPk[idx] === pkCol);
+  const columnsMatch = expectedCols.every(
+    (expectedCol, idx) => doesDatasetColumnMatch(actualCols[idx], expectedCol),
+  );
+  return columnsMatch &&
+    doesPrimaryKeyMatch(actualSchema.primaryKey, expectedSchema.primaryKey);
 }

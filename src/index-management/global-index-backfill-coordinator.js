@@ -10,6 +10,7 @@
 import {
   GLOBAL_INDEX_STATE,
   assertValidGlobalIndexStateTransition,
+  isTransientGlobalIndexError,
 } from './global-index-catalog-contract.js';
 import {
   buildIndexEntry,
@@ -320,20 +321,22 @@ export class GlobalIndexBackfillCoordinator {
 
   async _handleBackfillError(indexId, err) {
     this.logger.error(INDEX_LOG_MSG.GLOBAL_INDEX_BACKFILL_FAILED, {indexId, error: err.message});
-    try {
-      await this.updateIndexCheckpoint({
-        indexId,
-        state: GLOBAL_INDEX_STATE.FAILED,
-        errorMessage: err.message,
-        lastError: err.message,
-        last_error: err.message,
-        updatedAt: Date.now(),
-      });
-    } catch (saveErr) {
-      this.logger.debug(INDEX_LOG_MSG.CHECKPOINT_UPDATE_FAILED, {
-        indexId,
-        error: saveErr?.message,
-      });
+    if (!isTransientGlobalIndexError(err)) {
+      try {
+        await this.updateIndexCheckpoint({
+          indexId,
+          state: GLOBAL_INDEX_STATE.FAILED,
+          errorMessage: err.message,
+          lastError: err.message,
+          last_error: err.message,
+          updatedAt: Date.now(),
+        });
+      } catch (saveErr) {
+        this.logger.debug(INDEX_LOG_MSG.CHECKPOINT_UPDATE_FAILED, {
+          indexId,
+          error: saveErr?.message,
+        });
+      }
     }
     throw err;
   }

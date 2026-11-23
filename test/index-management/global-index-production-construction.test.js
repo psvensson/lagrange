@@ -49,6 +49,7 @@ import {
 } from '../../src/transport/transport-semantic-outcome.js';
 import {ledgerRows} from '../partition/placement-admission-fixture.js';
 import {
+  createRestartCacheAndGatewayFromGateway,
   createSeededSchemaAwareGateway,
   seedRealSystemTableCache,
   withFoundingPlacementEnvironment,
@@ -1436,12 +1437,13 @@ test('Production construction 10 (4B): crash immediately after schema job SUCCEE
     );
     t.equal(createdReplicas.length, 1, 'GSI replica was founded before crash');
 
+    const restart = createRestartCacheAndGatewayFromGateway(gateway, partitionServices);
     const engine2 = new SQLQueryEngine({
       nodeId: 'test-node',
-      systemCache: cache,
+      systemCache: restart.cache,
       controlPlaneReadinessService: readiness,
-      controlPlaneSystemTableGateway: gateway,
-      cdcIntegrationService,
+      controlPlaneSystemTableGateway: restart.gateway,
+      cdcIntegrationService: restart.cdcService,
       messageRouter,
       partitionServicesProvider: () => partitionServices,
       rebalanceCoordinator: coordinator,
@@ -1450,7 +1452,6 @@ test('Production construction 10 (4B): crash immediately after schema job SUCCEE
     });
     engine2.setRebalanceCoordinator(coordinator);
     try {
-      await engine2.indexService.initialize();
       const recovered = await waitForCondition(() => {
         const row = gateway.db.prepare(
           'SELECT * FROM indices WHERE index_name = ?',

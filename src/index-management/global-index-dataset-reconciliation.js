@@ -30,6 +30,7 @@ const LOCAL_STR_TEXT = 'TEXT';
 const NO_PARTITION_TRANSITION = null;
 const SQL_SELECT_INDEX_BY_NAME = 'SELECT * FROM indices WHERE index_name = ?';
 const OWNERSHIP_REASON = Object.freeze({
+  AUTHORITY_UNAVAILABLE: 'authority_unavailable',
   MISSING_CATALOG: 'missing_catalog',
   STALE_GENERATION: 'stale_generation',
   CATALOG_NOT_CREATING: 'catalog_not_creating',
@@ -298,12 +299,17 @@ async function reconcilePartitionDatasetKeyType(indexService, partition, expecte
   );
 }
 
-async function readAuthoritativeGlobalIndexRow(indexService, indexName) {
-  if (!indexService?.canReadMetadata?.() || !indexName) {
-    return {available: false, row: null};
+function resolveReadableGateway(indexService) {
+  if (!indexService?.canReadMetadata?.()) {
+    return null;
   }
   const gateway = indexService.getControlPlaneSystemTableGateway?.();
-  if (!gateway?.readRows) {
+  return gateway?.readRows ? gateway : null;
+}
+
+async function readAuthoritativeGlobalIndexRow(indexService, indexName) {
+  const gateway = resolveReadableGateway(indexService);
+  if (!gateway || !indexName) {
     return {available: false, row: null};
   }
   const result = await gateway.readRows(
@@ -317,19 +323,6 @@ async function readAuthoritativeGlobalIndexRow(indexService, indexName) {
   }
   const rows = Array.isArray(result?.rows) ? result.rows : [];
   return {available: true, row: rows[0] || null};
-}
-
-function resolveCatalogRowForOwnership(indexService, coordinator, indexName, authoritative) {
-  if (!authoritative.available) {
-    return coordinator?.catalog?.get(indexName) || null;
-  }
-  if (authoritative.row) {
-    return authoritative.row;
-  }
-  if (!indexService?.canWriteSystemTable?.()) {
-    return coordinator?.catalog?.get(indexName) || null;
-  }
-  return null;
 }
 
 const OWNERSHIP_CHECK_RULES = Object.freeze([
@@ -359,10 +352,12 @@ async function verifyGlobalIndexCatalogOwnership(
   {indexName, indexId = null, generation = null},
 ) {
   const authoritative = await readAuthoritativeGlobalIndexRow(indexService, indexName);
-  const row = resolveCatalogRowForOwnership(indexService, coordinator, indexName, authoritative);
-  const matchedRule = OWNERSHIP_CHECK_RULES.find(
-    (rule) => rule.matches(row, coordinator, {indexName, indexId, generation}),
-  );
+  const row = authoritative.row;
+  const matchedRule = authoritative.available ?
+    OWNERSHIP_CHECK_RULES.find(
+      (rule) => rule.matches(row, coordinator, {indexName, indexId, generation}),
+    ) :
+    {reason: OWNERSHIP_REASON.AUTHORITY_UNAVAILABLE};
   if (matchedRule) {
     return {
       owned: false,

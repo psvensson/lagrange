@@ -10,6 +10,7 @@
 import {
   GLOBAL_INDEX_STATE,
   findCatalogTarget,
+  isTransientGlobalIndexError,
   normalizeGlobalIndexRecord,
   parseGlobalIndexDdl,
   resolveBackfillOutcome,
@@ -411,6 +412,24 @@ export class GlobalIndexLifecycleCoordinator {
     return activeId === indexId;
   }
 
+  _buildBackfillOptions(indexName, currentGen, indexId, options) {
+    const userYield = options.backfillOptions?.shouldYield;
+    const explicitBatchSize = options.backfillOptions?.batchSize;
+    const resolvedBatchSize = explicitBatchSize !== undefined ?
+      explicitBatchSize :
+      options.batchSize;
+    return {
+      ...options.backfillOptions,
+      batchSize: resolvedBatchSize,
+      shouldYield: (progress) => {
+        if (!this._isGenerationCurrent(indexName, currentGen, indexId)) {
+          return true;
+        }
+        return userYield ? userYield(progress) : false;
+      },
+    };
+  }
+
   async _runBackfillToCompletion(record, currentGen, options) {
     const indexId = record.indexId || record.index_id;
     const indexName = record.indexName || record.index_name;
@@ -419,21 +438,7 @@ export class GlobalIndexLifecycleCoordinator {
       return {indexId, indexName, generation: currentGen, fenced: true};
     }
 
-    const userYield = options.backfillOptions?.shouldYield;
-    let resolvedBatchSize = options.batchSize;
-    if (options.backfillOptions?.batchSize !== undefined) {
-      resolvedBatchSize = options.backfillOptions.batchSize;
-    }
-    const backfillOptions = {
-      ...options.backfillOptions,
-      batchSize: resolvedBatchSize,
-      shouldYield: (progress) => {
-        if (!this._isGenerationCurrent(indexName, currentGen, indexId)) {
-          return true;
-        }
-        return typeof userYield === 'function' ? userYield(progress) : false;
-      },
-    };
+    const backfillOptions = this._buildBackfillOptions(indexName, currentGen, indexId, options);
 
     try {
       const result = await this.backfillCoordinator.executeBackfill(
@@ -454,7 +459,8 @@ export class GlobalIndexLifecycleCoordinator {
         result,
       });
     } catch (err) {
-      if (this._isGenerationCurrent(indexName, currentGen, indexId)) {
+      if (!isTransientGlobalIndexError(err) &&
+          this._isGenerationCurrent(indexName, currentGen, indexId)) {
         await this._updateCatalogRecord({
           indexId,
           state: GLOBAL_INDEX_STATE.FAILED,

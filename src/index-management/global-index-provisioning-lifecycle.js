@@ -11,6 +11,7 @@ import {
   assertSupportedGlobalIndexDefinition,
   createGlobalIndexRecord,
   isSameGlobalIndexDefinition,
+  isTransientGlobalIndexError,
   normalizeGlobalIndexRecord,
   resolveGlobalCreateSchemaContext,
 } from './global-index-catalog-contract.js';
@@ -58,10 +59,10 @@ function createParticipantUnavailableError(partitionId) {
   return error;
 }
 
-function hasOwnedLocalCreatingCatalogEntry(coordinator, meta) {
+function hasOwnedLocalCreatingCatalogEntry(coordinator, meta, reconcileExisting) {
   const existing = coordinator.catalog?.get(meta.indexName);
   if (!existing) {
-    return true;
+    return reconcileExisting !== true && !meta.indexId;
   }
   if (meta.indexId && existing.index_id !== meta.indexId) {
     return false;
@@ -75,7 +76,7 @@ function hasOwnedLocalCreatingCatalogEntry(coordinator, meta) {
 }
 
 function reconcileLocalDataset(coordinator, db, meta, reconcileExisting) {
-  if (!hasOwnedLocalCreatingCatalogEntry(coordinator, meta)) {
+  if (!hasOwnedLocalCreatingCatalogEntry(coordinator, meta, reconcileExisting)) {
     return {reconciled: false, skipped: true};
   }
   const expectedSchema = buildIndexDatasetSchema(meta);
@@ -341,11 +342,13 @@ async function driveGlobalIndexProvisioning(coordinator, record, def, options = 
       },
     });
   } catch (err) {
-    await coordinator._updateCatalogRecord({
-      indexId,
-      state: GLOBAL_INDEX_STATE.FAILED,
-      errorMessage: err.message,
-    });
+    if (!isTransientGlobalIndexError(err)) {
+      await coordinator._updateCatalogRecord({
+        indexId,
+        state: GLOBAL_INDEX_STATE.FAILED,
+        errorMessage: err.message,
+      });
+    }
     throw err;
   }
 
@@ -356,7 +359,14 @@ async function driveGlobalIndexProvisioning(coordinator, record, def, options = 
 }
 
 async function ensureRecoveredPartitionDatasets(coordinator, indexName, meta) {
-  for (const p of coordinator.getIndexPartitions(indexName)) {
+  const partitions = coordinator.getIndexPartitions(indexName);
+  const requiresPartitions = Boolean(
+    coordinator.resolvePartitionDatabase || coordinator.hasDistributedPartitionRoute,
+  );
+  if (requiresPartitions && partitions.length === 0) {
+    throw createParticipantUnavailableError(indexName);
+  }
+  for (const p of partitions) {
     const pId = resolvePartitionId(p);
     const db = coordinator._getPartitionDb(pId);
     if (db) {
@@ -369,6 +379,8 @@ async function ensureRecoveredPartitionDatasets(coordinator, indexName, meta) {
         partitionId: pId,
         partition: p,
       });
+    } else {
+      assertPartitionAvailability(coordinator, p, pId);
     }
   }
 }

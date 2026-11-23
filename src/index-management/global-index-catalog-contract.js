@@ -8,6 +8,7 @@
 
 import {QUERY_ERROR_CODE} from '../query/query-constants.js';
 import {
+  GLOBAL_INDEX_ERROR_CODE,
   GLOBAL_INDEX_ERROR_MSG,
   GLOBAL_INDEX_SQL_STATE,
   GLOBAL_INDEX_STATE,
@@ -17,6 +18,18 @@ import {
 const LOCAL_STR_COMMA = ',';
 const DDL_CAPTURE_TABLE_INDEX = 3;
 const DDL_CAPTURE_COLUMNS_INDEX = 4;
+const TRANSIENT_GSI_ERROR_CODES = new Set([
+  GLOBAL_INDEX_ERROR_CODE.PARTICIPANT_UNAVAILABLE,
+  GLOBAL_INDEX_ERROR_CODE.PARTITIONS_UNAVAILABLE,
+  QUERY_ERROR_CODE.TIMEOUT,
+  QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE,
+  'AUTHORITY_UNAVAILABLE',
+  'FORMATION_NOT_LATCHED',
+  'NOT_LEADER',
+  'STALE_LEADER',
+  'ECONNREFUSED',
+  'UNAVAILABLE',
+]);
 
 export {
   GLOBAL_INDEX_ERROR_MSG,
@@ -395,6 +408,13 @@ export function isSameGlobalIndexDefinition(existing, def) {
   const sameCols = norm.columnNames.length === defCols.length &&
     norm.columnNames.every((col, idx) => col === defCols[idx]);
   return sameTable && sameCols && Boolean(norm.isUnique) === resolveDefinitionUniqueFlag(def);
+}
+
+export function isTransientGlobalIndexError(err) {
+  if (!err) return false;
+  const code = String(err.code || err.errorCode || '').toUpperCase();
+  const failureCode = String(err.failureCode || '').toUpperCase();
+  return TRANSIENT_GSI_ERROR_CODES.has(code) || TRANSIENT_GSI_ERROR_CODES.has(failureCode);
 }
 
 export function checkIndexExistence(catalog, def, options) {

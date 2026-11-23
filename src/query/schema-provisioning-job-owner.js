@@ -330,7 +330,8 @@ class SchemaProvisioningJobOwner {
     this.retryClearTimeoutFn = options.retryClearTimeoutFn || clearTimeout;
     this.retryTimersByWorkflowId = new Map();
     this.retryCompletionHandlers = new Map();
-    this.onBackgroundJobSucceeded = options.onBackgroundJobSucceeded || null;
+    this.onBackgroundJobSucceeded = options.onBackgroundJobSucceeded;
+    this.onResumeSucceededGlobalIndexIntents = options.onResumeSucceededGlobalIndexIntents;
     this.shuttingDown = false;
     this.workflowCoordinator = createWorkflowCoordinator(this, options);
     this.recover();
@@ -345,6 +346,10 @@ class SchemaProvisioningJobOwner {
 
   setBackgroundJobSucceededHandler(handler) {
     this.onBackgroundJobSucceeded = handler || null;
+  }
+
+  setSucceededGlobalIndexRecoveryHandler(handler) {
+    this.onResumeSucceededGlobalIndexIntents = handler || null;
   }
 
   async notifyBackgroundSucceeded(intent, outcome, runOptions = {}) {
@@ -567,6 +572,51 @@ class SchemaProvisioningJobOwner {
     return runAdminActivity(() => this.executeJob(intent, executor, runOptions));
   }
 
+  async completeExecutedJob(intent, ownedWorkflow, result, runOptions) {
+    const outcome = await this.transitionTerminal(intent, ownedWorkflow, {
+      nextStep: SCHEMA_PROVISIONING_JOB_STEP.SUCCEEDED,
+      reason: SCHEMA_PROVISIONING_REASON.PROVISIONING_COMPLETE,
+      updates: {
+        status: SCHEMA_PROVISIONING_JOB_STATUS.SUCCEEDED,
+        reasonCodes: [SCHEMA_PROVISIONING_REASON.PROVISIONING_COMPLETE],
+        result,
+        retryAfterMs: 0,
+        completedAt: this.now(),
+      },
+    });
+    const notifyBackground = runOptions.background === true ||
+      runOptions.completionState?.callerDetached === true;
+    if (notifyBackground) {
+      await this.notifyBackgroundSucceeded(intent, outcome, {...runOptions, background: true});
+    } else {
+      this.retryCompletionHandlers.delete(intent.workflowId);
+    }
+    return outcome;
+  }
+
+  async handleExecuteJobError(intent, executor, ownedWorkflow, error) {
+    if (isTransientProvisioningError(error)) {
+      if (error.code === SCHEMA_PROVISIONING_ERROR_CODE.STALE_OWNER) {
+        return this.buildOutcome(ownedWorkflow, {
+          reasonCodes: [SCHEMA_PROVISIONING_REASON.ACTIVE_OWNER],
+        });
+      }
+      return this.transitionPendingForRetry(intent, executor, ownedWorkflow, error);
+    }
+    this.retryCompletionHandlers.delete(intent.workflowId);
+    return this.transitionTerminal(intent, ownedWorkflow, {
+      nextStep: SCHEMA_PROVISIONING_JOB_STEP.FAILED,
+      reason: SCHEMA_PROVISIONING_REASON.PROVISIONING_FAILED,
+      updates: {
+        status: SCHEMA_PROVISIONING_JOB_STATUS.FAILED,
+        reasonCodes: [SCHEMA_PROVISIONING_REASON.PROVISIONING_FAILED],
+        errorCode: error.code || error.errorCode || SCHEMA_PROVISIONING_FAILED_CODE,
+        errorMessage: error.message,
+        completedAt: this.now(),
+      },
+    });
+  }
+
   async executeJob(intent, executor, runOptions = {}) {
     const workflow = this.workflowCoordinator.requireWorkflow(intent.workflowId);
     if (SCHEMA_PROVISIONING_JOB_TERMINAL_STATUSES.has(workflow.status)) {
@@ -574,18 +624,13 @@ class SchemaProvisioningJobOwner {
       this.retryCompletionHandlers.delete(intent.workflowId);
       return this.buildOutcome(workflow);
     }
-    const claim = await this.workflowCoordinator.claimWorkflow(
-      workflow.workflowId,
-      {
-        ownerId: this.ownerId,
-        fenceToken: (workflow.fenceToken || 0) + 1,
-        leaseExpiresAt: this.now() + this.leaseMs,
-      },
-    );
+    const claim = await this.workflowCoordinator.claimWorkflow(workflow.workflowId, {
+      ownerId: this.ownerId,
+      fenceToken: (workflow.fenceToken || 0) + 1,
+      leaseExpiresAt: this.now() + this.leaseMs,
+    });
     if (!claim.accepted) {
-      return this.buildOutcome(workflow, {
-        reasonCodes: [SCHEMA_PROVISIONING_REASON.ACTIVE_OWNER],
-      });
+      return this.buildOutcome(workflow, {reasonCodes: [SCHEMA_PROVISIONING_REASON.ACTIVE_OWNER]});
     }
     const ownedWorkflow = claim.workflow;
     try {
@@ -597,70 +642,18 @@ class SchemaProvisioningJobOwner {
       }, {
         status: SCHEMA_PROVISIONING_JOB_STATUS.RUNNING,
         reasonCodes: [SCHEMA_PROVISIONING_REASON.METADATA_PROJECTING],
-      }, {
-        markCommitted: false,
-      });
+      }, {markCommitted: false});
       const result = await executor({
         ...intent,
         ownerFenceToken: ownedWorkflow.fenceToken,
         assertOwnership: () => this.assertOwnership(ownedWorkflow),
       });
       if (!isTerminalProvisioningSuccess(result)) {
-        return this.transitionPendingForRetry(
-          intent,
-          executor,
-          ownedWorkflow,
-        );
+        return this.transitionPendingForRetry(intent, executor, ownedWorkflow);
       }
-      const outcome = await this.transitionTerminal(intent, ownedWorkflow, {
-        nextStep: SCHEMA_PROVISIONING_JOB_STEP.SUCCEEDED,
-        reason: SCHEMA_PROVISIONING_REASON.PROVISIONING_COMPLETE,
-        updates: {
-          status: SCHEMA_PROVISIONING_JOB_STATUS.SUCCEEDED,
-          reasonCodes: [SCHEMA_PROVISIONING_REASON.PROVISIONING_COMPLETE],
-          result,
-          retryAfterMs: 0,
-          completedAt: this.now(),
-        },
-      });
-      const notifyBackground = runOptions.background === true ||
-        runOptions.completionState?.callerDetached === true;
-      if (notifyBackground) {
-        await this.notifyBackgroundSucceeded(intent, outcome, {
-          ...runOptions,
-          background: true,
-        });
-      } else {
-        this.retryCompletionHandlers.delete(intent.workflowId);
-      }
-      return outcome;
+      return await this.completeExecutedJob(intent, ownedWorkflow, result, runOptions);
     } catch (error) {
-      if (isTransientProvisioningError(error)) {
-        if (error.code === SCHEMA_PROVISIONING_ERROR_CODE.STALE_OWNER) {
-          return this.buildOutcome(ownedWorkflow, {
-            reasonCodes: [SCHEMA_PROVISIONING_REASON.ACTIVE_OWNER],
-          });
-        }
-        return this.transitionPendingForRetry(
-          intent,
-          executor,
-          ownedWorkflow,
-          error,
-        );
-      }
-      this.retryCompletionHandlers.delete(intent.workflowId);
-      return this.transitionTerminal(intent, ownedWorkflow, {
-        nextStep: SCHEMA_PROVISIONING_JOB_STEP.FAILED,
-        reason: SCHEMA_PROVISIONING_REASON.PROVISIONING_FAILED,
-        updates: {
-          status: SCHEMA_PROVISIONING_JOB_STATUS.FAILED,
-          reasonCodes: [SCHEMA_PROVISIONING_REASON.PROVISIONING_FAILED],
-          errorCode:
-            error.code || error.errorCode || SCHEMA_PROVISIONING_FAILED_CODE,
-          errorMessage: error.message,
-          completedAt: this.now(),
-        },
-      });
+      return this.handleExecuteJobError(intent, executor, ownedWorkflow, error);
     }
   }
 
@@ -755,17 +748,18 @@ class SchemaProvisioningJobOwner {
   }
 
   async resumeSucceededGlobalIndexContinuations() {
-    if (!this.onBackgroundJobSucceeded || this.shuttingDown) {
-      return [];
-    }
+    if (this.shuttingDown) return [];
     const intents = await this.listSucceededGlobalIndexIntents();
-    return Promise.all(
-      intents.map((intent) => {
-        const row = this.repository.rowsByJobId?.get(intent.jobId);
-        const outcome = row ? this.buildOutcome(this.refreshWorkflowFromRow(row)) : null;
-        return this.onBackgroundJobSucceeded(intent, outcome);
-      }),
-    );
+    if (intents.length === 0) return [];
+    if (this.onResumeSucceededGlobalIndexIntents) {
+      return this.onResumeSucceededGlobalIndexIntents(intents);
+    }
+    if (!this.onBackgroundJobSucceeded) return [];
+    return Promise.all(intents.map((intent) => {
+      const row = this.repository.rowsByJobId?.get(intent.jobId);
+      const outcome = row ? this.buildOutcome(this.refreshWorkflowFromRow(row)) : null;
+      return this.onBackgroundJobSucceeded(intent, outcome);
+    }));
   }
 
   async resumeNonterminal(executor) {

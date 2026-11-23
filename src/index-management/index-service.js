@@ -162,7 +162,9 @@ class IndexService {
     this.indices = new Map(); // indexName -> indexMetadata
 
     this.initialized = false;
+    this.shuttingDown = false;
     this._initializePromise = null;
+    this._gsiRecoveryQueue = null;
   }
 
   /**
@@ -768,6 +770,8 @@ class IndexService {
    */
   async shutdown() {
     this.logger.info(INDEX_LOG_MSG.SHUTTING_DOWN);
+    this.shuttingDown = true;
+    this._shutdownGsiRecoveryQueue?.();
     this._detachSystemTableCacheListener();
     this.indexCache.clear();
     this.indices?.clear();
