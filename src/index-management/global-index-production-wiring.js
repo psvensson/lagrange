@@ -543,16 +543,27 @@ function createReadRouterCallbacks(indexService, getBaseTablePartitions) {
   };
 }
 
-function syncGlobalIndexesForService(indexService) {
+function syncGlobalIndexesForService(indexService, options = {}) {
   syncGlobalIndexesFromSystemCache(
     indexService,
     hydrateGlobalIndexFromRow,
     syncServiceIndexEntryFromRecord,
+    options,
   );
+}
+
+function pruneIndexRowFromWiringState(indexService, indexName) {
+  const indexRows = indexService?.globalIndexWiringState?.indexRows;
+  if (Array.isArray(indexRows) && indexName) {
+    indexService.globalIndexWiringState.indexRows = indexRows.filter(
+      (row) => row?.index_name !== indexName,
+    );
+  }
 }
 
 async function removeIndexCatalogMetadata(indexService, record) {
   await persistCatalogDelete(indexService, record);
+  pruneIndexRowFromWiringState(indexService, record?.index_name);
   indexService._removeIndexFromCache(
     record.index_name,
     record.table_id || record.table_name,
@@ -587,7 +598,7 @@ function buildCatalogPersistenceHooks(indexService, getCoordinator = null) {
   return {
     refreshCatalogPartitions: async () => {
       await preloadProductionPartitionMetadata(indexService);
-      syncGlobalIndexesForService(indexService);
+      syncGlobalIndexesForService(indexService, {includeGatewaySnapshot: true});
     },
     onCatalogInsert: async (record) => {
       await ensureIndexDatasetTableInGateway(indexService, record);
@@ -694,6 +705,7 @@ export {
   buildProductionCoordinatorOptions,
   hydrateGlobalIndexFromRow,
   preloadProductionPartitionMetadata,
+  pruneIndexRowFromWiringState,
   sortRowsByOrderBy,
   syncGlobalIndexesForService,
 };

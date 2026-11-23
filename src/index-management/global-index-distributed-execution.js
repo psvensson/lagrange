@@ -732,9 +732,16 @@ function resolveCoordinatorForSync(indexService) {
     null;
 }
 
-function syncGlobalIndexesFromSystemCache(indexService, hydrateFn, syncEntryFn) {
+function syncGlobalIndexesFromSystemCache(
+  indexService,
+  hydrateFn,
+  syncEntryFn,
+  options = {},
+) {
   const cacheRows = indexService?.systemTableCache?.getAll?.(TABLES.INDICES) || [];
-  const gatewayRows = indexService?.globalIndexWiringState?.indexRows || [];
+  const gatewayRows = options.includeGatewaySnapshot === true ?
+    indexService?.globalIndexWiringState?.indexRows || [] :
+    [];
   const rows = [...cacheRows, ...gatewayRows];
   if (rows.length === 0) {
     return;
