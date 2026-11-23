@@ -16,6 +16,7 @@ documentClass: generated
 - [durable-rejoin-partition-restore-planner.js](durable-rejoin-partition-restore-planner.js) - No leading comment; first export: buildDurableRejoinPartitionRestorePlans. (importers: few)
 - [guarded-runtime-service-handler.js](guarded-runtime-service-handler.js) - Initialize a node's RuntimeServiceHandler behind the PG wire safety gate, the one way the seed and every joiner do it. (importers: few)
 - [hosted-replica-authorities.js](hosted-replica-authorities.js) - The node-local authorities a replica hosted on this node inherits. (importers: many)
+- [join-service-row-admission.js](join-service-row-admission.js) - Authoritative join-time SERVICES row admission for self-hosted message-group replicas. (importers: few)
 - [latency-topology-setup.js](latency-topology-setup.js) - Shared topology setup owner for latency-aware services. (importers: many)
 - [local-query-transport-readiness.js](local-query-transport-readiness.js) - Report exhausted local query-transport readiness attempts. (importers: many)
 - [message-group-selection.js](message-group-selection.js) - No leading comment; first export: buildMessageGroupOwnerNotReadyError. (importers: many)

@@ -24,10 +24,10 @@ import {
   MessageGroupServiceRowOwner,
 } from '../../message-group/message-group-service-row-owner.js';
 import {
-  getControlPlaneErrorCode,
-  getControlPlaneRetryAfterMs,
-  isRetryableControlPlaneError,
-} from '../../control-plane/control-plane-error-classification.js';
+  buildJoinServiceShortcutOptions,
+  buildShortcutMessageGroupRegistrationError,
+  selectRegisteredJoinServiceRow,
+} from '../shared/join-service-row-admission.js';
 import {
   JOINING_DEFAULT,
   JOINING_ERROR_MSG,
@@ -61,6 +61,7 @@ const CREATE_SELF_HOSTED_MESSAGE_GROUP_POLICY = Object.freeze({
 
 const REGISTER_MESSAGE_GROUP_SERVICE_OPTION = Object.freeze({
   PREFER_CONTROL_PLANE_UPSERT: 'preferControlPlaneUpsert',
+  REUSE_EXISTING_SERVICE: 'reuseExistingService',
 });
 const MESSAGE_GROUP_SERVICE_REGISTRATION_ADMISSION_TARGET = Object.freeze({
   LOCAL_SEED_SHORTCUT:
@@ -68,8 +69,6 @@ const MESSAGE_GROUP_SERVICE_REGISTRATION_ADMISSION_TARGET = Object.freeze({
   JOIN_METADATA_SHORTCUT:
     'create-self-hosted join metadata service registration',
 });
-const MESSAGE_GROUP_REGISTER_SHORTCUT_FAILED =
-  'Message group service registration shortcut returned non-success';
 const RETRYABLE_MESSAGE_GROUP_REGISTRATION_FAILURE_ACTION = Object.freeze({
   RETRY: 'retry',
   TERMINAL: 'terminal',
@@ -105,59 +104,6 @@ function resolveRetryableMessageGroupRegistrationFailureAction(options = {}) {
   return elapsedMs >= retryTimeoutMs ?
     RETRYABLE_MESSAGE_GROUP_REGISTRATION_FAILURE_ACTION.TERMINAL :
     RETRYABLE_MESSAGE_GROUP_REGISTRATION_FAILURE_ACTION.RETRY;
-}
-
-function buildRetryableMessageGroupRegistrationError(error, classification) {
-  const details = classification || {};
-  const retryableError = new Error(
-    error?.message || JOINING_ERROR_MSG.BOOTSTRAP_REQUEST_FAILED,
-  );
-  retryableError.deferRetry = true;
-  retryableError.retryable = true;
-  if (Number.isFinite(details.retryAfterMs) && details.retryAfterMs > 0) {
-    retryableError.retryAfterMs = Math.floor(details.retryAfterMs);
-  }
-  if (details.parsedError) {
-    retryableError.bootstrapResponse = details.parsedError;
-  }
-  if (typeof details.code === 'string' && details.code.length > 0) {
-    retryableError.code = details.code;
-  }
-  if (Number.isFinite(details.statusCode)) {
-    retryableError.statusCode = Math.floor(details.statusCode);
-  }
-  if (error) {
-    retryableError.cause = error;
-  }
-  return retryableError;
-}
-
-function buildShortcutMessageGroupRegistrationError(shortcutResult) {
-  const error = new Error(MESSAGE_GROUP_REGISTER_SHORTCUT_FAILED);
-  if (shortcutResult?.error) {
-    error.cause = shortcutResult.error;
-  }
-  const retryable =
-    isRetryableControlPlaneError(shortcutResult) ||
-    isRetryableControlPlaneError(shortcutResult?.error);
-  if (retryable !== true) {
-    return error;
-  }
-
-  return buildRetryableMessageGroupRegistrationError(
-    error,
-    {
-      parsedError: shortcutResult || null,
-      retryAfterMs: Math.max(
-        getControlPlaneRetryAfterMs(shortcutResult),
-        getControlPlaneRetryAfterMs(shortcutResult?.error),
-      ),
-      code:
-        getControlPlaneErrorCode(shortcutResult) ||
-        getControlPlaneErrorCode(shortcutResult?.error) ||
-        null,
-    },
-  );
 }
 
 /**
@@ -429,9 +375,7 @@ class CreateMessageGroupPhase {
       const shortcutResult =
         await this.delegates.upsertJoinServiceRowWithRetry(
           serviceData,
-          {
-            admissionTarget,
-          },
+          buildJoinServiceShortcutOptions(admissionTarget, options),
         );
       if (shortcutResult?.success === false) {
         logger.error(
@@ -449,15 +393,19 @@ class CreateMessageGroupPhase {
         throw error;
       }
 
+      const registeredRow = selectRegisteredJoinServiceRow(
+        shortcutResult,
+        serviceData,
+      );
       const shortcutOriginHlc =
         shortcutResult?.originHlc || shortcutResult?.partitionResult?.originHlc;
       if (typeof shortcutOriginHlc === 'string' && shortcutOriginHlc.length > 0) {
-        serviceData[COLUMN.UPDATED_AT_HLC] = shortcutOriginHlc;
+        registeredRow[COLUMN.UPDATED_AT_HLC] = shortcutOriginHlc;
       }
       if (typeof this.delegates.seedJoinTimeCacheRow === LOCAL_STR_FUNCTION) {
         this.delegates.seedJoinTimeCacheRow(
           TABLES.SERVICES,
-          serviceData,
+          registeredRow,
         );
       }
 
@@ -473,9 +421,9 @@ class CreateMessageGroupPhase {
         },
       );
       this.registrationEvidenceByReplicaId.set(replicaId,
-        Object.freeze({...serviceData}));
+        Object.freeze({...registeredRow}));
       this.settleJoinReplicaIdentityRecord(replicaId);
-      return serviceData;
+      return registeredRow;
     }
 
     const retryPolicy =
@@ -679,17 +627,26 @@ class CreateMessageGroupPhase {
       }
     }
 
+    const startupReplicaIds = Array.isArray(assignment.startupReplicaIds) ?
+      assignment.startupReplicaIds :
+      [];
     for (const [replicaId, svc] of replicas) {
+      const registerOptions = {
+        status: SERVICE_STATUS.STOPPED,
+        [REGISTER_MESSAGE_GROUP_SERVICE_OPTION.PREFER_CONTROL_PLANE_UPSERT]:
+          true,
+      };
+      if (assignment.reuseExistingGroup === true &&
+          startupReplicaIds.includes(replicaId)) {
+        registerOptions[
+          REGISTER_MESSAGE_GROUP_SERVICE_OPTION.REUSE_EXISTING_SERVICE
+        ] = true;
+      }
       await this.delegates.registerMessageGroupService(
         groupId,
         replicaId,
         svc,
-        {
-          status: SERVICE_STATUS.STOPPED,
-          [REGISTER_MESSAGE_GROUP_SERVICE_OPTION
-            .PREFER_CONTROL_PLANE_UPSERT]:
-            true,
-        },
+        registerOptions,
       );
     }
 

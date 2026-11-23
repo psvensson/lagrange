@@ -51,6 +51,7 @@ import {
 } from '../../constants/index.js';
 import {runRetryableControlPlaneWrite} from
   './retryable-control-plane-write.js';
+import {admitJoinServiceRow} from './join-service-row-admission.js';
 import {
   JOIN_ADMISSION_DELIVERY_PRIORITY,
   JOIN_ADMISSION_PHASE_SCOPE,
@@ -461,32 +462,37 @@ class NodeRegistrationOwnerPublicationMethods {
 
     const joinTimeOptions = this.getJoinTimeUpsertOptions();
     const queryTimeoutMs = this.getJoinAdmissionWriteRetryTimeoutMs();
-    return runRetryableControlPlaneWrite(
-      (attemptIdentity) => controlPlaneSystemTableGateway.submitMutation(
+    return admitJoinServiceRow({
+      gateway: controlPlaneSystemTableGateway,
+      rowData,
+      reuseExistingService: options.reuseExistingService === true,
+      insertRow: () => runRetryableControlPlaneWrite(
+        (attemptIdentity) => controlPlaneSystemTableGateway.submitMutation(
+          {
+            operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
+            tableName: TABLES.SERVICES,
+            row: rowData,
+          },
+          {
+            ...joinTimeOptions,
+            ...attemptIdentity,
+            queryTimeoutMs,
+          },
+        ),
         {
-          operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
-          tableName: TABLES.SERVICES,
-          row: rowData,
-        },
-        {
-          ...joinTimeOptions,
-          ...attemptIdentity,
-          queryTimeoutMs,
+          timeoutMs: queryTimeoutMs,
+          now: () => this.delegates.getNow()(),
+          onRetry: this.buildJoinAdmissionRetryLogger(
+            TABLES.SERVICES,
+            options.admissionTarget || null,
+          ),
+          sleep: (delayMs) => this.sleep(delayMs),
+          logger: this.delegates.getLogger?.() ?? null,
+          spentWait: JOIN_ADMISSION_WRITE_WAIT,
+          scope: {nodeId: this.nodeId, tableName: TABLES.SERVICES},
         },
       ),
-      {
-        timeoutMs: queryTimeoutMs,
-        now: () => this.delegates.getNow()(),
-        onRetry: this.buildJoinAdmissionRetryLogger(
-          TABLES.SERVICES,
-          options.admissionTarget || null,
-        ),
-        sleep: (delayMs) => this.sleep(delayMs),
-        logger: this.delegates.getLogger?.() ?? null,
-        spentWait: JOIN_ADMISSION_WRITE_WAIT,
-        scope: {nodeId: this.nodeId, tableName: TABLES.SERVICES},
-      },
-    );
+    });
   }
 
   async updateJoinAdmissionSystemTableRowWithRetry(

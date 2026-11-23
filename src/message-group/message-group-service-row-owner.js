@@ -601,4 +601,5 @@ class MessageGroupServiceRowOwner {
 export {
   MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR,
   MessageGroupServiceRowOwner,
+  observeMessageGroupService,
 };

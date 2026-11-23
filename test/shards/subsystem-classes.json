@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 123,
     "architecture-governance": 21,
-    "bootstrap-membership": 358,
+    "bootstrap-membership": 359,
     "cdc-metadata": 81,
     "cli-tooling": 99,
     "control-plane": 242,
@@ -25,8 +25,8 @@
     "transport-messaging": 123,
     "wasm-toolchain": 74
   },
-  "censusSize": 2816,
-  "digest": "fnv1a32-f703da22",
+  "censusSize": 2817,
+  "digest": "fnv1a32-63dc2dd3",
   "observationSchemaVersion": 2,
   "observationDigest": "fnv1a32-ccfb78e6",
   "classes": {
@@ -205,6 +205,7 @@
     "test/bootstrap/join-readiness-warming-node-preservation.property.test.js": "bootstrap-membership",
     "test/bootstrap/join-resume-replica-lifecycle-owner.test.js": "bootstrap-membership",
     "test/bootstrap/join-retry-patience-selectable.test.js": "bootstrap-membership",
+    "test/bootstrap/join-service-row-durable-rejoin-admission.test.js": "bootstrap-membership",
     "test/bootstrap/join-session-store.test.js": "bootstrap-membership",
     "test/bootstrap/join-startup-owner-routing.test.js": "bootstrap-membership",
     "test/bootstrap/joining-cdc-gate.test.js": "bootstrap-membership",

@@ -4,12 +4,12 @@
   "counts": {
     "unit": 2443,
     "integration": 132,
-    "bootstrap": 234,
+    "bootstrap": 235,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2816,
-  "digest": "fnv1a32-74f19c9d",
+  "censusSize": 2817,
+  "digest": "fnv1a32-a03f1015",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -186,6 +186,7 @@
     "test/bootstrap/join-readiness-warming-node-preservation.property.test.js": "bootstrap",
     "test/bootstrap/join-resume-replica-lifecycle-owner.test.js": "bootstrap",
     "test/bootstrap/join-retry-patience-selectable.test.js": "bootstrap",
+    "test/bootstrap/join-service-row-durable-rejoin-admission.test.js": "bootstrap",
     "test/bootstrap/join-session-store.test.js": "bootstrap",
     "test/bootstrap/join-startup-owner-routing.test.js": "bootstrap",
     "test/bootstrap/joining-cdc-gate.test.js": "bootstrap",
