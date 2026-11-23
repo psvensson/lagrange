@@ -1197,7 +1197,8 @@ test('Destructive reconciliation refuses stale/wrong operation authority and lat
       'CREATE GLOBAL INDEX idx_users_email ON users (name)',
     );
     t.equal(createGen2.success, true, 'Replaced gen2 CREATE succeeds');
-    t.equal(createGen2.generation, 2);
+    t.equal(createGen2.indexId, 'idx_users_email-gen2');
+    t.equal(coord.generations.get('idx_users_email'), 2);
 
     const gen2Parts = coord.getIndexPartitions('idx_users_email');
     const staleGen1AfterReplace = await coord.onReconcileIndexDataset({
