@@ -75,6 +75,21 @@ function matchesRegisteredReplicaIncarnation(row, sourceRow, options) {
     durableReplicaIncarnation(row) === sourceIncarnation;
 }
 
+function unavailableObservationCause(result) {
+  if (!result) return null;
+  if (result.error instanceof Error) {
+    return result.error;
+  }
+  const detail = result.error ?? result.failureCode;
+  if (!detail) return null;
+  const cause = new Error(String(detail));
+  const code = result.errorCode ?? result.failureCode;
+  if (typeof code === 'string' && code.length > 0) {
+    cause.code = code;
+  }
+  return cause;
+}
+
 async function observeRegisteredReplica(writer, replicaId) {
   try {
     const result = await readAuthoritativeControlPlaneRows(
@@ -92,14 +107,19 @@ async function observeRegisteredReplica(writer, replicaId) {
     );
     if (result?.success !== true || !Array.isArray(result.rows) ||
         result.rows.length > 1) {
-      return Object.freeze({available: false, row: null});
+      return Object.freeze({
+        available: false,
+        row: null,
+        cause: unavailableObservationCause(result),
+      });
     }
     return Object.freeze({
       available: true,
       row: result.rows.length === 1 ? result.rows[0] : null,
+      cause: null,
     });
-  } catch (_error) {
-    return Object.freeze({available: false, row: null});
+  } catch (error) {
+    return Object.freeze({available: false, row: null, cause: error});
   }
 }
 
@@ -231,20 +251,31 @@ function resolveRegistrationEvidence(options) {
   return evidence;
 }
 
+function isActivatableObservedSourceRow(sourceRow, options) {
+  const observedIncarnation = durableReplicaIncarnation(sourceRow);
+  if (!matchesRegisteredReplicaIdentity(sourceRow, options) ||
+      observedIncarnation === null) {
+    return false;
+  }
+  if (Number.isSafeInteger(options.expectedReplicaIncarnation) &&
+      observedIncarnation !== options.expectedReplicaIncarnation) {
+    return false;
+  }
+  return sourceRow.status === SERVICE_STATUS.ACTIVE ||
+    (sourceRow.status === SERVICE_STATUS.STOPPED &&
+      durableRowVersion(sourceRow));
+}
+
 function resolveObservedSourceRow(observation, options) {
   if (!observation.available) {
     throw activationError(
       REPLICA_REGISTERED_ACTIVATION_ERROR_CODE.AUTHORITY_UNAVAILABLE,
       options.replicaId,
+      observation.cause || null,
     );
   }
   const sourceRow = observation.row;
-  const validStatus = sourceRow?.status === SERVICE_STATUS.ACTIVE ||
-    (sourceRow?.status === SERVICE_STATUS.STOPPED &&
-      durableRowVersion(sourceRow));
-  if (!matchesRegisteredReplicaIdentity(sourceRow, options) ||
-      durableReplicaIncarnation(sourceRow) === null ||
-      !validStatus) {
+  if (!isActivatableObservedSourceRow(sourceRow, options)) {
     throw activationError(
       REPLICA_REGISTERED_ACTIVATION_ERROR_CODE.SOURCE_CHANGED,
       options.replicaId,

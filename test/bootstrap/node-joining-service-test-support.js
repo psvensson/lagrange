@@ -67,6 +67,7 @@ export function installNodeJoiningReplicaStateMachine(
       rows: row ? [createCanonicalLifecycleServiceRow(row)] : [],
     };
   };
+  service.controlPlaneSystemTableGateway = writer;
   const replicaStateMachine = new ReplicaStateMachine({
     nodeId: service.nodeId,
     controlPlaneSystemTableGateway: {},

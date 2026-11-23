@@ -1,5 +1,7 @@
 import {CDC_TERMINAL_STAGE} from './cdc-constants.js';
 import {issueAuthoritativeReadStage} from './cdc-terminal-gate.js';
+import {buildControlPlaneReadAuthority} from
+  '../control-plane/control-plane-system-table-gateway-read-contracts.js';
 import {
   canWriteSystemTableLocally,
   isLocalPartitionServiceLeader,
@@ -278,11 +280,18 @@ class CDCIntegrationServiceAuthoritativeReadDelegates {
    * @return {Promise<Object>}
    */
   async readAuthoritativeRows(tableName, sql, params = [], options = {}) {
+    const suppliedReadAuthority =
+      options?.readAuthority && Object.isFrozen(options.readAuthority) === true ?
+        options.readAuthority :
+        null;
+    const normalizedOptions = suppliedReadAuthority ?
+      options :
+      {...options, readAuthority: buildControlPlaneReadAuthority(options)};
     return this.executeAuthoritativeSystemTableRead(
       tableName,
       sql,
       params,
-      options,
+      normalizedOptions,
     );
   }
 

@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 123,
     "architecture-governance": 21,
-    "bootstrap-membership": 355,
+    "bootstrap-membership": 356,
     "cdc-metadata": 81,
     "cli-tooling": 99,
     "control-plane": 240,
@@ -25,10 +25,10 @@
     "transport-messaging": 123,
     "wasm-toolchain": 74
   },
-  "censusSize": 2811,
-  "digest": "fnv1a32-ef346026",
+  "censusSize": 2812,
+  "digest": "fnv1a32-2a6c4117",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-3c1e1759",
+  "observationDigest": "fnv1a32-53a245d9",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -179,6 +179,7 @@
     "test/bootstrap/debug-meta-table-schemas.test.js": "bootstrap-membership",
     "test/bootstrap/duplicate-replica-assignment.test.js": "bootstrap-membership",
     "test/bootstrap/durable-rejoin-incarnation-advance.test.js": "bootstrap-membership",
+    "test/bootstrap/durable-rejoin-partition-activation-recovery.test.js": "bootstrap-membership",
     "test/bootstrap/durable-rejoin-partition-restore-planner.test.js": "bootstrap-membership",
     "test/bootstrap/dynamic-partition-cdc-subscription.test.js": "bootstrap-membership",
     "test/bootstrap/fresh-join-multi-peer-contact.test.js": "bootstrap-membership",
@@ -3588,6 +3589,15 @@
         "src/partition/partition-write-kernel.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/rebalancer/node-storage-budget-service.js"
+      ]
+    },
+    "test/bootstrap/durable-rejoin-partition-activation-recovery.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/node/replica-state-machine-registered-activation.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/bootstrap/dynamic-partition-cdc-subscription.test.js": {

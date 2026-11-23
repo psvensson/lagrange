@@ -1,4 +1,6 @@
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
+import {preflightPartitionServiceActivationEntries} from
+  './shared/partition-service-activation.js';
 import {exposePartitionConstruction} from './shared/partition-service-construction.js';
 import {copyCdcEvent} from '../cdc/cdc-event-envelope.js';
 import {replicaConsensusEventsOf} from '../node/replica-handler-membership-relay.js';
@@ -29,6 +31,8 @@ import {PARTICIPANT_CONCURRENCY_GRANULARITY} from
 // target. Every other restore failure still aborts the rejoin.
 const DURABLE_REJOIN_RECORD_MISSING_MSG =
   'Durable rejoin replica refused: no durable consensus record (O4)';
+const DURABLE_REJOIN_PLACEMENT_RETIREMENT_DISK_MSG =
+  'Durable rejoin disk belongs to placement retirement';
 function isDurableRecordMissingRefusal(error) {
   return isConsensusInitRefusal(error, ENTITY_TYPE.PARTITION) &&
     error.consensus?.reason ===
@@ -103,12 +107,35 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
     );
     const restoredPlans =
       await this.ensureDurableRejoinPartitionRuntimes(restorePlans);
-    await this.activateJoinPartitionServiceRows(
-      restoredPlans.map(({replicaId}) => replicaId),
+    const restoredReplicaIds = restoredPlans.map(({replicaId}) => replicaId);
+    const restoredPartitionServices = new Map(
+      restoredReplicaIds
+        .map((replicaId) => [replicaId, this.partitionServices.get(replicaId)])
+        .filter(([, service]) => service != null),
     );
+    await preflightPartitionServiceActivationEntries({
+      nodeId: this.nodeId,
+      messageRouter: this.messageRouter,
+      partitionServices: restoredPartitionServices,
+    });
+    const expectedReplicaIncarnationByReplicaId = new Map();
+    for (const plan of restoredPlans) {
+      const createdAt = plan?.lifecycleAuthority?.replicaCreatedAt;
+      if (Number.isSafeInteger(createdAt)) {
+        expectedReplicaIncarnationByReplicaId.set(plan.replicaId, createdAt);
+      }
+    }
+    this.applySystemCacheToPartitions?.(systemTableCache);
     this.startDurableRejoinLocalPartitionElections(restoredPlans);
+    await this.activateJoinPartitionServiceRows(restoredReplicaIds, {
+      deferTransientFailures: true,
+      retireSupersededReplicas: true,
+      expectedReplicaIncarnationByReplicaId,
+    });
     this.durableRejoinRestoreState =
-      JOIN_REJOIN_PROMOTION_RESTORE_STATE.RESTORED;
+      this.hasPendingDeferredPartitionServiceActivations?.() === true ?
+        JOIN_REJOIN_PROMOTION_RESTORE_STATE.RESTORING :
+        JOIN_REJOIN_PROMOTION_RESTORE_STATE.RESTORED;
     this.logger.info(
       NODE_JOINING_SERVICE_LITERAL.RESTORED_DURABLE_LOCAL_PARTITION_SERVICES_FROM_CACHED_TOPOLOGY,
       {
@@ -145,10 +172,14 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
       try {
         await this.createJoinPartitionReplica({replicaOptions: restorePlan});
       } catch (error) {
-        const retired = error.code === DURABLE_REJOIN_PLACEMENT_RETIREMENT_OWNS_DISK;
-        if (!retired && !isDurableRecordMissingRefusal(error)) throw error;
+        const ownedByPlacement =
+          error.code === DURABLE_REJOIN_PLACEMENT_RETIREMENT_OWNS_DISK;
+        if (!ownedByPlacement && !isDurableRecordMissingRefusal(error)) {
+          throw error;
+        }
         restored.pop();
-        this.logger.warn(retired ? 'Durable rejoin disk belongs to placement retirement' :
+        this.logger.warn(ownedByPlacement ?
+          DURABLE_REJOIN_PLACEMENT_RETIREMENT_DISK_MSG :
           DURABLE_REJOIN_RECORD_MISSING_MSG, {
           nodeId: this.nodeId, replicaId,
           partitionId: restorePlan.partitionId,

@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2785,
+    "ordinary": 2786,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2811,
-  "digest": "fnv1a32-3ea097c9",
+  "censusSize": 2812,
+  "digest": "fnv1a32-f85c0609",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -159,6 +159,7 @@
     "test/bootstrap/debug-meta-table-schemas.test.js": "ordinary",
     "test/bootstrap/duplicate-replica-assignment.test.js": "ordinary",
     "test/bootstrap/durable-rejoin-incarnation-advance.test.js": "ordinary",
+    "test/bootstrap/durable-rejoin-partition-activation-recovery.test.js": "ordinary",
     "test/bootstrap/durable-rejoin-partition-restore-planner.test.js": "ordinary",
     "test/bootstrap/dynamic-partition-cdc-subscription.test.js": "ordinary",
     "test/bootstrap/fresh-join-multi-peer-contact.test.js": "ordinary",

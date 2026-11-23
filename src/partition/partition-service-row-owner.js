@@ -374,6 +374,7 @@ class PartitionServiceRowOwner {
       systemTableWriter: this.systemTableWriter,
       timestamp: options.timestamp ?? this.now(),
       registrationEvidence: options.registrationEvidence,
+      expectedReplicaIncarnation: options.expectedReplicaIncarnation,
       isEffectHandlerCurrent: options.isEffectHandlerCurrent,
       writeOptions: this.buildDeferredUpdateOptions(
         options.replicaId,

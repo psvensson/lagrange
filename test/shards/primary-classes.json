@@ -4,12 +4,12 @@
   "counts": {
     "unit": 2441,
     "integration": 132,
-    "bootstrap": 231,
+    "bootstrap": 232,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2811,
-  "digest": "fnv1a32-76b2c6e2",
+  "censusSize": 2812,
+  "digest": "fnv1a32-962a754c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -160,6 +160,7 @@
     "test/bootstrap/debug-meta-table-schemas.test.js": "bootstrap",
     "test/bootstrap/duplicate-replica-assignment.test.js": "bootstrap",
     "test/bootstrap/durable-rejoin-incarnation-advance.test.js": "bootstrap",
+    "test/bootstrap/durable-rejoin-partition-activation-recovery.test.js": "bootstrap",
     "test/bootstrap/durable-rejoin-partition-restore-planner.test.js": "bootstrap",
     "test/bootstrap/dynamic-partition-cdc-subscription.test.js": "bootstrap",
     "test/bootstrap/fresh-join-multi-peer-contact.test.js": "bootstrap",

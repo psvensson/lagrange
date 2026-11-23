@@ -344,6 +344,7 @@ class NodeJoiningReadySignalReadiness
       });
       throw error;
     }
+    await this.awaitDeferredPartitionServiceActivationsForReadySignal?.();
     // The READY lease states that this node can serve: it awaits the
     // node-local gates above and the durable NODES write below, and no
     // cluster-level fact.

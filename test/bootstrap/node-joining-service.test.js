@@ -933,8 +933,8 @@ test('NodeJoiningService - durable rejoin restore queues local partition replica
 
     t.same(
       calls,
-      ['init', 'reconcile', 'activate:nodes-p1-r1', 'start:nodes-p1-r1'],
-      'durable rejoin should activate restored partition services before starting their elections',
+      ['init', 'reconcile', 'start:nodes-p1-r1', 'activate:nodes-p1-r1'],
+      'durable rejoin should start restored partition Raft participation before authoritative service-row activation',
     );
     t.same(
       restored.map((plan) => plan.replicaId),
@@ -965,8 +965,8 @@ test('NodeJoiningService - durable rejoin restore queues local partition replica
     );
   });
 
-test('NodeJoiningService - durable rejoin activation debt blocks elections ' +
-  'and resumes through workflow re-entry', async (t) => {
+test('NodeJoiningService - durable rejoin starts elections before activation ' +
+  'and retains deferred activation obligation until settled', async (t) => {
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
@@ -979,50 +979,42 @@ test('NodeJoiningService - durable rejoin activation debt blocks elections ' +
   });
   const calls = [];
   let activationAttempt = 0;
-  service.initializeJoiningLifecycleOwners = async () => {
-    calls.push('init');
+  const transportHandler = () => null;
+  const addr = 'durable-join-node/partition/nodes-p1-r1';
+  service.messageRouter = {
+    isRegistered: (a) => a === addr,
+    getRegisteredHandler: (a) => (a === addr ? transportHandler : null),
   };
+  service.initializeJoiningLifecycleOwners = async () => calls.push('init');
   service.triggerJoinReconciler = async () => {
     calls.push('reconcile');
     service.partitionServices.set('nodes-p1-r1', {
-      initialized: true,
-      partitionId: 'nodes-p1',
-      startElection() {
-        calls.push('start:nodes-p1-r1');
-      },
+      initialized: true, transportHandler, partitionId: 'nodes-p1',
+      startElection: () => calls.push('start:nodes-p1-r1'),
     });
   };
-  service.activateJoinPartitionServiceRows = async () => {
+  service.activateJoinPartitionServiceRows = async (_replicaIds, options) => {
     activationAttempt += 1;
     calls.push(`activate:${activationAttempt}`);
+    t.equal(options?.deferTransientFailures, true);
     if (activationAttempt === 1) {
-      const error = new Error('activation owner deferred');
-      error.code = 'REPLICA_ACTIVATION_DURABILITY_DEFERRED';
-      error.deferRetry = true;
+      const error = Object.assign(new Error('activation owner deferred'), {
+        code: 'REPLICA_ACTIVATION_DURABILITY_DEFERRED', deferRetry: true,
+      });
       throw error;
     }
     return 1;
   };
-
   const systemTableCache = createDurableRejoinSystemTableCache();
-
   await t.rejects(
     service.restoreDurableRejoinLocalPartitionServices(systemTableCache),
     {code: 'REPLICA_ACTIVATION_DURABILITY_DEFERRED'},
-    'rejoin restore must remain incomplete while activation ownership is deferred',
   );
-  t.equal(calls.includes('start:nodes-p1-r1'), false,
-    'partition election must not start before durable activation succeeds');
-
-  const restored = await service.restoreDurableRejoinLocalPartitionServices(
-    systemTableCache,
-  );
-
-  t.equal(activationAttempt, 2,
-    'the existing restore workflow should re-enter the same activation debt');
+  t.same(calls, ['init', 'reconcile', 'start:nodes-p1-r1', 'activate:1']);
+  const restored = await service.restoreDurableRejoinLocalPartitionServices(systemTableCache);
+  t.equal(activationAttempt, 2);
   t.same(restored.map(({replicaId}) => replicaId), ['nodes-p1-r1']);
-  t.equal(calls.filter((call) => call === 'start:nodes-p1-r1').length, 1,
-    'successful re-entry should start the election exactly once');
+  t.equal(calls.filter((call) => call === 'start:nodes-p1-r1').length, 2);
 });
 
 test('NodeJoiningService - durable rejoin restore recreates stale local ' +
@@ -1178,10 +1170,10 @@ test('NodeJoiningService - durable rejoin restore recreates stale local ' +
       'reconcile',
       'shutdown:nodes-p1-r1',
       'create:nodes-p1-r1',
-      'activate:nodes-p1-r1',
       'start:nodes-p1-r1',
+      'activate:nodes-p1-r1',
     ],
-    'durable rejoin should rebuild stale runtime before service-row activation',
+    'durable rejoin should rebuild stale runtime and start consensus before service-row activation',
   );
   t.same(
     restored.map((plan) => plan.replicaId),
@@ -1364,8 +1356,8 @@ test('NodeJoiningService - durable rejoin restore repairs stale runtime when ' +
       'reconcile',
       `shutdown:${replicaId}`,
       `create:${replicaId}`,
-      `activate:${replicaId}`,
       `start:${replicaId}`,
+      `activate:${replicaId}`,
     ],
     'restore should repair stale runtime even when reconciliation is silent',
   );

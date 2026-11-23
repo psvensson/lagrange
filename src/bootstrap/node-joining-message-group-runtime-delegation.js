@@ -4,6 +4,8 @@ import {withRaftOpeningCleanupFailure} from '../raft/raft-operation-port.js';
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
 import {DEFERRED_MESSAGE_GROUP_ACTIVATION_RETRY_DELAY_MS} from './node-joining-constants.js';
 import {NodeJoiningReplicaDescriptorCoordination} from './node-joining-replica-descriptor-coordination.js';
+import {DeferredPartitionServiceActivationOwner} from
+  './shared/deferred-partition-service-activation-owner.js';
 import {isEndpointCurrentForNode} from
   '../control-plane/owners/endpoint-incarnation-currentness.js';
 
@@ -57,8 +59,11 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
     const handler = this.replicaHandler;
     const tracked = handler?.localServices.get(replicaId);
     const requireCurrent = () => {
-      if (this.shuttingDown || this.aborted || handler?.shuttingDown ||
-          this.replicaHandler !== handler || handler?.localServices.get(replicaId) !== tracked) {
+      const joiningInactive = this.shuttingDown || this.aborted;
+      const handlerChanged = this.replicaHandler !== handler ||
+        handler?.shuttingDown === true ||
+        handler?.localServices.get(replicaId) !== tracked;
+      if (joiningInactive || handlerChanged) {
         throw supersededPartitionConstruction(replicaId);
       }
     };
@@ -351,7 +356,7 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
     const deferredReplicaIds = new Set();
     const activatedCount = await activateMessageGroupServiceRows({
       nodeId: this.nodeId,
-      systemTableWriter: this.createCdcIntegrationService(),
+      systemTableWriter: this.controlPlaneSystemTableGateway,
       replicaStateMachine: this.replicaStateMachine,
       registrationEvidenceByReplicaId:
         this.createMessageGroupPhase.registrationEvidenceByReplicaId,
@@ -458,7 +463,96 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
     }
     return activatedCount;
   }
-  async activateJoinPartitionServiceRows(replicaIds = null) {
+  getDeferredPartitionActivationOwner() {
+    if (!this.deferredPartitionActivationOwner) {
+      this.deferredPartitionActivationOwner =
+        new DeferredPartitionServiceActivationOwner({
+          isStopped: () => this.aborted === true || this.shuttingDown === true,
+          getPartitionService: (replicaId) =>
+            this.partitionServices.get(replicaId) || null,
+          getDurableRejoinRestoreState: () => this.durableRejoinRestoreState,
+          setDurableRejoinRestoreState: (state) => {
+            this.durableRejoinRestoreState = state;
+          },
+          getRetryDelayMs: () => this.deferredPartitionActivationRetryDelayMs,
+          getReadyWaitTimeoutMs: () =>
+            this.config?.durableRejoinPartitionActivationTimeoutMs ??
+            this.config?.readinessTimeoutMs,
+          scheduleTimer: (callback, delayMs) =>
+            (this.setTimeoutFn ?? setTimeout)(callback, delayMs),
+          cancelTimer: (timer) =>
+            (this.clearTimeoutFn ?? clearTimeout)(timer),
+          now: () => this.now(),
+          sleep: (delayMs) => this.sleep(delayMs),
+          activateReplicaBatch: (replicaIds, batchOptions) =>
+            this.activateJoinPartitionServiceRows(replicaIds, batchOptions),
+          retireSupersededReplica: (details) =>
+            this.retireSupersededJoinPartitionReplica(details),
+        });
+    }
+    return this.deferredPartitionActivationOwner;
+  }
+  hasPendingDeferredPartitionServiceActivations() {
+    return this.deferredPartitionActivationOwner?.hasPending() === true;
+  }
+  clearDeferredPartitionServiceRowActivations() {
+    this.deferredPartitionActivationOwner?.clear();
+  }
+  async retryDeferredPartitionServiceRowsIfNeeded() {
+    if (!this.deferredPartitionActivationOwner) return 0;
+    return this.deferredPartitionActivationOwner.retryPendingIfNeeded();
+  }
+  async awaitDeferredPartitionServiceActivationsForReadySignal(options = {}) {
+    if (!this.deferredPartitionActivationOwner?.hasPending()) return;
+    await this.deferredPartitionActivationOwner.awaitSettledForReadySignal(
+      options,
+    );
+  }
+  async shutdownSupersededJoinPartitionReplica(replicaId, partitionId, service) {
+    try {
+      await service.shutdown?.();
+    } catch (shutdownError) {
+      this.logger.warn(
+        NODE_JOINING_SERVICE_LITERAL
+          .SUPERSEDED_DURABLE_REJOIN_PARTITION_REPLICA_SHUTDOWN_FAILED,
+        {
+          nodeId: this.nodeId,
+          partitionId,
+          replicaId,
+          error: shutdownError?.message || String(shutdownError),
+        },
+      );
+    }
+  }
+  async retireSupersededJoinPartitionReplica({
+    replicaId,
+    partitionId,
+    service,
+    error,
+  }) {
+    if (!service || this.partitionServices.get(replicaId) !== service) {
+      return;
+    }
+    this.logger.warn(
+      NODE_JOINING_SERVICE_LITERAL
+        .RETIRING_SUPERSEDED_DURABLE_REJOIN_PARTITION_REPLICA,
+      {
+        nodeId: this.nodeId,
+        partitionId,
+        replicaId,
+        error: error?.message || String(error),
+      },
+    );
+    this.partitionServices.delete(replicaId);
+    this.replicaHandler?.localServices?.delete?.(replicaId);
+    this.replicaHandler?.localReplicas?.delete?.(replicaId);
+    await this.shutdownSupersededJoinPartitionReplica(
+      replicaId,
+      partitionId,
+      service,
+    );
+  }
+  async activateJoinPartitionServiceRows(replicaIds = null, options = {}) {
     const partitionServices =
       replicaIds == null ?
         this.partitionServices :
@@ -470,12 +564,32 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
             ])
             .filter(([, service]) => service != null),
         );
-    return activatePartitionServiceRows({
+    const owner = this.getDeferredPartitionActivationOwner();
+    const deferredIds = new Set();
+    const supersededIds = new Set();
+    const expectedReplicaIncarnationByReplicaId =
+      options.expectedReplicaIncarnationByReplicaId instanceof Map ?
+        options.expectedReplicaIncarnationByReplicaId :
+        null;
+    const activatedCount = await activatePartitionServiceRows({
       nodeId: this.nodeId,
-      systemTableWriter: this.createCdcIntegrationService(),
+      systemTableWriter: this.controlPlaneSystemTableGateway,
       replicaStateMachine: this.replicaStateMachine,
       messageRouter: this.messageRouter,
-      onDeferredActivation: ({partitionId, replicaId, error}) => {
+      expectedReplicaIncarnationByReplicaId,
+      deferTransientFailures: options.deferTransientFailures === true,
+      retireSupersededReplicas: options.retireSupersededReplicas === true,
+      skipMissingHandlerPreflight: options.skipMissingHandlerPreflight === true,
+      onDeferredActivation: ({partitionId, replicaId, service, error}) => {
+        deferredIds.add(replicaId);
+        owner.recordDeferred({
+          replicaId,
+          partitionId,
+          service,
+          expectedReplicaIncarnation:
+            expectedReplicaIncarnationByReplicaId?.get(replicaId) ?? null,
+          error,
+        });
         this.logger.warn(
           NODE_JOINING_SERVICE_LITERAL.DEFERRING_JOIN_PARTITION_SERVICE_ROW_ACTIVATION,
           {
@@ -486,8 +600,24 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
           },
         );
       },
+      onSupersededReplica: async ({partitionId, replicaId, service, error}) => {
+        supersededIds.add(replicaId);
+        await owner.retireSuperseded({replicaId, partitionId, service, error});
+      },
       partitionServices,
     });
+    for (const replicaId of partitionServices.keys()) {
+      if (!deferredIds.has(replicaId) && !supersededIds.has(replicaId)) {
+        owner.markSettled(replicaId);
+      }
+    }
+    if (owner.hasPending()) {
+      owner.scheduleRetry();
+    } else {
+      owner.clearRetryTimer();
+    }
+    owner.syncRestoreState();
+    return activatedCount;
   }
   startJoinOpportunisticBackfill() {
     return this.querySystemStatePhase.startJoinOpportunisticBackfill();

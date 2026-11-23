@@ -223,6 +223,10 @@ const NODE_JOINING_SERVICE_LITERAL = Object.freeze({
     'Deferring join partition service row activation',
   DEFERRING_JOIN_MESSAGE_GROUP_SERVICE_ROW_ACTIVATION:
     'Deferring join message-group service row activation',
+  RETIRING_SUPERSEDED_DURABLE_REJOIN_PARTITION_REPLICA:
+    'Retiring superseded durable-rejoin partition replica',
+  SUPERSEDED_DURABLE_REJOIN_PARTITION_REPLICA_SHUTDOWN_FAILED:
+    'Superseded durable-rejoin partition replica shutdown failed',
   ANY_REPLICA: 'any_replica',
   NO_CONNECTION_TO_NODE: 'No connection to node',
   CONNECTION_TO_NODE: 'Connection to node',

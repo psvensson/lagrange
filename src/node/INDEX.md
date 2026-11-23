@@ -93,7 +93,7 @@ documentClass: generated
 - [replica-state-machine-lifecycle-observation.js](replica-state-machine-lifecycle-observation.js) - No leading comment; first export: DURABLE_VERSION_COLUMN. (importers: hub)
 - [replica-state-machine-metrics.js](replica-state-machine-metrics.js) - Initialize metrics tracking structures. (importers: few)
 - [replica-state-machine-recovery.js](replica-state-machine-recovery.js) - Handle node recovery by processing replicas in transitional states. (importers: many)
-- [replica-state-machine-registered-activation.js](replica-state-machine-registered-activation.js) - No leading comment; first export: REPLICA_REGISTERED_ACTIVATION_ERROR_CODE. (importers: few)
+- [replica-state-machine-registered-activation.js](replica-state-machine-registered-activation.js) - No leading comment; first export: REPLICA_REGISTERED_ACTIVATION_ERROR_CODE. (importers: many)
 - [replica-state-machine-removal-completion-receipt.js](replica-state-machine-removal-completion-receipt.js) - No leading comment; first export: createRemovalCompletionReceiptVerifier. (importers: one)
 - [replica-state-machine-serialization.js](replica-state-machine-serialization.js) - Run one mutation in the replica's linearization domain. (importers: many)
 - [replica-state-machine-timeouts.js](replica-state-machine-timeouts.js) - One replica stayed in a transient lifecycle state past its bound: one wait_bound_spent ERROR per (replica, observed... (importers: one)

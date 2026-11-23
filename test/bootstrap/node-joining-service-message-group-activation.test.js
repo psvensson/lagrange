@@ -445,6 +445,7 @@ test('NodeJoiningService - full join hosts its own message group; mg-1 ' +
           transportHandler,
         });
         service.createCdcIntegrationService = () => writer;
+        service.controlPlaneSystemTableGateway = writer;
         service.createMessageGroupPhase.registrationEvidenceByReplicaId.set(
           'mg-cache-r1',
           writer.store.durableRow(TABLES.SERVICES, 'mg-cache-r1'),
@@ -1211,6 +1212,7 @@ test('NodeJoiningService - partial message-group service row activation retains 
         return origUpdate(table, where, data, opts);
       };
       service.createCdcIntegrationService = () => writer;
+      service.controlPlaneSystemTableGateway = writer;
       service.replicaStateMachine = new ReplicaStateMachine({
         nodeId,
         controlPlaneSystemTableGateway: {},
