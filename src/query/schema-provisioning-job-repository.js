@@ -12,10 +12,16 @@ const SELECT_BY_IDENTITY =
 const SELECT_NONTERMINAL =
   `SELECT * FROM ${TABLES.SCHEMA_OPERATIONS} ` +
   'WHERE status NOT IN (\'SUCCEEDED\', \'FAILED\')';
+const SELECT_SUCCEEDED =
+  `SELECT * FROM ${TABLES.SCHEMA_OPERATIONS} ` +
+  'WHERE status = \'SUCCEEDED\'';
 
 const WRITE_OPTIONS = Object.freeze({
   workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
   deliveryPriority: 'critical',
+});
+const TABLE_LIFECYCLE_READ_OPTIONS = Object.freeze({
+  readProfile: 'table_lifecycle',
 });
 const SCHEMA_JOB_REPOSITORY_ERROR_MSG = Object.freeze({
   INSERT_FAILED: 'Schema provisioning intent insert failed',
@@ -264,13 +270,30 @@ class SchemaProvisioningJobRepository {
     return [...this.rowsByJobId.values()];
   }
 
+  async readSchemaJobRows(sql, rowFilter) {
+    if (this.gateway?.readRows) {
+      const result = await this.gateway.readRows(
+        TABLES.SCHEMA_OPERATIONS,
+        sql,
+        [],
+        TABLE_LIFECYCLE_READ_OPTIONS,
+      );
+      const rows = Array.isArray(result?.rows) ? result.rows : [];
+      for (const row of rows) {
+        if (row?.job_id) this.rowsByJobId.set(row.job_id, row);
+      }
+      return rows;
+    }
+    return this.listRows().filter(rowFilter);
+  }
+
   async listNonterminalRows() {
     if (typeof this.gateway?.readRows === 'function') {
       const result = await this.gateway.readRows(
         TABLES.SCHEMA_OPERATIONS,
         SELECT_NONTERMINAL,
         [],
-        {readProfile: 'table_lifecycle'},
+        TABLE_LIFECYCLE_READ_OPTIONS,
       );
       const rows = Array.isArray(result?.rows) ? result.rows : [];
       for (const row of rows) {
@@ -281,6 +304,13 @@ class SchemaProvisioningJobRepository {
     return this.listRows().filter(
       (row) => row.status !== SCHEMA_JOB_TERMINAL_STATUS.SUCCEEDED &&
         row.status !== SCHEMA_JOB_TERMINAL_STATUS.FAILED,
+    );
+  }
+
+  async listSucceededRows() {
+    return this.readSchemaJobRows(
+      SELECT_SUCCEEDED,
+      (row) => row.status === SCHEMA_JOB_TERMINAL_STATUS.SUCCEEDED,
     );
   }
 }

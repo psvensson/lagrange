@@ -8,6 +8,7 @@
 
 import {QUERY_ERROR_CODE} from '../query/query-constants.js';
 import {
+  GLOBAL_INDEX_ERROR_CODE,
   GLOBAL_INDEX_ERROR_MSG,
   GLOBAL_INDEX_SQL_STATE,
   GLOBAL_INDEX_STATE,
@@ -17,6 +18,18 @@ import {
 const LOCAL_STR_COMMA = ',';
 const DDL_CAPTURE_TABLE_INDEX = 3;
 const DDL_CAPTURE_COLUMNS_INDEX = 4;
+const TRANSIENT_GSI_ERROR_CODES = new Set([
+  GLOBAL_INDEX_ERROR_CODE.PARTICIPANT_UNAVAILABLE,
+  GLOBAL_INDEX_ERROR_CODE.PARTITIONS_UNAVAILABLE,
+  QUERY_ERROR_CODE.TIMEOUT,
+  QUERY_ERROR_CODE.PROVISIONING_UNAVAILABLE,
+  'AUTHORITY_UNAVAILABLE',
+  'FORMATION_NOT_LATCHED',
+  'NOT_LEADER',
+  'STALE_LEADER',
+  'ECONNREFUSED',
+  'UNAVAILABLE',
+]);
 
 export {
   GLOBAL_INDEX_ERROR_MSG,
@@ -366,6 +379,27 @@ export function resolveGlobalCreateSchemaContext(def, options, schemaInfo) {
   return {basePrimaryKeyColumns, columnTypes};
 }
 
+function resolveDefinitionUniqueFlag(def) {
+  return typeof def.isUnique === 'boolean' ? def.isUnique : Boolean(def.unique);
+}
+
+/**
+ * Compare two normalized global index definitions for structural equivalence.
+ * @param {Object|null} leftDef
+ * @param {Object|null} rightDef
+ * @return {boolean} True when both define the same table, columns, and uniqueness.
+ */
+export function areGlobalIndexDefinitionsEqual(leftDef, rightDef) {
+  if (!leftDef || !rightDef) return false;
+  const sameTable = (leftDef.tableName || '') === (rightDef.tableName || '');
+  const leftCols = Array.isArray(leftDef.columnNames) ? leftDef.columnNames : [];
+  const rightCols = Array.isArray(rightDef.columnNames) ? rightDef.columnNames : [];
+  const sameCols = leftCols.length === rightCols.length &&
+    leftCols.every((col, idx) => col === rightCols[idx]);
+  return sameTable && sameCols &&
+    resolveDefinitionUniqueFlag(leftDef) === resolveDefinitionUniqueFlag(rightDef);
+}
+
 export function isSameGlobalIndexDefinition(existing, def) {
   if (!existing || !def) return false;
   const norm = normalizeGlobalIndexRecord(existing);
@@ -373,7 +407,14 @@ export function isSameGlobalIndexDefinition(existing, def) {
   const defCols = Array.isArray(def.columnNames) ? def.columnNames : [];
   const sameCols = norm.columnNames.length === defCols.length &&
     norm.columnNames.every((col, idx) => col === defCols[idx]);
-  return sameTable && sameCols && Boolean(norm.isUnique) === Boolean(def.unique);
+  return sameTable && sameCols && Boolean(norm.isUnique) === resolveDefinitionUniqueFlag(def);
+}
+
+export function isTransientGlobalIndexError(err) {
+  if (!err) return false;
+  const code = String(err.code || err.errorCode || '').toUpperCase();
+  const failureCode = String(err.failureCode || '').toUpperCase();
+  return TRANSIENT_GSI_ERROR_CODES.has(code) || TRANSIENT_GSI_ERROR_CODES.has(failureCode);
 }
 
 export function checkIndexExistence(catalog, def, options) {

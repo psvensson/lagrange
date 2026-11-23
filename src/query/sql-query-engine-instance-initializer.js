@@ -32,6 +32,11 @@ function bindSchemaJobGsiCompletionHandler(engine) {
       (intent) => engine.indexService?.completeRecoveredGlobalIndexProvisioning?.(intent),
     );
   }
+  if (owner?.setSucceededGlobalIndexRecoveryHandler) {
+    owner.setSucceededGlobalIndexRecoveryHandler(
+      (intents) => engine.indexService?.recoverIncompleteGlobalIndexesFromSchemaJobs?.({intents}),
+    );
+  }
 }
 
 const LOCAL_STR_SQL_CONTROL_PLANE = 'sql_control_plane';

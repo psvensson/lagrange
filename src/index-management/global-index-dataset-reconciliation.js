@@ -7,12 +7,16 @@
 import {STATE, TABLES} from '../constants/index.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
+  CONTROL_PLANE_READ_PROFILE,
 } from '../control-plane/control-plane-system-table-gateway-constants.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {
   resolveDeclaredTableSchema,
 } from '../partition/partition-boundary-representation.js';
-import {normalizeGlobalIndexRecord} from './global-index-catalog-contract.js';
+import {
+  GLOBAL_INDEX_STATE,
+  normalizeGlobalIndexRecord,
+} from './global-index-catalog-contract.js';
 import {
   buildIndexDatasetSchema,
   getGlobalIndexDatasetName,
@@ -24,6 +28,13 @@ const LOCAL_STR_CRITICAL = 'critical';
 const LOCAL_STR_ID = 'id';
 const LOCAL_STR_TEXT = 'TEXT';
 const NO_PARTITION_TRANSITION = null;
+const SQL_SELECT_INDEX_BY_NAME = 'SELECT * FROM indices WHERE index_name = ?';
+const OWNERSHIP_REASON = Object.freeze({
+  AUTHORITY_UNAVAILABLE: 'authority_unavailable',
+  MISSING_CATALOG: 'missing_catalog',
+  STALE_GENERATION: 'stale_generation',
+  CATALOG_NOT_CREATING: 'catalog_not_creating',
+});
 
 function isMatchingHostedServiceRow(svc, partitionId) {
   return Boolean(
@@ -288,12 +299,84 @@ async function reconcilePartitionDatasetKeyType(indexService, partition, expecte
   );
 }
 
+function resolveReadableGateway(indexService) {
+  if (!indexService?.canReadMetadata?.()) {
+    return null;
+  }
+  const gateway = indexService.getControlPlaneSystemTableGateway?.();
+  return gateway?.readRows ? gateway : null;
+}
+
+async function readAuthoritativeGlobalIndexRow(indexService, indexName) {
+  const gateway = resolveReadableGateway(indexService);
+  if (!gateway || !indexName) {
+    return {available: false, row: null};
+  }
+  const result = await gateway.readRows(
+    TABLES.INDICES,
+    SQL_SELECT_INDEX_BY_NAME,
+    [indexName],
+    {readProfile: CONTROL_PLANE_READ_PROFILE.TABLE_LIFECYCLE},
+  );
+  if (result?.success === false) {
+    return {available: false, row: null};
+  }
+  const rows = Array.isArray(result?.rows) ? result.rows : [];
+  return {available: true, row: rows[0] || null};
+}
+
+const OWNERSHIP_CHECK_RULES = Object.freeze([
+  {
+    reason: OWNERSHIP_REASON.MISSING_CATALOG,
+    matches: (row) => !row,
+  },
+  {
+    reason: OWNERSHIP_REASON.STALE_GENERATION,
+    matches: (row, coordinator, {indexName, indexId, generation}) =>
+      Boolean(
+        (indexId && row.index_id !== indexId) ||
+        (coordinator &&
+         generation !== null &&
+         !coordinator._isGenerationCurrent(indexName, generation, row.index_id)),
+      ),
+  },
+  {
+    reason: OWNERSHIP_REASON.CATALOG_NOT_CREATING,
+    matches: (row) => row.state !== GLOBAL_INDEX_STATE.CREATING,
+  },
+]);
+
+async function verifyGlobalIndexCatalogOwnership(
+  indexService,
+  coordinator,
+  {indexName, indexId = null, generation = null},
+) {
+  const authoritative = await readAuthoritativeGlobalIndexRow(indexService, indexName);
+  const row = authoritative.row;
+  const matchedRule = authoritative.available ?
+    OWNERSHIP_CHECK_RULES.find(
+      (rule) => rule.matches(row, coordinator, {indexName, indexId, generation}),
+    ) :
+    {reason: OWNERSHIP_REASON.AUTHORITY_UNAVAILABLE};
+  if (matchedRule) {
+    return {
+      owned: false,
+      reason: matchedRule.reason,
+      ...(row?.state !== undefined ? {state: row.state} : {}),
+      row,
+    };
+  }
+  return {owned: true, row};
+}
+
 export {
   awaitGatewayProjection,
   buildProvisionedIndexMetadata,
   ensureIndexDatasetTableInGateway,
   hasHostedPartitionReplica,
   mergeColumnTypesWithBaseTable,
+  readAuthoritativeGlobalIndexRow,
   reconcilePartitionDatasetKeyType,
   submitControlPlaneMutation,
+  verifyGlobalIndexCatalogOwnership,
 };

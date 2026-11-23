@@ -285,6 +285,7 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
     ) {
       await this.tableCreationService.shutdown();
     }
+    await this.indexService?.shutdown?.();
     if (
       this.runtimeReplicaStateProjectionOwner &&
       typeof this.runtimeReplicaStateProjectionOwner.shutdown ===

@@ -20,11 +20,14 @@ import {
 import {
   SCHEMA_PROVISIONING_ERROR_CODE,
 } from '../query/schema-provisioning-job-constants.js';
+import {GLOBAL_INDEX_STATE} from './global-index-catalog-contract.js';
 import {
   buildIndexDatasetSchema,
+  doesDatasetSchemaMatch,
   generateCreateIndexDatasetSql,
   generateDropIndexDatasetSql,
   getGlobalIndexDatasetName,
+  parseDatasetTableDdlSchema,
 } from './global-index-dataset-manager.js';
 import {
   awaitGatewayProjection,
@@ -33,6 +36,7 @@ import {
   mergeColumnTypesWithBaseTable,
   reconcilePartitionDatasetKeyType,
   submitControlPlaneMutation,
+  verifyGlobalIndexCatalogOwnership,
 } from './global-index-dataset-reconciliation.js';
 import {
   createParticipantUnavailableError,
@@ -42,6 +46,18 @@ import {
 import {GLOBAL_INDEX_STATEMENT_LABEL} from './index-constants.js';
 
 const LOCAL_STR_TEXT = 'TEXT';
+const SQLITE_OBJECT_TYPE_TABLE = 'table';
+const SQL_SELECT_SQLITE_TABLE_DDL =
+  'SELECT sql FROM sqlite_master WHERE type = ? AND name = ?';
+const GENERATION_ID_SUFFIX_RE = /-gen(\d+)$/u;
+const GLOBAL_INDEX_STATE_ORDER = Object.freeze({
+  [GLOBAL_INDEX_STATE.CREATING]: 0,
+  [GLOBAL_INDEX_STATE.WRITE_ONLY]: 1,
+  [GLOBAL_INDEX_STATE.BACKFILLING]: 2,
+  [GLOBAL_INDEX_STATE.READ_WRITE]: 3,
+  [GLOBAL_INDEX_STATE.DROPPING]: 4,
+  [GLOBAL_INDEX_STATE.FAILED]: 4,
+});
 
 function resolveProvisionerCallback(indexService) {
   if (indexService?.partitionProvisioner) {
@@ -250,44 +266,107 @@ function buildDatasetAstForWorkflow(datasetName, datasetSchema, extraOptions = {
   };
 }
 
-async function reconcileDistributedIndexDatasetSchema(
-  indexService,
-  {tableName, indexName, columnNames, basePrimaryKeyColumns, columnTypes, partitionId, partition},
-) {
+async function verifyAndSyncDatasetOwnership(indexService, coordinator, identity, onSyncRow) {
+  const ownership = await verifyGlobalIndexCatalogOwnership(indexService, coordinator, identity);
+  if (ownership.row && coordinator) {
+    const existing = coordinator.catalog.get(identity.indexName);
+    if (isIncomingCatalogRowNewer(existing, ownership.row)) {
+      onSyncRow?.(ownership.row);
+    }
+  }
+  return ownership;
+}
+
+function buildPreparedReconciliationContext(indexService, params) {
+  const {tableName, indexName, columnNames, basePrimaryKeyColumns, columnTypes} = params;
   const datasetName = getGlobalIndexDatasetName(tableName, indexName);
   const baseTable = indexService?.sqlQueryEngine?.getTableInfo?.(tableName) || null;
   const resolvedTypes = mergeColumnTypesWithBaseTable(baseTable, columnTypes);
   const datasetSchema = buildIndexDatasetSchema({
-    tableName,
-    indexName,
-    columnNames,
-    basePrimaryKeyColumns,
-    columnTypes: resolvedTypes,
+    tableName, indexName, columnNames, basePrimaryKeyColumns, columnTypes: resolvedTypes,
   });
+  return {
+    datasetName,
+    datasetSchema,
+    expectedKeyType: resolvedTypes?.[columnNames[0]] || LOCAL_STR_TEXT,
+  };
+}
+
+async function createDistributedIndexTable(indexService, partitionId, datasetName, datasetSchema) {
+  await executePartitionWriteSql(
+    indexService, partitionId, generateCreateIndexDatasetSql(datasetSchema), [], datasetName,
+  );
+}
+
+async function replaceDistributedIndexTable(
+  indexService, partitionId, {tableName, indexName, datasetName, datasetSchema},
+) {
+  await executePartitionWriteSql(
+    indexService, partitionId, generateDropIndexDatasetSql(tableName, indexName), [], datasetName,
+  );
+  await createDistributedIndexTable(indexService, partitionId, datasetName, datasetSchema);
+}
+
+async function reconcileRemoteSqliteDataset(
+  indexService, coordinator, params, datasetName, datasetSchema, onSyncRow,
+) {
+  const {tableName, indexName, indexId = null, generation = null, isRedrive = false, partitionId} =
+    params;
+  const schemaRows = await executePartitionReadSql(
+    indexService, partitionId, SQL_SELECT_SQLITE_TABLE_DDL,
+    [SQLITE_OBJECT_TYPE_TABLE, datasetName], {tableName: datasetName},
+  );
+  const rechecked = await verifyAndSyncDatasetOwnership(
+    indexService, coordinator, {indexName, indexId, generation}, onSyncRow,
+  );
+  if (!rechecked.owned) {
+    return {reconciled: false, skipped: true, reason: rechecked.reason};
+  }
+  if (!Array.isArray(schemaRows) || schemaRows.length === 0) {
+    await createDistributedIndexTable(indexService, partitionId, datasetName, datasetSchema);
+    return {reconciled: true, dropped: false};
+  }
+  const actualSchema = parseDatasetTableDdlSchema(schemaRows[0]?.sql);
+  const schemaMatches = doesDatasetSchemaMatch(actualSchema, datasetSchema);
+  const isOwnedGenReplacement = isRedrive !== true && Number(generation || 1) > 1;
+  if (schemaMatches && !isOwnedGenReplacement) {
+    return {reconciled: true, dropped: false};
+  }
+  await replaceDistributedIndexTable(
+    indexService, partitionId, {tableName, indexName, datasetName, datasetSchema},
+  );
+  return {reconciled: true, dropped: true};
+}
+
+async function reconcileDistributedIndexDatasetSchema(
+  indexService, params, getCoordinator = null, onSyncRow = null,
+) {
+  const {
+    tableName, indexName, columnNames, basePrimaryKeyColumns,
+    indexId = null, generation = null, partitionId, partition,
+  } = params;
+  const coordinator = getCoordinator ? getCoordinator() : resolveCoordinatorForSync(indexService);
+  const initialOwnership = await verifyAndSyncDatasetOwnership(
+    indexService, coordinator, {indexName, indexId, generation}, onSyncRow,
+  );
+  if (!initialOwnership.owned) {
+    return {reconciled: false, skipped: true, reason: initialOwnership.reason};
+  }
+  const {datasetName, datasetSchema, expectedKeyType} = buildPreparedReconciliationContext(
+    indexService, params,
+  );
   await ensureIndexDatasetTableInGateway(indexService, {
     table_name: tableName,
     index_name: indexName,
     column_names: JSON.stringify(columnNames),
     basePrimaryKeyColumns,
   });
-  const expectedKeyType = resolvedTypes?.[columnNames[0]] || LOCAL_STR_TEXT;
   await reconcilePartitionDatasetKeyType(indexService, partition, expectedKeyType);
   if (!hasDistributedPartitionRoute(indexService, partitionId)) {
-    return;
+    return {reconciled: true, dropped: false};
   }
-  await executePartitionWriteSql(
-    indexService,
-    partitionId,
-    generateDropIndexDatasetSql(tableName, indexName),
-    [],
-    datasetName,
-  );
-  await executePartitionWriteSql(
-    indexService,
-    partitionId,
-    generateCreateIndexDatasetSql(datasetSchema),
-    [],
-    datasetName,
+  return reconcileRemoteSqliteDataset(
+    indexService, coordinator, params, datasetName, datasetSchema, onSyncRow,
   );
 }
 
@@ -379,13 +458,14 @@ function buildProvisioningIntentMetadata(context, built) {
       replicaCount: built.replicaCount,
     },
   ];
+  const generation = Number.isSafeInteger(raw.options?.generation) ? raw.options.generation : 1;
   const globalIndex = {
     tableName: raw.tableName,
     indexName: raw.indexName,
-    indexId: raw.options?.indexId || null,
+    indexId: raw.options?.indexId || `${raw.indexName}-gen${generation}`,
     columnNames: [...(raw.columnNames || [])],
     basePrimaryKeyColumns: [...(raw.basePrimaryKeyColumns || [])],
-    generation: Number.isSafeInteger(raw.options?.generation) ? raw.options.generation : 1,
+    generation,
   };
   return {
     tableId: built.datasetName,
@@ -595,11 +675,28 @@ function isRowGlobal(row) {
   return Boolean(row && (row.is_global === 1 || row.is_global === true || row.isGlobal === true));
 }
 
-function isCatalogRecordStaleOrDifferent(existing, incoming) {
+function parseIndexGenerationNumber(row) {
+  if (Number.isSafeInteger(row?.index_generation)) return row.index_generation;
+  const match = typeof row?.index_id === 'string' ?
+    row.index_id.match(GENERATION_ID_SUFFIX_RE) :
+    null;
+  return match ? Number(match[1]) : 1;
+}
+
+function isIncomingCatalogRowNewer(existing, incoming) {
+  if (!incoming) return false;
   if (!existing) return true;
-  if (existing.index_id !== incoming.index_id) return true;
-  if (existing.state !== incoming.state) return true;
-  return Boolean(incoming.updated_at && existing.updated_at !== incoming.updated_at);
+  if (existing.index_id !== incoming.index_id) {
+    return parseIndexGenerationNumber(incoming) >= parseIndexGenerationNumber(existing);
+  }
+  const existingOrder = GLOBAL_INDEX_STATE_ORDER[existing.state] ?? -1;
+  const incomingOrder = GLOBAL_INDEX_STATE_ORDER[incoming.state] ?? -1;
+  if (incomingOrder > existingOrder) return true;
+  if (incomingOrder < existingOrder) return false;
+  if ((incoming.backfill_total_rows || 0) > (existing.backfill_total_rows || 0)) {
+    return true;
+  }
+  return Boolean(incoming.updated_at && incoming.updated_at !== existing.updated_at);
 }
 
 function resolveCoordinatorForSync(indexService) {
@@ -611,21 +708,41 @@ function resolveCoordinatorForSync(indexService) {
     null;
 }
 
-function syncGlobalIndexesFromSystemCache(indexService, hydrateFn, syncEntryFn) {
-  const rows = indexService?.systemTableCache?.getAll?.(TABLES.INDICES);
-  if (!Array.isArray(rows) || rows.length === 0) {
+function collectSyncSourceRows(indexService, options = {}) {
+  const cacheRows = indexService?.systemTableCache?.getAll?.(TABLES.INDICES) || [];
+  if (options.includeGatewaySnapshot !== true) {
+    return cacheRows;
+  }
+  const gatewayRows = indexService?.globalIndexWiringState?.indexRows || [];
+  return [...cacheRows, ...gatewayRows];
+}
+
+function syncCatalogRowIfNewer(indexService, coordinator, row, hydrateFn, syncEntryFn) {
+  if (!isRowGlobal(row) || !row.index_name) {
+    return;
+  }
+  const existing = coordinator.catalog.get(row.index_name);
+  if (isIncomingCatalogRowNewer(existing, row)) {
+    hydrateFn(indexService, coordinator, row);
+    syncEntryFn(indexService, coordinator.catalog.get(row.index_name));
+  }
+}
+
+function syncGlobalIndexesFromSystemCache(
+  indexService,
+  hydrateFn,
+  syncEntryFn,
+  options = {},
+) {
+  const rows = collectSyncSourceRows(indexService, options);
+  if (rows.length === 0) {
     return;
   }
   const coordinator = resolveCoordinatorForSync(indexService);
   if (!coordinator) return;
 
   for (const row of rows) {
-    if (!isRowGlobal(row) || !row.index_name) continue;
-    const existing = coordinator.catalog.get(row.index_name);
-    if (isCatalogRecordStaleOrDifferent(existing, row)) {
-      hydrateFn(indexService, coordinator, row);
-      syncEntryFn(indexService, coordinator.catalog.get(row.index_name));
-    }
+    syncCatalogRowIfNewer(indexService, coordinator, row, hydrateFn, syncEntryFn);
   }
 }
 

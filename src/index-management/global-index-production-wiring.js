@@ -20,6 +20,8 @@ import {
 import {
   ensureIndexDatasetTableInGateway,
   hasHostedPartitionReplica,
+  readAuthoritativeGlobalIndexRow,
+  verifyGlobalIndexCatalogOwnership,
 } from './global-index-dataset-reconciliation.js';
 import {
   executePartitionReadSql,
@@ -294,22 +296,19 @@ async function persistCatalogDelete(indexService, record) {
   );
 }
 
-function hydrateGlobalIndexFromRow(indexService, coordinator, row) {
-  const normalized = normalizeGlobalIndexRecord(row);
-  if (!normalized || !normalized.indexName) return null;
+function resolveHydratedBasePrimaryKeyColumns(coordinator, indexName, schemaInfo) {
+  if (schemaInfo.basePrimaryKeyColumns.length > 0) {
+    return schemaInfo.basePrimaryKeyColumns;
+  }
+  return coordinator?.catalog?.get(indexName)?.basePrimaryKeyColumns;
+}
 
-  const runtimeState = ensureRuntimeState(indexService);
-  const schemaInfo = resolveTableSchemaMetadata(
-    indexService,
-    coordinator,
-    runtimeState,
-    normalized.tableName || normalized.tableId,
-  );
-  const generation = parseGenerationFromIndexId(normalized.indexId);
-  const catalogRecord = {
+function buildHydratedCatalogRecord(normalized, generation, basePrimaryKeyColumns) {
+  const tableName = normalized.tableName || normalized.tableId;
+  return {
     index_id: normalized.indexId,
     table_id: normalized.tableId,
-    table_name: normalized.tableName || normalized.tableId,
+    table_name: tableName,
     index_name: normalized.indexName,
     column_names: JSON.stringify(normalized.columnNames),
     index_type: normalized.indexType,
@@ -323,20 +322,41 @@ function hydrateGlobalIndexFromRow(indexService, coordinator, row) {
     created_at: normalized.createdAt,
     updated_at: normalized.updatedAt,
     index_generation: generation,
-    basePrimaryKeyColumns: schemaInfo.basePrimaryKeyColumns.length > 0 ?
-      schemaInfo.basePrimaryKeyColumns :
-      undefined,
+    basePrimaryKeyColumns,
   };
+}
 
-  coordinator.catalog.set(normalized.indexName, catalogRecord);
-  const prevGen = coordinator.generations.get(normalized.indexName) || 0;
+function applyHydratedCatalogRecord(coordinator, indexName, catalogRecord, generation) {
+  coordinator.catalog.set(indexName, catalogRecord);
+  const prevGen = coordinator.generations.get(indexName) || 0;
   if (generation > prevGen) {
-    coordinator.generations.set(normalized.indexName, generation);
+    coordinator.generations.set(indexName, generation);
   }
+}
+
+function hydrateGlobalIndexFromRow(indexService, coordinator, row) {
+  const normalized = normalizeGlobalIndexRecord(row);
+  if (!normalized?.indexName) return null;
+
+  const runtimeState = ensureRuntimeState(indexService);
+  const schemaInfo = resolveTableSchemaMetadata(
+    indexService,
+    coordinator,
+    runtimeState,
+    normalized.tableName || normalized.tableId,
+  );
+  const generation = parseGenerationFromIndexId(normalized.indexId);
+  const basePrimaryKeyColumns = resolveHydratedBasePrimaryKeyColumns(
+    coordinator,
+    normalized.indexName,
+    schemaInfo,
+  );
+  const catalogRecord = buildHydratedCatalogRecord(normalized, generation, basePrimaryKeyColumns);
+  applyHydratedCatalogRecord(coordinator, normalized.indexName, catalogRecord, generation);
   return {
     indexId: normalized.indexId,
     tableId: normalized.tableId,
-    tableName: normalized.tableName || normalized.tableId,
+    tableName: catalogRecord.table_name,
     indexName: normalized.indexName,
     columnNames: normalized.columnNames,
     indexType: normalized.indexType,
@@ -539,16 +559,27 @@ function createReadRouterCallbacks(indexService, getBaseTablePartitions) {
   };
 }
 
-function syncGlobalIndexesForService(indexService) {
+function syncGlobalIndexesForService(indexService, options = {}) {
   syncGlobalIndexesFromSystemCache(
     indexService,
     hydrateGlobalIndexFromRow,
     syncServiceIndexEntryFromRecord,
+    options,
   );
+}
+
+function pruneIndexRowFromWiringState(indexService, indexName) {
+  const indexRows = indexService?.globalIndexWiringState?.indexRows;
+  if (Array.isArray(indexRows) && indexName) {
+    indexService.globalIndexWiringState.indexRows = indexRows.filter(
+      (row) => row?.index_name !== indexName,
+    );
+  }
 }
 
 async function removeIndexCatalogMetadata(indexService, record) {
   await persistCatalogDelete(indexService, record);
+  pruneIndexRowFromWiringState(indexService, record?.index_name);
   indexService._removeIndexFromCache(
     record.index_name,
     record.table_id || record.table_name,
@@ -567,11 +598,23 @@ async function dropIndexDatasetPartition(indexService, {tableName, indexName, pa
   );
 }
 
-function buildCatalogPersistenceHooks(indexService) {
+function buildCatalogPersistenceHooks(indexService, getCoordinator = null) {
+  const resolveCoordinator = () =>
+    (getCoordinator ? getCoordinator() : indexService.globalIndexCoordinator);
+  const syncRow = (row) => {
+    if (!row) return;
+    const coordinator = resolveCoordinator();
+    if (!coordinator) return;
+    hydrateGlobalIndexFromRow(indexService, coordinator, row);
+    const updatedRecord = coordinator.catalog.get(row.index_name);
+    if (updatedRecord) {
+      syncServiceIndexEntryFromRecord(indexService, updatedRecord);
+    }
+  };
   return {
     refreshCatalogPartitions: async () => {
       await preloadProductionPartitionMetadata(indexService);
-      syncGlobalIndexesForService(indexService);
+      syncGlobalIndexesForService(indexService, {includeGatewaySnapshot: true});
     },
     onCatalogInsert: async (record) => {
       await ensureIndexDatasetTableInGateway(indexService, record);
@@ -585,7 +628,22 @@ function buildCatalogPersistenceHooks(indexService) {
     onCatalogDelete: (record) => removeIndexCatalogMetadata(indexService, record),
     onDropIndexDataset: (params) => dropIndexDatasetPartition(indexService, params),
     onReconcileIndexDataset: (params) =>
-      reconcileDistributedIndexDatasetSchema(indexService, params),
+      reconcileDistributedIndexDatasetSchema(indexService, params, getCoordinator, syncRow),
+    verifyCatalogOwnership: (params) =>
+      verifyGlobalIndexCatalogOwnership(indexService, resolveCoordinator(), params),
+    refreshCatalogRecord: async (indexName) => {
+      const {available, row} = await readAuthoritativeGlobalIndexRow(indexService, indexName);
+      if (available && row) {
+        syncRow(row);
+      } else if (available && !row) {
+        const coordinator = resolveCoordinator();
+        const cachedMeta = indexService.indices?.get(indexName);
+        coordinator?.catalog?.delete(indexName);
+        pruneIndexRowFromWiringState(indexService, indexName);
+        indexService._removeIndexFromCache(indexName, cachedMeta?.tableId);
+      }
+      return {available, row};
+    },
   };
 }
 
@@ -640,7 +698,7 @@ function buildProductionCoordinatorOptions(indexService) {
       hasHostedPartitionReplica(indexService, partitionId),
     provisionIndexPartitions: (context) =>
       provisionIndexPartitionsWithRuntime(indexService, getCoordinator, runtimeState, context),
-    ...buildCatalogPersistenceHooks(indexService),
+    ...buildCatalogPersistenceHooks(indexService, getCoordinator),
     ...createBackfillCallbacks(indexService, resolveTableSchema),
     ...createReadRouterCallbacks(indexService, getBaseTablePartitions),
   };
@@ -669,6 +727,7 @@ export {
   buildProductionCoordinatorOptions,
   hydrateGlobalIndexFromRow,
   preloadProductionPartitionMetadata,
+  pruneIndexRowFromWiringState,
   sortRowsByOrderBy,
   syncGlobalIndexesForService,
 };

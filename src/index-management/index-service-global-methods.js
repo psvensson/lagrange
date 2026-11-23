@@ -17,10 +17,17 @@ import {
   GlobalIndexLifecycleCoordinator,
   parseGlobalIndexDdl,
 } from './global-index-lifecycle-coordinator.js';
+import {OwnerKeyReconcileQueue} from '../workflow/owner-key-reconcile-queue.js';
+import {isTransientGlobalIndexError} from './global-index-catalog-contract.js';
 import {buildProductionCoordinatorOptions} from './global-index-production-wiring.js';
 
 const DEFAULT_INDEX_TYPE = INDEX_TYPE.BTREE;
 const DEFAULT_READABLE_STATE = INDEX_READABLE_STATE.READY;
+const GSI_RECOVERY_QUEUE_NAME = 'gsi-completion-recovery';
+const GSI_RECOVERY_REASON = 'gsi_schema_succeeded_recovery';
+const MAX_GSI_RECOVERY_ATTEMPTS = 20;
+const DEFAULT_GSI_RECOVERY_RETRY_DELAY_MS = 40;
+const MIN_GSI_RECOVERY_RETRY_DELAY_MS = 15;
 
 function isGlobalIndexRequest(input, options = {}) {
   if (input?.isGlobal === true || input?.global === true) {
@@ -143,6 +150,90 @@ function throwIndexNotFound(indexName, tableId) {
     (tableId ? `${INDEX_ERROR_MSG.INDEX_NOT_FOUND_MIDDLE}${tableId}` : '') +
     INDEX_ERROR_MSG.INDEX_NOT_FOUND_SUFFIX,
   );
+}
+
+const INCOMPLETE_GSI_STATES = new Set([
+  GLOBAL_INDEX_STATE.CREATING,
+  GLOBAL_INDEX_STATE.WRITE_ONLY,
+  GLOBAL_INDEX_STATE.BACKFILLING,
+]);
+
+function collectIncompleteFromEntryPairs(entries, names, requireGlobal) {
+  if (!entries) return;
+  for (const [indexName, item] of entries) {
+    const matchesGlobal = !requireGlobal || Boolean(item?.isGlobal || item?.global);
+    if (matchesGlobal && INCOMPLETE_GSI_STATES.has(item?.state)) {
+      names.add(indexName);
+    }
+  }
+}
+
+function collectIncompleteGlobalIndexNames(indexService) {
+  const names = new Set();
+  collectIncompleteFromEntryPairs(
+    indexService.globalIndexCoordinator?.catalog?.entries(),
+    names,
+    false,
+  );
+  collectIncompleteFromEntryPairs(indexService.indices?.entries(), names, true);
+  return names;
+}
+
+function resolveGsiRecoveryRetryDelayMs(indexService) {
+  const configured = indexService.sqlQueryEngine?.tableCreationService?.
+    schemaProvisioningJobOwner?.retryAfterMs;
+  if (Number.isFinite(configured) && configured > 0) {
+    return Math.max(
+      MIN_GSI_RECOVERY_RETRY_DELAY_MS,
+      Math.min(configured, DEFAULT_GSI_RECOVERY_RETRY_DELAY_MS),
+    );
+  }
+  return DEFAULT_GSI_RECOVERY_RETRY_DELAY_MS;
+}
+
+async function runRecoveredGsiProvisioningOnce(indexService, intent) {
+  const globalIndex = intent?.globalIndex;
+  if (!indexService.initialized && indexService.initialize) {
+    await indexService.initialize({skipSchemaJobRecovery: true});
+  }
+  const coordinator = indexService.getGlobalIndexCoordinator();
+  const outcome = await coordinator.completeRecoveredProvisioning({
+    ...globalIndex,
+    tableId: intent.tableId,
+    partitionId: intent.partitionId,
+  });
+  if (!outcome?.fenced && !outcome?.deferred) {
+    indexService.sqlQueryEngine?.resetPreparedStatements?.();
+  }
+  return outcome;
+}
+
+function ensureGsiRecoveryQueue(indexService) {
+  if (!indexService._gsiRecoveryQueue || indexService._gsiRecoveryQueue.stopped) {
+    indexService._gsiRecoveryQueue = new OwnerKeyReconcileQueue({
+      name: GSI_RECOVERY_QUEUE_NAME,
+      reconcileFn: (_ownerKey, _reasons, intent) =>
+        runRecoveredGsiProvisioningOnce(indexService, intent),
+      retryPolicy: {
+        isRetryableError: isTransientGlobalIndexError,
+        getRetryAfterMs: () => resolveGsiRecoveryRetryDelayMs(indexService),
+        maxAttempts: MAX_GSI_RECOVERY_ATTEMPTS,
+      },
+    });
+  }
+  return indexService._gsiRecoveryQueue;
+}
+
+function isMatchingRecoverableGsiIntent(coordinator, incompleteNames, intent) {
+  const gsi = intent?.globalIndex;
+  if (!gsi?.indexName || !incompleteNames.has(gsi.indexName)) {
+    return false;
+  }
+  const record = coordinator.catalog.get(gsi.indexName);
+  if (!record || !INCOMPLETE_GSI_STATES.has(record.state)) {
+    return false;
+  }
+  return !gsi.indexId || record.index_id === gsi.indexId;
 }
 
 const indexServiceGlobalMethods = {
@@ -300,26 +391,84 @@ const indexServiceGlobalMethods = {
   },
 
   /**
+   * Initialize index service caches and recover incomplete SUCCEEDED GSIs.
+   * @param {Object} [options={}] - Init options.
+   * @return {Promise<void>}
+   */
+  async _initializeIndexService(options = {}) {
+    this.shuttingDown = false;
+    if (!this.initialized) {
+      const initPromise = this._initializePromise || (this._initializePromise = (async () => {
+        this.logger.info(INDEX_LOG_MSG.SERVICE_INITIALIZING);
+        this._attachSystemTableCacheListener();
+        await this.loadIndicesFromCache();
+        this.syncGlobalIndexesFromCache();
+        this.initialized = true;
+        this.logger.info(INDEX_LOG_MSG.SERVICE_INITIALIZED, {
+          indexCount: this.getTotalIndexCount(),
+        });
+      })());
+      try {
+        await initPromise;
+      } finally {
+        if (this._initializePromise === initPromise) {
+          this._initializePromise = null;
+        }
+      }
+    }
+    if (this.initialized && options?.skipSchemaJobRecovery !== true) {
+      await this.recoverIncompleteGlobalIndexesFromSchemaJobs?.();
+    }
+  },
+
+  _shutdownGsiRecoveryQueue() {
+    this._gsiRecoveryQueue?.shutdown();
+    this._gsiRecoveryQueue = null;
+  },
+
+  /**
    * Complete recovered or retried GSI creation after durable schema job SUCCEEDED.
    * @param {Object} intent - Schema provisioning intent carrying globalIndex metadata.
    * @return {Promise<Object|null>}
    */
   async completeRecoveredGlobalIndexProvisioning(intent) {
     const globalIndex = intent?.globalIndex;
-    if (!globalIndex?.indexName) {
+    if (!globalIndex?.indexName || this.shuttingDown) {
       return null;
     }
+    const queue = ensureGsiRecoveryQueue(this);
+    const recoveryKey = globalIndex.indexId || globalIndex.indexName;
+    return queue.enqueueAndWait(recoveryKey, GSI_RECOVERY_REASON, intent);
+  },
+
+  /**
+   * Resume incomplete GSIs whose durable schema_operations job already SUCCEEDED.
+   * @param {Object} [options={}]
+   * @return {Promise<Array>}
+   */
+  async recoverIncompleteGlobalIndexesFromSchemaJobs(options = {}) {
+    const jobOwner =
+      this.sqlQueryEngine?.tableCreationService?.schemaProvisioningJobOwner;
+    if (!jobOwner?.listSucceededGlobalIndexIntents) {
+      return [];
+    }
     if (!this.initialized && this.initialize) {
-      await this.initialize();
+      await this.initialize({skipSchemaJobRecovery: true});
+    }
+    const incompleteNames = collectIncompleteGlobalIndexNames(this);
+    if (incompleteNames.size === 0) {
+      return [];
     }
     const coordinator = this.getGlobalIndexCoordinator();
-    const outcome = await coordinator.completeRecoveredProvisioning({
-      ...globalIndex,
-      tableId: intent.tableId,
-      partitionId: intent.partitionId,
-    });
-    this.sqlQueryEngine?.resetPreparedStatements?.();
-    return outcome;
+    const intents = Array.isArray(options?.intents) ?
+      options.intents :
+      await jobOwner.listSucceededGlobalIndexIntents();
+    const matchingIntents = intents.filter(
+      (intent) => isMatchingRecoverableGsiIntent(coordinator, incompleteNames, intent),
+    );
+    return Promise.all(
+      matchingIntents.map((intent) => this.completeRecoveredGlobalIndexProvisioning(intent)),
+    );
   },
 
   /**

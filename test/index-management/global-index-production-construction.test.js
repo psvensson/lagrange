@@ -49,6 +49,7 @@ import {
 } from '../../src/transport/transport-semantic-outcome.js';
 import {ledgerRows} from '../partition/placement-admission-fixture.js';
 import {
+  createRestartCacheAndGatewayFromGateway,
   createSeededSchemaAwareGateway,
   seedRealSystemTableCache,
   withFoundingPlacementEnvironment,
@@ -1333,5 +1334,157 @@ test('Production construction 9 (3D): temporary FORMATION_NOT_LATCHED preserves 
       [{id: 10, email: 'alice@example.com', name: 'Alice'}],
       'Query after background retry recovery serves authoritative row via GSI',
     );
+  });
+});
+
+test('Production construction 10 (4B): crash immediately after schema job SUCCEEDED recovers GSI backfill and READ_WRITE while idle', async (t) => {
+  await withFoundingPlacementEnvironment(async ({
+    engine,
+    coordinator,
+    cache,
+    gateway,
+    readiness,
+    partitionServices,
+    createdReplicas,
+  }) => {
+    await engine.executeQuery(
+      'INSERT INTO users (id, email, name, status) VALUES (?, ?, ?, ?)',
+      [10, 'alice@example.com', 'Alice', 'active'],
+    );
+    await engine.executeQuery(
+      'INSERT INTO users (id, email, name, status) VALUES (?, ?, ?, ?)',
+      [20, 'bob@example.com', 'Bob', 'pending'],
+    );
+
+    const {cdcIntegrationService, messageRouter} = engine;
+    await engine.shutdown();
+
+    const engine1Gateway = createProcessAbortableProxy(gateway);
+    const engine1Cdc = createProcessAbortableProxy(cdcIntegrationService);
+    const baseSubmit = engine1Gateway.submitMutation.bind(engine1Gateway);
+    let signalCrashAfterSucceeded;
+    const crashedAfterSucceeded = new Promise((resolve) => {
+      signalCrashAfterSucceeded = resolve;
+    });
+    let crashInjected = false;
+    const guardedGateway1 = new Proxy(engine1Gateway, {
+      get(obj, prop, receiver) {
+        if (prop === 'submitMutation') {
+          return async (mutation, opts) => {
+            const res = await baseSubmit(mutation, opts);
+            if (!crashInjected &&
+                mutation?.tableName === TABLES.SCHEMA_OPERATIONS &&
+                mutation?.data?.status === 'SUCCEEDED') {
+              crashInjected = true;
+              engine1Gateway.markDead();
+              engine1Cdc.markDead();
+              signalCrashAfterSucceeded();
+              throw Object.assign(
+                new Error('Simulated crash immediately after SUCCEEDED commit'),
+                {code: 'SCHEMA_JOB_STALE_OWNER'},
+              );
+            }
+            return res;
+          };
+        }
+        return Reflect.get(obj, prop, receiver);
+      },
+    });
+
+    const engine1 = new SQLQueryEngine({
+      nodeId: 'test-node',
+      systemCache: cache,
+      controlPlaneReadinessService: readiness,
+      controlPlaneSystemTableGateway: guardedGateway1,
+      cdcIntegrationService: engine1Cdc,
+      messageRouter,
+      partitionServicesProvider: () => partitionServices,
+      rebalanceCoordinator: coordinator,
+      autoStartDistributedTransactionRecovery: false,
+      migrationAutoWire: false,
+    });
+    engine1.setRebalanceCoordinator(coordinator);
+    engine1.tableCreationService.schemaProvisioningJobOwner.ownerId = 'crashed-after-succeeded';
+    engine1.tableCreationService.schemaProvisioningJobOwner.retryAfterMs = 30;
+
+    coordinator.controlPlaneReadinessService.answerCommittedNodes = () => ({
+      formation: {state: 'UNAVAILABLE', latchEpoch: null},
+    });
+    const deferredRes = await engine1.executeQuery(
+      'CREATE GLOBAL INDEX idx_users_email ON users (email)',
+    );
+    t.equal(deferredRes.deferred, true, 'Initial CREATE defers while formation unavailable');
+    const initialJobId = deferredRes.jobId;
+    const initialIndexId = deferredRes.indexId;
+
+    coordinator.controlPlaneReadinessService.answerCommittedNodes = () => ({
+      formation: {state: 'FORMED', latchEpoch: 5},
+    });
+    await crashedAfterSucceeded;
+    await engine1.shutdown().catch(() => {});
+
+    const crashedJob = gateway.db.prepare(
+      'SELECT * FROM schema_operations WHERE job_id = ?',
+    ).get(initialJobId);
+    const crashedIndex = gateway.db.prepare(
+      'SELECT * FROM indices WHERE index_name = ?',
+    ).get('idx_users_email');
+    t.equal(crashedJob?.status, 'SUCCEEDED', 'Schema job committed SUCCEEDED before crash');
+    t.equal(
+      crashedIndex?.state,
+      GLOBAL_INDEX_STATE.CREATING,
+      'GSI catalog remains CREATING when crash happened right after SUCCEEDED',
+    );
+    t.equal(createdReplicas.length, 1, 'GSI replica was founded before crash');
+
+    const restart = createRestartCacheAndGatewayFromGateway(gateway, partitionServices);
+    const engine2 = new SQLQueryEngine({
+      nodeId: 'test-node',
+      systemCache: restart.cache,
+      controlPlaneReadinessService: readiness,
+      controlPlaneSystemTableGateway: restart.gateway,
+      cdcIntegrationService: restart.cdcService,
+      messageRouter,
+      partitionServicesProvider: () => partitionServices,
+      rebalanceCoordinator: coordinator,
+      autoStartDistributedTransactionRecovery: true,
+      migrationAutoWire: false,
+    });
+    engine2.setRebalanceCoordinator(coordinator);
+    try {
+      const recovered = await waitForCondition(() => {
+        const row = gateway.db.prepare(
+          'SELECT * FROM indices WHERE index_name = ?',
+        ).get('idx_users_email');
+        return row?.state === GLOBAL_INDEX_STATE.READ_WRITE;
+      }, 3000, 15);
+      t.equal(
+        recovered,
+        true,
+        'Ordinary engine restart recovers SUCCEEDED GSI job to READ_WRITE while idle',
+      );
+
+      const finalIdx = gateway.db.prepare(
+        'SELECT * FROM indices WHERE index_name = ?',
+      ).get('idx_users_email');
+      t.equal(finalIdx?.index_id, initialIndexId, 'Recovered same generation index_id');
+      t.equal(finalIdx?.backfill_total_rows, 2, 'Recovered same generation backfilled both rows');
+
+      const selectRes = await engine2.executeQuery(
+        'SELECT * FROM users WHERE email = ? ORDER BY id ASC',
+        ['alice@example.com'],
+      );
+      t.equal(selectRes.success, true);
+      t.equal(
+        selectRes.globalIndexPlan?.accessPath,
+        GLOBAL_INDEX_ACCESS_PATH.GLOBAL_SECONDARY_INDEX,
+      );
+      t.same(
+        selectRes.rows.map((r) => ({id: r.id, email: r.email, name: r.name})),
+        [{id: 10, email: 'alice@example.com', name: 'Alice'}],
+      );
+    } finally {
+      await engine2.shutdown().catch(() => {});
+    }
   });
 });

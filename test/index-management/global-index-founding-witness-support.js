@@ -94,13 +94,7 @@ function executeSystemDbMutation(db, mutation) {
   return {success: true, affectedRows: info.changes, visibilityState: 'visible'};
 }
 
-function createSchemaAwareSystemGateway(catalogDbPath, cache) {
-  const db = new Database(catalogDbPath);
-  for (const tableName of SYSTEM_TABLE_NAMES) {
-    db.exec(generateCreateTableSQL(getSchemaByTableName(tableName)));
-  }
-  const txGateway = createTransactionPersistenceGateway();
-
+function createGatewayHandleForDbAndCache(db, cache, txGateway, {ownsDb = true} = {}) {
   const applyCacheChange = (tableName, operation, rowOrWhere, data) => {
     if (!cache?.applySystemTableChange) return;
     if (operation === 'delete') {
@@ -171,8 +165,10 @@ function createSchemaAwareSystemGateway(catalogDbPath, cache) {
       return res;
     },
     close() {
-      txGateway.db.close();
-      db.close();
+      if (ownsDb) {
+        txGateway.db.close();
+        db.close();
+      }
     },
   };
 
@@ -185,6 +181,70 @@ function createSchemaAwareSystemGateway(catalogDbPath, cache) {
   };
 
   return {gateway, cdcService};
+}
+
+function createSchemaAwareSystemGateway(catalogDbPath, cache) {
+  const db = new Database(catalogDbPath);
+  for (const tableName of SYSTEM_TABLE_NAMES) {
+    db.exec(generateCreateTableSQL(getSchemaByTableName(tableName)));
+  }
+  const txGateway = createTransactionPersistenceGateway();
+  const handle = createGatewayHandleForDbAndCache(db, cache, txGateway, {ownsDb: true});
+  return {
+    ...handle,
+    txGateway,
+  };
+}
+
+function normalizeRestartCacheRow(tableName, row) {
+  if (tableName !== TABLES.PARTITIONS || row?.partition_key_type !== 'INTEGER') {
+    return row;
+  }
+  return {
+    ...row,
+    partition_key_start: row.partition_key_start === null || row.partition_key_start === undefined ?
+      null :
+      Number(row.partition_key_start),
+    partition_key_end: row.partition_key_end === null || row.partition_key_end === undefined ?
+      null :
+      Number(row.partition_key_end),
+  };
+}
+
+function createRestartCacheAndGatewayFromGateway(existingGateway, partitionServices = null) {
+  const db = existingGateway.db;
+  const freshCache = new SystemTableCache();
+  for (const tableName of SYSTEM_TABLE_NAMES) {
+    const rows = db.prepare(`SELECT * FROM ${tableName}`).all();
+    for (const row of rows) {
+      freshCache.applySystemTableChange(
+        tableName,
+        CDC_OPERATION.INSERT,
+        normalizeRestartCacheRow(tableName, row),
+      );
+    }
+  }
+  if (partitionServices) {
+    for (const ps of partitionServices.values()) {
+      const existingSvc = freshCache.getAll(TABLES.SERVICES).find(
+        (s) => s.partition_id === ps.partitionId,
+      );
+      if (!existingSvc) {
+        freshCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
+          service_id: ps.replicaId || ps.partitionId,
+          service_type: 'partition',
+          partition_id: ps.partitionId,
+          node_id: ps.nodeId || 'test-node',
+          raft_role: 'leader',
+          address: `${ps.nodeId || 'test-node'}/partition/${ps.partitionId}`,
+          status: 'active',
+        });
+      }
+    }
+  }
+  const txGateway = existingGateway.txGateway || existingGateway;
+  const handle = createGatewayHandleForDbAndCache(db, freshCache, txGateway, {ownsDb: false});
+  return {cache: freshCache, ...handle};
 }
 
 function serializeBoundaryValue(val) {
@@ -505,6 +565,7 @@ async function withFoundingPlacementEnvironment(callback) {
 }
 
 export {
+  createRestartCacheAndGatewayFromGateway,
   createSchemaAwareSystemGateway,
   createSeededSchemaAwareGateway,
   createTargetRouter,

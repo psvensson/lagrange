@@ -9,20 +9,17 @@
 
 import {
   GLOBAL_INDEX_STATE,
-  assertSupportedGlobalIndexDefinition,
-  createGlobalIndexRecord,
   findCatalogTarget,
+  isTransientGlobalIndexError,
   normalizeGlobalIndexRecord,
   parseGlobalIndexDdl,
   resolveBackfillOutcome,
-  resolveGlobalCreateSchemaContext,
 } from './global-index-catalog-contract.js';
 import {
   completeRecoveredProvisioning as runCompleteRecoveredProvisioning,
-  driveGlobalIndexProvisioning,
+  createGlobalIndexWithLifecycle,
   provisionIndexDatasetsForCreation,
   provisionSingleIndexDataset,
-  resolveExistingCreateAction,
 } from './global-index-provisioning-lifecycle.js';
 import {GlobalIndexDatasetManager} from './global-index-dataset-manager.js';
 import {GlobalIndexBackfillCoordinator} from './global-index-backfill-coordinator.js';
@@ -167,6 +164,8 @@ function assignCoordinatorOptions(coordinator, options) {
     ['onCatalogDelete', 'onCatalogDelete'],
     ['onDropIndexDataset', 'onDropIndexDataset'],
     ['onReconcileIndexDataset', 'onReconcileIndexDataset'],
+    ['verifyCatalogOwnership', 'verifyCatalogOwnership'],
+    ['refreshCatalogRecord', 'refreshCatalogRecord'],
   ];
   for (const [target, source] of fields) {
     coordinator[target] = options[source] || null;
@@ -186,6 +185,8 @@ export class GlobalIndexLifecycleCoordinator {
     this.basePartitionsByTable = new Map();
     this.indexPartitionsByName = new Map();
     this.partitionDatabases = new Map();
+    this.inFlightCreationsByIndexName = new Map();
+    this.inFlightRecoveriesByIndexId = new Map();
     this.inFlightCompletionsByIndexId = new Map();
     this.logger = options.logger || console;
     assignCoordinatorOptions(this, options);
@@ -339,9 +340,20 @@ export class GlobalIndexLifecycleCoordinator {
   }
 
   async _saveCatalogRecord(record) {
-    this.catalog.set(record.index_name || record.indexName, record);
+    const indexName = record.index_name || record.indexName;
+    const previous = this.catalog.get(indexName);
+    this.catalog.set(indexName, record);
     if (this.onCatalogInsert) {
-      await this.onCatalogInsert(record);
+      try {
+        await this.onCatalogInsert(record);
+      } catch (err) {
+        if (previous !== undefined) {
+          this.catalog.set(indexName, previous);
+        } else {
+          this.catalog.delete(indexName);
+        }
+        throw err;
+      }
     }
   }
 
@@ -400,6 +412,24 @@ export class GlobalIndexLifecycleCoordinator {
     return activeId === indexId;
   }
 
+  _buildBackfillOptions(indexName, currentGen, indexId, options) {
+    const userYield = options.backfillOptions?.shouldYield;
+    const explicitBatchSize = options.backfillOptions?.batchSize;
+    const resolvedBatchSize = explicitBatchSize !== undefined ?
+      explicitBatchSize :
+      options.batchSize;
+    return {
+      ...options.backfillOptions,
+      batchSize: resolvedBatchSize,
+      shouldYield: (progress) => {
+        if (!this._isGenerationCurrent(indexName, currentGen, indexId)) {
+          return true;
+        }
+        return userYield ? userYield(progress) : false;
+      },
+    };
+  }
+
   async _runBackfillToCompletion(record, currentGen, options) {
     const indexId = record.indexId || record.index_id;
     const indexName = record.indexName || record.index_name;
@@ -408,21 +438,7 @@ export class GlobalIndexLifecycleCoordinator {
       return {indexId, indexName, generation: currentGen, fenced: true};
     }
 
-    const userYield = options.backfillOptions?.shouldYield;
-    let resolvedBatchSize = options.batchSize;
-    if (options.backfillOptions?.batchSize !== undefined) {
-      resolvedBatchSize = options.backfillOptions.batchSize;
-    }
-    const backfillOptions = {
-      ...options.backfillOptions,
-      batchSize: resolvedBatchSize,
-      shouldYield: (progress) => {
-        if (!this._isGenerationCurrent(indexName, currentGen, indexId)) {
-          return true;
-        }
-        return typeof userYield === 'function' ? userYield(progress) : false;
-      },
-    };
+    const backfillOptions = this._buildBackfillOptions(indexName, currentGen, indexId, options);
 
     try {
       const result = await this.backfillCoordinator.executeBackfill(
@@ -443,7 +459,8 @@ export class GlobalIndexLifecycleCoordinator {
         result,
       });
     } catch (err) {
-      if (this._isGenerationCurrent(indexName, currentGen, indexId)) {
+      if (!isTransientGlobalIndexError(err) &&
+          this._isGenerationCurrent(indexName, currentGen, indexId)) {
         await this._updateCatalogRecord({
           indexId,
           state: GLOBAL_INDEX_STATE.FAILED,
@@ -467,43 +484,12 @@ export class GlobalIndexLifecycleCoordinator {
    * @return {Promise<Object>}
    */
   async createGlobalIndex(ddlOrAst, options = {}) {
-    if (this.refreshCatalogPartitions) await this.refreshCatalogPartitions();
-    const def = normalizeGlobalIndexDefinition(ddlOrAst, options);
-    assertSupportedGlobalIndexDefinition(def);
-
-    const existingAction = resolveExistingCreateAction(this, def, options);
-    if (existingAction) {
-      if (existingAction.awaitCompletion) return existingAction.awaitCompletion;
-      if (existingAction.redrive) {
-        return driveGlobalIndexProvisioning(this, existingAction.redrive, def, options);
-      }
-      return existingAction.immediateResult;
-    }
-
-    const {indexName, tableName, columnNames} = def;
-    const currentGen = this.generations.has(indexName) ? this.generations.get(indexName) : 1;
-    this.generations.set(indexName, currentGen);
-
-    const schemaInfo = this.resolveTableSchema ? this.resolveTableSchema(tableName) : null;
-    const schemaCtx = resolveGlobalCreateSchemaContext(def, options, schemaInfo);
-    const basePrimaryKeyColumns = schemaCtx.basePrimaryKeyColumns.length > 0 ?
-      schemaCtx.basePrimaryKeyColumns :
-      [LOCAL_STR_ID];
-    const indexId = options.indexId || `${indexName}-gen${currentGen}`;
-
-    const record = createGlobalIndexRecord({
-      indexId,
-      tableName,
-      indexName,
-      columnNames,
-      state: GLOBAL_INDEX_STATE.CREATING,
-      ...options,
-    });
-    record.index_generation = currentGen;
-    record.basePrimaryKeyColumns = basePrimaryKeyColumns;
-    await this._saveCatalogRecord(record);
-
-    return driveGlobalIndexProvisioning(this, record, def, options);
+    return createGlobalIndexWithLifecycle(
+      this,
+      ddlOrAst,
+      options,
+      normalizeGlobalIndexDefinition,
+    );
   }
 
   /**
@@ -547,6 +533,7 @@ export class GlobalIndexLifecycleCoordinator {
 
     const currentGen = this.generations.get(indexName) || 1;
     this.generations.set(indexName, currentGen + 1);
+    this.inFlightCreationsByIndexName?.delete(indexName);
 
     const tableName = rawRecord.table_name || rawRecord.tableName;
     await this._dropIndexDatasets(tableName, indexName);

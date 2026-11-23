@@ -2,6 +2,7 @@ import {STRING, TABLES} from '../constants/index.js';
 import {CACHE_CDC_OPERATIONS} from '../cache/cache-constants.js';
 import {
   hydrateGlobalIndexFromRow,
+  pruneIndexRowFromWiringState,
   syncGlobalIndexesForService,
 } from './global-index-production-wiring.js';
 import {extractPartitionIdFromRow} from './global-index-partition-discovery.js';
@@ -23,6 +24,7 @@ function applyGlobalIndexCdcChange(indexService, operation, data) {
   const coordinator = indexService.getGlobalIndexCoordinator();
   if (operation === LOCAL_STR_DELETE) {
     coordinator?.catalog?.delete(data.index_name);
+    pruneIndexRowFromWiringState(indexService, data.index_name);
     indexService._removeIndexFromCache(data.index_name, data.table_id || data.table_name);
     return;
   }
@@ -133,6 +135,7 @@ const indexServiceCdcHandler = {
     case LOCAL_STR_DELETE: {
       const tableId = data.table_id;
       this.globalIndexCoordinator?.catalog?.delete(data.index_name);
+      pruneIndexRowFromWiringState(this, data.index_name);
       this._removeIndexFromCache(data.index_name, tableId);
       this.logger.debug(INDEX_LOG_MSG.INDEX_REMOVED_FROM_CDC, {
         indexId: data.index_id,
