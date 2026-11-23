@@ -1,0 +1,56 @@
+{
+  "schema": "solve-quest/2",
+  "id": "remote-cdc-shutdown-cleanup-custody",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "Graceful consumer shutdown retains custody of outstanding remote CDC registration cleanup while a producer remains live. The supported bounded shutdown protocol settles or transfers the obligation with an explicit deadline disposition, preserving ordinary delivery, retirement, replacement and quiet progress.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/remote-cdc-shutdown-cleanup-custody/evidence/receipt.json",
+      "requiredReceipts": [
+        "shutdown-producer-cleanup-settled",
+        "uncertain-registration-custody-preserved",
+        "ordinary-delivery-and-retirement-preserved",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "candidate-and-source",
+      "statement": "Unsealed candidate from integration b85ba795076b9457b68b83698bc74898b4724cc9, runtime a3dcbe8c742a0b25551fdb145a6b5a877d0a3aa9, within solve/epics/operation-integrity-and-reliable-formation/reliable-application-operations-candidate.md. Reconcile the actual current source, original evidence and incumbent assignment before choosing a new write. This record creates no runtime reproduction, test execution, seal, competing writer or acceptance. Existing authority and authorized work continue."
+    },
+    {
+      "id": "existing-owner-and-scope",
+      "statement": "Current J6/live-query, remote CDC transport and runtime-shutdown owners own the interaction from remote registration/retirement state through shutdown to actual producer resource removal. Writable scope is the lifecycle/effect/shutdown handoff and necessary consumers/witnesses. Do not add an unrelated producer lease, generic cleanup service or durable state store without a demonstrated need and the existing transition owner."
+    },
+    {
+      "id": "version-and-lineage",
+      "statement": "Initial completion: 0.4.1 admitted-correctness repair under alpha packages 7/9/10 and implementation-safety P4/P5. Preserve solved queryable-core-0-3-2-journeys-completion J6 and node-startup-natural-shutdown, plus current CDC/snapshot and ordinary uncertain-unsubscribe repairs. Do not reopen their terminal histories or replace the incumbent writer."
+    },
+    {
+      "id": "discriminating-baseline",
+      "statement": "Retain a deferred unsubscribe, or a subscribe whose reply is uncertain although the producer may have accepted registration. Begin graceful consumer shutdown while the producer stays live and quiet, then remove the finite blocker. Observe actual producer registration/resource removal. No unrelated CDC traffic, observer-induced progress or producer teardown may supply the missing cleanup."
+    },
+    {
+      "id": "owned-transition",
+      "statement": "Define which supported owner retains cleanup during and after shutdown's bounded drain, and what happens when the budget ends. Use an existing transfer or durable continuation only if it actually survives the relevant lifetime. Do not clear the final wake/record before settlement or supported transfer; do not claim post-process-death retries without a surviving mechanism. Include the effect executor and shutdown adapter in lifecycle/model conformance."
+    },
+    {
+      "id": "preserved-positive-and-negative-proof",
+      "statement": "Retain typed refusal, bounded redrive, wait cleanup, actual delivery assertions, ordinary unsubscribe and replacement, late registration acceptance, CDC-superseded snapshot protection and successful read/delivery after finite recovery. Consumer maps becoming empty are not evidence that producer resources were released."
+    },
+    {
+      "id": "receipt-meanings",
+      "statement": "shutdown-producer-cleanup-settled checks remote resource settlement after the controlled quiet schedule; uncertain-registration-custody-preserved covers lost acknowledgement and shutdown deadline outcomes; ordinary-delivery-and-retirement-preserved retains existing useful paths. independent-verification binds the real lifecycle, transport and shutdown composition with affected resource evidence."
+    },
+    {
+      "id": "proof-and-integration",
+      "statement": "Use existing execution and receipt producers; retain original red output and applicable earlier proof. A missing receipt is unavailable/non-measuring, never a fake red or a green. Obtain a genuine measuring baseline before sealing through the current Quest workflow. If current work already satisfies the claim, retain evidence-backed disposition and supported adoption without inventing a new defect or reverting the active candidate. Independent review covers actual production construction, adverse boundary cuts and affected consumers; bind affected execution and applicability to the resulting composed SHA. No hand-authored pass flags or derived summary may substitute for original execution."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ]
+}

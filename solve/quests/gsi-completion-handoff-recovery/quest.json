@@ -1,0 +1,56 @@
+{
+  "schema": "solve-quest/2",
+  "id": "gsi-completion-handoff-recovery",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "A crash after durable schema-provisioning success cannot strand an unfinished global-index creation. The existing durable owners retain and rediscover the completion/backfill obligation, preserve operation identity and data, and finish or explicitly retain useful progress without a new client CREATE.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/gsi-completion-handoff-recovery/evidence/receipt.json",
+      "requiredReceipts": [
+        "durable-handoff-rediscovered",
+        "recovered-index-data-correct",
+        "replacement-and-unavailability-fenced",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "candidate-and-source",
+      "statement": "Unsealed candidate from integration b85ba795076b9457b68b83698bc74898b4724cc9, runtime a3dcbe8c742a0b25551fdb145a6b5a877d0a3aa9, within solve/epics/operation-integrity-and-reliable-formation/reliable-application-operations-candidate.md. Reconcile the actual current source, original evidence and incumbent assignment before choosing a new write. This record creates no runtime reproduction, test execution, seal, competing writer or acceptance. Existing authority and authorized work continue."
+    },
+    {
+      "id": "existing-owner-and-scope",
+      "statement": "The incumbent GSI/schema writer owns schema-provisioning terminal transition, background completion binding, existing GSI catalog lifecycle/backfill and their startup recovery. Writable scope is the durable handoff and invalidated consumers/witnesses; existing schema jobs and index catalog remain authoritative. Exclude a generic outbox, duplicate workflow ledger or new recovery framework."
+    },
+    {
+      "id": "version-and-lineage",
+      "statement": "Initial completion: 0.4.1 admitted-correctness repair under alpha packages 6/10 and implementation-safety P3/P5. Preserve solved queryable-core-0-3-2-journeys-completion J5, current recovered physical-ID and pre-provisioning restart proof. Consume gsi-creation-effect-ownership's agreed identity/effect contract through the same writer; serialize shared changes."
+    },
+    {
+      "id": "discriminating-baseline",
+      "statement": "Use normal engine construction, persist schema SUCCEEDED, then terminate before the GSI completion callback runs. Reconstruct new owners over original durable state and verify unfinished index recovery and actual indexed results without a new client CREATE or status-induced progress. Also interrupt after backfill has begun. Keep the earlier crash-before-replicas witness."
+    },
+    {
+      "id": "owned-transition",
+      "statement": "Specify the exact durable completion obligation and the existing owner's recovery query/trigger. A terminal schema step must not erase unfinished user-level work; a callback or in-process promise cannot be its only custodian. Distinguish accepted/provisioned from usable index completion in the existing outcome contract. Permit multiple legitimate triggers through one algorithm, preserving bounded continuation and resource cleanup."
+    },
+    {
+      "id": "preserved-positive-and-negative-proof",
+      "statement": "Prove replacement/drop incarnation fencing for late completion, unavailable-authority retention and finite-blocker resumption, duplicate redrive identity, changed-definition correctness, preserved physical dataset/partition IDs and actual post-recovery data. Do not treat a succeeded schema row or empty unfinished-job scan as index completion."
+    },
+    {
+      "id": "receipt-meanings",
+      "statement": "durable-handoff-rediscovered identifies the exact crash cut, persisted obligation and new owner continuation; recovered-index-data-correct checks populated indexed results and fresh writes; replacement-and-unavailability-fenced covers late/stale effects and restored progress. independent-verification binds production construction, original process/source identities and composed applicability."
+    },
+    {
+      "id": "proof-and-integration",
+      "statement": "Use existing execution and receipt producers; retain original red output and applicable earlier proof. A missing receipt is unavailable/non-measuring, never a fake red or a green. Obtain a genuine measuring baseline before sealing through the current Quest workflow. If current work already satisfies the claim, retain evidence-backed disposition and supported adoption without inventing a new defect or reverting the active candidate. Independent review covers actual production construction, adverse boundary cuts and affected consumers; bind affected execution and applicability to the resulting composed SHA. No hand-authored pass flags or derived summary may substitute for original execution."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ]
+}

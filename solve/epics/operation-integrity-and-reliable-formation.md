@@ -38,6 +38,12 @@ doneWhen:
       - partition-checkpoint-epoch-generation-verified
       - independent-verification
 quests:
+  - gsi-creation-effect-ownership
+  - gsi-completion-handoff-recovery
+  - remote-cdc-shutdown-cleanup-custody
+  - service-inspect-achieved-readiness
+  - application-operating-envelope
+  - installed-application-retained-restart
   - quest-evidence-and-candidate-binding
   - cdc-source-image-occurrence-completion
   - replica-settlement-generation-fencing
@@ -110,6 +116,18 @@ canonical authority for each permission, completion, policy and routing decision
 Recovery retains obligations and progresses; startup and shutdown own their
 resources. The authoring and proof workflow must catch invented contracts and
 invalid evidence before integration.
+
+## Reliable application operations (candidate, 23 November 2026)
+
+The [epic candidate](operation-integrity-and-reliable-formation/reliable-application-operations-candidate.md)
+turns the architecture review into six unsealed Quest proposals and two reused
+work units. Its [start note](operation-integrity-and-reliable-formation/reliable-application-operations-start-here.md)
+routes reconciliation through the incumbent owners. It preserves all twelve
+alpha packages, implementation-safety P1-P6, existing seals and the approved
+formation/smoke/comparison sequence. This is proposed decomposition, not adoption,
+a new writer assignment, runtime acceptance or a second integration queue.
+Continue already authorized work under the current summary and actual owner
+records; reconcile the candidate against that work before starting a new unit.
 
 ## Usable alpha completion (approved 22 November 2026)
 
