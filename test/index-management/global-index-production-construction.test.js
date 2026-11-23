@@ -40,6 +40,9 @@ import {
 import {
   GLOBAL_INDEX_ERROR_CODE,
 } from '../../src/index-management/index-constants.js';
+import {
+  createPartitionServiceExecutorAdapter,
+} from './global-index-partition-executor-test-helper.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {
   createCommittedServeEligibilityOwner,
@@ -368,6 +371,7 @@ test('Production construction 1: durable TABLES.INDICES persistence, dataset pro
     controlPlaneSystemTableGateway: env.gateway,
     cdcIntegrationService: env.cdcService,
     partitionService: env.partitionServices,
+    partitionExecutor: createPartitionServiceExecutorAdapter(env.partitionServices),
   });
   await freshIndexService.initialize();
 
@@ -652,6 +656,7 @@ test('Production construction 3: checkpoint resume across restart, unreadable fa
     controlPlaneSystemTableGateway: env.gateway,
     cdcIntegrationService: env.cdcService,
     partitionService: env.partitionServices,
+    partitionExecutor: createPartitionServiceExecutorAdapter(env.partitionServices),
   });
   await freshIndexService.initialize();
   const freshCoordinator = freshIndexService.getGlobalIndexCoordinator();

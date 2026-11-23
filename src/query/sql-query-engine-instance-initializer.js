@@ -118,6 +118,23 @@ function createRuntimeReplicaStateProjectionOwner(engine, options) {
   });
 }
 
+function attachEngineIndexService(engine, options) {
+  if (options.indexService) {
+    if (!options.indexService.partitionExecutor) {
+      options.indexService.setPartitionExecutor?.(engine.queryExecutor);
+    }
+    return options.indexService;
+  }
+  return new IndexService({
+    systemTableCache: engine.systemCache,
+    cdcIntegrationService: engine.cdcIntegrationService,
+    sqlQueryEngine: engine,
+    controlPlaneSystemTableGateway: engine.controlPlaneSystemTableGateway,
+    partitionService: options.partitionService || null,
+    partitionExecutor: engine.queryExecutor,
+  });
+}
+
 function initializeSqlQueryEngineInstance(engine, options = {}) {
   engine.systemCache = options.systemCache || null;
   engine.messageRouter = options.messageRouter || null;
@@ -211,33 +228,6 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
     now: engine.nowFn,
   });
 
-  engine.indexService = options.indexService ||
-    new IndexService({
-      systemTableCache: engine.systemCache,
-      cdcIntegrationService: engine.cdcIntegrationService,
-      sqlQueryEngine: engine,
-      controlPlaneSystemTableGateway: engine.controlPlaneSystemTableGateway,
-      partitionService: options.partitionService || null,
-    });
-  engine.queryOptimizer = options.queryOptimizer ||
-    new QueryOptimizer({
-      indexService: engine.indexService,
-      systemTableCache: engine.systemCache,
-    });
-
-  engine.partitionResolver = new PartitionResolver({
-    systemCache: engine.systemCache,
-  });
-  engine.distributedQueryPlanner =
-    options.distributedQueryPlanner ||
-    new DistributedQueryPlanner({
-      partitionResolver: engine.partitionResolver,
-      getTablePartitions: (tableName) => engine.getTablePartitions(tableName),
-      getTableInfo: (tableName) => engine.getTableInfo(tableName),
-      indexService: engine.indexService,
-      queryOptimizer: engine.queryOptimizer,
-    });
-
   engine.queryExecutor = new QueryExecutor({
     // The executor orders for THIS node, on this node's clock.
     nowFn: engine.nowFn,
@@ -263,6 +253,26 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
       ),
     ),
   );
+
+  engine.indexService = attachEngineIndexService(engine, options);
+  engine.queryOptimizer = options.queryOptimizer ||
+    new QueryOptimizer({
+      indexService: engine.indexService,
+      systemTableCache: engine.systemCache,
+    });
+
+  engine.partitionResolver = new PartitionResolver({
+    systemCache: engine.systemCache,
+  });
+  engine.distributedQueryPlanner =
+    options.distributedQueryPlanner ||
+    new DistributedQueryPlanner({
+      partitionResolver: engine.partitionResolver,
+      getTablePartitions: (tableName) => engine.getTablePartitions(tableName),
+      getTableInfo: (tableName) => engine.getTableInfo(tableName),
+      indexService: engine.indexService,
+      queryOptimizer: engine.queryOptimizer,
+    });
   engine.distributedWriteCoordinator =
     options.distributedWriteCoordinator ||
     new DistributedWriteCoordinator({

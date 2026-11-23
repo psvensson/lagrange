@@ -516,6 +516,5 @@ export {
   preloadProductionPartitionMetadata,
   quoteIdentifier,
   resolveHostedPartitionService,
-  resolvePartitionDatabase,
   resolveTableSchemaMetadata,
 };

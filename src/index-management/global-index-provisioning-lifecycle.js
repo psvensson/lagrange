@@ -108,7 +108,9 @@ function shouldReconcileRemoteDataset(coordinator, partitionId, options) {
 function assertPartitionAvailability(coordinator, partition, partitionId) {
   const remoteReady = partition._provisionedWithSchema ||
     Boolean(coordinator.hasDistributedPartitionRoute?.(partitionId));
-  if (!remoteReady && coordinator.resolvePartitionDatabase) {
+  const hasRoutingOwner = coordinator.resolvePartitionDatabase ||
+    coordinator.hasDistributedPartitionRoute;
+  if (!remoteReady && hasRoutingOwner) {
     throw createParticipantUnavailableError(partitionId);
   }
 }
@@ -594,8 +596,6 @@ async function createGlobalIndexWithLifecycle(
 export {
   completeRecoveredProvisioning,
   createGlobalIndexWithLifecycle,
-  driveGlobalIndexProvisioning,
   provisionIndexDatasetsForCreation,
   provisionSingleIndexDataset,
-  resolveExistingCreateAction,
 };

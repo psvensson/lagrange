@@ -39,7 +39,6 @@ import {
   extractTableNameFromRow,
   preloadProductionPartitionMetadata,
   quoteIdentifier,
-  resolvePartitionDatabase,
   resolveTableSchemaMetadata,
 } from './global-index-partition-discovery.js';
 import {extractPredicateConditions} from './global-index-read-router.js';
@@ -587,7 +586,6 @@ async function removeIndexCatalogMetadata(indexService, record) {
 }
 
 async function dropIndexDatasetPartition(indexService, {tableName, indexName, partitionId}) {
-  if (!hasDistributedPartitionRoute(indexService, partitionId)) return;
   const datasetName = getGlobalIndexDatasetName(tableName, indexName);
   await executePartitionWriteSql(
     indexService,
@@ -675,10 +673,6 @@ function buildProductionCoordinatorOptions(indexService) {
     return discoverPartitionsForTargets(indexService, runtimeState, targets);
   };
 
-  const resolveDb = (partitionId) => {
-    return resolvePartitionDatabase(indexService, getCoordinator(), partitionId);
-  };
-
   const resolveTableSchema = (tableName) => {
     return resolveTableSchemaMetadata(indexService, getCoordinator(), runtimeState, tableName);
   };
@@ -690,7 +684,6 @@ function buildProductionCoordinatorOptions(indexService) {
     },
     getBaseTablePartitions,
     getIndexPartitions,
-    resolvePartitionDatabase: resolveDb,
     resolveTableSchema,
     hasDistributedPartitionRoute: (partitionId) =>
       hasDistributedPartitionRoute(indexService, partitionId),

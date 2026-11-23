@@ -685,5 +685,4 @@ export {
   executeEngineWriteWithGlobalIndexes,
   executeSelectWithGlobalIndexSupport,
   hasActiveGlobalIndexes,
-  tryExecuteGlobalIndexSelect,
 };

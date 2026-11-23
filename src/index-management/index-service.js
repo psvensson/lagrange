@@ -93,7 +93,7 @@ function assignIndexServiceCollaborators(service, options) {
     'partitionServices',
     'partitionServicesProvider',
     'storageManager',
-    'queryRouter',
+    'partitionExecutor',
     'partitionDatabases',
     'partitionProvisioner',
     'globalIndexCoordinator',
@@ -142,6 +142,7 @@ class IndexService {
    * @param {Object} [options.systemTableCache] - Read-only system table cache.
    * @param {Object} [options.sqlQueryEngine] - SQL query engine.
    * @param {Object} [options.partitionService] - Partition service or provider.
+   * @param {Object} [options.partitionExecutor] - Canonical partition executor.
    * @param {Object} [options.controlPlaneSystemTableGateway] - Metadata gateway.
    */
   constructor(options = {}) {
@@ -221,6 +222,14 @@ class IndexService {
       });
       throw error;
     }
+  }
+
+  /**
+   * Attach the canonical distributed partition executor after construction.
+   * @param {Object|null} partitionExecutor - Executor exposing executeOnPartition.
+   */
+  setPartitionExecutor(partitionExecutor) {
+    this.partitionExecutor = partitionExecutor || null;
   }
 
   resolveTableIdFromEngine(tableName) {
