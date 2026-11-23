@@ -33,6 +33,7 @@ import {PLACEMENT_DISPATCH_HOLD, PLACEMENT_MOVE_TYPE, PLACEMENT_OUTCOME,
   '../rebalancer/replica-placement-owner-constants.js';
 import {placementOperationIdOf, placementReplicaIdOf} from
   './partition-placement-admission-identity.js';
+import {sqliteConnectionState} from '../storage/sqlite-connection-state.js';
 
 const ENTITY_ADMISSION_STATE = Object.freeze({CLEAR: 'clear', REFUSED: 'refused'});
 const ENTITY_CLEAR = Object.freeze({state: ENTITY_ADMISSION_STATE.CLEAR});
@@ -47,11 +48,15 @@ const CENSUS_SQL = 'SELECT operation_id, type, partition_id, entity_type, entity
   `(${INCOMPLETE_OPERATION_CANDIDATE_WORKFLOW_STEPS.map(() => SQL_PARAMETER)
     .join(SQL_LIST_SEPARATOR)}) ` +
   'ORDER BY operation_id';
+const CENSUS_STAMP_SQL = 'SELECT total_changes() AS tc, ' +
+  '(SELECT data_version FROM pragma_data_version) AS dv, ' +
+  '(SELECT schema_version FROM pragma_schema_version) AS sv';
 const CLAIM_SQL = `SELECT operation_id FROM ${TABLE} WHERE target_claim_key = ?`;
 const ROW_SQL = `SELECT * FROM ${TABLE} WHERE operation_id = ?`;
 const RELEASE_SQL = `UPDATE ${TABLE} SET steps_history = ?, updated_at = ? ` +
   'WHERE operation_id = ?';
 const COPY_TYPES = Object.freeze(new Set([OperationType.ADD, OperationType.REPLACE]));
+const PLACEMENT_CENSUS_FACT = 'placement-admission-census';
 
 function parsedHistory(row) {
   return typeof row.steps_history === 'string' && row.steps_history.length > 0 ?
@@ -90,9 +95,24 @@ function retainedRepairCensusRead(operationId) {
   params: [operationId, ...INCOMPLETE_OPERATION_CANDIDATE_WORKFLOW_STEPS]};
 }
 
+function queryPlacementCensusRows(statements) {
+  return Object.freeze(
+    statements.statement(CENSUS_SQL).all(...INCOMPLETE_OPERATION_CANDIDATE_WORKFLOW_STEPS)
+      .map(censusRowOf),
+  );
+}
+
 function readPlacementCensus(db) {
-  return db.prepare(CENSUS_SQL).all(...INCOMPLETE_OPERATION_CANDIDATE_WORKFLOW_STEPS)
-    .map(censusRowOf);
+  const statements = sqliteConnectionState(db);
+  if (db.open !== true) {
+    return queryPlacementCensusRows(statements);
+  }
+  const stamp = statements.statement(CENSUS_STAMP_SQL).get();
+  return statements.applicationStampedFact(
+    PLACEMENT_CENSUS_FACT,
+    stamp,
+    () => queryPlacementCensusRows(statements),
+  );
 }
 
 function refused(reason, detail = {}) {
@@ -184,7 +204,7 @@ function claimRefusal(db, statement) {
   const move = statement.moves[0];
   const claimKey = runtimeServiceClaimKeyOf(statement, move, move.replicaId);
   if (claimKey === null) return null;
-  const holder = db.prepare(CLAIM_SQL).get(claimKey);
+  const holder = sqliteConnectionState(db).statement(CLAIM_SQL).get(claimKey);
   return holder === undefined ? null :
     refused(REFUSAL.TARGET_CLAIM_TAKEN, {operationIds: Object.freeze([holder.operation_id])});
 }
@@ -300,9 +320,10 @@ function stampFoundingSet(operations) {
 
 function insertRow(db, row) {
   const columns = Object.keys(row);
-  db.prepare(`INSERT INTO ${TABLE} (${columns.join(SQL_LIST_SEPARATOR)}) VALUES ` +
-    `(${columns.map(() => SQL_PARAMETER).join(SQL_LIST_SEPARATOR)})`).run(...columns.map((column) =>
-    row[column]));
+  sqliteConnectionState(db).statement(
+    `INSERT INTO ${TABLE} (${columns.join(SQL_LIST_SEPARATOR)}) VALUES ` +
+      `(${columns.map(() => SQL_PARAMETER).join(SQL_LIST_SEPARATOR)})`,
+  ).run(...columns.map((column) => row[column]));
 }
 
 /**
@@ -350,7 +371,7 @@ function isEngagedLedgerHold(row) {
  * @return {boolean} True when the hold is engaged.
  */
 function readEngagedLedgerHoldIn(db, operationId) {
-  const row = db.prepare(ROW_SQL).get(operationId);
+  const row = sqliteConnectionState(db).statement(ROW_SQL).get(operationId);
   return row !== undefined && isEngagedLedgerHold(censusRowOf(row));
 }
 
@@ -376,14 +397,15 @@ function decideHoldRelease(db, {command, release}) {
     return {result: refused(REFUSAL.COPY_PHASE_NOT_IDLE,
       {operationIds: idsOf(copying)}), rows: []};
   }
-  const row = db.prepare(ROW_SQL).get(held.operationId);
+  const statements = sqliteConnectionState(db);
+  const row = statements.statement(ROW_SQL).get(held.operationId);
   const history = JSON.parse(row.steps_history);
   delete history[0][OPERATION_METADATA_KEY.DISPATCH_HOLD];
-  db.prepare(RELEASE_SQL).run(JSON.stringify(history), command.proposedAt,
+  statements.statement(RELEASE_SQL).run(JSON.stringify(history), command.proposedAt,
     held.operationId);
   return {result: Object.freeze({outcome: PLACEMENT_OUTCOME.RELEASED,
     operationIds: Object.freeze([held.operationId])}),
-  rows: [Object.freeze({...db.prepare(ROW_SQL).get(held.operationId)})]};
+  rows: [Object.freeze({...statements.statement(ROW_SQL).get(held.operationId)})]};
 }
 
 export {

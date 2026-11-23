@@ -165,9 +165,9 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
       (_unused, shardIndex) => {
         return new OwnerKeyReconcileQueue({
           name: this.buildOperationDispatchQueueName(shardIndex),
-          reconcileFn: (ownerKey, _reasons, context) =>
+          reconcileFn: (ownerKey, reasons, context) =>
             runRebalancerActivity(() =>
-              this.reconcileOperationDispatch(ownerKey, context)),
+              this.reconcileOperationDispatch(ownerKey, context, reasons)),
         });
       },
     );

@@ -142,6 +142,23 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
 
   /**
    * @param {string} tableName
+   * @param {Array<Object>} rows
+   * @param {Object} [options={}]
+   * @return {Promise<Object>}
+   */
+  async upsertSystemTableRows(tableName, rows, options = {}) {
+    return this.submitMutation(
+      buildControlPlaneMutationIntent(
+        CONTROL_PLANE_MUTATION_OPERATION.UPSERT_BATCH,
+        tableName,
+        {rows},
+      ),
+      options,
+    );
+  },
+
+  /**
+   * @param {string} tableName
    * @param {Object} whereClause
    * @param {Object} [options={}]
    * @return {Promise<Object>}
@@ -307,18 +324,22 @@ const controlPlaneSystemTableGatewayMutationSubmissionMethods = {
         );
       }
       if (operation === CONTROL_PLANE_MUTATION_OPERATION.UPSERT) {
-        if (
-          !retained?.row ||
-          typeof retained.row !== 'object'
-        ) {
+        if (!retained?.row || typeof retained.row !== 'object') {
           throw new Error(GATEWAY_ERROR_MSG.MUTATION_ROW_REQUIRED);
         }
         return this.normalizeMutationResult(
           await cdcIntegrationService.upsertSystemTableRow(
-            tableName,
-            retained.row,
-            deliveryOptions,
-          ),
+            tableName, retained.row, deliveryOptions),
+          attemptContext,
+        );
+      }
+      if (operation === CONTROL_PLANE_MUTATION_OPERATION.UPSERT_BATCH) {
+        if (!Array.isArray(retained?.rows) || retained.rows.length === 0) {
+          throw new Error(GATEWAY_ERROR_MSG.MUTATION_ROW_REQUIRED);
+        }
+        return this.normalizeMutationResult(
+          await cdcIntegrationService.upsertSystemTableRows(
+            tableName, retained.rows, deliveryOptions),
           attemptContext,
         );
       }

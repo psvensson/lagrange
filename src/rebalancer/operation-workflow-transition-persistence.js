@@ -23,6 +23,7 @@ import {
 import {
   OperationWorkflowTransitionOrchestration,
 } from './operation-workflow-transition-orchestration.js';
+import {clearAcknowledgedCreateInFlight} from './operation-workflow-create-ack-state.js';
 import {
   shouldReleaseReservationForTerminalOutcome,
 } from './operation-workflow-terminal-reservation-release.js';
@@ -331,6 +332,7 @@ class OperationWorkflowTransitionPersistence
   clearTerminalOperationRetryState(operation) {
     this.clearDispatchRetry(operation?.operationId);
     this.withheldDispatchByOperationId.delete(operation?.operationId);
+    clearAcknowledgedCreateInFlight(this, operation?.operationId);
     this.clearOperationLedgerSelfMoveParkEvidence(operation?.operationId);
     this.clearObservedProgressRetry(operation?.operationId, {
       includeDeliveredCreateProgress: true,

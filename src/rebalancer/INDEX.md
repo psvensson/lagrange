@@ -47,6 +47,7 @@ documentClass: generated
 - [operation-workflow-coordinator-created-handoff-retry-registry.js](operation-workflow-coordinator-created-handoff-retry-registry.js) - No leading comment; first export: OperationWorkflowCoordinatorCreatedHandoffRetryRegistry. (importers: one)
 - [operation-workflow-coordinator-created-handoff-scheduling.js](operation-workflow-coordinator-created-handoff-scheduling.js) - Log one coordinator-created handoff retry stop. (importers: many)
 - [operation-workflow-coordinator-handoff-retry.js](operation-workflow-coordinator-handoff-retry.js) - No leading comment; first export: buildCoordinatorCreatedRemoteHandoffRetryEvidence. (importers: one)
+- [operation-workflow-create-ack-state.js](operation-workflow-create-ack-state.js) - Generation-fenced in-flight CREATE acknowledgement state for the operation workflow owner. (importers: few)
 - [operation-workflow-create-satisfied-response.js](operation-workflow-create-satisfied-response.js) - No leading comment; first export: reconcileSatisfiedCreateResponse. (importers: one)
 - [operation-workflow-dispatch-epoch-gate.js](operation-workflow-dispatch-epoch-gate.js) - Resolve the operation's canonical planning membership epoch binding via the single durable decode owner: BOUND... (importers: few)
 - [operation-workflow-dispatch-execution.js](operation-workflow-dispatch-execution.js) - Dispatch-time side of the ledger self-move interlock (operation-workflow-dispatch-ledger-self-move-gate.js): a... (importers: one)

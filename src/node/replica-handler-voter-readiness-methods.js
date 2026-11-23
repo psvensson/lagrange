@@ -28,6 +28,7 @@ import {
   CRITICAL_VOTER_READY_GATED_OPERATION_TYPES,
   VOTER_READY_CHECK_INTERVAL_MS,
 } from './replica-handler-transition-policy.js';
+import {waitForReadinessEventOrTimeout} from './replica-handler-readiness-wake.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const LOCAL_STR_PLACEMENT_ADMISSION_KEY = '"placementAdmission"';
@@ -66,6 +67,18 @@ function hasDecidedCreateReadiness(handler, service, replicaId, voterRequired, e
     (!voterRequired && isLearnerAdmittedToGroup(service, replicaId));
 }
 
+function matchesVoterReadyServicesRow(replicaId, row, createAdmissionEvidence) {
+  if (!row || row.service_id !== replicaId || !row.address) return false;
+  if (row.status === ReplicaStatus.FAILED ||
+      row.status === ReplicaStatus.REMOVING ||
+      row.status === ReplicaStatus.REMOVED) {
+    return false;
+  }
+  if (!createAdmissionEvidence) return true;
+  return row.create_attempt_token === createAdmissionEvidence.attemptToken &&
+    row.cleanup_token === null;
+}
+
 function isExactCreateVoterRow(row, service, evidence) {
   return service && !service.isShutdown &&
     row.service_type === SERVICE_TYPE.PARTITION && row.service_id === evidence.replicaId &&
@@ -87,16 +100,6 @@ const VOTER_READY_ACTIVATION_WAIT = Object.freeze({
 
 function readHandlerNowMs(handler) {
   return handler?.timeSource?.now ? handler.timeSource.now() : Date.now();
-}
-
-function sleepHandlerMs(handler, delayMs) {
-  return new Promise((resolve) => {
-    if (handler?.timeSource?.setTimeout) {
-      handler.timeSource.setTimeout(resolve, delayMs);
-    } else {
-      setTimeout(resolve, delayMs);
-    }
-  });
 }
 
 function clearHandlerTimer(handler, timerId) {
@@ -391,7 +394,24 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
         }
         const remainingMs = deadline - readHandlerNowMs(this);
         if (remainingMs <= 0) break;
-        await sleepHandlerMs(this, Math.min(VOTER_READY_CHECK_INTERVAL_MS, remainingMs));
+        const activeService = expectedService ?? this.getTrackedService(replicaId);
+        const alreadyVoter = isVoterRaftRole(this.getTrackedReplicaRole(replicaId));
+        await waitForReadinessEventOrTimeout(
+          this, replicaId, activeService,
+          Math.min(VOTER_READY_CHECK_INTERVAL_MS, remainingMs),
+          {
+            watchConsensus: !alreadyVoter,
+            shouldWakeOnConsensus: () =>
+              isVoterRaftRole(this.getTrackedReplicaRole(replicaId)),
+            watchServicesCache: true,
+            matchesServicesRow: (row) => matchesVoterReadyServicesRow(
+              replicaId, row, options.createAdmissionEvidence),
+            shouldWakeOnAdmissionSettled: () =>
+              isReplicaAdmissionRefused(activeService) ||
+              (!alreadyVoter &&
+                isVoterRaftRole(this.getTrackedReplicaRole(replicaId))),
+          },
+        );
       }
       reportVoterReadyActivationSpent(this, {
         replicaId,
@@ -574,7 +594,17 @@ function assignReplicaHandlerVoterReadinessMethods(ReplicaHandler) {
           VOTER_READY_CHECK_INTERVAL_MS,
           Math.max(1, deadline - nowAfterCheckMs),
         );
-        await sleepHandlerMs(this, sleepMs);
+        await waitForReadinessEventOrTimeout(
+          this,
+          replicaId,
+          expectedService,
+          sleepMs,
+          {
+            shouldWakeOnConsensus: () =>
+              isLearnerAdmittedToGroup(expectedService, replicaId) ||
+              isVoterRaftRole(this.getTrackedReplicaRole(replicaId)),
+          },
+        );
       }
     }
     /**

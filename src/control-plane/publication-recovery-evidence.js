@@ -1,3 +1,4 @@
+import {deepFreeze} from '../utils/deep-freeze.js';
 import {
   isRecord,
   PUBLICATION_RECOVERY_LEASE_DEFAULT_DURATION_MS,
@@ -6,6 +7,7 @@ import {
   buildCanonicalPublicationConvergenceGate,
   buildCanonicalPriorityRecoveryObservation,
   buildCanonicalPublicationConvergence,
+  isRecursivelyImmutableOwnData,
 } from './publication-recovery-evidence-builders.js';
 
 const RECOVERY_PREEMPTION_DECISION = Object.freeze({
@@ -96,7 +98,117 @@ function adjudicateRecoveryPreemption(evidenceSnapshot) {
   });
 }
 
-function buildCanonicalPublicationRecoveryEvidence(options = {}) {
+const PURE_SNAPSHOT_EVIDENCE_OPTION_KEYS = Object.freeze(new Set([
+  'publicationConvergence',
+  'publicationConvergenceGate',
+  'priorityRecoveryObservation',
+  'priorityRecoveryDecisionSnapshots',
+  'priorityRecoveryClosureWitness',
+  'priorityRecoveryInvariants',
+]));
+const MAX_EVIDENCE_CACHE_ENTRIES_PER_CONVERGENCE = 4;
+
+function isOptionalImmutableEvidenceInput(value) {
+  return value === undefined || value === null ||
+    isRecursivelyImmutableOwnData(value);
+}
+
+function canMemoizePureSnapshotEvidenceOptions(options) {
+  if (!isRecord(options) || !isRecord(options.publicationConvergence)) {
+    return false;
+  }
+  const keys = Object.keys(options);
+  for (let index = 0; index < keys.length; index += 1) {
+    if (!PURE_SNAPSHOT_EVIDENCE_OPTION_KEYS.has(keys[index])) {
+      return false;
+    }
+  }
+  return isRecursivelyImmutableOwnData(options.publicationConvergence) &&
+    isOptionalImmutableEvidenceInput(options.publicationConvergenceGate) &&
+    isOptionalImmutableEvidenceInput(options.priorityRecoveryObservation) &&
+    isOptionalImmutableEvidenceInput(options.priorityRecoveryDecisionSnapshots) &&
+    isOptionalImmutableEvidenceInput(options.priorityRecoveryClosureWitness) &&
+    isOptionalImmutableEvidenceInput(options.priorityRecoveryInvariants);
+}
+
+function findMemoizedPureSnapshotEvidence(entries, options) {
+  const gate = options.publicationConvergenceGate ?? null;
+  const obs = options.priorityRecoveryObservation ?? null;
+  const dec = options.priorityRecoveryDecisionSnapshots ?? null;
+  const wit = options.priorityRecoveryClosureWitness ?? null;
+  const inv = options.priorityRecoveryInvariants ?? null;
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index];
+    if (entry.gate === gate && entry.obs === obs && entry.dec === dec &&
+        entry.wit === wit && entry.inv === inv) {
+      return entry.result;
+    }
+  }
+  return null;
+}
+
+function storeMemoizedPureSnapshotEvidence(
+  evidenceMemo,
+  convergence,
+  entries,
+  options,
+  result,
+) {
+  const nextEntries = entries || [];
+  if (nextEntries.length >= MAX_EVIDENCE_CACHE_ENTRIES_PER_CONVERGENCE) {
+    nextEntries.shift();
+  }
+  nextEntries.push({
+    gate: options.publicationConvergenceGate ?? null,
+    obs: options.priorityRecoveryObservation ?? null,
+    dec: options.priorityRecoveryDecisionSnapshots ?? null,
+    wit: options.priorityRecoveryClosureWitness ?? null,
+    inv: options.priorityRecoveryInvariants ?? null,
+    result,
+  });
+  if (!entries) {
+    evidenceMemo.set(convergence, nextEntries);
+  }
+}
+
+function preparePureSnapshotEvidenceMemo(options, evidenceMemo) {
+  if (evidenceMemo === null || !canMemoizePureSnapshotEvidenceOptions(options)) {
+    return null;
+  }
+  const convergence = options.publicationConvergence;
+  const entries = evidenceMemo.get(convergence) || null;
+  const hit = entries ? findMemoizedPureSnapshotEvidence(entries, options) : null;
+  return {convergence, entries, hit};
+}
+
+function resolvePublicationRecoveryLeaseExpired(options) {
+  const lease = options.lease instanceof PublicationRecoveryLease ?
+    options.lease :
+    null;
+  return lease ? lease.isExpired(options.now || Date.now()) : false;
+}
+
+function hasExplicitConvergenceGate(options) {
+  return isRecord(options.publicationConvergenceGate) ||
+    isRecord(options.publicationConvergence?.publicationRecoveryGate);
+}
+
+function finalizePureSnapshotEvidence(evidenceMemo, memoLookup, options, result) {
+  if (!memoLookup) return result;
+  const frozenResult = deepFreeze(result);
+  storeMemoizedPureSnapshotEvidence(
+    evidenceMemo, memoLookup.convergence, memoLookup.entries, options, frozenResult,
+  );
+  return frozenResult;
+}
+
+function buildCanonicalPublicationRecoveryEvidence(
+  options = {},
+  evidenceMemo = null,
+) {
+  const memoLookup = preparePureSnapshotEvidenceMemo(options, evidenceMemo);
+  if (memoLookup?.hit) return memoLookup.hit;
+
   const publicationConvergenceGate = buildCanonicalPublicationConvergenceGate({
     publicationConvergence: options.publicationConvergence,
     publicationConvergenceGate: options.publicationConvergenceGate,
@@ -113,9 +225,7 @@ function buildCanonicalPublicationRecoveryEvidence(options = {}) {
   const priorityRecoveryObservation = buildCanonicalPriorityRecoveryObservation({
     publicationConvergence: options.publicationConvergence,
     publicationConvergenceGate,
-    hasExplicitPublicationConvergenceGate:
-      isRecord(options.publicationConvergenceGate) ||
-      isRecord(options.publicationConvergence?.publicationRecoveryGate),
+    hasExplicitPublicationConvergenceGate: hasExplicitConvergenceGate(options),
     priorityRecoveryObservation: options.priorityRecoveryObservation,
     priorityRecoveryDecisionSnapshots:
       options.priorityRecoveryDecisionSnapshots,
@@ -146,16 +256,14 @@ function buildCanonicalPublicationRecoveryEvidence(options = {}) {
     globalEpoch: options.globalEpoch || 0,
   });
 
-  const lease = options.lease instanceof PublicationRecoveryLease ? options.lease : null;
-  const leaseExpired = lease ? lease.isExpired(options.now || Date.now()) : false;
-
-  return Object.freeze({
+  const result = Object.freeze({
     publicationConvergence,
     publicationConvergenceGate,
     priorityRecoveryObservation,
     preemptionAdjudication,
-    leaseExpired,
+    leaseExpired: resolvePublicationRecoveryLeaseExpired(options),
   });
+  return finalizePureSnapshotEvidence(evidenceMemo, memoLookup, options, result);
 }
 
 export {

@@ -1242,3 +1242,20 @@ test('SQLParser - SELECT names its base table only as from.name', async (t) => {
     t.equal(ast.from, undefined, sql);
   }
 });
+
+test('SQLParser - AST parse memo returns isolated clones per dialect', async (t) => {
+  const sql = 'SELECT id, name FROM users WHERE id = ?';
+  const first = new SQLParser(sql).parse();
+  first.columns.push({expr: {type: 'column_ref', column: 'mutated'}});
+  first.from.name = 'corrupted';
+
+  const second = new SQLParser(sql).parse();
+  t.equal(second.from.name, 'users', 'mutation did not corrupt memoized AST');
+  t.equal(second.columns.length, 2, 'column array clone stayed isolated');
+
+  const pgSql = 'SELECT id FROM users WHERE id = $1';
+  const pgFirst = new SQLParser(pgSql, {dialect: PARSER_DIALECT.POSTGRESQL}).parse();
+  const pgSecond = new SQLParser(pgSql, {dialect: PARSER_DIALECT.POSTGRESQL}).parse();
+  t.same(pgSecond, pgFirst, 'postgresql dialect memo hit matches first parse');
+  t.not(pgSecond, pgFirst, 'memo hit returns distinct clone instance');
+});

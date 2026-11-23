@@ -60,6 +60,7 @@ documentClass: generated
 - [replica-handler-participant-release.js](replica-handler-participant-release.js) - The lifecycle recipient survives a PartitionService replacement. (importers: one)
 - [replica-handler-placement-learner-cleanup.js](replica-handler-placement-learner-cleanup.js) - No leading comment; first export: checkPlacementRemovalGeneration. (importers: one)
 - [replica-handler-progress-methods.js](replica-handler-progress-methods.js) - Start staged one-line progress reporting for replica creation. (importers: one)
+- [replica-handler-readiness-wake.js](replica-handler-readiness-wake.js) - Event-driven wake for ReplicaHandler learner-admission and voter-readiness loops. (importers: few)
 - [replica-handler-release-recovery.js](replica-handler-release-recovery.js) - No leading comment; first export: FRESH_CREATE_RELEASE_UNAVAILABLE. (importers: few)
 - [replica-handler-remove-execution-methods.js](replica-handler-remove-execution-methods.js) - Log one consensus-exit outcome: the backstop elapsing is a spent wait and an alarm, never a normal exit (owner... (importers: one)
 - [replica-handler-remove-request-methods.js](replica-handler-remove-request-methods.js) - No leading comment; first export: assignReplicaHandlerRemoveRequestMethods. (importers: one)

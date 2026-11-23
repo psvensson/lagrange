@@ -71,6 +71,7 @@ class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
     // Dispatches withheld at the reservation gate, each woken only by the
     // retained owner's verdict (operation-workflow-withheld-dispatch.js).
     this.withheldDispatchByOperationId = new Map();
+    this.acknowledgedCreateByOperationId = new Map();
     // Consecutive UNAVAILABLE stopping-observation deferrals per operation;
     // consumed by the bounded starvation escalation in
     // reconcileStoppingOperationProgress and cleared on any non-UNAVAILABLE
@@ -318,6 +319,7 @@ class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
   // A shut-down owner holds no withheld dispatch: a later verdict wakes nothing.
   shutdown() {
     this.withheldDispatchByOperationId.clear();
+    this.acknowledgedCreateByOperationId.clear();
     super.shutdown();
   }
 

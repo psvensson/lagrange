@@ -480,6 +480,19 @@ class SystemMetadataOwnerBase {
     );
   }
 
+  async upsertRows(rows, options = {}) {
+    return this.executeMutation(
+      LOCAL_STR_UPSERT,
+      {rows},
+      {...options, mergePolicy: CONTROL_PLANE_MUTATION_MERGE_POLICY.NONE},
+      (mutationOptions) => this.requireGateway().upsertSystemTableRows(
+        this.getTableName(),
+        rows,
+        mutationOptions,
+      ),
+    );
+  }
+
   async updateByPrimaryKey(primaryKeyValue, data, options = {}) {
     return this.executeMutation(
       LOCAL_STR_UPDATE,

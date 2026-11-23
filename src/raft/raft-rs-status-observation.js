@@ -18,6 +18,76 @@ import {
 import {
   RAFT_RS_PEER_IDENTITY_RESOLUTION,
 } from './raft-rs-peer-identity-constants.js';
+import {RAFT_RS_MESSAGE_TYPE} from './raft-rs-ingress-constants.js';
+
+const LEADER_PROGRESS_MESSAGE_TYPES = Object.freeze(new Set([
+  RAFT_RS_MESSAGE_TYPE.APPEND_RESPONSE,
+  RAFT_RS_MESSAGE_TYPE.HEARTBEAT_RESPONSE,
+  RAFT_RS_MESSAGE_TYPE.SNAPSHOT_STATUS,
+  RAFT_RS_MESSAGE_TYPE.UNREACHABLE,
+  RAFT_RS_MESSAGE_TYPE.TRANSFER_LEADER,
+  RAFT_RS_MESSAGE_TYPE.READ_INDEX,
+  RAFT_RS_MESSAGE_TYPE.READ_INDEX_RESPONSE,
+]));
+
+function readyChangesStatus(ready) {
+  return ready.softState !== undefined ||
+    ready.hardState !== undefined ||
+    (ready.entries?.length ?? 0) > 0 ||
+    (ready.committedEntries?.length ?? 0) > 0 ||
+    ready.snapshot !== undefined;
+}
+
+function lightReadyChangesStatus(lightReady) {
+  return lightReady.commitIndex !== undefined ||
+    (lightReady.committedEntries?.length ?? 0) > 0;
+}
+
+function messageMayChangeLeaderProgress(message) {
+  return LEADER_PROGRESS_MESSAGE_TYPES.has(message?.msgType);
+}
+
+function participationChanged(participation, observed) {
+  return participation.appliedIndex !== observed.appliedIndex ||
+    participation.gateOpen !== observed.gateOpen ||
+    participation.bootstrapIndex !== observed.bootstrapIndex ||
+    participation.admissionIndex !== observed.admissionIndex ||
+    participation.identityRecorded !== observed.identityRecorded;
+}
+
+function groupObservationInputsChanged(group, observation) {
+  const membershipGeneration = group.membershipGenerationKnown ?
+    Number(group.membershipGenerationIndex) : null;
+  return (group.pendingSnapshotGateOpen && group.gateOpen) ||
+    (group.confChangeEntriesApplied ?? 0) > 0 ||
+    group.persistedLastIndex !== observation.lastIndex ||
+    group.appliedTerm !== observation.appliedTerm ||
+    membershipGeneration !== observation.membershipGenerationIndex ||
+    group.lifecycleIncarnation !== observation.lifecycleIncarnation ||
+    group.peerDeliveryEpoch !== observation.peerDeliveryEpoch ||
+    group.inboundRefusalEpoch !== observation.inboundRefusalEpoch;
+}
+
+function hostObservationInputsChanged(group, observation, context) {
+  return group.announcedAppliedRuntimeGeneration !== context.expectedGeneration ||
+    participationChanged(context.participation, observation.participation) ||
+    context.runtimeHealth !== observation.runtimeHealth ||
+    context.runtimeGeneration !== observation.runtimeGeneration ||
+    groupObservationInputsChanged(group, observation);
+}
+
+function shouldAnnounceOnDrain(group, context) {
+  const observation = group.statusObservation;
+  if (!observation || group.lastStatus === null) return true;
+  if (group.resumingRuntime) return true;
+  if (context.readyChanged) return true;
+  if (ROLE[group.lastStatus.raftState] === ROLE_LEADER &&
+      (context.steppedLeaderProgress ||
+        (group.tenure?.c0ByRequestKey?.size ?? 0) > 0)) {
+    return true;
+  }
+  return hostObservationInputsChanged(group, observation, context);
+}
 
 const NO_DELIVERY_OBSERVED = Object.freeze({
   outcome: PEER_DELIVERY_OUTCOME.NONE_OBSERVED,
@@ -230,8 +300,12 @@ export {
   UNSHAPED_STATUS,
   cachedShapedGroupStatus,
   currentTermApplied,
+  lightReadyChangesStatus,
+  messageMayChangeLeaderProgress,
+  readyChangesStatus,
   reseedHoldStatus,
   setNativeStatusObserver,
   shapeGroupObservation,
+  shouldAnnounceOnDrain,
   validateObservationIdentities,
 };

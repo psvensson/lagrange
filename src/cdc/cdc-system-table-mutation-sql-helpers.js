@@ -8,6 +8,24 @@ export function buildSystemTableUpsert(tableName, data) {
     `${SQL.VALUES} (${placeholders})`, params: values};
 }
 
+export function buildSystemTableBatchUpsert(tableName, rows) {
+  const columns = Object.keys(rows[0] || {});
+  const rowPlaceholder =
+    `(${columns.map(() => CDC_SQL.PARAM_PLACEHOLDER).join(CDC_SQL.COMMA_SPACE)})`;
+  const valuesClause = rows.map(() => rowPlaceholder).join(CDC_SQL.COMMA_SPACE);
+  const params = [];
+  for (const row of rows) {
+    for (const columnName of columns) {
+      params.push(serializeMutationValue(row[columnName]));
+    }
+  }
+  return {
+    sql: `${SQL.INSERT_OR_REPLACE_INTO} ${tableName} ` +
+      `(${columns.join(CDC_SQL.COMMA_SPACE)}) ${SQL.VALUES} ${valuesClause}`,
+    params,
+  };
+}
+
 function serializeMutationValue(value) {
   if (value !== null && typeof value === 'object') {
     return JSON.stringify(value);

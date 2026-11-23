@@ -4,7 +4,6 @@ import {
   RAFT_OPERATION_OUTCOME,
 } from './raft-operation-port-constants.js';
 
-const FREEZABLE_VALUE_TYPES = Object.freeze(['object', 'function']);
 const VALUE_DESCRIPTOR_KEY = 'value';
 const OPENING_ERROR_METADATA = Object.freeze([
   'code', 'domain', 'identity', 'consensus',
@@ -28,16 +27,33 @@ const RAFT_OPERATION_PORT_METHODS = Object.freeze([
   'close',
 ]);
 
-function deepFreeze(value, seen = new Set()) {
-  if (value === null || !FREEZABLE_VALUE_TYPES.includes(typeof value) ||
-      seen.has(value)) {
+function isFreezableValue(value) {
+  return value !== null && (typeof value === 'object' || typeof value === 'function');
+}
+
+function deepFreeze(value, seen = null) {
+  if (!isFreezableValue(value)) {
     return value;
   }
-  seen.add(value);
-  for (const key of Reflect.ownKeys(value)) {
-    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+  let visited = seen;
+  if (visited !== null) {
+    if (visited.has(value)) {
+      return value;
+    }
+    visited.add(value);
+  }
+  const keys = Reflect.ownKeys(value);
+  for (let index = 0; index < keys.length; index += 1) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, keys[index]);
     if (descriptor && Object.hasOwn(descriptor, VALUE_DESCRIPTOR_KEY)) {
-      deepFreeze(descriptor.value, seen);
+      const child = descriptor.value;
+      if (isFreezableValue(child)) {
+        if (visited === null) {
+          visited = new Set();
+          visited.add(value);
+        }
+        deepFreeze(child, visited);
+      }
     }
   }
   return Object.freeze(value);

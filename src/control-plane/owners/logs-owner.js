@@ -56,6 +56,10 @@ class LogsOwner extends SystemMetadataOwnerBase {
     return this.upsertRow(row, options);
   }
 
+  async upsertLogs(rows, options = {}) {
+    return this.upsertRows(rows, options);
+  }
+
   async updateLog(logId, data, options = {}) {
     return this.updateByPrimaryKey(logId, data, options);
   }

@@ -329,6 +329,9 @@ function buildPriorityControlPlaneRecoveryProjection(service, context = {}) {
         context,
       ),
     );
+  if (!service.publicationEvidenceByConvergence) {
+    service.publicationEvidenceByConvergence = new WeakMap();
+  }
   const publicationEvidence = buildCanonicalPublicationRecoveryEvidence({
     publicationConvergence: planningSnapshot,
     publicationConvergenceGate:
@@ -341,7 +344,7 @@ function buildPriorityControlPlaneRecoveryProjection(service, context = {}) {
       planningSnapshot?.priorityRecoveryClosureWitness || null,
     priorityRecoveryInvariants:
       planningSnapshot?.priorityRecoveryInvariants || null,
-  });
+  }, service.publicationEvidenceByConvergence);
   const publicationRecoveryGate =
     publicationEvidence.publicationConvergenceGate ||
     planningSnapshot?.publicationRecoveryGate ||
@@ -393,7 +396,7 @@ function buildPriorityControlPlaneRecoveryProjection(service, context = {}) {
             ...(publicationEvidence.priorityRecoveryObservation || {}),
             priorityRecoveryClosureState:
               planningPriorityRecoveryClosureWitness.state || null,
-            priorityRecoveryReasonCodes:
+            priorityRecoveryReasonCodes: Object.freeze(
               Array.isArray(
                 planningSnapshot.diagnosticPriorityRecoveryReasonCodes,
               ) &&
@@ -419,6 +422,7 @@ function buildPriorityControlPlaneRecoveryProjection(service, context = {}) {
                     Array.isArray(planningSnapshot.priorityRecoveryReasonCodes) ?
                       [...planningSnapshot.priorityRecoveryReasonCodes] :
                       [],
+            ),
           }) :
           planningPriorityRecoveryObservation
       );

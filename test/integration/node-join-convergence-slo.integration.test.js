@@ -930,6 +930,9 @@ test('Readiness endpoint remains reachable during background log buffer flush',
           async upsertLog() {
             await sleepForMs(READINESS_STRESS_BLOCKING_WRITE_MS);
           },
+          async upsertLogs() {
+            await sleepForMs(READINESS_STRESS_BLOCKING_WRITE_MS);
+          },
         },
       });
       const flushedCount = await logsTableService.connectToLoggingService();
@@ -1113,6 +1116,9 @@ test('Real-listener join retries through transient SQL/metadata blockers under c
         batchSize: READINESS_STRESS_LOG_BATCH_SIZE,
         logsOwner: {
           async upsertLog() {
+            await sleepForMs(READINESS_STRESS_BLOCKING_WRITE_MS);
+          },
+          async upsertLogs() {
             await sleepForMs(READINESS_STRESS_BLOCKING_WRITE_MS);
           },
         },

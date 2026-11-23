@@ -8,6 +8,7 @@ import {hydrateCdcPropagatedTablesFromAuthority} from
 import {
   deleteSystemTableRow,
   upsertSystemTableRow,
+  upsertSystemTableRows,
 } from './cdc-integration-service-mutations.js';
 
 // Import fallback diagnostics helper
@@ -531,6 +532,17 @@ class CDCIntegrationServiceMutationOperations {
    */
   async upsertSystemTableRow(tableName, data, options = {}) {
     return upsertSystemTableRow(this, tableName, data, options);
+  }
+
+  /**
+   * Upsert multiple rows in a single multi-row SQL statement on a system table.
+   * @param {string} tableName - System table name.
+   * @param {Array<Object>} rows - Row data batch (each row must include primary key).
+   * @param {Object} [options] - Write options.
+   * @return {Promise<Object>} Batch upsert result.
+   */
+  async upsertSystemTableRows(tableName, rows, options = {}) {
+    return upsertSystemTableRows(this, tableName, rows, options);
   }
 
 

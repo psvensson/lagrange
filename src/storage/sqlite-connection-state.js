@@ -31,10 +31,16 @@ class SqliteConnectionState {
   #db;
   #statements = new Map();
   #exactStatements = new Map();
+  #boundedStatements = new Map();
   // fact -> Map<subject, value>
   #facts = new Map();
   // fact -> Set<subject>: forgotten inside a transaction not yet seen to end.
   #forgottenInTransaction = new Map();
+  // fact -> {schemaVersion, values: Map<subject, value>}
+  #schemaFacts = new Map();
+  // fact -> {appChanges, dv, sv, value}
+  #appStampedFacts = new Map();
+  #nonApplicationChanges = 0;
 
   /**
    * @param {Object} db - The better-sqlite3 connection this state belongs to.
@@ -106,6 +112,134 @@ class SqliteConnectionState {
     forgotten.add(subject);
   }
 
+  /**
+   * Record DML row changes performed exclusively on non-application bookkeeping
+   * tables (such as durable Raft log/state tables) so application-table change
+   * stamps can distinguish application writes from consensus bookkeeping.
+   * @param {number} changes - Row-change count returned by SQLite `.run()`.
+   */
+  recordNonApplicationChanges(changes) {
+    if (Number.isSafeInteger(changes) && changes > 0) {
+      this.#nonApplicationChanges += changes;
+    }
+  }
+
+  /**
+   * Execute a prepared non-application DML statement and record its row-change
+   * count against this connection's non-application change tally.
+   * @param {string} sql - Code-built DML SQL text targeting non-application tables.
+   * @param {...*} params - Bound parameters.
+   * @return {Object} The statement's run result.
+   */
+  runNonApplication(sql, ...params) {
+    const result = this.statement(sql).run(...params);
+    if (result && result.changes > 0) {
+      this.#nonApplicationChanges += result.changes;
+    }
+    return result;
+  }
+
+  /**
+   * Cumulative DML row changes recorded via non-application writes on this open
+   * connection.
+   * @return {number} Non-application change count.
+   */
+  getNonApplicationChanges() {
+    this.#observeConnection();
+    return this.#nonApplicationChanges;
+  }
+
+  /**
+   * The connection's statement for `sql`, retained in a bounded LRU map so
+   * dynamic SQL templates stay compiled without unbounded memory growth.
+   * @param {string} sql - Parameterized SQL text.
+   * @param {number} maxEntries - Maximum retained compiled statements.
+   * @return {Object} The prepared statement.
+   */
+  boundedStatement(sql, maxEntries) {
+    if (!this.#observeConnection()) {
+      return this.#db.prepare(sql);
+    }
+    let statement = this.#boundedStatements.get(sql);
+    if (statement !== undefined) {
+      this.#boundedStatements.delete(sql);
+      this.#boundedStatements.set(sql, statement);
+      return statement;
+    }
+    statement = this.#db.prepare(sql);
+    if (this.#boundedStatements.size >= maxEntries) {
+      this.#boundedStatements.delete(this.#boundedStatements.keys().next().value);
+    }
+    this.#boundedStatements.set(sql, statement);
+    return statement;
+  }
+
+  /**
+   * A schema-derived fact for `(fact, subject)` retained while `schemaVersion`
+   * matches and the connection is outside an uncommitted transaction.
+   * @param {string} fact - Fact name owned by caller.
+   * @param {*} subject - Subject key (e.g. table name).
+   * @param {number} schemaVersion - Connection's current `pragma_schema_version`.
+   * @param {Function} derive - Computes the fact when not already held.
+   * @return {*} The derived fact.
+   */
+  schemaVersionedFact(fact, subject, schemaVersion, derive) {
+    if (!this.#observeConnection()) {
+      return derive();
+    }
+    let held = this.#schemaFacts.get(fact);
+    if (held !== undefined && held.schemaVersion === schemaVersion) {
+      const existing = held.values.get(subject);
+      if (existing !== undefined) return existing;
+    }
+    const value = derive();
+    if (this.#db.inTransaction !== true) {
+      if (held === undefined || held.schemaVersion !== schemaVersion) {
+        held = {schemaVersion, values: new Map()};
+        this.#schemaFacts.set(fact, held);
+      }
+      held.values.set(subject, value);
+    }
+    return value;
+  }
+
+  /**
+   * An application-table fact stamped by `(appChanges, dv, sv)` where
+   * `appChanges = stamp.tc - nonApplicationChanges`. Safe to reuse across
+   * non-application Raft-store writes and inside transactions prior to any
+   * application mutation; uncommitted derivations are never retained.
+   * @param {string} fact - Fact name owned by caller.
+   * @param {{tc: number, dv: number, sv: number}} stamp - Connection change stamp.
+   * @param {Function} derive - Computes the fact when stamp advances.
+   * @return {*} The derived fact.
+   */
+  applicationStampedFact(fact, stamp, derive) {
+    if (!this.#observeConnection()) {
+      this.#appStampedFacts.delete(fact);
+      return derive();
+    }
+    const appChanges = stamp.tc - this.#nonApplicationChanges;
+    const held = this.#appStampedFacts.get(fact);
+    if (held !== undefined &&
+        held.appChanges === appChanges &&
+        held.dv === stamp.dv &&
+        held.sv === stamp.sv) {
+      return held.value;
+    }
+    const value = derive();
+    if (this.#db.inTransaction === true) {
+      this.#appStampedFacts.delete(fact);
+    } else {
+      this.#appStampedFacts.set(fact, {
+        appChanges,
+        dv: stamp.dv,
+        sv: stamp.sv,
+        value,
+      });
+    }
+    return value;
+  }
+
   // Whether the connection is open. A closed connection releases everything
   // it held; a connection outside any transaction ends the forgetting of the
   // transactions it has left (committed or rolled back, the next derivation
@@ -114,8 +248,12 @@ class SqliteConnectionState {
     if (this.#db.open !== true) {
       this.#statements.clear();
       this.#exactStatements.clear();
+      this.#boundedStatements.clear();
       this.#facts.clear();
       this.#forgottenInTransaction.clear();
+      this.#schemaFacts.clear();
+      this.#appStampedFacts.clear();
+      this.#nonApplicationChanges = 0;
       return false;
     }
     if (this.#db.inTransaction !== true) {

@@ -396,7 +396,9 @@ function textRuleRefusal(service, lexed, options = {}) {
 }
 
 function prepareByKind(db, sql, kind) {
-  return kind === KIND.READ ? preparePartitionReadStatement(db, sql) : db.prepare(sql);
+  return kind === KIND.READ || kind === KIND.WRITE ?
+    preparePartitionReadStatement(db, sql) :
+    db.prepare(sql);
 }
 
 /**

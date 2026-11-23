@@ -22,7 +22,6 @@ const objectFreeze = Object.freeze;
 const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 const objectGetPrototypeOf = Object.getPrototypeOf;
 const objectHasOwn = Object.hasOwn;
-const objectKeys = Object.keys;
 const reflectOwnKeys = Reflect.ownKeys;
 const canonicalArrayPrototype = Array.prototype;
 const canonicalObjectPrototype = Object.prototype;
@@ -239,23 +238,6 @@ function replaceExactSuffixByIndex(value, suffix, replacement) {
   return result + replacement;
 }
 
-function sortedOwnStringKeys(value) {
-  const keys = objectKeys(value);
-  for (let index = 1; index < keys.length; index += 1) {
-    const current = keys[index];
-    let insertionIndex = index;
-    while (
-      insertionIndex > 0 &&
-      keys[insertionIndex - 1] > current
-    ) {
-      keys[insertionIndex] = keys[insertionIndex - 1];
-      insertionIndex -= 1;
-    }
-    keys[insertionIndex] = current;
-  }
-  return keys;
-}
-
 function buildIndentation(spacing, depth) {
   let indentation = '';
   const length = spacing * depth;
@@ -265,9 +247,66 @@ function buildIndentation(spacing, depth) {
   return indentation;
 }
 
+function readOwnRecordPropertyValue(value, key) {
+  if (typeof key !== 'string') throw new CanonicalJsonDataError();
+  const descriptor = objectGetOwnPropertyDescriptor(value, key);
+  if (descriptor?.enumerable !== true ||
+      !objectHasOwn(descriptor, DATA_PROPERTY.VALUE)) {
+    throw new CanonicalJsonDataError();
+  }
+  return descriptor.value;
+}
+
+function readOwnRecordValues(value, keys) {
+  const values = new Array(keys.length);
+  for (let index = 0; index < keys.length; index += 1) {
+    values[index] = readOwnRecordPropertyValue(value, keys[index]);
+  }
+  return values;
+}
+
+function sortEntryIndices(keys) {
+  const order = new Array(keys.length);
+  for (let index = 0; index < keys.length; index += 1) {
+    let pos = index;
+    const key = keys[index];
+    while (pos > 0 && keys[order[pos - 1]] > key) {
+      order[pos] = order[pos - 1];
+      pos -= 1;
+    }
+    order[pos] = index;
+  }
+  return order;
+}
+
+function readDenseArrayValues(value) {
+  if (objectGetPrototypeOf(value) !== canonicalArrayPrototype ||
+      !hasCanonicalLength(value)) {
+    throw new CanonicalJsonDataError();
+  }
+  const length = value.length;
+  const keys = reflectOwnKeys(value);
+  if (keys.length !== length + 1) throw new CanonicalJsonDataError();
+  const items = new Array(length);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    if (key === DATA_PROPERTY.LENGTH) continue;
+    if (!isCanonicalArrayIndexKey(key, length)) {
+      throw new CanonicalJsonDataError();
+    }
+    const descriptor = objectGetOwnPropertyDescriptor(value, key);
+    if (descriptor?.enumerable !== true ||
+        !objectHasOwn(descriptor, DATA_PROPERTY.VALUE)) {
+      throw new CanonicalJsonDataError();
+    }
+    items[+key] = descriptor.value;
+  }
+  return items;
+}
+
 function serializeArrayData(value, options, depth, ancestors) {
-  if (!isDenseDataArray(value)) throw new CanonicalJsonDataError();
-  if (value.length === 0) return SERIALIZATION_TEXT.ARRAY_EMPTY;
+  const items = readDenseArrayValues(value);
+  if (items.length === 0) return SERIALIZATION_TEXT.ARRAY_EMPTY;
   const pretty = options.spacing > 0;
   const separator = pretty ?
     SERIALIZATION_TEXT.COMMA_PRETTY :
@@ -278,10 +317,10 @@ function serializeArrayData(value, options, depth, ancestors) {
   let serialized = pretty ?
     SERIALIZATION_TEXT.ARRAY_OPEN_PRETTY :
     SERIALIZATION_TEXT.ARRAY_OPEN;
-  for (let index = 0; index < value.length; index += 1) {
+  for (let index = 0; index < items.length; index += 1) {
     if (index > 0) serialized += separator;
     serialized += indentation +
-      serializeDataValue(value[index], options, depth + 1, ancestors);
+      serializeDataValue(items[index], options, depth + 1, ancestors);
   }
   if (!pretty) return serialized + SERIALIZATION_TEXT.ARRAY_CLOSE;
   return serialized + SERIALIZATION_TEXT.NEWLINE +
@@ -289,29 +328,69 @@ function serializeArrayData(value, options, depth, ancestors) {
     SERIALIZATION_TEXT.ARRAY_CLOSE;
 }
 
+function serializeSortedRecordEntries(
+  value,
+  keys,
+  options,
+  depth,
+  ancestors,
+  layout,
+) {
+  const values = readOwnRecordValues(value, keys);
+  const order = sortEntryIndices(keys);
+  let serialized = layout.open;
+  for (let index = 0; index < keys.length; index += 1) {
+    if (index > 0) serialized += layout.separator;
+    const entryIndex = order[index];
+    serialized += layout.indentation + jsonStringify(keys[entryIndex]) +
+      layout.colon +
+      serializeDataValue(values[entryIndex], options, depth + 1, ancestors);
+  }
+  return serialized;
+}
+
+function serializeUnsortedRecordEntries(
+  value,
+  keys,
+  options,
+  depth,
+  ancestors,
+  layout,
+) {
+  let serialized = layout.open;
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    const propertyValue = readOwnRecordPropertyValue(value, key);
+    if (index > 0) serialized += layout.separator;
+    serialized += layout.indentation + jsonStringify(key) + layout.colon +
+      serializeDataValue(propertyValue, options, depth + 1, ancestors);
+  }
+  return serialized;
+}
+
 function serializeRecordData(value, options, depth, ancestors) {
-  if (!isRecord(value)) throw new CanonicalJsonDataError();
-  const keys = options.sortKeys ?
-    sortedOwnStringKeys(value) :
-    objectKeys(value);
+  const prototype = objectGetPrototypeOf(value);
+  if (prototype !== canonicalObjectPrototype && prototype !== null) {
+    throw new CanonicalJsonDataError();
+  }
+  const keys = reflectOwnKeys(value);
   if (keys.length === 0) return SERIALIZATION_TEXT.OBJECT_EMPTY;
   const pretty = options.spacing > 0;
-  const separator = pretty ?
-    SERIALIZATION_TEXT.COMMA_PRETTY :
-    SERIALIZATION_TEXT.COMMA;
-  const indentation = pretty ?
-    buildIndentation(options.spacing, depth + 1) :
-    '';
-  let serialized = pretty ?
-    SERIALIZATION_TEXT.OBJECT_OPEN_PRETTY :
-    SERIALIZATION_TEXT.OBJECT_OPEN;
-  for (let index = 0; index < keys.length; index += 1) {
-    if (index > 0) serialized += separator;
-    const key = keys[index];
-    serialized += indentation + jsonStringify(key) +
-      (pretty ? SERIALIZATION_TEXT.COLON_PRETTY : SERIALIZATION_TEXT.COLON) +
-      serializeDataValue(value[key], options, depth + 1, ancestors);
-  }
+  const layout = {
+    open: pretty ?
+      SERIALIZATION_TEXT.OBJECT_OPEN_PRETTY :
+      SERIALIZATION_TEXT.OBJECT_OPEN,
+    separator: pretty ?
+      SERIALIZATION_TEXT.COMMA_PRETTY :
+      SERIALIZATION_TEXT.COMMA,
+    indentation: pretty ? buildIndentation(options.spacing, depth + 1) : '',
+    colon: pretty ?
+      SERIALIZATION_TEXT.COLON_PRETTY :
+      SERIALIZATION_TEXT.COLON,
+  };
+  const serialized = options.sortKeys ?
+    serializeSortedRecordEntries(value, keys, options, depth, ancestors, layout) :
+    serializeUnsortedRecordEntries(value, keys, options, depth, ancestors, layout);
   if (!pretty) return serialized + SERIALIZATION_TEXT.OBJECT_CLOSE;
   return serialized + SERIALIZATION_TEXT.NEWLINE +
     buildIndentation(options.spacing, depth) +

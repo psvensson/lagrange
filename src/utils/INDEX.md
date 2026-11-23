@@ -13,7 +13,7 @@ documentClass: generated
 - [cause-id.js](cause-id.js) - No leading comment; first export: getOrCreateCauseId. (importers: many)
 - [certification-evidence-record.js](certification-evidence-record.js) - The distributed certification archive's reader. (importers: few)
 - [correlation.js](correlation.js) - HTTP header name for correlation ID propagation. (importers: many)
-- [deep-freeze.js](deep-freeze.js) - Idempotent deep-freeze for JSON-shaped cache rows. (importers: few)
+- [deep-freeze.js](deep-freeze.js) - Idempotent deep-freeze for JSON-shaped cache rows. (importers: many)
 - [fast-json-clone.js](fast-json-clone.js) - Structural clone for JSON-shaped values, matching JSON.parse(JSON.stringify(value)) semantics without the... (importers: many)
 - [map-values-array.js](map-values-array.js) - No leading comment; first export: copyMapValuesToArray. (importers: few)
 - [phase-base.js](phase-base.js) - PhaseBase - Base class for phase-based operations. (importers: few)

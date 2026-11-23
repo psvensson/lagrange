@@ -7,6 +7,11 @@ import {
 import {
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
+import {
+  clearAcknowledgedCreateInFlight,
+  isAcknowledgedCreateStillInFlight,
+  recordAcknowledgedCreateInFlight,
+} from '../../src/rebalancer/operation-workflow-create-ack-state.js';
 import {createTestCoordinator} from './test-helpers.js';
 
 const SOURCE_NODE_ID = 'source-node';
@@ -389,6 +394,92 @@ test(
       t.ok(
         timers.every((timer) => timer.cleared),
         'any timer armed at delivery is cleared during terminal completion',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  },
+);
+
+test(
+  'generation-fenced acknowledged CREATE state suppresses routine CREATING ' +
+  're-dispatch under matching boot incarnation, fails closed without boot ' +
+  'incarnation, and clears on non-routine dispatch or incarnation change',
+  async (t) => {
+    let currentBoot = 1;
+    const {coordinator, owner} = createOwnerHarness();
+    const originalGet = owner.repository.systemTableCache.get.bind(
+      owner.repository.systemTableCache,
+    );
+    owner.repository.systemTableCache.get = (tableName, key) => {
+      if (tableName === 'nodes' && key === TARGET_NODE_ID) {
+        return currentBoot === null ?
+          null :
+          {node_id: TARGET_NODE_ID, boot_incarnation: currentBoot};
+      }
+      return originalGet(tableName, key);
+    };
+    const op = buildRuntimeOperation({
+      workflowStep: WORKFLOW_STEP.CREATING,
+    });
+
+    try {
+      recordAcknowledgedCreateInFlight(owner, op);
+      t.equal(
+        isAcknowledgedCreateStillInFlight(owner, op, {routineCreateRearmWake: true}),
+        true,
+        'suppresses routine CDC/heartbeat re-dispatch for matching boot incarnation',
+      );
+
+      t.equal(
+        isAcknowledgedCreateStillInFlight(owner, op, {boundary: 'dispatch'}),
+        false,
+        'direct non-routine dispatch clears acknowledged in-flight CREATE',
+      );
+      t.equal(
+        isAcknowledgedCreateStillInFlight(owner, op, {routineCreateRearmWake: true}),
+        false,
+        'entry remains cleared after non-routine dispatch',
+      );
+
+      recordAcknowledgedCreateInFlight(owner, op);
+      t.equal(
+        isAcknowledgedCreateStillInFlight(
+          owner, op, {routineCreateRearmWake: true, boundary: 'dispatch_retry'}),
+        false,
+        'explicit dispatch_retry boundary always clears acknowledged CREATE',
+      );
+
+      recordAcknowledgedCreateInFlight(owner, op);
+      currentBoot = 2;
+      t.equal(
+        isAcknowledgedCreateStillInFlight(owner, op, {routineCreateRearmWake: true}),
+        false,
+        'target boot incarnation change clears acknowledged in-flight CREATE',
+      );
+
+      recordAcknowledgedCreateInFlight(owner, op);
+      currentBoot = null;
+      t.equal(
+        isAcknowledgedCreateStillInFlight(owner, op, {routineCreateRearmWake: true}),
+        false,
+        'unreadable target boot incarnation fails closed and clears entry',
+      );
+
+      recordAcknowledgedCreateInFlight(owner, op);
+      t.equal(
+        owner.acknowledgedCreateByOperationId.has(op.operationId),
+        false,
+        'recording fails closed when target boot incarnation is absent',
+      );
+
+      currentBoot = 3;
+      recordAcknowledgedCreateInFlight(owner, op);
+      clearAcknowledgedCreateInFlight(owner, op.operationId);
+      t.equal(
+        isAcknowledgedCreateStillInFlight(owner, op, {routineCreateRearmWake: true}),
+        false,
+        'explicit clear removes acknowledged entry',
       );
     } finally {
       await coordinator.shutdown();

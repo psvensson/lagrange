@@ -434,4 +434,5 @@ export {
   buildCanonicalPublicationConvergenceGate,
   buildCanonicalPriorityRecoveryObservation,
   buildCanonicalPublicationConvergence,
+  isRecursivelyImmutableOwnData,
 };

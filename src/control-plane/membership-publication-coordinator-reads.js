@@ -487,13 +487,19 @@ class MembershipPublicationCoordinatorReads {
       TABLES.REPLICA_OPERATIONS,
     );
     const dispatchRows = cacheRows.filter((row) => {
+      if (!row || !isCoordinatorOwnedOperationType(row.type) ||
+          !isDispatchRetryOperation({
+            type: row.type,
+            workflowStep: row.workflow_step,
+            partitionId: row.partition_id,
+          })) {
+        return false;
+      }
       const operation = normalizeReplicaOperationView(row);
       return (
         operation &&
-        isCoordinatorOwnedOperationType(operation.type) &&
         this.isLocallyOwnedReplicaOperationRow(operation) &&
-        matchesDispatchRetryReadyNode(operation, normalizedNodeId) &&
-        isDispatchRetryOperation(operation)
+        matchesDispatchRetryReadyNode(operation, normalizedNodeId)
       );
     });
     const readinessService = this.controlPlaneReadinessService;

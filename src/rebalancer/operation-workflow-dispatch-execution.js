@@ -12,6 +12,7 @@ import * as DISPATCH_WAKE_PREEMPTION
   from './operation-workflow-dispatch-wake-preemption.js';
 import * as DISPATCH_RESPONSE_RECONCILE
   from './operation-workflow-dispatch-response-reconcile.js';
+import {isAcknowledgedCreateStillInFlight} from './operation-workflow-create-ack-state.js';
 import {ensureDispatchMembershipEpochOrSkip} from './operation-workflow-dispatch-epoch-gate.js';
 import {ensureDispatchReservationOrSkip} from './operation-workflow-dispatch-reservation-gate.js';
 import {OPERATION_OWNER_TURN_POLICY} from './operation-owner-turn-policy.js';
@@ -339,12 +340,9 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
         return null;
       }
       const operation = operationInput;
-      const sourceReplicaId =
-        this.repository.getReplaceSourceReplicaId(operation);
-      if (
-        typeof sourceReplicaId === OPERATION_WORKFLOW_OWNER_LITERAL.STRING &&
-        sourceReplicaId.length > 0
-      ) {
+      const sourceReplicaId = this.repository.getReplaceSourceReplicaId(operation);
+      if (typeof sourceReplicaId === OPERATION_WORKFLOW_OWNER_LITERAL.STRING &&
+          sourceReplicaId.length > 0) {
         operation.sourceReplicaId = sourceReplicaId;
       }
       const preconditionField =
@@ -423,16 +421,16 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
     }
 
     const createRearmDispatchPhase = this.isCreateRearmDispatchPhase(operation);
-    if (
-      this.shouldPreemptCreateRearmWithObservedProgress(
-        operationInput,
-        operation,
-        createRearmDispatchPhase,
-        options,
-      ) &&
-      await this.reconcileDispatchWakeOperationProgress(operation)
-    ) {
+    if (this.shouldPreemptCreateRearmWithObservedProgress(
+      operationInput, operation, createRearmDispatchPhase, options) &&
+      await this.reconcileDispatchWakeOperationProgress(operation)) {
       return this.buildSuccessfulOperationResult(operation.operationId);
+    }
+    if (createRearmDispatchPhase &&
+        isAcknowledgedCreateStillInFlight(this, operation, options)) {
+      return this.buildSuccessfulOperationResult(operation.operationId, {
+        status: OPERATION_WORKFLOW_OWNER_LITERAL.IN_PROGRESS,
+      });
     }
 
     // Fail-closed reservation gate (audit findings 3+11): after the

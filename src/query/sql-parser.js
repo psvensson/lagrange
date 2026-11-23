@@ -14,6 +14,7 @@ const CREATE_TABLE_STORAGE_OPTIONS_PATTERN =
 
 const {Parser: SQLiteParser} = sqliteNodeSqlParser;
 const {Parser: PostgreSQLParser} = postgresqlNodeSqlParser;
+import {SHARED_SQL_AST_PARSE_MEMO} from './sql-parser-ast-memo.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {resolveSystemTableName} from '../bootstrap/system-table-schema-shared-constants.js';
 import {AST_TYPE, EXPR_TYPE} from './parser-constants.js';
@@ -517,14 +518,16 @@ function parseExternalStatement(parser, prepared) {
     requireSingleStatement(externalAst) : externalAst;
 }
 
+const SHARED_SQLITE_PARSER = new SQLiteParser();
+const SHARED_POSTGRESQL_PARSER = new PostgreSQLParser();
+
 class SQLParser {
   constructor(sql, options = {}) {
     this.sql = sql;
     this.dialect = options.dialect || PARSER_DIALECT.SQLITE;
     this.parser = this.dialect === PARSER_DIALECT.POSTGRESQL ?
-      new PostgreSQLParser() :
-      new SQLiteParser();
-    this.logger = this.initLogger();
+      SHARED_POSTGRESQL_PARSER : SHARED_SQLITE_PARSER;
+    this.logger = null;
     this.positionalParams = [];
     this.parameterCounter = 0;
     this.columnSpans = new Map();
@@ -537,8 +540,7 @@ class SQLParser {
         return loggingService.forSubsystem(PARSER_CONFIG.SUBSYSTEM);
       }
     } catch (logErr) {
-      console.warn(PARSER_ERROR_MSG.SQL_PARSE_ERROR_PREFIX,
-        logErr.message);
+      console.warn(PARSER_ERROR_MSG.SQL_PARSE_ERROR_PREFIX, logErr.message);
     }
     return console;
   }
@@ -546,12 +548,14 @@ class SQLParser {
   parse() {
     this.positionalParams = [];
     this.parameterCounter = 0;
+    const memoizedAst = SHARED_SQL_AST_PARSE_MEMO.readClone(
+      this.dialect, this.sql,
+    );
+    if (memoizedAst !== null) return memoizedAst;
     const special = parseSpecialStatement(this.sql);
     if (special) return special;
 
-    const {sql: parseSql, hasLocking} =
-      stripAndValidateLockingClause(this.sql);
-
+    const {sql: parseSql, hasLocking} = stripAndValidateLockingClause(this.sql);
     let grammarText = null;
     try {
       const prepared = prepareStatementInput(this, parseSql);
@@ -568,8 +572,10 @@ class SQLParser {
         ast._paramMapping = this.positionalParams;
       }
       validateSelectAstLocking(ast, hasLocking);
+      SHARED_SQL_AST_PARSE_MEMO.recordClone(this.dialect, this.sql, ast);
       return ast;
     } catch (error) {
+      if (!this.logger) this.logger = this.initLogger();
       handleParseError(error, this.sql, this.logger, grammarText);
     }
   }

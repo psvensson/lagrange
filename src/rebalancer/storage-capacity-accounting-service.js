@@ -321,37 +321,84 @@ class StorageCapacityAccountingService {
     return this.buildSnapshot(node, usedBytes, reservedBytes);
   }
 
-  getCapacitySnapshotForNodeSync(
-    nodeId,
-    nowMs = this.readCapacitySemanticNowMs(),
-  ) {
-    if (!nodeId) {
-      return null;
-    }
+  readSyncCapacityStamp() {
+    const cache = this.systemTableCache;
+    const nodesVersion = cache?.getTableMutationVersion?.(TABLES.NODES);
+    if (nodesVersion === undefined) return null;
+    return `${nodesVersion}:` +
+      `${cache.getTableMutationVersion(TABLES.PARTITIONS)}:` +
+      `${cache.getTableMutationVersion(TABLES.SERVICES)}:` +
+      `${cache.getTableMutationVersion(TABLES.STORAGE_RESERVATIONS)}:` +
+      `${cache.getTableMutationVersion(TABLES.REPLICA_OPERATIONS)}`;
+  }
 
+  findNextActiveReservationExpiry(reservations, nowMs) {
+    let nextExpiryAtMs = null;
+    for (const reservation of reservations) {
+      if (reservation?.[COLUMN.STATUS] !== RESERVATION_STATUS.ACTIVE) continue;
+      const exp = Number(reservation?.[COLUMN.EXPIRES_AT]);
+      if (isFutureCapacityDeadline(exp, nowMs) &&
+          (nextExpiryAtMs === null || exp < nextExpiryAtMs)) {
+        nextExpiryAtMs = exp;
+      }
+    }
+    return nextExpiryAtMs;
+  }
+
+  computeSyncCapacityState(stamp, nowMs) {
     const nodes = this.getSystemTableRowsSync(TABLES.NODES);
-    const node = nodes.find((row) => row?.[COLUMN.NODE_ID] === nodeId);
-    if (!node) {
-      return null;
+    const nodesById = new Map();
+    for (const row of nodes) {
+      const id = row?.[COLUMN.NODE_ID];
+      if (id) nodesById.set(id, row);
     }
-
     const partitions = this.getSystemTableRowsSync(TABLES.PARTITIONS);
     const services = this.getSystemTableRowsSync(TABLES.SERVICES);
     const reservations = this.getSystemTableRowsSync(TABLES.STORAGE_RESERVATIONS);
     const operations = this.getSystemTableRowsSync(TABLES.REPLICA_OPERATIONS);
-
     const partitionSizes = this.buildPartitionSizeMap(partitions);
     const usedBytesByNode = this.calculateUsedBytes(services, partitionSizes);
     const liveOperationIds = this.buildLiveOperationIds(operations);
     const reservedBytesByNode = this.calculateReservedBytes(
+      reservations, liveOperationIds, nowMs);
+    return {
+      stamp,
+      nowMs,
+      nextExpiryAtMs: this.findNextActiveReservationExpiry(reservations, nowMs),
+      nodesById,
+      usedBytesByNode,
+      reservedBytesByNode,
       reservations,
       liveOperationIds,
-      nowMs,
-    );
-    const usedBytes = usedBytesByNode.get(nodeId) || 0;
-    const reservedBytes = reservedBytesByNode.get(nodeId) || 0;
+    };
+  }
 
-    return this.buildSnapshot(node, usedBytes, reservedBytes);
+  readSyncCapacityState(nowMs) {
+    const stamp = this.readSyncCapacityStamp();
+    const held = this._syncCapacityState;
+    if (stamp !== null && held && held.stamp === stamp &&
+        held.nowMs <= nowMs &&
+        (held.nextExpiryAtMs === null || nowMs < held.nextExpiryAtMs)) {
+      return held;
+    }
+    const state = this.computeSyncCapacityState(stamp, nowMs);
+    if (stamp !== null) this._syncCapacityState = state;
+    return state;
+  }
+
+  getCapacitySnapshotForNodeSync(
+    nodeId,
+    nowMs = this.readCapacitySemanticNowMs(),
+  ) {
+    if (!nodeId) return null;
+    const state = this.readSyncCapacityState(nowMs);
+    const node = state.nodesById.get(nodeId);
+    if (!node) return null;
+    return this.buildSnapshot(
+      node,
+      state.usedBytesByNode.get(nodeId) || 0,
+      state.reservedBytesByNode.get(nodeId) || 0,
+    );
   }
 
   /**
@@ -495,18 +542,21 @@ class StorageCapacityAccountingService {
   }
 
   buildCapacitySemanticProjection(nodeId, nowMs) {
-    const capacity = this.getCapacitySnapshotForNodeSync(nodeId, nowMs);
-    const reservations = this.getSystemTableRowsSync(
-      TABLES.STORAGE_RESERVATIONS,
-    );
-    const operations = this.getSystemTableRowsSync(TABLES.REPLICA_OPERATIONS);
-    const liveOperationIds = this.buildLiveOperationIds(operations);
+    const state = this.readSyncCapacityState(nowMs);
+    const node = nodeId ? state.nodesById.get(nodeId) : null;
+    const capacity = node ?
+      this.buildSnapshot(
+        node,
+        state.usedBytesByNode.get(nodeId) || 0,
+        state.reservedBytesByNode.get(nodeId) || 0,
+      ) :
+      null;
     return Object.freeze({
       capacity: capacity ? Object.freeze({...capacity}) : null,
       nextSemanticChangeAtMs: this.findNextCapacityChangeAtMs(
         nodeId,
-        reservations,
-        liveOperationIds,
+        state.reservations,
+        state.liveOperationIds,
         nowMs,
       ),
       nodeId,

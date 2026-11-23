@@ -1,3 +1,4 @@
+import {deepFreeze} from '../utils/deep-freeze.js';
 import {readUpperStateField} from '../utils/state-field-read.js';
 import {
   TABLES,
@@ -47,17 +48,99 @@ function resolvePlanningLivenessContext(coordinator, options, nodeRows) {
     nodeLivenessByNodeId};
 }
 
+const CLUSTER_CANDIDATE_SYNC_ALLOWED_OPTION_KEYS = new Set([
+  'deferNestedPriorityRecoveryPlanning',
+  'publisherNodeId',
+  'nowMs',
+]);
+
+function isDefaultClusterCandidateSyncOptions(options) {
+  if (!options || typeof options !== 'object' ||
+      options.deferNestedPriorityRecoveryPlanning !== true) {
+    return false;
+  }
+  const keys = Object.keys(options);
+  for (let index = 0; index < keys.length; index += 1) {
+    if (!CLUSTER_CANDIDATE_SYNC_ALLOWED_OPTION_KEYS.has(keys[index])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function resolveCoordinatorPublisherNodeId(options, coordinator) {
+  if (typeof options?.publisherNodeId === 'string' &&
+      options.publisherNodeId.length > 0) {
+    return options.publisherNodeId;
+  }
+  return coordinator.nodeId;
+}
+
+function readClusterCandidateSyncMemoKey(coordinator, options, publisherNodeId) {
+  if (!isDefaultClusterCandidateSyncOptions(options)) return null;
+  const cache = coordinator.systemTableCache;
+  const pubVersion = cache?.getTableMutationVersion?.(
+    TABLES.CONTROL_PLANE_PUBLICATIONS,
+  );
+  if (pubVersion === undefined) return null;
+  const readiness = coordinator.controlPlaneReadinessService;
+  const owner = readiness?.readinessPlanningSnapshotOwner;
+  if (!owner || owner.stopped) return null;
+  const nowMs = normalizePositiveInteger(options.nowMs, coordinator.now());
+  const identity = readiness.readCurrentPlanningProjectionIdentity?.(
+    publisherNodeId,
+    nowMs,
+  );
+  if (!identity) return null;
+  const token = owner.captureToken();
+  if (!token || token.transportTopologyValid === false) return null;
+  return `${publisherNodeId}:` +
+    `${identity.globalPlanningGeneration}:` +
+    `${owner.recoveryEpochRevision}:` +
+    `${owner.readinessSnapshotGeneration}:` +
+    `${token.transportTopologyGeneration}:` +
+    `${pubVersion}:` +
+    `${cache.getTableMutationVersion(TABLES.NODES)}:` +
+    `${cache.getTableMutationVersion(TABLES.NODE_ENDPOINTS)}`;
+}
+
 class MembershipPublicationCoordinatorPlanning extends
   MembershipPublicationCoordinatorReads {
   deriveClusterMembershipCandidateSync(options = {}) {
+    const publisherNodeId = resolveCoordinatorPublisherNodeId(options, this);
+    const memoKey = readClusterCandidateSyncMemoKey(
+      this, options, publisherNodeId,
+    );
+    if (memoKey !== null) {
+      const cached = this._clusterCandidateSyncMemoByPublisher?.get(
+        publisherNodeId,
+      );
+      if (cached?.key === memoKey) {
+        return cached.candidate;
+      }
+    }
     const planningSnapshot =
       options.planningSnapshot && typeof options.planningSnapshot === 'object' ?
         options.planningSnapshot :
         this.readPublicationPlanningSnapshotSync(options);
-    return deriveMembershipPublicationCandidate({
+    const candidate = deriveMembershipPublicationCandidate({
       ...options,
       planningSnapshot,
     });
+    if (memoKey !== null &&
+        readClusterCandidateSyncMemoKey(this, options, publisherNodeId) ===
+          memoKey) {
+      const frozenCandidate = deepFreeze(candidate);
+      if (!this._clusterCandidateSyncMemoByPublisher) {
+        this._clusterCandidateSyncMemoByPublisher = new Map();
+      }
+      this._clusterCandidateSyncMemoByPublisher.set(publisherNodeId, {
+        key: memoKey,
+        candidate: frozenCandidate,
+      });
+      return frozenCandidate;
+    }
+    return candidate;
   }
 
   async readPublicationPlanningSnapshot(options = {}) {

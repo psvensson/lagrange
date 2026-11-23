@@ -1,26 +1,32 @@
-const readStatementByDatabase = /* @__PURE__ */ new WeakMap();
+import {sqliteConnectionState} from '../storage/sqlite-connection-state.js';
+
+const MAX_PREPARED_STATEMENTS_PER_DB = 64;
+
+function resetStatementModes(statement) {
+  if (statement.reader !== false) {
+    statement.raw?.(false);
+  }
+  statement.safeIntegers?.(false);
+  return statement;
+}
 
 /**
- * Retain one most-recent SELECT statement per SQLite database handle.
- * Repeated control-plane reads use stable SQL with new bound parameters, while
- * a single slot keeps arbitrary local SQL from creating an unbounded cache.
+ * Retain a bounded per-connection LRU of prepared SQL statements through the
+ * connection's state owner. Control-plane reads and writes repeat a small set
+ * of parameterized SQL templates per partition connection; SQLite recompiles
+ * held statements automatically on schema changes.
  *
  * @param {Object} database - SQLite-compatible database handle.
- * @param {string} sql - Exact SELECT statement text.
+ * @param {string} sql - Exact SQL statement text.
  * @return {Object} Prepared SQLite statement.
  */
 function preparePartitionReadStatement(database, sql) {
-  const retained = readStatementByDatabase.get(database);
-  if (retained?.sql === sql) {
-    retained.statement.raw?.(false);
-    retained.statement.safeIntegers?.(false);
-    return retained.statement;
-  }
-  const statement = database.prepare(sql);
-  statement.raw?.(false);
-  statement.safeIntegers?.(false);
-  readStatementByDatabase.set(database, {sql, statement});
-  return statement;
+  const statement = database?.open === true ?
+    sqliteConnectionState(database).boundedStatement(
+      sql, MAX_PREPARED_STATEMENTS_PER_DB,
+    ) :
+    database.prepare(sql);
+  return resetStatementModes(statement);
 }
 
 export {preparePartitionReadStatement};

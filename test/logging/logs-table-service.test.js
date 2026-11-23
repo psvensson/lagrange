@@ -12,19 +12,18 @@ import {
   PRESSURE_GOVERNOR_ACTION,
   PRESSURE_WORK_CLASS,
 } from '../../src/control-plane/pressure-governor.js';
-import {
-  CONTROL_PLANE_WORKLOAD_CLASS,
-} from '../../src/control-plane/control-plane-workload-profile.js';
+import {CONTROL_PLANE_WORKLOAD_CLASS} from
+  '../../src/control-plane/control-plane-workload-profile.js';
 
 const SHARED_PRESSURE_RESOURCE_KEY = 'logs-table';
-const SHARED_PRESSURE_RESOURCE_KEYS = Object.freeze([
-  SHARED_PRESSURE_RESOURCE_KEY,
-]);
+const SHARED_PRESSURE_RESOURCE_KEYS = Object.freeze([SHARED_PRESSURE_RESOURCE_KEY]);
 
 function createLogsOwner(writeImpl = async () => ({success: true})) {
   return {
-    async upsertLog(row, options) {
-      return writeImpl(row, options);
+    upsertLog: (row, options) => writeImpl(row, options),
+    async upsertLogs(rows, options) {
+      for (const row of rows) await writeImpl(row, options);
+      return {success: true};
     },
   };
 }
