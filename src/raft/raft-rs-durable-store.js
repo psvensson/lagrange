@@ -173,17 +173,16 @@ function readRecordTable(table, read) {
  * @param {Function} work - The transaction's work.
  * @return {*} Whatever the work returned.
  */
-const READ_SYNCHRONOUS_SQL = 'PRAGMA synchronous';
-
 function commitDurably(db, work) {
   if (db.inTransaction) {
     throw Object.assign(
       new Error(RAFT_RS_STORE_ERROR_MSG.DURABLE_COMMIT_INSIDE_TRANSACTION),
       {code: RAFT_RS_STORE_ERROR_CODE.DURABLE_COMMIT_INSIDE_TRANSACTION});
   }
-  const level = sqliteConnectionState(db)
-    .statement(READ_SYNCHRONOUS_SQL).pluck(true).get();
-  if (level >= RAFT_RS_SYNCHRONOUS_PRAGMA.FULL_LEVEL) return db.transaction(work)();
+  const level = db.pragma(RAFT_RS_SYNCHRONOUS_PRAGMA.READ, {simple: true});
+  if (level >= RAFT_RS_SYNCHRONOUS_PRAGMA.FULL_LEVEL) {
+    return db.transaction(work)();
+  }
   db.pragma(RAFT_RS_SYNCHRONOUS_PRAGMA.SET_FULL);
   try {
     return db.transaction(work)();
