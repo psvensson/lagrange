@@ -51,6 +51,7 @@ class SeedRuntimeBridgeOwner {
     const engine = new SQLQueryEngine({
       nowFn: resolveHostedNodeClock(d), systemCache: d.getSystemTableCache(),
       messageRouter: d.getMessageRouter(), nodeId: d.getNodeId(),
+      dataDir: d.getDataDir?.() || null,
       cdcIntegrationService, partitionServicesProvider: () => d.getPartitionServices(),
       bootstrapTopologySnapshotOwner: this.bootstrapTopologySnapshotOwner,
       rebalanceCoordinator: d.getRebalanceCoordinator(),

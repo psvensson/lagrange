@@ -235,12 +235,34 @@ class PartitionServiceRowOwner {
       isBootstrapCriticalSystemPartitionId(partitionId);
   }
 
-  buildDeferredUpdateOptions(serviceId, partitionId = null) {
+  buildActivationBudgetOptions(budgetOptions = null) {
+    if (!budgetOptions || typeof budgetOptions !== 'object') {
+      return {};
+    }
+    const propagated = {};
+    if (budgetOptions.signal) {
+      propagated.signal = budgetOptions.signal;
+    }
+    if (Number.isFinite(budgetOptions.deadlineMs)) {
+      propagated.deadlineMs = budgetOptions.deadlineMs;
+      const remainingMs = Math.max(1, Math.floor(budgetOptions.deadlineMs - this.now()));
+      propagated.timeoutMs =
+        Number.isFinite(budgetOptions.timeoutMs) && budgetOptions.timeoutMs > 0 ?
+          Math.min(Math.floor(budgetOptions.timeoutMs), remainingMs) :
+          remainingMs;
+    } else if (Number.isFinite(budgetOptions.timeoutMs) && budgetOptions.timeoutMs > 0) {
+      propagated.timeoutMs = Math.floor(budgetOptions.timeoutMs);
+    }
+    return propagated;
+  }
+
+  buildDeferredUpdateOptions(serviceId, partitionId = null, budgetOptions = null) {
     return {
       ...(this.isBootstrapCriticalPartitionId(partitionId) ?
         CRITICAL_SERVICE_ROW_UPDATE_OPTION :
         SERVICE_ROW_UPDATE_OPTION),
       coalescingKey: `services:${serviceId}`,
+      ...this.buildActivationBudgetOptions(budgetOptions),
     };
   }
 
@@ -249,7 +271,11 @@ class PartitionServiceRowOwner {
   // owner (quest partition-leader-row-publication-integrity) treats the
   // absent observation as unruled-out divergence, so registration-time
   // leader publications ride the critical lane.
-  buildPartitionLeaderUpdateOptions(partitionId, publishingNodeId = null) {
+  buildPartitionLeaderUpdateOptions(
+    partitionId,
+    publishingNodeId = null,
+    budgetOptions = null,
+  ) {
     const critical = isCriticalLeaderPublication({
       observedLeaderNodeId: null,
       partitionId,
@@ -260,13 +286,15 @@ class PartitionServiceRowOwner {
         CRITICAL_SERVICE_ROW_UPDATE_OPTION :
         SERVICE_ROW_UPDATE_OPTION),
       coalescingKey: `partitions:leader:${partitionId}`,
+      ...this.buildActivationBudgetOptions(budgetOptions),
     };
   }
 
   // Leadership is the live service's (tier L): the row this owner built
   // never carries the leader role (resolvePartitionRaftRole collapses it).
-  async publishCanonicalLeaderNodeId(row, service = null) {
-    if (!row ||
+  async publishCanonicalLeaderNodeId(row, service = null, budgetOptions = null) {
+    if (budgetOptions?.signal?.aborted ||
+        !row ||
         row.service_type !== SERVICE_TYPE.PARTITION ||
         row.status !== SERVICE_STATUS.ACTIVE ||
         !isLeaderPartitionService(service) ||
@@ -282,7 +310,11 @@ class PartitionServiceRowOwner {
         leader_node_id: row.node_id,
         updated_at: row.updated_at,
       },
-      this.buildPartitionLeaderUpdateOptions(row.partition_id, row.node_id),
+      this.buildPartitionLeaderUpdateOptions(
+        row.partition_id,
+        row.node_id,
+        budgetOptions,
+      ),
     );
   }
 
@@ -367,6 +399,11 @@ class PartitionServiceRowOwner {
         PARTITION_SERVICE_ROW_OWNER_ERROR.LIFECYCLE_OWNER_REQUIRED,
       );
     }
+    const budgetOptions = this.buildActivationBudgetOptions({
+      timeoutMs: options.timeoutMs,
+      deadlineMs: options.deadlineMs,
+      signal: options.signal,
+    });
     const row = await this.replicaStateMachine.activateRegisteredReplica({
       partitionId: options.partitionId,
       replicaId: options.replicaId,
@@ -379,9 +416,10 @@ class PartitionServiceRowOwner {
       writeOptions: this.buildDeferredUpdateOptions(
         options.replicaId,
         options.partitionId,
+        budgetOptions,
       ),
     });
-    await this.publishCanonicalLeaderNodeId(row, options.service);
+    await this.publishCanonicalLeaderNodeId(row, options.service, budgetOptions);
     return row;
   }
 }

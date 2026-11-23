@@ -272,6 +272,7 @@ async function startJoinNode(options) {
   const joinSqlRuntime = await acquireStartupOwner({
     acquire: () => createSqlRuntimeComposition({
       nodeId,
+      dataDir: nodeJoiningService.dataDir || null,
       [METADATA_KEY]: metadata,
       messageRouter: joinResult.messageRouter,
       owner: nodeJoiningService.runtimeDependencyOwner,
@@ -515,6 +516,8 @@ async function startSeedNode(options) {
   const seedSqlRuntime = await acquireStartupOwner({
     acquire: () => createSqlRuntimeComposition({
       nodeId,
+      dataDir: bootstrapService.dataDirectoryManager?.isInitialized?.() ?
+        bootstrapService.dataDirectoryManager.getDataDir() : null,
       [METADATA_KEY]: metadata,
       messageRouter: bootstrapResult.messageRouter,
       owner: bootstrapService.runtimeDependencyOwner,

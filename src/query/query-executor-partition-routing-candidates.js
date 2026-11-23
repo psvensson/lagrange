@@ -1,4 +1,8 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
+import {
+  orderSelfLeaderProbeServices,
+  resolveSelfPublishedLeaderTermFloor,
+} from './query-executor-self-leader-term-floor.js';
 
 const {
   COLUMN,
@@ -176,6 +180,21 @@ const queryExecutorPartitionRoutingCandidateMethods = {
           QUERY_EXECUTOR_ROUTING_OPTION_FIELD.READ_AUTHORITY
         ]?.leaderMode === CONTROL_PLANE_READ_LEADER_MODE.REQUIRED);
     if (requireCanonicalLeader) {
+      // Option A (S0 ruling Q1 refinement): when THIS node is the published
+      // leader, knows in-process it does not currently lead, and has a durable
+      // local Raft term T_self >= T_pub, probe peers fenced by term >= T_self.
+      const selfLeaderFloor = resolveSelfPublishedLeaderTermFloor(
+        this, partitionId, routingSnapshot);
+      if (selfLeaderFloor.eligible) {
+        orderSelfLeaderProbeServices(
+          orderedServices, this.nodeId, selfLeaderFloor.hasLocalReplica,
+        ).forEach(addService);
+        return {
+          candidates,
+          routingSnapshot,
+          selfPublishedLeaderTermFloor: selfLeaderFloor.termFloor,
+        };
+      }
       // Redirect-first (S0 ruling Q1): the published leader's replicas when
       // it is published and usable; a replica that does not lead refuses typed
       // and names the leader it knows. A published leader with no usable

@@ -13,7 +13,7 @@
     "examples-e2e": 8,
     "pgwire-compat": 23,
     "placement-rebalance": 312,
-    "query-sql": 220,
+    "query-sql": 221,
     "release-packaging": 15,
     "runtime-primitives": 24,
     "services-runtime": 163,
@@ -25,10 +25,10 @@
     "transport-messaging": 123,
     "wasm-toolchain": 74
   },
-  "censusSize": 2818,
-  "digest": "fnv1a32-422ca99b",
+  "censusSize": 2819,
+  "digest": "fnv1a32-a5f5f4a4",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-3085e878",
+  "observationDigest": "fnv1a32-30657985",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1754,6 +1754,7 @@
     "test/query/schema-provisioning-native-admission.test.js": "query-sql",
     "test/query/schema-provisioning-transient-collision.test.js": "query-sql",
     "test/query/select-no-from.test.js": "query-sql",
+    "test/query/self-published-leader-term-fenced-peer-probing.test.js": "query-sql",
     "test/query/service-lifecycle-call-invocation.test.js": "query-sql",
     "test/query/service-lifecycle-sql-control-surface.test.js": "query-sql",
     "test/query/service-partition-access-attribution.test.js": "query-sql",
@@ -4190,6 +4191,11 @@
     "test/bootstrap/registered-service-row-raft-role.test.js": {
       "files": [
         "src/bootstrap/bootstrap-api-registration-methods.js"
+      ]
+    },
+    "test/bootstrap/registration-failure-and-activation-deadline-hardening.test.js": {
+      "files": [
+        "src/constants/index.js"
       ]
     },
     "test/bootstrap/release-version-fence.test.js": {
@@ -17892,6 +17898,34 @@
         "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "test/test-helpers/participant-protocol-double.js"
+      ]
+    },
+    "test/query/self-published-leader-term-fenced-peer-probing.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
+        "src/control-plane/control-plane-owner-fact-read-contract.js",
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/query/query-executor-partition-request-builders.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-committed-membership-stamp.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/control-plane/serve-eligibility-test-support.js",
+        "test/partition/committed-operation-gateway-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/query/service-lifecycle-call-invocation.test.js": {

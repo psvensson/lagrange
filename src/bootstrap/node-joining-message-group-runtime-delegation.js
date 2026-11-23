@@ -567,6 +567,7 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
     const owner = this.getDeferredPartitionActivationOwner();
     const deferredIds = new Set();
     const supersededIds = new Set();
+    const signal = options.signal || null;
     const expectedReplicaIncarnationByReplicaId =
       options.expectedReplicaIncarnationByReplicaId instanceof Map ?
         options.expectedReplicaIncarnationByReplicaId :
@@ -577,10 +578,16 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
       replicaStateMachine: this.replicaStateMachine,
       messageRouter: this.messageRouter,
       expectedReplicaIncarnationByReplicaId,
+      timeoutMs: options.timeoutMs,
+      deadlineMs: options.deadlineMs,
+      signal,
       deferTransientFailures: options.deferTransientFailures === true,
       retireSupersededReplicas: options.retireSupersededReplicas === true,
       skipMissingHandlerPreflight: options.skipMissingHandlerPreflight === true,
       onDeferredActivation: ({partitionId, replicaId, service, error}) => {
+        if (signal?.aborted) {
+          return;
+        }
         deferredIds.add(replicaId);
         owner.recordDeferred({
           replicaId,
@@ -601,14 +608,20 @@ class NodeJoiningMessageGroupRuntimeDelegation extends NodeJoiningReplicaDescrip
         );
       },
       onSupersededReplica: async ({partitionId, replicaId, service, error}) => {
+        if (signal?.aborted) {
+          return;
+        }
         supersededIds.add(replicaId);
         await owner.retireSuperseded({replicaId, partitionId, service, error});
       },
       partitionServices,
     });
-    for (const replicaId of partitionServices.keys()) {
+    if (signal?.aborted) {
+      return activatedCount;
+    }
+    for (const [replicaId, service] of partitionServices.entries()) {
       if (!deferredIds.has(replicaId) && !supersededIds.has(replicaId)) {
-        owner.markSettled(replicaId);
+        owner.markSettled(replicaId, service);
       }
     }
     if (owner.hasPending()) {

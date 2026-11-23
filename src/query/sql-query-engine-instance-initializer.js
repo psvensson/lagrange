@@ -24,6 +24,34 @@ import {
 import {
   readCacheApplyChangeChannel,
 } from '../control-plane/control-plane-readiness-collaborators.js';
+import {hostedPartitionReplicasOf} from '../cdc/cdc-hosted-replica-owner.js';
+
+function resolveEngineLocalPartitionReplicas(engine, partitionId) {
+  const seen = new Set();
+  const replicas = [];
+  const addReplica = (service) => {
+    if (!service || service.partitionId !== partitionId || seen.has(service)) {
+      return;
+    }
+    seen.add(service);
+    replicas.push(service);
+  };
+  if (engine.cdcIntegrationService) {
+    for (const service of hostedPartitionReplicasOf(
+      engine.cdcIntegrationService,
+      partitionId,
+    )) {
+      addReplica(service);
+    }
+  }
+  const provided = engine.partitionServicesProvider?.() ?? null;
+  if (provided instanceof Map) {
+    for (const service of provided.values()) {
+      addReplica(service);
+    }
+  }
+  return replicas;
+}
 
 function bindSchemaJobGsiCompletionHandler(engine) {
   const owner = engine.tableCreationService?.schemaProvisioningJobOwner;
@@ -165,6 +193,10 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
     typeof options.partitionServicesProvider === LOCAL_STR_FUNCTION ?
       options.partitionServicesProvider :
       null;
+  engine.dataDir = typeof options.dataDir === 'string' &&
+    options.dataDir.length > 0 ?
+    options.dataDir :
+    null;
   engine.isShutDown = false;
   engine.authoritativeRoutingOverlayEntries = new Map();
   engine.inFlightAuthoritativeRoutingRefreshes = new Map();
@@ -239,6 +271,9 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
     controlPlaneReadinessService: engine.controlPlaneReadinessService,
     defaultRoutingReadinessDimension: engine.defaultRoutingReadinessDimension,
     nodeId: engine.nodeId,
+    dataDir: engine.dataDir,
+    getLocalPartitionReplicas: (partitionId) =>
+      resolveEngineLocalPartitionReplicas(engine, partitionId),
     unrefRetryDelayTimers: options.unrefRetryDelayTimers === true,
   });
   engine.queryExecutor.setRoutingMetadataOverlay(

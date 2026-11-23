@@ -373,6 +373,7 @@ async function createSqlRuntimeComposition(options) {
       messageRouter: options.messageRouter,
       cdcIntegrationService: options.owner.cdcIntegrationService,
       nodeId: options.nodeId,
+      dataDir: options.dataDir || null,
       rebalanceCoordinator: options.owner.rebalanceCoordinator,
       controlPlaneReadinessService:
       resolveOwnerControlPlaneReadinessService(options.owner),

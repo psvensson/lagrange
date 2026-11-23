@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2444,
+    "unit": 2445,
     "integration": 132,
     "bootstrap": 235,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2818,
-  "digest": "fnv1a32-3dd633b6",
+  "censusSize": 2819,
+  "digest": "fnv1a32-f2ae6f3a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1735,6 +1735,7 @@
     "test/query/schema-provisioning-native-admission.test.js": "unit",
     "test/query/schema-provisioning-transient-collision.test.js": "unit",
     "test/query/select-no-from.test.js": "unit",
+    "test/query/self-published-leader-term-fenced-peer-probing.test.js": "unit",
     "test/query/service-lifecycle-call-invocation.test.js": "unit",
     "test/query/service-lifecycle-sql-control-surface.test.js": "unit",
     "test/query/service-partition-access-attribution.test.js": "unit",

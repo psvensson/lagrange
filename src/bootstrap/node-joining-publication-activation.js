@@ -657,6 +657,8 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
       systemCache: systemTableCache,
       messageRouter: this.messageRouter,
       nodeId: this.nodeId,
+      dataDir: this.dataDir,
+      partitionServicesProvider: () => this.partitionServices,
       rebalanceCoordinator: this.rebalanceCoordinator,
       controlPlaneReadinessService:
         this.rebalanceCoordinator?.controlPlaneReadinessService || null,

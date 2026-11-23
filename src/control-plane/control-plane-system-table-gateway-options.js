@@ -46,6 +46,12 @@ function buildGatewayQueryOptions(gateway, options = {}, context = {}) {
   if (options?.cancellationToken) {
     queryOptions.cancellationToken = options.cancellationToken;
   }
+  if (options?.signal) {
+    queryOptions.signal = options.signal;
+  }
+  if (Number.isFinite(options?.deadlineMs)) {
+    queryOptions.deadlineMs = options.deadlineMs;
+  }
   if (typeof options?.preferLeader === 'boolean') {
     queryOptions.preferLeader = options.preferLeader;
   }
@@ -114,6 +120,12 @@ function buildGatewayWriteOptions(gateway, options = {}, context = {}) {
     options,
     CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.TIMEOUTBUDGET,
   );
+  if (options?.signal) {
+    writeOptions.signal = options.signal;
+  }
+  if (Number.isFinite(options?.deadlineMs)) {
+    writeOptions.deadlineMs = options.deadlineMs;
+  }
   writeOptions = copyOption(
     writeOptions,
     options,

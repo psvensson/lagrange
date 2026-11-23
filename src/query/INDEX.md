@@ -62,6 +62,7 @@ documentClass: generated
 - [query-executor-partition-routing-snapshot.js](query-executor-partition-routing-snapshot.js) - Build one owner-style snapshot for partition routing diagnostics. (importers: one)
 - [query-executor-partition-service-resolution.js](query-executor-partition-service-resolution.js) - Find partition leader address from system cache. (importers: one)
 - [query-executor-recovery-read-delivery.js](query-executor-recovery-read-delivery.js) - One invocation owns its submissions and their replies. (importers: few)
+- [query-executor-self-leader-term-floor.js](query-executor-self-leader-term-floor.js) - Self-published leader term-fenced peer probing (Option A, S0 ruling Q1 refinement). (importers: few)
 - [query-executor-shared.js](query-executor-shared.js) - Query Executor - Executes queries across partitions in parallel. (importers: many)
 - [query-executor-sql-command-rendering.js](query-executor-sql-command-rendering.js) - Build SQL string from SELECT AST (the one renderer, sql-statement-renderer.js). (importers: one)
 - [query-executor-temporary-unroutable-addresses.js](query-executor-temporary-unroutable-addresses.js) - Mark one partition service endpoint as temporarily unroutable after a runtime no-handler witness so follow-up calls... (importers: one)

@@ -336,7 +336,76 @@ async function preflightPartitionServiceActivationEntries(options = {}) {
   return {entries, isReplicaHandlerRegistered};
 }
 
+function buildPreSubmissionAbortError(replicaId, cause = null) {
+  const error = new Error(
+    `Replica activation ${REPLICA_REGISTERED_ACTIVATION_ERROR_CODE.AUTHORITY_UNAVAILABLE}: ` +
+    `${replicaId} (aborted before submission)`,
+  );
+  error.code = REPLICA_REGISTERED_ACTIVATION_ERROR_CODE.AUTHORITY_UNAVAILABLE;
+  error.errorCode = error.code;
+  error.deferRetry = true;
+  error.submitted = false;
+  error.abortedBeforeSubmission = true;
+  error.abortedAfterSubmission = false;
+  error.outcomeUncertain = false;
+  if (cause) {
+    error.cause = cause;
+  }
+  return error;
+}
+
+function buildPostSubmissionAbortError(replicaId, cause = null) {
+  const error = new Error(
+    `Replica activation ${REPLICA_REGISTERED_ACTIVATION_ERROR_CODE.AUTHORITY_UNAVAILABLE}: ` +
+    `${replicaId} (aborted after submission)`,
+  );
+  error.code = REPLICA_REGISTERED_ACTIVATION_ERROR_CODE.AUTHORITY_UNAVAILABLE;
+  error.errorCode = error.code;
+  error.deferRetry = true;
+  error.submitted = true;
+  error.abortedBeforeSubmission = false;
+  error.abortedAfterSubmission = true;
+  error.outcomeUncertain = false;
+  if (cause) {
+    error.cause = cause;
+  }
+  return error;
+}
+
+function resolveRemainingActivationBudget(options, nowFn, replicaId) {
+  if (options.signal?.aborted) {
+    throw buildPreSubmissionAbortError(replicaId, options.signal.reason || null);
+  }
+  const budget = {};
+  if (options.signal) {
+    budget.signal = options.signal;
+  }
+  const hasDeadline = Number.isFinite(options.deadlineMs);
+  if (hasDeadline) {
+    const remainingMs = Math.floor(options.deadlineMs - nowFn());
+    if (remainingMs <= 0) {
+      throw buildPreSubmissionAbortError(replicaId);
+    }
+    budget.deadlineMs = options.deadlineMs;
+    budget.timeoutMs = Number.isFinite(options.timeoutMs) && options.timeoutMs > 0 ?
+      Math.min(Math.floor(options.timeoutMs), remainingMs) :
+      remainingMs;
+  } else if (Number.isFinite(options.timeoutMs) && options.timeoutMs > 0) {
+    budget.timeoutMs = Math.floor(options.timeoutMs);
+  }
+  return budget;
+}
+
+function isAbortActivationError(options, error) {
+  return options.signal?.aborted === true ||
+    error?.abortedBeforeSubmission === true ||
+    error?.abortedAfterSubmission === true;
+}
+
 async function handlePartitionActivationEntryError(options, entry, error) {
+  if (isAbortActivationError(options, error)) {
+    throw error;
+  }
   const payload = {
     partitionId: entry.partitionId,
     replicaId: entry.replicaId,
@@ -367,12 +436,11 @@ async function activatePartitionServiceRows(options = {}) {
   }
   const {entries, isReplicaHandlerRegistered} =
     await preflightPartitionServiceActivationEntries(options);
+  const nowFn = typeof options.now === 'function' ? options.now : () => Date.now();
   const owner = new PartitionServiceRowOwner({
     systemTableWriter: options.systemTableWriter,
     replicaStateMachine: options.replicaStateMachine,
-    now: typeof options.now === 'function' ?
-      options.now :
-      () => Date.now(),
+    now: nowFn,
   });
   let activatedCount = 0;
 
@@ -385,6 +453,7 @@ async function activatePartitionServiceRows(options = {}) {
       service,
     } = entry;
     try {
+      const budget = resolveRemainingActivationBudget(options, nowFn, replicaId);
       await owner.activateReplica({
         partitionId,
         replicaId,
@@ -392,11 +461,15 @@ async function activatePartitionServiceRows(options = {}) {
         service,
         registrationEvidence,
         expectedReplicaIncarnation,
+        ...budget,
         // Checked inside the replica's lifecycle lane immediately before the
         // ACTIVE CAS (the preflight above is only an early refusal).
         isEffectHandlerCurrent: () =>
           isReplicaHandlerRegistered(replicaId, service) === true,
       });
+      if (options.signal?.aborted) {
+        throw buildPostSubmissionAbortError(replicaId, options.signal.reason || null);
+      }
       await settlePartitionServiceActiveAdmission({
         partitionId,
         replicaId,

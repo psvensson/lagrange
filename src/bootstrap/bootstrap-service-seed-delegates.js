@@ -79,6 +79,8 @@ function buildPhaseExecutionDelegates(service) {
     getOriginalSeedFoundationTimestamp: () =>
       self.originalAllocationPreparation.foundationTimestamp(),
     getNodeId: () => self.nodeId,
+    getDataDir: () => (self.dataDirectoryManager?.isInitialized?.() ?
+      self.dataDirectoryManager.getDataDir() : null),
     getNodeAddress: () => self.nodeAddress,
     getAdvertisedNodeWsAddress: () =>
       self.advertisedNodeWsAddress,

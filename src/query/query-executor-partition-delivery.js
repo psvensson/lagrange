@@ -34,9 +34,11 @@ import {
   createUnknownOutcomeRedelivery,
   withWriteEntryIdentity,
 } from './query-executor-unknown-outcome.js';
-import {deliveryAnswerOf, deliveryTransportOf, TRANSPORT_DELIVERY_OUTCOME_REASON_CODE, classifyThrownDeliveryError,
-  deliveryReadingOf} from
+import {deliveryAnswerOf, deliveryTransportOf, TRANSPORT_DELIVERY_OUTCOME_REASON_CODE, classifyThrownDeliveryError} from
   '../transport/transport-semantic-outcome.js';
+import {
+  evaluateTermFloorDeliveryOutcome, mergeSelfLeaderTermFloor, shouldRetainTermFloorFailure,
+} from './query-executor-self-leader-term-floor.js';
 
 const {
   CONTROL_PLANE_WRITE_RETRY_DECISION_STATE,
@@ -229,8 +231,8 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           attemptBudget.reportDeadlineSpentBeforeAttempt();
           return buildDeadlineSpentFailureResult();
         }
-        let {candidates: serviceCandidates, routingSnapshot, ownerHadCandidates} =
-          resolveAttemptCandidates();
+        let {candidates: serviceCandidates, routingSnapshot, ownerHadCandidates,
+          selfPublishedLeaderTermFloor} = resolveAttemptCandidates();
         readDelivery?.reconcile(serviceCandidates);
         if (
           serviceCandidates.length === 0 && !ownerHadCandidates &&
@@ -245,7 +247,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         ) {
           awaitedRoutingRepair = true;
           this.throwIfCancelled(cancellationToken);
-          ({candidates: serviceCandidates, routingSnapshot} =
+          ({candidates: serviceCandidates, routingSnapshot, selfPublishedLeaderTermFloor} =
             resolveAttemptCandidates());
           readDelivery?.reconcile(serviceCandidates);
         }
@@ -321,18 +323,12 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         });
         const {attemptedAddresses, candidateQueue} = candidateState;
         const recordCandidateFailure = (
-          errorMessage,
-          failure,
-          participantNodeId,
-          participantAddress,
+          errorMessage, failure, participantNodeId, participantAddress,
         ) => {
+          if (shouldRetainTermFloorFailure(lastFailureDetails, failure)) return;
           lastError = errorMessage;
           lastFailureDetails = buildQueryPartitionCandidateFailureDetails({
-            executor: this,
-            failure,
-            forRead,
-            participantNodeId,
-            participantAddress,
+            executor: this, failure, forRead, participantNodeId, participantAddress,
           });
         };
         let submittedRecoveryRead = false;
@@ -410,7 +406,10 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               ({address, request, serviceInfo} = readTicket);
               // A reply remains scoped to its route and peer incarnation
               // even if the old replica had already executed the read.
-              if (!readDelivery.currentIn(readTicket, resolveAttemptCandidates().candidates)) {
+              const latestRoutes = resolveAttemptCandidates();
+              selfPublishedLeaderTermFloor = mergeSelfLeaderTermFloor(
+                selfPublishedLeaderTermFloor, latestRoutes.selfPublishedLeaderTermFloor);
+              if (!readDelivery.currentIn(readTicket, latestRoutes.candidates)) {
                 shouldRecheckRoutes = true;
                 continue;
               }
@@ -424,8 +423,9 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             unknownOutcome.observeTransport(deliveryTransportOf(delivery));
             deliverySubmitted = false;
             this.throwIfCancelled(cancellationToken);
-            const response = deliveryReadingOf(delivery);
-            if (isSuccessfulResponse(delivery)) {
+            const {accepted, response} = evaluateTermFloorDeliveryOutcome(
+              delivery, isSuccessfulResponse, selfPublishedLeaderTermFloor);
+            if (accepted) {
               applySuccessfulCandidateAffinity(
                 this,
                 executionOptions,
@@ -479,8 +479,10 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               }
               unknownOutcome.observeTransport(deliveryTransportOf(redirectDelivery));
               deliverySubmitted = false;
-              const redirectResponse = deliveryReadingOf(redirectDelivery);
-              if (isSuccessfulResponse(redirectDelivery)) {
+              const {accepted: redirectAccepted, response: redirectResponse} =
+                evaluateTermFloorDeliveryOutcome(
+                  redirectDelivery, isSuccessfulResponse, selfPublishedLeaderTermFloor);
+              if (redirectAccepted) {
                 applySuccessfulCandidateAffinity(
                   this,
                   executionOptions,

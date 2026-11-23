@@ -53,6 +53,68 @@ function activationError(code, replicaId, cause = null) {
   return error;
 }
 
+function preSubmissionAbortError(replicaId, cause = null) {
+  return Object.assign(
+    activationError(
+      REPLICA_REGISTERED_ACTIVATION_ERROR_CODE.AUTHORITY_UNAVAILABLE,
+      replicaId,
+      cause,
+    ),
+    {
+      submitted: false,
+      abortedBeforeSubmission: true,
+      abortedAfterSubmission: false,
+      outcomeUncertain: false,
+    },
+  );
+}
+
+function postSubmissionAbortError(replicaId, cause, outcomeUncertain) {
+  return Object.assign(
+    activationError(
+      REPLICA_REGISTERED_ACTIVATION_ERROR_CODE.AUTHORITY_UNAVAILABLE,
+      replicaId,
+      cause,
+    ),
+    {
+      submitted: true,
+      abortedBeforeSubmission: false,
+      abortedAfterSubmission: true,
+      outcomeUncertain: outcomeUncertain === true,
+    },
+  );
+}
+
+function extractActivationBudgetOptions(options = {}) {
+  const writeOpts = options.writeOptions && typeof options.writeOptions === 'object' ?
+    options.writeOptions : null;
+  if (!writeOpts) {
+    return {};
+  }
+  const budget = {};
+  if (Number.isFinite(writeOpts.timeoutMs) && writeOpts.timeoutMs > 0) {
+    budget.timeoutMs = Math.floor(writeOpts.timeoutMs);
+  }
+  if (Number.isFinite(writeOpts.deadlineMs)) {
+    budget.deadlineMs = writeOpts.deadlineMs;
+  }
+  if (writeOpts.signal) {
+    budget.signal = writeOpts.signal;
+  }
+  return budget;
+}
+
+function activationSignalOf(options = {}) {
+  return options.writeOptions?.signal ?? null;
+}
+
+function throwIfAbortedBeforeSubmission(options) {
+  const signal = activationSignalOf(options);
+  if (signal?.aborted) {
+    throw preSubmissionAbortError(options.replicaId, signal.reason || null);
+  }
+}
+
 function matchesRegisteredReplicaIdentity(row, options) {
   return row?.service_id === options.replicaId &&
     row.service_type === SERVICE_TYPE.PARTITION &&
@@ -90,7 +152,7 @@ function unavailableObservationCause(result) {
   return cause;
 }
 
-async function observeRegisteredReplica(writer, replicaId) {
+async function observeRegisteredReplica(writer, replicaId, budgetOptions = {}) {
   try {
     const result = await readAuthoritativeControlPlaneRows(
       writer,
@@ -103,6 +165,7 @@ async function observeRegisteredReplica(writer, replicaId) {
         leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
         deliveryPriority: 'critical',
         workClass: 'critical',
+        ...budgetOptions,
       },
     );
     if (result?.success !== true || !Array.isArray(result.rows) ||
@@ -150,6 +213,52 @@ function matchesActivatedGeneration(row, activatedRow) {
   );
 }
 
+async function observePostMutationActivation(
+  options,
+  sourceRow,
+  sourceVersion,
+  activatedRow,
+  mutationError,
+) {
+  const observation = await observeRegisteredReplica(
+    options.systemTableWriter,
+    options.replicaId,
+    extractActivationBudgetOptions(options),
+  );
+  const signal = activationSignalOf(options);
+  if (signal?.aborted) {
+    throw postSubmissionAbortError(
+      options.replicaId,
+      mutationError || signal.reason || null,
+      true,
+    );
+  }
+  if (!observation.available) {
+    throw activationError(
+      REPLICA_REGISTERED_ACTIVATION_ERROR_CODE.AUTHORITY_UNAVAILABLE,
+      options.replicaId,
+      mutationError,
+    );
+  }
+  if (matchesActivatedGeneration(observation.row, activatedRow)) {
+    return activatedRow;
+  }
+  const unchangedStoppedSource = matchesRegisteredReplicaIncarnation(
+    observation.row,
+    sourceRow,
+    options,
+  ) &&
+    observation.row.status === SERVICE_STATUS.STOPPED &&
+    observation.row[sourceVersion.column] === sourceVersion.value;
+  throw activationError(
+    unchangedStoppedSource ?
+      REPLICA_REGISTERED_ACTIVATION_ERROR_CODE.DURABILITY_DEFERRED :
+      REPLICA_REGISTERED_ACTIVATION_ERROR_CODE.SOURCE_CHANGED,
+    options.replicaId,
+    mutationError,
+  );
+}
+
 async function persistRegisteredReplicaActivation(
   stateMachine,
   options,
@@ -178,6 +287,7 @@ async function persistRegisteredReplicaActivation(
       options.replicaId,
     );
   }
+  throwIfAbortedBeforeSubmission(options);
   try {
     mutationResult = await options.systemTableWriter.updateSystemTableRow(
       TABLES.SERVICES,
@@ -188,40 +298,23 @@ async function persistRegisteredReplicaActivation(
   } catch (error) {
     mutationError = error;
   }
-  if (classifyControlPlaneMutationResult(mutationResult).applied) {
-    return activatedRow;
-  }
-
-  const observation = await observeRegisteredReplica(
-    options.systemTableWriter,
-    options.replicaId,
-  );
-  if (!observation.available) {
-    throw activationError(
-      REPLICA_REGISTERED_ACTIVATION_ERROR_CODE.AUTHORITY_UNAVAILABLE,
+  const applied = classifyControlPlaneMutationResult(mutationResult).applied;
+  const signal = activationSignalOf(options);
+  if (signal?.aborted) {
+    throw postSubmissionAbortError(
       options.replicaId,
-      mutationError,
+      mutationError || signal.reason || null,
+      !applied,
     );
   }
-  if (matchesActivatedGeneration(observation.row, activatedRow)) {
+  if (applied) {
     return activatedRow;
   }
-  if (matchesRegisteredReplicaIncarnation(
-    observation.row,
-    sourceRow,
+  return observePostMutationActivation(
     options,
-  ) &&
-      observation.row.status === SERVICE_STATUS.STOPPED &&
-      observation.row[sourceVersion.column] === sourceVersion.value) {
-    throw activationError(
-      REPLICA_REGISTERED_ACTIVATION_ERROR_CODE.DURABILITY_DEFERRED,
-      options.replicaId,
-      mutationError,
-    );
-  }
-  throw activationError(
-    REPLICA_REGISTERED_ACTIVATION_ERROR_CODE.SOURCE_CHANGED,
-    options.replicaId,
+    sourceRow,
+    sourceVersion,
+    activatedRow,
     mutationError,
   );
 }
@@ -285,13 +378,16 @@ function resolveObservedSourceRow(observation, options) {
 }
 
 async function resolveRegisteredReplicaSourceRow(options) {
+  throwIfAbortedBeforeSubmission(options);
   if (hasRegistrationEvidence(options)) {
     return resolveRegistrationEvidence(options);
   }
   const observation = await observeRegisteredReplica(
     options.systemTableWriter,
     options.replicaId,
+    extractActivationBudgetOptions(options),
   );
+  throwIfAbortedBeforeSubmission(options);
   return resolveObservedSourceRow(observation, options);
 }
 
@@ -311,13 +407,17 @@ function requireEffectHandler(options) {
 }
 
 async function activateRegisteredReplicaInLane(stateMachine, options) {
+  throwIfAbortedBeforeSubmission(options);
   const sourceRow = await resolveRegisteredReplicaSourceRow(options);
   // The check and the section opening are one synchronous step: retirement
   // cannot interleave before the ACTIVE CAS settles.
   const activatedRow = await runActivationEffectSection(
     stateMachine,
     options.replicaId,
-    () => requireEffectHandler(options),
+    () => {
+      throwIfAbortedBeforeSubmission(options);
+      requireEffectHandler(options);
+    },
     () => sourceRow.status === SERVICE_STATUS.ACTIVE ? sourceRow :
       persistRegisteredReplicaActivation(
         stateMachine,
@@ -326,6 +426,10 @@ async function activateRegisteredReplicaInLane(stateMachine, options) {
         durableRowVersion(sourceRow),
       ),
   );
+  const signal = activationSignalOf(options);
+  if (signal?.aborted) {
+    throw postSubmissionAbortError(options.replicaId, signal.reason || null, false);
+  }
   if (!installAuthoritativeReplicaLifecycleInLane(
     stateMachine,
     options.replicaId,

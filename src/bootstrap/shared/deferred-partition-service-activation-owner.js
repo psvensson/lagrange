@@ -71,6 +71,9 @@ function buildBoundedBatchOptions(expectedReplicaIncarnationByReplicaId, passOpt
   if (Number.isFinite(passOptions.deadlineMs)) {
     batchOptions.deadlineMs = passOptions.deadlineMs;
   }
+  if (passOptions.signal) {
+    batchOptions.signal = passOptions.signal;
+  }
   return batchOptions;
 }
 
@@ -89,6 +92,7 @@ class DeferredPartitionServiceActivationOwner {
     this.pendingEntries = new Map();
     this.retryTimer = null;
     this.inFlightRetry = null;
+    this.activePassController = null;
   }
 
   hasPending() {
@@ -141,7 +145,16 @@ class DeferredPartitionServiceActivationOwner {
     });
   }
 
-  markSettled(replicaId) {
+  markSettled(replicaId, expectedService = undefined) {
+    if (expectedService !== undefined) {
+      const existing = this.pendingEntries.get(replicaId);
+      if (existing && existing.service !== expectedService) {
+        return;
+      }
+      if (!this.isExactCurrentService(replicaId, expectedService)) {
+        return;
+      }
+    }
     this.pendingEntries.delete(replicaId);
     if (!this.hasPending()) {
       this.clearRetryTimer();
@@ -173,7 +186,17 @@ class DeferredPartitionServiceActivationOwner {
 
   clear() {
     this.clearRetryTimer();
+    this.abortActivePass();
+    this.inFlightRetry = null;
     this.pendingEntries.clear();
+  }
+
+  abortActivePass(reason = undefined) {
+    const controller = this.activePassController;
+    this.activePassController = null;
+    if (controller && !controller.signal.aborted) {
+      controller.abort(reason);
+    }
   }
 
   syncRestoreState() {
@@ -248,26 +271,38 @@ class DeferredPartitionServiceActivationOwner {
     return activatedCount;
   }
 
-  async retryPendingIfNeeded(passOptions = {}) {
+  retryPendingIfNeeded(passOptions = {}) {
     if (this.isStopped() || !this.hasPending()) {
       this.clearRetryTimer();
       this.syncRestoreState();
-      return 0;
+      return Promise.resolve(0);
     }
     if (this.inFlightRetry !== null) {
       return this.inFlightRetry;
     }
+    const controller = passOptions.abortController ||
+      (passOptions.signal ? null : new AbortController());
+    const effectivePassOptions = controller && !passOptions.signal ?
+      {...passOptions, signal: controller.signal} :
+      passOptions;
+    if (controller) {
+      this.activePassController = controller;
+    }
     let pass = null;
-    pass = this.runSingleRetryPass(passOptions).finally(() => {
+    pass = this.runSingleRetryPass(effectivePassOptions).finally(() => {
       if (this.inFlightRetry === pass) {
         this.inFlightRetry = null;
+      }
+      if (controller && this.activePassController === controller) {
+        this.activePassController = null;
       }
     });
     this.inFlightRetry = pass;
     return pass;
   }
 
-  detachTimedOutRetryPass(retryPass) {
+  detachTimedOutRetryPass(retryPass, timeoutError = undefined) {
+    this.abortActivePass(timeoutError);
     if (this.inFlightRetry === retryPass) {
       this.inFlightRetry = null;
     }
@@ -277,23 +312,28 @@ class DeferredPartitionServiceActivationOwner {
   }
 
   async awaitRetryPassWithBudget(remainingMs, deadlineMs) {
+    const passController = new AbortController();
     const retryPass = this.retryPendingIfNeeded({
       timeoutMs: remainingMs,
       deadlineMs,
+      signal: passController.signal,
+      abortController: passController,
     });
     let timer = null;
     let timedOut = false;
     const timeoutPromise = new Promise((_, reject) => {
       timer = this.scheduleTimer(() => {
         timedOut = true;
-        this.detachTimedOutRetryPass(retryPass);
-        this.syncRestoreState();
-        reject(
-          buildPendingActivationTimeoutError(
-            this.pendingReplicaIds(),
-            this.getLastError(),
-          ),
+        const timeoutError = buildPendingActivationTimeoutError(
+          this.pendingReplicaIds(),
+          this.getLastError(),
         );
+        if (!passController.signal.aborted) {
+          passController.abort(timeoutError);
+        }
+        this.detachTimedOutRetryPass(retryPass, timeoutError);
+        this.syncRestoreState();
+        reject(timeoutError);
       }, remainingMs);
     });
     try {

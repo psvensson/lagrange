@@ -87,6 +87,9 @@ class QueryExecutorBase {
       options.defaultRoutingReadinessDimension ||
       CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE;
     this.nodeId = options.nodeId || QUERY_SUBSYSTEM.QUERY_EXECUTOR;
+    this.dataDir = typeof options.dataDir === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
+      options.dataDir.length > 0 ? options.dataDir : null;
+    this.getLocalPartitionReplicas = options.getLocalPartitionReplicas ?? null;
     // The executor runs on the clock of the node it runs for: its HLC orders
     // on it and every timed decision it makes (the no-handler address
     // quarantine) reads it. Unsupplied, it is the host clock exactly as before.
