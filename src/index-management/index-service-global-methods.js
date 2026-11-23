@@ -145,6 +145,43 @@ function throwIndexNotFound(indexName, tableId) {
   );
 }
 
+const INCOMPLETE_GSI_STATES = new Set([
+  GLOBAL_INDEX_STATE.CREATING,
+  GLOBAL_INDEX_STATE.WRITE_ONLY,
+  GLOBAL_INDEX_STATE.BACKFILLING,
+]);
+
+function collectIncompleteGlobalIndexNames(indexService) {
+  const names = new Set();
+  const catalogEntries = indexService.globalIndexCoordinator?.catalog?.entries();
+  if (catalogEntries) {
+    for (const [indexName, record] of catalogEntries) {
+      if (INCOMPLETE_GSI_STATES.has(record.state)) names.add(indexName);
+    }
+  }
+  const cachedEntries = indexService.indices?.entries();
+  if (cachedEntries) {
+    for (const [indexName, meta] of cachedEntries) {
+      if ((meta?.isGlobal || meta?.global) && INCOMPLETE_GSI_STATES.has(meta.state)) {
+        names.add(indexName);
+      }
+    }
+  }
+  return names;
+}
+
+function isMatchingRecoverableGsiIntent(coordinator, incompleteNames, intent) {
+  const gsi = intent?.globalIndex;
+  if (!gsi?.indexName || !incompleteNames.has(gsi.indexName)) {
+    return false;
+  }
+  const record = coordinator.catalog.get(gsi.indexName);
+  if (!record || !INCOMPLETE_GSI_STATES.has(record.state)) {
+    return false;
+  }
+  return !gsi.indexId || record.index_id === gsi.indexId;
+}
+
 const indexServiceGlobalMethods = {
   /**
    * Get or lazily create GlobalIndexLifecycleCoordinator.
@@ -300,6 +337,36 @@ const indexServiceGlobalMethods = {
   },
 
   /**
+   * Initialize index service caches and recover incomplete SUCCEEDED GSIs.
+   * @param {Object} [options={}] - Init options.
+   * @return {Promise<void>}
+   */
+  async _initializeIndexService(options = {}) {
+    if (!this.initialized) {
+      const initPromise = this._initializePromise || (this._initializePromise = (async () => {
+        this.logger.info(INDEX_LOG_MSG.SERVICE_INITIALIZING);
+        this._attachSystemTableCacheListener();
+        await this.loadIndicesFromCache();
+        this.syncGlobalIndexesFromCache();
+        this.initialized = true;
+        this.logger.info(INDEX_LOG_MSG.SERVICE_INITIALIZED, {
+          indexCount: this.getTotalIndexCount(),
+        });
+      })());
+      try {
+        await initPromise;
+      } finally {
+        if (this._initializePromise === initPromise) {
+          this._initializePromise = null;
+        }
+      }
+    }
+    if (this.initialized && options?.skipSchemaJobRecovery !== true) {
+      await this.recoverIncompleteGlobalIndexesFromSchemaJobs?.();
+    }
+  },
+
+  /**
    * Complete recovered or retried GSI creation after durable schema job SUCCEEDED.
    * @param {Object} intent - Schema provisioning intent carrying globalIndex metadata.
    * @return {Promise<Object|null>}
@@ -310,7 +377,7 @@ const indexServiceGlobalMethods = {
       return null;
     }
     if (!this.initialized && this.initialize) {
-      await this.initialize();
+      await this.initialize({skipSchemaJobRecovery: true});
     }
     const coordinator = this.getGlobalIndexCoordinator();
     const outcome = await coordinator.completeRecoveredProvisioning({
@@ -320,6 +387,31 @@ const indexServiceGlobalMethods = {
     });
     this.sqlQueryEngine?.resetPreparedStatements?.();
     return outcome;
+  },
+
+  /**
+   * Resume incomplete GSIs whose durable schema_operations job already SUCCEEDED.
+   * @return {Promise<Array>}
+   */
+  async recoverIncompleteGlobalIndexesFromSchemaJobs() {
+    const jobOwner =
+      this.sqlQueryEngine?.tableCreationService?.schemaProvisioningJobOwner;
+    if (!jobOwner?.listSucceededGlobalIndexIntents) {
+      return [];
+    }
+    const incompleteNames = collectIncompleteGlobalIndexNames(this);
+    if (incompleteNames.size === 0) {
+      return [];
+    }
+    const coordinator = this.getGlobalIndexCoordinator();
+    const intents = await jobOwner.listSucceededGlobalIndexIntents();
+    const outcomes = [];
+    for (const intent of intents) {
+      if (isMatchingRecoverableGsiIntent(coordinator, incompleteNames, intent)) {
+        outcomes.push(await this.completeRecoveredGlobalIndexProvisioning(intent));
+      }
+    }
+    return outcomes;
   },
 
   /**

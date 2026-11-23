@@ -366,6 +366,27 @@ export function resolveGlobalCreateSchemaContext(def, options, schemaInfo) {
   return {basePrimaryKeyColumns, columnTypes};
 }
 
+function resolveDefinitionUniqueFlag(def) {
+  return typeof def.isUnique === 'boolean' ? def.isUnique : Boolean(def.unique);
+}
+
+/**
+ * Compare two normalized global index definitions for structural equivalence.
+ * @param {Object|null} leftDef
+ * @param {Object|null} rightDef
+ * @return {boolean} True when both define the same table, columns, and uniqueness.
+ */
+export function areGlobalIndexDefinitionsEqual(leftDef, rightDef) {
+  if (!leftDef || !rightDef) return false;
+  const sameTable = (leftDef.tableName || '') === (rightDef.tableName || '');
+  const leftCols = Array.isArray(leftDef.columnNames) ? leftDef.columnNames : [];
+  const rightCols = Array.isArray(rightDef.columnNames) ? rightDef.columnNames : [];
+  const sameCols = leftCols.length === rightCols.length &&
+    leftCols.every((col, idx) => col === rightCols[idx]);
+  return sameTable && sameCols &&
+    resolveDefinitionUniqueFlag(leftDef) === resolveDefinitionUniqueFlag(rightDef);
+}
+
 export function isSameGlobalIndexDefinition(existing, def) {
   if (!existing || !def) return false;
   const norm = normalizeGlobalIndexRecord(existing);
@@ -373,7 +394,7 @@ export function isSameGlobalIndexDefinition(existing, def) {
   const defCols = Array.isArray(def.columnNames) ? def.columnNames : [];
   const sameCols = norm.columnNames.length === defCols.length &&
     norm.columnNames.every((col, idx) => col === defCols[idx]);
-  return sameTable && sameCols && Boolean(norm.isUnique) === Boolean(def.unique);
+  return sameTable && sameCols && Boolean(norm.isUnique) === resolveDefinitionUniqueFlag(def);
 }
 
 export function checkIndexExistence(catalog, def, options) {

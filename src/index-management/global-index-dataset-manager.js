@@ -24,6 +24,22 @@ const LOCAL_STR_TEXT = 'TEXT';
 const LOCAL_STR_COMMA_SPACE = ', ';
 const LOCAL_STR_ID = 'id';
 const LOCAL_STR_NOT_NULL = ' NOT NULL';
+const DDL_PARSE_CHAR = Object.freeze({
+  OPEN_PAREN: '(',
+  CLOSE_PAREN: ')',
+  COMMA: ',',
+  DOUBLE_QUOTE: String.fromCharCode(34),
+  SINGLE_QUOTE: String.fromCharCode(39),
+  BACKTICK: '`',
+  SPACE: ' ',
+});
+const TABLE_PRIMARY_KEY_CLAUSE_RE = /^PRIMARY\s+KEY\s*\((.+)\)$/iu;
+const NON_COLUMN_CLAUSE_RE = /^(?:CONSTRAINT|UNIQUE|CHECK|FOREIGN)\b/iu;
+const COLUMN_NOT_NULL_RE = /\bNOT\s+NULL\b/iu;
+const COLUMN_INLINE_PK_RE = /\bPRIMARY\s+KEY\b/iu;
+const COLUMN_CONSTRAINT_TAIL_RE =
+  /\b(?:PRIMARY\s+KEY|NOT\s+NULL|NULL|UNIQUE|CHECK|DEFAULT|COLLATE|REFERENCES|GENERATED)\b.*$/iu;
+const WHITESPACE_RE = /\s/u;
 
 /**
  * Format the system-managed dataset table name for a global secondary index.
@@ -308,4 +324,198 @@ export class GlobalIndexDatasetManager {
     const partitions = this.getIndexPartitions(indexName);
     return resolveIndexPartitionForEntry(entry, partitions, leadingColumnName);
   }
+}
+
+function advanceQuotedScanner(text, index, quoteChar) {
+  let cursor = index + 1;
+  while (cursor < text.length) {
+    if (text[cursor] === quoteChar) {
+      if (text[cursor + 1] === quoteChar) {
+        cursor += 2;
+        continue;
+      }
+      return cursor + 1;
+    }
+    cursor += 1;
+  }
+  return cursor;
+}
+
+function splitTopLevelCommaClauses(body) {
+  const clauses = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < body.length; i++) {
+    const ch = body[i];
+    if (ch === DDL_PARSE_CHAR.DOUBLE_QUOTE ||
+        ch === DDL_PARSE_CHAR.SINGLE_QUOTE ||
+        ch === DDL_PARSE_CHAR.BACKTICK) {
+      i = advanceQuotedScanner(body, i, ch) - 1;
+      continue;
+    }
+    if (ch === DDL_PARSE_CHAR.OPEN_PAREN) depth += 1;
+    else if (ch === DDL_PARSE_CHAR.CLOSE_PAREN && depth > 0) depth -= 1;
+    else if (ch === DDL_PARSE_CHAR.COMMA && depth === 0) {
+      const segment = body.slice(start, i).trim();
+      if (segment.length > 0) clauses.push(segment);
+      start = i + 1;
+    }
+  }
+  const tail = body.slice(start).trim();
+  if (tail.length > 0) clauses.push(tail);
+  return clauses;
+}
+
+function unquoteIdentifierToken(token) {
+  const trimmed = String(token || '').trim();
+  if (trimmed.length >= 2 &&
+      trimmed[0] === DDL_PARSE_CHAR.DOUBLE_QUOTE &&
+      trimmed[trimmed.length - 1] === DDL_PARSE_CHAR.DOUBLE_QUOTE) {
+    return trimmed.slice(1, -1).replaceAll(LOCAL_STR_ESCAPED_QUOTE, DDL_PARSE_CHAR.DOUBLE_QUOTE);
+  }
+  if (trimmed.length >= 2 &&
+      trimmed[0] === DDL_PARSE_CHAR.BACKTICK &&
+      trimmed[trimmed.length - 1] === DDL_PARSE_CHAR.BACKTICK) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
+function readLeadingIdentifier(clause) {
+  const first = clause[0];
+  if (first === DDL_PARSE_CHAR.DOUBLE_QUOTE || first === DDL_PARSE_CHAR.BACKTICK) {
+    const end = advanceQuotedScanner(clause, 0, first);
+    return {
+      name: unquoteIdentifierToken(clause.slice(0, end)),
+      rest: clause.slice(end).trim(),
+    };
+  }
+  let end = 0;
+  while (end < clause.length && !WHITESPACE_RE.test(clause[end])) {
+    end += 1;
+  }
+  return {
+    name: clause.slice(0, end),
+    rest: clause.slice(end).trim(),
+  };
+}
+
+function parseColumnClause(clause) {
+  const {name, rest} = readLeadingIdentifier(clause);
+  if (!name) return null;
+  const notNull = COLUMN_NOT_NULL_RE.test(rest);
+  const inlinePk = COLUMN_INLINE_PK_RE.test(rest);
+  const typeText = rest.replace(COLUMN_CONSTRAINT_TAIL_RE, '').trim().toUpperCase();
+  return {
+    column: {
+      name,
+      type: typeText || LOCAL_STR_TEXT,
+      notNull,
+    },
+    inlinePk,
+  };
+}
+
+/**
+ * Inspect an existing physical index dataset table on a local SQLite database handle.
+ * @param {Object} db - better-sqlite3 database handle.
+ * @param {string} datasetName - Index dataset table name.
+ * @return {{exists: boolean, columns: Array<Object>, primaryKey: string[]}}
+ */
+export function inspectLocalDatasetSchema(db, datasetName) {
+  const cols = db.prepare(`PRAGMA table_info(${quoteIdentifier(datasetName)})`).all();
+  if (!Array.isArray(cols) || cols.length === 0) {
+    return {exists: false, columns: [], primaryKey: []};
+  }
+  const pkEntries = [];
+  const columns = cols.map((col) => {
+    if (Number(col.pk) > 0) {
+      pkEntries.push({name: col.name, pkOrder: Number(col.pk)});
+    }
+    return {
+      name: col.name,
+      type: String(col.type || LOCAL_STR_TEXT).toUpperCase(),
+      notNull: Number(col.notnull) === 1,
+    };
+  });
+  pkEntries.sort((a, b) => a.pkOrder - b.pkOrder);
+  return {
+    exists: true,
+    columns,
+    primaryKey: pkEntries.map((entry) => entry.name),
+  };
+}
+
+/**
+ * Parse a SQLite CREATE TABLE DDL string (from sqlite_master.sql) into structural
+ * column and primary-key descriptors comparable with buildIndexDatasetSchema.
+ * @param {string} ddlSql - Stored CREATE TABLE SQL.
+ * @return {{exists: boolean, columns: Array<Object>, primaryKey: string[]}|null}
+ */
+export function parseDatasetTableDdlSchema(ddlSql) {
+  if (typeof ddlSql !== 'string' || ddlSql.trim().length === 0) {
+    return {exists: false, columns: [], primaryKey: []};
+  }
+  const openIdx = ddlSql.indexOf(DDL_PARSE_CHAR.OPEN_PAREN);
+  const closeIdx = ddlSql.lastIndexOf(DDL_PARSE_CHAR.CLOSE_PAREN);
+  if (openIdx < 0 || closeIdx <= openIdx) {
+    return null;
+  }
+  const clauses = splitTopLevelCommaClauses(ddlSql.slice(openIdx + 1, closeIdx));
+  const columns = [];
+  const inlinePrimaryKey = [];
+  let tablePrimaryKey = [];
+  for (const clause of clauses) {
+    const pkMatch = clause.match(TABLE_PRIMARY_KEY_CLAUSE_RE);
+    if (pkMatch) {
+      tablePrimaryKey = splitTopLevelCommaClauses(pkMatch[1]).map(unquoteIdentifierToken);
+      continue;
+    }
+    if (NON_COLUMN_CLAUSE_RE.test(clause)) {
+      continue;
+    }
+    const parsed = parseColumnClause(clause);
+    if (parsed) {
+      columns.push(parsed.column);
+      if (parsed.inlinePk) inlinePrimaryKey.push(parsed.column.name);
+    }
+  }
+  return {
+    exists: true,
+    columns,
+    primaryKey: tablePrimaryKey.length > 0 ? tablePrimaryKey : inlinePrimaryKey,
+  };
+}
+
+/**
+ * Compare an observed physical dataset schema against an expected schema descriptor.
+ * @param {Object|null} actualSchema - Schema from inspectLocalDatasetSchema or parseDatasetTableDdlSchema.
+ * @param {Object|null} expectedSchema - Schema from buildIndexDatasetSchema.
+ * @return {boolean} True when columns, types, nullability, and primary key order match.
+ */
+export function doesDatasetSchemaMatch(actualSchema, expectedSchema) {
+  if (!actualSchema || actualSchema.exists !== true || !expectedSchema) {
+    return false;
+  }
+  const actualCols = actualSchema.columns || [];
+  const expectedCols = expectedSchema.columns || [];
+  if (actualCols.length !== expectedCols.length) {
+    return false;
+  }
+  for (let i = 0; i < expectedCols.length; i++) {
+    const actualCol = actualCols[i];
+    const expectedCol = expectedCols[i];
+    if (actualCol.name !== expectedCol.name) return false;
+    if (String(actualCol.type || LOCAL_STR_TEXT).toUpperCase() !==
+        String(expectedCol.type || LOCAL_STR_TEXT).toUpperCase()) {
+      return false;
+    }
+    if (Boolean(actualCol.notNull) !== Boolean(expectedCol.notNull)) return false;
+  }
+  const actualPk = actualSchema.primaryKey || [];
+  const expectedPk = expectedSchema.primaryKey || [];
+  if (actualPk.length !== expectedPk.length) {
+    return false;
+  }
+  return expectedPk.every((pkCol, idx) => actualPk[idx] === pkCol);
 }

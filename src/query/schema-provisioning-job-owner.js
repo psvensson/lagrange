@@ -623,8 +623,13 @@ class SchemaProvisioningJobOwner {
           completedAt: this.now(),
         },
       });
-      if (runOptions.background === true) {
-        await this.notifyBackgroundSucceeded(intent, outcome, runOptions);
+      const notifyBackground = runOptions.background === true ||
+        runOptions.completionState?.callerDetached === true;
+      if (notifyBackground) {
+        await this.notifyBackgroundSucceeded(intent, outcome, {
+          ...runOptions,
+          background: true,
+        });
       } else {
         this.retryCompletionHandlers.delete(intent.workflowId);
       }
@@ -659,10 +664,11 @@ class SchemaProvisioningJobOwner {
     }
   }
 
-  async waitForRequest(execution, workflow, timeoutBudget) {
+  async waitForRequest(execution, workflow, timeoutBudget, completionState = null) {
     if (!timeoutBudget) return execution;
     const remainingMs = getRemainingBudgetMs(timeoutBudget, {now: this.now});
     if (remainingMs <= 1) {
+      if (completionState) completionState.callerDetached = true;
       reportSchemaProvisioningDeadlineSpent(
         this, workflow, timeoutBudget,
         SCHEMA_PROVISIONING_DEADLINE_WAIT.preExpired,
@@ -672,6 +678,7 @@ class SchemaProvisioningJobOwner {
     let timerId;
     const deadline = new Promise((resolve) => {
       timerId = this.setTimeoutFn(() => {
+        if (completionState) completionState.callerDetached = true;
         reportSchemaProvisioningDeadlineSpent(
           this, workflow, timeoutBudget,
           SCHEMA_PROVISIONING_DEADLINE_WAIT.armed,
@@ -696,6 +703,7 @@ class SchemaProvisioningJobOwner {
         options.onBackgroundSucceeded,
       );
     }
+    const completionState = {callerDetached: false};
     // The deadline race is armed BEFORE the first await: insertOrAttach's
     // schema_operations gateway read/insert has no deadline of its own, and
     // on a lone bootstrapping seed that partition's routability can hold
@@ -713,18 +721,50 @@ class SchemaProvisioningJobOwner {
       const workflow = this.refreshWorkflowFromRow(row);
       if (SCHEMA_PROVISIONING_JOB_TERMINAL_STATUSES.has(workflow.status)) {
         this.clearScheduledRetry(intent.workflowId);
-        return this.buildOutcome(workflow);
+        const outcome = this.buildOutcome(workflow);
+        if (completionState.callerDetached &&
+            workflow.status === SCHEMA_PROVISIONING_JOB_STATUS.SUCCEEDED) {
+          await this.notifyBackgroundSucceeded(intent, outcome, {background: true});
+        }
+        return outcome;
       }
       this.clearScheduledRetry(intent.workflowId);
       return this.workflowCoordinator.runExclusive(
         intent.ownerKey,
-        () => this.runJob(intent, executor),
+        () => this.runJob(intent, executor, {completionState}),
       );
     })();
     return this.waitForRequest(
       execution,
       prologueWorkflow,
       options.timeoutBudget,
+      completionState,
+    );
+  }
+
+  async listSucceededGlobalIndexIntents() {
+    const rows = (await this.repository.listSucceededRows?.()) || [];
+    const intents = [];
+    for (const row of rows) {
+      const intent = recoverIntentFromRow(row);
+      if (intent?.globalIndex?.indexName) {
+        intents.push(intent);
+      }
+    }
+    return intents;
+  }
+
+  async resumeSucceededGlobalIndexContinuations() {
+    if (!this.onBackgroundJobSucceeded || this.shuttingDown) {
+      return [];
+    }
+    const intents = await this.listSucceededGlobalIndexIntents();
+    return Promise.all(
+      intents.map((intent) => {
+        const row = this.repository.rowsByJobId?.get(intent.jobId);
+        const outcome = row ? this.buildOutcome(this.refreshWorkflowFromRow(row)) : null;
+        return this.onBackgroundJobSucceeded(intent, outcome);
+      }),
     );
   }
 
@@ -745,7 +785,11 @@ class SchemaProvisioningJobOwner {
         ),
       ));
     }
-    return Promise.all(executions);
+    const [executionOutcomes] = await Promise.all([
+      Promise.all(executions),
+      this.resumeSucceededGlobalIndexContinuations(),
+    ]);
+    return executionOutcomes;
   }
 }
 

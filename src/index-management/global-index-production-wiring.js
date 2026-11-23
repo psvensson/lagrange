@@ -20,6 +20,8 @@ import {
 import {
   ensureIndexDatasetTableInGateway,
   hasHostedPartitionReplica,
+  readAuthoritativeGlobalIndexRow,
+  verifyGlobalIndexCatalogOwnership,
 } from './global-index-dataset-reconciliation.js';
 import {
   executePartitionReadSql,
@@ -306,6 +308,10 @@ function hydrateGlobalIndexFromRow(indexService, coordinator, row) {
     normalized.tableName || normalized.tableId,
   );
   const generation = parseGenerationFromIndexId(normalized.indexId);
+  const existing = coordinator?.catalog?.get(normalized.indexName);
+  const basePrimaryKeyColumns = schemaInfo.basePrimaryKeyColumns.length > 0 ?
+    schemaInfo.basePrimaryKeyColumns :
+    existing?.basePrimaryKeyColumns;
   const catalogRecord = {
     index_id: normalized.indexId,
     table_id: normalized.tableId,
@@ -323,9 +329,7 @@ function hydrateGlobalIndexFromRow(indexService, coordinator, row) {
     created_at: normalized.createdAt,
     updated_at: normalized.updatedAt,
     index_generation: generation,
-    basePrimaryKeyColumns: schemaInfo.basePrimaryKeyColumns.length > 0 ?
-      schemaInfo.basePrimaryKeyColumns :
-      undefined,
+    basePrimaryKeyColumns,
   };
 
   coordinator.catalog.set(normalized.indexName, catalogRecord);
@@ -567,7 +571,19 @@ async function dropIndexDatasetPartition(indexService, {tableName, indexName, pa
   );
 }
 
-function buildCatalogPersistenceHooks(indexService) {
+function buildCatalogPersistenceHooks(indexService, getCoordinator = null) {
+  const resolveCoordinator = () =>
+    (getCoordinator ? getCoordinator() : indexService.globalIndexCoordinator);
+  const syncRow = (row) => {
+    if (!row) return;
+    const coordinator = resolveCoordinator();
+    if (!coordinator) return;
+    hydrateGlobalIndexFromRow(indexService, coordinator, row);
+    const updatedRecord = coordinator.catalog.get(row.index_name);
+    if (updatedRecord) {
+      syncServiceIndexEntryFromRecord(indexService, updatedRecord);
+    }
+  };
   return {
     refreshCatalogPartitions: async () => {
       await preloadProductionPartitionMetadata(indexService);
@@ -585,7 +601,16 @@ function buildCatalogPersistenceHooks(indexService) {
     onCatalogDelete: (record) => removeIndexCatalogMetadata(indexService, record),
     onDropIndexDataset: (params) => dropIndexDatasetPartition(indexService, params),
     onReconcileIndexDataset: (params) =>
-      reconcileDistributedIndexDatasetSchema(indexService, params),
+      reconcileDistributedIndexDatasetSchema(indexService, params, getCoordinator, syncRow),
+    verifyCatalogOwnership: (params) =>
+      verifyGlobalIndexCatalogOwnership(indexService, resolveCoordinator(), params),
+    refreshCatalogRecord: async (indexName) => {
+      const {available, row} = await readAuthoritativeGlobalIndexRow(indexService, indexName);
+      if (available && row) {
+        syncRow(row);
+      }
+      return {available, row};
+    },
   };
 }
 
@@ -640,7 +665,7 @@ function buildProductionCoordinatorOptions(indexService) {
       hasHostedPartitionReplica(indexService, partitionId),
     provisionIndexPartitions: (context) =>
       provisionIndexPartitionsWithRuntime(indexService, getCoordinator, runtimeState, context),
-    ...buildCatalogPersistenceHooks(indexService),
+    ...buildCatalogPersistenceHooks(indexService, getCoordinator),
     ...createBackfillCallbacks(indexService, resolveTableSchema),
     ...createReadRouterCallbacks(indexService, getBaseTablePartitions),
   };

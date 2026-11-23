@@ -4,6 +4,9 @@
  */
 
 import {TABLES} from '../constants/index.js';
+import {
+  CONTROL_PLANE_READ_PROFILE,
+} from '../control-plane/control-plane-system-table-gateway-constants.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {
   resolveDeclaredPrimaryKeyColumns,
@@ -15,6 +18,7 @@ const LOCAL_STR_ESCAPED_QUOTE = '""';
 const LOCAL_STR_TEXT = 'TEXT';
 const SQL_SELECT_ALL_PARTITIONS = 'SELECT * FROM partitions';
 const SQL_SELECT_ALL_TABLES = 'SELECT * FROM tables';
+const SQL_SELECT_ALL_INDICES = 'SELECT * FROM indices';
 
 function quoteIdentifier(identifier) {
   return `"${String(identifier).replace(/"/g, LOCAL_STR_ESCAPED_QUOTE)}"`;
@@ -346,6 +350,7 @@ function ensureRuntimeState(indexService) {
     indexService.globalIndexWiringState = {
       partitionRows: [],
       tableRows: new Map(),
+      indexRows: [],
     };
   }
   return indexService.globalIndexWiringState;
@@ -379,6 +384,16 @@ async function preloadProductionPartitionMetadata(indexService) {
       if (tName) runtimeState.tableRows.set(tName, row);
       if (tId) runtimeState.tableRows.set(tId, row);
     }
+  }
+
+  const indexResult = await gateway.readRows(
+    TABLES.INDICES,
+    SQL_SELECT_ALL_INDICES,
+    [],
+    {readProfile: CONTROL_PLANE_READ_PROFILE.TABLE_LIFECYCLE},
+  );
+  if (Array.isArray(indexResult?.rows)) {
+    runtimeState.indexRows = indexResult.rows;
   }
   return runtimeState;
 }

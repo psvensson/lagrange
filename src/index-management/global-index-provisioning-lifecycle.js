@@ -7,10 +7,18 @@
 
 import {
   GLOBAL_INDEX_STATE,
+  areGlobalIndexDefinitionsEqual,
+  assertSupportedGlobalIndexDefinition,
+  createGlobalIndexRecord,
   isSameGlobalIndexDefinition,
   normalizeGlobalIndexRecord,
   resolveGlobalCreateSchemaContext,
 } from './global-index-catalog-contract.js';
+import {
+  buildIndexDatasetSchema,
+  doesDatasetSchemaMatch,
+  inspectLocalDatasetSchema,
+} from './global-index-dataset-manager.js';
 
 const LOCAL_STR_ID = 'id';
 const PARTICIPANT_UNAVAILABLE_PREFIX = 'Index participant database unavailable';
@@ -50,11 +58,41 @@ function createParticipantUnavailableError(partitionId) {
   return error;
 }
 
-function reconcileLocalDataset(coordinator, db, meta, reconcileExisting) {
-  if (reconcileExisting === true) {
-    coordinator.datasetManager.dropIndexDataset(db, meta.tableName, meta.indexName);
+function hasOwnedLocalCreatingCatalogEntry(coordinator, meta) {
+  const existing = coordinator.catalog?.get(meta.indexName);
+  if (!existing) {
+    return true;
   }
+  if (meta.indexId && existing.index_id !== meta.indexId) {
+    return false;
+  }
+  if (meta.generation !== undefined &&
+      meta.generation !== null &&
+      !coordinator._isGenerationCurrent(meta.indexName, meta.generation, existing.index_id)) {
+    return false;
+  }
+  return existing.state === GLOBAL_INDEX_STATE.CREATING;
+}
+
+function reconcileLocalDataset(coordinator, db, meta, reconcileExisting) {
+  if (!hasOwnedLocalCreatingCatalogEntry(coordinator, meta)) {
+    return {reconciled: false, skipped: true};
+  }
+  const expectedSchema = buildIndexDatasetSchema(meta);
+  const actualSchema = inspectLocalDatasetSchema(db, expectedSchema.tableName);
+  if (!actualSchema.exists) {
+    coordinator.datasetManager.createIndexDataset(db, meta);
+    return {reconciled: true, dropped: false};
+  }
+  const schemaMatches = doesDatasetSchemaMatch(actualSchema, expectedSchema);
+  const isOwnedGenReplacement =
+    meta.isRedrive !== true && Number(meta.generation || 1) > 1;
+  if (reconcileExisting !== true || (schemaMatches && !isOwnedGenReplacement)) {
+    return {reconciled: true, dropped: false};
+  }
+  coordinator.datasetManager.dropIndexDataset(db, meta.tableName, meta.indexName);
   coordinator.datasetManager.createIndexDataset(db, meta);
+  return {reconciled: true, dropped: true};
 }
 
 function shouldReconcileRemoteDataset(coordinator, partitionId, options) {
@@ -78,6 +116,16 @@ async function provisionSingleIndexDataset(coordinator, partition, meta, options
   const pId = resolvePartitionId(partition);
   const db = coordinator._getPartitionDb(pId);
   if (db) {
+    if (options.reconcileExisting === true && coordinator.verifyCatalogOwnership) {
+      const ownership = await coordinator.verifyCatalogOwnership({
+        indexName: meta.indexName,
+        indexId: meta.indexId ?? null,
+        generation: meta.generation ?? null,
+      });
+      if (!ownership.owned) {
+        return;
+      }
+    }
     reconcileLocalDataset(coordinator, db, meta, options.reconcileExisting);
     return;
   }
@@ -143,6 +191,9 @@ async function provisionIndexDatasetsForCreation(
     columnNames,
     basePrimaryKeyColumns,
     columnTypes: options.columnTypes || {},
+    indexId: options.indexId ?? null,
+    generation: options.generation ?? null,
+    isRedrive: options.isRedrive === true,
   };
   for (const p of resolved.partitions) {
     await provisionSingleIndexDataset(coordinator, p, meta, {
@@ -173,15 +224,37 @@ function resolveRecoveredBasePkColumns(record, schemaInfo) {
   return [LOCAL_STR_ID];
 }
 
+async function refreshAndCheckStageOwnership(coordinator, indexName, currentGen, indexId) {
+  if (coordinator.refreshCatalogRecord) {
+    const refreshed = await coordinator.refreshCatalogRecord(indexName);
+    if (refreshed?.available && !refreshed.row) {
+      return {fenced: true, currentRecord: null};
+    }
+  }
+  if (!coordinator._isGenerationCurrent(indexName, currentGen, indexId)) {
+    return {fenced: true, currentRecord: null};
+  }
+  return {fenced: false, currentRecord: coordinator.catalog.get(indexName) || null};
+}
+
 async function advanceRecordThroughBackfillStages(coordinator, record, currentGen, options) {
   const indexId = record.index_id;
   const indexName = record.index_name;
   if (!coordinator._isGenerationCurrent(indexName, currentGen, indexId)) {
     return {indexId, indexName, generation: currentGen, fenced: true};
   }
-  const currentRecord = coordinator.catalog.get(indexName) || record;
+  const ownership = await refreshAndCheckStageOwnership(
+    coordinator, indexName, currentGen, indexId,
+  );
+  if (ownership.fenced) {
+    return {indexId, indexName, generation: currentGen, fenced: true};
+  }
+  const currentRecord = ownership.currentRecord || record;
   if (currentRecord.state === GLOBAL_INDEX_STATE.READ_WRITE) {
     return coordinator.getCatalogRecord(indexName);
+  }
+  if (!ACTIVE_CREATION_STATES.has(currentRecord.state)) {
+    return {indexId, indexName, generation: currentGen, fenced: true};
   }
   if (currentRecord.state === GLOBAL_INDEX_STATE.CREATING) {
     await coordinator._updateCatalogRecord({indexId, state: GLOBAL_INDEX_STATE.WRITE_ONLY});
@@ -259,7 +332,13 @@ async function driveGlobalIndexProvisioning(coordinator, record, def, options = 
       indexName,
       columnNames,
       basePrimaryKeyColumns,
-      options: {...options, columnTypes: schemaCtx.columnTypes, generation: currentGen, indexId},
+      options: {
+        ...options,
+        columnTypes: schemaCtx.columnTypes,
+        generation: currentGen,
+        indexId,
+        isRedrive: options.isRedrive === true,
+      },
     });
   } catch (err) {
     await coordinator._updateCatalogRecord({
@@ -276,11 +355,20 @@ async function driveGlobalIndexProvisioning(coordinator, record, def, options = 
   return advanceProvisionedIndexToReady(coordinator, record, currentGen, options);
 }
 
-function ensureLocalPartitionDatasets(coordinator, indexName, meta) {
+async function ensureRecoveredPartitionDatasets(coordinator, indexName, meta) {
   for (const p of coordinator.getIndexPartitions(indexName)) {
-    const db = coordinator._getPartitionDb(resolvePartitionId(p));
+    const pId = resolvePartitionId(p);
+    const db = coordinator._getPartitionDb(pId);
     if (db) {
       coordinator.datasetManager.createIndexDataset(db, meta);
+    } else if (coordinator.onReconcileIndexDataset &&
+        coordinator.hasDistributedPartitionRoute?.(pId)) {
+      await coordinator.onReconcileIndexDataset({
+        ...meta,
+        isRedrive: true,
+        partitionId: pId,
+        partition: p,
+      });
     }
   }
 }
@@ -296,7 +384,7 @@ function findRecoverableCatalogRecord(coordinator, {indexName, indexId, generati
   return {record, targetGen};
 }
 
-async function completeRecoveredProvisioning(
+async function runRecoveredProvisioningWork(
   coordinator,
   {indexName, indexId = null, generation = null} = {},
 ) {
@@ -308,20 +396,56 @@ async function completeRecoveredProvisioning(
     return {indexName, indexId, fenced: true};
   }
   const {record, targetGen} = found;
+  if (record.state === GLOBAL_INDEX_STATE.READ_WRITE) {
+    return coordinator.getCatalogRecord(indexName);
+  }
+  if (!ACTIVE_CREATION_STATES.has(record.state)) {
+    return {indexName, indexId: record.index_id, generation: targetGen, fenced: true};
+  }
   const norm = normalizeGlobalIndexRecord(record);
   const schemaInfo = coordinator.resolveTableSchema ?
     coordinator.resolveTableSchema(norm.tableName) :
     null;
   const basePrimaryKeyColumns = resolveRecoveredBasePkColumns(record, schemaInfo);
   record.basePrimaryKeyColumns = basePrimaryKeyColumns;
-  ensureLocalPartitionDatasets(coordinator, indexName, {
+  await ensureRecoveredPartitionDatasets(coordinator, indexName, {
     tableName: norm.tableName,
     indexName,
     columnNames: norm.columnNames,
     basePrimaryKeyColumns,
     columnTypes: schemaInfo?.columnTypes || {},
+    indexId: record.index_id,
+    generation: targetGen,
   });
   return advanceProvisionedIndexToReady(coordinator, record, targetGen, {});
+}
+
+async function completeRecoveredProvisioning(
+  coordinator,
+  {indexName, indexId = null, generation = null} = {},
+) {
+  const recoveryMap = coordinator.inFlightRecoveriesByIndexId;
+  if (indexId && recoveryMap?.has(indexId)) {
+    return recoveryMap.get(indexId);
+  }
+  const workPromise = runRecoveredProvisioningWork(coordinator, {indexName, indexId, generation});
+  if (!indexId || !recoveryMap) {
+    return workPromise;
+  }
+  recoveryMap.set(indexId, workPromise);
+  try {
+    return await workPromise;
+  } finally {
+    if (recoveryMap.get(indexId) === workPromise) {
+      recoveryMap.delete(indexId);
+    }
+  }
+}
+
+function findInFlightIndexPromise(coordinator, indexId) {
+  return coordinator.inFlightRecoveriesByIndexId?.get(indexId) ||
+    coordinator.inFlightCompletionsByIndexId.get(indexId) ||
+    null;
 }
 
 function resolveExistingCreateAction(coordinator, def, options) {
@@ -329,8 +453,9 @@ function resolveExistingCreateAction(coordinator, def, options) {
   if (!existing) return null;
   if (ACTIVE_CREATION_STATES.has(existing.state) && isSameGlobalIndexDefinition(existing, def)) {
     const existingIndexId = existing.index_id;
-    if (coordinator.inFlightCompletionsByIndexId.has(existingIndexId)) {
-      return {awaitCompletion: coordinator.inFlightCompletionsByIndexId.get(existingIndexId)};
+    const inFlight = findInFlightIndexPromise(coordinator, existingIndexId);
+    if (inFlight) {
+      return {awaitCompletion: inFlight};
     }
     if (existing.state === GLOBAL_INDEX_STATE.CREATING) {
       return {redrive: existing};
@@ -352,8 +477,111 @@ function resolveExistingCreateAction(coordinator, def, options) {
   throw new Error(`Index '${def.indexName}' already exists`);
 }
 
+function executeExistingCreateAction(coordinator, existingAction, def, options) {
+  if (existingAction.awaitCompletion) return existingAction.awaitCompletion;
+  if (existingAction.redrive) {
+    return driveGlobalIndexProvisioning(
+      coordinator,
+      existingAction.redrive,
+      def,
+      {...options, isRedrive: true},
+    );
+  }
+  return existingAction.immediateResult;
+}
+
+async function createAndSaveNewGlobalIndexRecord(coordinator, def, options) {
+  const {indexName, tableName, columnNames} = def;
+  const currentGen = coordinator.generations.has(indexName) ?
+    coordinator.generations.get(indexName) :
+    1;
+  coordinator.generations.set(indexName, currentGen);
+
+  const schemaInfo = coordinator.resolveTableSchema ?
+    coordinator.resolveTableSchema(tableName) :
+    null;
+  const schemaCtx = resolveGlobalCreateSchemaContext(def, options, schemaInfo);
+  const basePrimaryKeyColumns = schemaCtx.basePrimaryKeyColumns.length > 0 ?
+    schemaCtx.basePrimaryKeyColumns :
+    [LOCAL_STR_ID];
+  const indexId = options.indexId || `${indexName}-gen${currentGen}`;
+
+  const record = createGlobalIndexRecord({
+    indexId,
+    tableName,
+    indexName,
+    columnNames,
+    state: GLOBAL_INDEX_STATE.CREATING,
+    ...options,
+  });
+  record.index_generation = currentGen;
+  record.basePrimaryKeyColumns = basePrimaryKeyColumns;
+  await coordinator._saveCatalogRecord(record);
+  return record;
+}
+
+async function runSingleGlobalIndexCreation(coordinator, def, options) {
+  if (coordinator.refreshCatalogPartitions) await coordinator.refreshCatalogPartitions();
+  const existingAction = resolveExistingCreateAction(coordinator, def, options);
+  if (existingAction) {
+    return executeExistingCreateAction(coordinator, existingAction, def, options);
+  }
+  let record;
+  try {
+    record = await createAndSaveNewGlobalIndexRecord(coordinator, def, options);
+  } catch (err) {
+    if (coordinator.refreshCatalogRecord) {
+      const refreshed = await coordinator.refreshCatalogRecord(def.indexName);
+      if (refreshed?.row) {
+        const actionAfterRace = resolveExistingCreateAction(coordinator, def, options);
+        if (actionAfterRace) {
+          return executeExistingCreateAction(coordinator, actionAfterRace, def, options);
+        }
+      }
+    }
+    throw err;
+  }
+  return driveGlobalIndexProvisioning(coordinator, record, def, options);
+}
+
+async function createGlobalIndexWithLifecycle(
+  coordinator,
+  ddlOrAst,
+  options,
+  parseAndValidateDef,
+) {
+  const def = parseAndValidateDef(ddlOrAst, options);
+  assertSupportedGlobalIndexDefinition(def);
+
+  const creationsMap = coordinator.inFlightCreationsByIndexName;
+  const activeCreation = creationsMap?.get(def.indexName);
+  if (activeCreation) {
+    if (areGlobalIndexDefinitionsEqual(activeCreation.def, def)) {
+      return activeCreation.promise;
+    }
+    if (def.ifNotExists === true || options.ifNotExists === true) {
+      return activeCreation.promise;
+    }
+    throw new Error(`Index '${def.indexName}' already exists`);
+  }
+
+  const creationPromise = runSingleGlobalIndexCreation(coordinator, def, options);
+  if (!creationsMap) {
+    return creationPromise;
+  }
+  creationsMap.set(def.indexName, {def, promise: creationPromise});
+  try {
+    return await creationPromise;
+  } finally {
+    if (creationsMap.get(def.indexName)?.promise === creationPromise) {
+      creationsMap.delete(def.indexName);
+    }
+  }
+}
+
 export {
   completeRecoveredProvisioning,
+  createGlobalIndexWithLifecycle,
   driveGlobalIndexProvisioning,
   provisionIndexDatasetsForCreation,
   provisionSingleIndexDataset,
