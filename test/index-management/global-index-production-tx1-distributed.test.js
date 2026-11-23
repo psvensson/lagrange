@@ -24,6 +24,9 @@ import {
   GLOBAL_INDEX_ACCESS_PATH,
 } from '../../src/index-management/global-index-read-router.js';
 import {
+  GLOBAL_INDEX_STATE,
+} from '../../src/index-management/global-index-catalog-contract.js';
+import {
   buildIndexDatasetSchema,
 } from '../../src/index-management/global-index-dataset-manager.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
@@ -904,6 +907,196 @@ test('DROP INDEX + CREATE GLOBAL INDEX on empty base table reconciles physical s
     t.equal(selectOld.success, true);
     t.equal(selectOld.globalIndexPlan?.accessPath, GLOBAL_INDEX_ACCESS_PATH.GLOBAL_SECONDARY_INDEX);
     t.same(selectOld.rows, []);
+  } finally {
+    await engine.shutdown();
+  }
+});
+
+test('Concurrent identical CREATE GLOBAL INDEX at replica-visible / CREATING boundary never drops completed dataset (4A)', async (t) => {
+  const env = await setupStrictCluster(t, {includeIndexPartitions: false});
+  seedUsers(env, [
+    {id: 10, email: 'alice@example.com', name: 'Alice', status: 'active'},
+    {id: 20, email: 'bob@example.com', name: 'Bob', status: 'active'},
+    {id: 120, email: 'zoe@example.com', name: 'Zoe', status: 'pending'},
+  ]);
+
+  const engineA = await env.createStrictEngine({attachProvisioner: true});
+  const engineB = await env.createStrictEngine({attachProvisioner: false});
+  try {
+    const coordA = engineA.indexService.getGlobalIndexCoordinator();
+    const coordB = engineB.indexService.getGlobalIndexCoordinator();
+
+    let signalAReplicaVisible;
+    const aReplicaVisible = new Promise((resolve) => {
+      signalAReplicaVisible = resolve;
+    });
+    let releaseAContinue;
+    const aContinueGate = new Promise((resolve) => {
+      releaseAContinue = resolve;
+    });
+    const origUpdateA = coordA._updateCatalogRecord.bind(coordA);
+    let pausedA = false;
+    coordA._updateCatalogRecord = async (update) => {
+      if (!pausedA && update?.state === GLOBAL_INDEX_STATE.WRITE_ONLY) {
+        pausedA = true;
+        signalAReplicaVisible();
+        await aContinueGate;
+      }
+      return origUpdateA(update);
+    };
+
+    let signalBAtReconcile;
+    const bAtReconcile = new Promise((resolve) => {
+      signalBAtReconcile = resolve;
+    });
+    let releaseBReconcile;
+    const bReconcileGate = new Promise((resolve) => {
+      releaseBReconcile = resolve;
+    });
+    const origReconcileB = coordB.onReconcileIndexDataset;
+    let pausedB = false;
+    coordB.onReconcileIndexDataset = async (params) => {
+      if (!pausedB) {
+        pausedB = true;
+        signalBAtReconcile();
+        await bReconcileGate;
+      }
+      return origReconcileB(params);
+    };
+
+    const createAPromise = engineA.executeQuery(
+      'CREATE GLOBAL INDEX idx_users_email ON users (email)',
+    );
+    await aReplicaVisible;
+
+    const preCatalog = env.gateway.db.prepare(
+      'SELECT * FROM indices WHERE index_name = ?',
+    ).get('idx_users_email');
+    t.equal(
+      preCatalog?.state,
+      GLOBAL_INDEX_STATE.CREATING,
+      'Catalog remains CREATING while physical GSI partition replica is visible',
+    );
+
+    const createBPromise = engineB.executeQuery(
+      'CREATE GLOBAL INDEX idx_users_email ON users (email)',
+    );
+    await bAtReconcile;
+
+    // Release Client A to finish backfill and transition to READ_WRITE
+    releaseAContinue();
+    const createARes = await createAPromise;
+    t.equal(createARes.success, true, 'Client A CREATE GLOBAL INDEX completes');
+    const afterCatalogA = env.gateway.db.prepare(
+      'SELECT * FROM indices WHERE index_name = ?',
+    ).get('idx_users_email');
+    t.equal(
+      afterCatalogA?.state,
+      GLOBAL_INDEX_STATE.READ_WRITE,
+      'Client A reached READ_WRITE before Client B resumed',
+    );
+
+    // Resume Client B from pre-reconciliation pause
+    releaseBReconcile();
+    const createBRes = await createBPromise;
+    t.equal(createBRes.success, true, 'Client B CREATE GLOBAL INDEX settles cleanly');
+
+    const idxReplicas = [...env.partitionServices.values()].filter(
+      (ps) => ps.tableName === '__idx_users_idx_users_email',
+    );
+    t.ok(idxReplicas.length >= 1, 'Founded GSI partition replica exists');
+    const totalIndexed = idxReplicas.reduce((sum, ps) => {
+      const cnt = ps.db.prepare(
+        'SELECT COUNT(*) AS cnt FROM "__idx_users_idx_users_email"',
+      ).get().cnt;
+      return sum + cnt;
+    }, 0);
+    t.equal(
+      totalIndexed,
+      3,
+      'Physical GSI dataset retains all 3 backfilled rows after Client B resumes',
+    );
+
+    const selectSql = 'SELECT * FROM users WHERE email = ? ORDER BY id ASC';
+    for (const [email, name] of [
+      ['alice@example.com', 'Alice'],
+      ['bob@example.com', 'Bob'],
+      ['zoe@example.com', 'Zoe'],
+    ]) {
+      const res = await engineB.executeQuery(selectSql, [email]);
+      t.equal(res.success, true, `GSI SELECT for ${email} succeeds`);
+      t.equal(
+        res.globalIndexPlan?.accessPath,
+        GLOBAL_INDEX_ACCESS_PATH.GLOBAL_SECONDARY_INDEX,
+        `GSI SELECT for ${email} uses GLOBAL_SECONDARY_INDEX`,
+      );
+      t.same(
+        res.rows,
+        env.oracleDb.prepare(selectSql).all(email),
+        `Indexed row for ${name} remains queryable after concurrent CREATE`,
+      );
+    }
+  } finally {
+    await engineB.shutdown();
+    await engineA.shutdown();
+  }
+});
+
+test('Same-node concurrent identical CREATE GLOBAL INDEX joins in-flight creation before provisioning or redrive (4A)', async (t) => {
+  const env = await setupStrictCluster(t, {includeIndexPartitions: false});
+  seedUsers(env, [
+    {id: 10, email: 'alice@example.com', name: 'Alice', status: 'active'},
+    {id: 120, email: 'zoe@example.com', name: 'Zoe', status: 'pending'},
+  ]);
+
+  const engine = await env.createStrictEngine({attachProvisioner: true});
+  try {
+    const coord = engine.indexService.getGlobalIndexCoordinator();
+    const origProvision = coord.provisionIndexPartitions;
+    const origReconcile = coord.onReconcileIndexDataset;
+    let provisionCalls = 0;
+    let reconcileCalls = 0;
+
+    let signalStarted;
+    const firstProvisionStarted = new Promise((resolve) => {
+      signalStarted = resolve;
+    });
+    let releaseFirstProvision;
+    const provisionGate = new Promise((resolve) => {
+      releaseFirstProvision = resolve;
+    });
+
+    coord.provisionIndexPartitions = async (ctx) => {
+      provisionCalls += 1;
+      if (provisionCalls === 1) {
+        signalStarted();
+        await provisionGate;
+      }
+      return origProvision(ctx);
+    };
+    coord.onReconcileIndexDataset = async (params) => {
+      reconcileCalls += 1;
+      return origReconcile(params);
+    };
+
+    const p1 = engine.executeQuery('CREATE GLOBAL INDEX idx_users_email ON users (email)');
+    await firstProvisionStarted;
+    const p2 = engine.executeQuery('CREATE GLOBAL INDEX idx_users_email ON users (email)');
+    releaseFirstProvision();
+
+    const [r1, r2] = await Promise.all([p1, p2]);
+    t.equal(r1.success, true, 'First same-node CREATE succeeds');
+    t.equal(r2.success, true, 'Second concurrent identical same-node CREATE succeeds');
+    t.equal(provisionCalls, 1, 'Second caller joined active creation without re-provisioning');
+    t.equal(reconcileCalls, 0, 'Second caller triggered zero destructive reconciliations');
+
+    const selectSql = 'SELECT * FROM users WHERE email = ? ORDER BY id ASC';
+    const selectRes = await engine.executeQuery(selectSql, ['zoe@example.com']);
+    t.equal(
+      selectRes.globalIndexPlan?.accessPath,
+      GLOBAL_INDEX_ACCESS_PATH.GLOBAL_SECONDARY_INDEX,
+    );
+    t.same(selectRes.rows, env.oracleDb.prepare(selectSql).all('zoe@example.com'));
   } finally {
     await engine.shutdown();
   }
