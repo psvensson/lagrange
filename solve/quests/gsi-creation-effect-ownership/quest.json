@@ -1,0 +1,56 @@
+{
+  "schema": "solve-quest/2",
+  "id": "gsi-creation-effect-ownership",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "Identical concurrent public CREATE INDEX requests preserve one owned global-index creation operation across provisioning and backfill. A delayed duplicate cannot reset a completed physical dataset, and destructive reconciliation validates the exact current operation authority while legitimate changed-definition replacement and deferred progress remain correct.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/gsi-creation-effect-ownership/evidence/receipt.json",
+      "requiredReceipts": [
+        "concurrent-create-data-preserved",
+        "destructive-effect-owner-bound",
+        "legitimate-replacement-and-redrive-preserved",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "candidate-and-source",
+      "statement": "Unsealed candidate from integration b85ba795076b9457b68b83698bc74898b4724cc9, runtime a3dcbe8c742a0b25551fdb145a6b5a877d0a3aa9, within solve/epics/operation-integrity-and-reliable-formation/reliable-application-operations-candidate.md. Reconcile the actual current source, original evidence and incumbent assignment before choosing a new write. This record creates no runtime reproduction, test execution, seal, competing writer or acceptance. Existing authority and authorized work continue."
+    },
+    {
+      "id": "existing-owner-and-scope",
+      "statement": "Current GSI writer owns IndexService, GlobalIndexLifecycleCoordinator, global-index-provisioning-lifecycle and global-index-distributed-execution interactions with existing schema/partition owners. Writable scope is creation admission/identity, the destructive reconciliation port and necessary consumers/witnesses. Preserve public entrypoints; exclude unrelated optimizer, SQL engine, replication or index redesign."
+    },
+    {
+      "id": "version-and-lineage",
+      "statement": "Initial completion: 0.4.1 admitted-correctness repair under alpha package 6 and implementation-safety P1/P3/P5. Preserve solved queryable-core-0-3-2-journeys-completion J5 and its evidence. Keep the incumbent GSI writer; coordinate the operation identity with gsi-completion-handoff-recovery and serialize shared edits/integration."
+    },
+    {
+      "id": "discriminating-baseline",
+      "statement": "Through normal public CREATE and production schema/partition construction on a populated base table, let A publish CREATING with a usable physical route. Let identical B enter redrive and pause before destructive reconciliation. Let A backfill and become READ_WRITE, then release B. Assert actual dataset contents and indexed query results under the same logical generation. Do not replace the production provisioner or inject direct local tables to make the witness pass."
+    },
+    {
+      "id": "owned-transition",
+      "statement": "Own duplicate admission before the first relevant physical effect; identical requests join or reconcile the same logical operation. Validate the actual operation/generation authority at destructive replacement, including stale/wrong operation negatives and late effects after completion. A pre-await check or matching logical index ID alone cannot authorize the resumed destructive action."
+    },
+    {
+      "id": "preserved-positive-and-negative-proof",
+      "statement": "Preserve typed unavailable-authority/zero-replica deferral, bounded redrive, real changed-definition DROP/recreate on populated and empty tables, restored-authority progress, new writes and readable index results. Do not avoid data loss by silently omitting a required schema replacement."
+    },
+    {
+      "id": "receipt-meanings",
+      "statement": "concurrent-create-data-preserved measures the late-duplicate production schedule and actual rows; destructive-effect-owner-bound proves stale/wrong-operation rejection at the physical boundary; legitimate-replacement-and-redrive-preserved covers real replacement and restored useful work. independent-verification binds review of this interaction and its producer/consumer proof to the composed candidate."
+    },
+    {
+      "id": "proof-and-integration",
+      "statement": "Use existing execution and receipt producers; retain original red output and applicable earlier proof. A missing receipt is unavailable/non-measuring, never a fake red or a green. Obtain a genuine measuring baseline before sealing through the current Quest workflow. If current work already satisfies the claim, retain evidence-backed disposition and supported adoption without inventing a new defect or reverting the active candidate. Independent review covers actual production construction, adverse boundary cuts and affected consumers; bind affected execution and applicability to the resulting composed SHA. No hand-authored pass flags or derived summary may substitute for original execution."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ]
+}

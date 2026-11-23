@@ -1,0 +1,61 @@
+{
+  "schema": "solve-quest/2",
+  "id": "installed-application-retained-restart",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "A clean installed client uses the admitted SQL and compiled WASI/service application through ordinary public interfaces, preserves independently recorded acknowledged results across supported same-version interruptions and retained-directory restart, keeps unfinished operations owned, and performs fresh useful work without private repair or source-checkout dependencies.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/installed-application-retained-restart/evidence/receipt.json",
+      "requiredReceipts": [
+        "installed-public-application-journey",
+        "acknowledged-state-survives-retained-restart",
+        "unfinished-operations-resume-or-remain-owned",
+        "post-restart-work-and-resource-settlement",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "candidate-and-source",
+      "statement": "Unsealed candidate from integration b85ba795076b9457b68b83698bc74898b4724cc9, runtime a3dcbe8c742a0b25551fdb145a6b5a877d0a3aa9, within solve/epics/operation-integrity-and-reliable-formation/reliable-application-operations-candidate.md. Reconcile the actual current source, original evidence and incumbent assignment before choosing a new write. This record creates no runtime reproduction, test execution, seal, competing writer or acceptance. Existing authority and authorized work continue."
+    },
+    {
+      "id": "existing-owner-and-scope",
+      "statement": "Existing developer-journey J1-J3/H5, installed-consumer/stabilization J8/Q17, feature recovery, artifact and integration owners own one representative installed application history. Reuse the existing application and Queryable Core fixtures/specifications; define exact schema/data, artifact revisions, public operations and independent oracle before implementation. Do not create another application framework or replace feature-owner acceptance."
+    },
+    {
+      "id": "version-and-lineage",
+      "statement": "Initial completion: 0.5 composed application qualification under alpha packages 5-11, consumed by package 12. Preserve solved seed-restart-recovery-mode-v2 and developer/Hono predecessors, and current retained-seed-original-handoff, TX1 and retained-reader work. All twelve alpha packages and admitted capabilities remain required; this representative journey does not narrow release scope."
+    },
+    {
+      "id": "discriminating-baseline",
+      "statement": "From actual candidate distributions and a clean client, create/use real schema/rows, transactions, admitted indexes/subscriptions and compiled WASI artifact revisions. Record acknowledged results independently. Exercise declared non-seed, seed/relevant-leader and connection interruption cuts plus supported full-cluster same-version stop/start on original directories, including selected pending transaction/schema/propagation/cleanup work. Establish actual execution baseline through existing owners; absent evidence alone is not a red or proof of unsupported seed rejoin."
+    },
+    {
+      "id": "owned-transition",
+      "statement": "No re-founding reset, private metadata repair, author-side artifact/source files, in-memory handler injection or alternate ingress may make the journey pass. Distinguish desired/accepted from usable, failed and unknown. An unknown mutation is not assumed aborted or blindly retried; use only supported identity/reconciliation. Require recovery evidence from the interrupted node itself."
+    },
+    {
+      "id": "preserved-positive-and-negative-proof",
+      "statement": "After new processes reopen retained state, verify all independently acknowledged results, settle or explicitly retain unfinished obligations with an enabled supported continuation, and perform fresh SQL and WASI work. Verify actual natural shutdown and failed-start resource release, truthful diagnostics/next actions and the existing onboarding requirement under declared prerequisites. Consume Q1-Q4/Q6/Q7 and wider feature proof with exact applicability."
+    },
+    {
+      "id": "receipt-meanings",
+      "statement": "installed-public-application-journey covers packaged ordinary-client use and actual service invocation; acknowledged-state-survives-retained-restart checks the independent oracle and original directories; unfinished-operations-resume-or-remain-owned checks supported continuation without observer-driven repair; post-restart-work-and-resource-settlement covers new work and physical cleanup. independent-verification binds actual artifact/runtime/topology and the declared application history."
+    },
+    {
+      "id": "proof-and-integration",
+      "statement": "Use existing execution and receipt producers; retain original red output and applicable earlier proof. A missing receipt is unavailable/non-measuring, never a fake red or a green. Obtain a genuine measuring baseline before sealing through the current Quest workflow. If current work already satisfies the claim, retain evidence-backed disposition and supported adoption without inventing a new defect or reverting the active candidate. Independent review covers actual production construction, adverse boundary cuts and affected consumers; bind affected execution and applicability to the resulting composed SHA. No hand-authored pass flags or derived summary may substitute for original execution."
+    },
+    {
+      "id": "separate-milestones",
+      "statement": "Backup/restore/PITR, cross-version upgrade, wiped-storage repair, power-loss and full comparative claims retain their separate existing owners and milestones. A reloadable evaluation is distinct from a sole authoritative datastore. Preserve the approved base-system, unchanged formation, canonical local comparative smoke and GCP measurement sequence."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ]
+}

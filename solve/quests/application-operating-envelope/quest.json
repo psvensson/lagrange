@@ -1,0 +1,56 @@
+{
+  "schema": "solve-quest/2",
+  "id": "application-operating-envelope",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "The admitted reference application has a declared, executed operating envelope in which foreground and control work make useful progress, pressure preserves acknowledged obligations, retained resources are reclaimed under existing contracts, and restart/replay and cleanup costs are measured within the declared supported limits.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/application-operating-envelope/evidence/receipt.json",
+      "requiredReceipts": [
+        "declared-envelope-executed",
+        "pressure-preserves-obligations-and-progress",
+        "retention-cleanup-and-replay-bounded",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "candidate-and-source",
+      "statement": "Unsealed candidate from integration b85ba795076b9457b68b83698bc74898b4724cc9, runtime a3dcbe8c742a0b25551fdb145a6b5a877d0a3aa9, within solve/epics/operation-integrity-and-reliable-formation/reliable-application-operations-candidate.md. Reconcile the actual current source, original evidence and incumbent assignment before choosing a new write. This record creates no runtime reproduction, test execution, seal, competing writer or acceptance. Existing authority and authorized work continue."
+    },
+    {
+      "id": "existing-owner-and-scope",
+      "statement": "Existing runtime/work-class, query/partition, cancellation, storage/CDC/TX and stabilization resource owners retain their boundaries. Scope is one declared application workload/topology/duration and its required resource/progress qualification. Route a demonstrated product defect to its bounded owner; do not authorize a repository-wide scheduling/threading refactor or a new monitoring framework."
+    },
+    {
+      "id": "version-and-lineage",
+      "statement": "Initial completion: 0.5 operating-envelope qualification under alpha packages 4/9 and existing stabilization Q08-Q11. Consume coordinator-sqlite-merge, current retained-read-view-generation-custody, ES6 safety and existing execution/retention contracts. Known violations of already admitted correctness remain current 0.4.1 corrections and cannot be deferred under this qualification label."
+    },
+    {
+      "id": "discriminating-baseline",
+      "statement": "Before execution, freeze the existing owning profile's hardware, topology, dataset, offered/concurrent work, result limits, subscriptions/background-operation counts, duration, interruption schedule, acceptance bounds and independent oracles. Run that actual finite workload with modest foreground work, slow-replica/backpressure, cancellation and finite-blocker removal. Missing evidence or an unrun profile is unavailable, not a manufactured red; use the existing qualification owner to establish a genuine baseline or retain a verified no-change disposition."
+    },
+    {
+      "id": "owned-transition",
+      "statement": "Measure longest execution turns and causal owner waits before attributing formation delay to synchronous work. Bind foreground/control progress, queue depth/age, acknowledged outcomes, oldest obligations, memory/storage/log growth, cleanup and replay costs to original observations. Select bounded batching/yielding or a worker boundary only from the proven cause, preserving native/SQLite ownership and one decision path."
+    },
+    {
+      "id": "preserved-positive-and-negative-proof",
+      "statement": "Pressure may slow or explicitly refuse work but cannot change correctness or drop accepted obligations. Preserve mandatory stabilization retention, two-cycle physical compaction/reclamation, reconstruction and finite-blocker resumption where required. A documented caveat or ever-growing log cannot replace those required proofs. Verify new useful work after blockers clear and after the declared retained-state restart."
+    },
+    {
+      "id": "receipt-meanings",
+      "statement": "declared-envelope-executed binds the frozen profile and actual complete execution; pressure-preserves-obligations-and-progress covers independent outcome accounting and foreground/control liveness; retention-cleanup-and-replay-bounded covers physical resources and existing recovery/retention predicates. independent-verification covers exact profile/candidate applicability, limits and remaining unsupported claims."
+    },
+    {
+      "id": "proof-and-integration",
+      "statement": "Use existing execution and receipt producers; retain original red output and applicable earlier proof. A missing receipt is unavailable/non-measuring, never a fake red or a green. Obtain a genuine measuring baseline before sealing through the current Quest workflow. If current work already satisfies the claim, retain evidence-backed disposition and supported adoption without inventing a new defect or reverting the active candidate. Independent review covers actual production construction, adverse boundary cuts and affected consumers; bind affected execution and applicability to the resulting composed SHA. No hand-authored pass flags or derived summary may substitute for original execution."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ]
+}

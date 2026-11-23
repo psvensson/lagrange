@@ -1,0 +1,56 @@
+{
+  "schema": "solve-quest/2",
+  "id": "service-inspect-achieved-readiness",
+  "epic": "operation-integrity-and-reliable-formation",
+  "statement": "Public service inspection distinguishes requested installation intent from achieved service usability. No initial, pending, failed or unavailable-route installation is reported ready; a positive readiness result is grounded in the canonical lifecycle/Cell owner and followed by a successful invocation of the actual deployed artifact through ordinary ingress.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/service-inspect-achieved-readiness/evidence/receipt.json",
+      "requiredReceipts": [
+        "intent-is-not-readiness",
+        "unavailable-and-failed-service-not-ready",
+        "ready-service-public-invocation",
+        "independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "candidate-and-source",
+      "statement": "Unsealed candidate from integration b85ba795076b9457b68b83698bc74898b4724cc9, runtime a3dcbe8c742a0b25551fdb145a6b5a877d0a3aa9, within solve/epics/operation-integrity-and-reliable-formation/reliable-application-operations-candidate.md. Reconcile the actual current source, original evidence and incumbent assignment before choosing a new write. This record creates no runtime reproduction, test execution, seal, competing writer or acceptance. Existing authority and authorized work continue."
+    },
+    {
+      "id": "existing-owner-and-scope",
+      "statement": "Existing CLI/service-pipeline, service-lifecycle-command, installation catalog/projection and actual Cell/readiness owners own the inspection-to-invocation interaction. Writable scope is canonical readiness consumption/projection, necessary public consumers and their genuine production witnesses. Do not introduce another readiness authority or make inspection drive deployment/repair."
+    },
+    {
+      "id": "version-and-lineage",
+      "statement": "Initial completion: 0.4.1 false-success repair under alpha packages 2/8/11 and implementation-safety P1/P5. Preserve solved service-install-lifecycle-cli-final, developer-journey-and-measured-comparisons-acceptance and h5-compiled-public-hono-journey. This successor covers the precise remaining readiness claim and its actual public consumer."
+    },
+    {
+      "id": "discriminating-baseline",
+      "statement": "Create an installation through the normal command/catalog owners with desired_state active and initial rollout_state recorded_not_running. Invoke public inspection and retain the incorrect ready result as the real red witness. Include no-Cell, pending/reconciling, failed and route-unavailable cases using the canonical status shape. The reviewed CLI treats desired active as ready and compares rollout with active although active is not a rollout state."
+    },
+    {
+      "id": "owned-transition",
+      "statement": "Identify the owner and witness that establish actual invocable readiness; changing active to converged without that trace is insufficient. Preserve desired intent as separate information, current installation/revision identity and failure details. Consume a canonical result instead of re-deriving authority from local flags. Keep accepted deploy and achieved usable service distinct."
+    },
+    {
+      "id": "preserved-positive-and-negative-proof",
+      "statement": "Publish/deploy the actual compiled artifact through the ordinary identity-based path, inspect readiness, then invoke its public endpoint and verify useful output. No manual handler injection, author-source load or synthetic dispatcher activation may stand in for deployment. Preserve deploy idempotence, unsupported/unavailable semantics and existing SQL/CLI consumers; update the owned capability/documentation producer where affected."
+    },
+    {
+      "id": "receipt-meanings",
+      "statement": "intent-is-not-readiness covers the production installation/inspection red-to-green; unavailable-and-failed-service-not-ready covers canonical negative states and route unavailability; ready-service-public-invocation establishes actual artifact activation and useful public output. independent-verification binds status producer, CLI consumer and public composition."
+    },
+    {
+      "id": "proof-and-integration",
+      "statement": "Use existing execution and receipt producers; retain original red output and applicable earlier proof. A missing receipt is unavailable/non-measuring, never a fake red or a green. Obtain a genuine measuring baseline before sealing through the current Quest workflow. If current work already satisfies the claim, retain evidence-backed disposition and supported adoption without inventing a new defect or reverting the active candidate. Independent review covers actual production construction, adverse boundary cuts and affected consumers; bind affected execution and applicability to the resulting composed SHA. No hand-authored pass flags or derived summary may substitute for original execution."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ]
+}

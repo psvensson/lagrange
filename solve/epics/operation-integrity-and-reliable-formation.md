@@ -38,6 +38,12 @@ doneWhen:
       - partition-checkpoint-epoch-generation-verified
       - independent-verification
 quests:
+  - gsi-creation-effect-ownership
+  - gsi-completion-handoff-recovery
+  - remote-cdc-shutdown-cleanup-custody
+  - service-inspect-achieved-readiness
+  - application-operating-envelope
+  - installed-application-retained-restart
   - quest-evidence-and-candidate-binding
   - cdc-source-image-occurrence-completion
   - replica-settlement-generation-fencing
@@ -111,6 +117,18 @@ canonical authority for each permission, completion, policy and routing decision
 Recovery retains obligations and progresses; startup and shutdown own their
 resources. The authoring and proof workflow must catch invented contracts and
 invalid evidence before integration.
+
+## Reliable application operations (candidate, 23 November 2026)
+
+The [epic candidate](operation-integrity-and-reliable-formation/reliable-application-operations-candidate.md)
+turns the architecture review into six unsealed Quest proposals and two reused
+work units. Its [start note](operation-integrity-and-reliable-formation/reliable-application-operations-start-here.md)
+routes reconciliation through the incumbent owners. It preserves all twelve
+alpha packages, implementation-safety P1-P6, existing seals and the approved
+formation/smoke/comparison sequence. This is proposed decomposition, not adoption,
+a new writer assignment, runtime acceptance or a second integration queue.
+Continue already authorized work under the current summary and actual owner
+records; reconcile the candidate against that work before starting a new unit.
 
 ## Usable alpha completion (approved 22 November 2026)
 
@@ -205,6 +223,21 @@ Live P6 negative controls executed against `Batch-L-Composed-a3dcbe8c7` (after F
 - **NC3 (`--claim-kind cross-node-cdc-propagation` with `sharedCache=true`)**: `REFUSED` (`shared_cache_substitution_refused`).
 - **NC4 (corrupted artifact digest on `adam-laptop`)**: `REFUSED` (`host_artifact_mismatch`).
 - **NC5 (Finding 4C: missing `adam-laptop` placement log and per-host NDJSON while merged `test-results.ndjson` still claims all 62 rows)**: `REFUSED` (`unbacked_merged_result`, `required_file_missing_or_failed`).
+
+### Q1-Q8 Reliable Application Operations Reconciliation & Disposition (23 November 2026)
+
+Reconciled against [reliable-application-operations-candidate.md](operation-integrity-and-reliable-formation/reliable-application-operations-candidate.md) (`6007d9ec74f7c89b68dbe8345ca6322607406429`, 6 unsealed scaffold quests plus reused Q5 and Q7 records; `node scripts/solve.js probe --id <id>` reports unavailable/non-measuring with zero placeholder receipts for each new scaffold):
+
+| Unit | Quest ID | Owner / Branch / Host | Disposition & Current Evidence |
+| --- | --- | --- | --- |
+| `Q1` | `gsi-creation-effect-ownership` | `@gsi-owner-v3` on `work/global-index-production-integration-20261122` (`adam-laptop`) | Active bounded repair (Finding 4A): retain duplicate-CREATE schedule on populated base table, assert actual dataset/query results under same logical generation, enforce operation/generation authority at physical replacement boundary. |
+| `Q2` | `gsi-completion-handoff-recovery` | `@gsi-owner-v3` on `work/global-index-production-integration-20261122` (`adam-laptop`, serialized with Q1) | Active bounded repair (Finding 4B): crash cut after `SchemaProvisioningJobOwner` durably persists `SUCCEEDED` plus interruption during backfill, recovery over original durable state without client `CREATE` or status-induced progress, plus drop/replace fencing. |
+| `Q3` | `remote-cdc-shutdown-cleanup-custody` | `@live-query-v3` on `work/generic-live-query-data-plane-20261122` @ `e343336e337af6cb5a2f21002746c5bd172b8fc8` (`adams-gamla`) | Completed bounded repair (Finding 4D): independently `APPROVE`d (`@verifier-p6`, board `#87`: RED `57df55314` failed `0/1` on `adams-gamla`, GREEN `e343336e3` passed `11/11`, 697 assertions, 0 retries) and merged into `work/integration-candidate-20261121` at `04f48d2e1` (new scaffold remains unsealed with no placeholder receipts). |
+| `Q4` | `service-inspect-achieved-readiness` | `@service-readiness` on `work/service-inspect-achieved-readiness-20261123` (`adams-gamla`) | Active bounded repair: distinguish `desired_state: 'active'` from canonical invocable Cell/route + converged rollout readiness (`recorded_not_running`, pending/reconciling, failed, route-unavailable not ready; full compiled-artifact deploy + public invocation without manual handler injection). |
+| `Q5` | `fresh-formation-user-table-routability` | `@formation-perf` on `work/formation-perf-20261123` (`tv-dator`) | Active causal investigation & optimization on reused existing Quest record: dissect original GCP stage traces (`84.6s` seed `nodeReady[0]` and `129.0s` 46-partition RF1->RF3 spread) while preserving `240.0s` comparative budget, `420.0s` 3-pass physical local gate, pure status, applied-term authority, and `APPLY_BEHIND_COMMIT`. |
+| `Q6` | `application-operating-envelope` | Existing runtime/stabilization owners (`Q08-Q11`, alpha packages `4`/`9`) | Scaffold registered (0.5 operating-envelope qualification; missing receipt is unavailable measurement pending frozen workload baseline after 0.4.1 `Q1-Q5`/`Q7` integration). |
+| `Q7` | `quest-evidence-and-candidate-binding` | `@verifier-p6` on `work/integration-candidate-20261121` @ `3825e8c2c` / `95f6e67a7` | Completed bounded repair (Finding 4C) on reused existing Quest record: `scripts/checks/lab-evidence-report*.js` derives required-file coverage strictly from validated original per-host logs/NDJSON with single-attempt enforcement (`10/10` pass incl. NC5 unit cases; `Batch-L-Composed-a3dcbe8c7` `ADMITTED`, NC1-NC5 live `REFUSED`). |
+| `Q8` | `installed-application-retained-restart` | Existing J1-J3/H5, stabilization J8/Q17, and feature-recovery owners | Scaffold registered (0.5 composed application qualification; consumes `Q1-Q4`/`Q6`/`Q7` after 0.4.1 integration; missing receipt is unavailable measurement). |
 
 ## Core integration handoff, 21 November 2026
 
