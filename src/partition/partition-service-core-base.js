@@ -279,11 +279,10 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.releaseMetadataPublicationReadinessListener = null;
     this._metadataPublicationReadinessState = null;
     this.metadataPublicationReadinessState =
-      options.metadataPublicationReadinessState ||
-      options.bootstrapReadinessState ||
-      null;
+      options.metadataPublicationReadinessState || options.bootstrapReadinessState || null;
     this.deferElection = options.deferElection || this.isJoiningExistingGroup;
     this.electionStarted = false;
+    this.deferredFounderSchedulingPending = false;
     this.raftTimingConfig = null;
     this.replicaStateMachine = options.replicaStateMachine || null;
     this.resolveHandlerRetirementLane =

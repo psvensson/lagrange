@@ -18,7 +18,9 @@ import {
 import {committedPartitionPeerAddress} from
   './partition-committed-peer-address.js';
 import {
+  activateDeferredFounderSchedulingIfNeeded,
   relayPartitionConsensusObservations,
+  startPartitionElectionScheduling,
   wirePartitionRaftLifecycleEvents,
 } from './partition-service-raft-lifecycle-wiring.js';
 import {PartitionServiceCoreBase} from './partition-service-core-base.js';
@@ -529,18 +531,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
    * If deferElection was false, this is a no-op (election already started).
    */
   startElection() {
-    if (this.electionStarted) {
-      return;
-    }
-    this.electionStarted = true;
-    if (this.raft) {
-      this.logger.info(PARTITION_SERVICE_LOG_MSG.STARTING_ELECTION_TIMER, {
-        replicaId: this.replicaId,
-        partitionId: this.partitionId,
-        peerCount: this.raft.readStatus().peerCount,
-      });
-      this.raft.startScheduling();
-    }
+    startPartitionElectionScheduling(this);
   }
   /**
    * Apply raft timing configuration to this live replica.
@@ -591,6 +582,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
         tickIntervalMs :
         this.raftTimingConfig?.tickIntervalMs || null,
     };
+    activateDeferredFounderSchedulingIfNeeded(this);
     const shouldRearmTimer =
       !this.defersElectionScheduling() || this.electionStarted;
     const outcome = applyPortRaftTimingConfig(this, {

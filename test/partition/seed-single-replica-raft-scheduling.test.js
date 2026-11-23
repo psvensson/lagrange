@@ -52,6 +52,7 @@ setTestPortBase(26500);
 
 const SCHEDULING_STARTED = 'start';
 const FAILOVER_BUDGET_MS = 4000;
+const NATURAL_HANDOFF_BUDGET_MS = 12000;
 const LEADER_TRANSFER_BUDGET_MS = 4000;
 const HEARTBEAT_OBSERVE_BUDGET_MS = 1500;
 const SEED_REPLICA = ['seed-p1-r1', 'node-1'];
@@ -323,5 +324,105 @@ test('PartitionService applyRaftTimingConfig passes rearmTimer: true for ' +
     assert.ok(HEARTBEAT_OBSERVE_BUDGET_MS > 0);
   } finally {
     await partition.shutdown();
+  }
+});
+
+test('single-replica deferred founder yields naturally to joiners after RF3 ' +
+  'growth, then arms ticks on step-down so surviving quorum fails over',
+async () => {
+  configure();
+  const harness = createCommittedMembershipHarness('seed-natural-handoff-p1');
+  try {
+    const seed = harness.build(SEED_REPLICA, {
+      replicaIds: [SEED_REPLICA[0]],
+      peerAddresses: [`${SEED_REPLICA[1]}/partition/${SEED_REPLICA[0]}`],
+      cache: metadataCache(harness.partitionId, [SEED_REPLICA]),
+      deferElection: true,
+    });
+    const startedTimerPayloads = [];
+    const origInfo = seed.logger.info.bind(seed.logger);
+    seed.logger = {
+      ...seed.logger,
+      info: (msg, payload) => {
+        if (msg === 'Starting Raft election timer') {
+          startedTimerPayloads.push(payload);
+        }
+        return origInfo(msg, payload);
+      },
+      debug: () => {},
+      warn: () => {},
+      error: () => {},
+    };
+
+    await seed.initialize();
+    assert.equal(await waitFor(() => statusOf(seed).appliedIndex > 0), true,
+      'single-replica seed must lead and apply its genesis no-op');
+
+    seed.startElection();
+    assert.equal(seed.electionStarted, true,
+      'startElection must mark electionStarted on solo founder');
+    assert.equal(seed.deferredFounderSchedulingPending, true,
+      'solo term-1 founder must defer periodic tick scheduling until handoff');
+    assert.equal(startedTimerPayloads.length, 0,
+      'solo term-1 founder must not start periodic heartbeat ticks at startElection');
+
+    await addJoiner(harness, JOINER_TWO, [SEED_REPLICA]);
+    await addJoiner(harness, JOINER_THREE, [SEED_REPLICA, JOINER_TWO]);
+
+    const r2 = harness.services.get(JOINER_TWO[0]);
+    const r3 = harness.services.get(JOINER_THREE[0]);
+
+    // Without transferLeadership, joiners must naturally take leadership at
+    // term >= 2 instead of staying pinned on seed's term-1 heartbeat flood.
+    const naturalTakeoverOk = await waitFor(() => {
+      const joinerLeader = [r2, r3].find((svc) =>
+        svc.isLeader && statusOf(svc).term > 1);
+      return Boolean(
+        joinerLeader &&
+        !seed.isLeader &&
+        statusOf(seed).leaderId === joinerLeader.replicaId,
+      );
+    }, NATURAL_HANDOFF_BUDGET_MS);
+    assert.equal(
+      naturalTakeoverOk,
+      true,
+      'joiner {r2, r3} must naturally win term >= 2 after RF3 growth ' +
+      `(seed: role=${seed.role} term=${statusOf(seed).term} ` +
+      `leader=${statusOf(seed).leaderId})`,
+    );
+
+    // Stepping down from initial term-1 founder tenure must immediately arm
+    // Raft tick scheduling on seed so its check_quorum lease never freezes.
+    assert.equal(seed.deferredFounderSchedulingPending, false,
+      'stepping down to term >= 2 must clear deferredFounderSchedulingPending');
+    assert.equal(startedTimerPayloads.length, 1,
+      'stepping down from initial founder tenure must arm Raft ticks once');
+
+    const activeJoinerLeader = r2.isLeader ? r2 : r3;
+    const survivingJoiner = activeJoinerLeader === r2 ? r3 : r2;
+    const termBeforeStop = statusOf(activeJoinerLeader).term;
+
+    await activeJoinerLeader.shutdown();
+
+    const failoverOk = await waitFor(() => {
+      const survivorLeader = [seed, survivingJoiner].find((svc) =>
+        svc.isLeader && statusOf(svc).term > termBeforeStop);
+      return Boolean(
+        survivorLeader &&
+        statusOf(seed).leaderId === survivorLeader.replicaId &&
+        statusOf(survivingJoiner).leaderId === survivorLeader.replicaId,
+      );
+    }, NATURAL_HANDOFF_BUDGET_MS);
+    assert.equal(
+      failoverOk,
+      true,
+      'surviving 2-of-3 quorum {seed, survivingJoiner} must elect a new leader ' +
+      'after the naturally elected joiner leader stops ' +
+      `(seed: role=${seed.role} term=${statusOf(seed).term} ` +
+      `leader=${statusOf(seed).leaderId}; survivor: role=${survivingJoiner.role} ` +
+      `term=${statusOf(survivingJoiner).term} leader=${statusOf(survivingJoiner).leaderId})`,
+    );
+  } finally {
+    await harness.dispose();
   }
 });

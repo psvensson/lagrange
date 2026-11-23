@@ -23,6 +23,82 @@ const {
 } = PARTITION_SERVICE_SHARED;
 
 const LOCAL_STR_VOTER = 'voter';
+const INITIAL_FOUNDER_TERM = 1;
+const SINGLE_REPLICA_COUNT = 1;
+
+function shouldDeferInitialSoloFounderScheduling(service) {
+  if (!service?.raft || service.replicaIds?.length !== SINGLE_REPLICA_COUNT) {
+    return false;
+  }
+  const status = service.raft.readStatus();
+  return (
+    service.isSoloReplicaGroup() &&
+    status?.gateOpen !== false &&
+    service.role === RaftRole.LEADER &&
+    Number(status?.term) <= INITIAL_FOUNDER_TERM
+  );
+}
+
+function startPartitionRaftSchedulingTimer(service) {
+  if (!service?.raft) {
+    return false;
+  }
+  service.deferredFounderSchedulingPending = false;
+  service.logger.info(PARTITION_SERVICE_LOG_MSG.STARTING_ELECTION_TIMER, {
+    replicaId: service.replicaId,
+    partitionId: service.partitionId,
+    peerCount: service.raft.readStatus().peerCount,
+  });
+  service.raft.startScheduling();
+  return true;
+}
+
+function startPartitionElectionScheduling(service) {
+  if (service.electionStarted) {
+    return;
+  }
+  service.electionStarted = true;
+  if (!service.raft) {
+    return;
+  }
+  if (shouldDeferInitialSoloFounderScheduling(service)) {
+    service.deferredFounderSchedulingPending = true;
+    return;
+  }
+  startPartitionRaftSchedulingTimer(service);
+}
+
+function resolveObservedTerm(service, observedTerm) {
+  if (observedTerm !== null && observedTerm !== undefined) {
+    const numeric = Number(observedTerm);
+    if (Number.isFinite(numeric)) {
+      return numeric;
+    }
+  }
+  return Number(service.raft.readStatus()?.term);
+}
+
+function hasLeftInitialFounderTenure(service, observedTerm) {
+  return (
+    service.role !== RaftRole.LEADER ||
+    resolveObservedTerm(service, observedTerm) > INITIAL_FOUNDER_TERM
+  );
+}
+
+function activateDeferredFounderSchedulingIfNeeded(service, observedTerm = null) {
+  if (
+    !service?.deferredFounderSchedulingPending ||
+    !service.electionStarted ||
+    service.isShutdown ||
+    !service.raft
+  ) {
+    return false;
+  }
+  if (!hasLeftInitialFounderTenure(service, observedTerm)) {
+    return false;
+  }
+  return startPartitionRaftSchedulingTimer(service);
+}
 
 function wirePartitionRaftLifecycleEvents(
   service,
@@ -72,6 +148,7 @@ function wirePartitionRaftLifecycleEvents(
       service.normalizeLeaderReplicaId(candidate),
     shouldIgnoreDemotionEvent,
     onLeader: ({term}) => {
+      activateDeferredFounderSchedulingIfNeeded(service, term);
       recordTransition({
         eventType: PARTITION_SERVICE_RAFT_EVIDENCE.EVENT_ROLE_TRANSITION,
         role: PARTITION_SERVICE_ROLE.LEADER,
@@ -85,6 +162,7 @@ function wirePartitionRaftLifecycleEvents(
       observeConsensusHold();
     },
     onFollower: ({term, demotedByLeaderChange}) => {
+      activateDeferredFounderSchedulingIfNeeded(service, term);
       recordTransition({
         eventType: PARTITION_SERVICE_RAFT_EVIDENCE.EVENT_ROLE_TRANSITION,
         role: PARTITION_SERVICE_ROLE.FOLLOWER,
@@ -99,6 +177,7 @@ function wirePartitionRaftLifecycleEvents(
       observeConsensusHold();
     },
     onCandidate: ({term}) => {
+      activateDeferredFounderSchedulingIfNeeded(service, term);
       recordTransition({
         eventType: PARTITION_SERVICE_RAFT_EVIDENCE.EVENT_ROLE_TRANSITION,
         role: PARTITION_SERVICE_ROLE.CANDIDATE,
@@ -111,6 +190,7 @@ function wirePartitionRaftLifecycleEvents(
       observeConsensusHold();
     },
     onLeaderChange: ({leaderId, previousLeaderId, term, demoted}) => {
+      activateDeferredFounderSchedulingIfNeeded(service, term);
       recordTransition({
         eventType: PARTITION_SERVICE_RAFT_EVIDENCE.EVENT_LEADER_OBSERVATION,
         role: service.role,
@@ -127,6 +207,9 @@ function wirePartitionRaftLifecycleEvents(
         partitionId: service.partitionId,
       });
       observeConsensusHold();
+    },
+    onTermChange: ({term}) => {
+      activateDeferredFounderSchedulingIfNeeded(service, term);
     },
   });
 }
@@ -211,4 +294,9 @@ function relayPartitionConsensusObservations(service) {
   service.raft.subscribe(RAFT_EVENT.TERM_CHANGE, (term) => emit({term}));
 }
 
-export {relayPartitionConsensusObservations, wirePartitionRaftLifecycleEvents};
+export {
+  activateDeferredFounderSchedulingIfNeeded,
+  relayPartitionConsensusObservations,
+  startPartitionElectionScheduling,
+  wirePartitionRaftLifecycleEvents,
+};
