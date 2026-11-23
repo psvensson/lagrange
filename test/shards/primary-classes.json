@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2441,
+    "unit": 2442,
     "integration": 132,
     "bootstrap": 232,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2812,
-  "digest": "fnv1a32-962a754c",
+  "censusSize": 2813,
+  "digest": "fnv1a32-9b48aba2",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -604,6 +604,7 @@
     "test/control-plane/heartbeat-wait-bound-spent.test.js": "unit",
     "test/control-plane/incarnation-reuse-cross-owner-anchor.test.js": "unit",
     "test/control-plane/invariant-engine.test.js": "unit",
+    "test/control-plane/leader-required-no-follower-fallback.test.js": "unit",
     "test/control-plane/lease-sweep-expired.property.test.js": "unit",
     "test/control-plane/lease-sweep-serialization.test.js": "unit",
     "test/control-plane/lease-sweep-skip-observability.test.js": "unit",

@@ -20,6 +20,9 @@ import {
 import {
   resolveAuthoritativeReadModeContract,
 } from '../control-plane/control-plane-system-table-gateway-read-contracts.js';
+import {
+  CONTROL_PLANE_READ_LEADER_MODE,
+} from '../control-plane/control-plane-system-table-gateway-constants.js';
 const {
   AUTHORITATIVE_READ_SOURCE,
   AUTHORITATIVE_ROW_VERSION_FIELD_CANDIDATES,
@@ -27,6 +30,7 @@ const {
   CDC_INTEGRATION_SERVICE_LITERAL,
   CONTROL_PLANE_READINESS_DIMENSION,
   INITIAL_PARTITION_IDS,
+  LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
   QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
   SERVICE_STATUS,
   SERVICE_TYPE,
@@ -541,48 +545,31 @@ async function executeAuthoritativeSystemTableRead(
   const statement = sql || `SELECT * FROM ${tableName}`;
   const requireOwnerRpcRead =
     authoritativeReadModeContract.requireOwnerRpcRead;
-  const preferredConsistency =
+  const leaderRequired =
+    readAuthority.leaderMode === CONTROL_PLANE_READ_LEADER_MODE.REQUIRED;
+  const preferredConsistency = leaderRequired ?
+    LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER :
     readAuthority.localReadConsistency;
-  const preferOwnerRpcRead =
-    authoritativeReadModeContract.preferOwnerRpcRead;
-  const allowOwnerRpcFallback =
-    authoritativeReadModeContract.allowOwnerRpcFallback;
+  const preferOwnerRpcRead = authoritativeReadModeContract.preferOwnerRpcRead;
+  const allowOwnerRpcFallback = authoritativeReadModeContract.allowOwnerRpcFallback;
   const baseDiagnostics = buildSystemTableOperationDiagnostics(
-    service,
-    tableName,
-    canonicalOptions,
+    service, tableName, canonicalOptions,
   );
-
-  let localRead = {
-    available: false,
-    rows: [],
-  };
+  let localRead = {available: false, rows: []};
   let localReplicaFallbackHit = false;
-
   const readLocalAuthoritativeRows = async () => {
     localRead = await queryLocalAuthoritativeSystemTableRows(
-      service,
-      tableName,
-      statement,
-      params,
-      {
-        consistency: preferredConsistency,
-      },
+      service, tableName, statement, params,
+      {consistency: preferredConsistency},
     );
-
     if (
-      !localRead.available &&
+      !leaderRequired && !localRead.available &&
       readAuthority.replicaFallbackConsistency &&
       readAuthority.replicaFallbackConsistency !== preferredConsistency
     ) {
       localRead = await queryLocalAuthoritativeSystemTableRows(
-        service,
-        tableName,
-        statement,
-        params,
-        {
-          consistency: readAuthority.replicaFallbackConsistency,
-        },
+        service, tableName, statement, params,
+        {consistency: readAuthority.replicaFallbackConsistency},
       );
       localReplicaFallbackHit = localRead.available;
     }
@@ -617,16 +604,20 @@ async function executeAuthoritativeSystemTableRead(
     await readLocalAuthoritativeRows();
   }
 
+  const localReadSatisfiesAuthority =
+    localRead.available &&
+    (!leaderRequired ||
+      (localRead.rowSetComplete === true && Boolean(localRead.readAuthorityWitness)));
   const shouldConfirmEmptyLocalReadWithOwnerRpc =
     authoritativeReadModeContract.confirmEmptyLocalReadWithOwnerRpc === true &&
     allowOwnerRpcFallback &&
-    localRead.available &&
+    localReadSatisfiesAuthority &&
     localRead.rows.length === 0 &&
     !preferOwnerRpcRead &&
     !requireOwnerRpcRead;
 
   if (
-    localRead.available &&
+    localReadSatisfiesAuthority &&
     !preferOwnerRpcRead &&
     !requireOwnerRpcRead &&
     !shouldConfirmEmptyLocalReadWithOwnerRpc
@@ -636,7 +627,7 @@ async function executeAuthoritativeSystemTableRead(
 
   // A leader-REQUIRED read on the node hosting the leader asks it in process
   // (the same receiver entry), before needing a transport or a query engine.
-  const inProcessLeaderRead = requireOwnerRpcRead ?
+  const inProcessLeaderRead = (requireOwnerRpcRead || leaderRequired) ?
     await executeInProcessLeaderRead(service, tableName, statement, params,
       canonicalOptions, baseDiagnostics) : null;
   if (inProcessLeaderRead !== null) return inProcessLeaderRead;

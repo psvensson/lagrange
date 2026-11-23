@@ -104,7 +104,7 @@ documentClass: generated
 - [sql-query-engine-initial-partition-provisioning.js](sql-query-engine-initial-partition-provisioning.js) - Return active, non-transitioning partitions eligible for split evaluation. (importers: one)
 - [sql-query-engine-instance-initializer.js](sql-query-engine-instance-initializer.js) - No leading comment; first export: attachAuthoritativeRoutingOverlayCacheApplyListener. (importers: one)
 - [sql-query-engine-lifecycle-and-callback-dispatch.js](sql-query-engine-lifecycle-and-callback-dispatch.js) - Initialize logger. (importers: few)
-- [sql-query-engine-metadata-authority-refresh.js](sql-query-engine-metadata-authority-refresh.js) - No leading comment; first export: METADATA_AUTHORITY_ERROR_CODE. (importers: few)
+- [sql-query-engine-metadata-authority-refresh.js](sql-query-engine-metadata-authority-refresh.js) - No leading comment; first export: METADATA_AUTHORITY_ERROR_CODE. (importers: many)
 - [sql-query-engine-participant-wire.js](sql-query-engine-participant-wire.js) - The engine's wire to the participant transaction owner (TX1 design revision 10, sections 2.2 and 4; seam items A, D,... (importers: many)
 - [sql-query-engine-partition-routing-readiness.js](sql-query-engine-partition-routing-readiness.js) - The outstanding durable split proposals: one per tables row whose transition is a retryable split (BLOCKED /... (importers: few)
 - [sql-query-engine-provision-target-methods.js](sql-query-engine-provision-target-methods.js) - Resolve the minimum routable replica cohort required before provisioning can continue. (importers: few)

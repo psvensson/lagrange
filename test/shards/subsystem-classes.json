@@ -7,7 +7,7 @@
     "bootstrap-membership": 356,
     "cdc-metadata": 81,
     "cli-tooling": 99,
-    "control-plane": 240,
+    "control-plane": 241,
     "convergence-topology": 88,
     "distributed-harness": 223,
     "examples-e2e": 8,
@@ -25,8 +25,8 @@
     "transport-messaging": 123,
     "wasm-toolchain": 74
   },
-  "censusSize": 2812,
-  "digest": "fnv1a32-2a6c4117",
+  "censusSize": 2813,
+  "digest": "fnv1a32-b7a7e189",
   "observationSchemaVersion": 2,
   "observationDigest": "fnv1a32-53a245d9",
   "classes": {
@@ -623,6 +623,7 @@
     "test/control-plane/heartbeat-wait-bound-spent.test.js": "control-plane",
     "test/control-plane/incarnation-reuse-cross-owner-anchor.test.js": "control-plane",
     "test/control-plane/invariant-engine.test.js": "control-plane",
+    "test/control-plane/leader-required-no-follower-fallback.test.js": "control-plane",
     "test/control-plane/lease-sweep-expired.property.test.js": "control-plane",
     "test/control-plane/lease-sweep-serialization.test.js": "control-plane",
     "test/control-plane/lease-sweep-skip-observability.test.js": "control-plane",

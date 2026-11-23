@@ -75,14 +75,17 @@ const controlPlaneSystemTableGatewayReadDispatchMethods = {
       ...profiledOptions,
       strategy,
     };
+    const defaultSecondaryConsistency =
+      mergedOptions.leaderMode === CONTROL_PLANE_READ_LEADER_MODE.REQUIRED ?
+        null :
+        CONTROL_PLANE_REPLICA_FALLBACK_CONSISTENCY;
     mergedOptions.readAuthority = buildControlPlaneReadAuthority({
       ...mergedOptions,
       localReadConsistency:
         mergedOptions.localReadConsistency ||
         CONTROL_PLANE_LOCAL_READ_CONSISTENCY,
       replicaFallbackConsistency:
-        mergedOptions.replicaFallbackConsistency ||
-        CONTROL_PLANE_REPLICA_FALLBACK_CONSISTENCY,
+        mergedOptions.replicaFallbackConsistency || defaultSecondaryConsistency,
     });
     const authoritativeReadModeContract =
       resolveAuthoritativeReadModeContract(mergedOptions.readAuthority);

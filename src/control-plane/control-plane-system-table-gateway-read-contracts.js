@@ -10,6 +10,7 @@ import {buildControlPlaneWorkloadProfile} from './control-plane-workload-profile
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   CONTROL_PLANE_CACHE_RECONCILE_DELETE_POLICY,
+  CONTROL_PLANE_LOCAL_READ_CONSISTENCY,
   CONTROL_PLANE_READ_PROFILE,
   CONTROL_PLANE_READ_LEADER_MODE,
   CONTROL_PLANE_READ_STRATEGY,
@@ -290,6 +291,25 @@ function resolveControlPlaneReadIntent(
   };
 }
 
+function resolveLeaderScopedLocalConsistency(leaderMode, value) {
+  if (!value) return null;
+  if (leaderMode === CONTROL_PLANE_READ_LEADER_MODE.REQUIRED &&
+      value !== CONTROL_PLANE_LOCAL_READ_CONSISTENCY) {
+    return CONTROL_PLANE_LOCAL_READ_CONSISTENCY;
+  }
+  return value;
+}
+
+function resolveLeaderScopedSecondaryConsistency(leaderMode, value) {
+  if (!value) return null;
+  if (leaderMode === CONTROL_PLANE_READ_LEADER_MODE.REQUIRED) {
+    return value === CONTROL_PLANE_LOCAL_READ_CONSISTENCY ?
+      CONTROL_PLANE_LOCAL_READ_CONSISTENCY :
+      null;
+  }
+  return value;
+}
+
 /**
  * The single frozen read-authority contract. Built once at gateway read
  * ingress and threaded structurally (requestOptions.readAuthority,
@@ -300,6 +320,7 @@ function resolveControlPlaneReadIntent(
  * alternate input forms.
  */
 function buildControlPlaneReadAuthority(options = {}) {
+  const leaderMode = normalizeReadLeaderMode(options?.leaderMode);
   return Object.freeze({
     purpose:
       options?.purpose === CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL ?
@@ -308,14 +329,19 @@ function buildControlPlaneReadAuthority(options = {}) {
     strategy: normalizeReadStrategy(options?.strategy),
     readProfile: normalizeReadProfile(options?.readProfile),
     authoritativeReadMode: resolveAuthoritativeReadMode(options),
-    leaderMode: normalizeReadLeaderMode(options?.leaderMode),
+    leaderMode,
     preferLeader:
       typeof options?.preferLeader === 'boolean' ?
         options.preferLeader :
         null,
-    localReadConsistency: options?.localReadConsistency || null,
-    replicaFallbackConsistency:
+    localReadConsistency: resolveLeaderScopedLocalConsistency(
+      leaderMode,
+      options?.localReadConsistency || null,
+    ),
+    replicaFallbackConsistency: resolveLeaderScopedSecondaryConsistency(
+      leaderMode,
       options?.replicaFallbackConsistency || null,
+    ),
     routingReadinessDimension:
       options?.routingReadinessDimension ||
       CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
