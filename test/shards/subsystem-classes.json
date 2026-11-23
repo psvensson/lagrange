@@ -13,7 +13,7 @@
     "examples-e2e": 8,
     "pgwire-compat": 23,
     "placement-rebalance": 312,
-    "query-sql": 222,
+    "query-sql": 223,
     "release-packaging": 15,
     "runtime-primitives": 24,
     "services-runtime": 163,
@@ -25,10 +25,10 @@
     "transport-messaging": 123,
     "wasm-toolchain": 74
   },
-  "censusSize": 2821,
-  "digest": "fnv1a32-e67d6dfc",
+  "censusSize": 2822,
+  "digest": "fnv1a32-9c49a26b",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-9de6d729",
+  "observationDigest": "fnv1a32-3b338956",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1646,6 +1646,7 @@
     "test/query/call-stage.test.js": "query-sql",
     "test/query/cancellation-token.test.js": "query-sql",
     "test/query/catalog-authority-and-visible-reconciliation.test.js": "query-sql",
+    "test/query/contradiction-pruned-empty-query.test.js": "query-sql",
     "test/query/coordinator-interim-refusals.test.js": "query-sql",
     "test/query/coordinator-merge-process-pool.test.js": "query-sql",
     "test/query/coordinator-resource-limits.property.test.js": "query-sql",
@@ -17067,6 +17068,15 @@
         "src/control-plane/projection-readiness-constants.js",
         "src/partition/partition-participant-transaction-constants.js",
         "test/test-helpers/participant-protocol-double.js"
+      ]
+    },
+    "test/query/contradiction-pruned-empty-query.test.js": {
+      "files": [
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/query/sql-query-engine-metadata-authority-refresh.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/control-plane/serve-eligibility-test-support.js"
       ]
     },
     "test/query/coordinator-interim-refusals.test.js": {

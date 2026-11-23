@@ -441,10 +441,16 @@ class DistributedQueryPlanner {
     const {indexAccess, selectedIndex, rejectedIndexes} =
       this.resolveTablePlanIndexAccess(ast, tableName);
 
+    const prunedEmpty =
+      partitions.length > 0 &&
+      partitionIds.length === 0 &&
+      resolutionInfo?.prunedEmpty === true;
+
     return {
       tableName,
       tableAlias,
       partitions: partitionIds,
+      prunedEmpty,
       localPredicate,
       projectedColumns: this.extractProjectedColumns(ast, tableAlias),
       keyPredicateShape: resolutionInfo?.predicateShape ||

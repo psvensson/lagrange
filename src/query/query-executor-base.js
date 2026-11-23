@@ -386,6 +386,74 @@ class QueryExecutorBase {
       readinessDimension || CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE;
   }
 
+  async executeEmptyAggregateSelect(ast, params, queryTimestamp, requestDeadlineMs, options) {
+    const resolveTableSchema = (name) => this.resolveJoinTableSchema(name);
+    const fanoutPlan = buildSelectFanoutPlan(ast, params, 2, {resolveTableSchema});
+    const effectivePlan = fanoutPlan.unmergedPlan || fanoutPlan;
+    const extraFetch = await this.fetchExtraNestedBaseTables(
+      ast,
+      effectivePlan.extraBaseTableNames,
+      queryTimestamp,
+      options,
+    );
+    if (!extraFetch.ok) {
+      return extraFetch.failureResult;
+    }
+    const mergeOptions = this.buildCoordinatorMergeOptions(
+      options,
+      extraFetch.extraTables,
+      requestDeadlineMs,
+    );
+    const aggregated = await this.mergeEngine.mergePartitionResults(
+      [],
+      ast,
+      this,
+      effectivePlan,
+      params,
+      mergeOptions,
+    );
+    return {
+      success: true,
+      rows: aggregated.rows,
+      rawRows: aggregated.rawRows,
+      columns: aggregated.columns,
+      rowSet: aggregated.rowSet,
+      count: aggregated.rows.length,
+      partitions: [],
+      timestamp: queryTimestamp ? queryTimestamp.toString() : null,
+    };
+  }
+
+  tryExecuteJoinSelect(ast, partitionIds, params, options, queryTimestamp) {
+    if (!ast.joins || ast.joins.length === 0 || hasSubqueryCteOrCompound(ast)) {
+      return null;
+    }
+    const joinPartitions = this.resolveJoinPartitions(ast, options);
+    const isSelfJoin = ast.joins.every(
+      (join) => join?.table?.name && join.table.name === ast.from?.name,
+    );
+    if (joinPartitions.size > 0 || isSelfJoin) {
+      return this.executeCrossPartitionJoin(
+        ast,
+        partitionIds,
+        params,
+        {...options, joinPartitions},
+        queryTimestamp,
+      );
+    }
+    if (partitionIds.length === 0) {
+      return Promise.resolve({success: true, rows: [], count: 0, partitions: []});
+    }
+    return Promise.resolve({
+      success: false,
+      errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
+      error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
+      failedPartitions: [],
+      partitionErrors: [{partitionId: null, error: QUERY_ERROR_MSG.MISSING_JOIN_PLAN}],
+      partitions: partitionIds,
+    });
+  }
+
   /**
    * Execute a SELECT query across partitions in parallel.
    * Supports cross-partition queries including JOINs and aggregates.
@@ -398,15 +466,6 @@ class QueryExecutorBase {
    */
   async executeSelect(ast, partitionIds, params = [], options = {}) {
     assertQueryParametersBound(ast, params);
-    if (partitionIds.length === 0) {
-      return {
-        success: true,
-        rows: [],
-        count: 0,
-        partitions: [],
-      };
-    }
-
     const requestDeadlineMs = this.resolveRequestDeadlineMs(options);
     const queryTimestamp = this.hlcClock.now();
     this.logger.debug(QUERY_LOG_MSG.EXECUTING_DISTRIBUTED_SELECT, {
@@ -416,36 +475,28 @@ class QueryExecutorBase {
       hasAggregates: this.hasAggregates(ast),
     });
 
-    if (ast.joins && ast.joins.length > 0 && !hasSubqueryCteOrCompound(ast)) {
-      const joinPartitions = this.resolveJoinPartitions(ast, options);
-      const isSelfJoin = ast.joins.every(
-        (join) => join?.table?.name && join.table.name === ast.from?.name,
-      );
-      if (joinPartitions.size > 0 || isSelfJoin) {
-        return this.executeCrossPartitionJoin(
-          ast,
-          partitionIds,
-          params,
-          {
-            ...options,
-            joinPartitions,
-          },
-          queryTimestamp,
-        );
+    const joinResult = this.tryExecuteJoinSelect(
+      ast, partitionIds, params, options, queryTimestamp);
+    if (joinResult !== null) {
+      return joinResult;
+    }
+
+    if (partitionIds.length === 0) {
+      if (!this.hasAggregates(ast)) {
+        return {
+          success: true,
+          rows: [],
+          count: 0,
+          partitions: [],
+        };
       }
-      return {
-        success: false,
-        errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
-        error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
-        failedPartitions: [],
-        partitionErrors: [
-          {
-            partitionId: null,
-            error: QUERY_ERROR_MSG.MISSING_JOIN_PLAN,
-          },
-        ],
-        partitions: partitionIds,
-      };
+      return this.executeEmptyAggregateSelect(
+        ast,
+        params,
+        queryTimestamp,
+        requestDeadlineMs,
+        options,
+      );
     }
 
     const baseTables = collectAllBaseTableNames(ast);

@@ -156,6 +156,16 @@ function lookupTablePlanEntry(tablePlans, key) {
   return tablePlans[key] || null;
 }
 
+function resolvePlannedJoinEntry(tablePlans, joinTableName, joinAlias) {
+  const entry = (joinAlias ? lookupTablePlanEntry(tablePlans, joinAlias) : null) ||
+    lookupTablePlanEntry(tablePlans, joinTableName);
+  const partitionIds = Array.isArray(entry?.partitions) ? entry.partitions : [];
+  if (partitionIds.length > 0 || entry?.prunedEmpty === true) {
+    return partitionIds;
+  }
+  return null;
+}
+
 function lookupPlannedPartitionsForTable(tablePlans, tableName, aliasName = null) {
   const byAlias = aliasName ? lookupTablePlanEntry(tablePlans, aliasName) : null;
   const entry = byAlias || lookupTablePlanEntry(tablePlans, tableName);
@@ -390,16 +400,10 @@ const queryExecutorJoinExecutionMethods = {
       const joinTableName = join.table?.name;
       const joinAlias = join.table?.alias || joinTableName;
       if (!joinTableName) continue;
-      const partitionIds = lookupPlannedPartitionsForTable(
-        tablePlans,
-        joinTableName,
-        joinAlias,
-      );
-      if (partitionIds.length > 0) {
+      const partitionIds = resolvePlannedJoinEntry(tablePlans, joinTableName, joinAlias);
+      if (partitionIds !== null) {
         joinPartitions.set(joinTableName, partitionIds);
-        if (joinAlias) {
-          joinPartitions.set(joinAlias, partitionIds);
-        }
+        if (joinAlias) joinPartitions.set(joinAlias, partitionIds);
       }
     }
     return joinPartitions;
@@ -423,10 +427,8 @@ const queryExecutorJoinExecutionMethods = {
   },
 
   resolveEdgePartitions(edgePlan, joinPartitions, mainTableName, mainPartitionIds) {
-    const byRef = joinPartitions.get(edgePlan.ref);
-    if (Array.isArray(byRef) && byRef.length > 0) return byRef;
-    const byName = joinPartitions.get(edgePlan.tableName);
-    if (Array.isArray(byName) && byName.length > 0) return byName;
+    if (joinPartitions.has(edgePlan.ref)) return joinPartitions.get(edgePlan.ref);
+    if (joinPartitions.has(edgePlan.tableName)) return joinPartitions.get(edgePlan.tableName);
     return edgePlan.tableName === mainTableName ? mainPartitionIds : [];
   },
 
@@ -625,6 +627,9 @@ const queryExecutorJoinExecutionMethods = {
     tableName,
     fanoutMetrics,
   ) {
+    if (partitionIds.length === 0) {
+      return {ok: true, results: [], rows: []};
+    }
     const results = await this.executeOnPartitions(
       partitionIds,
       sql,

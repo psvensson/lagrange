@@ -91,12 +91,19 @@ class PartitionResolver {
    * @param {number} partitionCount - Number of matched partitions.
    * @private
    */
-  recordResolution(tableName, predicateShape, keyColumns, partitionCount) {
+  recordResolution(
+    tableName,
+    predicateShape,
+    keyColumns,
+    partitionCount,
+    prunedEmpty = false,
+  ) {
     this.lastResolutionInfo = Object.freeze({
       tableName,
       predicateShape,
       keyColumns,
       partitionCount,
+      prunedEmpty: prunedEmpty === true,
     });
   }
 
@@ -144,6 +151,7 @@ class PartitionResolver {
       return {
         partitionIds: [],
         predicateShape: PREDICATE_SHAPE.POINT,
+        prunedEmpty: true,
       };
     }
 
@@ -176,6 +184,7 @@ class PartitionResolver {
   resolvePartitions(tableName, whereClause, partitions, options = {}) {
     if (!partitions || partitions.length === 0) {
       this.logger.warn(QUERY_LOG_MSG.NO_PARTITIONS_FOR_TABLE, {tableName});
+      this.recordResolution(tableName, PREDICATE_SHAPE.SCATTER, [], 0, false);
       return [];
     }
 
@@ -216,6 +225,7 @@ class PartitionResolver {
       resolution.predicateShape,
       primaryKeyColumns,
       resolution.partitionIds.length,
+      resolution.prunedEmpty === true,
     );
     return resolution.partitionIds;
   }

@@ -83,6 +83,14 @@ async function enlistTransactionSelectParticipants(
   return enlisted.success === true ? null : enlisted;
 }
 
+function isRoutableJoinPlan(joinPlan) {
+  return Boolean(
+    joinPlan &&
+    Array.isArray(joinPlan.partitions) &&
+    (joinPlan.partitions.length > 0 || joinPlan.prunedEmpty === true),
+  );
+}
+
 function buildSelectExecutionEnvelope(
   result,
   tableName,
@@ -290,7 +298,7 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
         distributedPlan.tablePlans.get(joinAlias) ||
         distributedPlan.tablePlans.get(joinTableName) ||
         null;
-      if (!joinPlan || joinPlan.partitions.length === 0) {
+      if (!isRoutableJoinPlan(joinPlan)) {
         if (this.getTableInfo?.(joinTableName)) {
           return {
             success: false,

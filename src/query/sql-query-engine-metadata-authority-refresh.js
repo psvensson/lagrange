@@ -645,7 +645,7 @@ function hasRoutableTablePlan(tablePlan) {
   return Boolean(
     tablePlan &&
     Array.isArray(tablePlan.partitions) &&
-    tablePlan.partitions.length > 0,
+    (tablePlan.partitions.length > 0 || tablePlan.prunedEmpty === true),
   );
 }
 
