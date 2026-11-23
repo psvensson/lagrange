@@ -16,5 +16,6 @@ documentClass: generated
 - [dynamic-config-service.js](dynamic-config-service.js) - Dynamic Configuration Service - Manages configuration through system table. (importers: many)
 - [dynamic-config-startup-wiring.js](dynamic-config-startup-wiring.js) - Dynamic configuration startup wiring helpers. (importers: few)
 - [listener-port-model.js](listener-port-model.js) - No leading comment; first export: LISTENER_PORT_DEFAULT. (importers: hub)
+- [network-timing-profile-resolver.js](network-timing-profile-resolver.js) - Canonical static network timing profile resolver and applier. (importers: few)
 - [raft-adaptive-timing-controller-constants.js](raft-adaptive-timing-controller-constants.js) - Constants for Raft adaptive timing controller. (importers: one)
 - [raft-adaptive-timing-controller.js](raft-adaptive-timing-controller.js) - Raft adaptive timing controller. (importers: few)

@@ -10,27 +10,101 @@
 import {RAFT_RS_GROUP_TUNING} from './raft-rs-group-constants.js';
 
 const MIN_TICK_MS = 1;
+const NATIVE_ELECTION_MAX_MULTIPLIER = 2;
+const EMPTY_STRING = '';
+const TYPE_BOOLEAN = 'boolean';
 
-function tickMsOf(timing) {
-  const heartbeatMs = Number(timing.heartbeatMs);
-  const tickIntervalMs = Number(timing.tickIntervalMs);
-  if (Number.isFinite(tickIntervalMs) && tickIntervalMs > 0) {
-    return tickIntervalMs;
+const RAFT_RS_TIMING_DISCREPANCY_FIELD = Object.freeze({
+  TICK_INTERVAL_MS: 'tickIntervalMs',
+  HEARTBEAT_MS: 'heartbeatMs',
+  ELECTION_MIN_MS: 'electionMinMs',
+  ELECTION_MAX_MS: 'electionMaxMs',
+});
+
+const RAFT_RS_TIMING_DISCREPANCY_REASON = Object.freeze({
+  TICK_DERIVED_FROM_HEARTBEAT: 'tick_interval_derived_from_heartbeat',
+  ROUNDED_TO_TICK_MULTIPLE: 'rounded_to_tick_multiple',
+  ROUNDED_OR_CLAMPED_TO_ELECTION_TICK: 'rounded_or_clamped_to_election_tick',
+  NATIVE_CORE_RANDOMIZES_DOUBLE_ELECTION_TICK:
+    'native_core_randomizes_to_double_election_tick',
+});
+
+function numericScalarOrNaN(value) {
+  return value === null || value === undefined ? Number.NaN : Number(value);
+}
+
+function finiteNumberOrNull(value) {
+  if (
+    value === null ||
+    value === undefined ||
+    value === EMPTY_STRING ||
+    typeof value === TYPE_BOOLEAN
+  ) {
+    return null;
+  }
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function extractRequestedTiming(timing = {}) {
+  const safeTiming = timing || {};
+  return Object.freeze({
+    tickIntervalMs: finiteNumberOrNull(safeTiming.tickIntervalMs),
+    heartbeatMs: finiteNumberOrNull(safeTiming.heartbeatMs),
+    electionMinMs: finiteNumberOrNull(safeTiming.electionMinMs),
+    electionMaxMs: finiteNumberOrNull(safeTiming.electionMaxMs),
+  });
+}
+
+function deriveTickMsFromRequested(requested) {
+  if (requested.tickIntervalMs !== null && requested.tickIntervalMs > 0) {
+    return requested.tickIntervalMs;
+  }
+  if (requested.heartbeatMs === null) {
+    return MIN_TICK_MS;
   }
   const fromHeartbeat = Math.floor(
-    heartbeatMs / RAFT_RS_GROUP_TUNING.HEARTBEAT_TICK);
+    requested.heartbeatMs / RAFT_RS_GROUP_TUNING.HEARTBEAT_TICK);
   return Number.isFinite(fromHeartbeat) ?
     Math.max(MIN_TICK_MS, fromHeartbeat) : MIN_TICK_MS;
 }
 
+function deriveHeartbeatTickFromRequested(requested, derivedTickMs) {
+  if (
+    requested.heartbeatMs !== null &&
+    requested.heartbeatMs > 0 &&
+    requested.tickIntervalMs !== null &&
+    requested.tickIntervalMs > 0
+  ) {
+    return Math.max(MIN_TICK_MS, Math.round(requested.heartbeatMs / derivedTickMs));
+  }
+  return RAFT_RS_GROUP_TUNING.HEARTBEAT_TICK;
+}
+
+function deriveElectionTickFromRequested(requested, derivedTickMs, heartbeatTick) {
+  if (requested.electionMinMs !== null) {
+    return Math.max(
+      heartbeatTick + 1,
+      Math.ceil(requested.electionMinMs / derivedTickMs),
+    );
+  }
+  return Math.max(heartbeatTick + 1, RAFT_RS_GROUP_TUNING.ELECTION_TICK);
+}
+
+function deriveEffectiveTickParameters(timing = {}) {
+  const requested = extractRequestedTiming(timing);
+  const derivedTickMs = deriveTickMsFromRequested(requested);
+  const heartbeatTick = deriveHeartbeatTickFromRequested(requested, derivedTickMs);
+  const electionTick = deriveElectionTickFromRequested(
+    requested, derivedTickMs, heartbeatTick,
+  );
+  return {requested, derivedTickMs, heartbeatTick, electionTick};
+}
+
 function tuningOf(timing = {}) {
-  const electionMinMs = Number(timing.electionMinMs);
-  const heartbeatTick = RAFT_RS_GROUP_TUNING.HEARTBEAT_TICK;
-  const derivedTickMs = tickMsOf(timing);
+  const {heartbeatTick, electionTick} = deriveEffectiveTickParameters(timing);
   return {
-    electionTick: Number.isFinite(electionMinMs) ?
-      Math.max(heartbeatTick + 1, Math.ceil(electionMinMs / derivedTickMs)) :
-      RAFT_RS_GROUP_TUNING.ELECTION_TICK,
+    electionTick,
     heartbeatTick,
     preVote: RAFT_RS_GROUP_TUNING.PRE_VOTE,
     checkQuorum: RAFT_RS_GROUP_TUNING.CHECK_QUORUM,
@@ -50,7 +124,8 @@ function tuningOf(timing = {}) {
 // that heals inside a window is found only by the first operation after it,
 // so the group's first write after a heal waits up to one window.
 function recoveryRetryWindowMsOf(timing = {}) {
-  return tuningOf(timing).electionTick * tickMsOf(timing);
+  const {derivedTickMs, electionTick} = deriveEffectiveTickParameters(timing);
+  return electionTick * derivedTickMs;
 }
 
 /**
@@ -61,12 +136,87 @@ function recoveryRetryWindowMsOf(timing = {}) {
  * @param {Object} timing Original opening's millisecond timing inputs.
  * @return {Object} Frozen numeric inputs consumed by this same tuning owner.
  */
-function captureOriginalRaftRsTiming(timing) {
+function buildDiscrepancies(requested, effective) {
+  const discrepancies = [];
+  if (requested.tickIntervalMs === null) {
+    discrepancies.push(Object.freeze({
+      field: RAFT_RS_TIMING_DISCREPANCY_FIELD.TICK_INTERVAL_MS,
+      requested: requested.tickIntervalMs,
+      effective: effective.tickIntervalMs,
+      reason: RAFT_RS_TIMING_DISCREPANCY_REASON.TICK_DERIVED_FROM_HEARTBEAT,
+    }));
+  }
+  if (
+    requested.heartbeatMs !== null &&
+    requested.heartbeatMs !== effective.effectiveHeartbeatMs
+  ) {
+    discrepancies.push(Object.freeze({
+      field: RAFT_RS_TIMING_DISCREPANCY_FIELD.HEARTBEAT_MS,
+      requested: requested.heartbeatMs,
+      effective: effective.effectiveHeartbeatMs,
+      reason: RAFT_RS_TIMING_DISCREPANCY_REASON.ROUNDED_TO_TICK_MULTIPLE,
+    }));
+  }
+  if (
+    requested.electionMinMs !== null &&
+    requested.electionMinMs !== effective.effectiveElectionMinMs
+  ) {
+    discrepancies.push(Object.freeze({
+      field: RAFT_RS_TIMING_DISCREPANCY_FIELD.ELECTION_MIN_MS,
+      requested: requested.electionMinMs,
+      effective: effective.effectiveElectionMinMs,
+      reason: RAFT_RS_TIMING_DISCREPANCY_REASON.ROUNDED_OR_CLAMPED_TO_ELECTION_TICK,
+    }));
+  }
+  if (
+    requested.electionMaxMs !== null &&
+    requested.electionMaxMs !== effective.effectiveElectionMaxMs
+  ) {
+    discrepancies.push(Object.freeze({
+      field: RAFT_RS_TIMING_DISCREPANCY_FIELD.ELECTION_MAX_MS,
+      requested: requested.electionMaxMs,
+      effective: effective.effectiveElectionMaxMs,
+      reason: RAFT_RS_TIMING_DISCREPANCY_REASON.NATIVE_CORE_RANDOMIZES_DOUBLE_ELECTION_TICK,
+    }));
+  }
+  return Object.freeze(discrepancies);
+}
+
+function describeEffectiveRaftRsTiming(timing = {}) {
+  const {requested, derivedTickMs, heartbeatTick, electionTick} =
+    deriveEffectiveTickParameters(timing);
+  const effectiveHeartbeatMs = heartbeatTick * derivedTickMs;
+  const effectiveElectionMinMs = electionTick * derivedTickMs;
+  const effectiveElectionMaxMs =
+    NATIVE_ELECTION_MAX_MULTIPLIER * electionTick * derivedTickMs;
+  const effective = Object.freeze({
+    tickIntervalMs: derivedTickMs,
+    heartbeatTick,
+    electionTick,
+    effectiveHeartbeatMs,
+    effectiveElectionMinMs,
+    effectiveElectionMaxMs,
+    electionMaxControlledByCore: false,
+  });
   return Object.freeze({
-    heartbeatMs: Number(timing.heartbeatMs),
-    tickIntervalMs: Number(timing.tickIntervalMs),
-    electionMinMs: Number(timing.electionMinMs),
+    requested,
+    effective,
+    discrepancies: buildDiscrepancies(requested, effective),
   });
 }
 
-export {captureOriginalRaftRsTiming, recoveryRetryWindowMsOf, tuningOf};
+function captureOriginalRaftRsTiming(timing = {}) {
+  return Object.freeze({
+    heartbeatMs: numericScalarOrNaN(timing.heartbeatMs),
+    tickIntervalMs: numericScalarOrNaN(timing.tickIntervalMs),
+    electionMinMs: numericScalarOrNaN(timing.electionMinMs),
+    electionMaxMs: numericScalarOrNaN(timing.electionMaxMs),
+  });
+}
+
+export {
+  captureOriginalRaftRsTiming,
+  describeEffectiveRaftRsTiming,
+  recoveryRetryWindowMsOf,
+  tuningOf,
+};

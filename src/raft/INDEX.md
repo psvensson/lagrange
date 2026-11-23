@@ -79,7 +79,7 @@ documentClass: generated
 - [raft-rs-runtime-faults.js](raft-rs-runtime-faults.js) - What the runtime owner does with a fault it observes: a delivered envelope the local-log guard refused (recorded... (importers: one)
 - [raft-rs-runtime-owner-constants.js](raft-rs-runtime-owner-constants.js) - The raft-rs runtime owner's private vocabulary: runtime health and group usability, the leader and role names read... (importers: hub)
 - [raft-rs-runtime-owner.js](raft-rs-runtime-owner.js) - Test seam: a fault injected at the core boundary (see coreFaultInjector). (importers: hub)
-- [raft-rs-runtime-tuning.js](raft-rs-runtime-tuning.js) - Derives the tick-based tuning a raft-rs core is given from a group's millisecond timing: the tick length, the... (importers: many)
+- [raft-rs-runtime-tuning.js](raft-rs-runtime-tuning.js) - Derives the tick-based tuning a raft-rs core is given from a group's millisecond timing: the tick length, the... (importers: hub)
 - [raft-rs-snapshot-witness.js](raft-rs-snapshot-witness.js) - Durable snapshot witness and proof-gated committed-prefix compaction for `RaftRsDurableStore` (SN1 / F5). (importers: one)
 - [raft-rs-status-observation.js](raft-rs-status-observation.js) - The semantic parts of an rs-raft status observation that need no core entry: the peers of a configuration and the... (importers: few)
 - [raft-rs-turn-answer.js](raft-rs-turn-answer.js) - The answer of one runtime turn, named once where the turn produced it (R07): SETTLED when the work completed within... (importers: hub)

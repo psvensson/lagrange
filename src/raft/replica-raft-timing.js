@@ -6,6 +6,7 @@
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {RAFT_ELECTION_TIMING} from './constants.js';
+import {describeEffectiveRaftRsTiming} from './raft-rs-runtime-tuning.js';
 import {computeReplicaElectionTimeouts} from './replica-election-timeouts.js';
 
 /**
@@ -33,13 +34,24 @@ function resolveReplicaRaftTiming(replica) {
     baseElectionMaxMs,
     electionJitterPerReplicaMs: RAFT_ELECTION_TIMING.JITTER_PER_REPLICA_MS,
   });
+  const normalizedTickIntervalMs =
+    Number.isFinite(tickIntervalMs) && tickIntervalMs > 0 ? tickIntervalMs : null;
+  const effectiveTiming = describeEffectiveRaftRsTiming({
+    heartbeatMs,
+    tickIntervalMs: normalizedTickIntervalMs,
+    electionMinMs,
+    electionMaxMs,
+  });
   return {
     heartbeatMs,
     baseElectionMinMs,
     baseElectionMaxMs,
     electionMinMs,
     electionMaxMs,
-    tickIntervalMs: Number.isFinite(tickIntervalMs) ? tickIntervalMs : null,
+    tickIntervalMs: normalizedTickIntervalMs,
+    requested: effectiveTiming.requested,
+    effective: effectiveTiming.effective,
+    discrepancies: effectiveTiming.discrepancies,
   };
 }
 

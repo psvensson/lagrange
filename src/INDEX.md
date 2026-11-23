@@ -58,7 +58,7 @@ documentClass: generated
 - [entrypoint-runtime-join-config.js](entrypoint-runtime-join-config.js) - No leading comment; first export: resolveNodeJoiningConfig. (importers: few)
 - [entrypoint-runtime-join-decision.js](entrypoint-runtime-join-decision.js) - Parse a comma-separated seed-address value into a candidate list. (importers: many)
 - [entrypoint-runtime-join-startup-policy.js](entrypoint-runtime-join-startup-policy.js) - Report exhausted process-level join reattempts. (importers: many)
-- [entrypoint-runtime-options.js](entrypoint-runtime-options.js) - Check for version flag. (importers: few)
+- [entrypoint-runtime-options.js](entrypoint-runtime-options.js) - Check for version flag. (importers: many)
 - [entrypoint-runtime-provenance.js](entrypoint-runtime-provenance.js) - Decide and report a dry run: the node and data directory it validated and the raft-rs binding's own verdict on the... (importers: few)
 - [entrypoint-runtime-shutdown-lifecycle.js](entrypoint-runtime-shutdown-lifecycle.js) - Connect structured logging persistence to the replicated logs table. (importers: few)
 - [entrypoint-startup-acquisition-ledger.js](entrypoint-startup-acquisition-ledger.js) - No leading comment; first export: acquireStartupOwner. (importers: many)

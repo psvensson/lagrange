@@ -81,7 +81,10 @@ import {printRatchetTighteningHint} from './metric-check-helpers.js';
 // partition, and comparative-harness helpers.
 // 2026-11-21 (leader-role dead arms): tightened 1319 -> 1316 on the checker
 // hint.
-const BASELINE_UNUSED_EXPORT_COUNT = 1316;
+// 2026-11-23 (integration composition Stage 1 + Stage 2 + unused-exports):
+// tightened 1316 -> 1305 on the checker hint after de-exporting 37
+// internal-only symbols in endpoint-sync and service-discovery-catalog.
+const BASELINE_UNUSED_EXPORT_COUNT = 1305;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;
 const SELF_REFERENCE = 'scripts/check-unused-exports.js';

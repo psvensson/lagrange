@@ -7,7 +7,7 @@
 import {EventEmitter} from 'events';
 import {LoggingService} from './logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
-import {CONFIG_KEY} from '../config/config-constants.js';
+import {CONFIG_KEY, DEFAULT_CONFIG} from '../config/config-constants.js';
 import {
   LOGGING_ERROR_MSG,
   LOGGING_LOG_MSG,
@@ -112,6 +112,20 @@ function normalizeLogMessage(message) {
   return String(message);
 }
 
+function normalizePositiveLogBudget(value) {
+  return Number.isFinite(value) && value > LOCAL_NUM_ZERO ?
+    Math.floor(value) :
+    null;
+}
+
+function resolveLogsOperationBudgetMs(options, config) {
+  return normalizePositiveLogBudget(options.queryTimeoutMs) ??
+    normalizePositiveLogBudget(
+      config.get(CONFIG_KEY.TIMEOUT_CONTROL_PLANE_OPERATION_BUDGET_MS),
+    ) ??
+    DEFAULT_CONFIG.timeout.controlPlaneOperationBudgetMs;
+}
+
 /**
  * LogsTableService manages writing log entries to the logs system table.
  * It integrates with LoggingService to flush buffered entries after bootstrap.
@@ -147,6 +161,7 @@ class LogsTableService extends EventEmitter {
       config.get(CONFIG_KEY.LOGGING_MAX_RETRIES) || LOGS_TABLE_DEFAULT.MAX_RETRIES;
     this.retryDelayMs = options.retryDelayMs ||
       config.get(CONFIG_KEY.LOGGING_RETRY_DELAY_MS) || LOGS_TABLE_DEFAULT.RETRY_DELAY_MS;
+    this.operationBudgetMs = resolveLogsOperationBudgetMs(options, config);
     this.flushChunkSize = Number.isFinite(options.flushChunkSize) &&
       options.flushChunkSize > LOCAL_NUM_ZERO ?
       Math.floor(options.flushChunkSize) :
@@ -534,11 +549,15 @@ class LogsTableService extends EventEmitter {
     }));
     // Log rows are append-only (write-once, never updated). Batched multi-row
     // UPSERT amortizes Raft fsync across the chunk with idempotent log_id replay.
+    // Pass the configured controlPlaneOperationBudgetMs explicitly so
+    // LogsTableService does not fall through to the 5,000ms gateway default
+    // (which CDC retry budgeting splits across 6 attempts to a 1,000ms deadline).
     await this.logsOwner.upsertLogs(rows, {
       workClass: PRESSURE_WORK_CLASS.BACKGROUND,
       workloadClass: CONTROL_PLANE_WORKLOAD_CLASS.LOGS_TABLE_BACKGROUND_WRITE,
       deliveryPriority: LOCAL_STR_BACKGROUND,
       pressureRetryAfterMs: this.retryDelayMs,
+      queryTimeoutMs: this.operationBudgetMs,
     });
   }
 

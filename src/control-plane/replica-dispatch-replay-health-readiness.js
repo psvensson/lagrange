@@ -6,6 +6,8 @@ import {
   isActiveReplaceSourceRemovalPhase,
 } from '../rebalancer/replica-operation-step-policy.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {CONFIG_KEY} from '../config/config-constants.js';
+import {ConfigurationManager} from '../config/configuration-manager.js';
 
 const {
   COLUMN,
@@ -230,9 +232,17 @@ class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchOperationExecu
     if (Number.isFinite(numeric) && numeric > 0) {
       return Math.max(1, Math.floor(numeric));
     }
+    const config = ConfigurationManager.getInstance();
+    const configuredProbeTimeoutMs = config.isInitialized() ?
+      Number(config.get(CONFIG_KEY.TIMEOUT_READINESS_OBSERVATION_PROBE_TIMEOUT_MS)) :
+      Number.NaN;
+    const baselineTimeoutMs =
+      Number.isFinite(configuredProbeTimeoutMs) && configuredProbeTimeoutMs > 0 ?
+        Math.floor(configuredProbeTimeoutMs) :
+        DISPATCH_DEFAULT.OPERATION_DISPATCH_READINESS_REFRESH_TIMEOUT_MS;
     return Math.max(
       this.operationDispatchRetryAfterMs,
-      DISPATCH_DEFAULT.OPERATION_DISPATCH_READINESS_REFRESH_TIMEOUT_MS,
+      baselineTimeoutMs,
     );
   }
 

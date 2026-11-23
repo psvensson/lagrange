@@ -25,7 +25,8 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
 import {ROUTER_MESSAGE_TYPE} from '../../src/constants/transport.js';
-import {RAFT_RS_GROUP_TUNING} from '../../src/raft/raft-rs-group-constants.js';
+import {tuningOf} from '../../src/raft/raft-rs-runtime-tuning.js';
+import {PARTITION_TIMING} from '../raft/raft-rs-backend/partition-node-cluster.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {
   deliveryAnswerOf, deliveryTransportOf, isDeliveredTransportDeliveryOutcome,
@@ -80,8 +81,9 @@ test('(e) a raft envelope is one frame with nothing back: no ACK, no ' +
     const receiptsBefore = world.raftReceipts.length;
     const orphanedBefore = world.orphanedResponses(NODE_A);
     const timeoutsBefore = world.routerTimeouts(NODE_A);
+    const heartbeatTicks = tuningOf(PARTITION_TIMING).heartbeatTick;
     for (let round = 0; round < HEARTBEAT_ROUNDS; round += 1) {
-      for (let tick = 0; tick < RAFT_RS_GROUP_TUNING.HEARTBEAT_TICK; tick += 1) {
+      for (let tick = 0; tick < heartbeatTicks; tick += 1) {
         await turnChainValue(world.node(LEADER).tick());
       }
       await world.driveUntilQuiet();

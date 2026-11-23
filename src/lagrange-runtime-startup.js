@@ -22,6 +22,9 @@ import {
   ENTRYPOINT_ERROR_MSG, ENTRYPOINT_LOG_MSG,
   ENTRYPOINT_RUNTIME_VALUE, ENTRYPOINT_SUBSYSTEM,
 } from './constants/entrypoint.js';
+import {
+  applyRuntimeNetworkTimingProfile,
+} from './entrypoint-runtime-options.js';
 import {VERSION} from './public-api.js';
 import {assertCritical} from './utils/assert.js';
 import {attachSqlRuntimeToStartupOwner} from './bootstrap/shared/startup-sql-runtime-handoff.js';
@@ -693,6 +696,12 @@ async function acquireLagrangeRuntime(options, cleanupLedger) {
     config,
     environment,
   );
+  applyRuntimeNetworkTimingProfile({
+    config,
+    environment,
+    networkTimingProfile: options.networkTimingProfile,
+    logger: configLogger,
+  });
   await startFormationAttributionWindow({environment, logger: mainLogger});
 
   configLogger.debug(ENTRYPOINT_RUNTIME_VALUE.CONFIGURATION_LOADED, {

@@ -251,7 +251,7 @@ documentClass: generated
 - [replica-dispatch-priority-recovery-retry-evidence.js](replica-dispatch-priority-recovery-retry-evidence.js) - No leading comment; first export: mergeDispatchRetryRowsByOperationId. (importers: one)
 - [replica-dispatch-readiness-capture.js](replica-dispatch-readiness-capture.js) - Initial partition provisioning persists operation intents before it can derive the complete cohort. (importers: one)
 - [replica-dispatch-reconcile-callbacks.js](replica-dispatch-reconcile-callbacks.js) - Reconcile-queue callbacks and cache-change handlers attached to the dispatch service prototype. (importers: one)
-- [replica-dispatch-replay-health-readiness.js](replica-dispatch-replay-health-readiness.js) - Check and record ready-trigger watermark for deduped retry scheduling. (importers: one)
+- [replica-dispatch-replay-health-readiness.js](replica-dispatch-replay-health-readiness.js) - Check and record ready-trigger watermark for deduped retry scheduling. (importers: few)
 - [replica-dispatch-replay-readiness.js](replica-dispatch-replay-readiness.js) - Retry dispatches for operations targeting a ready node. (importers: one)
 - [replica-dispatch-retained-verification.js](replica-dispatch-retained-verification.js) - No leading comment; first export: scheduleRemoteDispatchWakeupVerification. (importers: one)
 - [replica-dispatch-retry-scheduling.js](replica-dispatch-retry-scheduling.js) - Normalize operation-dispatch queue shard count to a safe positive integer. (importers: one)

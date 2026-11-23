@@ -257,15 +257,6 @@ function buildServiceDiscoveryCatalog(endpointRows, options = {}) {
 }
 
 export {
-  SERVICE_DISCOVERY_DEFAULT,
   SERVICE_DISCOVERY_HEALTH,
-  toStringAllowlist,
-  resolveDefinitionServiceId,
-  resolveDefinitionReplicaCount,
-  buildDesiredReplicaCountByServiceId,
-  buildDesiredReplicaCountMap,
-  resolveDesiredReplicaCount,
-  resolveDiscoveryHealth,
-  buildReplicaRecord,
   buildServiceDiscoveryCatalog,
 };

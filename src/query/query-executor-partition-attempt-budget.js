@@ -278,6 +278,16 @@ function createPartitionAttemptBudget({
       currentCandidateIndex,
       attemptedAddresses,
     );
+    // Wi-Fi diagnosis (2026-11-23 §4): `partition_execution_deadline` of 1,000ms
+    // enters from two distinct paths:
+    // (1) Unbudgeted control-plane writes (`LogsTableService` via `SystemMetadataOwnerBase`,
+    //     `HeartbeatService` via `resolveHeartbeatWriteQueryTimeoutMs`) default to a
+    //     5,000ms SQL query timeout in `ControlPlaneSystemTableGateway` / `createNamedWriteCaller`,
+    //     which `cdc-routed-mutation-readiness.js` divides across 6 retry attempts down to
+    //     the 1,000ms floor (`options.timeoutMs = 1000` -> `partition_execution_deadline: 1000`).
+    // (2) Connected `CONTROL_PLANE_RECOVERY_ELIGIBLE` queries (`services-p1`, `nodes-p1`) are
+    //     clamped here to `messageRouter.reconnectIntervalMs` (default 1,000ms) for their
+    //     per-attempt transport ACK probe.
     const capRecoveryCandidateBudget = (deliveryTimeoutMs) => {
       if (!shouldBoundRecoveryCandidateAckTimeout(candidate)) {
         return deliveryTimeoutMs;
