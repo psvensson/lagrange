@@ -7,6 +7,9 @@ import {
   SERVICE_INSTALL_FAILURE_PHASE,
   SERVICE_INSTALL_ROLLOUT_STATE,
 } from '../control-plane/owners/service-install-catalog-owner.js';
+import {
+  PACKAGE_BINDING_READINESS,
+} from './service-installation-readiness.js';
 import {resolveTimeSource} from '../time/time-source.js';
 
 const FAILURE_ID_NAMESPACE = 'service-installation-reconciler/v1';
@@ -37,6 +40,12 @@ const UNSUPPORTED_ACTIVATION_ROLLOUT_STATES = new Set([
   SERVICE_INSTALL_ROLLOUT_STATE.PENDING,
   SERVICE_INSTALL_ROLLOUT_STATE.RECONCILING,
   SERVICE_INSTALL_ROLLOUT_STATE.FAILED,
+]);
+const BINDING_CELL_RECONCILABLE_ROLLOUT_STATES = new Set([
+  SERVICE_INSTALL_ROLLOUT_STATE.RECORDED_NOT_RUNNING,
+  SERVICE_INSTALL_ROLLOUT_STATE.PENDING,
+  SERVICE_INSTALL_ROLLOUT_STATE.RECONCILING,
+  SERVICE_INSTALL_ROLLOUT_STATE.CONVERGED,
 ]);
 const NEVER_ACTIVATED_REMOVAL_STATES = new Set([
   SERVICE_INSTALL_ROLLOUT_STATE.RECORDED_NOT_RUNNING,
@@ -86,6 +95,7 @@ class ServiceInstallationReconciler {
       throw new TypeError(ERROR_MESSAGE.CATALOG_OWNER_REQUIRED);
     }
     this.catalogOwner = options.catalogOwner;
+    this.cellReadinessObserver = options.cellReadinessObserver || null;
     this.timeSource = resolveTimeSource(options);
     this.sweepIntervalMs = Number.isSafeInteger(options.sweepIntervalMs) &&
       options.sweepIntervalMs > 0 ?
@@ -95,6 +105,7 @@ class ServiceInstallationReconciler {
     this._shutdown = false;
     this._generation = 0;
     this._sweepTimerState = INACTIVE_ASYNC_HANDLE;
+    this._unsubscribeReadiness = null;
     this._drainState = INACTIVE_ASYNC_HANDLE;
     this._rerunRequested = false;
     this._installationFlights = new Map();
@@ -107,12 +118,14 @@ class ServiceInstallationReconciler {
       this._generation += 1;
       this._rerunRequested = false;
       this._clearSweepTimer();
+      this._clearReadinessSubscription();
       return COMPLETED_OPERATION;
     }
     if (!this._isLeader) {
       this._isLeader = true;
       this._generation += 1;
       this._startSweepTimer();
+      this._startReadinessSubscription();
     }
     return this.reconcileNow();
   }
@@ -157,6 +170,7 @@ class ServiceInstallationReconciler {
     this._generation += 1;
     this._rerunRequested = false;
     this._clearSweepTimer();
+    this._clearReadinessSubscription();
   }
 
   async _drain() {
@@ -214,10 +228,127 @@ class ServiceInstallationReconciler {
         installation.desiredState !== SERVICE_INSTALL_DESIRED_STATE.INSTALLED) {
       return;
     }
+    if (this.cellReadinessObserver) {
+      const servicePackage = await this._resolveInstallationPackage(
+        installation,
+        generation,
+      );
+      if (!servicePackage) return;
+      if (servicePackage.runtimeKind === RUNTIME_KIND.WASM_COMPONENT) {
+        await this._reconcileBindingCellInstallation(
+          installation,
+          servicePackage,
+          generation,
+        );
+        return;
+      }
+    }
     if (!UNSUPPORTED_ACTIVATION_ROLLOUT_STATES.has(
       installation.rolloutState,
     )) return;
     await this._reconcileUnsupportedActivation(installation, generation);
+  }
+
+  async _resolveInstallationPackage(installation, generation) {
+    const revision = await this.catalogOwner.getRevision(
+      installation.revisionId,
+    );
+    if (!this._isCurrentGeneration(generation) || revision === null) {
+      return null;
+    }
+    const servicePackage = await this.catalogOwner.getPackage(
+      revision.packageId,
+    );
+    return this._isCurrentGeneration(generation) ? servicePackage : null;
+  }
+
+  async _reconcileBindingCellInstallation(
+    installation,
+    servicePackage,
+    generation,
+  ) {
+    if (installation.desiredState !== SERVICE_INSTALL_DESIRED_STATE.ACTIVE ||
+        installation.latestFailureId !== null ||
+        !BINDING_CELL_RECONCILABLE_ROLLOUT_STATES.has(
+          installation.rolloutState,
+        )) {
+      return;
+    }
+    const readiness = this.cellReadinessObserver.evaluatePackage(
+      servicePackage,
+    );
+    if (readiness.state === PACKAGE_BINDING_READINESS.READY) {
+      await this._convergeBindingCellInstallation(
+        installation,
+        servicePackage,
+        generation,
+      );
+      return;
+    }
+    if (readiness.state === PACKAGE_BINDING_READINESS.BINDINGS_NOT_READY) {
+      await this._markReconciling(installation, generation);
+      return;
+    }
+    if (readiness.state === PACKAGE_BINDING_READINESS.NO_INVOCABLE_BINDINGS) {
+      await this._settleNoInvocableBindings(installation, generation);
+    }
+  }
+
+  async _convergeBindingCellInstallation(
+    installation,
+    servicePackage,
+    generation,
+  ) {
+    let rolloutState = installation.rolloutState;
+    if (rolloutState === SERVICE_INSTALL_ROLLOUT_STATE.CONVERGED) return;
+    if (rolloutState !== SERVICE_INSTALL_ROLLOUT_STATE.RECONCILING) {
+      const reconciling = await this.catalogOwner.recordRolloutOutcome({
+        installationId: installation.installationId,
+        rolloutState: SERVICE_INSTALL_ROLLOUT_STATE.RECONCILING,
+      });
+      if (!this._isCurrentGeneration(generation)) return;
+      rolloutState = reconciling.rolloutState;
+    }
+    if (rolloutState !== SERVICE_INSTALL_ROLLOUT_STATE.RECONCILING) return;
+    const stillReady = this.cellReadinessObserver.evaluatePackage(
+      servicePackage,
+    );
+    if (stillReady.state !== PACKAGE_BINDING_READINESS.READY) return;
+    await this.catalogOwner.recordRolloutOutcome({
+      installationId: installation.installationId,
+      rolloutState: SERVICE_INSTALL_ROLLOUT_STATE.CONVERGED,
+    });
+  }
+
+  async _markReconciling(installation, generation) {
+    if (!this._isCurrentGeneration(generation) ||
+        installation.rolloutState ===
+          SERVICE_INSTALL_ROLLOUT_STATE.RECONCILING) {
+      return;
+    }
+    await this.catalogOwner.recordRolloutOutcome({
+      installationId: installation.installationId,
+      rolloutState: SERVICE_INSTALL_ROLLOUT_STATE.RECONCILING,
+    });
+  }
+
+  async _settleNoInvocableBindings(installation, generation) {
+    let rolloutState = installation.rolloutState;
+    if (rolloutState === SERVICE_INSTALL_ROLLOUT_STATE.RECORDED_NOT_RUNNING) {
+      return;
+    }
+    if (rolloutState === SERVICE_INSTALL_ROLLOUT_STATE.CONVERGED) {
+      const reconciling = await this.catalogOwner.recordRolloutOutcome({
+        installationId: installation.installationId,
+        rolloutState: SERVICE_INSTALL_ROLLOUT_STATE.RECONCILING,
+      });
+      if (!this._isCurrentGeneration(generation)) return;
+      rolloutState = reconciling.rolloutState;
+    }
+    if (rolloutState === SERVICE_INSTALL_ROLLOUT_STATE.PENDING ||
+        rolloutState === SERVICE_INSTALL_ROLLOUT_STATE.RECONCILING) {
+      await this._settleRecordedNotRunning(installation, generation);
+    }
   }
 
   async _reconcileRemoval(installation, generation) {
@@ -334,6 +465,22 @@ class ServiceInstallationReconciler {
     if (this._sweepTimerState.state === ASYNC_STATE.INACTIVE) return;
     this.timeSource.clearInterval(this._sweepTimerState.handle);
     this._sweepTimerState = INACTIVE_ASYNC_HANDLE;
+  }
+
+  _startReadinessSubscription() {
+    if (!this.cellReadinessObserver || this._unsubscribeReadiness !== null) {
+      return;
+    }
+    this._unsubscribeReadiness = this.cellReadinessObserver.subscribe(
+      () => void this.reconcileNow(),
+    );
+  }
+
+  _clearReadinessSubscription() {
+    if (this._unsubscribeReadiness === null) return;
+    const unsubscribe = this._unsubscribeReadiness;
+    this._unsubscribeReadiness = null;
+    unsubscribe();
   }
 
   _logError(message, error, details = {}) {

@@ -151,18 +151,25 @@ context.
 
 ## Observe readiness
 
-The deployment records describe desired state. A service is ready only when a
-matching Cell actual is running and its endpoint has been published.
+The deployment records describe desired state (`desired_state`). A service is
+ready (`readiness_state = ready`, `lagrange service inspect` returning
+`"ready": true`) only when its installation has converged (`rollout_state =
+converged`) with no recorded failure and every current-generation publicly
+invocable Binding has an active compiled service definition and at least one
+ready Cell actual.
 
-Use the administration surfaces to inspect:
+Use `lagrange service inspect <project-directory|service-name>`, `SHOW SERVICE
+$1`, and the administration surfaces to inspect:
 
 - installed service package and manifest digest;
+- desired intent (`desired_state`), rollout state (`rollout_state`), and
+  achieved readiness (`readiness_state`, `readiness_reason`);
 - Binding lineage;
 - desired service definition;
 - ready Cell actuals;
 - service endpoint rows;
 - activation leases; and
-- typed lifecycle failures.
+- typed lifecycle failures (`latest_failure_id`).
 
 Do not infer activation merely because `INSTALL SERVICE` or `CREATE BINDING`
 returned successfully.

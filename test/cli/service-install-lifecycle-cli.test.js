@@ -56,6 +56,8 @@ function statusRow(serviceName = 'weather-service') {
     installation_id: `installation-${serviceName}`,
     latest_failure_id: null,
     operation_id: `operation-${serviceName}`,
+    readiness_reason: 'desired_not_active',
+    readiness_state: 'not_ready',
     revision_id: `revision-${serviceName}`,
     rollout_state: 'recorded_not_running',
     service_definition_id: `definition-${serviceName}`,

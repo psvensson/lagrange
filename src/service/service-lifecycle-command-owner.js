@@ -26,6 +26,8 @@ import {assertSuccessorServiceArtifact} from './service-deployment-record-genera
 import {internalizeInstallPayload} from
   './artifact-payload-internalization.js';
 import {loadComponentPayloadThroughStore} from './artifact-payload-loader.js';
+import {buildServiceInstallationStatusRow} from
+  './service-installation-readiness.js';
 import {
   SERVICE_LIFECYCLE_COMMAND_ERROR_CODE,
   SERVICE_LIFECYCLE_COMMAND_PATH,
@@ -838,7 +840,7 @@ class ServiceLifecycleCommandOwner {
     );
   }
 
-  async statusRow(installation) {
+  async statusRow(installation, securityContext) {
     const revision = await this.catalogOwner.getRevision(
       installation.revisionId,
     );
@@ -861,16 +863,11 @@ class ServiceLifecycleCommandOwner {
         SERVICE_LIFECYCLE_COMMAND_MESSAGE.CATALOG_PACKAGE_MISSING,
       );
     }
-    return deepFreeze({
-      desired_state: installation.desiredState,
-      installation_id: installation.installationId,
-      latest_failure_id: installation.latestFailureId,
-      operation_id: installation.operationId,
-      revision_id: installation.revisionId,
-      rollout_state: installation.rolloutState,
-      service_definition_id: installation.serviceDefinitionId,
-      service_name: servicePackage.name,
-      version: servicePackage.version,
+    return buildServiceInstallationStatusRow({
+      installation,
+      servicePackage,
+      systemTableCache: this.catalogOwner.getSystemTableCache(),
+      tenantId: securityContext.tenantId,
     });
   }
 
@@ -881,7 +878,8 @@ class ServiceLifecycleCommandOwner {
     const installation = installations
       .filter((entry) => entry.serviceDefinitionId === serviceDefinitionId)
       .at(-1);
-    const rows = installation ? [await this.statusRow(installation)] : [];
+    const rows = installation ?
+      [await this.statusRow(installation, securityContext)] : [];
     return successResult(SERVICE_LIFECYCLE_SQL_COMMAND.SHOW_ONE, rows);
   }
 
@@ -890,7 +888,8 @@ class ServiceLifecycleCommandOwner {
       await this.catalogOwner.listInstallations(),
     );
     const projected = await Promise.all(
-      installations.map((installation) => this.statusRow(installation)),
+      installations.map((installation) =>
+        this.statusRow(installation, securityContext)),
     );
     const rows = projected.filter((row) =>
       row.service_definition_id ===

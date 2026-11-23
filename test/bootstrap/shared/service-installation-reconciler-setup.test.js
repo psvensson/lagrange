@@ -205,4 +205,39 @@ describe('service installation reconciler production setup', () => {
         null,
       );
     });
+
+  it('wires binding cell readiness observer when catalog owner exposes a SystemTableCache',
+    () => {
+      const listeners = new Set();
+      const cache = {
+        get: () => null,
+        getAll: () => [],
+        offCacheChange: (listener) => listeners.delete(listener),
+        onCacheChange: (listener) => listeners.add(listener),
+      };
+      const catalog = {
+        ...catalogOwner(),
+        getSystemTableCache: () => cache,
+      };
+      const authoritative = partitionService('service_installations-p1', true);
+      const owner = {
+        partitionServices: new Map([['installations-r1', authoritative]]),
+        serviceInstallationReconcilerOwnerHandle: null,
+        serviceLifecycleCommandOwner: {catalogOwner: catalog},
+      };
+
+      attachSqlRuntimeToStartupOwner({
+        owner,
+        sqlQueryEngine: {setServiceLifecycleCommandOwner() {}},
+        systemTableCache: cache,
+      });
+
+      const handle = owner.serviceInstallationReconcilerOwnerHandle;
+      assert.ok(handle);
+      assert.ok(handle.owner.cellReadinessObserver);
+      assert.equal(listeners.size, 1);
+
+      detachServiceInstallationReconcilerOwner(owner);
+      assert.equal(listeners.size, 0);
+    });
 });

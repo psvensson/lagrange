@@ -32,7 +32,7 @@ documentClass: generated
 - [service-lifecycle-command.js](service-lifecycle-command.js) - No leading comment; first export: runServiceLifecycleCommand. (importers: few)
 - [service-lifecycle-sql-client.js](service-lifecycle-sql-client.js) - No leading comment; first export: createServiceLifecycleSqlClient. (importers: few)
 - [service-pipeline-command.js](service-pipeline-command.js) - `lagrange service generate|build|deploy` - the code-first CLI pipeline over the service compiler. (importers: many)
-- [service-pipeline-router.js](service-pipeline-router.js) - Argument routing for `lagrange service generate|build|deploy`: parses argv into a typed pipeline command and invokes... (importers: few)
+- [service-pipeline-router.js](service-pipeline-router.js) - Argument routing for `lagrange service generate|build|deploy`: parses argv into a typed pipeline command and invokes... (importers: many)
 - [service-project-build-input.js](service-project-build-input.js) - No leading comment; first export: readBoundedJsonFile. (importers: one)
 - [service-project-scaffold.js](service-project-scaffold.js) - No leading comment; first export: createServiceServer. (importers: few)
 - [service-scaffold-writer.js](service-scaffold-writer.js) - Shared scaffold-projection writer for the `lagrange service init` scaffolds (the WASM-first and the legacy OCI owners). (importers: few)

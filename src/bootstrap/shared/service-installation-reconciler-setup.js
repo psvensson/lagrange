@@ -3,6 +3,9 @@ import {
   SYSTEM_TABLE_NAME,
 } from '../system-table-schemas-constants.js';
 import {
+  createBindingCellReadinessObserver,
+} from '../../service/service-installation-readiness.js';
+import {
   ServiceInstallationReconciler,
   isServiceInstallCatalogOwnerCompatible,
 } from '../../service/service-installation-reconciler.js';
@@ -26,6 +29,8 @@ const UNRESOLVED_PARTITION_SERVICE = Object.freeze({
 const PARTITION_SERVICE_UNAVAILABLE = null;
 const RECONCILER_HANDLE_UNAVAILABLE = null;
 const CATALOG_OWNER_UNAVAILABLE = null;
+const CELL_READINESS_OBSERVER_UNAVAILABLE = null;
+const SYSTEM_TABLE_CACHE_UNAVAILABLE = null;
 const LEADERSHIP_SINK_DETACHED = null;
 
 function resolvePartitionServiceByPartitionId(partitionServices, partitionId) {
@@ -117,8 +122,14 @@ function ensureServiceInstallationReconcilerOwner(startupOwner) {
   if (!isServiceInstallCatalogOwnerCompatible(catalogOwner)) {
     return RECONCILER_HANDLE_UNAVAILABLE;
   }
+  const systemTableCache =
+    catalogOwner.getSystemTableCache?.() ?? SYSTEM_TABLE_CACHE_UNAVAILABLE;
+  const cellReadinessObserver = systemTableCache ?
+    createBindingCellReadinessObserver(systemTableCache) :
+    CELL_READINESS_OBSERVER_UNAVAILABLE;
   const handle = attachServiceInstallationReconcilerOwner({
     catalogOwner,
+    cellReadinessObserver,
     partitionServices: startupOwner.partitionServices,
     timeSource: startupOwner.timeSource,
     logger: startupOwner.logger,

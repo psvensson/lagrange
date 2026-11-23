@@ -17,6 +17,7 @@ const SERVICE_COMMAND = Object.freeze({
   DEV_INSTALL: 'dev-install',
   GENERATE: 'generate',
   INIT: 'init',
+  INSPECT: 'inspect',
   INSTALL: 'install',
   LIST: 'list',
   PUBLISH: 'publish',
@@ -54,6 +55,7 @@ const SERVICE_HELP = `Usage:
   lagrange service build <project-directory>
   lagrange service publish <project-directory>
   lagrange service deploy <project-directory> --idempotency-key <key>
+  lagrange service inspect <project-directory|service-name>
   lagrange service install <manifest-file> --idempotency-key <key> [--config <json-file>]
   lagrange service list
   lagrange service status <service-name>
@@ -65,6 +67,7 @@ Commands:
   build <project-directory>        Build the generated service artifact
   publish <project-directory>      Publish and seal the service artifact into the artifact store
   deploy <project-directory>       Deploy the built project through the service lifecycle
+  inspect <target>                 Inspect achieved service readiness and installation state
   install <manifest-file>          Install a prebuilt artifact from a manifest
   list                             List installed service catalog rows
   status <service-name>            Show one service catalog row
@@ -86,6 +89,7 @@ const SERVICE_PIPELINE_COMMANDS = Object.freeze(new Set([
   SERVICE_COMMAND.CALL,
   SERVICE_COMMAND.DEPLOY,
   SERVICE_COMMAND.GENERATE,
+  SERVICE_COMMAND.INSPECT,
   SERVICE_COMMAND.PUBLISH,
 ]));
 const loadServiceLifecycleCommand = () =>
