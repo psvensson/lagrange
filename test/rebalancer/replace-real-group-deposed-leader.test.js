@@ -81,7 +81,7 @@ test('deposed leader: R-1a completes from an isolated ex-leader while the ' +
       'PROPERTY: no retirement from a deposed leader\'s stale configuration');
     await fireFallbackTimers(world);
     await settleTurns();
-    await world.coordinator.reconcileOperationProgress(await readPersisted(world));
+    await world.coordinator.reconcileOperationLifecycle(await readPersisted(world));
     await settleTurns();
     const persisted = await readPersisted(world);
     const removedWhileVoter = world.terminalWrites.filter((write) =>

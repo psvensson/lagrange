@@ -396,7 +396,7 @@ export async function registerReplaceReplicaWorkflowTailTests({
             coordinator.getOperationOwnerSingleFlightKey(
               operation.operationId,
             ),
-            () => coordinator.reconcileOperationProgress(operation),
+            () => coordinator.reconcileOperationLifecycle(operation),
           );
 
         t.equal(progressed, true,
@@ -468,7 +468,7 @@ export async function registerReplaceReplicaWorkflowTailTests({
           );
 
         const progressed =
-          await coordinator.reconcileOperationProgress(operation);
+          await coordinator.reconcileOperationLifecycle(operation);
 
         t.equal(progressed, true,
           'reconciliation should treat ACTIVE replay as observed progress');
@@ -553,7 +553,7 @@ export async function registerReplaceReplicaWorkflowTailTests({
           async () => authoritativeActiveOperation;
 
         const progressed =
-          await coordinator.reconcileOperationProgress(operation);
+          await coordinator.reconcileOperationLifecycle(operation);
 
         t.equal(progressed, true,
           'reconciliation should treat stale syncing state as observed progress');
@@ -656,7 +656,7 @@ export async function registerReplaceReplicaWorkflowTailTests({
           });
 
         const progressed =
-          await coordinator.reconcileOperationProgress(operation);
+          await coordinator.reconcileOperationLifecycle(operation);
 
         t.equal(progressed, true,
           'reconciliation should accept observed terminal progress');
@@ -738,7 +738,7 @@ export async function registerReplaceReplicaWorkflowTailTests({
           {step: WORKFLOW_STEP.STOPPING, timestamp: Date.now()}];
         await coordinator.repository.persistOperationUpdate(operation);
 
-        await coordinator.reconcileOperationProgress(operation);
+        await coordinator.reconcileOperationLifecycle(operation);
         t.equal(
           deliveries.length,
           0,
@@ -750,7 +750,7 @@ export async function registerReplaceReplicaWorkflowTailTests({
           'the REPLACE re-drives REMOVE_PEER of the source through its target');
 
         witness.commitRemoval();
-        await coordinator.reconcileOperationProgress(operation);
+        await coordinator.reconcileOperationLifecycle(operation);
         t.equal(
           operation.workflowStep,
           WORKFLOW_STEP.REMOVED,

@@ -1,3 +1,5 @@
+import {assertOperationUpdateRecord, invalidOperationPersistenceOutcome} from
+  './replica-operation-update-outcome.js';
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {
   controlPlaneWriteIdentity,
@@ -42,6 +44,10 @@ const PROVEN_INVALID_CREATED_RESERVATION_ERRORS = Object.freeze(new Set([
 
 const RESERVATION_ORPHAN_RECONCILE_STATE_TABLE = Object.freeze([
   Object.freeze({
+    state: RESERVATION_ORPHAN_RECONCILE_STATE.DEFERRED_OPERATION_VISIBILITY,
+    matches: (evidence) => evidence.ownerReadDeferred === true,
+  }),
+  Object.freeze({
     state: RESERVATION_ORPHAN_RECONCILE_STATE.TERMINAL_OPERATION,
     matches: (evidence) =>
       evidence.operationVisible === true && evidence.operationTerminal === true,
@@ -50,10 +56,6 @@ const RESERVATION_ORPHAN_RECONCILE_STATE_TABLE = Object.freeze([
     state: RESERVATION_ORPHAN_RECONCILE_STATE.NON_TERMINAL_OPERATION,
     matches: (evidence) =>
       evidence.operationVisible === true && evidence.operationTerminal !== true,
-  }),
-  Object.freeze({
-    state: RESERVATION_ORPHAN_RECONCILE_STATE.DEFERRED_OPERATION_VISIBILITY,
-    matches: (evidence) => evidence.ownerReadDeferred === true,
   }),
   Object.freeze({
     state: RESERVATION_ORPHAN_RECONCILE_STATE.ABSENT_OPERATION,
@@ -100,6 +102,36 @@ const {
 } = REBALANCE_COORDINATOR_SHARED;
 
 const RESERVATION_BIRTH_VERB = 'birth';
+const RESERVATION_RELEASE_READ_QUERY_OPTIONS = Object.freeze({
+  ...STORAGE_RESERVATION_READ_QUERY_OPTIONS,
+  authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+  leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
+});
+const RESERVATION_RELEASE_UNCONFIRMED = 'RESERVATION_RELEASE_UNCONFIRMED';
+const RESERVATION_RELEASE_WITNESS_SQL =
+  'SELECT * FROM storage_reservations WHERE reservation_id = ?';
+
+function reservationReleaseError(operation, reason) {
+  const error = new Error(`Reservation release unresolved for ${operation.operationId}: ${reason}`);
+  error.code = RESERVATION_RELEASE_UNCONFIRMED;
+  return error;
+}
+
+function requireReservationReleaseRows(result, operation) {
+  if (result?.success !== true || !Array.isArray(result.rows)) {
+    throw reservationReleaseError(operation, result?.error || 'malformed authority response');
+  }
+  for (const row of result.rows) {
+    if (!row || typeof row.reservation_id !== 'string' || row.reservation_id.length === 0 ||
+        row.operation_id !== operation.operationId || row.entity_type !== operation.entityType ||
+        row.entity_id !== operation.entityId || row.partition_id !== operation.partitionId ||
+        row.target_node_id !== operation.targetNodeId) {
+      throw reservationReleaseError(operation, 'reservation identity mismatch');
+    }
+  }
+  return result.rows;
+}
+
 
 // The subject of a reservation's write identities.
 function reservationWriteSubject(reservationId) {
@@ -199,7 +231,7 @@ class RebalanceCoordinatorReservationLifecycleMethods {
         timeoutBudget: options.timeoutBudget,
       },
     );
-    if (!result.success) {
+    if (result.success !== true) {
       return {
         success: false,
         changed: false,
@@ -210,7 +242,7 @@ class RebalanceCoordinatorReservationLifecycleMethods {
     const changeCount = this.extractMutationChangeCount(result);
     return {
       success: true,
-      changed: changeCount === null || changeCount > 0,
+      changed: changeCount !== null && changeCount > 0,
       changeCount,
     };
   }
@@ -466,40 +498,35 @@ class RebalanceCoordinatorReservationLifecycleMethods {
       SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS,
       SQL.SELECT_ACTIVE_RESERVATIONS_BY_OPERATION,
       [operation.operationId, RESERVATION_STATUS.ACTIVE],
-      STORAGE_RESERVATION_READ_QUERY_OPTIONS,
+      RESERVATION_RELEASE_READ_QUERY_OPTIONS,
     );
-    if (!activeResult.success) {
-      this.logger.warn(
-        REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RELEASE_FAILED,
-        {
-          operationId: operation.operationId,
-          error: activeResult.error,
-        },
-      );
-      return;
+    const rows = requireReservationReleaseRows(activeResult, operation);
+    if (rows.some((row) => row.status !== RESERVATION_STATUS.ACTIVE || row.released_at !== null)) {
+      throw reservationReleaseError(operation, 'invalid active reservation tuple');
     }
 
     const now = this.nowFn();
     let releasedCount = 0;
-    const rows = Array.isArray(activeResult.rows) ? activeResult.rows : [];
     for (const row of rows) {
       const transition = await this.transitionActiveReservationById(
         row.reservation_id,
         RESERVATION_STATUS.RELEASED,
         now,
       );
-      if (!transition.success) {
-        this.logger.warn(
-          REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RELEASE_FAILED,
-          {
-            operationId: operation.operationId,
-            reservationId: row.reservation_id,
-            error: transition.error,
-          },
-        );
-        continue;
+      if (!transition.success || transition.changeCount === null || transition.changeCount === 0) {
+        const witness = await readAuthoritativeControlPlaneRows(
+          this.controlPlaneSystemTableGateway, SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS,
+          RESERVATION_RELEASE_WITNESS_SQL, [row.reservation_id],
+          RESERVATION_RELEASE_READ_QUERY_OPTIONS);
+        const finalRows = requireReservationReleaseRows(witness, operation);
+        const final = finalRows[0];
+        if (finalRows.length !== 1 || final.reservation_id !== row.reservation_id ||
+            ![RESERVATION_STATUS.RELEASED, RESERVATION_STATUS.EXPIRED].includes(final.status) ||
+            !Number.isFinite(final.released_at)) {
+          throw reservationReleaseError(operation, transition.error || 'conditional release unproved');
+        }
       }
-      if (transition.changed) {
+      if (transition.changeCount > 0) {
         releasedCount++;
       }
     }
@@ -528,44 +555,12 @@ class RebalanceCoordinatorReservationLifecycleMethods {
    * @private
    */
   async getReservationOperationVisibilityObservation(operationId) {
-    if (
-      typeof this.repository?.getOperationByIdVisibilityObservation ===
-      LOCAL_STR_FUNCTION
-    ) {
-      const preferredObservation =
-        await this.repository.getOperationByIdVisibilityObservation(
-          operationId,
-          {
-            allowPriorityRecoveryDeferredVisibility: true,
-          },
-        );
-      if (
-        preferredObservation?.operation ||
-        preferredObservation?.deferredOutcome
-      ) {
-        return preferredObservation;
-      }
-      // A silent absent from the preferred read may be a transient lagging
-      // local view. Releasing an active reservation requires the absence to
-      // be disproven or confirmed by the owner-RPC-required authority read;
-      // an escalated read that cannot confirm defers the decision.
-      return this.repository.getOperationByIdVisibilityObservation(
-        operationId,
-        {
-          authoritativeReadMode:
-            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
-          leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
-          allowPriorityRecoveryDeferredVisibility: true,
-          requireAbsenceConfirmation: true,
-        },
-      );
-    }
-    const operation = operationId ?
-      await this.queryOperationById(operationId) :
-      null;
-    return Object.freeze({
-      operation,
-      deferredOutcome: null,
+    return this.repository.getOperationByIdVisibilityObservation(operationId, {
+      authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+      leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
+      allowPriorityRecoveryDeferredVisibility: false,
+      allowOwnerPersistedTransitionDeferredVisibility: false,
+      requireAbsenceConfirmation: true,
     });
   }
 
@@ -574,22 +569,32 @@ class RebalanceCoordinatorReservationLifecycleMethods {
    * @return {Object}
    * @private
    */
-  buildReservationOrphanReconcileSnapshot(visibilityObservation) {
-    const operation = visibilityObservation?.operation || null;
+  buildReservationOrphanReconcileSnapshot(visibilityObservation, operationId) {
+    if (!visibilityObservation || !Object.hasOwn(visibilityObservation, 'operation') ||
+        !Object.hasOwn(visibilityObservation, 'deferredOutcome')) {
+      throw invalidOperationPersistenceOutcome('reservation operation authority is unavailable');
+    }
+    const operation = visibilityObservation.operation;
     const deferredOutcome =
       visibilityObservation?.deferredOutcome &&
       typeof visibilityObservation.deferredOutcome === 'object' ?
         visibilityObservation.deferredOutcome :
         null;
+    if (!deferredOutcome && operation !== null) {
+      assertOperationUpdateRecord(operation);
+      if (operation.operationId !== operationId) {
+        throw invalidOperationPersistenceOutcome('reservation operation identity differs');
+      }
+    }
     const evidence = Object.freeze({
       operationVisible: operation !== null,
-      operationTerminal: this.isOperationTerminal(operation),
+      operationTerminal: !deferredOutcome && operation !== null && operation.completedAt !== null,
       ownerReadDeferred: deferredOutcome !== null,
     });
     const state =
       RESERVATION_ORPHAN_RECONCILE_STATE_TABLE.find((candidate) =>
         candidate.matches(evidence),
-      )?.state || RESERVATION_ORPHAN_RECONCILE_STATE.ABSENT_OPERATION;
+      ).state;
     const action =
       RESERVATION_ORPHAN_RECONCILE_ACTION_BY_STATE.get(state) ||
       RESERVATION_ORPHAN_RECONCILE_ACTION.KEEP_ACTIVE;
@@ -618,10 +623,11 @@ class RebalanceCoordinatorReservationLifecycleMethods {
     const visibilityObservation =
       await this.getReservationOperationVisibilityObservation(operationId);
     const reconcileSnapshot =
-      this.buildReservationOrphanReconcileSnapshot(visibilityObservation);
+      this.buildReservationOrphanReconcileSnapshot(visibilityObservation, operationId);
     return Object.freeze({
       action: reconcileSnapshot.action,
       state: reconcileSnapshot.state,
+      operation: reconcileSnapshot.operation,
     });
   }
 
@@ -656,6 +662,9 @@ class RebalanceCoordinatorReservationLifecycleMethods {
         if (expirySnapshot.action !==
             RESERVATION_ORPHAN_RECONCILE_ACTION.RELEASE_ACTIVE) {
           continue;
+        }
+        if (expirySnapshot.operation) {
+          requireReservationReleaseRows({success: true, rows: [row]}, expirySnapshot.operation);
         }
         const transition = await this.transitionActiveReservationById(
           row.reservation_id, RESERVATION_STATUS.EXPIRED, now);
@@ -711,12 +720,15 @@ class RebalanceCoordinatorReservationLifecycleMethods {
             row.operation_id,
           );
         const reconcileSnapshot =
-          this.buildReservationOrphanReconcileSnapshot(visibilityObservation);
+          this.buildReservationOrphanReconcileSnapshot(visibilityObservation, row.operation_id);
         if (
           reconcileSnapshot.action !==
           RESERVATION_ORPHAN_RECONCILE_ACTION.RELEASE_ACTIVE
         ) {
           continue;
+        }
+        if (reconcileSnapshot.operation) {
+          requireReservationReleaseRows({success: true, rows: [row]}, reconcileSnapshot.operation);
         }
         const transition = await this.transitionActiveReservationById(
           row.reservation_id,

@@ -16,6 +16,8 @@
 
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
+import {buildCanonicalReplicaOperationRow} from
+  '../../src/rebalancer/replica-operation-repository-mutation-row-methods.js';
 import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
 import {
@@ -47,6 +49,8 @@ import {
 import {DurableWorkflowCoordinator} from
   '../../src/workflow/durable-workflow-coordinator.js';
 import {
+  createCoordinatorSqlStore,
+  createMockCache,
   createMockControlPlaneReadinessService,
   createMockControlPlaneSystemTableGateway,
   createMockPolicyService,
@@ -81,8 +85,6 @@ const TEST_EMPTY_OUTCOME_STATE = 'empty';
 const TEST_PRESENT_OUTCOME_STATE = 'present';
 const TEST_DEFERRED_OUTCOME_COMPLETION_STATE =
   'authoritative_operation_read_deferred';
-const TEST_REPLICA_OPERATION_UPDATE_SQL_PREFIX =
-  'UPDATE replica_operations';
 const TEST_RETRY_PAYLOAD_WAIT_INITIAL_ATTEMPT = 0;
 const TEST_RETRY_PAYLOAD_WAIT_ATTEMPT_INCREMENT = 1;
 const TEST_RETRY_PAYLOAD_WAIT_ATTEMPT_COUNT = 4;
@@ -104,7 +106,7 @@ function buildTestOperation(overrides = {}) {
     replicaId: TEST_REPLICA_ID,
     sourceNodeId: TEST_NODE_ID,
     targetNodeId: TEST_NODE_ID,
-    status: 'in_progress',
+    status: ReplicaStatus.CREATING,
     workflowStep: WORKFLOW_STEP.CREATING,
     createdAt: now,
     updatedAt: now,
@@ -136,7 +138,6 @@ function createTransactionCoordinator() {
 function createTestCoordinator(options = {}) {
   const {
     operation = null,
-    persistResults = {success: true, rows: [], affectedRows: 1},
     setTimeoutFn = setTimeout,
     clearTimeoutFn = clearTimeout,
   } = options;
@@ -150,56 +151,22 @@ function createTestCoordinator(options = {}) {
     ownerKeys.push(ownerKey);
     return originalRunExclusive(ownerKey, factory);
   };
+  const cache = createMockCache({replicaOperations: operation ?
+    [buildCanonicalReplicaOperationRow(operation, null)] : []});
+  const store = createCoordinatorSqlStore(cache);
+  if (operation && [OperationType.ADD, OperationType.REPLACE].includes(operation.type)) {
+    const seeded = store.execute(
+      'INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, ' +
+      'partition_id, target_node_id, estimated_bytes, amplification_factor, status, reason_code, ' +
+      'created_at, updated_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?, ?, ?)',
+      [`res-${operation.operationId}`, operation.operationId, operation.entityType, operation.entityId,
+        operation.partitionId, operation.targetNodeId, 'active',
+        operation.type === OperationType.REPLACE ? 'replace_replica' : 'add_replica', operation.createdAt,
+        operation.createdAt, operation.createdAt + 300000],
+    );
+    if (!seeded.success) throw new Error(seeded.error);
+  }
   const executeQuery = async (sql, params) => {
-    if (sql.includes('FROM storage_reservations') && operation) {
-      const now = Date.now();
-      return {
-        success: true,
-        rows: [{
-          reservation_id: `res-${operation.operationId}`,
-          operation_id: operation.operationId,
-          entity_type: operation.entityType,
-          entity_id: operation.entityId,
-          partition_id: operation.partitionId,
-          target_node_id: operation.targetNodeId,
-          estimated_bytes: 1,
-          amplification_factor: 1,
-          status: 'active',
-          reason_code: operation.type === 'REPLACE' ?
-            'replace_replica' : 'add_replica',
-          created_at: now,
-          updated_at: now,
-          expires_at: now + 300000,
-          released_at: null,
-        }],
-      };
-    }
-    // SELECT by operation_id
-    if (sql.includes('WHERE operation_id') && operation) {
-      const opId = params?.[0];
-      if (opId === operation.operationId) {
-        return {
-          success: true,
-          rows: [operationToRow(operation)],
-        };
-      }
-    }
-    if (
-      sql.includes(TEST_REPLICA_OPERATION_UPDATE_SQL_PREFIX) &&
-      operation
-    ) {
-      operation.status = params?.[0];
-      operation.workflowStep = params?.[1];
-      operation.updatedAt = params?.[2];
-      operation.completedAt = params?.[3];
-      operation.errorMessage = params?.[4];
-      operation.stepsHistory =
-        typeof params?.[5] === 'string' ?
-          JSON.parse(params[5]) :
-          operation.stepsHistory;
-      operation.replicaId = params?.[6];
-      return persistResults;
-    }
     // The remove-safety floor reads the partition's services rows. Surface the
     // operation's source/target replicas as voter-ready rows so a REPLACE
     // source-removal is evaluated against the replacement holding quorum
@@ -227,7 +194,7 @@ function createTestCoordinator(options = {}) {
         return {success: true, rows};
       }
     }
-    return {success: true, rows: []};
+    return store.execute(sql, params);
   };
 
   const coordinator = new RebalanceCoordinator({
@@ -290,32 +257,16 @@ function createTestCoordinator(options = {}) {
   coordinator.workflowOwner.recoverFailedCreateCleanupReleaseDebt =
     async () => 0;
   coordinator.initialize();
+  const shutdown = coordinator.shutdown.bind(coordinator);
+  coordinator.shutdown = async () => {
+    try {
+      await shutdown();
+    } finally {
+      store.suspend();
+    }
+  };
 
   return {coordinator, emitter, ownerKeys};
-}
-
-/**
- * Convert an in-memory operation object to a row shape that
- * queryOperationById expects from SQL.
- */
-function operationToRow(op) {
-  return {
-    operation_id: op.operationId,
-    type: op.type,
-    partition_id: op.partitionId,
-    entity_type: op.entityType,
-    entity_id: op.entityId,
-    replica_id: op.replicaId,
-    source_node_id: op.sourceNodeId,
-    target_node_id: op.targetNodeId,
-    status: op.status,
-    workflow_step: op.workflowStep,
-    created_at: op.createdAt,
-    updated_at: op.updatedAt,
-    completed_at: op.completedAt,
-    error_message: op.errorMessage,
-    steps_history: JSON.stringify(op.stepsHistory || []),
-  };
 }
 
 function buildExecutorOutcomePayload(outcomeType, workflowStep, options = {}) {
@@ -459,12 +410,12 @@ test('Executor outcome routing through owner-key reconcile path',
             'outcomeType should match',
           );
           t.equal(
-            operation.workflowStep,
+            (await coordinator.getOperation(operation.operationId)).workflowStep,
             WORKFLOW_STEP.CREATING,
             'operation should advance to the accepted create step',
           );
           t.equal(
-            operation.status,
+            (await coordinator.getOperation(operation.operationId)).status,
             ReplicaStatus.CREATING,
             'operation status should advance with the workflow step',
           );
@@ -544,7 +495,7 @@ test('Executor outcome routing through owner-key reconcile path',
             'source removal should target the retained source replica',
           );
           t.equal(
-            operation.workflowStep,
+            (await coordinator.getOperation(operation.operationId)).workflowStep,
             WORKFLOW_STEP.STOPPING,
             'operation should not remain pinned in SYNCING',
           );
@@ -617,12 +568,12 @@ test('Executor outcome routing through owner-key reconcile path',
           await routedEventPromise;
 
           t.equal(
-            operation.workflowStep,
+            (await coordinator.getOperation(operation.operationId)).workflowStep,
             WORKFLOW_STEP.STOPPING,
             'delayed SYNCING outcome should not rewind source removal',
           );
           t.equal(
-            operation.status,
+            (await coordinator.getOperation(operation.operationId)).status,
             ReplicaStatus.REMOVING,
             'operation status should remain in the remove phase',
           );
@@ -643,6 +594,7 @@ test('Executor outcome routing through owner-key reconcile path',
       async (t) => {
         const operation = buildTestOperation({
           workflowStep: WORKFLOW_STEP.SYNCING,
+          status: ReplicaStatus.SYNCING,
         });
         const {coordinator, emitter, ownerKeys} =
           createTestCoordinator({operation});
@@ -1050,12 +1002,12 @@ test('Executor outcome routing through owner-key reconcile path',
             'source removal should target the retained source replica',
           );
           t.equal(
-            operation.workflowStep,
+            (await coordinator.getOperation(operation.operationId)).workflowStep,
             WORKFLOW_STEP.STOPPING,
             'REPLACE should move into STOPPING instead of terminal completion',
           );
           t.equal(
-            operation.completedAt,
+            (await coordinator.getOperation(operation.operationId)).completedAt,
             null,
             'REPLACE create-active should not mark the operation complete',
           );
@@ -1140,22 +1092,22 @@ test('Executor outcome routing through owner-key reconcile path',
             'retryable critical create failure should not fail terminally',
           );
           t.equal(
-            operation.workflowStep,
+            (await coordinator.getOperation(operation.operationId)).workflowStep,
             WORKFLOW_STEP.CREATING,
             'retryable create failure should keep the create-rearm step',
           );
           t.equal(
-            operation.status,
+            (await coordinator.getOperation(operation.operationId)).status,
             ReplicaStatus.CREATING,
             'retryable create failure should preserve the in-flight status',
           );
           t.equal(
-            operation.completedAt,
+            (await coordinator.getOperation(operation.operationId)).completedAt,
             null,
             'retryable create failure should not mark the operation complete',
           );
           t.equal(
-            operation.errorMessage,
+            (await coordinator.getOperation(operation.operationId)).errorMessage,
             null,
             'retryable create failure should not persist a terminal error',
           );
@@ -1178,6 +1130,7 @@ test('Executor outcome routing through owner-key reconcile path',
         const operation = buildTestOperation({
           type: 'REMOVE',
           workflowStep: WORKFLOW_STEP.STOPPING,
+          status: ReplicaStatus.REMOVING,
         });
         const {coordinator, emitter} =
           createTestCoordinator({operation});
@@ -1270,22 +1223,22 @@ test('Executor outcome routing through owner-key reconcile path',
             'retryable message-group ingress failure must not fail terminally',
           );
           t.equal(
-            operation.workflowStep,
+            (await coordinator.getOperation(operation.operationId)).workflowStep,
             WORKFLOW_STEP.CREATING,
             'retryable message-group failure should keep the create-rearm step',
           );
           t.equal(
-            operation.status,
+            (await coordinator.getOperation(operation.operationId)).status,
             ReplicaStatus.CREATING,
             'retryable message-group failure should preserve the in-flight status',
           );
           t.equal(
-            operation.completedAt,
+            (await coordinator.getOperation(operation.operationId)).completedAt,
             null,
             'retryable message-group failure should not mark the operation complete',
           );
           t.equal(
-            operation.errorMessage,
+            (await coordinator.getOperation(operation.operationId)).errorMessage,
             null,
             'retryable message-group failure should not persist a terminal error',
           );
@@ -1308,6 +1261,7 @@ test('Executor outcome routing through owner-key reconcile path',
         const operation = buildTestOperation({
           entityType: 'runtime_service',
           entityId: 'rs-1',
+          partitionId: 'rs-1',
           workflowStep: WORKFLOW_STEP.CREATING,
         });
         const {coordinator, emitter} =
@@ -1482,7 +1436,7 @@ test('Executor outcome routing through owner-key reconcile path',
             'priority recovery owner wake should use critical delivery',
           );
           t.equal(
-            operation.workflowStep,
+            (await coordinator.getOperation(operation.operationId)).workflowStep,
             WORKFLOW_STEP.PENDING,
             'target-side outcome should not mutate the non-local operation',
           );
@@ -1582,12 +1536,12 @@ async (t) => {
       'create rearm should still issue one dispatch request',
     );
     t.equal(
-      operation.workflowStep,
+      (await coordinator.getOperation(operation.operationId)).workflowStep,
       WORKFLOW_STEP.SYNCING,
       'in-progress create dispatch should advance to the observed target progress state',
     );
     t.equal(
-      operation.status,
+      (await coordinator.getOperation(operation.operationId)).status,
       ReplicaStatus.SYNCING,
       'in-progress create dispatch should persist the reconciled target status',
     );
@@ -1647,12 +1601,12 @@ async (t) => {
       'create rearm should still issue one dispatch request',
     );
     t.equal(
-      operation.workflowStep,
+      (await coordinator.getOperation(operation.operationId)).workflowStep,
       WORKFLOW_STEP.SYNCING,
       'response target status should advance without services-cache coverage',
     );
     t.equal(
-      operation.status,
+      (await coordinator.getOperation(operation.operationId)).status,
       ReplicaStatus.SYNCING,
       'response target status should persist the reconciled workflow status',
     );
@@ -1724,17 +1678,17 @@ async (t) => {
       'remove rearm should keep the remove-phase message type',
     );
     t.equal(
-      operation.workflowStep,
+      (await coordinator.getOperation(operation.operationId)).workflowStep,
       WORKFLOW_STEP.STOPPING,
       'in-progress remove dispatch should remain parked in STOPPING',
     );
     t.equal(
-      operation.status,
+      (await coordinator.getOperation(operation.operationId)).status,
       ReplicaStatus.REMOVING,
       'observed active target should not complete a remove operation',
     );
     t.equal(
-      operation.completedAt,
+      (await coordinator.getOperation(operation.operationId)).completedAt,
       null,
       'in-progress remove dispatch should not mark completion',
     );

@@ -1,3 +1,4 @@
+import {assertOperationTransitionOutcome, terminalOperationReconcileOutcome} from './operation-workflow-transition-outcome.js';
 import {PRE_SYNC_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {OperationWorkflowRecoveryObservation} from './operation-workflow-recovery-observation.js';
@@ -10,9 +11,7 @@ import {
   isReplaceRemovalIntentDurable, recordReplaceBudgetDiagnostic,
 } from './operation-workflow-replace-owner.js';
 import {observedReplaceTargetStatus} from './operation-workflow-replace-surviving-membership.js';
-import {OPERATION_RECONCILE_OUTCOME, didOperationReconcileAdvanceOrComplete} from './operation-workflow-growth-promote.js';
-import {isTerminalTransitionOutcomeSettled} from './operation-workflow-terminal-reservation-release.js';
-import {REPLICA_OPERATION_UPDATE_DISPOSITION} from './replica-operation-update-disposition.js';
+import {OPERATION_RECONCILE_OUTCOME, didOperationReconcileAdvanceOrComplete} from './operation-workflow-reconcile-outcome.js';
 const {
   ACTIVE_REPLACE_SOURCE_RETIREMENT_BLOCKING_STATUSES,
   OBSERVED_OPERATION_ROW_TARGET_PROGRESS_STATUSES, OPERATION_LIFECYCLE_ACTION,
@@ -25,7 +24,7 @@ const {
   RECONCILED_REPLICA_STATUS_RESOLUTION_STATE,
   RECONCILED_REPLICA_STATUS_RESOLUTION_TABLE,
   RECONCILED_REPLICA_STATUS_TERMINAL_CACHE_BLOCKING_STATUSES,
-  ReplicaOperationResponseStatus, ReplicaStatus, SQL_RECONCILIATION_REASON,
+  ReplicaStatus, SQL_RECONCILIATION_REASON,
   STOPPING_REPLICA_OBSERVATION_STATE, SYSTEM_TABLE_NAME,
   TARGET_CREATE_ADMISSION_WORKFLOW_STEPS_BY_STATUS,
   TIMEOUT_BUDGET_CLASSIFICATION, TIMEOUT_BUDGET_DEFAULT,
@@ -76,17 +75,16 @@ function reportOperationStepTimeoutSpent(owner, operation, spent) {
 }
 
 function classifyTerminalPersistOutcome(_owner, _operation, outcome) {
-  if (isTerminalTransitionOutcomeSettled(outcome)) {
-    return OPERATION_RECONCILE_OUTCOME.COMPLETED;
-  }
-  return outcome?.disposition === REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED ?
-    OPERATION_RECONCILE_OUTCOME.REFUSED : OPERATION_RECONCILE_OUTCOME.WAITING;
+  assertOperationTransitionOutcome(outcome);
+  return outcome.reconcileOutcome;
 }
 
 function classifyReconcileExecutionOutcome(owner, operation, previousStep, executionResult = null) {
-  if (owner.repository?.isOperationTerminal?.(operation) === true ||
-      executionResult?.status === ReplicaOperationResponseStatus.COMPLETED) {
-    return OPERATION_RECONCILE_OUTCOME.COMPLETED;
+  if (owner.repository.isOperationTerminal(operation)) {
+    return terminalOperationReconcileOutcome(operation);
+  }
+  if (executionResult?.reconcileOutcome === OPERATION_RECONCILE_OUTCOME.FAILED) {
+    return OPERATION_RECONCILE_OUTCOME.FAILED;
   }
   if (executionResult?.skipped === true) return OPERATION_RECONCILE_OUTCOME.WAITING;
   if (previousStep !== null && previousStep !== undefined &&
@@ -248,8 +246,7 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
     }
 
     if (this.isTargetCreateAdmissionProgress(operation, reconciledStatus)) {
-      await this.updateStep(operation, WORKFLOW_STEP.CREATING);
-      return OPERATION_RECONCILE_OUTCOME.ADVANCED;
+      return this.updateStep(operation, WORKFLOW_STEP.CREATING);
     }
 
     if (
@@ -296,8 +293,7 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
       reconciledStatus === ReplicaStatus.SYNCING &&
       PRE_SYNC_WORKFLOW_STEPS.has(operation.workflowStep)
     ) {
-      await this.updateStep(operation, WORKFLOW_STEP.SYNCING);
-      return OPERATION_RECONCILE_OUTCOME.ADVANCED;
+      return this.updateStep(operation, WORKFLOW_STEP.SYNCING);
     }
 
     if (reconciledStatus === ReplicaStatus.REMOVED) {
@@ -406,7 +402,8 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
         priorityRecoveryDrainSnapshot,
       )
     ) {
-      return OPERATION_RECONCILE_OUTCOME.COMPLETED;
+      return this.repository.isOperationTerminal(operation) ?
+        terminalOperationReconcileOutcome(operation) : OPERATION_RECONCILE_OUTCOME.WAITING;
     }
     if (
       !this.shouldEnterOperationLifecycleFromDrainSnapshot(
@@ -481,15 +478,13 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
     }
     case OPERATION_LIFECYCLE_ACTION.RECONCILE_STOPPING: {
       const stoppingProgressed = await this.reconcileStoppingOperationProgress(operation);
-      if (this.repository?.isOperationTerminal?.(operation) === true) {
-        return OPERATION_RECONCILE_OUTCOME.COMPLETED;
+      if (this.repository.isOperationTerminal(operation)) {
+        return terminalOperationReconcileOutcome(operation);
       }
       if (operation.workflowStep !== previousStep) {
         return OPERATION_RECONCILE_OUTCOME.ADVANCED;
       }
-      return !isReplaceRemovalIntentDurable(operation) &&
-        didOperationReconcileAdvanceOrComplete(stoppingProgressed) ?
-        OPERATION_RECONCILE_OUTCOME.COMPLETED : OPERATION_RECONCILE_OUTCOME.WAITING;
+      return stoppingProgressed;
     }
     case OPERATION_LIFECYCLE_ACTION.NOOP:
       return OPERATION_RECONCILE_OUTCOME.WAITING;
@@ -522,17 +517,11 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
     });
   }
 
-  async reconcileOperationProgress(operation, options = {}) {
-    return didOperationReconcileAdvanceOrComplete(
-      await this.reconcileOperationLifecycle(operation, options),
-    );
-  }
-
   async reconcileObservedTargetProgressDuringTransitionGrace(operation, now) {
     if (!this.hasObservedOperationRowTargetProgress(operation)) {
-      return false;
+      return OPERATION_RECONCILE_OUTCOME.WAITING;
     }
-    return this.reconcileOperationProgress(operation, {
+    return this.reconcileOperationLifecycle(operation, {
       cause: OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED_PROGRESS,
       now,
     });
@@ -688,7 +677,7 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
       }
       return;
     }
-    const progressed = await this.reconcileOperationProgress(operation, {
+    const progressed = await this.reconcileOperationLifecycle(operation, {
       cause: 'timeout',
       now,
     });
@@ -781,7 +770,5 @@ class OperationWorkflowRecoveryStatusReconcile extends OperationWorkflowRecovery
 }
 
 export {
-  OPERATION_RECONCILE_OUTCOME,
   OperationWorkflowRecoveryStatusReconcile,
-  didOperationReconcileAdvanceOrComplete,
 };

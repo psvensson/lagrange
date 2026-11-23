@@ -73,13 +73,15 @@ const REBALANCER_DIRECTORY = path.join(REPOSITORY_ROOT, 'src', 'rebalancer');
 const LONG_AFTER_MS = 3_600_000;
 const POST_INTENT_TARGET_DEATH = 'replace_target_dead_source_retained';
 
+// Includes the new authoritative preflight observations; these counts are source census,
+// not evidence that a write occurred. Runtime cells exercise the terminal effects.
 // The edges as the code has them at the frozen production SHA: a changed
 // count or a new file fails here until the new edge has a cell below.
-const TERMINAL_PERSIST_SITES = Object.freeze({
-  'operation-workflow-transition-persistence.js': 2,
-  'operation-workflow-terminal-transition-repair.js': 1,
+const TERMINAL_INTENT_SITES = Object.freeze({
+  'operation-workflow-transition-persistence.js': 4,
+  'operation-workflow-terminal-transition-repair.js': 2,
   // GROWTH_PROMOTE completion (never REPLACE: guarded by type === GROWTH_PROMOTE).
-  'operation-workflow-growth-promote.js': 1,
+  'operation-workflow-growth-promote.js': 2,
 });
 const COMPLETE_OPERATION_CALLERS = Object.freeze({
   'operation-workflow-recovery-drain.js': 1,
@@ -90,8 +92,9 @@ const COMPLETE_OPERATION_CALLERS = Object.freeze({
   'rebalance-coordinator-owner-facade.js': 1,
   'operation-workflow-replace-owner.js': 1,
   'operation-workflow-dispatch-response-reconcile.js': 2,
-  'operation-workflow-growth-promote.js': 1,
-  'operation-workflow-recovery-reconcile.js': 1,
+  'operation-workflow-growth-promote.js': 2,
+  // Terminal STOPPING reentry now reconsults the same completion owner.
+  'operation-workflow-recovery-reconcile.js': 2,
   // M2: a refused failure of a partition ADD whose target is live completes
   // it (never a REPLACE: its post-intent refusal completes nothing).
   'operation-workflow-transition-persistence.js': 1,
@@ -171,8 +174,8 @@ function failureOwnerSources() {
 
 test('P1 census: the terminal edges of the code are the ones with cells',
   async (t) => {
-    t.same(censusOf(/terminalTransition: true/gu), TERMINAL_PERSIST_SITES,
-      'the terminal persist sites (completeOperation, failOperation, repair)');
+    t.same(censusOf(/terminalTransition: true/gu), TERMINAL_INTENT_SITES,
+      'terminal intent sites: fresh authority observation and subsequent guarded write');
     t.same(censusOf(/\.completeOperation\(/gu), COMPLETE_OPERATION_CALLERS,
       'the completeOperation callers');
     t.same(Object.keys(censusOf(/\.failOperation\(/gu)).sort(),
@@ -330,7 +333,7 @@ test('P1 terminal boundary: re-admission after the decision but before the ' +
   }
 });
 
-test('P1 edge (STOPPING owner via reconcileOperationProgress): the ' +
+test('P1 edge (STOPPING owner via reconcileOperationLifecycle): the ' +
   'membership decides, not the source row', async (t) => {
   const world = await openReplaceWorld({sourceHandler: true});
   try {
@@ -341,7 +344,7 @@ test('P1 edge (STOPPING owner via reconcileOperationProgress): the ' +
     await driveToIntent(world);
     setSourceRow(world, null);
     await assertNoCompletionWhileVoter(t, world, 'row gone, voter', () =>
-      world.coordinator.reconcileOperationProgress(readPersisted(world)
+      world.coordinator.reconcileOperationLifecycle(readPersisted(world)
         .then((operation) => operation)));
     const reason = readReplaceOwnerDiagnostic(world.coordinator.workflowOwner,
       world.operation.operationId)?.reason;
@@ -368,7 +371,7 @@ test('P1 edge (ACTIVE adoption, BR7): a source row already retiring at ' +
     world.group.kill(world.sourceReplicaId);
     world.group.advance(200);
     await assertNoCompletionWhileVoter(t, world, 'adoption', () =>
-      world.coordinator.reconcileOperationProgress(world.operation));
+      world.coordinator.reconcileOperationLifecycle(world.operation));
     const persisted = await readPersisted(world);
     t.ok(persisted.stepsHistory.some((entry) =>
       entry?.replaceRemovalIntent === true), 'an intent was adopted');
@@ -469,8 +472,8 @@ test('P1 edge (terminal-transition repair, A11.1): a retained REMOVED is ' +
       await arm();
       await fireFallbackTimers(world);
     });
-    t.notOk(owner.terminalTransitionRepairStateByOperationId.has(
-      world.operation.operationId), 'the repair stood down');
+    t.ok(owner.terminalTransitionRepairStateByOperationId.has(
+      world.operation.operationId), 'refused persistence remains owned without a terminal write');
     world.group.advance();
     await settleTurns();
     if ((await readPersisted(world)).workflowStep !== WORKFLOW_STEP.REMOVED) {
@@ -501,7 +504,7 @@ test('P1 edge (target status REMOVED after the intent): with the target ' +
     world.eventsSuppressed = true;
     world.group.kill(world.targetReplicaId);
     setTargetRow(world, ReplicaStatus.REMOVED);
-    await world.coordinator.reconcileOperationProgress(
+    await world.coordinator.reconcileOperationLifecycle(
       await readPersisted(world));
     await settleTurns();
     await assertLeaderlessTypedWait(t, world, 'target gone', {targetGone: true});
@@ -514,7 +517,7 @@ test('P1 edge (target status REMOVED after the intent): with the target ' +
     // it keeps stepping until then); the leader's answer classifies.
     for (let round = 0; round < 12 && (await readPersisted(world))
       .workflowStep === WORKFLOW_STEP.STOPPING; round += 1) {
-      await world.coordinator.reconcileOperationProgress(
+      await world.coordinator.reconcileOperationLifecycle(
         await readPersisted(world));
       await settleTurns();
       world.group.advance();
@@ -579,7 +582,7 @@ test('AN3: a target gone before the intent fails the REPLACE with the ' +
   try {
     world.currentEdge = 'target-removed-before-active';
     setTargetRow(world, ReplicaStatus.REMOVED);
-    await world.coordinator.reconcileOperationProgress(world.operation);
+    await world.coordinator.reconcileOperationLifecycle(world.operation);
     await settleTurns();
     const persisted = await readPersisted(world);
     t.equal(persisted.workflowStep, WORKFLOW_STEP.FAILED, 'FAILED');
@@ -689,12 +692,12 @@ test('AN11 (live, adopted intent): an absence the witness reports below ' +
     // Another writer's STOPPING: the owner adopts its intent from a fresh
     // witness read (C0 = that read's commit index), then decides.
     world.operation.workflowStep = WORKFLOW_STEP.STOPPING;
-    world.operation.status = ReplicaStatus.ACTIVE;
+    world.operation.status = ReplicaStatus.REMOVING;
     world.operation.stepsHistory = [...world.operation.stepsHistory,
       {step: WORKFLOW_STEP.STOPPING, timestamp: Date.now()}];
     await world.coordinator.repository.persistOperationUpdate(world.operation);
     setSourceRow(world, null);
-    await world.coordinator.reconcileOperationProgress(world.operation);
+    await world.coordinator.reconcileOperationLifecycle(world.operation);
     await settleTurns();
     assertLaggingAbsenceCompletesNothing(t, world, 'adopted intent',
       await readPersisted(world));
@@ -736,7 +739,7 @@ test('AN11 (live, recorded intent): the same, with C0 recorded at the ' +
       'setup: the REPLACE decided nothing while its wakes were lost');
     await fireFallbackTimers(world);
     await settleTurns();
-    await world.coordinator.reconcileOperationProgress(
+    await world.coordinator.reconcileOperationLifecycle(
       await readPersisted(world));
     await settleTurns();
     assertLaggingAbsenceCompletesNothing(t, world, 'recorded intent',
@@ -807,7 +810,7 @@ test('P1\' (D2): after the durable intent no elapsed time, sweep, stale ' +
     }
     setTargetRow(world, ReplicaStatus.FAILED);
     setSourceRow(world, null);
-    await world.coordinator.reconcileOperationProgress(
+    await world.coordinator.reconcileOperationLifecycle(
       await readPersisted(world));
     await settleTurns();
     await assertLeaderlessTypedWait(t, world, 'P1 prime', {targetGone: true});
@@ -816,7 +819,7 @@ test('P1\' (D2): after the durable intent no elapsed time, sweep, stale ' +
     // re-reads the authority.
     for (let round = 0; round < 12 && (await readPersisted(world))
       .workflowStep === WORKFLOW_STEP.STOPPING; round += 1) {
-      await world.coordinator.reconcileOperationProgress(
+      await world.coordinator.reconcileOperationLifecycle(
         await readPersisted(world));
       await settleTurns();
       world.group.advance();

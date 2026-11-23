@@ -84,7 +84,7 @@ test('T5-prime installs the canonical waiter and fallback before returning ' +
     world.removingWriteFails = false;
     world.clockOffsetMs += 61_000;
     const before = world.removeEffects.length;
-    await world.coordinator.reconcileOperationProgress(
+    await world.coordinator.reconcileOperationLifecycle(
       await readPersisted(world));
     await settleTurns();
     t.ok(world.removeEffects.length > before, 'the T5-prime resend occurred');
@@ -122,7 +122,7 @@ async function outputOf(world) {
 }
 
 async function entry(world) {
-  await world.coordinator.reconcileOperationProgress(await readPersisted(world));
+  await world.coordinator.reconcileOperationLifecycle(await readPersisted(world));
   await settleTurns();
 }
 
@@ -245,7 +245,7 @@ async (t) => {
     let decided = false;
     const decisions = Promise.all([
       world.coordinator.reconcileOrphanedOperations(),
-      world.coordinator.reconcileOperationProgress(await readPersisted(world)),
+      world.coordinator.reconcileOperationLifecycle(await readPersisted(world)),
     ]).then(() => {
       decided = true;
     });
@@ -339,7 +339,7 @@ async (t) => {
     // FAILED is written. Two owner decisions may be in flight on the lane;
     // whichever terminal lands first wins, the other is refused by the CAS.
     first.holdNextWitnessRead = true;
-    const decision = first.coordinator.reconcileOperationProgress(
+    const decision = first.coordinator.reconcileOperationLifecycle(
       await readPersisted(first));
     t.ok(await waitUntil(() => first.heldWitnessRead !== null),
       'setup: the decision is reading the witness');
@@ -524,7 +524,7 @@ test('S11 (T5\' re-send): a concurrent operation active at STOPPING defers ' +
     t.equal(world.removeEffects.length, 1, 'setup: the first effect left');
     world.clockOffsetMs += 61_000;
     world.cache.upsert('replica_operations', concurrentRemoveRow(world));
-    await world.coordinator.reconcileOperationProgress(
+    await world.coordinator.reconcileOperationLifecycle(
       await readPersisted(world));
     await settleTurns();
     t.equal(world.removeEffects.length, 1,

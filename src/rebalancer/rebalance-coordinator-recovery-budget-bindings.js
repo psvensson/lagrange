@@ -3,7 +3,7 @@ import {
   reconcileOrphanedOperations,
   getTimeoutForStep,
   reconcileTimeoutOperation,
-  reconcileOperationProgress,
+  reconcileOperationLifecycle,
   handleExecutorOutcome,
   reconcileExecutorOutcome,
   handleRecovery,
@@ -74,8 +74,8 @@ class RebalanceCoordinatorRecoveryBudgetBindings {
     return reconcileTimeoutOperation(this, operation, now);
   }
 
-  async reconcileOperationProgress(operation) {
-    return reconcileOperationProgress(this, operation);
+  async reconcileOperationLifecycle(operation) {
+    return reconcileOperationLifecycle(this, operation);
   }
 
   handleExecutorOutcome(outcome) {

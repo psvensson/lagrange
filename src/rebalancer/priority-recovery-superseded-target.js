@@ -1,3 +1,4 @@
+import {OPERATION_RECONCILE_OUTCOME} from './operation-workflow-reconcile-outcome.js';
 import {readOperationRecordWorkflowStep} from './replica-operation-progress.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
@@ -537,7 +538,7 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
         return true;
       }
       if (operation.workflowStep === WORKFLOW_STEP.STOPPING) {
-        await this.reconcileOperationProgress(operation);
+        await this.reconcileOperationLifecycle(operation);
         return true;
       }
       if (operation.workflowStep === WORKFLOW_STEP.ACTIVE) {
@@ -550,7 +551,7 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
       }
     }
 
-    let activeTransitionCommitted = false;
+    let activeTransitionCommitted = OPERATION_RECONCILE_OUTCOME.WAITING;
     try {
       activeTransitionCommitted = await this.updateStep(
         operation,
@@ -564,7 +565,7 @@ class PriorityRecoverySupersededTarget extends PriorityRecoveryObservation {
       }
       throw error;
     }
-    if (activeTransitionCommitted) {
+    if (activeTransitionCommitted === OPERATION_RECONCILE_OUTCOME.ADVANCED) {
       const replaceResumeResult =
         await this.executeOperationFromReconcilePath(operation);
       if (replaceResumeResult?.skipped === true) {

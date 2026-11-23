@@ -1,3 +1,6 @@
+import {assertOperationTransitionOutcome} from './operation-workflow-transition-outcome.js';
+import {isTerminalTransitionOutcomeSettled} from './operation-workflow-terminal-reservation-release.js';
+import {OPERATION_RECONCILE_OUTCOME} from './operation-workflow-reconcile-outcome.js';
 /**
  * OperationWorkflowOwner helpers for durable GROWTH_PROMOTE operations
  * (1-voter founding + odd-voter growth via joint learner promotion).
@@ -12,13 +15,10 @@ import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared
 import {
   OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED,
 } from './operation-workflow-recovery-reconcile-shared.js';
-import {
-  REPLICA_OPERATION_UPDATE_DISPOSITION,
-} from './replica-operation-update-disposition.js';
 
 const {
   OPERATION_TRANSITION_REASON, OPERATION_WORKFLOW_OWNER_LITERAL, OperationType,
-  REBALANCE_COORDINATOR_EVENT, REBALANCE_COORDINATOR_LOG_MSG, ReplicaStatus, WORKFLOW_STEP,
+  REBALANCE_COORDINATOR_LOG_MSG, ReplicaStatus, WORKFLOW_STEP,
 } = SHARED;
 
 const {
@@ -37,14 +37,6 @@ const GROWTH_PROMOTE_OBSERVED_STATE = Object.freeze({
   UNAPPLICABLE: 'UNAPPLICABLE',
   COMPLETE_ACTIVE: 'COMPLETE_ACTIVE',
   REPLAY_DISPATCH: 'REPLAY_DISPATCH',
-});
-const OPERATION_RECONCILE_OUTCOME = Object.freeze({
-  COMPLETED: 'completed',
-  FAILED: 'failed',
-  ADVANCED: 'advanced',
-  WAITING: 'waiting',
-  HELD: 'held',
-  REFUSED: 'refused',
 });
 /**
  * Four-phase growth promotion settlement model:
@@ -68,14 +60,6 @@ const GROWTH_SETTLEMENT_PHASE = Object.freeze({
 const LOCAL_STR_CORE_OK = 'CORE_OK';
 const LOCAL_STR_GROWTH_PROMOTE_REFUSED = 'growth_promote_refused';
 const LOCAL_STR_LEADER = 'leader';
-
-function didOperationReconcileAdvanceOrComplete(outcome) {
-  return (
-    outcome === OPERATION_RECONCILE_OUTCOME.COMPLETED ||
-    outcome === OPERATION_RECONCILE_OUTCOME.ADVANCED ||
-    outcome === true
-  );
-}
 
 function isHeldGrowthPromoteOperation(operation) {
   return (
@@ -166,85 +150,8 @@ function canEnterGrowthSettlementPersistence(owner, operation, options = {}) {
   return resolveGrowthPromoteReplicaIds(operation).length > 0;
 }
 
-async function dischargeGrowthPromoteLiveObligations(owner, operation) {
-  owner.clearTerminalOperationRetryState?.(operation);
-  owner.clearTransitionRetry?.(operation?.operationId);
-  await owner.releaseReservationForOperation?.(operation);
-  owner.clearDeferredSafetyBlockState?.(operation?.operationId);
-  await owner.releasePlacementHoldIfNeeded?.(operation);
-}
-
-function resolveTerminalAdoptedReconcileOutcome(operation) {
-  return isNormalizedGrowthPromoteCompleted(operation) ?
-    OPERATION_RECONCILE_OUTCOME.COMPLETED :
-    OPERATION_RECONCILE_OUTCOME.FAILED;
-}
-
-function isIdempotentReplayGrowthSettled(owner, operation, completionOutcome) {
-  return (
-    completionOutcome?.committed === true ||
-    isNormalizedGrowthPromoteCompleted(operation) ||
-    observeGrowthPromoteIncompleteState(owner, operation) ===
-      GROWTH_PROMOTE_OBSERVED_STATE.COMPLETE_ACTIVE
-  );
-}
-
-const GROWTH_SETTLEMENT_DISPOSITION_TABLE = Object.freeze({
-  [REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED]: Object.freeze({
-    isDurableTerminal: () => true,
-    resolveOutcome: () => OPERATION_RECONCILE_OUTCOME.COMPLETED,
-  }),
-  [REPLICA_OPERATION_UPDATE_DISPOSITION.RECOVERED]: Object.freeze({
-    isDurableTerminal: () => true,
-    resolveOutcome: () => OPERATION_RECONCILE_OUTCOME.COMPLETED,
-  }),
-  [REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY]: Object.freeze({
-    isDurableTerminal: (owner, op, out) => isIdempotentReplayGrowthSettled(owner, op, out),
-    resolveOutcome: (owner, op, out) =>
-      isIdempotentReplayGrowthSettled(owner, op, out) ?
-        OPERATION_RECONCILE_OUTCOME.COMPLETED :
-        OPERATION_RECONCILE_OUTCOME.WAITING,
-  }),
-  [REPLICA_OPERATION_UPDATE_DISPOSITION.TERMINAL_ADOPTED]: Object.freeze({
-    isDurableTerminal: () => true,
-    resolveOutcome: (_owner, op) => resolveTerminalAdoptedReconcileOutcome(op),
-  }),
-  [REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED]: Object.freeze({
-    isDurableTerminal: () => false,
-    resolveOutcome: () => OPERATION_RECONCILE_OUTCOME.REFUSED,
-  }),
-  [REPLICA_OPERATION_UPDATE_DISPOSITION.REINSERTED]: Object.freeze({
-    isDurableTerminal: () => false,
-    resolveOutcome: () => OPERATION_RECONCILE_OUTCOME.WAITING,
-  }),
-});
-
-const UNRECOGNIZED_GROWTH_SETTLEMENT_POLICY = Object.freeze({
-  isDurableTerminal: () => false,
-  resolveOutcome: () => OPERATION_RECONCILE_OUTCOME.WAITING,
-});
-
-function resolveGrowthSettlementDispositionPolicy(disposition) {
-  if (
-    typeof disposition === 'string' &&
-    Object.hasOwn(GROWTH_SETTLEMENT_DISPOSITION_TABLE, disposition)
-  ) {
-    return GROWTH_SETTLEMENT_DISPOSITION_TABLE[disposition];
-  }
-  return UNRECOGNIZED_GROWTH_SETTLEMENT_POLICY;
-}
-
 function buildGrowthSettlementResult(phase, reconcileOutcome, committed, disposition) {
   return Object.freeze({phase, reconcileOutcome, committed, disposition});
-}
-
-async function runGrowthSettlementReleasingPhase(owner, operation, outcome) {
-  let releasingPhase = GROWTH_SETTLEMENT_PHASE.RELEASING;
-  if (outcome?.obligationsReleased !== true) {
-    await dischargeGrowthPromoteLiveObligations(owner, operation);
-  }
-  releasingPhase = GROWTH_SETTLEMENT_PHASE.SETTLED;
-  return releasingPhase;
 }
 
 async function settleGrowthPromoteCompletion(owner, operation, options = {}) {
@@ -257,17 +164,11 @@ async function settleGrowthPromoteCompletion(owner, operation, options = {}) {
     );
   }
   const completionOutcome = await owner.completeOperation(operation);
-  const disposition = readLowerStateField(completionOutcome?.disposition);
-  const committed =
-    completionOutcome?.committed === true &&
-    disposition !== REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY &&
-    disposition !== REPLICA_OPERATION_UPDATE_DISPOSITION.REINSERTED;
-  const policy = resolveGrowthSettlementDispositionPolicy(disposition, completionOutcome);
-  const settledPhase = policy.isDurableTerminal(owner, operation, completionOutcome) ?
-    await runGrowthSettlementReleasingPhase(owner, operation, completionOutcome) :
-    GROWTH_SETTLEMENT_PHASE.PERSISTING;
-  const reconcileOutcome = policy.resolveOutcome(owner, operation, completionOutcome);
-  return buildGrowthSettlementResult(settledPhase, reconcileOutcome, committed, disposition);
+  assertOperationTransitionOutcome(completionOutcome);
+  const settledPhase = isTerminalTransitionOutcomeSettled(completionOutcome) ?
+    GROWTH_SETTLEMENT_PHASE.SETTLED : GROWTH_SETTLEMENT_PHASE.PERSISTING;
+  return buildGrowthSettlementResult(settledPhase, completionOutcome.reconcileOutcome,
+    completionOutcome.committed, completionOutcome.disposition);
 }
 
 async function completeAndBuildGrowthPromoteResult(owner, operation, options = {}) {
@@ -608,139 +509,29 @@ function observeGrowthPromoteIncompleteState(owner, operation) {
 }
 
 async function completeGrowthPromoteOperation(owner, operation) {
-  const now = owner.resolveTimeoutCheckNowMs();
   const finalStep = WORKFLOW_STEP.ACTIVE;
-  if (isGrowthPromoteOperationTerminal(owner, operation)) {
-    const disposition = isNormalizedGrowthPromoteCompleted(operation) ?
-      REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY :
-      REPLICA_OPERATION_UPDATE_DISPOSITION.TERMINAL_ADOPTED;
-    await dischargeGrowthPromoteLiveObligations(owner, operation);
-    return Object.freeze({committed: false, disposition, obligationsReleased: true});
+  const replay = await owner.resolveOperationTransitionBeforeWrite(operation, finalStep,
+    {terminalTransition: true, terminalErrorMessage: null});
+  if (replay) {
+    await owner.releaseDurableTerminalOperation(operation, replay);
+    return replay;
   }
-  const previousStep = operation.workflowStep;
-  const stepEntry = owner.buildOperationTransitionStepEntry(
-    operation,
-    finalStep,
+  const now = owner.resolveTimeoutCheckNowMs();
+  const stepEntry = owner.buildOperationTransitionStepEntry(operation, finalStep,
+    OPERATION_TRANSITION_REASON.OPERATION_COMPLETED, operation.workflowStep, now);
+  const projectedOperation = {...operation, workflowStep: finalStep,
+    status: ReplicaStatus.ACTIVE, updatedAt: now, completedAt: now,
+    stepsHistory: [...operation.stepsHistory, stepEntry]};
+  const outcome = await owner.persistTerminalOperation(operation, projectedOperation,
     OPERATION_TRANSITION_REASON.OPERATION_COMPLETED,
-    previousStep,
-    now,
-  );
-  const projectedOperation = {
-    ...operation,
-    workflowStep: finalStep,
-    status: ReplicaStatus.ACTIVE,
-    updatedAt: now,
-    completedAt: now,
-    stepsHistory: [
-      ...(Array.isArray(operation.stepsHistory) ? operation.stepsHistory : []),
-      stepEntry,
-    ],
-  };
-  const projectIdempotentTransition = () => {
-    operation.workflowStep = finalStep;
-    operation.status = ReplicaStatus.ACTIVE;
-    const prevUpd = Number(operation.updatedAt);
-    operation.updatedAt = Number.isFinite(prevUpd) ? Math.max(prevUpd, now) : now;
-    const prevDone = Number(operation.completedAt);
-    operation.completedAt = Number.isFinite(prevDone) ? Math.max(prevDone, now) : now;
-  };
-  const persistOptions = {
-    ...owner.buildOperationTransitionPersistOptions(),
-    terminalTransition: true,
-    returnDisposition: true,
-  };
-  const persistFn = async () => {
-    const rawResult = await owner.repository.persistOperationUpdate(
-      projectedOperation,
-      persistOptions,
-    );
-    if (
-      rawResult &&
-      typeof rawResult === 'object' &&
-      readLowerStateField(rawResult.disposition) ===
-        REPLICA_OPERATION_UPDATE_DISPOSITION.REINSERTED
-    ) {
-      return {...rawResult, persisted: false};
-    }
-    return rawResult;
-  };
-  const transitionOutcome = await owner.executeAtomicTransition(
-    operation,
-    finalStep,
-    OPERATION_TRANSITION_REASON.OPERATION_COMPLETED,
-    persistFn,
-    {
-      onIdempotentTransition: projectIdempotentTransition,
-      afterCommit: async () => {
-        await owner.confirmCommittedTransitionPersistence(projectedOperation, {
-          terminalTransitionRepair: true,
-        });
-      },
-    },
-  );
-  const outcomeDisposition = readLowerStateField(transitionOutcome?.disposition);
-  if (!transitionOutcome?.committed) {
-    if (
-      outcomeDisposition === REPLICA_OPERATION_UPDATE_DISPOSITION.TERMINAL_ADOPTED
-    ) {
-      await owner.resolveNotCommittedTerminalTransition(
-        operation,
-        projectedOperation,
-        transitionOutcome,
-        finalStep,
-        persistOptions,
-      );
-      await owner.releasePlacementHoldIfNeeded(operation);
-      return Object.freeze({
-        committed: false,
-        disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.TERMINAL_ADOPTED,
-        obligationsReleased: true,
-      });
-    }
-    if (
-      outcomeDisposition === REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY ||
-      isNormalizedGrowthPromoteCompleted(operation)
-    ) {
-      if (!isNormalizedGrowthPromoteCompleted(operation)) projectIdempotentTransition();
-      await dischargeGrowthPromoteLiveObligations(owner, operation);
-      return Object.freeze({
-        committed: false,
-        disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY,
-        obligationsReleased: true,
-      });
-    }
-    await owner.resolveNotCommittedTerminalTransition(
-      operation,
-      projectedOperation,
-      transitionOutcome,
-      finalStep,
-      persistOptions,
-    );
-    return transitionOutcome;
-  }
-  const isIdempotentCommit =
-    outcomeDisposition === REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY;
-  operation.workflowStep = finalStep;
-  operation.status = ReplicaStatus.ACTIVE;
-  operation.updatedAt = now;
-  operation.completedAt = operation.completedAt ?? now;
-  operation.stepsHistory.push(stepEntry);
-  await dischargeGrowthPromoteLiveObligations(owner, operation);
-  if (!isIdempotentCommit) {
-    owner.stats.operationsCompleted++;
+    {...owner.buildOperationTransitionPersistOptions(), terminalTransition: true});
+  if (outcome.committed) {
     owner.logger.info(REBALANCE_COORDINATOR_LOG_MSG.OPERATION_COMPLETED, {
-      operationId: operation.operationId,
-      type: operation.type,
-      partitionId: operation.partitionId,
-      targetNodeId: operation.targetNodeId,
+      operationId: operation.operationId, type: operation.type,
+      partitionId: operation.partitionId, targetNodeId: operation.targetNodeId,
     });
-    owner.emitter.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED, {operation});
   }
-  return Object.freeze({
-    committed: !isIdempotentCommit,
-    disposition: transitionOutcome?.disposition ?? null,
-    obligationsReleased: true,
-  });
+  return outcome;
 }
 
 async function reconcileGrowthPromoteLifecycle(owner, operation) {
@@ -748,10 +539,8 @@ async function reconcileGrowthPromoteLifecycle(owner, operation) {
     return OPERATION_RECONCILE_OUTCOME.HELD;
   }
   if (owner.repository.isOperationTerminal(operation)) {
-    await dischargeGrowthPromoteLiveObligations(owner, operation);
-    return isNormalizedGrowthPromoteCompleted(operation) ?
-      OPERATION_RECONCILE_OUTCOME.COMPLETED :
-      OPERATION_RECONCILE_OUTCOME.FAILED;
+    const outcome = await owner.completeOperation(operation);
+    return outcome.reconcileOutcome;
   }
   const previousStep = operation.workflowStep;
   const replayResult = await owner.executeOperationFromReconcilePath(operation);
@@ -778,10 +567,8 @@ async function reconcileGrowthPromoteLifecycle(owner, operation) {
 
 export {
   GROWTH_SETTLEMENT_PHASE,
-  OPERATION_RECONCILE_OUTCOME,
   applyGrowthPromoteRequestFields,
   completeGrowthPromoteOperation,
-  didOperationReconcileAdvanceOrComplete,
   hasValidGrowthPromoteCompletionProvenance,
   isHeldGrowthPromoteOperation,
   observeGrowthPromoteIncompleteState,

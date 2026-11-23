@@ -1,3 +1,5 @@
+import {OPERATION_RECONCILE_OUTCOME} from
+  '../../src/rebalancer/operation-workflow-reconcile-outcome.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {
   OPERATION_WORKFLOW_OWNER_SHARED,
@@ -240,13 +242,13 @@ test('RebalanceCoordinator completes ACTIVE REPLACE when source removal is alrea
       };
 
       const reconcileResult =
-        await coordinator.workflowOwner.reconcileOperationProgress(operation);
+        await coordinator.workflowOwner.reconcileOperationLifecycle(operation);
       const persistedOperation =
         await coordinator.getOperation(operation.operationId);
 
       t.equal(
         reconcileResult,
-        true,
+        OPERATION_RECONCILE_OUTCOME.COMPLETED,
         'ACTIVE replace reconciliation should consume already-visible source removal',
       );
       t.equal(
@@ -311,14 +313,14 @@ test('RebalanceCoordinator fails a REPLACE whose target is REMOVED before ' +
 
     const operation = await coordinator.getOperation(TEST_OPERATION_ID);
     const reconcileResult =
-      await coordinator.workflowOwner.reconcileOperationProgress(operation);
+      await coordinator.workflowOwner.reconcileOperationLifecycle(operation);
     const persistedOperation =
       await coordinator.getOperation(TEST_OPERATION_ID);
 
     t.equal(
       reconcileResult,
-      true,
-      'reconcileOperationProgress should consume authoritative REMOVED state for REPLACE',
+      OPERATION_RECONCILE_OUTCOME.FAILED,
+      'reconcileOperationLifecycle should consume authoritative REMOVED state for REPLACE',
     );
     // SUPERSEDED (R09) by the owner decision of 2026-09-25 (approved REPLACE
     // design, A10), quest replace-source-removal-owner: a REPLACE whose
@@ -387,19 +389,19 @@ test('RebalanceCoordinator fails ADD target REMOVED status during ' +
 
     const operation = await coordinator.getOperation(TEST_OPERATION_ID);
     const reconcileResult =
-      await coordinator.workflowOwner.reconcileOperationProgress(operation);
+      await coordinator.workflowOwner.reconcileOperationLifecycle(operation);
     const persistedOperation =
       await coordinator.getOperation(TEST_OPERATION_ID);
 
     t.equal(
       reconcileResult,
-      true,
-      'reconcileOperationProgress should fail ADD on authoritative REMOVED status',
+      OPERATION_RECONCILE_OUTCOME.FAILED,
+      'reconcileOperationLifecycle should fail ADD on authoritative REMOVED status',
     );
     t.equal(
       persistedOperation?.workflowStep,
       WORKFLOW_STEP.FAILED,
-      'reconcileOperationProgress should persist ADD failure as workflow FAILED',
+      'reconcileOperationLifecycle should persist ADD failure as workflow FAILED',
     );
     t.equal(
       persistedOperation?.status,
