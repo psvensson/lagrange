@@ -4,7 +4,7 @@
 // Proves:
 // 1. A real 1-replica PartitionService opened with deferElection: true (the
 //    exact seed-partitions-phase.js contract) starts Raft tick scheduling on
-//    startElection(). After growing from RF1 -> RF3 via ConfChange and
+//    startElection() and arms ticks upon RF1 -> RF2/RF3 growth. After
 //    transferring leadership to r3, stopping r3 lets the surviving 2-of-3
 //    quorum {r1, r2} elect a new leader automatically instead of deadlocking
 //    forever on r1's frozen check_quorum leader lease.
@@ -16,11 +16,19 @@
 //    rearmTimer: true, PartitionService.scheduleLeaderOwnedActivation does not
 //    bypass leadership activation delay (immediate: false), and
 //    MessageGroupService CDC does not treat the grown group as single-replica.
+// 4. While a 1-replica founder stays genuinely solo (RF1), periodic ticks remain
+//    deferred; the instant committed membership grows beyond solo (RF1 -> RF2/
+//    RF3) while still leader in term 1 before any handoff, ticks start
+//    immediately. Isolating the founder before its first handoff expires
+//    check_quorum and demotes it so leader-qualified reads fail closed, and
+//    healing connectivity restores convergence and read/write service.
 
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
+import {setTimeout as delay} from 'node:timers/promises';
 
 import {
+  addressOf,
   admitThroughRequest,
   buildTargetFromOperation,
   configure,
@@ -38,10 +46,27 @@ import {
 } from '../message-group/message-group-service-test-support.js';
 import {ControllableConsensusPort} from
   '../test-helpers/controllable-consensus-port.js';
+import {
+  resumeFixtureParticipantGroupAdmission,
+} from '../test-helpers/participant-transaction-fixture.js';
 import {CDC_OPERATION, TABLES} from '../../src/constants/index.js';
+import {
+  LEADER_READ_REQUEST_FIELD,
+  LEADER_REQUIRED_READ,
+  OWNER_FACT_UNAVAILABLE_REASON,
+  leaderReadRequestOf,
+} from '../../src/control-plane/control-plane-owner-fact-read-contract.js';
 import {
   PartitionService,
 } from '../../src/partition/partition-service.js';
+import {
+  PARTITION_SERVICE_RESPONSE,
+} from '../../src/partition/partition-service-constants.js';
+import {decodeTypedRowSet} from '../../src/query/sql-value-codec.js';
+import {
+  materializeAndPresentRowObjects,
+} from '../../src/query/sql-value-presentation.js';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
 import {
   RAFT_LEADERSHIP_TRANSFER_SUCCESSOR,
@@ -52,12 +77,23 @@ setTestPortBase(26500);
 
 const SCHEDULING_STARTED = 'start';
 const FAILOVER_BUDGET_MS = 4000;
-const NATURAL_HANDOFF_BUDGET_MS = 12000;
+const CONVERGENCE_BUDGET_MS = 8000;
 const LEADER_TRANSFER_BUDGET_MS = 4000;
 const HEARTBEAT_OBSERVE_BUDGET_MS = 1500;
+const CHECK_QUORUM_MIN_WAIT_MS = 100;
 const SEED_REPLICA = ['seed-p1-r1', 'node-1'];
 const JOINER_TWO = ['seed-p1-r2', 'node-2'];
 const JOINER_THREE = ['seed-p1-r3', 'node-3'];
+const INSERT_ROW_SQL =
+  'INSERT INTO committed_membership_table (seq) VALUES (?)';
+const SELECT_ROWS_SQL =
+  'SELECT seq FROM committed_membership_table ORDER BY seq';
+const QUERY_MESSAGE_TYPE = 'QUERY';
+const FOLLOWER_ROLE = RAFT_ROLE.FOLLOWER;
+const LEADER_ROLE = RAFT_ROLE.LEADER;
+const REDIRECT_RESPONSE = PARTITION_SERVICE_RESPONSE.LEADER_REDIRECT;
+const INITIAL_SEQ = 1;
+const HEALED_SEQ = 2;
 
 async function addJoiner(harness, target, existingMembers) {
   const leaderMember = harness.leaderMember();
@@ -327,15 +363,58 @@ test('PartitionService applyRaftTimingConfig passes rearmTimer: true for ' +
   }
 });
 
-test('single-replica deferred founder yields naturally to joiners after RF3 ' +
-  'growth, then arms ticks on step-down so surviving quorum fails over',
+async function waitForAsync(predicate, boundMs = CONVERGENCE_BUDGET_MS) {
+  const deadline = Date.now() + boundMs;
+  while (Date.now() < deadline) {
+    if (await predicate()) {
+      return true;
+    }
+    await delay(10);
+  }
+  return Boolean(await predicate());
+}
+
+function readRemoteSeqs(answer) {
+  if (Array.isArray(answer?.rows)) {
+    return answer.rows.map((row) => Number(row.seq));
+  }
+  const decoded = decodeTypedRowSet(answer.rowSet);
+  return materializeAndPresentRowObjects(decoded.columns, decoded.rows)
+    .map((row) => Number(row.seq));
+}
+
+function readLeaderQualified(service, leaderRead = LEADER_REQUIRED_READ) {
+  return service.handleRemoteQuery({
+    type: QUERY_MESSAGE_TYPE,
+    sql: SELECT_ROWS_SQL,
+    params: [],
+    [LEADER_READ_REQUEST_FIELD]: leaderRead,
+  });
+}
+
+async function commitRemoteSeq(service, seq, entryId) {
+  const result = await service.handleRemoteQuery({
+    type: QUERY_MESSAGE_TYPE,
+    sql: INSERT_ROW_SQL,
+    params: [seq],
+    entryId,
+  });
+  assert.equal(
+    result.success,
+    true,
+    `write seq=${seq} must commit on ${service.replicaId}: ${JSON.stringify(result)}`,
+  );
+}
+
+test('single-replica deferred founder starts ticks on committed RF2/RF3 ' +
+  'growth before handoff, demotes on pre-handoff isolation, and heals cleanly',
 async () => {
   configure();
-  const harness = createCommittedMembershipHarness('seed-natural-handoff-p1');
+  const harness = createCommittedMembershipHarness('seed-pre-handoff-iso-p1');
   try {
     const seed = harness.build(SEED_REPLICA, {
       replicaIds: [SEED_REPLICA[0]],
-      peerAddresses: [`${SEED_REPLICA[1]}/partition/${SEED_REPLICA[0]}`],
+      peerAddresses: [addressOf(SEED_REPLICA)],
       cache: metadataCache(harness.partitionId, [SEED_REPLICA]),
       deferElection: true,
     });
@@ -362,65 +441,178 @@ async () => {
     assert.equal(seed.electionStarted, true,
       'startElection must mark electionStarted on solo founder');
     assert.equal(seed.deferredFounderSchedulingPending, true,
-      'solo term-1 founder must defer periodic tick scheduling until handoff');
+      'solo term-1 founder must defer periodic ticks while RF1');
     assert.equal(startedTimerPayloads.length, 0,
-      'solo term-1 founder must not start periodic heartbeat ticks at startElection');
+      'solo term-1 founder must not start periodic ticks at startElection');
+    assert.equal(seed.isSoloReplicaGroup(), true,
+      'founder must still report solo replica group before ConfChange growth');
 
+    // Grow RF1 -> RF2 via production ConfChange admission: ticks must start
+    // immediately while the founder is still leader in term 1 before handoff.
     await addJoiner(harness, JOINER_TWO, [SEED_REPLICA]);
-    await addJoiner(harness, JOINER_THREE, [SEED_REPLICA, JOINER_TWO]);
+    assert.equal(seed.isLeader, true,
+      'founder must still be leader in term 1 immediately after RF2 growth');
+    assert.equal(statusOf(seed).term, 1,
+      'founder must still be in term 1 before any handoff');
+    assert.equal(seed.isSoloReplicaGroup(), false,
+      'committed RF2 growth must clear solo-group state');
+    assert.equal(seed.deferredFounderSchedulingPending, false,
+      'committed RF1 -> RF2 growth must clear deferredFounderSchedulingPending');
+    assert.equal(startedTimerPayloads.length, 1,
+      'committed RF1 -> RF2 growth must start the founder Raft tick timer once');
 
+    await addJoiner(harness, JOINER_THREE, [SEED_REPLICA, JOINER_TWO]);
     const r2 = harness.services.get(JOINER_TWO[0]);
     const r3 = harness.services.get(JOINER_THREE[0]);
+    assert.equal(seed.isLeader, true,
+      'founder must remain term-1 leader prior to isolation or handoff');
+    assert.equal(statusOf(seed).term, 1,
+      'founder term must still be 1 prior to isolation');
+    assert.equal(seed.deferredFounderSchedulingPending, false,
+      'RF3 founder must keep deferredFounderSchedulingPending cleared');
+    assert.equal(startedTimerPayloads.length, 1,
+      'RF3 growth must not re-start the founder Raft tick timer twice');
 
-    // Without transferLeadership, joiners must naturally take leadership at
-    // term >= 2 instead of staying pinned on seed's term-1 heartbeat flood.
-    const naturalTakeoverOk = await waitFor(() => {
+    await resumeFixtureParticipantGroupAdmission([seed, r2, r3], waitForAsync);
+    await commitRemoteSeq(seed, INITIAL_SEQ, 'pre-isolation-seq-1');
+    const preIsolationRead = await readLeaderQualified(seed);
+    assert.equal(preIsolationRead.success, true,
+      'term-1 RF3 leader must serve leader-qualified read before isolation');
+    assert.deepEqual(readRemoteSeqs(preIsolationRead), [INITIAL_SEQ]);
+    assert.equal(preIsolationRead.readAuthorityWitness?.role, LEADER_ROLE);
+    assert.equal(preIsolationRead.readAuthorityWitness?.term, 1);
+
+    // Isolate the founder BEFORE its first leadership handoff while keeping
+    // its local handleRemoteQuery receiver reachable.
+    harness.network.cut(addressOf(SEED_REPLICA), statusOf(seed).peerId);
+
+    const joinerElectionOk = await waitFor(() => {
       const joinerLeader = [r2, r3].find((svc) =>
         svc.isLeader && statusOf(svc).term > 1);
-      return Boolean(
-        joinerLeader &&
-        !seed.isLeader &&
-        statusOf(seed).leaderId === joinerLeader.replicaId,
-      );
-    }, NATURAL_HANDOFF_BUDGET_MS);
+      if (!joinerLeader) {
+        return false;
+      }
+      const otherJoiner = joinerLeader === r2 ? r3 : r2;
+      return statusOf(otherJoiner).leaderId === joinerLeader.replicaId;
+    }, CONVERGENCE_BUDGET_MS);
+    assert.equal(joinerElectionOk, true,
+      'surviving joiner quorum {r2, r3} must elect a term >= 2 leader');
+
+    // Advance beyond the founder's effective check_quorum election bound and
+    // verify active ticks demote the isolated term-1 leader.
+    const checkQuorumBoundMs =
+      seed.effectiveRaftTiming()?.effective?.effectiveElectionMaxMs ?? 300;
+    await delay(checkQuorumBoundMs + CHECK_QUORUM_MIN_WAIT_MS);
+    const seedDemoted = await waitFor(() =>
+      !seed.isLeader &&
+      seed.role !== LEADER_ROLE &&
+      statusOf(seed).role !== LEADER_ROLE, FAILOVER_BUDGET_MS);
+    assert.equal(seedDemoted, true,
+      'active ticks on isolated term-1 founder must expire check_quorum and ' +
+      `demote it (role=${seed.role} statusRole=${statusOf(seed).role} ` +
+      `term=${statusOf(seed).term})`);
+    assert.equal(seed.role, FOLLOWER_ROLE,
+      'isolated founder service role must demote to follower');
+    assert.equal(statusOf(seed).term, 1,
+      'isolated founder demotion must come from check_quorum, not higher term');
+
+    const isolatedAuthority = seed.raft.observeCurrentAuthority();
+    assert.notEqual(isolatedAuthority.role, LEADER_ROLE,
+      'observeCurrentAuthority must not report LEADER after check_quorum');
+    assert.equal(isolatedAuthority.tickBacklog, 0,
+      'isolated founder must not rely on tickBacklog masking frozen ticks');
+
+    const isolatedLeaderRead = await readLeaderQualified(
+      seed, LEADER_REQUIRED_READ);
+    assert.equal(isolatedLeaderRead.success, false,
+      'leader-qualified read on isolated founder must fail closed');
     assert.equal(
-      naturalTakeoverOk,
-      true,
-      'joiner {r2, r3} must naturally win term >= 2 after RF3 growth ' +
-      `(seed: role=${seed.role} term=${statusOf(seed).term} ` +
-      `leader=${statusOf(seed).leaderId})`,
+      isolatedLeaderRead.failureCode,
+      OWNER_FACT_UNAVAILABLE_REASON.NOT_LEADER,
+    );
+    assert.equal(isolatedLeaderRead.rows, undefined);
+    assert.equal(isolatedLeaderRead.rowSet, undefined);
+    assert.notEqual(isolatedLeaderRead.readAuthorityWitness?.role, LEADER_ROLE);
+
+    const isolatedOwnerFactRead = await readLeaderQualified(
+      seed,
+      leaderReadRequestOf({
+        partitionId: harness.partitionId,
+        index: INITIAL_SEQ,
+        term: 1,
+      }),
+    );
+    assert.equal(isolatedOwnerFactRead.success, false,
+      'owner-fact leader read on isolated founder must fail closed');
+    assert.equal(
+      isolatedOwnerFactRead.failureCode,
+      OWNER_FACT_UNAVAILABLE_REASON.NOT_LEADER,
+    );
+    assert.equal(isolatedOwnerFactRead.rows, undefined);
+    assert.equal(isolatedOwnerFactRead.rowSet, undefined);
+
+    // Heal connectivity and prove useful recovery: seed converges to the
+    // joiner leader's term and the healed RF3 group serves writes and reads.
+    harness.network.heal();
+
+    const healedConvergenceOk = await waitFor(() => {
+      const currentLeader = [r2, r3].find((svc) =>
+        svc.isLeader && statusOf(svc).term > 1);
+      if (!currentLeader) {
+        return false;
+      }
+      const leaderTerm = statusOf(currentLeader).term;
+      return (
+        !seed.isLeader &&
+        statusOf(seed).term === leaderTerm &&
+        statusOf(seed).leaderId === currentLeader.replicaId &&
+        statusOf(seed).appliedIndex >= statusOf(currentLeader).commitIndex
+      );
+    }, CONVERGENCE_BUDGET_MS);
+    assert.equal(healedConvergenceOk, true,
+      'healed founder must converge to the new term and leader');
+
+    const currentLeader = r2.isLeader ? r2 : r3;
+    const healedTerm = statusOf(currentLeader).term;
+    await resumeFixtureParticipantGroupAdmission([seed, r2, r3], waitForAsync);
+    await commitRemoteSeq(currentLeader, HEALED_SEQ, 'healed-seq-2');
+
+    const healedLeaderRead = await readLeaderQualified(currentLeader);
+    assert.equal(healedLeaderRead.success, true,
+      'healed RF3 leader must serve leader-qualified reads cleanly');
+    assert.deepEqual(
+      readRemoteSeqs(healedLeaderRead),
+      [INITIAL_SEQ, HEALED_SEQ],
+    );
+    assert.equal(healedLeaderRead.readAuthorityWitness?.role, LEADER_ROLE);
+    assert.equal(healedLeaderRead.readAuthorityWitness?.term, healedTerm);
+
+    const healedSeedRedirect = await readLeaderQualified(seed);
+    assert.equal(healedSeedRedirect.success, false);
+    assert.equal(
+      healedSeedRedirect.failureCode,
+      OWNER_FACT_UNAVAILABLE_REASON.NOT_LEADER,
+    );
+    assert.equal(healedSeedRedirect.redirect, REDIRECT_RESPONSE);
+    assert.equal(
+      healedSeedRedirect.leaderAddress,
+      currentLeader.unifiedAddress,
     );
 
-    // Stepping down from initial term-1 founder tenure must immediately arm
-    // Raft tick scheduling on seed so its check_quorum lease never freezes.
-    assert.equal(seed.deferredFounderSchedulingPending, false,
-      'stepping down to term >= 2 must clear deferredFounderSchedulingPending');
-    assert.equal(startedTimerPayloads.length, 1,
-      'stepping down from initial founder tenure must arm Raft ticks once');
-
-    const activeJoinerLeader = r2.isLeader ? r2 : r3;
-    const survivingJoiner = activeJoinerLeader === r2 ? r3 : r2;
-    const termBeforeStop = statusOf(activeJoinerLeader).term;
-
-    await activeJoinerLeader.shutdown();
-
-    const failoverOk = await waitFor(() => {
-      const survivorLeader = [seed, survivingJoiner].find((svc) =>
-        svc.isLeader && statusOf(svc).term > termBeforeStop);
-      return Boolean(
-        survivorLeader &&
-        statusOf(seed).leaderId === survivorLeader.replicaId &&
-        statusOf(survivingJoiner).leaderId === survivorLeader.replicaId,
-      );
-    }, NATURAL_HANDOFF_BUDGET_MS);
-    assert.equal(
-      failoverOk,
-      true,
-      'surviving 2-of-3 quorum {seed, survivingJoiner} must elect a new leader ' +
-      'after the naturally elected joiner leader stops ' +
-      `(seed: role=${seed.role} term=${statusOf(seed).term} ` +
-      `leader=${statusOf(seed).leaderId}; survivor: role=${survivingJoiner.role} ` +
-      `term=${statusOf(survivingJoiner).term} leader=${statusOf(survivingJoiner).leaderId})`,
+    const seedReplicatedOk = await waitFor(() =>
+      statusOf(seed).appliedIndex >= statusOf(currentLeader).commitIndex,
+    CONVERGENCE_BUDGET_MS);
+    assert.equal(seedReplicatedOk, true,
+      'healed founder must replicate writes committed after recovery');
+    const seedFollowerRead = await seed.handleRemoteQuery({
+      type: QUERY_MESSAGE_TYPE,
+      sql: SELECT_ROWS_SQL,
+      params: [],
+    });
+    assert.equal(seedFollowerRead.success, true);
+    assert.deepEqual(
+      readRemoteSeqs(seedFollowerRead),
+      [INITIAL_SEQ, HEALED_SEQ],
     );
   } finally {
     await harness.dispose();
