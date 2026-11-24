@@ -1297,9 +1297,18 @@ function validateRunSemanticGateEvidence(run) {
       'correctness.semanticGate.proofs contains non-canonical proofIds',
     );
   }
-  const cases = ownProp(gate, 'cases');
-  if (!Array.isArray(cases) || cases.length === 0) return;
   const boundToRun = isGateBoundToRunEndpoint(gate, run);
+  const isPassedGate = ownProp(gate, 'status') === SEMANTIC_GATE_CASE_STATUS.PASSED;
+  const cases = ownProp(gate, 'cases');
+  if (!Array.isArray(cases) || cases.length === 0) {
+    if (isPassedGate && boundToRun) {
+      rejectSemanticGate(
+        RECORD_REJECTION.MISSING_FIELD,
+        'passed correctness.semanticGate requires non-empty canonical cases',
+      );
+    }
+    return;
+  }
   for (const proofCase of cases) {
     validateGateCaseProofIdsOnRecord(proofCase);
     if (boundToRun) validatePassedDurabilityCaseOnRecord(proofCase, run);

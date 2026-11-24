@@ -68,13 +68,13 @@ const SEALED_TABLE = Object.freeze([
   ['stale_owner_indexes', ZERO, 0, 0, 9],
   ['failure_bundle_log_windows_without_coverage', ZERO, 0, 0, 1],
   ['two_source_fallback_reads', CAP, 1789, 1, 1790],
-  ['typeof_dual_paths', CAP, 627, 1, 628],
+  ['typeof_dual_paths', CAP, 966, 1, 967],
   ['catch_returns_default', CAP, 387, 1, 388],
   ['reexport_only_modules', CAP, 35, 1, 36],
   ['alias_exports', ZERO, 0, 0, 1],
   ['legacy_term_identifiers', CAP, 2924, 1, 2925],
-  // 1790 + 628 + 388 fallback sites, five of them censused.
-  ['fallback_sites_uncensused', CENSUS, 0, 0, 2801],
+  // 1790 + 967 + 388 fallback sites, five of them censused.
+  ['fallback_sites_uncensused', CENSUS, 0, 0, 3140],
   ['fallback_branches_never_taken', CENSUS, 0, 0, 1],
   ['fallback_branches_only_fallback_taken', CENSUS, 0, 0, 1],
   ['fallback_sites_unclassified', CENSUS, 0, 0, 1],
@@ -274,7 +274,7 @@ function offendingSourceFixture(root) {
   }
   write(root, 'src/fallbacks/two-source.js', arrayModule('two', 'a, b', 1790, 'a.x || b.y'));
   write(root, 'src/fallbacks/dual-paths.js',
-    arrayModule('dual', 'f', 628, 'typeof f === \'function\' ? 1 : 0'));
+    arrayModule('dual', 'f', 967, 'typeof f === \'function\' ? 1 : 0'));
   const catches = 'export function guarded() {\n' +
     `${repeated(388, () => `  try { work(); } ${CATCH_SLICE}`)}\n}\n`;
   write(root, CATCHES, catches);

@@ -674,23 +674,10 @@ function claimsDurabilityProofIdsInPassed(gate) {
     arraySome(gate.passed, (id) => arrayIncludes(DURABILITY_PROOF_ID_SET, id));
 }
 
-function hasNonFixtureProductIdentity(run) {
-  const products = run?.identity?.products;
-  if (!Array.isArray(products) || products.length === 0) return false;
-  return arraySome(products,
-    (p) => !isFixtureImageRef(p?.imageRef) && !isFixtureReportedVersion(p?.reportedVersion));
-}
-
-function isMissingRequiredCasesOnPassedGate(gate, run) {
-  if (Array.isArray(gate.cases)) {
-    return gate.cases.length === 0 &&
-      (gate.status === GATE_STATUS.PASSED || claimsDurabilityProofIdsInPassed(gate));
-  }
-  if (claimsDurabilityProofIdsInPassed(gate)) return true;
-  return Boolean(
-    run && (isClaimedPhysicalRun(run) || hasNonFixtureProductIdentity(run)) &&
-    gate.status === GATE_STATUS.PASSED,
-  );
+function isMissingRequiredCasesOnPassedGate(gate) {
+  const missingCases = !Array.isArray(gate.cases) || gate.cases.length === 0;
+  return missingCases &&
+    (gate.status === GATE_STATUS.PASSED || claimsDurabilityProofIdsInPassed(gate));
 }
 
 function isPlainRecordObject(value) {
@@ -704,7 +691,7 @@ function isAdmissibleAwardedCase(proofCase, run = null) {
 function awardedProofIds(gate, run = null) {
   if (!gate) return [];
   if (!Array.isArray(gate.cases)) {
-    if (isMissingRequiredCasesOnPassedGate(gate, run)) return [];
+    if (isMissingRequiredCasesOnPassedGate(gate)) return [];
     return Array.isArray(gate.passed) ? [...gate.passed].sort() : [];
   }
   const passedIds = new Set();
@@ -894,7 +881,7 @@ function passedGateHasCompleteCanonicalAward(gate, awarded, run) {
 }
 
 function gateCasesHaveInconsistentSummary(gate, run) {
-  if (isMissingRequiredCasesOnPassedGate(gate, run)) return true;
+  if (isMissingRequiredCasesOnPassedGate(gate)) return true;
   const awarded = awardedProofIds(gate, run);
   if (hasInvalidProofsArray(gate, awarded)) return true;
   if (!hasNonEmptyArray(gate.cases)) return false;

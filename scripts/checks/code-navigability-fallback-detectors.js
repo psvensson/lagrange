@@ -32,6 +32,7 @@ import {
 
 const arrayEvery = Function.call.bind(Array.prototype.every);
 const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayIndexOf = Function.call.bind(Array.prototype.indexOf);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const arraySome = Function.call.bind(Array.prototype.some);
 const stringSplit = Function.call.bind(String.prototype.split);
@@ -60,6 +61,7 @@ const LEGACY_WORDS = Object.freeze(new Set(['old', 'v1']));
 const WORD_BOUNDARY = /_|(?<=[a-z0-9])(?=[A-Z])/u;
 
 const NODE_TYPE = Object.freeze({
+  BLOCK: 'BlockStatement',
   CATCH: 'CatchClause',
   CONDITIONAL: 'ConditionalExpression',
   EXPORT_SPECIFIER: 'ExportSpecifier',
@@ -67,6 +69,7 @@ const NODE_TYPE = Object.freeze({
   PROGRAM: 'Program',
   RETURN: 'ReturnStatement',
   THIS: 'ThisExpression',
+  THROW: 'ThrowStatement',
 });
 
 function isMemberTerm(node) {
@@ -110,23 +113,62 @@ function typeofComparisonWithin(node, negations) {
   return {comparison: undefined, negations};
 }
 
-function dualPathSides(node, found) {
+function comparisonPolarity(found) {
   const positive = found.comparison.operator === STRICT_EQUALITY;
-  const polarity = positive !== (found.negations % 2 === 1);
+  return positive !== (found.negations % 2 === 1);
+}
+
+function dualPathSides(node, found) {
+  const polarity = comparisonPolarity(found);
   const taken = rangeOf(node.consequent);
   const other = rangeOf(node.alternate);
   return polarity ? {primary: taken, fallback: other} : {primary: other, fallback: taken};
 }
 
+function consequentEndsAsDualGuard(consequent, polarity) {
+  const lastStmt = consequent.type === NODE_TYPE.BLOCK ?
+    consequent.body[consequent.body.length - 1] : consequent;
+  if (!lastStmt) return false;
+  if (polarity) {
+    return lastStmt.type === NODE_TYPE.RETURN || lastStmt.type === NODE_TYPE.THROW;
+  }
+  return lastStmt.type === NODE_TYPE.RETURN && !returnsDefault(lastStmt);
+}
+
+function subsequentBlockIndex(node, parent) {
+  if (!parent || !Array.isArray(parent.body)) return -1;
+  const index = arrayIndexOf(parent.body, node);
+  return index >= 0 && index < parent.body.length - 1 ? index : -1;
+}
+
+function sequentialGuardSides(node, parent, index, polarity) {
+  const taken = rangeOf(node.consequent);
+  const subsequent = [
+    parent.body[index + 1].range[0],
+    parent.body[parent.body.length - 1].range[1],
+  ];
+  return polarity ? {primary: taken, fallback: subsequent} : {primary: subsequent, fallback: taken};
+}
+
 const typeofDualPaths = Object.freeze({
   row: ROW.TYPEOF_DUAL,
-  visit(node, _parent, parsed, sites) {
+  visit(node, parent, parsed, sites) {
     if (node.type !== NODE_TYPE.IF && node.type !== NODE_TYPE.CONDITIONAL) return;
-    if (!node.alternate) return;
     const found = typeofComparisonWithin(node.test, 0);
     if (!found.comparison) return;
+    if (node.alternate) {
+      const site = makeSite(parsed, ROW.TYPEOF_DUAL, node, found.comparison.operator);
+      site.sides = dualPathSides(node, found);
+      sites.push(site);
+      return;
+    }
+    if (node.type !== NODE_TYPE.IF) return;
+    const index = subsequentBlockIndex(node, parent);
+    if (index < 0) return;
+    const polarity = comparisonPolarity(found);
+    if (!consequentEndsAsDualGuard(node.consequent, polarity)) return;
     const site = makeSite(parsed, ROW.TYPEOF_DUAL, node, found.comparison.operator);
-    site.sides = dualPathSides(node, found);
+    site.sides = sequentialGuardSides(node, parent, index, polarity);
     sites.push(site);
   },
 });

@@ -35,7 +35,11 @@ import {
 } from './oltp-baseline-workload.js';
 import {OLTP_OPEN_LOOP_PROFILE, interleaveOltpWorkerPhase} from './oltp-open-loop-step-owner.js';
 import {OLTP_PAIRED_RETRY_POLICY} from './oltp-paired-retry-owner.js';
-import {OLTP_SCENARIO_A_SEMANTIC_PROOF_STATUS} from './oltp-scenario-a-semantic-gate.js';
+import {
+  CANONICAL_SCENARIO_A_CASE_PROOF_IDS,
+  CANONICAL_SCENARIO_A_PROOF_IDS,
+  OLTP_SCENARIO_A_SEMANTIC_PROOF_STATUS,
+} from './oltp-scenario-a-semantic-gate.js';
 import {
   OLTP_SCENARIO_A_SEMANTIC_PROFILE,
   hashScenarioASemanticProfile,
@@ -48,6 +52,8 @@ import {
   RAW_RECORD_TYPE,
   READINESS_STATE,
   STORAGE_KIND,
+  TARGET_DURABILITY_CONTRACT,
+  buildCanonicalSemanticGateCaseRecord,
   buildClaimKey,
   computeRunObservationsDigest,
 } from './raw-observation-record.js';
@@ -98,8 +104,82 @@ function fixtureProductIdentity(targetId) {
   };
 }
 
+const CANONICAL_FIXTURE_CASE_IDS = Object.freeze([
+  'new-order-contention',
+  'visibility',
+  'payment',
+  'order-status',
+  'delivery',
+  'stock-level',
+  'failure-atomicity',
+  'retryable-conflict',
+  'durability',
+]);
+
 function fixtureProductRole(targetId) {
-  return `${targetId}-node`;
+  return TARGET_DURABILITY_CONTRACT[targetId]?.allowedRoles?.[0] ?? `${targetId}-node`;
+}
+
+function fixtureProductSystem(targetId) {
+  return TARGET_DURABILITY_CONTRACT[targetId]?.system ?? fixtureProductFamily(targetId);
+}
+
+function buildCanonicalFixtureSemanticGate({campaignId, targetId, endpoint, products}) {
+  const system = fixtureProductSystem(targetId);
+  const binding = {
+    campaignId,
+    containerId: endpoint.containerId,
+    imageId: products[0].imageId,
+    endpoint: `${endpoint.host}:${endpoint.port}`,
+  };
+  const targetProduct = products[products.length - 1];
+  const faultEvidence = {
+    containerId: targetProduct.containerId,
+    host: targetProduct.host,
+    faultTarget: {
+      nodeId: targetProduct.containerId,
+      role: targetProduct.role,
+      host: targetProduct.host,
+      isDataReplica: true,
+      pgHostOnly: false,
+    },
+    startedAtBefore: '2026-11-01T11:58:00.000Z',
+    startedAtAfter: '2026-11-01T11:59:00.000Z',
+    beforeIncarnation: `${targetProduct.containerId}:2026-11-01T11:58:00.000Z`,
+    afterIncarnation: `${targetProduct.containerId}:2026-11-01T11:59:00.000Z`,
+    storageContinuity: 'preserved',
+    retainedObligations: ['committed_payment_rows', 'full_oltp_state_sha256'],
+  };
+  const cases = JSON.parse(JSON.stringify(arrayMap(CANONICAL_FIXTURE_CASE_IDS, (caseId) => {
+    const proofIds = [...CANONICAL_SCENARIO_A_CASE_PROOF_IDS[caseId]];
+    return buildCanonicalSemanticGateCaseRecord({
+      proofCase: {id: caseId, proofIds},
+      binding,
+      evaluation: {passed: true, failures: []},
+      proofRecord: {
+        evidenceId: `${system}-${caseId}`,
+        system,
+        status: OLTP_SCENARIO_A_SEMANTIC_PROOF_STATUS.PASSED,
+        artifactSha256: hexDigits('e'),
+        proofIds,
+      },
+      ...(caseId === 'durability' ? {faultEvidence} : {}),
+    });
+  })));
+  return {
+    system,
+    status: OLTP_SCENARIO_A_SEMANTIC_PROOF_STATUS.PASSED,
+    passed: [...CANONICAL_SCENARIO_A_PROOF_IDS],
+    failed: [],
+    missing: [],
+    passedCount: CANONICAL_SCENARIO_A_PROOF_IDS.length,
+    failedCount: 0,
+    missingCount: 0,
+    binding,
+    bindings: [binding],
+    cases,
+    proofs: arrayMap(cases, (c) => c.proofRecord),
+  };
 }
 
 /**
@@ -316,10 +396,7 @@ function buildFixtureRun(options = {}) {
       resources: null, network: null,
     },
     correctness: {
-      semanticGate: {status: OLTP_SCENARIO_A_SEMANTIC_PROOF_STATUS.PASSED,
-        passed: ['visibility'], failed: [], missing: [],
-        binding: {campaignId, containerId: endpoint.containerId,
-          imageId: products[0].imageId, endpoint: `${endpoint.host}:${endpoint.port}`}},
+      semanticGate: buildCanonicalFixtureSemanticGate({campaignId, targetId, endpoint, products}),
       finalState: {},
     },
     rawObservationsDigest: '',

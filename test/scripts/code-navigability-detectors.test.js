@@ -482,6 +482,48 @@ test('typeof_dual_paths counts a typeof function test with an alternate', () => 
   assert.equal(countOf(detectTypeofDualPaths, negative), 0,
     'no alternate, another type, a loose == and a test without typeof are ' +
     'not dual paths');
+
+  const sequential = [
+    'function seqPos(fn) {',
+    '  if (typeof fn === \'function\') { const r = fn(); return r; }',
+    '  const fb = computeFallback();',
+    '  return fb;',
+    '}',
+    'function seqSingle(fn) {',
+    '  if (typeof fn === \'function\') return fn();',
+    '  return backup();',
+    '}',
+    'function seqNegFallback(fn) {',
+    '  if (typeof fn !== \'function\') { return computeLegacy(); }',
+    '  return fn();',
+    '}',
+  ].join('\n');
+  const seqSites = sitesOf(detectTypeofDualPaths, sequential);
+  assert.equal(seqSites.length, 3,
+    'guard-return positive typeof and non-default negative typeof with subsequent statements count');
+  const seqSlice = (range) => sequential.slice(range[0], range[1]);
+  assert.equal(seqSlice(seqSites[0].sides.primary), '{ const r = fn(); return r; }');
+  assert.equal(seqSlice(seqSites[0].sides.fallback), 'const fb = computeFallback();\n  return fb;');
+  assert.equal(seqSlice(seqSites[1].sides.primary), 'return fn();');
+  assert.equal(seqSlice(seqSites[1].sides.fallback), 'return backup();');
+  assert.equal(seqSlice(seqSites[2].sides.primary), 'return fn();');
+  assert.equal(seqSlice(seqSites[2].sides.fallback), '{ return computeLegacy(); }');
+
+  const failClosedGuards = [
+    'function guards(fn) {',
+    '  if (typeof fn !== \'function\') return null;',
+    '  if (typeof fn !== \'function\') { return undefined; }',
+    '  if (typeof fn !== \'function\') { throw new Error(\'missing\'); }',
+    '  if (typeof fn === \'function\') { fn(); }',
+    '  return fn();',
+    '}',
+    'function terminalGuard(fn) {',
+    '  if (typeof fn === \'function\') { return fn(); }',
+    '}',
+  ].join('\n');
+  assert.equal(countOf(detectTypeofDualPaths, failClosedGuards), 0,
+    'fail-closed negative guards returning defaults or throwing, non-returning ifs, and ' +
+    'guard-returns without subsequent statements are not dual paths');
 });
 
 test('catch_returns_default counts a catch that ends returning a default', () => {

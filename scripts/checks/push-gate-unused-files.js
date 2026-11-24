@@ -32,6 +32,7 @@ const arrayMap = Function.call.bind(Array.prototype.map);
 const arraySome = Function.call.bind(Array.prototype.some);
 const stringIncludes = Function.call.bind(String.prototype.includes);
 const stringMatchAll = Function.call.bind(String.prototype.matchAll);
+const stringReplace = Function.call.bind(String.prototype.replace);
 const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 const stringEndsWith = Function.call.bind(String.prototype.endsWith);
 const stringSplit = Function.call.bind(String.prototype.split);
@@ -40,9 +41,18 @@ const TEXT_ENCODING = 'utf8';
 const NUL = '\0';
 const LINE_SEPARATOR = '\n';
 const SCRIPTS_DIR = 'scripts/';
+const SRC_DIR = 'src/';
+const TEST_DIR = 'test/';
+const TEST_HELPERS_DIR = 'src/test-helpers/';
 const SOLVER_PREFIX = 'scripts/solve';
 const JS_SUFFIX = '.js';
+const MJS_SUFFIX = '.mjs';
+const CJS_SUFFIX = '.cjs';
 const PACKAGE_JSON = 'package.json';
+const KNIP_JSON = 'knip.json';
+const PRODUCTION_ENTRY_SUFFIX = '!';
+const LEADING_DOT_SLASH = /^\.\//u;
+const PRODUCTION_SRC_ROOTS = Object.freeze(['src/index.js', 'src/main.js']);
 const WORKFLOWS_DIR = '.github/workflows';
 const HOOKS_DIR = '.githooks';
 const QUESTS_DIR = 'solve/quests';
@@ -55,10 +65,14 @@ const DOCKERFILE = 'Dockerfile';
 const EXAMPLES_DIR = 'examples';
 const CLOSED_EPIC_STATUS = /^status:\s*(?:closed|done|superseded)\b/mu;
 const ARG_UNREACHABLE = '--unreachable-scripts';
+const ARG_UNREACHABLE_SRC = '--unreachable-src';
 const ARG_LIST = '--list';
 // A literal mention of a script anywhere in a reachable text: a package
 // script body, a workflow step, a hook, a spawn argument, a probe command.
 const SCRIPT_MENTION = /scripts\/[\w./-]+?\.(?:js|sh|mjs)\b/gu;
+// A literal mention of a runtime module under src/ (e.g. package.json script,
+// Dockerfile, or worker entrypoint spawn).
+const SRC_MENTION = /src\/[\w./-]+?\.js\b/gu;
 // A quoted relative path in a script - an import specifier, a `new URL`
 // argument, a spawn argument - resolved against the mentioning file.
 const RELATIVE_PATH_LITERAL = /['"](\.{1,2}\/[^'"\s]+)['"]/gu;
@@ -213,14 +227,150 @@ function unusedFilesGate() {
   return 1;
 }
 
-function main(argv) {
-  if (!arrayIncludes(argv, ARG_UNREACHABLE)) return unusedFilesGate();
-  const unreachable = unreachableScripts(trackedPaths());
+function isJsLikeModule(file) {
+  return stringEndsWith(file, JS_SUFFIX) ||
+    stringEndsWith(file, MJS_SUFFIX) ||
+    stringEndsWith(file, CJS_SUFFIX);
+}
+
+function isProductionTarget(file) {
+  return !stringStartsWith(file, TEST_DIR) && !stringStartsWith(file, TEST_HELPERS_DIR);
+}
+
+function normalizeEntryCandidate(rawPath) {
+  if (typeof rawPath !== 'string' || rawPath.length === 0) return '';
+  const stripped = stringEndsWith(rawPath, PRODUCTION_ENTRY_SUFFIX) ?
+    rawPath.slice(0, -1) : rawPath;
+  return path.posix.normalize(stringReplace(stripped, LEADING_DOT_SLASH, ''));
+}
+
+function collectNestedStrings(value, out) {
+  if (typeof value === 'string') {
+    out.push(value);
+    return;
+  }
+  if (!value || typeof value !== 'object') return;
+  for (const child of Object.values(value)) {
+    collectNestedStrings(child, out);
+  }
+}
+
+function readJsonOrNull(relativePath) {
+  const text = readText(relativePath);
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function productionEntrypoints(tracked) {
+  const roots = [];
+  const addCandidate = (rawPath) => {
+    const normalized = normalizeEntryCandidate(rawPath);
+    if (normalized && tracked.has(normalized) && isProductionTarget(normalized)) {
+      roots.push(normalized);
+    }
+  };
+  const pkg = readJsonOrNull(PACKAGE_JSON);
+  if (pkg) {
+    addCandidate(pkg.main);
+    const extra = [];
+    collectNestedStrings(pkg.exports, extra);
+    collectNestedStrings(pkg.bin, extra);
+    arrayForEach(extra, addCandidate);
+  }
+  const knip = readJsonOrNull(KNIP_JSON);
+  if (knip && Array.isArray(knip.entry)) {
+    for (const entry of knip.entry) {
+      if (typeof entry === 'string' && stringEndsWith(entry, PRODUCTION_ENTRY_SUFFIX)) {
+        addCandidate(entry);
+      }
+    }
+  }
+  arrayForEach(PRODUCTION_SRC_ROOTS, addCandidate);
+  for (const file of tracked) {
+    if (stringStartsWith(file, SCRIPTS_DIR)) roots.push(file);
+  }
+  return roots;
+}
+
+function mentionedSrcModules(text, tracked) {
+  const found = [];
+  for (const match of stringMatchAll(text, SRC_MENTION)) {
+    const candidate = match[0];
+    if (tracked.has(candidate) && isProductionTarget(candidate)) found.push(candidate);
+  }
+  return found;
+}
+
+function importedProductionModules(text, from, tracked) {
+  const found = [];
+  for (const match of stringMatchAll(text, RELATIVE_PATH_LITERAL)) {
+    const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(from), match[1]));
+    if (tracked.has(resolved) && isProductionTarget(resolved)) {
+      found.push(resolved);
+    } else if (tracked.has(`${resolved}${JS_SUFFIX}`) &&
+        isProductionTarget(`${resolved}${JS_SUFFIX}`)) {
+      found.push(`${resolved}${JS_SUFFIX}`);
+    }
+  }
+  return found;
+}
+
+/**
+ * Tracked runtime modules under src/** (excluding src/test-helpers/**) that
+ * no production entrypoint (package.json main/bin/exports, knip production
+ * entries, src/index.js, src/main.js, Dockerfile, or scripts/**) reaches.
+ * @param {Set<string>} tracked tracked paths of the tree
+ * @returns {string[]} unreachable src module paths, sorted
+ */
+function unreachableSrcModules(tracked) {
+  const srcModules = arrayFilter(
+    [...tracked],
+    (file) => stringStartsWith(file, SRC_DIR) &&
+      stringEndsWith(file, JS_SUFFIX) &&
+      !stringStartsWith(file, TEST_HELPERS_DIR),
+  );
+  const reachable = new Set();
+  const queue = [];
+  const admit = (file) => {
+    if (reachable.has(file) || !isProductionTarget(file)) return;
+    reachable.add(file);
+    queue.push(file);
+  };
+  arrayForEach(productionEntrypoints(tracked), admit);
+  for (const text of [readText(PACKAGE_JSON), readText(DOCKERFILE)]) {
+    arrayForEach(mentionedSrcModules(text, tracked), admit);
+  }
+  for (let cursor = 0; cursor < queue.length; cursor += 1) {
+    const file = queue[cursor];
+    const text = readText(file);
+    arrayForEach(mentionedSrcModules(text, tracked), admit);
+    if (isJsLikeModule(file)) {
+      arrayForEach(importedProductionModules(text, file, tracked), admit);
+    }
+  }
+  return arrayFilter(srcModules, (file) => !reachable.has(file)).sort();
+}
+
+function runReachabilityProbe(unreachable, argv) {
   if (arrayIncludes(argv, ARG_LIST)) {
     arrayForEach(unreachable, (file) => console.log(file));
   }
   console.log(unreachable.length);
   return unreachable.length === 0 ? 0 : 1;
+}
+
+function main(argv) {
+  if (arrayIncludes(argv, ARG_UNREACHABLE)) {
+    return runReachabilityProbe(unreachableScripts(trackedPaths()), argv);
+  }
+  if (arrayIncludes(argv, ARG_UNREACHABLE_SRC)) {
+    return runReachabilityProbe(unreachableSrcModules(trackedPaths()), argv);
+  }
+  return unusedFilesGate();
 }
 
 process.exit(main(process.argv.slice(2)));

@@ -196,12 +196,15 @@ test('repeatable-clean-dataset-without-reformation: semantic gate stage resets d
         }
         if (caseId === 'durability') await restartProduct({});
       }
+      const canonicalGate = JSON.parse(JSON.stringify(probeRun.correctness.semanticGate));
+      const activeBinding = distinctBindings.length === 1 ? distinctBindings[0] : null;
+      if (activeBinding) {
+        for (const c of canonicalGate.cases) c.binding = {...activeBinding};
+      }
       return {
+        ...canonicalGate,
         status: 'passed',
-        passed: [...OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS],
-        failed: [],
-        missing: [],
-        binding: distinctBindings.length === 1 ? distinctBindings[0] : null,
+        binding: activeBinding,
         bindings: distinctBindings,
       };
     },
@@ -316,12 +319,15 @@ test('same-cohort-journey-to-valid-observed: full Lagrange journey on same cohor
         }
         if (caseId === 'durability') await restartProduct({});
       }
+      const canonicalGate = JSON.parse(JSON.stringify(probeRun.correctness.semanticGate));
+      const activeBinding = distinctBindings.length === 1 ? distinctBindings[0] : null;
+      if (activeBinding) {
+        for (const c of canonicalGate.cases) c.binding = {...activeBinding};
+      }
       return {
+        ...canonicalGate,
         status: 'passed',
-        passed: [...OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS],
-        failed: [],
-        missing: [],
-        binding: distinctBindings.length === 1 ? distinctBindings[0] : null,
+        binding: activeBinding,
         bindings: distinctBindings,
       };
     },

@@ -27,6 +27,11 @@ import {gitProcessEnvironment} from '../../scripts/checks/git-process-environmen
 import {recomputeComparativeBenchmarks} from '../../scripts/checks/comparative-benchmark-recompute.js';
 import {benchmarkHistoryOffences} from '../../scripts/checks/check-benchmark-history-append-only.js';
 import {
+  classifyChangedPathsSinceBenchmarkRefresh,
+  computeBenchmarkProducerPathsForGitRefs,
+  resolveCheckTarget,
+} from '../../scripts/checks/check-pushed-benchmark-freshness.js';
+import {
   regenerateAllBenchmarkArtifactsFromAdmitted,
 } from '../distributed/harness/raw-observation-campaign-specs.js';
 
@@ -443,3 +448,70 @@ test('Gap 1, 2 & 3: generator-only edits trigger pre-commit/pre-push freshness, 
     /without required input data\/tidb-comparison\/raw-observations\.ndjson; refusing push/u,
   );
 });
+
+test('committed-tree producer closure tracks added/removed src/ and scripts/ imports across refs',
+  (t) => {
+    const tmpRepo = fs.mkdtempSync(path.join(os.tmpdir(), 'bench-git-ref-closure-'));
+    t.after(() => fs.rmSync(tmpRepo, {recursive: true, force: true}));
+    git(tmpRepo, ['init', '--quiet']);
+    git(tmpRepo, ['config', 'user.name', 'lagrange-test']);
+    git(tmpRepo, ['config', 'user.email', 'lagrange-test@example.invalid']);
+
+    const entry = 'docs/benchmarks/cloud/recompute-comparative-from-raw.mjs';
+    const baseScriptDep = 'scripts/lab/committed-base-probe.js';
+    const addedSrcDep = 'src/utils/committed-added-helper.js';
+    const unrelatedFile = 'docs/unrelated.md';
+    writeFile(tmpRepo, RAW_OBSERVATIONS_PATH, '{}\n');
+    writeFile(tmpRepo, baseScriptDep, 'export const probe = 1;\n');
+    writeFile(tmpRepo, entry, `import '../../../${baseScriptDep}';\n`);
+    writeFile(tmpRepo, unrelatedFile, 'hello\n');
+    git(tmpRepo, ['add', '-A']);
+    git(tmpRepo, ['commit', '--quiet', '--no-verify', '-m', 'base with scripts/ dep']);
+    const baseSha = git(tmpRepo, ['rev-parse', 'HEAD']);
+
+    // Commit B removes baseScriptDep import and adds a new src/ import.
+    writeFile(tmpRepo, addedSrcDep, 'export const helper = 2;\n');
+    writeFile(tmpRepo, entry, `import '../../../${addedSrcDep}';\n`);
+    git(tmpRepo, ['add', '-A']);
+    git(tmpRepo, ['commit', '--quiet', '--no-verify', '-m', 'switch to new src/ dep']);
+    const headSha = git(tmpRepo, ['rev-parse', 'HEAD']);
+
+    // Mutate worktree to drop BOTH imports so ambient worktree lacks both deps.
+    writeFile(tmpRepo, entry, 'export const empty = true;\n');
+
+    const baseClosure = computeBenchmarkProducerPathsForGitRefs(tmpRepo, [baseSha]);
+    assert.equal(baseClosure.includes(baseScriptDep), true);
+    assert.equal(baseClosure.includes(addedSrcDep), false);
+
+    const unionClosure = computeBenchmarkProducerPathsForGitRefs(tmpRepo, [baseSha, headSha]);
+    assert.equal(unionClosure.includes(baseScriptDep), true,
+      'union closure must retain producer removed between baseSha and headSha');
+    assert.equal(unionClosure.includes(addedSrcDep), true,
+      'union closure must include producer added in headSha even when absent from worktree');
+
+    const classified = classifyChangedPathsSinceBenchmarkRefresh(tmpRepo, {
+      baseSha,
+      commitSha: headSha,
+      changedPaths: [baseScriptDep, addedSrcDep, unrelatedFile],
+    });
+    assert.equal(classified.touchesBenchmark, true);
+    assert.deepEqual(classified.benchmarkPaths, [baseScriptDep, addedSrcDep]);
+    assert.deepEqual(classified.nonBenchmarkPaths, [unrelatedFile]);
+
+    // Modify only addedSrcDep in commit C while worktree still has empty entry -> must trigger.
+    git(tmpRepo, ['checkout', '--quiet', '--', entry]);
+    writeFile(tmpRepo, addedSrcDep, 'export const helper = 3;\n');
+    git(tmpRepo, ['add', addedSrcDep]);
+    git(tmpRepo, ['commit', '--quiet', '--no-verify', '-m', 'edit added src dep']);
+    const editAddedSha = git(tmpRepo, ['rev-parse', 'HEAD']);
+    writeFile(tmpRepo, entry, 'export const empty = true;\n');
+
+    const target = resolveCheckTarget(tmpRepo, {
+      localRef: 'refs/heads/work/test',
+      localSha: editAddedSha,
+      remoteRef: 'refs/heads/work/test',
+      remoteSha: headSha,
+    });
+    assert.ok(target, 'editing a committed-only producer dep must trigger freshness check');
+    assert.equal(target.commitSha, editAddedSha);
+  });
