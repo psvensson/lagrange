@@ -127,7 +127,6 @@ const LOCAL_STR_BOOTSTRAPSERVICE = 'BootstrapService';
 const LOCAL_STR_STARTUP_BRANCH_SEED = 'seed';
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_CREATERUNTIMESTARTUPWIRING = 'createRuntimeStartupWiring';
-const LOCAL_STR_TRIGGERREBALANCINGONALLPARTITIONS = 'triggerRebalancingOnAllPartitions';
 const LOCAL_STR_RETRYING_SEED_STEADY_STATE_CONTROL_PLANE = 'Retrying seed steady-state control-plane writers until ';
 const LOCAL_STR_LIFECYCLE_METADATA_PUBLICATION_READINESS = 'lifecycle metadata publication readiness is satisfied';
 const LOCAL_STR_DEFERRING_SEED_STEADY_STATE_CONTROL_PLAN = 'Deferring seed steady-state control-plane writers until ';
@@ -473,20 +472,12 @@ class BootstrapService extends EventEmitter {
         getNodeReadyRebalanceDelayMs: () => this.nodeReadyRebalanceDelayMs,
         getPartitionServices: () => this.partitionServices,
         executeNodeReadyRebalance: (reason) => {
-          if (Object.prototype.hasOwnProperty.call(
-            this,
-            LOCAL_STR_TRIGGERREBALANCINGONALLPARTITIONS,
-          )) {
-            this.triggerRebalancingOnAllPartitions(reason);
-            return;
-          }
-          this.nodeReadyRebalanceOwner.triggerRebalancingOnAllPartitions(reason);
+          this.triggerRebalancingOnAllPartitions(reason);
         },
       },
     });
     this.runtimeHandoffOwner = new StartupRuntimeHandoffOwner({
       delegates: {
-        getCompatibilityService: () => this,
         isShuttingDown: () => this.isShuttingDown === true,
         getMetadataPublicationReadinessOptions: () => ({
           readinessState: this.bootstrapReadinessState,
@@ -625,8 +616,6 @@ class BootstrapService extends EventEmitter {
       delegates: seedDelegates,
       runtimeBridgeOwner: this.seedRuntimeBridgeOwner,
     });
-    this.seedRuntimeBridgeOwner.compatibilityPhase =
-      this.seedCacheHydrationPhase;
     this.seedCleanupHandler = new SeedCleanupHandler({
       delegates: this._composeSeedDelegates(delegateBundles, {
         cleanupOnly: true,

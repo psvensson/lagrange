@@ -10,7 +10,6 @@ import {INITIAL_PARTITION_IDS} from '../bootstrap/system-table-schemas-constants
 
 const DEFAULT_OPTIONS = Object.freeze({
   requireLeaderNodeId: false,
-  allowLeaderServiceFallback: false,
 });
 const OWNER_TABLE_BY_SERVICE_TYPE = Object.freeze({
   [SERVICE_TYPE.PARTITION]: TABLES.PARTITIONS,
@@ -142,24 +141,6 @@ const findCanonicalLeaderService = (
   })[0] || null;
 };
 
-const findObservableLeaderService = (
-  services,
-  serviceType,
-  entityId,
-  options = {},
-) => {
-  const idColumn = getOwnerIdColumn(serviceType);
-  const requireAddress = options.requireAddress === true;
-  return services.find((service) =>
-    service?.[COLUMN.SERVICE_TYPE] === serviceType &&
-    service?.[idColumn] === entityId &&
-    service?.[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE &&
-    typeof service?.[COLUMN.NODE_ID] === 'string' &&
-    service[COLUMN.NODE_ID].length > 0 &&
-    (!requireAddress || Boolean(service?.[COLUMN.ADDRESS])),
-  ) || null;
-};
-
 const resolveCanonicalLeaderService = (
   cache,
   serviceType,
@@ -182,22 +163,10 @@ const resolveCanonicalLeaderService = (
     entityId,
     leaderNodeId,
     options,
-  ) || (
-    options.allowLeaderServiceFallback === true &&
-    !leaderNodeId ?
-      findObservableLeaderService(
-        services,
-        serviceType,
-        entityId,
-        options,
-      ) :
-      null
   );
   return {
     ownerRecord,
-    leaderNodeId: leaderNodeId ||
-      leaderService?.[COLUMN.NODE_ID] ||
-      null,
+    leaderNodeId,
     leaderService,
   };
 };
@@ -278,8 +247,6 @@ const getMissingSystemServiceLeaders = (systemTableCache, options = {}) => {
       partitionId,
       {
         requireAddress: false,
-        allowLeaderServiceFallback:
-          config.allowLeaderServiceFallback === true,
       },
     );
 
@@ -320,8 +287,6 @@ const getMissingSystemServiceLeaders = (systemTableCache, options = {}) => {
       groupId,
       {
         requireAddress: false,
-        allowLeaderServiceFallback:
-          config.allowLeaderServiceFallback === true,
       },
     );
 
@@ -369,8 +334,6 @@ const getBlockingSystemServiceLeaders = (
       isSystemTableWriteReady;
   const missing = getMissingSystemServiceLeaders(systemTableCache, {
     requireLeaderNodeId: options.requireLeaderNodeId === true,
-    allowLeaderServiceFallback:
-      options.allowLeaderServiceFallback === true,
   });
   const missingPartitionLeaders = [];
   const missingPartitionLeaderNodes = [];

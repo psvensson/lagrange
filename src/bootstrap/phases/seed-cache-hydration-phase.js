@@ -118,7 +118,6 @@ class SeedCacheHydrationPhase {
       options.runtimeBridgeOwner ||
       new SeedRuntimeBridgeOwner({
         delegates: this.delegates,
-        compatibilityPhase: this,
       });
   }
 

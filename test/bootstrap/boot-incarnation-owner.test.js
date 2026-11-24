@@ -7,7 +7,7 @@
  * B1-B5 are the owner decision's witnesses; B6 is the hints-writer census
  * plus one generic contract every census writer must satisfy.
  */
-import {mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
+import {mkdir, mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
 import fs, {readdirSync, readFileSync, statSync} from 'node:fs';
 import fsPromises from 'node:fs/promises';
 import {syncBuiltinESMExports} from 'node:module';
@@ -379,9 +379,12 @@ test('D-7: the NODES registration write has four typed outcomes and never ' +
   'no authority: unresolved, never assumed');
 });
 
-// B7: boot-incarnation.json is the sole authority; rejoin-hints.json is
-// never consulted as a legacy floor even when no reservation exists yet.
-const LEGACY_HINTS_COUNTER = 4;
+// B7: boot-incarnation.json is the sole authority. A virgin data directory
+// (empty or containing only transient lock/temp files) starts at floor 0 and
+// reserves 1. A previously-used data directory whose reservation file is
+// missing MUST fail closed with BOOT_INCARNATION_STATE_UNREADABLE instead of
+// silently resetting to 0 / issuing 1.
+const STATE_UNREADABLE = 'BOOT_INCARNATION_STATE_UNREADABLE';
 const DAMAGED_HINTS = Object.freeze({
   'truncated JSON': '{"localNodeId": "node-f1", "bootIncarn',
   'empty file': '',
@@ -396,37 +399,89 @@ async function writeHints(dataDir, content) {
   await writeFile(join(dataDir, REJOIN_HINTS_FILENAME), content, 'utf8');
 }
 
-test('B7: absent owner file always starts at floor 0 regardless of rejoin hints',
+async function ownerStateExists(dataDir) {
+  return readFile(join(dataDir, BOOT_INCARNATION_FILENAME), 'utf8')
+    .then(() => true, () => false);
+}
+
+test('B7: virgin directory issues 1, while missing reservation file in a previously-used directory fails closed',
   async (t) => {
     await withDataDir(async (dataDir) => {
-      await writeHints(dataDir, JSON.stringify({
-        localNodeId: NODE_ID, bootIncarnation: LEGACY_HINTS_COUNTER,
-      }));
       t.equal(await readIssuedBootIncarnation(dataDir), 0,
-        'no owner file -> issued floor is NOTHING_ISSUED (0)');
+        'virgin empty directory -> issued floor is NOTHING_ISSUED (0)');
       t.equal(await reserveBootIncarnation(dataDir), 1,
-        'first reservation is 1 without reading legacy hints');
+        'virgin empty directory issues 1');
     });
     await withDataDir(async (dataDir) => {
-      await writeHints(dataDir, JSON.stringify({localNodeId: NODE_ID}));
+      await writeFile(
+        join(dataDir, '.lagrange-data-directory-owner.sqlite'),
+        '',
+        'utf8',
+      );
+      await writeFile(
+        join(dataDir, '.lagrange-data-directory-owner.sqlite-wal'),
+        '',
+        'utf8',
+      );
+      await writeFile(join(dataDir, '.boot-incarnation.json.tmp'), '', 'utf8');
+      t.equal(await readIssuedBootIncarnation(dataDir), 0,
+        'directory containing only process-owner lock and temp files is virgin');
       t.equal(await reserveBootIncarnation(dataDir), 1,
-        'hints without counter -> floor 0 -> reserves 1');
+        'virgin directory with lock/temp files issues 1');
     });
     await withDataDir(async (dataDir) => {
-      t.equal(await reserveBootIncarnation(dataDir), 1,
-        'no owner file and no hints: a virgin directory issues 1');
+      await raiseBootIncarnationFloor(dataDir, 4);
+      t.equal(await reserveBootIncarnation(dataDir), 5,
+        'reaches incarnation 5');
+      await writeHints(dataDir, JSON.stringify({
+        localNodeId: NODE_ID, bootIncarnation: 5,
+      }));
+      await rm(join(dataDir, BOOT_INCARNATION_FILENAME));
+      await t.rejects(readIssuedBootIncarnation(dataDir),
+        {code: STATE_UNREADABLE},
+        'removing boot-incarnation.json when hints remain refuses read');
+      await t.rejects(reserveBootIncarnation(dataDir),
+        {code: STATE_UNREADABLE},
+        'removing boot-incarnation.json when hints remain refuses issuing 1');
+      t.equal(await ownerStateExists(dataDir), false,
+        'refusal does not write a reset reservation file');
+    });
+    await withDataDir(async (dataDir) => {
+      await mkdir(join(dataDir, 'partitions'), {recursive: true});
+      await t.rejects(readIssuedBootIncarnation(dataDir),
+        {code: STATE_UNREADABLE},
+        'missing boot-incarnation.json with existing partitions/ refuses read');
+      await t.rejects(reserveBootIncarnation(dataDir),
+        {code: STATE_UNREADABLE},
+        'missing boot-incarnation.json with existing partitions/ refuses reservation');
+    });
+    await withDataDir(async (dataDir) => {
+      await writeFile(join(dataDir, 'boot-incarnation-hints.json'), '{}', 'utf8');
+      await t.rejects(reserveBootIncarnation(dataDir),
+        {code: STATE_UNREADABLE},
+        'missing boot-incarnation.json with existing durable json refuses reservation');
+    });
+    await withDataDir(async (dataDir) => {
+      await writeFile(join(dataDir, 'node-state.db'), '', 'utf8');
+      await t.rejects(reserveBootIncarnation(dataDir),
+        {code: STATE_UNREADABLE},
+        'missing boot-incarnation.json with existing sqlite db refuses reservation');
     });
   });
 
-test('B7: damaged rejoin hints never block or read during boot incarnation reservation',
+test('B7: missing owner file with damaged rejoin hints fails closed without reading or altering hints',
   async (t) => {
     for (const [label, content] of Object.entries(DAMAGED_HINTS)) {
       await withDataDir(async (dataDir) => {
         await writeHints(dataDir, content);
-        t.equal(await readIssuedBootIncarnation(dataDir), 0,
-          `${label}: issued floor is 0 when owner file is absent`);
-        t.equal(await reserveBootIncarnation(dataDir), 1,
-          `${label}: reservation succeeds from owner state alone`);
+        await t.rejects(readIssuedBootIncarnation(dataDir),
+          {code: STATE_UNREADABLE},
+          `${label}: missing owner file with prior hints refuses read`);
+        await t.rejects(reserveBootIncarnation(dataDir),
+          {code: STATE_UNREADABLE},
+          `${label}: missing owner file with prior hints refuses reservation`);
+        t.equal(await ownerStateExists(dataDir), false,
+          `${label}: no reservation file is created`);
         t.equal(await readFile(join(dataDir, REJOIN_HINTS_FILENAME), 'utf8'),
           content, `${label}: damaged hints are left untouched`);
       });
@@ -536,33 +591,39 @@ test('B8: with the owner present, a higher or lower legacy counter changes ' +
   });
 });
 
-test('B8: even before the owner file exists, hints are never read', async (t) => {
+test('B8: when the owner file is absent in a used directory, hints are never read and issuance fails closed', async (t) => {
   await withDataDir(async (dataDir) => {
     await writeHints(dataDir, JSON.stringify({
       localNodeId: NODE_ID, bootIncarnation: HIGHER_LEGACY_COUNTER,
     }));
-    const first = await recordTouches(
+    let caughtError = null;
+    const {touched} = await recordTouches(
       join(dataDir, REJOIN_HINTS_FILENAME),
-      () => reserveBootIncarnation(dataDir));
-    t.same(first.touched, [],
-      'hints file is never read when creating the initial reservation');
-    t.equal(first.result, 1,
-      'initial reservation starts from floor 0 -> 1');
-    await rm(join(dataDir, REJOIN_HINTS_FILENAME));
-    t.equal(await reserveBootIncarnation(dataDir), 2,
-      'deleting the hints has no effect');
-    await writeHints(dataDir, DAMAGED_HINTS['empty file']);
-    t.equal(await reserveBootIncarnation(dataDir), 3,
-      'corrupting the hints has no effect');
+      async () => {
+        try {
+          await reserveBootIncarnation(dataDir);
+        } catch (error) {
+          caughtError = error;
+        }
+      });
+    t.same(touched, [],
+      'hints file contents are never read when refusing missing owner state');
+    t.equal(caughtError?.code, STATE_UNREADABLE,
+      'refuses missing owner reservation with STATE_UNREADABLE');
+    t.equal(await ownerStateExists(dataDir), false,
+      'no owner reservation file is created');
   });
 });
 
-test('B8: owner absent and corrupt hints still reserve cleanly from floor 0',
+test('B8: owner absent and corrupt hints fail closed with STATE_UNREADABLE',
   async (t) => {
     await withDataDir(async (dataDir) => {
       await writeHints(dataDir, DAMAGED_HINTS['JSON scalar']);
-      t.equal(await reserveBootIncarnation(dataDir), 1,
-        'corrupt hints do not affect owner reservation');
+      await t.rejects(reserveBootIncarnation(dataDir),
+        {code: STATE_UNREADABLE},
+        'corrupt prior hints without owner file refuse reservation');
+      t.equal(await ownerStateExists(dataDir), false,
+        'no owner reservation file is created');
     });
   });
 

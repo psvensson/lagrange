@@ -267,9 +267,6 @@ const readinessPlanningSemanticCurrencyMethods = {
   },
 
   refreshLivenessSemanticIdentities(rows, ownerKey, observedAtMs) {
-    if (typeof this.service?.getNodeLivenessSemanticIdentity !== 'function') {
-      return false;
-    }
     if (rows.length === 0 && this.service?.nodesOwner) return true;
     try {
       for (let index = 0; index < rows.length; index += 1) {

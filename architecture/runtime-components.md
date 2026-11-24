@@ -320,8 +320,6 @@ No other source file may call `applySystemTableChange` directly.
   (`src/admin/admin-meta-endpoint-builder.js`)
 - Existing admin CLI/API entrypoints are thin adapters via
   `AdminApiAdapter` (`src/admin/admin-api-adapter.js`)
-- CLI compatibility preserved via `AdminCliCompat`
-  (`src/admin/admin-cli-compat.js`)
 - Deprecation warnings for direct node-local mutation paths via
   `AdminDeprecation` (`src/admin/admin-deprecation.js`)
 - Mutation guard (`src/admin/admin-mutation-guard.js`) rejects

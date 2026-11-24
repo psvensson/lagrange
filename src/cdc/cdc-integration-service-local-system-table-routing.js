@@ -3,8 +3,6 @@ import {CDC_TERMINAL_STAGE} from './cdc-constants.js';
 import {issueAuthoritativeReadStage} from './cdc-terminal-gate.js';
 import {isValidLeaderReadAuthorityWitness} from
   '../control-plane/control-plane-authoritative-read-witness.js';
-import {readAdmittedPartitionRows} from
-  '../partition/partition-statement-admission.js';
 
 const {
   CDC_INTEGRATION_SERVICE_LITERAL,
@@ -292,11 +290,7 @@ function isUsablePartitionService(partitionService) {
   if (partitionService.initialized === false) {
     return false;
   }
-  return (
-    typeof partitionService.executeQuery === 'function' ||
-    typeof partitionService.executeLocalQuery === 'function' ||
-    typeof partitionService?.db?.prepare === 'function'
-  );
+  return typeof partitionService.executeLocalQuery === 'function';
 }
 
 function resolveLeaderRole(partitionService) {
@@ -402,10 +396,6 @@ function resolvePartitionServicesForTable(service, tableName, options = {}) {
 function executeSystemTableRead(partitionService, sql, params = []) {
   if (typeof partitionService?.executeLocalQuery === 'function') {
     return partitionService.executeLocalQuery(sql, params);
-  }
-  if (typeof partitionService?.db?.prepare === 'function') {
-    // Only a read the statement-admission owner admits is prepared here.
-    return readAdmittedPartitionRows(partitionService, sql, params);
   }
   return {
     success: false,

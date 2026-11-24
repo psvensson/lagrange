@@ -127,6 +127,9 @@ test('readiness planning inputs reject hostile data and ignore mutated ' +
   const service = {
     nodeId: 'node-0',
     nodeLivenessSemanticProjectionOwner: {subscribe: () => () => {}},
+    getNodeLivenessSemanticIdentity: () => null,
+    getNodeRow: (nodeId) => rows.find((row) => row?.[COLUMN.NODE_ID] === nodeId) || null,
+    buildNodeReadinessSyncCurrent: (nodeId) => ({nodeId}),
     systemTableCache: {getAll: () => rows},
     messageRouter: {
       getConnectedNodes: () => connectedNodes,

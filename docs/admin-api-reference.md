@@ -103,27 +103,39 @@ Admin ingress exposes unified operational diagnostics:
 Payloads and interpretation are covered in
 `docs/runtime-resource-diagnostics.md`.
 
-## CLI WebSocket Message Contract
+## Admin WebSocket Message Contract
 
-`AdminCliCompat` (`src/admin/admin-cli-compat.js`) defines the CLI
-WebSocket message contract, validated in both directions:
+`AdminWebSocketAPI` (`src/admin/admin-websocket-api.js`) owns the admin
+WebSocket stream (`/api/admin/stream`) and validates incoming JSON envelopes
+before dispatching commands through `serviceDispatcher` and SQL/CDC:
 
-**Incoming** (CLI -> server):
+**Incoming** (client -> server):
 
-- `query` - requires `type`, `queryId`, `sql`; optional `params`
-- `refresh` - requires `type`
+- `query` (`MessageType.QUERY`) — requires `type`, `queryId`, `sql`; optional
+  `params`, `tenantId`, `principal`, `traceId`
+- `refresh` (`MessageType.REFRESH`) — requires `type`
+- `live_query_subscribe` (`MessageType.LIVE_QUERY_SUBSCRIBE`) — requires
+  `type`, `subscriptionId`, `sql`
+- `live_query_unsubscribe` (`MessageType.LIVE_QUERY_UNSUBSCRIBE`) — requires
+  `type`, `subscriptionId`
 
-**Outgoing** (server -> CLI):
+**Outgoing** (server -> client):
 
-- `query_result` - requires `type`, `queryId`, `timestamp`
-- `cache_dump` - requires `type`, `timestamp`, `nodeId`, `data`
-- `cdc_event` - requires `type`, `timestamp`, `table`,
-  `operation`, `record`
-- `error` - requires `type`, `timestamp`, `error`, `errorCode`
+- `query_result` (`MessageType.QUERY_RESULT`) — includes `type`, `queryId`,
+  `timestamp`, plus query rows/write metadata or `error` and `errorCode`
+- `cache_dump` (`MessageType.CACHE_DUMP`) — includes `type`, `timestamp`,
+  `nodeId`, `data`
+- `cdc_event` (`MessageType.CDC_EVENT`) — includes `type`, `timestamp`,
+  `table`, `operation`, `record`
+- `live_query_event` (`MessageType.LIVE_QUERY_EVENT`) — includes `type`,
+  `subscriptionId`, `queryId`, `partitions`, plus `eventType`, `data`,
+  `oldData`, or `expiresAt`
+- `error` (`MessageType.ERROR`) — includes `type`, `timestamp`, `error`,
+  `errorCode`, and optional `hint` / `details`
 
-Use `validateIncomingMessage()` and `validateOutgoingMessage()` to verify
-messages conform to the contract. The adapter layer translates between
-these CLI message formats and the meta-service command handler interface.
+Dispatchable messages (`query`, `refresh`) are converted into canonical
+`Service_Message` envelopes by `adaptAdminMessageToServiceMessage(...)`
+(`src/admin/admin-service-message-adapter.js`) before execution.
 
 ## Related Docs
 

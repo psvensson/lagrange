@@ -211,6 +211,9 @@ test('the memoized deferral serves each read its own dimension\'s cell when ' +
   const owner = new ReadinessPlanningSnapshotOwner({
     service: {
       nodeLivenessSemanticProjectionOwner: {subscribe: () => () => {}},
+      getNodeLivenessSemanticIdentity: () => null,
+      getNodeRow: (nodeId) => ({node_id: nodeId}),
+      buildNodeReadinessSyncCurrent: (nodeId) => ({nodeId}),
     },
   });
   t.teardown(() => owner.shutdown());

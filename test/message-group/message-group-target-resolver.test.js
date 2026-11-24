@@ -462,3 +462,47 @@ test('message-group target resolver fails closed when cache is absent, NODES is 
       'cache missing canonical getReadyNodes() must fail closed',
     );
   });
+
+test('message-group target resolver delegates null and expired lease rejection to SystemTableCache.getReadyNodes',
+  async (t) => {
+    const cache = new SystemTableCache();
+    const now = Date.now();
+    cache.applySystemTableChange(TABLES.MESSAGE_GROUPS, CDC_OPERATION.UPSERT, {
+      [COLUMN.GROUP_ID]: 'mg-lease',
+      [COLUMN.LEADER_NODE_ID]: 'node-null',
+    });
+    addMessageGroupService(cache, {
+      [COLUMN.SERVICE_ID]: 'mg-lease-r1',
+      [COLUMN.GROUP_ID]: 'mg-lease',
+      [COLUMN.NODE_ID]: 'node-null',
+      [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.ADDRESS]: 'node-null/message-group/mg-lease-r1',
+      [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
+    });
+    addNode(cache, {
+      [COLUMN.NODE_ID]: 'node-null',
+      [COLUMN.CONNECTION_STATE]: STATE.READY,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: null,
+    });
+
+    t.same(cache.getReadyNodes(), [],
+      'SystemTableCache.getReadyNodes excludes nodes with null ready_lease_expires_at');
+    t.equal(resolveMessageGroupLeaderServiceFromCache(cache, 'mg-lease'), null,
+      'leader resolution rejects node with null ready_lease_expires_at');
+    t.equal(resolveMessageGroupTargetAddressFromCache(cache, 'mg-lease'), null,
+      'target address resolution rejects node with null ready_lease_expires_at');
+
+    addNode(cache, {
+      [COLUMN.NODE_ID]: 'node-null',
+      [COLUMN.CONNECTION_STATE]: STATE.READY,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60_000,
+    });
+    t.same(cache.getReadyNodes(), ['node-null'],
+      'SystemTableCache.getReadyNodes includes READY node with live positive lease');
+    t.equal(
+      resolveMessageGroupTargetAddressFromCache(cache, 'mg-lease'),
+      'node-null/message-group/mg-lease-r1',
+      'target address resolves once SystemTableCache.getReadyNodes admits the node',
+    );
+  });

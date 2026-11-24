@@ -317,7 +317,6 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
     );
     this.runtimeHandoffOwner = new StartupRuntimeHandoffOwner({
       delegates: {
-        getCompatibilityService: () => this,
         getLeaseService: () => this.leaseService,
         getLeaseRunningState: () => LEASE_STATE.RUNNING,
         getHeartbeatService: () => this.heartbeatService,
