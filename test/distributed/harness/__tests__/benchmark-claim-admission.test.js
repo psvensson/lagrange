@@ -2,6 +2,7 @@
 // real publication path (raw store -> admission -> matrix -> renderers), the
 // append-only invalidation ledger and the offline recomputation check.
 import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -83,6 +84,8 @@ import {
   BENCHMARK_CORPUS_PATHS,
   BENCHMARK_PRODUCER_PATHSPECS,
   BENCHMARK_PUBLICATION_PRODUCER_PATHS,
+  checkStagedBenchmarkInputsClean,
+  resolveCheckTarget,
 } from '../../../../scripts/checks/check-pushed-benchmark-freshness.js';
 import {recomputeComparativeBenchmarks} from
   '../../../../scripts/checks/comparative-benchmark-recompute.js';
@@ -90,10 +93,12 @@ import {recomputeComparativeBenchmarks} from
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayFind = Function.call.bind(Array.prototype.find);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const arrayJoin = Function.call.bind(Array.prototype.join);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const stringIncludes = Function.call.bind(String.prototype.includes);
 const stringReplace = Function.call.bind(String.prototype.replace);
 const stringStartsWith = Function.call.bind(String.prototype.startsWith);
+const stringTrim = Function.call.bind(String.prototype.trim);
 
 const LAGRANGE = 'lagrange';
 // The smoke claim: its subkind names the smoke profile, whose class is smoke.
@@ -1011,164 +1016,111 @@ describe('readinessDenialOf structured extraction', () => {
   it('decodes cluster-readiness denials, containerExited, and lastProbeError alongside /readyz',
     async () => {
       const {readinessDenialOf} = await import('../benchmark-readiness-denial.js');
-      const readyzDenial = readinessDenialOf({
-        deployment: {readiness: {evidence: {diagnostic: {
-          component: 'lagrange-node@10.0.0.1',
-          attempts: 4,
-          elapsedMs: 1200,
-          last: {status: 503, json: {phase: 'joining', state: 'waiting', reasons: ['quorum']}},
-        }}}},
-      });
+      const wrap = (diagnostic) => ({deployment: {readiness: {evidence: {diagnostic}}}});
+      const readyzDenial = readinessDenialOf(wrap({
+        component: 'lagrange-node@10.0.0.1', attempts: 4, elapsedMs: 1200,
+        last: {status: 503, json: {phase: 'joining', state: 'waiting', reasons: ['quorum']}},
+      }));
       assert.deepEqual(readyzDenial, {
-        component: 'lagrange-node@10.0.0.1',
-        attempts: 4,
-        elapsedMs: 1200,
-        phase: 'joining',
-        state: 'waiting',
-        reasons: ['quorum'],
+        component: 'lagrange-node@10.0.0.1', attempts: 4, elapsedMs: 1200,
+        phase: 'joining', state: 'waiting', reasons: ['quorum'],
       });
-
-      const sysDenial = readinessDenialOf({
-        deployment: {readiness: {evidence: {diagnostic: {
-          component: 'lagrange-system-tables',
-          attempts: 28,
-          elapsedMs: 420000,
-          lastCompletedObservation: {denials: ['partition_under_replicated:tables-p1']},
-          lastProbeError: {error: 'readiness probe formation deadline expired'},
-        }}}},
-      });
+      const sysDenial = readinessDenialOf(wrap({
+        component: 'lagrange-system-tables', attempts: 28, elapsedMs: 420000,
+        lastCompletedObservation: {denials: ['partition_under_replicated:tables-p1']},
+        lastProbeError: {error: 'readiness probe formation deadline expired'},
+      }));
       assert.deepEqual(sysDenial, {
-        component: 'lagrange-system-tables',
-        attempts: 28,
-        elapsedMs: 420000,
-        phase: 'cluster-readiness',
-        state: 'denied',
+        component: 'lagrange-system-tables', attempts: 28, elapsedMs: 420000,
+        phase: 'cluster-readiness', state: 'denied',
         reasons: ['partition_under_replicated:tables-p1'],
         lastProbeError: 'readiness probe formation deadline expired',
       });
-
-      const exitedDenial = readinessDenialOf({
-        deployment: {readiness: {evidence: {diagnostic: {
-          component: 'lagrange-system-tables',
-          attempts: 3,
-          elapsedMs: 5000,
-          lastObservation: {containerExited: true, role: 'lagrange-node', status: 'exited', exitCode: 137},
-        }}}},
-      });
+      const exitedDenial = readinessDenialOf(wrap({
+        component: 'lagrange-system-tables', attempts: 3, elapsedMs: 5000,
+        lastObservation: {
+          containerExited: true, role: 'lagrange-node', status: 'exited', exitCode: 137,
+        },
+      }));
       assert.equal(exitedDenial.phase, 'container-exited');
       assert.equal(exitedDenial.state, 'exited');
       assert.deepEqual(exitedDenial.reasons, ['container_exited:lagrange-node:137']);
-
-      const postReadyProbeFailure = readinessDenialOf({
-        deployment: {readiness: {evidence: {diagnostic: {
-          component: 'lagrange-system-tables',
-          attempts: 3,
-          elapsedMs: 4000,
-          lastCompletedReady: true,
-          lastCompletedObservation: {denials: []},
-          lastObservation: {error: 'ssh: connect to host 10.0.0.1 port 22: Connection timed out'},
-          lastProbeError: {error: 'ssh: connect to host 10.0.0.1 port 22: Connection timed out'},
-        }}}},
-      });
+      const sshErr = 'ssh: connect to host 10.0.0.1 port 22: Connection timed out';
+      const postReadyProbeFailure = readinessDenialOf(wrap({
+        component: 'lagrange-system-tables', attempts: 3, elapsedMs: 4000,
+        lastCompletedReady: true, lastCompletedObservation: {denials: []},
+        lastObservation: {error: sshErr}, lastProbeError: {error: sshErr},
+      }));
       assert.deepEqual(postReadyProbeFailure, {
-        component: 'lagrange-system-tables',
-        attempts: 3,
-        elapsedMs: 4000,
-        phase: null,
-        state: 'probe-failed',
-        reasons: ['ssh: connect to host 10.0.0.1 port 22: Connection timed out'],
-        lastProbeError: 'ssh: connect to host 10.0.0.1 port 22: Connection timed out',
+        component: 'lagrange-system-tables', attempts: 3, elapsedMs: 4000,
+        phase: null, state: 'probe-failed', reasons: [sshErr], lastProbeError: sshErr,
       });
-
-      const postReadyJsonDeadline = readinessDenialOf({
-        deployment: {readiness: {evidence: {diagnostic: {
-          component: 'lagrange-node@10.0.0.1',
-          attempts: 2,
-          elapsedMs: 420000,
-          deadlineExpired: true,
-          lastCompletedReady: true,
-          last: {status: 200, json: {ready: true, phase: 'ready', state: 'ready', reasons: []}},
-        }}}},
-      });
+      const postReadyJsonDeadline = readinessDenialOf(wrap({
+        component: 'lagrange-node@10.0.0.1', attempts: 2, elapsedMs: 420000,
+        deadlineExpired: true, lastCompletedReady: true,
+        last: {status: 200, json: {ready: true, phase: 'ready', state: 'ready', reasons: []}},
+      }));
       assert.deepEqual(postReadyJsonDeadline, {
-        component: 'lagrange-node@10.0.0.1',
-        attempts: 2,
-        elapsedMs: 420000,
-        phase: null,
-        state: 'deadline-expired',
-        reasons: ['formation_deadline_expired'],
+        component: 'lagrange-node@10.0.0.1', attempts: 2, elapsedMs: 420000,
+        phase: null, state: 'deadline-expired', reasons: ['formation_deadline_expired'],
       });
     });
 });
 
 const CANONICAL_NINE_CASE_IDS = Object.freeze([
-  'new-order-contention',
-  'visibility',
-  'payment',
-  'order-status',
-  'delivery',
-  'stock-level',
-  'failure-atomicity',
-  'retryable-conflict',
-  'durability',
+  'new-order-contention', 'visibility', 'payment', 'order-status', 'delivery',
+  'stock-level', 'failure-atomicity', 'retryable-conflict', 'durability',
 ]);
 
-function buildPhysicalRunAndHeader({repetition = 1} = {}) {
-  const campaignId = 'physical-camp-20261124';
-  const header = buildFixtureHeader({
-    campaignId,
-    targetIds: [LAGRANGE],
-    executionTarget: EXECUTION_TARGET.GCP,
-  });
-  const realImageRef = 'psvensson/lagrange:0.4.0';
-  const realRepoDigest = `psvensson/lagrange@sha256:${'a'.repeat(64)}`;
-  const realVersion = '0.4.0';
+const PHYSICAL_TARGET_SPECS = Object.freeze({
+  [LAGRANGE]: Object.freeze({
+    system: LAGRANGE, role: 'lagrange-node', imageRef: 'psvensson/lagrange:0.4.0',
+    repoDigest: `psvensson/lagrange@sha256:${'a'.repeat(64)}`, version: '0.4.0',
+  }),
+  [TIDB]: Object.freeze({
+    system: TIDB, role: 'tikv', imageRef: 'pingcap/tikv:v8.5.8',
+    repoDigest: `pingcap/tikv@sha256:${'b'.repeat(64)}`, version: '8.5.8',
+  }),
+});
+
+function buildPhysicalRunAndHeader({
+  targetId = LAGRANGE, executionTarget = EXECUTION_TARGET.GCP, repetition = 1,
+} = {}) {
+  const spec = PHYSICAL_TARGET_SPECS[targetId];
+  const campaignId = `physical-camp-${targetId}-${executionTarget}-20261124`;
+  const header = buildFixtureHeader({campaignId, targetIds: [targetId], executionTarget});
   header.products[0] = {
-    ...header.products[0],
-    reportedVersion: realVersion,
-    images: [{
-      ...header.products[0].images[0],
-      repoDigest: realRepoDigest,
-      provenance: `registry:${realRepoDigest}`,
-    }],
+    ...header.products[0], role: spec.role, reportedVersion: spec.version,
+    images: [{...header.products[0].images[0], repoDigest: spec.repoDigest,
+      provenance: `registry:${spec.repoDigest}`}],
   };
-  const run = buildFixtureRun({campaignId, targetId: LAGRANGE, repetition});
-  run.executionTarget = EXECUTION_TARGET.GCP;
+  const run = buildFixtureRun({campaignId, targetId, repetition});
+  run.executionTarget = executionTarget;
   for (const key of ['products', 'productsAfterWindow']) {
     run.identity[key] = arrayMap(run.identity[key], (p) => ({
-      ...p,
-      imageRef: realImageRef,
-      repoDigest: realRepoDigest,
-      provenance: `registry:${realRepoDigest}`,
-      reportedVersion: realVersion,
+      ...p, role: spec.role, imageRef: spec.imageRef, repoDigest: spec.repoDigest,
+      provenance: `registry:${spec.repoDigest}`, reportedVersion: spec.version,
     }));
   }
+  run.deployment.roles = arrayMap(run.deployment.roles, (r) => ({...r, role: spec.role}));
+  run.deployment.products = arrayMap(run.identity.products, (p) => ({...p}));
   run.deployment.storage = arrayMap(run.deployment.roles, (r) => ({
-    role: r.role,
-    host: r.host,
-    containerId: r.containerId,
-    mount: '/data',
-    kind: STORAGE_KIND.HOST_VOLUME,
+    role: r.role, host: r.host, containerId: r.containerId,
+    mount: '/data', kind: STORAGE_KIND.HOST_VOLUME,
   }));
   const binding = {
-    campaignId,
-    containerId: run.deployment.endpoint.containerId,
+    campaignId, containerId: run.deployment.endpoint.containerId,
     imageId: run.identity.products[0].imageId,
     endpoint: `${run.deployment.endpoint.host}:${run.deployment.endpoint.port}`,
   };
   const targetRole = run.deployment.roles[1];
   const faultEvidence = {
-    containerId: targetRole.containerId,
-    host: targetRole.host,
+    containerId: targetRole.containerId, host: targetRole.host,
     faultTarget: {
-      nodeId: targetRole.containerId,
-      role: targetRole.role,
-      host: targetRole.host,
-      isDataReplica: true,
-      pgHostOnly: false,
+      nodeId: targetRole.containerId, role: targetRole.role, host: targetRole.host,
+      isDataReplica: true, pgHostOnly: false,
     },
-    startedAtBefore: '2026-11-24T10:00:00.000Z',
-    startedAtAfter: '2026-11-24T10:01:00.000Z',
+    startedAtBefore: '2026-11-24T10:00:00.000Z', startedAtAfter: '2026-11-24T10:01:00.000Z',
     beforeIncarnation: `${targetRole.containerId}:2026-11-24T10:00:00.000Z`,
     afterIncarnation: `${targetRole.containerId}:2026-11-24T10:01:00.000Z`,
     storageContinuity: 'preserved',
@@ -1177,53 +1129,35 @@ function buildPhysicalRunAndHeader({repetition = 1} = {}) {
   const cases = JSON.parse(JSON.stringify(arrayMap(CANONICAL_NINE_CASE_IDS, (caseId) => {
     const proofIds = [...CANONICAL_SCENARIO_A_CASE_PROOF_IDS[caseId]];
     return buildCanonicalSemanticGateCaseRecord({
-      proofCase: {id: caseId, proofIds},
-      binding,
-      evaluation: {passed: true, failures: []},
+      proofCase: {id: caseId, proofIds}, binding, evaluation: {passed: true, failures: []},
       proofRecord: {
-        evidenceId: `lagrange-${caseId}`,
-        system: LAGRANGE,
-        status: 'passed',
-        artifactSha256: 'e'.repeat(64),
-        proofIds,
+        evidenceId: `${spec.system}-${caseId}`, system: spec.system, status: 'passed',
+        artifactSha256: 'e'.repeat(64), proofIds,
       },
       ...(caseId === 'durability' ? {faultEvidence} : {}),
     });
   })));
-  const proofs = arrayMap(cases, (c) => c.proofRecord);
   run.correctness.semanticGate = {
-    system: LAGRANGE,
-    status: OLTP_SCENARIO_A_SEMANTIC_GATE_STATUS.PASSED,
-    passed: [...CANONICAL_SCENARIO_A_PROOF_IDS],
-    failed: [],
-    missing: [],
-    passedCount: CANONICAL_SCENARIO_A_PROOF_IDS.length,
-    failedCount: 0,
-    missingCount: 0,
-    binding,
-    bindings: [binding],
-    cases,
-    proofs,
+    system: spec.system, status: OLTP_SCENARIO_A_SEMANTIC_GATE_STATUS.PASSED,
+    passed: [...CANONICAL_SCENARIO_A_PROOF_IDS], failed: [], missing: [],
+    passedCount: CANONICAL_SCENARIO_A_PROOF_IDS.length, failedCount: 0, missingCount: 0,
+    binding, bindings: [binding], cases, proofs: arrayMap(cases, (c) => c.proofRecord),
   };
   sealFixtureRun(run, {keepFinalState: true});
   return {campaignId, header, run};
 }
 
-function evaluatePhysicalRunPair(mutateRun) {
-  const first = buildPhysicalRunAndHeader({repetition: 1});
-  const second = buildPhysicalRunAndHeader({repetition: 2});
-  mutateRun(first.run);
-  mutateRun(second.run);
+function evaluatePhysicalRunPair(mutateRun, options = {}) {
+  const {targetId = LAGRANGE, executionTarget = EXECUTION_TARGET.GCP} = options;
+  const first = buildPhysicalRunAndHeader({targetId, executionTarget, repetition: 1});
+  const second = buildPhysicalRunAndHeader({targetId, executionTarget, repetition: 2});
+  mutateRun(first.run, first.header);
+  mutateRun(second.run, second.header);
   first.run.rawObservationsDigest = computeRunObservationsDigest(first.run);
   second.run.rawObservationsDigest = computeRunObservationsDigest(second.run);
   const claim = {
-    claimKey: `${LAGRANGE}/scenarioA/main`,
-    claimKind: CLAIM_KIND.THROUGHPUT,
-    targetId: LAGRANGE,
-    scenario: 'scenarioA',
-    subkind: 'main',
-    minDistinctHosts: 3,
-    forensicReceiptIds: [],
+    claimKey: `${targetId}/scenarioA/main`, claimKind: CLAIM_KIND.THROUGHPUT,
+    targetId, scenario: 'scenarioA', subkind: 'main', minDistinctHosts: 3, forensicReceiptIds: [],
   };
   return {
     firstRun: first.run,
@@ -1234,9 +1168,19 @@ function evaluatePhysicalRunPair(mutateRun) {
         {file: 'data/tidb-comparison/raw-observations.ndjson', run: second.run},
       ],
       campaignHeaders: new Map([[first.campaignId, first.header]]),
-      retainedReferences: [],
-      invalidations: [],
+      retainedReferences: [], invalidations: [],
     }),
+  };
+}
+
+function assignGhostDurabilityFaultTarget(run, ghostId, host = null) {
+  const durCase = arrayFind(run.correctness.semanticGate.cases, (c) => c.caseId === 'durability');
+  const targetHost = host ?? durCase.faultEvidence.host;
+  durCase.faultEvidence = {
+    ...durCase.faultEvidence, containerId: ghostId, host: targetHost,
+    faultTarget: {...durCase.faultEvidence.faultTarget, nodeId: ghostId, host: targetHost},
+    beforeIncarnation: `${ghostId}:2026-11-24T10:00:00.000Z`,
+    afterIncarnation: `${ghostId}:2026-11-24T10:01:00.000Z`,
   };
 }
 
@@ -1244,69 +1188,104 @@ describe('Finding 5: positive fault-target deployment join and canonical proof-I
   () => {
     it('admits a valid physical run with positive deployment join and all 33 canonical proof IDs',
       () => {
-        const {firstRun, cell} = evaluatePhysicalRunPair(() => {});
-        assert.doesNotThrow(() => validateRawObservationRecord(firstRun));
-        assert.equal(hasExactCanonicalScenarioAProofIdSet(firstRun.correctness.semanticGate.passed),
-          true);
-        const durCase = arrayFind(firstRun.correctness.semanticGate.cases,
-          (c) => c.caseId === 'durability');
-        assert.equal(hasPositiveFaultTargetDeploymentJoin(durCase, firstRun), true);
-        assert.equal(validateCanonicalDurabilityCaseRecord(durCase, firstRun).valid, true);
-        assert.equal(cell.status, CLAIM_CELL_STATUS.VALID_OBSERVED, cell.reasons.join(', '));
+        for (const executionTarget of [EXECUTION_TARGET.GCP, EXECUTION_TARGET.LAB]) {
+          for (const targetId of [LAGRANGE, TIDB]) {
+            const {firstRun, cell} = evaluatePhysicalRunPair(() => {}, {targetId, executionTarget});
+            assert.doesNotThrow(() => validateRawObservationRecord(firstRun));
+            assert.equal(
+              hasExactCanonicalScenarioAProofIdSet(firstRun.correctness.semanticGate.passed), true,
+            );
+            const durCase = arrayFind(
+              firstRun.correctness.semanticGate.cases, (c) => c.caseId === 'durability',
+            );
+            assert.equal(hasPositiveFaultTargetDeploymentJoin(durCase, firstRun), true);
+            assert.equal(validateCanonicalDurabilityCaseRecord(durCase, firstRun).valid, true);
+            assert.equal(cell.status, CLAIM_CELL_STATUS.VALID_OBSERVED, cell.reasons.join(', '));
+          }
+        }
       });
 
     it('negative control 1: mutating faultEvidence.containerId to a nonexistent container ID ' +
-      'on a genuine deployed host with recomputed rawObservationsDigest is rejected by both ' +
-      'validateRawObservationRecord and evaluateBenchmarkClaimAdmission', () => {
+      'on a genuine deployed host with recomputed rawObservationsDigest is rejected for both ' +
+      'physical lab (tidb-tikv and lagrange) and gcp records', () => {
       const ghostContainerId = 'deadbeef'.repeat(8);
-      const {firstRun, cell} = evaluatePhysicalRunPair((run) => {
-        const durCase = arrayFind(run.correctness.semanticGate.cases,
-          (c) => c.caseId === 'durability');
-        durCase.faultEvidence = {
-          ...durCase.faultEvidence,
-          containerId: ghostContainerId,
-          faultTarget: {
-            ...durCase.faultEvidence.faultTarget,
-            nodeId: ghostContainerId,
-          },
-          beforeIncarnation: `${ghostContainerId}:2026-11-24T10:00:00.000Z`,
-          afterIncarnation: `${ghostContainerId}:2026-11-24T10:01:00.000Z`,
+      for (const executionTarget of [EXECUTION_TARGET.GCP, EXECUTION_TARGET.LAB]) {
+        for (const targetId of [LAGRANGE, TIDB]) {
+          const {firstRun, cell} = evaluatePhysicalRunPair(
+            (run) => assignGhostDurabilityFaultTarget(run, ghostContainerId),
+            {targetId, executionTarget},
+          );
+          const durCase = arrayFind(
+            firstRun.correctness.semanticGate.cases, (c) => c.caseId === 'durability',
+          );
+          assert.equal(hasPositiveFaultTargetDeploymentJoin(durCase, firstRun), false);
+          assert.equal(validateCanonicalDurabilityCaseRecord(durCase, firstRun).valid, false);
+          assert.throws(() => validateRawObservationRecord(firstRun),
+            (err) => err.code === RECORD_REJECTION.UNBOUND_FAULT_TARGET);
+          assert.equal(cell.status, CLAIM_CELL_STATUS.INVALID_MEASUREMENT);
+          assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.RAW_DIGEST_MISMATCH), false);
+          assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.SEMANTIC_GATE_UNBOUND), true);
+          assert.equal(
+            arrayIncludes(cell.reasons, ADMISSION_REASON.SEMANTIC_GATE_NOT_PASSED), true,
+          );
+        }
+      }
+      const tidbEndpointHex = '7'.repeat(64);
+      const companionGhostHex = '2'.repeat(64);
+      const legacyBypassAttempt = evaluatePhysicalRunPair((run, header) => {
+        header.products[0].role = 'tidb-tikv-node';
+        run.deployment.endpoint.containerId = tidbEndpointHex;
+        run.deployment.roles[0] = {
+          ...run.deployment.roles[0], role: 'tidb-tikv-node', containerId: tidbEndpointHex,
         };
-      });
-      const durCase = arrayFind(firstRun.correctness.semanticGate.cases,
-        (c) => c.caseId === 'durability');
-      assert.equal(hasPositiveFaultTargetDeploymentJoin(durCase, firstRun), false);
-      assert.equal(validateCanonicalDurabilityCaseRecord(durCase, firstRun).valid, false);
-      assert.throws(
-        () => validateRawObservationRecord(firstRun),
-        (err) => err.code === RECORD_REJECTION.UNBOUND_FAULT_TARGET,
+        run.deployment.storage[0] = {
+          ...run.deployment.storage[0], role: 'tidb-tikv-node', containerId: tidbEndpointHex,
+        };
+        for (const key of ['products', 'productsAfterWindow']) {
+          run.identity[key] = arrayMap(run.identity[key], (p, i) => ({
+            ...p, role: 'tidb-tikv-node', containerId: i === 0 ? tidbEndpointHex : p.containerId,
+          }));
+        }
+        run.deployment.products = arrayMap(run.identity.products, (p) => ({...p}));
+        run.correctness.semanticGate.binding.containerId = tidbEndpointHex;
+        run.correctness.semanticGate.bindings[0].containerId = tidbEndpointHex;
+        for (const c of run.correctness.semanticGate.cases) {
+          c.binding.containerId = tidbEndpointHex;
+        }
+        assignGhostDurabilityFaultTarget(run, companionGhostHex, run.deployment.roles[0].host);
+      }, {targetId: TIDB, executionTarget: EXECUTION_TARGET.LAB});
+      assert.throws(() => validateRawObservationRecord(legacyBypassAttempt.firstRun),
+        (err) => err.code === RECORD_REJECTION.UNBOUND_FAULT_TARGET);
+      assert.equal(legacyBypassAttempt.cell.status, CLAIM_CELL_STATUS.INVALID_MEASUREMENT);
+      assert.equal(
+        arrayIncludes(legacyBypassAttempt.cell.reasons, ADMISSION_REASON.SEMANTIC_GATE_UNBOUND),
+        true,
       );
-      assert.equal(cell.status, CLAIM_CELL_STATUS.INVALID_MEASUREMENT);
-      assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.RAW_DIGEST_MISMATCH), false);
-      assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.SEMANTIC_GATE_UNBOUND), true);
-      assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.SEMANTIC_GATE_NOT_PASSED), true);
-
-      // Also verify that missing from any single table (roles, products, or storage) fails closed:
       for (const dropTable of [
         (run) => {
-          run.deployment.storage = arrayFilter(run.deployment.storage,
-            (s) => s.containerId !== 'ctr-2');
+          run.deployment.storage = arrayFilter(
+            run.deployment.storage, (s) => s.containerId !== 'ctr-2',
+          );
         },
         (run) => {
-          run.identity.products = arrayFilter(run.identity.products,
-            (p) => p.containerId !== 'ctr-2');
+          run.deployment.products = arrayFilter(
+            run.deployment.products, (p) => p.containerId !== 'ctr-2',
+          );
+          run.identity.products = arrayFilter(
+            run.identity.products, (p) => p.containerId !== 'ctr-2',
+          );
         },
         (run) => {
-          run.deployment.roles = arrayFilter(run.deployment.roles,
-            (r) => r.containerId !== 'ctr-2');
+          run.deployment.roles = arrayFilter(
+            run.deployment.roles, (r) => r.containerId !== 'ctr-2',
+          );
         },
       ]) {
         const partial = evaluatePhysicalRunPair(dropTable);
         assert.throws(() => validateRawObservationRecord(partial.firstRun));
         assert.equal(partial.cell.status, CLAIM_CELL_STATUS.INVALID_MEASUREMENT);
         assert.equal(
-          arrayIncludes(partial.cell.reasons, ADMISSION_REASON.SEMANTIC_GATE_UNBOUND),
-          true,
+          arrayIncludes(partial.cell.reasons, ADMISSION_REASON.SEMANTIC_GATE_UNBOUND), true,
         );
       }
     });
@@ -1318,51 +1297,39 @@ describe('Finding 5: positive fault-target deployment join and canonical proof-I
       const substitutedId = 'isolation:readYourOwnWritesSubstituted';
       assert.equal(isCanonicalScenarioAProofId(originalId), true);
       assert.equal(isCanonicalScenarioAProofId(substitutedId), false);
-
       const {firstRun, cell} = evaluatePhysicalRunPair((run) => {
         const gate = run.correctness.semanticGate;
         gate.passed = arrayMap(
-          gate.passed,
-          (id) => (id === originalId ? substitutedId : id),
+          gate.passed, (id) => (id === originalId ? substitutedId : id),
         ).sort();
         const visCase = arrayFind(gate.cases, (c) => c.caseId === 'visibility');
         visCase.proofIds = arrayMap(visCase.proofIds,
           (id) => (id === originalId ? substitutedId : id)).sort();
-        visCase.proofRecord = {
-          ...visCase.proofRecord,
-          proofIds: [...visCase.proofIds],
-        };
+        visCase.proofRecord = {...visCase.proofRecord, proofIds: [...visCase.proofIds]};
         gate.proofs = arrayMap(gate.proofs, (p) => (p.evidenceId === 'lagrange-visibility' ?
           {...p, proofIds: [...visCase.proofIds]} : p));
       });
-
       assert.equal(firstRun.correctness.semanticGate.passed.length,
         CANONICAL_SCENARIO_A_PROOF_IDS.length);
       const visCase = arrayFind(firstRun.correctness.semanticGate.cases,
         (c) => c.caseId === 'visibility');
       assert.equal(hasCanonicalScenarioACaseProofIds('visibility', visCase.proofIds), false);
       assert.equal(validateCanonicalSemanticGateCaseRecord(visCase, firstRun).valid, false);
-      assert.throws(
-        () => validateRawObservationRecord(firstRun),
-        (err) => err.code === RECORD_REJECTION.NON_CANONICAL_PROOF_IDS,
-      );
+      assert.throws(() => validateRawObservationRecord(firstRun),
+        (err) => err.code === RECORD_REJECTION.NON_CANONICAL_PROOF_IDS);
       assert.equal(
-        arrayIncludes(checkSemanticGate(firstRun), ADMISSION_REASON.SEMANTIC_GATE_NOT_PASSED),
-        true,
+        arrayIncludes(checkSemanticGate(firstRun), ADMISSION_REASON.SEMANTIC_GATE_NOT_PASSED), true,
       );
       assert.equal(cell.status, CLAIM_CELL_STATUS.INVALID_MEASUREMENT);
       assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.RAW_DIGEST_MISMATCH), false);
       assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.SEMANTIC_GATE_NOT_PASSED), true);
       assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.SEMANTIC_GATE_INCOMPLETE), true);
-
-      // Summary count mismatch (passedCount / failedCount / missing) is also rejected:
       const countMismatch = evaluatePhysicalRunPair((run) => {
         run.correctness.semanticGate.passedCount = 32;
       });
       assert.equal(countMismatch.cell.status, CLAIM_CELL_STATUS.INVALID_MEASUREMENT);
       assert.equal(
-        arrayIncludes(countMismatch.cell.reasons, ADMISSION_REASON.SEMANTIC_GATE_NOT_PASSED),
-        true,
+        arrayIncludes(countMismatch.cell.reasons, ADMISSION_REASON.SEMANTIC_GATE_NOT_PASSED), true,
       );
     });
   });
@@ -1378,9 +1345,7 @@ const PRODUCER_GRAPH_ROOTS = Object.freeze([
   'test/distributed/harness/comparative-landing-tables.js',
 ]);
 const PRODUCER_SCOPE_PREFIXES = Object.freeze([
-  'test/distributed/',
-  'docs/benchmarks/',
-  'scripts/checks/',
+  'src/', 'test/distributed/', 'docs/benchmarks/', 'scripts/checks/',
 ]);
 
 function isProducerScopedRelativePath(relPath) {
@@ -1406,24 +1371,31 @@ function collectImportedProducerFilesFromRoots() {
       const specifier = match[1] || match[2];
       if (!stringStartsWith(specifier, '.')) continue;
       const target = path.resolve(path.dirname(current), specifier);
-      if (!fs.existsSync(target)) continue;
+      if (!fs.existsSync(target) || !fs.statSync(target).isFile()) continue;
       const targetRel = path.relative(REPO_ROOT_DIR, target);
-      if (isProducerScopedRelativePath(targetRel)) {
-        pending.push(target);
-      }
+      if (isProducerScopedRelativePath(targetRel)) pending.push(target);
     }
   }
   return arrayMap([...visited], (absPath) => path.relative(REPO_ROOT_DIR, absPath)).sort();
 }
 
+function gitInTempRepo(repoDir, args) {
+  return stringTrim(String(execFileSync('git', args, {cwd: repoDir, encoding: 'utf8'})));
+}
+
 describe('Finding 6: canonical benchmark producer dependency set and snapshot-fenced hooks', () => {
-  it('every imported test/distributed/**, docs/benchmarks/**, and scripts/checks/** file in ' +
-    'the benchmark publication/freshness ES module import graph is in ' +
-    'BENCHMARK_PUBLICATION_PRODUCER_PATHS', () => {
+  it('every transitive src/**, test/distributed/**, docs/benchmarks/**, and scripts/checks/** ' +
+    'module in the benchmark publication/freshness import graph is in ' +
+    'BENCHMARK_PUBLICATION_PRODUCER_PATHS and changing only an imported src/ dependency triggers ' +
+    'freshness verification and --check-staged-clean fencing', () => {
     const producerSet = new Set(BENCHMARK_PUBLICATION_PRODUCER_PATHS);
     const importedFiles = collectImportedProducerFilesFromRoots();
+    const importedSrcFiles = arrayFilter(importedFiles, (f) => stringStartsWith(f, 'src/'));
     assert.ok(importedFiles.length > 50, 'import graph traversal must discover producer closure');
+    assert.ok(importedSrcFiles.length > 0, 'import graph traversal must include imported src/ files');
     for (const requiredProducer of [
+      'src/utils/canonical-json-data.js',
+      'src/diagnostics/source-fingerprint.js',
       'test/distributed/harness/oltp-scenario-a-semantic-profile.js',
       'test/distributed/harness/benchmark-workload-dispatch.js',
       'test/distributed/harness/benchmark-oltp-state-reconciliation.js',
@@ -1442,13 +1414,45 @@ describe('Finding 6: canonical benchmark producer dependency set and snapshot-fe
     }
     const missingFromCanonicalSet = arrayFilter(importedFiles, (file) => !producerSet.has(file));
     assert.deepEqual(
-      missingFromCanonicalSet,
-      [],
+      missingFromCanonicalSet, [],
       'imported producer files missing from BENCHMARK_PUBLICATION_PRODUCER_PATHS: ' +
       missingFromCanonicalSet.join(', '),
     );
     for (const corpusPath of BENCHMARK_CORPUS_PATHS) {
       assert.equal(arrayIncludes(BENCHMARK_PRODUCER_PATHSPECS, corpusPath), true);
+    }
+    const importedSrcDep = 'src/utils/canonical-json-data.js';
+    const tmpRepo = fs.mkdtempSync(path.join(os.tmpdir(), 'bench-src-dep-fence-'));
+    try {
+      gitInTempRepo(tmpRepo, ['init', '-q']);
+      gitInTempRepo(tmpRepo, ['config', 'user.email', 'test@example.com']);
+      gitInTempRepo(tmpRepo, ['config', 'user.name', 'Test']);
+      const rawObsFile = path.join(tmpRepo, 'data/tidb-comparison/raw-observations.ndjson');
+      const srcDepFile = path.join(tmpRepo, importedSrcDep);
+      fs.mkdirSync(path.dirname(rawObsFile), {recursive: true});
+      fs.mkdirSync(path.dirname(srcDepFile), {recursive: true});
+      fs.writeFileSync(rawObsFile, '{}\n', 'utf8');
+      fs.writeFileSync(srcDepFile, 'export const v = 1;\n', 'utf8');
+      gitInTempRepo(tmpRepo, ['add', '.']);
+      gitInTempRepo(tmpRepo, ['commit', '-q', '-m', 'base']);
+      const baseSha = gitInTempRepo(tmpRepo, ['rev-parse', 'HEAD']);
+      assert.equal(checkStagedBenchmarkInputsClean(tmpRepo), 0);
+      fs.writeFileSync(srcDepFile, 'export const v = 2;\n', 'utf8');
+      const dirtyLines = [];
+      assert.equal(checkStagedBenchmarkInputsClean(tmpRepo, (line) => dirtyLines.push(line)), 1);
+      assert.equal(stringIncludes(arrayJoin(dirtyLines, ''), importedSrcDep), true);
+      gitInTempRepo(tmpRepo, ['add', importedSrcDep]);
+      gitInTempRepo(tmpRepo, ['commit', '-q', '-m', 'touch imported src dep']);
+      const srcChangedSha = gitInTempRepo(tmpRepo, ['rev-parse', 'HEAD']);
+      assert.equal(checkStagedBenchmarkInputsClean(tmpRepo), 0);
+      const target = resolveCheckTarget(tmpRepo, {
+        localRef: 'refs/heads/work/test', localSha: srcChangedSha,
+        remoteRef: 'refs/heads/work/test', remoteSha: baseSha,
+      });
+      assert.ok(target, 'modifying an imported src/ dependency must trigger freshness check');
+      assert.equal(target.commitSha, srcChangedSha);
+    } finally {
+      fs.rmSync(tmpRepo, {recursive: true, force: true});
     }
   });
 

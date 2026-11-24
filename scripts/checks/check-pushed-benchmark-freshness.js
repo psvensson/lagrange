@@ -23,7 +23,10 @@ import {gitProcessEnvironment} from './git-process-environment.js';
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayJoin = Function.call.bind(Array.prototype.join);
+const arrayMap = Function.call.bind(Array.prototype.map);
+const arraySome = Function.call.bind(Array.prototype.some);
 const stringSplit = Function.call.bind(String.prototype.split);
+const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 const stringTrim = Function.call.bind(String.prototype.trim);
 
 const UTF8 = 'utf8';
@@ -36,12 +39,31 @@ const SIGNAL_EXIT_BASE = 128;
 const ARGV_REF_LINES_INDEX = 2;
 const REF_LINE_MIN_FIELDS = 4;
 const REMOTE_SHA_INDEX = 3;
+const RELATIVE_SPECIFIER_PREFIX = '.';
+const MODULE_ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const PRODUCER_IMPORT_PATTERN =
+  /(?:import|export)\s[^'"]*?from\s*['"]([^'"]+)['"]|import\(\s*['"]([^'"]+)['"]\s*\)/gu;
+const PRODUCER_SCOPE_PREFIXES = Object.freeze([
+  'src/',
+  'test/distributed/',
+  'docs/benchmarks/',
+  'scripts/checks/',
+]);
+const PRODUCER_CLOSURE_ENTRYPOINTS = Object.freeze([
+  'docs/benchmarks/cloud/recompute-comparative-from-raw.mjs',
+  'docs/benchmarks/cloud/run-comparative-benchmarks.mjs',
+  'scripts/checks/check-pushed-benchmark-freshness.js',
+  'scripts/checks/comparative-benchmark-recompute.js',
+  'scripts/checks/check-benchmark-history-append-only.js',
+  'test/distributed/harness/raw-observation-campaign-specs.js',
+  'test/distributed/harness/comparative-landing-tables.js',
+]);
 
 const BENCHMARK_CORPUS_PATHS = Object.freeze([
   'data/tidb-comparison',
   'docs/benchmarks',
 ]);
-const BENCHMARK_PUBLICATION_PRODUCER_PATHS = Object.freeze([
+const SEED_BENCHMARK_PUBLICATION_PRODUCER_PATHS = Object.freeze([
   'docs/benchmarks/cloud/gcp-vm-lifetime-args.mjs',
   'docs/benchmarks/cloud/run-comparative-benchmarks.mjs',
   'scripts/checks/change-proof-string-collections.js',
@@ -234,6 +256,46 @@ const BENCHMARK_PUBLICATION_PRODUCER_PATHS = Object.freeze([
   'test/distributed/scenarios/scenario-a-stock-level-lagrange.js',
   'test/distributed/scenarios/scenario-a-visibility-lagrange.js',
 ]);
+
+function isProducerScopedPath(relPath) {
+  return arraySome(PRODUCER_SCOPE_PREFIXES, (prefix) => stringStartsWith(relPath, prefix));
+}
+
+function collectRelativeImportTargets(currentAbsPath, rootDir) {
+  const source = fs.readFileSync(currentAbsPath, UTF8);
+  const targets = [];
+  for (const match of source.matchAll(PRODUCER_IMPORT_PATTERN)) {
+    const specifier = match[1] || match[2];
+    if (!stringStartsWith(specifier, RELATIVE_SPECIFIER_PREFIX)) continue;
+    const candidate = path.resolve(path.dirname(currentAbsPath), specifier);
+    if (!fs.existsSync(candidate) || !fs.statSync(candidate).isFile()) continue;
+    const relPath = path.relative(rootDir, candidate);
+    if (isProducerScopedPath(relPath)) targets.push(candidate);
+  }
+  return targets;
+}
+
+function computeBenchmarkPublicationProducerPaths(rootDir = MODULE_ROOT_DIR) {
+  const seeds = [...PRODUCER_CLOSURE_ENTRYPOINTS, ...SEED_BENCHMARK_PUBLICATION_PRODUCER_PATHS];
+  const visited = new Set();
+  const pending = [];
+  for (const relSeed of seeds) {
+    const absSeed = path.join(rootDir, relSeed);
+    if (fs.existsSync(absSeed)) pending.push(absSeed);
+  }
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (visited.has(current)) continue;
+    visited.add(current);
+    pending.push(...collectRelativeImportTargets(current, rootDir));
+  }
+  const discovered = arrayMap([...visited], (absPath) => path.relative(rootDir, absPath));
+  return Object.freeze(
+    [...new Set([...SEED_BENCHMARK_PUBLICATION_PRODUCER_PATHS, ...discovered])].sort(),
+  );
+}
+
+const BENCHMARK_PUBLICATION_PRODUCER_PATHS = computeBenchmarkPublicationProducerPaths();
 const BENCHMARK_PRODUCER_PATHSPECS = Object.freeze([
   ...BENCHMARK_CORPUS_PATHS,
   ...BENCHMARK_PUBLICATION_PRODUCER_PATHS,
@@ -521,7 +583,7 @@ function verifyMaterializedCommit(root, target) {
   }
 }
 
-function checkStagedBenchmarkInputsClean(root) {
+function checkStagedBenchmarkInputsClean(root, writeOut = (text) => process.stdout.write(text)) {
   const env = gitEnv();
   const unstaged = nonEmptyLines(execGit(
     [GIT_C_FLAG, root, ...GIT_DIFF_NAME_ONLY_ARGUMENTS,
@@ -535,11 +597,11 @@ function checkStagedBenchmarkInputsClean(root) {
   ));
   const dirty = [...new Set([...unstaged, ...untracked])].sort();
   if (dirty.length === 0) return 0;
-  process.stdout.write(TEXT.UNSTAGED_HEADER);
+  writeOut(TEXT.UNSTAGED_HEADER);
   for (const item of dirty) {
-    process.stdout.write(`${TEXT.UNSTAGED_ITEM_PREFIX}${item}${NEWLINE}`);
+    writeOut(`${TEXT.UNSTAGED_ITEM_PREFIX}${item}${NEWLINE}`);
   }
-  process.stdout.write(TEXT.UNSTAGED_BYPASS);
+  writeOut(TEXT.UNSTAGED_BYPASS);
   return EXIT_FAILURE;
 }
 
@@ -586,4 +648,9 @@ export {
   BENCHMARK_CORPUS_PATHS,
   BENCHMARK_PRODUCER_PATHSPECS,
   BENCHMARK_PUBLICATION_PRODUCER_PATHS,
+  PRODUCER_CLOSURE_ENTRYPOINTS,
+  PRODUCER_SCOPE_PREFIXES,
+  checkStagedBenchmarkInputsClean,
+  computeBenchmarkPublicationProducerPaths,
+  resolveCheckTarget,
 };

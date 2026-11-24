@@ -539,10 +539,37 @@ describe('readiness summary and canonical history outcome accounting', () => {
       }),
       /retries \(45\) !== Math\.max\(0, attempts \(143\) - issued \(100\)\) \(43\)/u,
     );
+
+    // Summary-only transaction inputs (without offered/issued) must also satisfy canonical
+    // accounting invariants (succeeded + failed === attempted, non-negative integer counts,
+    // retries === 0 when attempted === 0):
+    assert.deepEqual(
+      normalizeTransactions({attempted: 100, succeeded: 95, failed: 5, retries: 12}),
+      {attempted: 100, succeeded: 95, failed: 5, retries: 12},
+    );
+    assert.throws(
+      () => normalizeTransactions({attempted: 100, succeeded: 95, failed: 4, retries: 44}),
+      /succeeded \(95\) \+ failed \(4\) !== attempted \(100\)/u,
+    );
+    assert.throws(
+      () => normalizeTransactions({
+        measuredAttempted: 100, measuredSucceeded: 0, failed: 0, retries: 0,
+      }),
+      /succeeded \(0\) \+ failed \(0\) !== attempted \(100\)/u,
+    );
+    assert.throws(
+      () => normalizeTransactions({attempted: 160, failed: 0, retries: 0}),
+      /Expected succeeded to be a non-negative integer/u,
+    );
+    assert.throws(
+      () => normalizeTransactions({attempted: 0, succeeded: 0, failed: 0, retries: 2}),
+      /attempts \(2\) must be 0 when issued is 0/u,
+    );
   });
 
   it('reconciles Nov 2026 history records with distinct per-run receipt.json artifactSha256 ' +
-    'digests and append-only invalidation of lines 21-43', async () => {
+    'digests and append-only invalidation of lines 21-43, and is pre-validated, idempotent, ' +
+    'and resumable', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'nov2026-history-reconcile-'));
     try {
       const rawHistory = await fs.readFile('data/tidb-comparison/history.ndjson', 'utf8');
@@ -563,6 +590,35 @@ describe('readiness summary and canonical history outcome accounting', () => {
       await fs.writeFile(ndjsonPath, preHistory, 'utf8');
       await fs.writeFile(ledgerPath, preLedger, 'utf8');
 
+      // Pre-validation before touching disk: an invalid extraRecord fails in memory without
+      // mutating either invalidations.ndjson or history.ndjson:
+      const invalidExtra = {
+        ...JSON.parse(historyLines[0]),
+        recordedAt: '2026-11-24T12:00:00.000Z',
+        metrics: {
+          lagrange: {
+            opsPerSec: 10,
+            latencyMs: {p50: 1, p95: 2, p99: 3},
+            transactions: {attempted: 100, succeeded: 90, failed: 5, retries: 0},
+            semanticProofs: {passedCount: 33},
+          },
+          tidbTikv: null,
+        },
+      };
+      await assert.rejects(
+        reconcileNov2026ComparisonHistoryToDisk({
+          ndjsonPath,
+          ledgerPath,
+          summaryPath,
+          recordedAt: '2026-11-24T12:00:00.000Z',
+          recordedBy: 'evidence-report-owner-test',
+          extraRecords: [invalidExtra],
+        }),
+        /succeeded \(90\) \+ failed \(5\) !== attempted \(100\)/u,
+      );
+      assert.equal(await fs.readFile(ndjsonPath, 'utf8'), preHistory);
+      assert.equal(await fs.readFile(ledgerPath, 'utf8'), preLedger);
+
       const result = await reconcileNov2026ComparisonHistoryToDisk({
         ndjsonPath,
         ledgerPath,
@@ -575,9 +631,60 @@ describe('readiness summary and canonical history outcome accounting', () => {
       const afterLedger = await fs.readFile(ledgerPath, 'utf8');
       assert.equal(stringStartsWith(afterHistory, preHistory), true);
       assert.equal(stringStartsWith(afterLedger, preLedger), true);
+      assert.equal(result.applied, true);
+      assert.equal(result.alreadyReconciled, false);
+      assert.equal(result.resumed, false);
+      assert.equal(result.appendedInvalidationCount, 1);
+      assert.equal(result.appendedHistoryCount, 23);
       assert.equal(result.invalidationEntry.id, 'inv-0026');
       assert.equal(result.invalidationEntry.scope.receiptIds.length, 23);
       assert.equal(result.appendedRecords.length, 23);
+
+      // Idempotency witness: running reconcileNov2026ComparisonHistoryToDisk a second time in a
+      // row succeeds as an explicit no-op and leaves both .ndjson files byte-identical:
+      const secondResult = await reconcileNov2026ComparisonHistoryToDisk({
+        ndjsonPath,
+        ledgerPath,
+        summaryPath,
+        recordedAt: '2026-11-24T12:05:00.000Z',
+        recordedBy: 'evidence-report-owner-test',
+      });
+      assert.equal(secondResult.applied, false);
+      assert.equal(secondResult.alreadyReconciled, true);
+      assert.equal(secondResult.resumed, false);
+      assert.equal(secondResult.appendedInvalidationCount, 0);
+      assert.equal(secondResult.appendedHistoryCount, 0);
+      assert.equal(secondResult.appendedRecords.length, 0);
+      assert.equal(await fs.readFile(ndjsonPath, 'utf8'), afterHistory);
+      assert.equal(await fs.readFile(ledgerPath, 'utf8'), afterLedger);
+
+      // Resumability witness: simulating an interrupted reconciliation (inv-0026 + first 5
+      // replacement history records on disk) and calling reconcileNov2026ComparisonHistoryToDisk
+      // resumes and writes only the remaining 18 records without duplicating inv-0026 or any
+      // history record:
+      const afterHistoryLines = arrayFilter(
+        stringSplit(afterHistory, '\n'),
+        (line) => stringTrim(line).length > 0,
+      );
+      const partialHistory = `${arrayJoin(arraySlice(afterHistoryLines, 0, 48), '\n')}\n`;
+      await fs.writeFile(ndjsonPath, partialHistory, 'utf8');
+      await fs.writeFile(ledgerPath, afterLedger, 'utf8');
+
+      const resumedResult = await reconcileNov2026ComparisonHistoryToDisk({
+        ndjsonPath,
+        ledgerPath,
+        summaryPath,
+        recordedAt: '2026-11-24T12:10:00.000Z',
+        recordedBy: 'evidence-report-owner-test',
+      });
+      assert.equal(resumedResult.applied, true);
+      assert.equal(resumedResult.alreadyReconciled, false);
+      assert.equal(resumedResult.resumed, true);
+      assert.equal(resumedResult.appendedInvalidationCount, 0);
+      assert.equal(resumedResult.appendedHistoryCount, 18);
+      assert.equal(resumedResult.appendedRecords.length, 18);
+      assert.equal(await fs.readFile(ndjsonPath, 'utf8'), afterHistory);
+      assert.equal(await fs.readFile(ledgerPath, 'utf8'), afterLedger);
 
       const allParsed = parseComparisonHistoryNdjson(afterHistory);
       assert.equal(allParsed.length, 66);

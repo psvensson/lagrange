@@ -674,13 +674,23 @@ function claimsDurabilityProofIdsInPassed(gate) {
     arraySome(gate.passed, (id) => arrayIncludes(DURABILITY_PROOF_ID_SET, id));
 }
 
+function hasNonFixtureProductIdentity(run) {
+  const products = run?.identity?.products;
+  if (!Array.isArray(products) || products.length === 0) return false;
+  return arraySome(products,
+    (p) => !isFixtureImageRef(p?.imageRef) && !isFixtureReportedVersion(p?.reportedVersion));
+}
+
 function isMissingRequiredCasesOnPassedGate(gate, run) {
   if (Array.isArray(gate.cases)) {
     return gate.cases.length === 0 &&
       (gate.status === GATE_STATUS.PASSED || claimsDurabilityProofIdsInPassed(gate));
   }
   if (claimsDurabilityProofIdsInPassed(gate)) return true;
-  return Boolean(run && isClaimedPhysicalRun(run) && gate.status === GATE_STATUS.PASSED);
+  return Boolean(
+    run && (isClaimedPhysicalRun(run) || hasNonFixtureProductIdentity(run)) &&
+    gate.status === GATE_STATUS.PASSED,
+  );
 }
 
 function isPlainRecordObject(value) {
@@ -748,7 +758,8 @@ function gateCasesHaveUnboundTarget(gate, run) {
   }
   if (!Array.isArray(gate.cases)) return false;
   return arraySome(gate.cases, (c) => {
-    if (isDurabilityProofCase(c) && isClaimedPassedStatus(c?.status) &&
+    if (isDurabilityProofCase(c) &&
+        (isClaimedPassedStatus(c?.status) || isPlainRecordObject(c?.faultEvidence?.faultTarget)) &&
         isPlainRecordObject(c?.faultEvidence) &&
         !hasPositiveFaultTargetDeploymentJoin(c, run)) {
       return true;
@@ -775,26 +786,32 @@ function hasInvalidClaimedPassedCase(cases, run) {
   return arraySome(cases, (c) => isClaimedPassedStatus(c.status) && !isPassedAndValidCase(c, run));
 }
 
+function isWellFormedProofEntry(proof) {
+  if (!isPlainRecordObject(proof) || !Array.isArray(proof.proofIds)) return false;
+  return proof.proofIds.length > 0 &&
+    new Set(proof.proofIds).size === proof.proofIds.length &&
+    arrayEvery(proof.proofIds, isCanonicalScenarioAProofId);
+}
+
+function collectPassedProofsFromArray(proofs) {
+  const seenPassed = new Set();
+  for (const proof of proofs) {
+    if (!isWellFormedProofEntry(proof)) return null;
+    if (proof.status !== GATE_STATUS.PASSED) continue;
+    for (const id of proof.proofIds) {
+      if (seenPassed.has(id)) return null;
+      seenPassed.add(id);
+    }
+  }
+  return [...seenPassed].sort();
+}
+
 function hasInvalidProofsArray(gate, awarded) {
   if (!Array.isArray(gate.proofs)) return false;
   if (gate.status === GATE_STATUS.PASSED && gate.proofs.length === 0) return true;
-  const seenPassed = new Set();
-  for (const proof of gate.proofs) {
-    if (!isPlainRecordObject(proof) || !Array.isArray(proof.proofIds) ||
-        proof.proofIds.length === 0 ||
-        new Set(proof.proofIds).size !== proof.proofIds.length ||
-        !arrayEvery(proof.proofIds, isCanonicalScenarioAProofId)) {
-      return true;
-    }
-    if (proof.status === GATE_STATUS.PASSED) {
-      for (const id of proof.proofIds) {
-        if (seenPassed.has(id)) return true;
-        seenPassed.add(id);
-      }
-    }
-  }
+  const sortedPassed = collectPassedProofsFromArray(gate.proofs);
+  if (!sortedPassed) return true;
   if (!hasNonEmptyArray(gate.cases) && gate.status !== GATE_STATUS.PASSED) return false;
-  const sortedPassed = [...seenPassed].sort();
   const expected = hasNonEmptyArray(gate.cases) ? awarded : CANONICAL_SCENARIO_A_PROOF_IDS;
   return sortedPassed.length !== expected.length ||
     arraySome(sortedPassed, (id, idx) => id !== expected[idx]);
@@ -866,21 +883,29 @@ function summaryDisagreesWithRecomputedCoverage(gate, coverage) {
     !countFieldMatches(gate.missingCount, coverage.missing.length);
 }
 
+function passedGateHasCompleteCanonicalAward(gate, awarded, run) {
+  const allCasesPassed = arraySome(gate.cases, isDurabilityProofCase) &&
+    arrayEvery(gate.cases, (c) => isPassedAndValidCase(c, run));
+  return allCasesPassed &&
+    !hasNonEmptyArray(gate.failed) &&
+    !hasNonEmptyArray(gate.missing) &&
+    hasExactCanonicalScenarioAProofIdSet(awarded) &&
+    hasExactCanonicalScenarioAProofIdSet(gate.passed);
+}
+
 function gateCasesHaveInconsistentSummary(gate, run) {
   if (isMissingRequiredCasesOnPassedGate(gate, run)) return true;
   const awarded = awardedProofIds(gate, run);
   if (hasInvalidProofsArray(gate, awarded)) return true;
   if (!hasNonEmptyArray(gate.cases)) return false;
-  if (hasNonCanonicalCaseProofMapping(gate.cases)) return true;
-  if (hasInvalidClaimedPassedCase(gate.cases, run)) return true;
+  if (hasNonCanonicalCaseProofMapping(gate.cases) ||
+      hasInvalidClaimedPassedCase(gate.cases, run)) {
+    return true;
+  }
   const coverage = recomputeCaseProofCoverage(gate.cases, awarded);
   if (summaryDisagreesWithRecomputedCoverage(gate, coverage)) return true;
-  if (gate.status !== GATE_STATUS.PASSED) return false;
-  const allCasesPassed = arraySome(gate.cases, isDurabilityProofCase) &&
-    arrayEvery(gate.cases, (c) => isPassedAndValidCase(c, run));
-  return !allCasesPassed || hasNonEmptyArray(gate.failed) || hasNonEmptyArray(gate.missing) ||
-    !hasExactCanonicalScenarioAProofIdSet(awarded) ||
-    !hasExactCanonicalScenarioAProofIdSet(gate.passed);
+  return gate.status === GATE_STATUS.PASSED &&
+    !passedGateHasCompleteCanonicalAward(gate, awarded, run);
 }
 
 function checkGateProfileMatch(gate, run) {
