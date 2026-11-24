@@ -24,10 +24,12 @@ const GATE_STATUS = Object.freeze({
 });
 const SYSTEMS = Object.freeze(Object.values(OLTP_SCENARIO_A_SYSTEM));
 
+const arrayEvery = Function.call.bind(Array.prototype.every);
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const arraySome = Function.call.bind(Array.prototype.some);
+const objectHasOwn = Object.hasOwn;
 const stringToLowerCase = Function.call.bind(String.prototype.toLowerCase);
 const stringTrim = Function.call.bind(String.prototype.trim);
 
@@ -63,6 +65,94 @@ if (REQUIRED_SYSTEM_PROOF_IDS.length !== CANONICAL_PROOF_COUNT) {
   );
 }
 const REQUIRED_SYSTEM_PROOF_SET = new Set(REQUIRED_SYSTEM_PROOF_IDS);
+
+function familyProofIds(family) {
+  const contract = OLTP_SCENARIO_A_SEMANTIC_PROFILE.transactionFamilies[family];
+  return arrayMap(
+    contract.successInvariants,
+    (invariant) => `transaction:${family}:${invariant}`,
+  );
+}
+
+function freezeSortedProofIds(ids) {
+  return Object.freeze([...ids].sort());
+}
+
+function buildCanonicalScenarioACaseProofIds() {
+  const profile = OLTP_SCENARIO_A_SEMANTIC_PROFILE;
+  const durabilityProofIds = freezeSortedProofIds([
+    'isolation:atomicCommitRequired',
+    'isolation:successfulCommitDurable',
+  ]);
+  const canonicalNineCases = Object.freeze({
+    'new-order-contention': freezeSortedProofIds([
+      'forbidden:duplicate_success_effect',
+      'forbidden:lost_successful_write',
+      'isolation:lostSuccessfulWriteForbidden',
+      'isolation:successfulEffectsExactlyOnce',
+      ...familyProofIds('new_order'),
+    ]),
+    'visibility': freezeSortedProofIds([
+      'forbidden:dirty_read',
+      'isolation:dirtyReadsForbidden',
+      'isolation:readYourOwnWritesRequired',
+    ]),
+    'payment': freezeSortedProofIds(familyProofIds('payment')),
+    'order-status': freezeSortedProofIds([
+      'forbidden:read_only_transaction_mutation',
+      ...familyProofIds('order_status'),
+    ]),
+    'delivery': freezeSortedProofIds(familyProofIds('delivery')),
+    'stock-level': freezeSortedProofIds(familyProofIds('stock_level')),
+    'failure-atomicity': freezeSortedProofIds([
+      `failureAtomicity:${profile.failureAtomicity.rule}`,
+      'forbidden:partial_commit',
+    ]),
+    'retryable-conflict': freezeSortedProofIds([
+      `outcome:retryableConflictSqlState:${profile.outcomes.retryableConflictSqlState}`,
+    ]),
+    'durability': durabilityProofIds,
+  });
+  const combined = [];
+  for (const ids of Object.values(canonicalNineCases)) {
+    combined.push(...ids);
+  }
+  const sortedCombined = [...combined].sort();
+  if (sortedCombined.length !== REQUIRED_SYSTEM_PROOF_IDS.length ||
+      arraySome(sortedCombined, (id, index) => id !== REQUIRED_SYSTEM_PROOF_IDS[index])) {
+    throw new Error('Scenario A canonical case proof IDs do not partition required proof IDs');
+  }
+  return Object.freeze({
+    ...canonicalNineCases,
+    'scenario-a-durable-commit-v1': durabilityProofIds,
+  });
+}
+
+const CANONICAL_SCENARIO_A_CASE_PROOF_IDS = buildCanonicalScenarioACaseProofIds();
+
+function isCanonicalScenarioAProofId(value) {
+  return typeof value === 'string' && REQUIRED_SYSTEM_PROOF_SET.has(value);
+}
+
+function hasExactSortedProofIds(values, expectedSortedIds) {
+  if (!Array.isArray(values) || !Array.isArray(expectedSortedIds)) return false;
+  if (values.length !== expectedSortedIds.length) return false;
+  if (new Set(values).size !== expectedSortedIds.length) return false;
+  if (!arrayEvery(values, isCanonicalScenarioAProofId)) return false;
+  const sorted = [...values].sort();
+  return arrayEvery(sorted, (id, index) => id === expectedSortedIds[index]);
+}
+
+function hasExactCanonicalScenarioAProofIdSet(values) {
+  return hasExactSortedProofIds(values, REQUIRED_SYSTEM_PROOF_IDS);
+}
+
+function hasCanonicalScenarioACaseProofIds(caseId, values) {
+  if (typeof caseId !== 'string' || !objectHasOwn(CANONICAL_SCENARIO_A_CASE_PROOF_IDS, caseId)) {
+    return false;
+  }
+  return hasExactSortedProofIds(values, CANONICAL_SCENARIO_A_CASE_PROOF_IDS[caseId]);
+}
 
 function requireText(value, label) {
   const text = stringTrim(String(value || ''));
@@ -237,9 +327,14 @@ const PROOF_FAILURE_KIND = Object.freeze({
 });
 
 export {
+  CANONICAL_SCENARIO_A_CASE_PROOF_IDS,
+  REQUIRED_SYSTEM_PROOF_IDS as CANONICAL_SCENARIO_A_PROOF_IDS,
   PROOF_FAILURE_KIND as OLTP_SCENARIO_A_PROOF_FAILURE_KIND,
   REQUIRED_SYSTEM_PROOF_IDS as OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS,
   GATE_STATUS as OLTP_SCENARIO_A_SEMANTIC_GATE_STATUS,
   STATUS as OLTP_SCENARIO_A_SEMANTIC_PROOF_STATUS,
   buildScenarioASemanticGateEvidence,
+  hasCanonicalScenarioACaseProofIds,
+  hasExactCanonicalScenarioAProofIdSet,
+  isCanonicalScenarioAProofId,
 };

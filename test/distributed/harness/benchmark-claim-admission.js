@@ -12,9 +12,13 @@ import {OLTP_OPEN_LOOP_PROFILE} from './oltp-open-loop-step-owner.js';
 import {OLTP_PAIRED_RETRY_POLICIES} from './oltp-paired-retry-owner.js';
 import {isImageId} from './real-product-deployment-contract.js';
 import {
-  OLTP_SCENARIO_A_PROOF_FAILURE_KIND,
-  OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS,
+  CANONICAL_SCENARIO_A_CASE_PROOF_IDS,
+  CANONICAL_SCENARIO_A_PROOF_IDS,
   OLTP_SCENARIO_A_SEMANTIC_GATE_STATUS as GATE_STATUS,
+  OLTP_SCENARIO_A_PROOF_FAILURE_KIND,
+  hasCanonicalScenarioACaseProofIds,
+  hasExactCanonicalScenarioAProofIdSet,
+  isCanonicalScenarioAProofId,
 } from './oltp-scenario-a-semantic-gate.js';
 import {
   OLTP_SCENARIO_A_SEMANTIC_PROFILES,
@@ -49,6 +53,7 @@ import {
   computeRawObservationRunDigest,
   computeRunObservationsDigest,
   hasDurabilityRestartEvidence,
+  hasPositiveFaultTargetDeploymentJoin,
   isContentIdentity,
   isDurabilityProofCase,
   validateCampaignHeader,
@@ -678,6 +683,10 @@ function isMissingRequiredCasesOnPassedGate(gate, run) {
   return Boolean(run && isClaimedPhysicalRun(run) && gate.status === GATE_STATUS.PASSED);
 }
 
+function isPlainRecordObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
 function isAdmissibleAwardedCase(proofCase, run = null) {
   return validateCanonicalSemanticGateCaseRecord(proofCase, run).valid;
 }
@@ -691,7 +700,9 @@ function awardedProofIds(gate, run = null) {
   const passedIds = new Set();
   for (const c of gate.cases) {
     if (!isAdmissibleAwardedCase(c, run)) continue;
-    for (const id of c.proofIds || []) passedIds.add(id);
+    for (const id of c.proofIds || []) {
+      if (isCanonicalScenarioAProofId(id)) passedIds.add(id);
+    }
   }
   return [...passedIds].sort();
 }
@@ -737,6 +748,11 @@ function gateCasesHaveUnboundTarget(gate, run) {
   }
   if (!Array.isArray(gate.cases)) return false;
   return arraySome(gate.cases, (c) => {
+    if (isDurabilityProofCase(c) && isClaimedPassedStatus(c?.status) &&
+        isPlainRecordObject(c?.faultEvidence) &&
+        !hasPositiveFaultTargetDeploymentJoin(c, run)) {
+      return true;
+    }
     const verdict = validateCanonicalSemanticGateCaseRecord(c, run);
     return arrayIncludes(verdict.reasons, 'durability_fault_target_unbound') ||
       arrayIncludes(verdict.reasons, 'case_proof_system_mismatch');
@@ -759,20 +775,112 @@ function hasInvalidClaimedPassedCase(cases, run) {
   return arraySome(cases, (c) => isClaimedPassedStatus(c.status) && !isPassedAndValidCase(c, run));
 }
 
-function gateCasesHaveInconsistentSummary(gate, run) {
-  if (isMissingRequiredCasesOnPassedGate(gate, run)) return true;
-  if (!hasNonEmptyArray(gate.cases)) return false;
-  if (hasInvalidClaimedPassedCase(gate.cases, run)) return true;
-  const awarded = awardedProofIds(gate, run);
-  const awardedSet = new Set(awarded);
-  if (Array.isArray(gate.passed) && arraySome(gate.passed, (id) => !awardedSet.has(id))) {
+function hasInvalidProofsArray(gate, awarded) {
+  if (!Array.isArray(gate.proofs)) return false;
+  if (gate.status === GATE_STATUS.PASSED && gate.proofs.length === 0) return true;
+  const seenPassed = new Set();
+  for (const proof of gate.proofs) {
+    if (!isPlainRecordObject(proof) || !Array.isArray(proof.proofIds) ||
+        proof.proofIds.length === 0 ||
+        new Set(proof.proofIds).size !== proof.proofIds.length ||
+        !arrayEvery(proof.proofIds, isCanonicalScenarioAProofId)) {
+      return true;
+    }
+    if (proof.status === GATE_STATUS.PASSED) {
+      for (const id of proof.proofIds) {
+        if (seenPassed.has(id)) return true;
+        seenPassed.add(id);
+      }
+    }
+  }
+  if (!hasNonEmptyArray(gate.cases) && gate.status !== GATE_STATUS.PASSED) return false;
+  const sortedPassed = [...seenPassed].sort();
+  const expected = hasNonEmptyArray(gate.cases) ? awarded : CANONICAL_SCENARIO_A_PROOF_IDS;
+  return sortedPassed.length !== expected.length ||
+    arraySome(sortedPassed, (id, idx) => id !== expected[idx]);
+}
+
+function hasNonCanonicalCaseProofMapping(cases) {
+  const seenCaseIds = new Set();
+  for (const c of cases) {
+    if (!isPlainRecordObject(c)) return true;
+    const caseId = c.caseId ?? c.id;
+    if (typeof caseId !== 'string' || seenCaseIds.has(caseId) ||
+        !Object.hasOwn(CANONICAL_SCENARIO_A_CASE_PROOF_IDS, caseId)) {
+      return true;
+    }
+    seenCaseIds.add(caseId);
+    if (!hasCanonicalScenarioACaseProofIds(caseId, c.proofIds)) return true;
+    if (isPlainRecordObject(c.proofRecord) &&
+        !hasCanonicalScenarioACaseProofIds(caseId, c.proofRecord.proofIds)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function recomputeCaseProofCoverage(cases, awarded) {
+  const passedSet = new Set(awarded);
+  const failedSet = new Set();
+  const anomaly = OLTP_SCENARIO_A_PROOF_FAILURE_KIND.PRODUCT_ANOMALY;
+  for (const c of cases) {
+    if (!isPlainRecordObject(c)) continue;
+    if (c.status !== GATE_STATUS.PASSED && c.failureKind === anomaly &&
+        isPlainRecordObject(c.proofRecord)) {
+      for (const id of c.proofIds || []) {
+        if (isCanonicalScenarioAProofId(id) && !passedSet.has(id)) failedSet.add(id);
+      }
+    }
+  }
+  const failed = [...failedSet].sort();
+  const missing = arrayFilter(
+    CANONICAL_SCENARIO_A_PROOF_IDS,
+    (id) => !passedSet.has(id) && !failedSet.has(id),
+  );
+  return {passed: awarded, failed, missing};
+}
+
+function sortedProofListMatches(actual, expectedSorted) {
+  if (!Array.isArray(actual)) return false;
+  if (actual.length !== expectedSorted.length) return false;
+  if (new Set(actual).size !== expectedSorted.length) return false;
+  if (!arrayEvery(actual, isCanonicalScenarioAProofId)) return false;
+  const sorted = [...actual].sort();
+  return arrayEvery(sorted, (id, idx) => id === expectedSorted[idx]);
+}
+
+function countFieldMatches(countValue, expectedLength) {
+  return countValue === undefined || countValue === expectedLength;
+}
+
+function summaryDisagreesWithRecomputedCoverage(gate, coverage) {
+  if (!sortedProofListMatches(gate.passed, coverage.passed)) return true;
+  if (Array.isArray(gate.failed) && !sortedProofListMatches(gate.failed, coverage.failed)) {
     return true;
   }
+  if (Array.isArray(gate.missing) && !sortedProofListMatches(gate.missing, coverage.missing)) {
+    return true;
+  }
+  return !countFieldMatches(gate.passedCount, coverage.passed.length) ||
+    !countFieldMatches(gate.failedCount, coverage.failed.length) ||
+    !countFieldMatches(gate.missingCount, coverage.missing.length);
+}
+
+function gateCasesHaveInconsistentSummary(gate, run) {
+  if (isMissingRequiredCasesOnPassedGate(gate, run)) return true;
+  const awarded = awardedProofIds(gate, run);
+  if (hasInvalidProofsArray(gate, awarded)) return true;
+  if (!hasNonEmptyArray(gate.cases)) return false;
+  if (hasNonCanonicalCaseProofMapping(gate.cases)) return true;
+  if (hasInvalidClaimedPassedCase(gate.cases, run)) return true;
+  const coverage = recomputeCaseProofCoverage(gate.cases, awarded);
+  if (summaryDisagreesWithRecomputedCoverage(gate, coverage)) return true;
   if (gate.status !== GATE_STATUS.PASSED) return false;
   const allCasesPassed = arraySome(gate.cases, isDurabilityProofCase) &&
     arrayEvery(gate.cases, (c) => isPassedAndValidCase(c, run));
   return !allCasesPassed || hasNonEmptyArray(gate.failed) || hasNonEmptyArray(gate.missing) ||
-    awarded.length < OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS.length;
+    !hasExactCanonicalScenarioAProofIdSet(awarded) ||
+    !hasExactCanonicalScenarioAProofIdSet(gate.passed);
 }
 
 function checkGateProfileMatch(gate, run) {
@@ -975,12 +1083,13 @@ function isReadinessExhaustedRun(run) {
 
 function checkRun(entry, claim, context) {
   const run = entry.run;
+  const reasons = [];
   try {
     validateRunRecord(run);
   } catch (err) {
-    return [`${REASON_PREFIX.RECORD_REJECTED}${err.code || 'invalid'}`];
+    reasons.push(`${REASON_PREFIX.RECORD_REJECTED}${err.code || 'invalid'}`);
+    if (!err.semanticGateValidation) return reasons;
   }
-  const reasons = [];
   if (computeRunObservationsDigest(run) !== run.rawObservationsDigest) {
     reasons.push(ADMISSION_REASON.RAW_DIGEST_MISMATCH);
   }
@@ -1244,6 +1353,7 @@ export {
   REASON_PREFIX,
   SUFFICIENCY_RULE,
   admitClaim,
+  admitClaim as evaluateBenchmarkClaimAdmission,
   awardedProofIds,
   campaignOutcomeOfCells,
   checkSemanticGate,

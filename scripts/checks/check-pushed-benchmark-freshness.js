@@ -15,12 +15,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
+import {fileURLToPath} from 'node:url';
 
 import {CHECK_BASE_ENV} from './change-selection-constants.js';
 import {execGit, spawnGit} from './git-invocation.js';
 import {gitProcessEnvironment} from './git-process-environment.js';
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayJoin = Function.call.bind(Array.prototype.join);
 const stringSplit = Function.call.bind(String.prototype.split);
 const stringTrim = Function.call.bind(String.prototype.trim);
 
@@ -39,17 +41,209 @@ const BENCHMARK_CORPUS_PATHS = Object.freeze([
   'data/tidb-comparison',
   'docs/benchmarks',
 ]);
-const BENCHMARK_PRODUCER_PATHSPECS = Object.freeze([
-  ...BENCHMARK_CORPUS_PATHS,
-  ':(glob)test/distributed/harness/comparative-*.js',
-  ':(glob)test/distributed/harness/raw-observation-*.js',
-  ':(glob)test/distributed/harness/oltp-comparison-*.js',
-  ':(glob)test/distributed/harness/*-static-web.js',
+const BENCHMARK_PUBLICATION_PRODUCER_PATHS = Object.freeze([
+  'docs/benchmarks/cloud/gcp-vm-lifetime-args.mjs',
+  'docs/benchmarks/cloud/run-comparative-benchmarks.mjs',
+  'scripts/checks/change-proof-string-collections.js',
+  'scripts/checks/change-selection-constants.js',
+  'scripts/checks/changed-paths.js',
+  'scripts/checks/check-benchmark-history-append-only.js',
+  'scripts/checks/check-pushed-benchmark-freshness.js',
+  'scripts/checks/check-quest-log-append-only.js',
+  'scripts/checks/comparative-benchmark-recompute.js',
+  'scripts/checks/git-invocation.js',
+  'scripts/checks/git-process-environment.js',
+  'scripts/checks/quest-record-transitions.js',
+  'scripts/checks/wait-for-thermal-headroom.js',
+  'test/distributed/harness/active-gate-closure-classification.js',
+  'test/distributed/harness/active-probe-snapshot-lane-constants.js',
+  'test/distributed/harness/assertions-consistency-checks.js',
+  'test/distributed/harness/assertions-consistency-comparison.js',
+  'test/distributed/harness/assertions-consistency-observation-cohort.js',
+  'test/distributed/harness/assertions-consistency-shared.js',
+  'test/distributed/harness/assertions-control-snapshot-extraction.js',
+  'test/distributed/harness/assertions-convergence-wait.js',
+  'test/distributed/harness/assertions-publication-gate-comparison.js',
+  'test/distributed/harness/assertions-publication-recovery-gate.js',
+  'test/distributed/harness/assertions.js',
   'test/distributed/harness/benchmark-claim-admission.js',
   'test/distributed/harness/benchmark-invalidation-ledger.js',
-  ':(glob)test/distributed/harness/scaleout-*.js',
-  'scripts/checks/comparative-benchmark-recompute.js',
-  'scripts/checks/check-benchmark-history-append-only.js',
+  'test/distributed/harness/benchmark-oltp-attempt-capture.js',
+  'test/distributed/harness/benchmark-oltp-state-reconciliation.js',
+  'test/distributed/harness/benchmark-operation-outcome.js',
+  'test/distributed/harness/benchmark-partition-convergence.js',
+  'test/distributed/harness/benchmark-readiness-denial.js',
+  'test/distributed/harness/benchmark-scenario-a-run.js',
+  'test/distributed/harness/benchmark-semantic-integrity.js',
+  'test/distributed/harness/benchmark-workload-dispatch.js',
+  'test/distributed/harness/benchmark-workload-semantics-constants.js',
+  'test/distributed/harness/benchmark-workload-semantics.js',
+  'test/distributed/harness/chaos.js',
+  'test/distributed/harness/citus-comparison-static-web.js',
+  'test/distributed/harness/cluster-active-wait-diagnostics.js',
+  'test/distributed/harness/cluster-active-wait-formatting-layer.js',
+  'test/distributed/harness/cluster-active-wait-normalization.js',
+  'test/distributed/harness/cluster-active-wait-priority-recovery-progress.js',
+  'test/distributed/harness/cluster-active-wait-progress-layer.js',
+  'test/distributed/harness/cluster-active-wait-publication-gate.js',
+  'test/distributed/harness/cluster-base-layer.js',
+  'test/distributed/harness/cluster-control-snapshot-admin-layer.js',
+  'test/distributed/harness/cluster-node-handle-layer.js',
+  'test/distributed/harness/cluster-node-owner-operations.js',
+  'test/distributed/harness/cluster-node-resource-diagnostics.js',
+  'test/distributed/harness/cluster-startup-gate-layer.js',
+  'test/distributed/harness/comparative-benchmark-campaign-manifest.js',
+  'test/distributed/harness/comparative-benchmark-campaign-runner.js',
+  'test/distributed/harness/comparative-benchmark-harness-identity.js',
+  'test/distributed/harness/comparative-benchmark-host-preparation.js',
+  'test/distributed/harness/comparative-benchmark-lab-hosts.js',
+  'test/distributed/harness/comparative-benchmark-product-pins.js',
+  'test/distributed/harness/comparative-benchmark-provisioning.js',
+  'test/distributed/harness/comparative-benchmark-record-owner.js',
+  'test/distributed/harness/comparative-benchmark-semantic-gate.js',
+  'test/distributed/harness/comparative-benchmark-tidb-cases.js',
+  'test/distributed/harness/comparative-benchmark-workload-call-site.js',
+  'test/distributed/harness/comparative-coverage-manifest.js',
+  'test/distributed/harness/comparative-efficiency-evidence-contract.js',
+  'test/distributed/harness/comparative-landing-page.js',
+  'test/distributed/harness/comparative-landing-svg-renderer.js',
+  'test/distributed/harness/comparative-landing-tables.js',
+  'test/distributed/harness/comparative-matrix-runner.js',
+  'test/distributed/harness/comparative-page-columns.js',
+  'test/distributed/harness/comparative-system-budget.js',
+  'test/distributed/harness/consistency-evaluator.js',
+  'test/distributed/harness/constants.js',
+  'test/distributed/harness/container-log-window.js',
+  'test/distributed/harness/container-memory-working-set.js',
+  'test/distributed/harness/convergence-voter-targets.js',
+  'test/distributed/harness/docker-build-context.js',
+  'test/distributed/harness/docker-image-retirement.js',
+  'test/distributed/harness/docker-provider.js',
+  'test/distributed/harness/failure-bundle-artifact-foundation.js',
+  'test/distributed/harness/failure-bundle-log-window.js',
+  'test/distributed/harness/gcp-vm-lifetime.js',
+  'test/distributed/harness/invariant-breaches.js',
+  'test/distributed/harness/lagrange-evolution-static-web.js',
+  'test/distributed/harness/load-generator-runtime-methods.js',
+  'test/distributed/harness/load-generator.js',
+  'test/distributed/harness/load-node-availability.js',
+  'test/distributed/harness/log-analyzer.js',
+  'test/distributed/harness/log-collector.js',
+  'test/distributed/harness/movement-scenario-c-scaling-static-web.js',
+  'test/distributed/harness/node-client-normalization-methods.js',
+  'test/distributed/harness/node-client.js',
+  'test/distributed/harness/oltp-baseline-dataset.js',
+  'test/distributed/harness/oltp-baseline-transaction-executor.js',
+  'test/distributed/harness/oltp-baseline-workload.js',
+  'test/distributed/harness/oltp-comparison-history-store.js',
+  'test/distributed/harness/oltp-comparison-static-web.js',
+  'test/distributed/harness/oltp-comparison-svg-renderer.js',
+  'test/distributed/harness/oltp-error-classification.js',
+  'test/distributed/harness/oltp-open-loop-step-owner.js',
+  'test/distributed/harness/oltp-paired-retry-owner.js',
+  'test/distributed/harness/oltp-paired-sweep-plan.js',
+  'test/distributed/harness/oltp-scenario-a-comparison-systems.js',
+  'test/distributed/harness/oltp-scenario-a-delivery-case.js',
+  'test/distributed/harness/oltp-scenario-a-durability-case.js',
+  'test/distributed/harness/oltp-scenario-a-failure-atomicity-case.js',
+  'test/distributed/harness/oltp-scenario-a-lagrange-live-admission.js',
+  'test/distributed/harness/oltp-scenario-a-lagrange-proof-plan.js',
+  'test/distributed/harness/oltp-scenario-a-lagrange-public-pg-context.js',
+  'test/distributed/harness/oltp-scenario-a-lagrange-runtime-preflight.js',
+  'test/distributed/harness/oltp-scenario-a-new-order-contention-case.js',
+  'test/distributed/harness/oltp-scenario-a-order-status-case.js',
+  'test/distributed/harness/oltp-scenario-a-payment-case.js',
+  'test/distributed/harness/oltp-scenario-a-proof-cases.js',
+  'test/distributed/harness/oltp-scenario-a-retryable-conflict-case.js',
+  'test/distributed/harness/oltp-scenario-a-semantic-gate.js',
+  'test/distributed/harness/oltp-scenario-a-semantic-profile.js',
+  'test/distributed/harness/oltp-scenario-a-stock-level-case.js',
+  'test/distributed/harness/oltp-scenario-a-visibility-case.js',
+  'test/distributed/harness/oracle-blindness.js',
+  'test/distributed/harness/partition-granularity-comparison-static-web.js',
+  'test/distributed/harness/playback-recorder.js',
+  'test/distributed/harness/post-rebalance-closure-contract.js',
+  'test/distributed/harness/postgresql-comparison-static-web.js',
+  'test/distributed/harness/publication-convergence-claim.js',
+  'test/distributed/harness/raw-observation-campaign-specs.js',
+  'test/distributed/harness/raw-observation-forensic-reader.js',
+  'test/distributed/harness/raw-observation-metrics.js',
+  'test/distributed/harness/raw-observation-record.js',
+  'test/distributed/harness/raw-observation-store.js',
+  'test/distributed/harness/real-product-campaign-cleanup.js',
+  'test/distributed/harness/real-product-captured-intrinsics.js',
+  'test/distributed/harness/real-product-cluster-deployers.js',
+  'test/distributed/harness/real-product-component-recovery.js',
+  'test/distributed/harness/real-product-deployer-lagrange.js',
+  'test/distributed/harness/real-product-deployer-postgres.js',
+  'test/distributed/harness/real-product-deployer-tidb.js',
+  'test/distributed/harness/real-product-deployment-contract.js',
+  'test/distributed/harness/real-product-exhausted-deployment.js',
+  'test/distributed/harness/real-product-identity.js',
+  'test/distributed/harness/real-product-lagrange-observations.js',
+  'test/distributed/harness/real-product-lagrange-readiness-evaluation.js',
+  'test/distributed/harness/real-product-network-impairment.js',
+  'test/distributed/harness/real-product-readiness.js',
+  'test/distributed/harness/real-product-remote-shell.js',
+  'test/distributed/harness/real-product-sql-clients.js',
+  'test/distributed/harness/real-product-workload-drivers.js',
+  'test/distributed/harness/scale-certification-receipt-freshness.js',
+  'test/distributed/harness/scale-evidence-contract.js',
+  'test/distributed/harness/scaleout-node-rf-comparison-static-web.js',
+  'test/distributed/harness/scaleout-series-experiments.js',
+  'test/distributed/harness/scenario-b-rtt-working-set-static-web.js',
+  'test/distributed/harness/scenario-c-comparison-static-web.js',
+  'test/distributed/harness/scenario-host-topology.js',
+  'test/distributed/harness/scenario-outcome.js',
+  'test/distributed/harness/scenario-setup-breakdown-renderer.js',
+  'test/distributed/harness/startup-readiness-evidence.js',
+  'test/distributed/harness/tidb-reference-lifecycle.js',
+  'test/distributed/harness/tidb-reference-physical-placement-proof.js',
+  'test/distributed/harness/trace-artifact-recorder.js',
+  'test/distributed/harness/yugabyte-ignite-comparison-static-web.js',
+  'test/distributed/reference-client/lagrange-delivery-observer.js',
+  'test/distributed/reference-client/lagrange-new-order-contention-observer.js',
+  'test/distributed/reference-client/lagrange-oltp-adapter.js',
+  'test/distributed/reference-client/lagrange-oltp-state-snapshot.js',
+  'test/distributed/reference-client/lagrange-payment-observer.js',
+  'test/distributed/reference-client/lagrange-retryable-conflict-probe.js',
+  'test/distributed/reference-client/lagrange-visibility-probe.js',
+  'test/distributed/reference-client/native-clients.js',
+  'test/distributed/reference-client/oltp-adapter-contract.js',
+  'test/distributed/reference-client/oltp-state-snapshot-shared.js',
+  'test/distributed/reference-client/pg-wire-client.js',
+  'test/distributed/reference-client/postgresql-oltp-adapter.js',
+  'test/distributed/reference-client/retryable-conflict-probe.js',
+  'test/distributed/reference-client/tidb-delivery-observer.js',
+  'test/distributed/reference-client/tidb-new-order-contention-observer.js',
+  'test/distributed/reference-client/tidb-oltp-adapter.js',
+  'test/distributed/reference-client/tidb-oltp-state-snapshot.js',
+  'test/distributed/reference-client/tidb-payment-observer.js',
+  'test/distributed/reference-client/tidb-retryable-conflict-probe.js',
+  'test/distributed/reference-client/tidb-visibility-probe.js',
+  'test/distributed/scenarios/postgres-baseline-node-admission.js',
+  'test/distributed/scenarios/scenario-a-delivery-lagrange.js',
+  'test/distributed/scenarios/scenario-a-durability-lagrange.js',
+  'test/distributed/scenarios/scenario-a-failure-atomicity-lagrange.js',
+  'test/distributed/scenarios/scenario-a-lagrange-shared.js',
+  'test/distributed/scenarios/scenario-a-new-order-contention-lagrange.js',
+  'test/distributed/scenarios/scenario-a-order-status-lagrange.js',
+  'test/distributed/scenarios/scenario-a-payment-lagrange.js',
+  'test/distributed/scenarios/scenario-a-retryable-conflict-lagrange.js',
+  'test/distributed/scenarios/scenario-a-semantic-proof-journey.js',
+  'test/distributed/scenarios/scenario-a-stock-level-lagrange.js',
+  'test/distributed/scenarios/scenario-a-visibility-lagrange.js',
+]);
+const BENCHMARK_PRODUCER_PATHSPECS = Object.freeze([
+  ...BENCHMARK_CORPUS_PATHS,
+  ...BENCHMARK_PUBLICATION_PRODUCER_PATHS,
+]);
+const LIST_PRODUCERS_FLAG = '--list-producers';
+const CHECK_STAGED_CLEAN_FLAG = '--check-staged-clean';
+const GIT_LS_FILES_UNTRACKED_ARGUMENTS = Object.freeze([
+  'ls-files',
+  '--others',
+  '--exclude-standard',
 ]);
 const RAW_OBSERVATIONS_PATH = 'data/tidb-comparison/raw-observations.ndjson';
 const ORIGIN_MAIN_REF = 'refs/remotes/origin/main';
@@ -78,7 +272,9 @@ const STDIO_INHERIT = 'inherit';
 const CLEANUP_SIGNALS = Object.freeze(['SIGINT', 'SIGTERM', 'SIGHUP']);
 
 const TEXT = Object.freeze({
-  USAGE: 'usage: check-pushed-benchmark-freshness.js <ref-lines-file>\n',
+  USAGE:
+    'usage: check-pushed-benchmark-freshness.js ' +
+    '(<ref-lines-file> | --list-producers | --check-staged-clean)\n',
   UNRESOLVABLE_COMMIT: '[pre-push] could not resolve pushed commit ',
   VERIFYING_PREFIX: '[pre-push] verifying benchmark freshness on pushed commit ',
   VERIFYING_REF_PREFIX: ' (',
@@ -92,6 +288,11 @@ const TEXT = Object.freeze({
   MISSING_RAW_OBSERVATIONS_SUFFIX:
     ' without required input data/tidb-comparison/raw-observations.ndjson; refusing push\n',
   ERROR_PREFIX: '[pre-push] benchmark freshness error: ',
+  UNSTAGED_HEADER:
+    'pre-commit: benchmark artifact regeneration needs data/tidb-comparison and ' +
+    'docs/benchmarks to match the staged index (including benchmark generator inputs)\n',
+  UNSTAGED_ITEM_PREFIX: 'pre-commit: stage/stash or remove: ',
+  UNSTAGED_BYPASS: 'pre-commit: WIP bypass: LAGRANGE_SKIP_INVENTORY_REGEN=1 git commit\n',
 });
 
 function gitEnv() {
@@ -320,8 +521,38 @@ function verifyMaterializedCommit(root, target) {
   }
 }
 
+function checkStagedBenchmarkInputsClean(root) {
+  const env = gitEnv();
+  const unstaged = nonEmptyLines(execGit(
+    [GIT_C_FLAG, root, ...GIT_DIFF_NAME_ONLY_ARGUMENTS,
+      GIT_DOUBLE_DASH, ...BENCHMARK_PRODUCER_PATHSPECS],
+    {encoding: UTF8, env},
+  ));
+  const untracked = nonEmptyLines(execGit(
+    [GIT_C_FLAG, root, ...GIT_LS_FILES_UNTRACKED_ARGUMENTS,
+      GIT_DOUBLE_DASH, ...BENCHMARK_CORPUS_PATHS],
+    {encoding: UTF8, env},
+  ));
+  const dirty = [...new Set([...unstaged, ...untracked])].sort();
+  if (dirty.length === 0) return 0;
+  process.stdout.write(TEXT.UNSTAGED_HEADER);
+  for (const item of dirty) {
+    process.stdout.write(`${TEXT.UNSTAGED_ITEM_PREFIX}${item}${NEWLINE}`);
+  }
+  process.stdout.write(TEXT.UNSTAGED_BYPASS);
+  return EXIT_FAILURE;
+}
+
 function main(argv) {
-  const refLinesFile = argv[ARGV_REF_LINES_INDEX];
+  const firstArg = argv[ARGV_REF_LINES_INDEX];
+  if (firstArg === LIST_PRODUCERS_FLAG) {
+    process.stdout.write(`${arrayJoin(BENCHMARK_PUBLICATION_PRODUCER_PATHS, NEWLINE)}${NEWLINE}`);
+    return 0;
+  }
+  if (firstArg === CHECK_STAGED_CLEAN_FLAG) {
+    return checkStagedBenchmarkInputsClean(repoRoot());
+  }
+  const refLinesFile = firstArg;
   if (!refLinesFile || !fs.existsSync(refLinesFile)) {
     process.stderr.write(TEXT.USAGE);
     return EXIT_USAGE;
@@ -340,9 +571,19 @@ function main(argv) {
   return 0;
 }
 
-try {
-  process.exitCode = main(process.argv);
-} catch (error) {
-  process.stderr.write(`${TEXT.ERROR_PREFIX}${error?.message ?? String(error)}${NEWLINE}`);
-  process.exitCode = EXIT_FAILURE;
+const isDirectCli = Boolean(process.argv[1]) &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isDirectCli) {
+  try {
+    process.exitCode = main(process.argv);
+  } catch (error) {
+    process.stderr.write(`${TEXT.ERROR_PREFIX}${error?.message ?? String(error)}${NEWLINE}`);
+    process.exitCode = EXIT_FAILURE;
+  }
 }
+
+export {
+  BENCHMARK_CORPUS_PATHS,
+  BENCHMARK_PRODUCER_PATHSPECS,
+  BENCHMARK_PUBLICATION_PRODUCER_PATHS,
+};

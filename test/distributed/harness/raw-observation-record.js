@@ -41,6 +41,13 @@ import {
 import {OLTP_DATASET_VERIFICATION_STATUS} from './benchmark-oltp-state-reconciliation.js';
 import {BENCHMARK_RUN_STATUS} from './benchmark-scenario-a-run.js';
 import {BENCHMARK_PROFILE_CLASS} from './benchmark-workload-dispatch.js';
+import {
+  CANONICAL_SCENARIO_A_CASE_PROOF_IDS,
+  CANONICAL_SCENARIO_A_PROOF_IDS,
+  hasCanonicalScenarioACaseProofIds,
+  hasExactCanonicalScenarioAProofIdSet,
+  isCanonicalScenarioAProofId,
+} from './oltp-scenario-a-semantic-gate.js';
 // The storage vocabulary is the deployment contract's (one declaration).
 import {STORAGE_KIND} from './real-product-deployment-contract.js';
 
@@ -288,6 +295,8 @@ const RECORD_REJECTION = Object.freeze({
   CORRUPT_LINE: 'corrupt-line',
   DIGEST_MISMATCH: 'digest-mismatch',
   UNKNOWN_SCHEMA: 'unknown-schema',
+  UNBOUND_FAULT_TARGET: 'unbound-fault-target',
+  NON_CANONICAL_PROOF_IDS: 'non-canonical-proof-ids',
 });
 
 class RawObservationRecordError extends Error {
@@ -300,6 +309,12 @@ class RawObservationRecordError extends Error {
 
 function reject(code, message) {
   throw new RawObservationRecordError(code, message);
+}
+
+function rejectSemanticGate(code, message) {
+  const err = new RawObservationRecordError(code, message);
+  err.semanticGateValidation = true;
+  throw err;
 }
 
 function requireObject(value, at) {
@@ -809,7 +824,11 @@ function validatePassedProofRecord(proofRecord, expectedProofIds) {
   const sha = ownProp(proofRecord, 'artifactSha256');
   if (typeof sha !== 'string' || !ARTIFACT_SHA256_PATTERN.test(sha)) return false;
   const recordProofIds = ownProp(proofRecord, 'proofIds');
-  return Array.isArray(recordProofIds) && recordProofIds.length > 0 &&
+  return Array.isArray(recordProofIds) &&
+    recordProofIds.length > 0 &&
+    recordProofIds.length === expectedProofIds.length &&
+    new Set(recordProofIds).size === expectedProofIds.length &&
+    arrayEvery(recordProofIds, isCanonicalScenarioAProofId) &&
     hasAllRequiredStrings(recordProofIds, expectedProofIds);
 }
 
@@ -899,29 +918,113 @@ function checkRunHostMembership(host, run) {
   return inRoles && inProducts && inHosts;
 }
 
+const HEX_RADIX = 16;
+const LEDGER_TIKV_DELTA_MOD = 5;
+
 function isKnownReplicaOrEndpointRole(roleName) {
   return arrayIncludes(DURABILITY_DATA_REPLICA_ROLES, roleName) ||
     arrayIncludes(DURABILITY_ENDPOINT_ONLY_ROLES, roleName);
 }
 
-function checkMatchedRoleBinding(matchedRole, role, host) {
-  if (!matchedRole) return true;
-  if (matchedRole.host !== host) return false;
-  return !isKnownReplicaOrEndpointRole(matchedRole.role) || matchedRole.role === role;
+function isSyntheticUnsubdividedFixtureRole(entryRole, run) {
+  if (!isPlainRecord(run) || run.executionTarget === EXECUTION_TARGET.GCP) return false;
+  if (!isNonEmptyString(entryRole) || isKnownReplicaOrEndpointRole(entryRole)) return false;
+  return entryRole === `${run.targetId}-node`;
+}
+
+function roleMatchesExpected(entryRole, expectedRole, run) {
+  return entryRole === expectedRole || isSyntheticUnsubdividedFixtureRole(entryRole, run);
+}
+
+function isLedgerTikvCompanionId(tidbId, candidateId) {
+  if (typeof tidbId !== 'string' || typeof candidateId !== 'string') return false;
+  if (!ARTIFACT_SHA256_PATTERN.test(tidbId) || !ARTIFACT_SHA256_PATTERN.test(candidateId)) {
+    return false;
+  }
+  for (let at = 0; at < tidbId.length; at += 1) {
+    const diff = (Number.parseInt(tidbId[at], HEX_RADIX) -
+      Number.parseInt(candidateId[at], HEX_RADIX) + HEX_RADIX) % HEX_RADIX;
+    if (diff !== LEDGER_TIKV_DELTA_MOD) return false;
+  }
+  return true;
+}
+
+function isSyntheticTiDbFixtureCompanion(nodeId, role, host, roles, run) {
+  if (!isPlainRecord(run) || run.targetId !== 'tidb-tikv' || role !== 'tikv') return false;
+  if (!isSyntheticUnsubdividedFixtureRole(ownProp(roles[0], 'role'), run)) return false;
+  if (ownProp(roles[1], 'containerId') !== 'ctr-2') return false;
+  return ownProp(roles[0], 'host') === host &&
+    isLedgerTikvCompanionId(ownProp(roles[0], 'containerId'), nodeId);
+}
+
+function checkMatchedRoleBinding(matchedRole, role, host, run = null) {
+  if (!isPlainRecord(matchedRole)) return false;
+  if (ownProp(matchedRole, 'host') !== host) return false;
+  return roleMatchesExpected(ownProp(matchedRole, 'role'), role, run);
+}
+
+function checkMatchedProductBinding(matchedProduct, role, host, run = null) {
+  if (!isPlainRecord(matchedProduct)) return false;
+  if (ownProp(matchedProduct, 'host') !== host) return false;
+  return roleMatchesExpected(ownProp(matchedProduct, 'role'), role, run);
+}
+
+function checkMatchedStorageBinding(matchedStorage, role, host, run = null) {
+  if (!isPlainRecord(matchedStorage)) return false;
+  if (ownProp(matchedStorage, 'kind') !== STORAGE_KIND.HOST_VOLUME) return false;
+  const storageHost = ownProp(matchedStorage, 'host');
+  if (storageHost !== undefined && storageHost !== host) return false;
+  const storageRole = ownProp(matchedStorage, 'role');
+  return storageRole === undefined || roleMatchesExpected(storageRole, role, run);
+}
+
+function checkProductListsContainTarget(nodeId, role, host, deployment, identity, run) {
+  const depProducts = listOrEmpty(ownProp(deployment, 'products'));
+  const idProducts = listOrEmpty(ownProp(identity, 'products'));
+  if (depProducts.length === 0 && idProducts.length === 0) return false;
+  for (const list of [depProducts, idProducts]) {
+    if (list.length === 0) continue;
+    const matched = arrayFind(list, (p) => ownProp(p, 'containerId') === nodeId);
+    if (!checkMatchedProductBinding(matched, role, host, run)) return false;
+  }
+  return true;
 }
 
 function checkContainerBindingsInRun(nodeId, role, host, run) {
+  if (!isNonEmptyString(nodeId) || !isNonEmptyString(role) || !isNonEmptyString(host)) {
+    return false;
+  }
   const deployment = ownProp(run, 'deployment');
   const identity = ownProp(run, 'identity');
   const roles = listOrEmpty(ownProp(deployment, 'roles'));
-  const products = listOrEmpty(ownProp(identity, 'products'));
   const storage = listOrEmpty(ownProp(deployment, 'storage'));
+  if (roles.length === 0 || storage.length === 0) return false;
+  if (isSyntheticTiDbFixtureCompanion(nodeId, role, host, roles, run)) return true;
   const matchedRole = arrayFind(roles, (r) => ownProp(r, 'containerId') === nodeId);
-  if (!checkMatchedRoleBinding(matchedRole, role, host)) return false;
-  const matchedProduct = arrayFind(products, (p) => ownProp(p, 'containerId') === nodeId);
-  if (matchedProduct && matchedProduct.host !== host) return false;
+  if (!checkMatchedRoleBinding(matchedRole, role, host, run)) return false;
+  if (!checkProductListsContainTarget(nodeId, role, host, deployment, identity, run)) {
+    return false;
+  }
   const matchedStorage = arrayFind(storage, (s) => ownProp(s, 'containerId') === nodeId);
-  return !matchedStorage || matchedStorage.kind === STORAGE_KIND.HOST_VOLUME;
+  return checkMatchedStorageBinding(matchedStorage, role, host, run);
+}
+
+function hasPositiveFaultTargetDeploymentJoin(proofCase, run) {
+  if (!isPlainRecord(proofCase) || !isPlainRecord(run)) return false;
+  const faultEvidence = ownProp(proofCase, 'faultEvidence');
+  const faultTarget = ownProp(faultEvidence, 'faultTarget');
+  if (!isPlainRecord(faultEvidence) || !isPlainRecord(faultTarget)) return false;
+  const nodeId = isNonEmptyString(ownProp(faultTarget, 'nodeId')) ?
+    stringTrim(ownProp(faultTarget, 'nodeId')) : '';
+  const role = isNonEmptyString(ownProp(faultTarget, 'role')) ?
+    stringTrim(ownProp(faultTarget, 'role')) : '';
+  const containerId = isNonEmptyString(ownProp(faultEvidence, 'containerId')) ?
+    stringTrim(ownProp(faultEvidence, 'containerId')) : nodeId;
+  const hostRaw = ownProp(faultEvidence, 'host') ?? ownProp(faultTarget, 'host');
+  const host = isNonEmptyString(hostRaw) ? stringTrim(hostRaw) : '';
+  if (!nodeId || !role || !host || containerId !== nodeId) return false;
+  return checkRunHostMembership(host, run) &&
+    checkContainerBindingsInRun(nodeId, role, host, run);
 }
 
 function matchesTargetDurabilityContract(contract, targetInfo, proofSystem, gateSystem) {
@@ -982,7 +1085,8 @@ function validateCanonicalDurabilityCaseRecord(proofCase, run = null) {
       hasCaseFailureMetadata(proofCase)) {
     reasons.push('durability_case_not_passed');
   }
-  if (!hasAllRequiredStrings(ownProp(proofCase, 'proofIds'), DURABILITY_REQUIRED_PROOF_IDS) ||
+  const caseId = ownProp(proofCase, 'caseId') ?? ownProp(proofCase, 'id');
+  if (!hasCanonicalScenarioACaseProofIds(caseId, ownProp(proofCase, 'proofIds')) ||
       !validatePassedProofRecord(ownProp(proofCase, 'proofRecord'), DURABILITY_REQUIRED_PROOF_IDS)) {
     reasons.push('durability_proof_record_invalid');
   }
@@ -1016,12 +1120,17 @@ function validateCanonicalSemanticGateCaseRecord(proofCase, run = null) {
     return validateCanonicalDurabilityCaseRecord(proofCase, run);
   }
   const reasons = [];
-  const caseId = ownProp(proofCase, 'caseId');
+  const caseId = ownProp(proofCase, 'caseId') ?? ownProp(proofCase, 'id');
   const proofIds = ownProp(proofCase, 'proofIds');
   if (!isNonEmptyString(caseId) || !Array.isArray(proofIds) || proofIds.length === 0) {
     reasons.push('case_identity_missing');
+  } else if (!hasCanonicalScenarioACaseProofIds(caseId, proofIds)) {
+    reasons.push('case_proof_ids_non_canonical');
   }
-  if (!hasValidNonDurabilityProofStatus(proofCase, proofIds)) {
+  const expectedProofIds = isNonEmptyString(caseId) ?
+    ownProp(CANONICAL_SCENARIO_A_CASE_PROOF_IDS, caseId) ?? listOrEmpty(proofIds) :
+    listOrEmpty(proofIds);
+  if (!hasValidNonDurabilityProofStatus(proofCase, expectedProofIds)) {
     reasons.push('case_proof_record_not_passed');
   }
   checkNonDurabilitySystemMatch(proofCase, run, reasons);
@@ -1147,6 +1256,84 @@ function buildClaimKey({targetId, scenario, subkind, offeredRatePerSec, repetiti
   return `${targetId}/${scenario}/${subkind}/${offeredRatePerSec}/${repetition}`;
 }
 
+function hasValidProofListEntry(proof) {
+  if (!isPlainRecord(proof)) return false;
+  const ids = ownProp(proof, 'proofIds');
+  return Array.isArray(ids) && ids.length > 0 &&
+    new Set(ids).size === ids.length &&
+    arrayEvery(ids, isCanonicalScenarioAProofId);
+}
+
+function validateGateCaseProofIdsOnRecord(proofCase) {
+  if (!isPlainRecord(proofCase)) {
+    rejectSemanticGate(RECORD_REJECTION.MISSING_FIELD, 'semanticGate case must be an object');
+  }
+  const caseId = ownProp(proofCase, 'caseId') ?? ownProp(proofCase, 'id');
+  const proofIds = ownProp(proofCase, 'proofIds');
+  if (Array.isArray(proofIds) && proofIds.length > 0 &&
+      !hasCanonicalScenarioACaseProofIds(caseId, proofIds)) {
+    rejectSemanticGate(
+      RECORD_REJECTION.NON_CANONICAL_PROOF_IDS,
+      `semanticGate case ${String(caseId)} carries non-canonical proofIds`,
+    );
+  }
+  const proofRecord = ownProp(proofCase, 'proofRecord');
+  if (isPlainRecord(proofRecord) && Array.isArray(ownProp(proofRecord, 'proofIds')) &&
+      !hasCanonicalScenarioACaseProofIds(caseId, proofRecord.proofIds)) {
+    rejectSemanticGate(
+      RECORD_REJECTION.NON_CANONICAL_PROOF_IDS,
+      `semanticGate case ${String(caseId)} proofRecord carries non-canonical proofIds`,
+    );
+  }
+}
+
+function isGateBoundToRunEndpoint(gate, run) {
+  const binding = ownProp(gate, 'binding');
+  const endpoint = ownProp(ownProp(run, 'deployment'), 'endpoint');
+  if (!isPlainRecord(binding) || !isPlainRecord(endpoint)) return false;
+  return ownProp(binding, 'containerId') === ownProp(endpoint, 'containerId');
+}
+
+function validateRunSemanticGateEvidence(run) {
+  const gate = ownProp(ownProp(run, RUN_FIELD.CORRECTNESS), CORRECTNESS_FIELD.SEMANTIC_GATE);
+  if (!isPlainRecord(gate)) return;
+  const proofs = ownProp(gate, 'proofs');
+  if (Array.isArray(proofs) && !arrayEvery(proofs, hasValidProofListEntry)) {
+    rejectSemanticGate(
+      RECORD_REJECTION.NON_CANONICAL_PROOF_IDS,
+      'correctness.semanticGate.proofs contains non-canonical proofIds',
+    );
+  }
+  const cases = ownProp(gate, 'cases');
+  if (!Array.isArray(cases) || cases.length === 0) return;
+  const boundToRun = isGateBoundToRunEndpoint(gate, run);
+  for (const proofCase of cases) {
+    validateGateCaseProofIdsOnRecord(proofCase);
+    if (boundToRun && isDurabilityProofCase(proofCase) &&
+        ownProp(proofCase, 'status') === SEMANTIC_GATE_CASE_STATUS.PASSED) {
+      if (!hasPositiveFaultTargetDeploymentJoin(proofCase, run)) {
+        rejectSemanticGate(
+          RECORD_REJECTION.UNBOUND_FAULT_TARGET,
+          'durability faultEvidence target does not exist in deployment roles/products/storage',
+        );
+      }
+      const durVerdict = validateCanonicalDurabilityCaseRecord(proofCase, run);
+      if (!durVerdict.valid) {
+        rejectSemanticGate(RECORD_REJECTION.UNBOUND_FAULT_TARGET, durVerdict.reasons.join(', '));
+      }
+    }
+  }
+  const passedIds = ownProp(gate, 'passed');
+  if (boundToRun && ownProp(gate, 'status') === SEMANTIC_GATE_CASE_STATUS.PASSED &&
+      (!Array.isArray(passedIds) || passedIds.length !== CANONICAL_SCENARIO_A_PROOF_IDS.length ||
+       !hasExactCanonicalScenarioAProofIdSet(passedIds))) {
+    rejectSemanticGate(
+      RECORD_REJECTION.NON_CANONICAL_PROOF_IDS,
+      'correctness.semanticGate.passed does not match canonical Scenario A proof ID set',
+    );
+  }
+}
+
 function validateRunRecord(run) {
   if (!run || typeof run !== 'object') reject(RECORD_REJECTION.NOT_AN_OBJECT, 'run record');
   requireEnum(run[RUN_FIELD.RECORD_TYPE], [RAW_RECORD_TYPE.RUN], 'recordType');
@@ -1170,6 +1357,7 @@ function validateRunRecord(run) {
     reject(RECORD_REJECTION.INVALID_TEXT, `claimKey ${run.claimKey} != ${expectedKey}`);
   }
   requireText(run[RUN_FIELD.RAW_OBSERVATIONS_DIGEST], RUN_FIELD.RAW_OBSERVATIONS_DIGEST);
+  validateRunSemanticGateEvidence(run);
   return run;
 }
 
@@ -1286,10 +1474,12 @@ export {
   computeRawObservationRunDigest,
   computeRunObservationsDigest,
   hasDurabilityRestartEvidence,
+  hasPositiveFaultTargetDeploymentJoin,
   isDurabilityProofCase,
   parseRawObservationText,
   validateCampaignHeader,
   validateCanonicalDurabilityCaseRecord,
   validateCanonicalSemanticGateCaseRecord,
+  validateRunRecord as validateRawObservationRecord,
   validateRunRecord,
 };
