@@ -174,9 +174,9 @@ function generationOf(partition) {
   }
 }
 function validationTextOf(generation, partitionId = PARTITION_ID,
-  originIndex = GENERATION_ORIGIN_INDEX) {
+  originIndex = GENERATION_ORIGIN_INDEX, readDeps = {readScope: 'none'}) {
   return JSON.stringify([[V3.PARTITION_SCOPE, partitionId,
-    sha256(`generation:${generation === null ? 'none' : generation}`), originIndex]]);
+    sha256(`generation:${generation === null ? 'none' : generation}`), originIndex, readDeps]]);
 }
 // The log index the replica's write generation counts from (null when no
 // origin has applied there, or the table is absent).
@@ -217,9 +217,9 @@ function operationOf(row, extra = {}) {
     params: extra.params ?? [row.id, row.value]};
 }
 function prepareCommandOf(identity, operations, generation, partitionId = PARTITION_ID,
-  originIndex = GENERATION_ORIGIN_INDEX) {
+  originIndex = GENERATION_ORIGIN_INDEX, readDeps = {readScope: 'none'}) {
   const operationsText = JSON.stringify(operations);
-  const validationText = validationTextOf(generation, partitionId, originIndex);
+  const validationText = validationTextOf(generation, partitionId, originIndex, readDeps);
   return {
     type: V3.PREPARE_COMMAND,
     entryId: `${identity.participantId}:prepare`,

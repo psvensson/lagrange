@@ -5,10 +5,18 @@
 // Recovery / wake entry: hydrateDurablePreparedAndCommittedState on reopen and resetParticipantRowKeyHistory on afterRollback.
 // Representative production tests: test/query/scenario-a-transaction-coordination-fast-path.test.js, test/partition/partition-participant-transaction-apply.test.js.
 import {
-  PARTICIPANT_CONCURRENCY_GRANULARITY, PARTICIPANT_TRANSACTION_LOG_MSG as LOG_MSG,
-  PARTICIPANT_TRANSACTION_SESSION_PHASE as PHASE,
+  PARTICIPANT_CONCURRENCY_GRANULARITY,
+  PARTICIPANT_TRANSACTION_LOG_MSG as LOG_MSG, PARTICIPANT_TRANSACTION_SESSION_PHASE as PHASE,
 } from './partition-participant-transaction-constants.js';
-import {operationsOf, validationTextOf} from './partition-participant-transaction-bytes.js';
+import {operationsOf} from './partition-participant-transaction-bytes.js';
+import {
+  FAIL_CLOSED_READ_DEPENDENCY_SNAPSHOT, areGenerationRowsDisjointFromCandidate,
+  attachSessionReadDependencyAccumulator, buildPreparedEntryFromFootprintAndValidation,
+  buildStagedPreparedEntry, collectPreparedContradictions,
+  decodeParticipantValidationForPartition, doTransactionFootprintsConflict,
+  getSessionReadDependencySnapshot, hasScopedCandidateFootprint,
+  isEntryDisjointFromCommittedMap, normalizeTransactionFootprint,
+} from './partition-participant-read-dependencies.js';
 import {
   isParticipantSessionPrepared, isPartitionReserved,
   readDurablePrepareGeneration, readOrReconstructGenerationHistoryRange,
@@ -219,7 +227,7 @@ function revertSessionRowKeyCheck(service, session, rowKeyCheck) {
   if (changed) notifyRowKeySettlementWaiters(service);
 }
 
-function checkAndRecordSessionRowKey(service, session, params, sql = '') {
+function checkAndRecordSessionRowKey(service, session, params, sql = '', ast = null) {
   if (!isRowKeyConcurrencyEnabled(service)) {
     return {conflict: false, rowKey: null, alreadyTouchedInSession: false,
       scoped: false, addedRowKeys: [], setUnscopedWrite: false};
@@ -228,7 +236,7 @@ function checkAndRecordSessionRowKey(service, session, params, sql = '') {
   const {pkCols, allCols, uniqueConstraintCols, hasUnscopedSchemaConstraints} =
     resolveTablePkMetadata(service);
   const footprint = extractStatementWriteFootprint({
-    sql, params: Array.isArray(params) ? params : [],
+    ast, sql, params: Array.isArray(params) ? params : [],
     pkCols, allCols, uniqueConstraintCols, hasUnscopedSchemaConstraints,
   });
   if (!footprint.scoped || footprint.rowKeys.length === 0) {
@@ -259,16 +267,18 @@ function extractOperationsRowKeyFootprint(service, operations) {
   return {scoped: true, rowKeys, hasUnscopedWrite: false};
 }
 
+function decodeParticipantValidationForService(service, validationText) {
+  if (service?.db?.open !== true) return null;
+  return decodeParticipantValidationForPartition({
+    validationText,
+    currentGeneration: readPartitionWriteGeneration(service.db),
+    partitionId: service.partitionId,
+    originIndex: readPartitionWriteOrigin(service.db)?.originIndex ?? null,
+  });
+}
+
 function resolveExactValidationBaseGeneration(service, validationText) {
-  if (typeof validationText !== 'string' || service?.db?.open !== true) return null;
-  const origin = readPartitionWriteOrigin(service.db);
-  if (origin === null) return null;
-  for (let gen = readPartitionWriteGeneration(service.db); gen >= 0; gen -= 1) {
-    if (validationText === validationTextOf(gen, service.partitionId, origin.originIndex)) {
-      return gen;
-    }
-  }
-  return null;
+  return decodeParticipantValidationForService(service, validationText)?.baseGeneration ?? null;
 }
 
 function applyHydratedGenerationRow(row, expectedGen, scopedGens, committedGenMap) {
@@ -302,11 +312,12 @@ function hydrateCommittedHistoryFromStore(service, minGen, currentGen) {
 function getOrBuildPreparedEntry(service, preparedMap, row) {
   let entry = preparedMap.get(row.participantId);
   if (entry) return entry;
-  const opsFp = extractOperationsRowKeyFootprint(service, operationsOf(row.operationsText));
-  const baseGen = resolveExactValidationBaseGeneration(service, row.validationText) ?? 0;
+  const opsFootprint = extractOperationsRowKeyFootprint(service, operationsOf(row.operationsText));
+  const decodedValidation = decodeParticipantValidationForService(service, row.validationText);
+  const baseGen = decodedValidation?.baseGeneration ?? 0;
   const prepareGen = Math.max(baseGen, readDurablePrepareGeneration(service.db, row.prepareIndex));
-  entry = {rowKeys: new Set(opsFp.rowKeys), hasUnscopedWrite: Boolean(opsFp.hasUnscopedWrite),
-    generationBase: baseGen, validatedThroughGeneration: prepareGen};
+  entry = buildPreparedEntryFromFootprintAndValidation({
+    opsFootprint, decodedValidation, baseGen, prepareGen});
   preparedMap.set(row.participantId, entry);
   return entry;
 }
@@ -331,24 +342,18 @@ function hydrateDurablePreparedAndCommittedState(service) {
   }
 }
 
-function isPreparedEntryConflicting(entry, rowKeys, hasUnscopedWrite) {
-  if (!entry || entry.hasUnscopedWrite === true || hasUnscopedWrite === true) return true;
-  for (const rk of rowKeys ?? []) {
-    if (entry.rowKeys?.has(rk)) return true;
-  }
-  return false;
-}
-
 function isPartitionReservedForPrepare(
-  service, selfParticipantId, rowKeys, hasUnscopedWrite = false,
+  service, selfParticipantId, rowKeysOrFootprint, hasUnscopedWrite = false, readDependencies = null,
 ) {
   if (!isPartitionReserved(service.db)) return false;
   if (!isRowKeyConcurrencyEnabled(service)) return true;
   hydrateDurablePreparedAndCommittedState(service);
+  const candidate = normalizeTransactionFootprint(
+    rowKeysOrFootprint, hasUnscopedWrite, readDependencies);
   const preparedIds = readPreparedParticipantIds(service.db);
   const preparedMap = PREPARED_PARTICIPANT_ROW_KEYS.get(service);
   return preparedIds.some((otherId) => otherId !== selfParticipantId &&
-    isPreparedEntryConflicting(preparedMap?.get(otherId), rowKeys, hasUnscopedWrite));
+    doTransactionFootprintsConflict(preparedMap?.get(otherId), candidate));
 }
 
 function findMinActiveGenerationBase(service) {
@@ -365,20 +370,12 @@ function findMinActiveGenerationBase(service) {
   return minGen;
 }
 
-function isEntryDisjointFromCommittedMap(entry, committedGenMap) {
-  if (!committedGenMap) return true;
-  for (const rk of entry.rowKeys ?? []) {
-    if ((committedGenMap.get(rk) ?? 0) > entry.generationBase) return false;
-  }
-  return true;
-}
-
 function advancePreparedValidationBeforeEviction(service, maxEvictedGen) {
   const preparedMap = PREPARED_PARTICIPANT_ROW_KEYS.get(service);
   if (!preparedMap || preparedMap.size === 0) return;
   const committedGenMap = COMMITTED_ROW_KEY_GENERATIONS.get(service);
   for (const entry of preparedMap.values()) {
-    if (entry.hasUnscopedWrite) continue;
+    if (entry.hasUnscopedWrite || entry.hasUnscopedRead) continue;
     const fromGen = Math.max(entry.generationBase,
       entry.validatedThroughGeneration ?? entry.generationBase);
     if (maxEvictedGen > fromGen &&
@@ -471,19 +468,24 @@ function resolvePreparedBaseGeneration(service, participantId, existing, validat
     resolveExactValidationBaseGeneration(service, validationText) ?? 0;
 }
 
+function resolvePreparedCurrentGeneration(service, baseGen, validationText) {
+  return validationText !== null && service.db?.open === true ?
+    readPartitionWriteGeneration(service.db) : baseGen;
+}
+
 function stagePreparedParticipantRowKeys(
-  service, participantId, touchedRowKeys, hasUnscopedWrite = false, validationText = null,
+  service, participantId, touchedRowKeys, hasUnscopedWrite = false,
+  validationText = null, readDeps = null,
 ) {
   if (!service || !participantId || !(touchedRowKeys instanceof Set)) return;
   const preparedMap = perServiceMap(PREPARED_PARTICIPANT_ROW_KEYS, service);
   const existing = preparedMap.get(participantId);
   const baseGen = resolvePreparedBaseGeneration(service, participantId, existing, validationText);
-  const currentGen = validationText !== null && service.db?.open === true ?
-    readPartitionWriteGeneration(service.db) : baseGen;
-  const validatedThrough = Math.max(existing?.validatedThroughGeneration ?? baseGen, currentGen);
-  preparedMap.set(participantId, {rowKeys: new Set(touchedRowKeys),
-    hasUnscopedWrite: Boolean(hasUnscopedWrite), generationBase: baseGen,
-    validatedThroughGeneration: validatedThrough});
+  const currentGen = resolvePreparedCurrentGeneration(service, baseGen, validationText);
+  const session = SESSIONS.get(service)?.get(participantId);
+  preparedMap.set(participantId, buildStagedPreparedEntry({
+    touchedRowKeys, hasUnscopedWrite, baseGen, currentGen, existing,
+    validationText, readDeps, session}));
 }
 
 function clearPreparedParticipantRowKeys(service, participantId) {
@@ -526,18 +528,26 @@ function areIntermediateGenerationsScoped(service, fromGen, toGen) {
   return true;
 }
 
-function isRowKeyTouchedAfterGeneration(service, session, rk) {
-  const committedGenMap = COMMITTED_ROW_KEY_GENERATIONS.get(service);
-  if ((committedGenMap?.get(rk) ?? 0) > session.generationBase) return true;
-  return isRowKeyHeldByOtherPreparedParticipant(
-    PREPARED_PARTICIPANT_ROW_KEYS.get(service), session.identity?.participantId, rk);
-}
-
 function hasUnmodifiedRowKeySet(service, session, rowKeys) {
+  const committedGenMap = COMMITTED_ROW_KEY_GENERATIONS.get(service);
   for (const rk of rowKeys ?? []) {
-    if (isRowKeyTouchedAfterGeneration(service, session, rk)) return false;
+    if ((committedGenMap?.get(rk) ?? 0) > session.generationBase) return false;
   }
   return true;
+}
+
+function hasPreparedConflictForSession(service, session) {
+  if (!session) return false;
+  hydrateDurablePreparedAndCommittedState(service);
+  const preparedMap = PREPARED_PARTICIPANT_ROW_KEYS.get(service);
+  if (!preparedMap || preparedMap.size === 0) return false;
+  const selfId = session.identity?.participantId;
+  const candidate = normalizeTransactionFootprint(
+    session.touchedRowKeys, session.hasUnscopedWrite, getSessionReadDependencySnapshot(session));
+  for (const [otherId, entry] of preparedMap.entries()) {
+    if (otherId !== selfId && doTransactionFootprintsConflict(entry, candidate)) return true;
+  }
+  return false;
 }
 
 function isSessionSchemaCurrent(service, session) {
@@ -547,15 +557,17 @@ function isSessionSchemaCurrent(service, session) {
 
 function isScopedRowKeySession(service, session) {
   return isRowKeyConcurrencyEnabled(service) &&
-    session?.hasUnscopedWrite !== true && session?.hasUnscopedRead !== true &&
-    session?.touchedRowKeys instanceof Set && session.touchedRowKeys.size > 0 &&
+    Boolean(session) &&
+    session.hasUnscopedWrite !== true &&
+    session.hasUnscopedRead !== true &&
     isSessionSchemaCurrent(service, session);
 }
 
 function canAdvanceRowKeySessionGeneration(service, session, targetGeneration) {
   hydrateDurablePreparedAndCommittedState(service);
   if (!isScopedRowKeySession(service, session) ||
-      !areIntermediateGenerationsScoped(service, session.generationBase, targetGeneration)) {
+      !areIntermediateGenerationsScoped(service, session.generationBase, targetGeneration) ||
+      hasPreparedConflictForSession(service, session)) {
     return false;
   }
   return hasUnmodifiedRowKeySet(service, session, session.touchedRowKeys) &&
@@ -566,68 +578,53 @@ function canRebaseEmptyWaitingSession(service, session, targetGeneration) {
   if (!session || session.hasUnscopedRead === true || !isSessionSchemaCurrent(service, session)) {
     return false;
   }
-  if (!(session.readRowKeys instanceof Set) || session.readRowKeys.size === 0) return true;
   hydrateDurablePreparedAndCommittedState(service);
+  if (hasPreparedConflictForSession(service, session)) return false;
+  if ((session.readKeyCount ?? 0) === 0) return true;
   return isRowKeyConcurrencyEnabled(service) &&
     areIntermediateGenerationsScoped(service, session.generationBase, targetGeneration) &&
     hasUnmodifiedRowKeySet(service, session, session.readRowKeys);
 }
 
-function recordConflictingPair(contradictoryIds, contradictions, left, right) {
-  if (!isPreparedEntryConflicting(left.fp, right.fp.rowKeys, right.fp.hasUnscopedWrite)) return;
-  contradictoryIds.add(left.participantId);
-  contradictoryIds.add(right.participantId);
-  contradictions.push(Object.freeze({
-    leftParticipantId: left.participantId, rightParticipantId: right.participantId}));
+function buildDurablePreparedRowFootprint(service, row) {
+  const opsFp = extractOperationsRowKeyFootprint(service, operationsOf(row.operationsText));
+  const decoded = decodeParticipantValidationForService(service, row.validationText);
+  const readDeps = decoded === null ?
+    FAIL_CLOSED_READ_DEPENDENCY_SNAPSHOT : decoded.readDependencies;
+  return normalizeTransactionFootprint(
+    opsFp.rowKeys, Boolean(opsFp.hasUnscopedWrite) || decoded === null, readDeps);
 }
 
 function inspectRetainedPreparedObligations(service) {
   if (service?.db?.open !== true) {
-    return Object.freeze({healthy: true, preparedCount: 0,
-      contradictoryParticipantIds: Object.freeze([]), contradictions: Object.freeze([])});
+    return collectPreparedContradictions([]);
   }
   const durableRows = readPreparedParticipantRows(service.db);
-  const footprints = durableRows.map((row) => ({participantId: row.participantId,
-    fp: extractOperationsRowKeyFootprint(service, operationsOf(row.operationsText))}));
-  const contradictoryIds = new Set();
-  const contradictions = [];
-  for (let i = 0; i < footprints.length; i += 1) {
-    for (let j = i + 1; j < footprints.length; j += 1) {
-      recordConflictingPair(contradictoryIds, contradictions, footprints[i], footprints[j]);
-    }
-  }
-  return Object.freeze({healthy: contradictions.length === 0, preparedCount: durableRows.length,
-    contradictoryParticipantIds: Object.freeze([...contradictoryIds]),
-    contradictions: Object.freeze(contradictions)});
-}
-
-function isRowTouchedInGeneration(row, expectedGen, operationsFootprint) {
-  if (Number(row.generation) !== expectedGen || Number(row.scoped) !== 1) return true;
-  const keys = JSON.parse(row.row_keys_text);
-  if (!Array.isArray(keys) || keys.length === 0) return true;
-  return keys.some((rk) => operationsFootprint.rowKeys.has(rk));
+  return collectPreparedContradictions(durableRows.map((row) => ({
+    participantId: row.participantId,
+    fp: buildDurablePreparedRowFootprint(service, row),
+  })));
 }
 
 function canAdvanceCommittedValidationText(service, validationText, operationsFootprint) {
+  hydrateDurablePreparedAndCommittedState(service);
+  const decoded = decodeParticipantValidationForService(service, validationText);
+  if (decoded === null) return false;
+  const baseGen = decoded.baseGeneration;
+  const currentGen = readPartitionWriteGeneration(service.db);
+  if (baseGen < 0 || baseGen > currentGen) return false;
+  if (baseGen === currentGen) return true;
   if (!isRowKeyConcurrencyEnabled(service) ||
-      !operationsFootprint?.scoped || operationsFootprint.hasUnscopedWrite) {
+      !hasScopedCandidateFootprint(operationsFootprint, decoded)) {
     return false;
   }
-  hydrateDurablePreparedAndCommittedState(service);
-  const baseGen = resolveExactValidationBaseGeneration(service, validationText);
-  const currentGen = readPartitionWriteGeneration(service.db);
-  if (baseGen === null || baseGen < 0 || baseGen > currentGen) return false;
-  if (baseGen === currentGen) return true;
+  const candidate = normalizeTransactionFootprint(
+    operationsFootprint.rowKeys, operationsFootprint.hasUnscopedWrite, decoded.readDependencies);
   const rows = readOrReconstructGenerationHistoryRange(service.db, baseGen, currentGen,
     (opsText) => extractOperationsRowKeyFootprint(service, operationsOf(opsText)));
   if (rows.length !== currentGen - baseGen) return false;
   hydrateCommittedHistoryFromStore(service, baseGen, currentGen);
-  for (let idx = 0; idx < rows.length; idx += 1) {
-    if (isRowTouchedInGeneration(rows[idx], baseGen + idx + 1, operationsFootprint)) {
-      return false;
-    }
-  }
-  return true;
+  return areGenerationRowsDisjointFromCandidate(rows, baseGen, candidate);
 }
 
 function recordCommittedAutocommitRowKeys(service, command, generation) {
@@ -673,14 +670,15 @@ function openParticipantSession(service, identity, base) {
   hydrateDurablePreparedAndCommittedState(service);
   const schemaVersionBase = resolveTablePkMetadata(service).schemaVersion;
   const session = {
-    identity: Object.freeze({...identity}), operations: [], compiledOperations: [],
-    touchedRowKeys: new Set(), hasUnscopedWrite: false, readRowKeys: new Set(),
-    hasUnscopedRead: false, stagedLockClaims: {rowKeys: new Set(), hasUnscopedWrite: false},
+    identity: Object.freeze({...identity}), operations: [], encodedOperations: [],
+    compiledOperations: [], touchedRowKeys: new Set(), hasUnscopedWrite: false,
+    stagedLockClaims: {rowKeys: new Set(), hasUnscopedWrite: false},
     bytes: 0, generationBase: base.generationBase, lastValidatedGeneration: base.generationBase,
     lastValidatedSchemaVersion: null, schemaVersionBase, originIndex: base.originIndex,
     startedAt: service.timeSource.now(), phase: PHASE.ACTIVE, sealed: null,
     inFlight: false, doomCode: null,
   };
+  attachSessionReadDependencyAccumulator(session);
   sessionsOf(service).set(identity.participantId, session);
   return session;
 }

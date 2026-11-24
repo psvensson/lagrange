@@ -59,6 +59,10 @@ import {
   revertSessionRowKeyCheck,
 } from './partition-participant-transaction-session.js';
 import {
+  recordSessionReadDependencyFootprint,
+  widenSessionReadToPartition,
+} from './partition-participant-read-dependencies.js';
+import {
   checkPartitionWriteLockingReadConflict,
   recordSessionStagedWriteClaims,
 } from './partition-locking-read-write-check.js';
@@ -80,6 +84,11 @@ const TEXT_ENCODING = 'utf8';
 const PRAGMA_SCHEMA_VERSION = 'schema_version';
 const ZERO = 0;
 const ONE = 1;
+const EMPTY_ARRAY_BRACKET_BYTES = 2;
+const ARRAY_ELEMENT_COMMA_BYTES = 1;
+const MAX_MEMOIZED_FOOTPRINT_PLANS = 256;
+const STAT_EMPTY_READ_DIRECT = 'emptyReadDirectExecutions';
+const STAT_DISJOINT_DIRECT_READS = 'disjointDirectReads';
 const PG_PARAM_PATTERN = /\$[1-9]\d*/u;
 const SQL_DIALECT_PG = 'postgresql';
 const SQL_DIALECT_SQLITE = 'sqlite';
@@ -87,10 +96,27 @@ const SELECT_AST_TYPE = 'SELECT';
 const TABLE_SOURCE_TYPE = 'table';
 const SUBQUERY_NODE_TYPES = new Set(['subquery', 'exists']);
 const UNSCOPED_SELECT_AST = Object.freeze({unscoped: true});
+const UNSCOPED_QUERY_READ_FOOTPRINT = Object.freeze({scoped: false, rowKeys: Object.freeze([])});
 // The private value that ends a validation: thrown inside its transaction,
 // so better-sqlite3 rolls every replayed and new effect back.
 const VALIDATION_COMPLETE = Object.freeze({validationComplete: true});
 const STAGING_REPLAY_STATS = new WeakMap();
+const footprintPlanMemo = {
+  entries: new Map(),
+  hitCount: ZERO,
+  missCount: ZERO,
+};
+
+function deepFreezeAst(node) {
+  if (!node || typeof node !== 'object' || Object.isFrozen(node)) return node;
+  if (Array.isArray(node)) {
+    for (let i = ZERO; i < node.length; i += ONE) deepFreezeAst(node[i]);
+    return Object.freeze(node);
+  }
+  const values = Object.values(node);
+  for (let i = ZERO; i < values.length; i += ONE) deepFreezeAst(values[i]);
+  return Object.freeze(node);
+}
 
 function containsAstSubquery(node) {
   if (!node || typeof node !== 'object') return false;
@@ -110,11 +136,10 @@ function isPlainTableFrom(from, tableName) {
   return !hasTable || from.name.toLowerCase() === tableName.toLowerCase();
 }
 
-function isSingleTableSelectShape(ast, tableName) {
+function isBaseSingleTableSelectAst(ast) {
   const isSelect = Boolean(ast) && String(ast.type ?? '').toUpperCase() === SELECT_AST_TYPE;
   const hasJoins = Array.isArray(ast?.joins) && ast.joins.length > ZERO;
-  return isSelect && !ast.ctes && !ast.setOperation && !hasJoins &&
-    isPlainTableFrom(ast.from, tableName);
+  return isSelect && !ast.ctes && !ast.setOperation && !hasJoins;
 }
 
 function hasNoSubqueryClauses(ast) {
@@ -122,34 +147,71 @@ function hasNoSubqueryClauses(ast) {
   return !clauses.some(containsAstSubquery);
 }
 
-function parseScopedSelectAst(sql, tableName) {
-  if (typeof sql !== 'string' || sql.trim().length === ZERO) return UNSCOPED_SELECT_AST;
+function buildFootprintPlanEntry(trimmedStatement) {
   try {
-    const dialect = PG_PARAM_PATTERN.test(sql) ? SQL_DIALECT_PG : SQL_DIALECT_SQLITE;
-    const parser = new SQLParser(sql, {dialect});
+    const dialect = PG_PARAM_PATTERN.test(trimmedStatement) ? SQL_DIALECT_PG : SQL_DIALECT_SQLITE;
+    const parser = new SQLParser(trimmedStatement, {dialect});
     parser.logger = {debug() {}, info() {}, warn() {}, error() {}};
-    const ast = parser.parse();
-    return isSingleTableSelectShape(ast, tableName) && hasNoSubqueryClauses(ast) ?
-      ast : UNSCOPED_SELECT_AST;
+    const ast = deepFreezeAst(parser.parse());
+    const eligibleSelect = isBaseSingleTableSelectAst(ast) && hasNoSubqueryClauses(ast);
+    return Object.freeze({ast, eligibleSelect});
   } catch {
-    return UNSCOPED_SELECT_AST;
+    return Object.freeze({ast: null, eligibleSelect: false});
   }
 }
 
-function recordSessionReadFootprint(service, session, sql, params) {
-  if (!session || session.hasUnscopedRead === true) return;
-  if (!isRowKeyConcurrencyEnabled(service)) {
-    session.hasUnscopedRead = true;
-    return;
+function resolveFootprintPlanEntry(statementText) {
+  if (typeof statementText !== 'string') return null;
+  const trimmed = statementText.trim();
+  if (trimmed.length === ZERO) return null;
+  const entries = footprintPlanMemo.entries;
+  if (entries.has(trimmed)) {
+    const existing = entries.get(trimmed);
+    entries.delete(trimmed);
+    entries.set(trimmed, existing);
+    footprintPlanMemo.hitCount += ONE;
+    return existing;
   }
+  footprintPlanMemo.missCount += ONE;
+  const entry = buildFootprintPlanEntry(trimmed);
+  if (entries.size >= MAX_MEMOIZED_FOOTPRINT_PLANS) {
+    const oldestKey = entries.keys().next().value;
+    if (oldestKey !== undefined) entries.delete(oldestKey);
+  }
+  entries.set(trimmed, entry);
+  return entry;
+}
+
+function resolveStatementFootprintAst(statementText) {
+  return resolveFootprintPlanEntry(statementText)?.ast ?? null;
+}
+
+function getOrParseCachedStatementFootprintAst(statementText) {
+  return resolveStatementFootprintAst(statementText);
+}
+
+function getFootprintPlanCacheStats() {
+  return {
+    hitCount: footprintPlanMemo.hitCount,
+    missCount: footprintPlanMemo.missCount,
+    size: footprintPlanMemo.entries.size,
+    maxEntries: MAX_MEMOIZED_FOOTPRINT_PLANS,
+  };
+}
+
+function parseScopedSelectAst(sql, tableName) {
+  const entry = resolveFootprintPlanEntry(sql);
+  if (!entry?.eligibleSelect || !entry.ast) return UNSCOPED_SELECT_AST;
+  return isPlainTableFrom(entry.ast.from, tableName) ? entry.ast : UNSCOPED_SELECT_AST;
+}
+
+function extractQueryReadFootprint(service, sql, params) {
+  if (!isRowKeyConcurrencyEnabled(service)) return UNSCOPED_QUERY_READ_FOOTPRINT;
   const ast = parseScopedSelectAst(sql, service.tableName);
-  if (ast === UNSCOPED_SELECT_AST) {
-    session.hasUnscopedRead = true;
-    return;
-  }
+  if (ast === UNSCOPED_SELECT_AST) return UNSCOPED_QUERY_READ_FOOTPRINT;
   const {pkCols, allCols, uniqueConstraintCols, hasUnscopedSchemaConstraints} =
     readTableFootprintMetadata(service?.db, service?.tableName);
-  const footprint = extractStatementWriteFootprint({
+  return extractStatementWriteFootprint({
     ast,
     params: Array.isArray(params) ? params : [],
     pkCols,
@@ -157,13 +219,16 @@ function recordSessionReadFootprint(service, session, sql, params) {
     uniqueConstraintCols,
     hasUnscopedSchemaConstraints,
   });
-  if (!footprint.scoped || footprint.rowKeys.length === ZERO) {
-    session.hasUnscopedRead = true;
+}
+
+function applyQueryReadFootprintToSession(service, session, footprint) {
+  if (!session || session.hasUnscopedRead === true) return;
+  if (!isRowKeyConcurrencyEnabled(service) ||
+      !footprint?.scoped || footprint.rowKeys.length === ZERO) {
+    widenSessionReadToPartition(session);
     return;
   }
-  for (let i = ZERO; i < footprint.rowKeys.length; i += ONE) {
-    session.readRowKeys?.add(footprint.rowKeys[i]);
-  }
+  recordSessionReadDependencyFootprint(session, footprint);
 }
 
 function replayStatsOf(service) {
@@ -171,6 +236,7 @@ function replayStatsOf(service) {
   if (!stats) {
     stats = {
       disjointDirectValidations: ZERO,
+      disjointDirectReads: ZERO,
       emptyReadDirectExecutions: ZERO,
       fastReplayedOperations: ZERO,
       fullReplayedOperations: ZERO,
@@ -362,6 +428,37 @@ function admittedEntry(service, session, request, params) {
     {refusal: committedCommandRefusalResult(admission, service.partitionId)};
 }
 
+function buildImmutableStagedOperation(entryId, sql, params) {
+  const cloned = JSON.parse(JSON.stringify({entryId, sql, params}));
+  return Object.freeze({
+    entryId: cloned.entryId,
+    sql: cloned.sql,
+    params: Object.freeze(cloned.params),
+  });
+}
+
+function computeIncrementalStagedBytes(session, operationBytes) {
+  return session.operations.length === ZERO ?
+    EMPTY_ARRAY_BRACKET_BYTES + operationBytes :
+    session.bytes + ARRAY_ELEMENT_COMMA_BYTES + operationBytes;
+}
+
+function appendValidatedOperationToSession(
+  service, session, operation, operationText, nextBytes, classifiedStmt,
+) {
+  session.operations.push(operation);
+  if (Array.isArray(session.encodedOperations)) {
+    session.encodedOperations.push(operationText);
+  }
+  recordSessionStagedWriteClaims(service, session, operation.sql, operation.params);
+  if (Array.isArray(session.compiledOperations)) {
+    session.compiledOperations.push(classifiedStmt);
+  }
+  session.lastValidatedGeneration = readPartitionWriteGeneration(service.db);
+  session.lastValidatedSchemaVersion = readSchemaVersion(service.db);
+  session.bytes = nextBytes;
+}
+
 function stageWrite(service, session, request, params) {
   const admitted = admittedEntry(service, session, request, params);
   if (admitted.refusal !== undefined) {
@@ -370,7 +467,9 @@ function stageWrite(service, session, request, params) {
   if (!params.every(isJsonScalar)) {
     return refused(CODE.SESSION_WRITE_PARAM_UNSUPPORTED);
   }
-  const rowKeyCheck = checkAndRecordSessionRowKey(service, session, params, request.sql);
+  const parsedWriteAst = resolveStatementFootprintAst(request.sql);
+  const rowKeyCheck = checkAndRecordSessionRowKey(
+    service, session, params, request.sql, parsedWriteAst);
   if (rowKeyCheck.conflict) {
     return refused(CODE.ALREADY_ACTIVE, {detail: rowKeyCheck.rowKey});
   }
@@ -380,15 +479,16 @@ function stageWrite(service, session, request, params) {
     revertSessionRowKeyCheck(service, session, rowKeyCheck);
     return classifierRefusal(classified);
   }
-  // As the PREPARE will carry it: the decoding of its own JSON text.
-  const operation = JSON.parse(JSON.stringify({entryId: admitted.entry.entryId,
-    sql: request.sql, params}));
-  const operations = [...session.operations, operation];
-  const bytes = Buffer.byteLength(JSON.stringify(operations), TEXT_ENCODING);
-  if (operations.length > BOUND.MAX_OPERATIONS || bytes > BOUND.MAX_BYTES) {
+  // Encode each immutable staged operation once and account bytes incrementally.
+  const operation = buildImmutableStagedOperation(admitted.entry.entryId, request.sql, params);
+  const operationText = JSON.stringify(operation);
+  const operationBytes = Buffer.byteLength(operationText, TEXT_ENCODING);
+  const nextOperationCount = session.operations.length + ONE;
+  const nextBytes = computeIncrementalStagedBytes(session, operationBytes);
+  if (nextOperationCount > BOUND.MAX_OPERATIONS || nextBytes > BOUND.MAX_BYTES) {
     revertSessionRowKeyCheck(service, session, rowKeyCheck);
     return refused(CODE.REPLAY_BUDGET_EXCEEDED,
-      {operations: operations.length, bytes});
+      {operations: nextOperationCount, bytes: nextBytes});
   }
   const runWithSequentialLockCheck = () => {
     if (session.operations.length > ZERO) {
@@ -413,14 +513,8 @@ function stageWrite(service, session, request, params) {
     }
     return failedValidation(service, session, outcome.failure);
   }
-  session.operations = operations;
-  recordSessionStagedWriteClaims(service, session, request.sql, params);
-  if (Array.isArray(session.compiledOperations)) {
-    session.compiledOperations.push(classified.statement);
-  }
-  session.lastValidatedGeneration = readPartitionWriteGeneration(service.db);
-  session.lastValidatedSchemaVersion = readSchemaVersion(service.db);
-  session.bytes = bytes;
+  appendValidatedOperationToSession(
+    service, session, operation, operationText, nextBytes, classified.statement);
   return {success: true, provisional: true, changes: outcome.ran.changes,
     lastInsertRowid: outcome.ran.lastInsertRowid};
 }
@@ -437,10 +531,10 @@ function buildSessionReadAnswer(service, collected) {
   };
 }
 
-function executeDirectEmptyRead(service, statement, params, rowBudgetOptions) {
+function executeDirectRead(service, statement, params, rowBudgetOptions, statField) {
   try {
     const collected = collectBoundedTypedRowSet(statement, params, rowBudgetOptions);
-    replayStatsOf(service).emptyReadDirectExecutions += ONE;
+    replayStatsOf(service)[statField] += ONE;
     return buildSessionReadAnswer(service, collected);
   } catch (directReadError) {
     return refused(CODE.STATEMENT_FAILED, {
@@ -448,6 +542,57 @@ function executeDirectEmptyRead(service, statement, params, rowBudgetOptions) {
       errorCode: directReadError?.code ?? null,
     });
   }
+}
+
+function hasScopedDisjointReadAndStagedWrites(session, queryReadFootprint) {
+  if (session.operations.length === ZERO ||
+      session.hasUnscopedWrite === true ||
+      !(session.touchedRowKeys instanceof Set) ||
+      session.touchedRowKeys.size === ZERO ||
+      queryReadFootprint?.scoped !== true ||
+      !Array.isArray(queryReadFootprint.rowKeys) ||
+      queryReadFootprint.rowKeys.length === ZERO) {
+    return false;
+  }
+  return !queryReadFootprint.rowKeys.some((rk) => session.touchedRowKeys.has(rk));
+}
+
+function isSessionValidationCurrent(service, session) {
+  const currentGen = readPartitionWriteGeneration(service.db);
+  const currentSchema = readSchemaVersion(service.db);
+  return currentGen === session.lastValidatedGeneration &&
+    (session.lastValidatedSchemaVersion === null ||
+      currentSchema === session.lastValidatedSchemaVersion);
+}
+
+function canDirectExecuteDisjointRead(service, session, queryReadFootprint) {
+  return isRowKeyConcurrencyEnabled(service) &&
+    hasScopedDisjointReadAndStagedWrites(session, queryReadFootprint) &&
+    isSessionValidationCurrent(service, session);
+}
+
+function resolveDirectSessionReadStatField(service, session, queryReadFootprint) {
+  if (session.operations.length === ZERO) return STAT_EMPTY_READ_DIRECT;
+  return canDirectExecuteDisjointRead(service, session, queryReadFootprint) ?
+    STAT_DISJOINT_DIRECT_READS : null;
+}
+
+function executeReplayedSessionRead(
+  service, session, statement, params, rowBudgetOptions, queryReadFootprint,
+) {
+  const outcome = validateOverReplay(service, session, () =>
+    collectBoundedTypedRowSet(statement, params, rowBudgetOptions));
+  const failure = outcome.failure;
+  if (failure?.replayDiverged === true) {
+    return doomSession(service, session, failure);
+  }
+  if (failure !== undefined) {
+    return refused(CODE.STATEMENT_FAILED, {
+      error: String(failure?.message ?? failure),
+      errorCode: failure?.code ?? null});
+  }
+  applyQueryReadFootprintToSession(service, session, queryReadFootprint);
+  return buildSessionReadAnswer(service, outcome.ran);
 }
 
 function readInSession(service, session, request, params) {
@@ -461,32 +606,19 @@ function readInSession(service, session, request, params) {
     maxBytes: request[QUERY_RESULT_REQUEST_FIELD.MAX_BYTES],
     maxRows: request[QUERY_RESULT_REQUEST_FIELD.MAX_ROWS],
   };
-  if (session.operations.length === ZERO) {
-    const directRead = executeDirectEmptyRead(
-      service,
-      classified.statement,
-      params,
-      rowBudgetOptions,
-    );
+  const queryReadFootprint = extractQueryReadFootprint(service, request.sql, params);
+  const directStatField = resolveDirectSessionReadStatField(
+    service, session, queryReadFootprint);
+  if (directStatField !== null) {
+    const directRead = executeDirectRead(
+      service, classified.statement, params, rowBudgetOptions, directStatField);
     if (directRead?.success === true) {
-      recordSessionReadFootprint(service, session, request.sql, params);
+      applyQueryReadFootprintToSession(service, session, queryReadFootprint);
     }
     return directRead;
   }
-  const outcome = validateOverReplay(service, session, () =>
-    collectBoundedTypedRowSet(classified.statement, params, rowBudgetOptions));
-  if (outcome.failure?.replayDiverged === true) {
-    return doomSession(service, session, outcome.failure);
-  }
-  // The read's own failure (its result budget included) is typed as every
-  // session statement's is; errorCode keeps its owner's code.
-  if (outcome.failure !== undefined) {
-    return refused(CODE.STATEMENT_FAILED, {
-      error: String(outcome.failure?.message ?? outcome.failure),
-      errorCode: outcome.failure?.code ?? null});
-  }
-  recordSessionReadFootprint(service, session, request.sql, params);
-  return buildSessionReadAnswer(service, outcome.ran);
+  return executeReplayedSessionRead(
+    service, session, classified.statement, params, rowBudgetOptions, queryReadFootprint);
 }
 
 /**
@@ -550,6 +682,8 @@ function runParticipantSessionStatement(service, session, request) {
 }
 
 export {
+  getFootprintPlanCacheStats,
+  getOrParseCachedStatementFootprintAst,
   getStagingReplayStats,
   prepareWaitingRowKeySessionForReevaluation,
   runParticipantSessionStatement,
