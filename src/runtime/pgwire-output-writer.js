@@ -11,9 +11,12 @@
 
 import {
   buildCommandComplete,
-  buildDataRow,
   buildNoticeResponse,
+  buildPreparedDataRowFrame,
   buildRowDescription,
+  encodePreparedDataRowChunks,
+  getPreparedDataRowFrameLength,
+  prepareDataRowColumns,
 } from './pgwire-message-builders.js';
 import {
   PG_ERROR_CODE,
@@ -99,6 +102,22 @@ class PgWireOutputWriter {
       Number.isSafeInteger(options?.batchMaxBytes) && options.batchMaxBytes > 0 ?
         options.batchMaxBytes :
         DEFAULT_PGWIRE_OUTPUT_BATCH_BYTES;
+    this._onDataRowChunkEncoded = options?.onDataRowChunkEncoded || null;
+    this.encodedDataRowChunks = 0;
+    this.maxEncodedChunkBytes = 0;
+  }
+
+  _recordEncodedChunk(chunkByteLength, encodedBytes, totalFrameBytes) {
+    this.encodedDataRowChunks += 1;
+    if (chunkByteLength > this.maxEncodedChunkBytes) {
+      this.maxEncodedChunkBytes = chunkByteLength;
+    }
+    this._onDataRowChunkEncoded?.({
+      chunkByteLength,
+      encodedBytes,
+      totalFrameBytes,
+      encodedDataRowChunks: this.encodedDataRowChunks,
+    });
   }
 
   /**
@@ -228,18 +247,47 @@ class PgWireOutputWriter {
     return this.writeBuffer(buildCommandComplete(tag));
   }
 
-  async _writeOversizedRowFrame(frame, batchChunks, batchBytes, hasMoreRows) {
+  async _prepareOversizedRowStream(batchChunks, batchBytes) {
     if (batchBytes > 0) {
-      const flushedPending = await this._flushBatchAndYield(
-        batchChunks,
-        batchBytes,
-        true,
-      );
-      if (!flushedPending) {
+      return this._flushBatchAndYield(batchChunks, batchBytes, true);
+    }
+    await yieldEventLoopTurn();
+    return !this.isDisconnected();
+  }
+
+  async _writeOversizedPreparedDataRow(
+    prepared,
+    batchChunks,
+    batchBytes,
+    hasMoreRows,
+  ) {
+    const ready = await this._prepareOversizedRowStream(batchChunks, batchBytes);
+    if (!ready) {
+      return false;
+    }
+    const totalFrameBytes = getPreparedDataRowFrameLength(prepared);
+    let encodedBytes = 0;
+    for (const chunk of encodePreparedDataRowChunks(
+      prepared,
+      this._batchMaxBytes,
+    )) {
+      if (this.isDisconnected()) {
         return false;
       }
+      encodedBytes += chunk.length;
+      this._recordEncodedChunk(chunk.length, encodedBytes, totalFrameBytes);
+      const wrote = await this._writeSingleChunk(chunk);
+      if (!wrote) {
+        return false;
+      }
+      if (encodedBytes < totalFrameBytes || hasMoreRows) {
+        await yieldEventLoopTurn();
+        if (this.isDisconnected()) {
+          return false;
+        }
+      }
     }
-    return this._writeOversizedBuffer(frame, hasMoreRows);
+    return !this.isDisconnected();
   }
 
   async _writeBatchedDataRows(rows, columns) {
@@ -249,11 +297,15 @@ class PgWireOutputWriter {
       if (this.isDisconnected()) {
         return;
       }
-      const frame = buildDataRow(extractRowValues(rows[index], columns), columns);
+      const prepared = prepareDataRowColumns(
+        extractRowValues(rows[index], columns),
+        columns,
+      );
+      const frameByteLength = getPreparedDataRowFrameLength(prepared);
       const hasMoreRows = index + 1 < rows.length;
-      if (frame.length > this._batchMaxBytes) {
-        const ok = await this._writeOversizedRowFrame(
-          frame,
+      if (frameByteLength > this._batchMaxBytes) {
+        const ok = await this._writeOversizedPreparedDataRow(
+          prepared,
           batchChunks,
           batchBytes,
           hasMoreRows,
@@ -265,7 +317,7 @@ class PgWireOutputWriter {
         }
         continue;
       }
-      if (batchBytes > 0 && batchBytes + frame.length > this._batchMaxBytes) {
+      if (batchBytes > 0 && batchBytes + frameByteLength > this._batchMaxBytes) {
         const ok = await this._flushBatchAndYield(batchChunks, batchBytes, true);
         batchChunks = [];
         batchBytes = 0;
@@ -273,6 +325,8 @@ class PgWireOutputWriter {
           return;
         }
       }
+      const frame = buildPreparedDataRowFrame(prepared);
+      this._recordEncodedChunk(frame.length, frame.length, frameByteLength);
       batchChunks.push(frame);
       batchBytes += frame.length;
       if (batchBytes >= this._batchMaxBytes) {
