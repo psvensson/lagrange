@@ -1,27 +1,15 @@
 // The durable Raft record of one replica's raft-rs groups, in that replica's
-// own SQLite database.
+// own SQLite database. Preserves log entries, hard state (term, vote, commit
+// index), applied progress, configuration state, and snapshot state.
 //
-// What it preserves: the log entries, the hard state (term, vote and commit
-// index), the applied progress, the configuration state, and the snapshot
-// state. The applied progress and the configuration state are columns of one
-// row, so they are written by one statement and can never disagree.
-//
-// It keeps an ordered journal of the durable writes it made. The journal is
-// observability, not authority: it is what a caller reads to see the order the
-// writes happened in, while the record itself is what a restart reads.
-//
-// What survives what (owner decision O4, 2026-10-05, "option 2"): the
-// connection runs journal_mode WAL with synchronous NORMAL, so a commit
-// survives a process crash. A Ready raft-rs says must be synced (a changed
-// term or vote, appended entries, a snapshot) is committed SYNCED: SQLite
-// fsyncs the WAL as part of its COMMIT, before the runtime hands any of that
-// Ready's messages to the transport, so a granted vote and an acknowledged
-// append also survive a power loss or an OS crash. Because the WAL is
-// append-only, that sync also makes every earlier commit of the file durable.
-// Everything else - commit-index-only hard state, applied progress, the
-// application's own writes - keeps NORMAL and may be lost to a power loss;
-// it is recomputed from the synced log on restart.
+// Connection runs journal_mode WAL with synchronous NORMAL (owner decision O4,
+// 2026-10-05, "option 2"): Ready turns with mustSync are committed SYNCED
+// (SQLite fsyncs the WAL on COMMIT before messages leave for transport).
 
+import {performance} from 'node:perf_hooks';
+import {
+  observePersistedPartitionTerm,
+} from '../storage/retained-read-view-custody.js';
 import {sqliteConnectionState} from '../storage/sqlite-connection-state.js';
 import {
   RAFT_RS_BOOLEAN_COLUMN,
@@ -294,7 +282,9 @@ class RaftRsDurableStore {
     this.journalWriteCount = 0;
     this.ownTransactionDepth = 0;
     this.syncCommitCount = 0;
+    this.syncFailureCount = 0;
     this.totalSyncMs = 0;
+    this.maxSyncMs = 0;
     this.batchedEntryCount = 0;
     this.multiEntryReadyCount = 0;
     this.createRecordTables();
@@ -408,6 +398,19 @@ class RaftRsDurableStore {
     }
   }
 
+  recordSyncedTransactionOutcome(startMs, committed) {
+    const elapsedMs = Math.max(0, performance.now() - startMs);
+    this.totalSyncMs += elapsedMs;
+    if (elapsedMs > this.maxSyncMs) {
+      this.maxSyncMs = elapsedMs;
+    }
+    if (committed) {
+      this.syncCommitCount += 1;
+    } else {
+      this.syncFailureCount += 1;
+    }
+  }
+
   /**
    * Run a unit of work as one SQLite transaction the store opens itself;
    * refused while a transaction the store did not open is in progress.
@@ -421,17 +424,29 @@ class RaftRsDurableStore {
     this.admitWrite();
     this.ownTransactionDepth += 1;
     const synced = durability === RAFT_RS_COMMIT_DURABILITY.SYNCED;
+    const startMs = synced ? performance.now() : 0;
+    let committed = false;
     try {
-      return synced ? commitDurably(this.db, work) : this.db.transaction(work)();
+      const result = synced ? commitDurably(this.db, work) : this.db.transaction(work)();
+      committed = true;
+      return result;
     } finally {
-      if (synced) this.syncCommitCount += 1;
+      if (synced) {
+        this.recordSyncedTransactionOutcome(startMs, committed);
+      }
       this.ownTransactionDepth -= 1;
     }
   }
 
   getDurableSyncStats() {
-    return {syncCommitCount: this.syncCommitCount, totalSyncMs: this.totalSyncMs,
-      batchedEntryCount: this.batchedEntryCount, multiEntryReadyCount: this.multiEntryReadyCount};
+    return {
+      batchedEntryCount: this.batchedEntryCount,
+      maxSyncMs: this.maxSyncMs,
+      multiEntryReadyCount: this.multiEntryReadyCount,
+      syncCommitCount: this.syncCommitCount,
+      syncFailureCount: this.syncFailureCount,
+      totalSyncMs: this.totalSyncMs,
+    };
   }
 
   /**
@@ -520,15 +535,7 @@ class RaftRsDurableStore {
     this.record(RAFT_RS_HOST_WRITE.COMMIT_INDEX, {groupId, commitIndex});
   }
 
-  /**
-   * Durably record the applied index together with the configuration state
-   * that index includes. One statement writes both columns: there is no way
-   * to move one without the other.
-   * @param {string} groupId - The group.
-   * @param {string} appliedIndex - The applied index as a decimal string.
-   * @param {Object} confState - The ConfState the core reported.
-   * @param {string} [write] - Which contract write this is.
-   */
+  // Durably record applied index together with configuration state in one row.
   putAppliedState(groupId, appliedIndex, confState,
     write = RAFT_RS_HOST_WRITE.CONF_STATE_AND_APPLIED,
     membershipGenerationIndex = null) {
@@ -547,17 +554,7 @@ class RaftRsDurableStore {
       membershipGenerationIndex});
   }
 
-  /**
-   * Durably record a created group's first applied state (index 0, its
-   * bootstrap configuration) together with its participation gate: the
-   * committed index its bootstrap configuration was read at and, when that
-   * configuration already names this replica a voter, its admission index.
-   * One statement, like every applied-state write.
-   * @param {string} groupId - The group.
-   * @param {Object} confState - The bootstrap ConfState the core reported.
-   * @param {Object} gate - {bootstrapIndex, admissionIndex} as decimal
-   *   strings; admissionIndex null while this replica is not admitted.
-   */
+  // Durably record a created group's first applied state and participation gate.
   putBootstrapAppliedState(groupId, confState, {bootstrapIndex,
     admissionIndex, membershipGenerationIndex = RAFT_RS_ZERO_INDEX}) {
     this.admitWrite();
@@ -575,12 +572,7 @@ class RaftRsDurableStore {
       admissionIndex, membershipGenerationIndex});
   }
 
-  /**
-   * Durably record the index of the applied entry that admitted this replica
-   * as a voter. Called inside the application transaction of that entry.
-   * @param {string} groupId - The group.
-   * @param {string} admissionIndex - The entry's index as a decimal string.
-   */
+  // Durably record the index of the applied entry admitting this voter.
   putAdmissionIndex(groupId, admissionIndex) {
     this.admitWrite();
     sqliteConnectionState(this.db).runNonApplication(
@@ -588,13 +580,7 @@ class RaftRsDurableStore {
       toExactInteger(admissionIndex), groupId);
   }
 
-  /**
-   * Durably store a snapshot and the configuration it carries.
-   * @param {string} groupId - The group.
-   * @param {Object} snapshot - A Ready snapshot from the core. Its optional
-   *   metadata.membershipGenerationIndex must come from the later checkpoint
-   *   owner; native SnapshotMetadata alone leaves it null.
-   */
+  // Durably store a snapshot and the configuration it carries.
   putSnapshot(groupId, snapshot, membershipGenerationIndex = null) {
     this.admitWrite();
     const metadata = snapshot.metadata || {};
@@ -725,6 +711,23 @@ class RaftRsDurableStore {
     return row ? fromExactInteger(row.applied_index) : null;
   }
 
+  static readPersistedTermIn(db, groupId) {
+    const statements = sqliteConnectionState(db);
+    const hasTable = statements.statement(
+      RAFT_RS_SCHEMA_SQL.SELECT_TABLE_PRESENT,
+    ).get(RAFT_RS_TABLE.HARD_STATE) !== undefined;
+    if (!hasTable) {
+      return null;
+    }
+    const row = statements.exactStatement(RAFT_RS_SQL.SELECT_HARD_STATE)
+      .get(groupId);
+    return row ? fromExactInteger(row.term) : null;
+  }
+
+  static observePersistedPartitionTerm(exactReplicaIdentity) {
+    return observePersistedPartitionTerm(exactReplicaIdentity);
+  }
+
   static encodeSnapshotWitnessData(maxCommittedHlc) {
     return encodeSnapshotWitnessData(maxCommittedHlc);
   }
@@ -792,4 +795,5 @@ class RaftRsDurableStore {
 export {
   RaftRsDurableStore,
   commitDurably,
+  observePersistedPartitionTerm,
 };

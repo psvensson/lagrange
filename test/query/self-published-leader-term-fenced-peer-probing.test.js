@@ -57,6 +57,9 @@ import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {RAFT_OPERATION_OUTCOME} from
   '../../src/raft/raft-operation-port-constants.js';
 import {getPartitionDbPath} from '../../src/storage/data-directory-manager.js';
+import {
+  getRetainedPersistedTermReader,
+} from '../../src/storage/retained-read-view-custody.js';
 import {buildDeliveryEnvelope} from
   '../../src/transport/transport-semantic-outcome.js';
 import {createCommittedServeEligibilityOwner} from
@@ -832,14 +835,14 @@ test('Option A adversarial hardening: 46-partition memoized disk term lookup avo
     t.equal(floor.termFloor, partitions[i].expectedTerm);
   }
 
-  // Capture memo entry references after the cold pass: with all 46 files intact
-  // on disk, 460 subsequent warm lookups MUST validate the physical file-state
-  // witness and reuse the exact cached memo entries with zero SQLite re-opens!
-  const coldMemoEntries = partitions.map(({partitionId, replicaId}) =>
-    executor.selfPublishedLeaderDiskTermMemo.get(partitionId)?.get(`${dataDir}\0${replicaId}`),
+  // Capture cached readonly SQLite term-reader handles after the cold pass:
+  // with all 46 files intact on disk, 460 subsequent warm lookups MUST execute
+  // the prepared statement on the exact cached readonly handles with zero SQLite re-opens!
+  const coldReaderEntries = partitions.map(({partitionId, replicaId}) =>
+    getRetainedPersistedTermReader({dataDir, partitionId, replicaId}),
   );
-  t.ok(coldMemoEntries.every(Boolean),
-    'cold pass populated a witnessed disk-term memo entry for all 46 partitions');
+  t.ok(coldReaderEntries.every((entry) => Boolean(entry) && entry.db?.open === true),
+    'cold pass populated an open cached readonly SQLite term reader for all 46 partitions');
 
   const warmStartMs = performance.now();
   const ROUNDS = 10;
@@ -858,16 +861,16 @@ test('Option A adversarial hardening: 46-partition memoized disk term lookup avo
   }
   const warmElapsedMs = performance.now() - warmStartMs;
   const reopenedCount = partitions.filter(({partitionId, replicaId}, i) =>
-    executor.selfPublishedLeaderDiskTermMemo.get(partitionId)?.get(`${dataDir}\0${replicaId}`) !==
-      coldMemoEntries[i],
+    getRetainedPersistedTermReader({dataDir, partitionId, replicaId}) !==
+      coldReaderEntries[i],
   ).length;
   t.equal(mismatches, 0,
-    'all 460 memoized 46-partition lookups must return eligible with exact cached term');
+    'all 460 prepared-statement 46-partition lookups must return eligible with exact term');
   t.equal(reopenedCount, 0,
-    'all 460 warm lookups must reuse exact memo entries with zero SQLite re-opens');
+    'all 460 warm lookups must reuse exact cached readonly handles with zero SQLite re-opens');
   t.ok(
-    warmElapsedMs < 100,
-    `460 memoized 46-partition lookups must complete well under 100ms (observed ${warmElapsedMs.toFixed(2)}ms)`,
+    warmElapsedMs < 25,
+    `460 prepared-statement 46-partition lookups must complete under 25ms (observed ${warmElapsedMs.toFixed(2)}ms)`,
   );
 
   // Removing a cached partition DB file on disk MUST invalidate its physical
