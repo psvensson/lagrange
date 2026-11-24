@@ -79,8 +79,10 @@ import {
   RAFT_AUTHORITY_CLOCK_UNSETTLED_REASON,
   isPortScheduling,
   readPortClockObligation,
+  readPortEffectiveRaftTiming,
 } from '../../src/raft/raft-rs-operation-port.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
+import {VirtualTimeSource} from '../../src/time/time-source.js';
 
 setTestPortBase(26500);
 
@@ -1036,5 +1038,198 @@ test('close and shutdown cleanly end clock obligation and prevent orphaned ' +
       'configureTick after close must not arm any timer');
   } finally {
     await harness.dispose();
+  }
+});
+
+function isRaftTickDelay(delayMs) {
+  return Number.isFinite(delayMs) && delayMs <= RAFT_TICK_TIMER_MAX_DELAY_MS;
+}
+
+function findActiveRaftTickTimer(virtualClock) {
+  for (const timer of virtualClock._timers.values()) {
+    if (timer.repeating && isRaftTickDelay(timer.delayMs)) {
+      return timer;
+    }
+  }
+  return null;
+}
+
+function createTrackedVirtualTimeSource(startMs = 1000) {
+  const virtualClock = new VirtualTimeSource({startMs});
+  let setIntervalCalls = 0;
+  let clearIntervalCalls = 0;
+  let tickFirings = 0;
+  return {
+    virtualClock,
+    now: () => virtualClock.now(),
+    setTimeout: (...args) => virtualClock.setTimeout(...args),
+    clearTimeout: (handle) => virtualClock.clearTimeout(handle),
+    setInterval: (fn, delayMs, ...args) => {
+      const isRaftTick = isRaftTickDelay(delayMs);
+      if (isRaftTick) {
+        setIntervalCalls += 1;
+      }
+      const wrappedFn = isRaftTick ?
+        (...callArgs) => {
+          tickFirings += 1;
+          return fn(...callArgs);
+        } :
+        fn;
+      return virtualClock.setInterval(wrappedFn, delayMs, ...args);
+    },
+    clearInterval: (handle) => {
+      const entry = virtualClock._timers.get(handle);
+      if (entry && entry.repeating && isRaftTickDelay(entry.delayMs)) {
+        clearIntervalCalls += 1;
+      }
+      return virtualClock.clearInterval(handle);
+    },
+    advance: (ms) => virtualClock.advance(ms),
+    getRaftTickTimer: () => findActiveRaftTickTimer(virtualClock),
+    getStats: () => ({
+      setIntervalCalls,
+      clearIntervalCalls,
+      tickFirings,
+    }),
+  };
+}
+
+function assertPassiveSubIntervalReads(partition, clock, initialTimerId, tickIntervalMs) {
+  for (let step = 1; step <= 12; step += 1) {
+    clock.advance(5);
+    const expectedTicks = Math.floor((step * 5) / tickIntervalMs);
+    const expectedDueAt = 1000 + (expectedTicks + 1) * tickIntervalMs;
+
+    const viaService = partition.effectiveRaftTiming();
+    const viaPort = readPortEffectiveRaftTiming(partition.raft);
+    assert.equal(viaService.effective.tickIntervalMs, tickIntervalMs);
+    assert.equal(viaPort.effective.tickIntervalMs, tickIntervalMs);
+
+    const currentTimer = clock.getRaftTickTimer();
+    assert.ok(currentTimer);
+    assert.equal(
+      currentTimer.id,
+      initialTimerId,
+      `passive timing read at +${step * 5}ms must preserve timer handle id`,
+    );
+    assert.equal(
+      currentTimer.dueAt,
+      expectedDueAt,
+      `passive timing read at +${step * 5}ms must preserve next dueAt (${expectedDueAt})`,
+    );
+    assert.equal(
+      clock.getStats().tickFirings,
+      expectedTicks,
+      `scheduled ticks must fire uninterrupted at +${step * 5}ms`,
+    );
+  }
+}
+
+test('Finding 3 Witness: passive effectiveRaftTiming / readPortEffectiveRaftTiming ' +
+  'calls faster than tickIntervalMs preserve timer identity, next due time, and ' +
+  'uninterrupted tick progress while rearmTimer: true or changed tickIntervalMs ' +
+  'still rearms', async () => {
+  configure();
+  const clock = createTrackedVirtualTimeSource(1000);
+  const partition = new PartitionService(withFoundingStamp({
+    partitionId: 'seed-passive-timing-p1',
+    tableId: 'seed_passive_timing',
+    replicaId: 'seed-passive-timing-p1-r1',
+    replicaIds: ['seed-passive-timing-p1-r1', 'seed-passive-timing-p1-r2'],
+    nodeId: 'node-1',
+    dbPath: ':memory:',
+    deferElection: true,
+    timeSource: clock,
+  }));
+  try {
+    await partition.initialize();
+    partition.startElection();
+
+    const initialTiming = partition.effectiveRaftTiming();
+    const tickIntervalMs = initialTiming.effective.tickIntervalMs;
+    assert.equal(tickIntervalMs, 20);
+
+    const initialTimer = clock.getRaftTickTimer();
+    assert.ok(initialTimer, 'RF2 replica must arm a periodic Raft tick timer');
+    const initialTimerId = initialTimer.id;
+    assert.equal(initialTimer.dueAt, 1000 + tickIntervalMs);
+    assert.equal(clock.getStats().setIntervalCalls, 1);
+    assert.equal(clock.getStats().clearIntervalCalls, 0);
+
+    // Poll effectiveRaftTiming() and readPortEffectiveRaftTiming() every 5ms
+    // (4x faster than tickIntervalMs=20ms) across 3 full tick intervals (60ms).
+    assertPassiveSubIntervalReads(partition, clock, initialTimerId, tickIntervalMs);
+
+    assert.equal(clock.getStats().setIntervalCalls, 1,
+      '24 sub-interval passive timing reads must not call setInterval again');
+    assert.equal(clock.getStats().clearIntervalCalls, 0,
+      '24 sub-interval passive timing reads must not call clearInterval');
+    assert.equal(clock.getStats().tickFirings, 3,
+      'exact 3 scheduled ticks must have fired across 60ms');
+
+    // Same-cadence configureTick with rearmTimer: false mid-interval (+7ms)
+    // must also preserve timer identity and dueAt.
+    clock.advance(7);
+    assert.equal(clock.now(), 1067);
+    await turnChainValue(partition.raft.configureTick({
+      tickIntervalMs,
+      rearmTimer: false,
+    }));
+    const sameCadenceTimer = clock.getRaftTickTimer();
+    assert.equal(sameCadenceTimer.id, initialTimerId,
+      'same-cadence configureTick with rearmTimer: false must preserve timer id');
+    assert.equal(sameCadenceTimer.dueAt, 1080,
+      'same-cadence configureTick with rearmTimer: false must preserve dueAt=1080');
+
+    // Explicit rearmTimer: true at t=1067 MUST rearm and anchor dueAt=1087.
+    await turnChainValue(partition.raft.configureTick({
+      tickIntervalMs,
+      rearmTimer: true,
+    }));
+    const rearmedTimer = clock.getRaftTickTimer();
+    assert.notEqual(rearmedTimer.id, initialTimerId,
+      'explicit rearmTimer: true must register a fresh interval timer');
+    assert.equal(rearmedTimer.dueAt, 1067 + tickIntervalMs,
+      'explicit rearmTimer: true must re-anchor dueAt to now + tickIntervalMs');
+
+    // Changing tickIntervalMs (20ms -> 25ms) via applyRaftTimingConfig
+    // (preserving createdCoreTuning ticks) MUST rearm at the new 25ms cadence.
+    clock.advance(5);
+    assert.equal(clock.now(), 1072);
+    const {heartbeatTick, electionTick} = initialTiming.createdCoreTuning;
+    const appliedNewCadence = partition.applyRaftTimingConfig({
+      heartbeatIntervalMs: heartbeatTick * 25,
+      electionTimeoutMinMs: electionTick * 25,
+      electionTimeoutMaxMs: electionTick * 50,
+      tickIntervalMs: 25,
+    });
+    assert.equal(appliedNewCadence, true);
+    const changedCadenceTimer = clock.getRaftTickTimer();
+    assert.notEqual(changedCadenceTimer.id, rearmedTimer.id,
+      'changing tickIntervalMs must replace the interval timer');
+    assert.equal(changedCadenceTimer.delayMs, 25);
+    assert.equal(changedCadenceTimer.dueAt, 1072 + 25);
+
+    // Changing tickIntervalMs (25ms -> 30ms) with rearmTimer: false must also
+    // replace the timer because the cadence changed.
+    clock.advance(4);
+    assert.equal(clock.now(), 1076);
+    const appliedWithoutRearmFlag = await turnChainValue(
+      partition.raft.configureTick({
+        heartbeatMs: heartbeatTick * 30,
+        electionMinMs: electionTick * 30,
+        electionMaxMs: electionTick * 60,
+        tickIntervalMs: 30,
+        rearmTimer: false,
+      }),
+    );
+    assert.equal(appliedWithoutRearmFlag.appliedToExistingCore, true);
+    const cadenceOnlyTimer = clock.getRaftTickTimer();
+    assert.notEqual(cadenceOnlyTimer.id, changedCadenceTimer.id,
+      'changed tickIntervalMs with rearmTimer: false must still replace the timer');
+    assert.equal(cadenceOnlyTimer.delayMs, 30);
+    assert.equal(cadenceOnlyTimer.dueAt, 1076 + 30);
+  } finally {
+    await partition.shutdown();
   }
 });

@@ -494,7 +494,19 @@ function createPortClockObligationController({
     return snapshotFromFacts(facts);
   }
 
+  function shouldArmOrRearmTimer(facts, {intervalChanged, rearmTimer}) {
+    if (!isActiveAndOpen() || !facts.usable || !isClockRequiredForFacts(facts)) {
+      return false;
+    }
+    if (timer !== null) {
+      return intervalChanged || rearmTimer === true;
+    }
+    return schedulingRequested && (rearmTimer === true || lastArmError === null);
+  }
+
   function updateTickIntervalMs(nextTickIntervalMs, {rearmTimer = false} = {}) {
+    const previousTickIntervalMs = getTickIntervalMs();
+    const intervalChanged = nextTickIntervalMs !== previousTickIntervalMs;
     setTickIntervalMs(nextTickIntervalMs);
     if (rearmTimer === true) {
       clockManaged = true;
@@ -503,12 +515,7 @@ function createPortClockObligationController({
     }
     const facts = readCurrentFacts();
     latchFromFacts(facts);
-    const shouldArm =
-      isActiveAndOpen() &&
-      facts.usable &&
-      isClockRequiredForFacts(facts) &&
-      (timer !== null || (rearmTimer === true && schedulingRequested));
-    if (shouldArm) {
+    if (shouldArmOrRearmTimer(facts, {intervalChanged, rearmTimer})) {
       lastArmError = null;
       armPeriodicTimer(facts);
     }

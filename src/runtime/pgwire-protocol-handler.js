@@ -45,7 +45,10 @@ import {
   buildNoData,
   buildEmptyQueryResponse,
 } from './pgwire-message-builders.js';
-import {answerFailedStatement} from './pgwire-transaction-outcome.js';
+import {
+  answerFailedStatement,
+  takeTransactionEndNotice,
+} from './pgwire-transaction-outcome.js';
 import {
   parseStartupParams,
   parseQueryMessage,
@@ -178,8 +181,9 @@ class PgWireProtocolHandler {
       // transaction is rolled back now (PostgreSQL), not left holding its
       // partitions until the budget sweep.
       this._adapter.closeSession(sid, {
-        transactionOpen: this._session.getTransactionState() !==
-          PG_TRANSACTION_STATE.IDLE,
+        transactionOpen:
+          this._session.getTransactionState() !== PG_TRANSACTION_STATE.IDLE ||
+          this._session.transactionId !== null,
       });
       this._session.close();
     }
@@ -642,16 +646,14 @@ class PgWireProtocolHandler {
     // wire cannot tag is refused whole (XX000), never rows then an error.
     const tag = deriveCommandTag(result);
     const statementType = readExecutedStatementType(result);
-    const completed = await this._outputWriter.writeExecutionSuccess({
+    const txNotice = takeTransactionEndNotice(this._session, statementType);
+    this._applyTransactionOutcome(statementType, result);
+    await this._outputWriter.writeExecutionSuccess({
       result,
       executionMeta,
       tag,
-      statementType,
-      session: this._session,
+      txNotice,
     });
-    if (completed) {
-      this._applyTransactionOutcome(statementType, result);
-    }
   }
 
   async _executeAndSend(query, params, executionMeta = {}) {
@@ -670,9 +672,7 @@ class PgWireProtocolHandler {
       await this._sendExecutionSuccess(result, executionMeta);
       succeeded = true;
     } catch (err) {
-      if (!this._outputWriter.isDisconnected()) {
-        this._answerFailure(err, stateBefore);
-      }
+      this._answerFailure(err, stateBefore);
     }
     return succeeded;
   }
@@ -719,7 +719,11 @@ class PgWireProtocolHandler {
       failure: err,
       stateBefore,
       session: this._session,
-      write: (message) => this._socket.write(message),
+      write: (message) => {
+        if (!this._outputWriter.isDisconnected()) {
+          this._socket.write(message);
+        }
+      },
     });
   }
 
