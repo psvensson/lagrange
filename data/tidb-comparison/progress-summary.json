@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "totalRecords": 20,
-  "totalCombinations": 20,
+  "totalRecords": 43,
+  "totalCombinations": 43,
   "entries": [
     {
       "recordSha256": "ae6bd0386ece94749f2f78ab2bf5783d5bb3105a10df6b872bc4571eeece9024",
@@ -43,9 +43,15 @@
       "admission": {
         "status": "invalid-measurement",
         "reasons": [
-          "forensic-record-not-admissible"
+          "closed-loop-throughput",
+          "forensic-record-not-admissible",
+          "invalidated:inv-0013",
+          "non-canonical-workload"
         ],
-        "defectIds": []
+        "defectIds": [
+          "D04",
+          "D13"
+        ]
       }
     },
     {
@@ -88,9 +94,15 @@
       "admission": {
         "status": "invalid-measurement",
         "reasons": [
-          "forensic-record-not-admissible"
+          "closed-loop-throughput",
+          "forensic-record-not-admissible",
+          "invalidated:inv-0013",
+          "non-canonical-workload"
         ],
-        "defectIds": []
+        "defectIds": [
+          "D04",
+          "D13"
+        ]
       }
     },
     {
@@ -133,9 +145,15 @@
       "admission": {
         "status": "invalid-measurement",
         "reasons": [
-          "forensic-record-not-admissible"
+          "closed-loop-throughput",
+          "forensic-record-not-admissible",
+          "invalidated:inv-0013",
+          "non-canonical-workload"
         ],
-        "defectIds": []
+        "defectIds": [
+          "D04",
+          "D13"
+        ]
       }
     },
     {
@@ -178,9 +196,15 @@
       "admission": {
         "status": "invalid-measurement",
         "reasons": [
-          "forensic-record-not-admissible"
+          "closed-loop-throughput",
+          "forensic-record-not-admissible",
+          "invalidated:inv-0013",
+          "non-canonical-workload"
         ],
-        "defectIds": []
+        "defectIds": [
+          "D04",
+          "D13"
+        ]
       }
     },
     {
@@ -364,9 +388,15 @@
       "admission": {
         "status": "invalid-measurement",
         "reasons": [
-          "forensic-record-not-admissible"
+          "closed-loop-throughput",
+          "forensic-record-not-admissible",
+          "invalidated:inv-0013",
+          "non-canonical-workload"
         ],
-        "defectIds": []
+        "defectIds": [
+          "D04",
+          "D13"
+        ]
       }
     },
     {
@@ -968,15 +998,1050 @@
           "D13"
         ]
       }
+    },
+    {
+      "recordSha256": "02cb32c61e4ce8968bff4c272ed1ca2eed3bfc79b8205e29ce40647673a6b9c6",
+      "combinationSha256": "10a376196a5870a4416891686f2aefc319316abc005cf8962a44b5cce4434f55",
+      "recordedAt": "2026-11-23T11:44:38.133Z",
+      "framework": {
+        "frameworkVersion": "0.4.0",
+        "frameworkCommitSha": "234f478e034b738328c63900e74b6bea3ee63bb8",
+        "scenarioId": "tidb-oltp-baseline",
+        "profileId": "scenario-a-smoke-v1",
+        "profileSha256": "2062639f3bc903789f581664dbb7b0e90d72199fc2edc5c446fec092bb6d789b",
+        "datasetSha256": "95a4381c932e2f74d1e3808dab05206b446f9b62c315df78966ebc5d1d6b4c83",
+        "workloadPlanSha256": "9f3576072d1883165ccb152810ea09a35dae043c3b9b61a8e7f65e11c53f0f60",
+        "measurementPlanSha256": "99f0800fc906c3b3f662ed720f0a554020e455b86505ede941fd551fce749492",
+        "retryPolicyId": "scenario-a-retry-v2",
+        "openLoopProfileId": "scenario-a-open-loop-v2",
+        "comparisonView": "gcp-smoke"
+      },
+      "systems": {
+        "lagrange": {
+          "present": true,
+          "version": "0.4.0",
+          "commitSha": "234f478e034b738328c63900e74b6bea3ee63bb8"
+        },
+        "tidbTikv": {
+          "present": false,
+          "version": null,
+          "commitSha": null
+        }
+      },
+      "evidenceSource": {
+        "kind": "gcp-comparative-smoke",
+        "runId": "bench-gcp-lagrange-smoke-234f478e0-20261123-r001",
+        "issueNumber": null,
+        "url": null,
+        "artifactSha256": "93e743a70efd7d3c678715555d796d866e6700a01b1b1a1b37e5b078b19a8d75"
+      },
+      "recordsForCombination": 1,
+      "admission": {
+        "status": "invalid-measurement",
+        "reasons": [
+          "forensic-record-not-admissible"
+        ],
+        "defectIds": []
+      }
+    },
+    {
+      "recordSha256": "0271fe00357afdf17c1634125621ffb7fc3aa064d45d06deca159c19ace6cc69",
+      "combinationSha256": "ce1dc1687958237b33e14c2cd7ad95af5b7cab1f6de34ed84f2113732084a152",
+      "recordedAt": "2026-11-23T13:21:50.503Z",
+      "framework": {
+        "frameworkVersion": "0.4.0",
+        "frameworkCommitSha": "357783544d0098de6b41c50f9bd754bad7d42482",
+        "scenarioId": "tidb-oltp-baseline",
+        "profileId": "scenario-a-smoke-v1",
+        "profileSha256": "2062639f3bc903789f581664dbb7b0e90d72199fc2edc5c446fec092bb6d789b",
+        "datasetSha256": "95a4381c932e2f74d1e3808dab05206b446f9b62c315df78966ebc5d1d6b4c83",
+        "workloadPlanSha256": "9f3576072d1883165ccb152810ea09a35dae043c3b9b61a8e7f65e11c53f0f60",
+        "measurementPlanSha256": "99f0800fc906c3b3f662ed720f0a554020e455b86505ede941fd551fce749492",
+        "retryPolicyId": "scenario-a-retry-v2",
+        "openLoopProfileId": "scenario-a-open-loop-v2",
+        "comparisonView": "gcp-smoke"
+      },
+      "systems": {
+        "lagrange": {
+          "present": true,
+          "version": "0.4.0",
+          "commitSha": "357783544d0098de6b41c50f9bd754bad7d42482"
+        },
+        "tidbTikv": {
+          "present": false,
+          "version": null,
+          "commitSha": null
+        }
+      },
+      "evidenceSource": {
+        "kind": "gcp-comparative-smoke",
+        "runId": "bench-gcp-lagrange-smoke-357783544-20261123-r001",
+        "issueNumber": null,
+        "url": null,
+        "artifactSha256": "08cd184797611d285e7ac3860980660abfb73f5bfd1fd81d3cd1a0fe0fa961ca"
+      },
+      "recordsForCombination": 1,
+      "admission": {
+        "status": "invalid-measurement",
+        "reasons": [
+          "forensic-record-not-admissible"
+        ],
+        "defectIds": []
+      }
+    },
+    {
+      "recordSha256": "45071ffbbb3f182ee8102c4ba1e335259631fead6b9fe5a9cfe243d70e9e9718",
+      "combinationSha256": "42536e668223774eb51a8391e6f2d35c6ef00b7fa4a8c30ccfaca954e4597e8e",
+      "recordedAt": "2026-11-23T13:55:14.228Z",
+      "framework": {
+        "frameworkVersion": "0.4.0",
+        "frameworkCommitSha": "09e4e64ea12e073eb369c48bd3e017615648f26c",
+        "scenarioId": "tidb-oltp-baseline",
+        "profileId": "scenario-a-smoke-v1",
+        "profileSha256": "2062639f3bc903789f581664dbb7b0e90d72199fc2edc5c446fec092bb6d789b",
+        "datasetSha256": "95a4381c932e2f74d1e3808dab05206b446f9b62c315df78966ebc5d1d6b4c83",
+        "workloadPlanSha256": "9f3576072d1883165ccb152810ea09a35dae043c3b9b61a8e7f65e11c53f0f60",
+        "measurementPlanSha256": "99f0800fc906c3b3f662ed720f0a554020e455b86505ede941fd551fce749492",
+        "retryPolicyId": "scenario-a-retry-v2",
+        "openLoopProfileId": "scenario-a-open-loop-v2",
+        "comparisonView": "gcp-smoke"
+      },
+      "systems": {
+        "lagrange": {
+          "present": true,
+          "version": "0.4.0",
+          "commitSha": "09e4e64ea12e073eb369c48bd3e017615648f26c"
+        },
+        "tidbTikv": {
+          "present": false,
+          "version": null,
+          "commitSha": null
+        }
+      },
+      "evidenceSource": {
+        "kind": "gcp-comparative-smoke",
+        "runId": "bench-gcp-lagrange-smoke-09e4e64ea-v2-20261123-r001",
+        "issueNumber": null,
+        "url": null,
+        "artifactSha256": "4e923646095f3041e6bb178811f83110e9a0930d48ab298a24327df0372d7d17"
+      },
+      "recordsForCombination": 1,
+      "admission": {
+        "status": "invalid-measurement",
+        "reasons": [
+          "forensic-record-not-admissible"
+        ],
+        "defectIds": []
+      }
+    },
+    {
+      "recordSha256": "d4ddf353fda70f2d57c41e5c282cf6634423c1bfa3a91b2e9884699f341cf4e5",
+      "combinationSha256": "64bd7735db2cce4197d3e60ba5ddd83706e9f7169c7c884483b92cad0b6293cb",
+      "recordedAt": "2026-11-23T15:18:21.791Z",
+      "framework": {
+        "frameworkVersion": "0.4.0",
+        "frameworkCommitSha": "9265a47d257d97a2319257e0f3cfc8857209b03c",
+        "scenarioId": "tidb-oltp-baseline",
+        "profileId": "scenario-a-smoke-v1",
+        "profileSha256": "2062639f3bc903789f581664dbb7b0e90d72199fc2edc5c446fec092bb6d789b",
+        "datasetSha256": "95a4381c932e2f74d1e3808dab05206b446f9b62c315df78966ebc5d1d6b4c83",
+        "workloadPlanSha256": "9f3576072d1883165ccb152810ea09a35dae043c3b9b61a8e7f65e11c53f0f60",
+        "measurementPlanSha256": "99f0800fc906c3b3f662ed720f0a554020e455b86505ede941fd551fce749492",
+        "retryPolicyId": "scenario-a-retry-v2",
+        "openLoopProfileId": "scenario-a-open-loop-v2",
+        "comparisonView": "tv-dator-3node-smoke"
+      },
+      "systems": {
+        "lagrange": {
+          "present": true,
+          "version": "0.4.0",
+          "commitSha": "9265a47d257d97a2319257e0f3cfc8857209b03c"
+        },
+        "tidbTikv": {
+          "present": false,
+          "version": null,
+          "commitSha": null
+        }
+      },
+      "evidenceSource": {
+        "kind": "lab-tv-dator-3node-smoke",
+        "runId": "tv-dator-3node-smoke-9265a47d2",
+        "issueNumber": null,
+        "url": null,
+        "artifactSha256": null
+      },
+      "recordsForCombination": 1,
+      "admission": {
+        "status": "invalid-measurement",
+        "reasons": [
+          "forensic-record-not-admissible"
+        ],
+        "defectIds": []
+      }
+    },
+    {
+      "recordSha256": "ab02c707e1547724dfc6ec8d7421cb6b52dd48e730a2f428eea1dbb17a6bb050",
+      "combinationSha256": "c155ef639196229c752d53b793a87c3670748b12b7a018bcd4dad0bf18195b60",
+      "recordedAt": "2026-11-23T15:59:58.927Z",
+      "framework": {
+        "frameworkVersion": "0.4.0",
+        "frameworkCommitSha": "b0365602b5987531366c573448ece62a27357e36",
+        "scenarioId": "tidb-oltp-baseline",
+        "profileId": "scenario-a-smoke-v1",
+        "profileSha256": "2062639f3bc903789f581664dbb7b0e90d72199fc2edc5c446fec092bb6d789b",
+        "datasetSha256": "95a4381c932e2f74d1e3808dab05206b446f9b62c315df78966ebc5d1d6b4c83",
+        "workloadPlanSha256": "9f3576072d1883165ccb152810ea09a35dae043c3b9b61a8e7f65e11c53f0f60",
+        "measurementPlanSha256": "99f0800fc906c3b3f662ed720f0a554020e455b86505ede941fd551fce749492",
+        "retryPolicyId": "scenario-a-retry-v2",
+        "openLoopProfileId": "scenario-a-open-loop-v2",
+        "comparisonView": "tv-dator-3node-smoke"
+      },
+      "systems": {
+        "lagrange": {
+          "present": true,
+          "version": "0.4.0",
+          "commitSha": "b0365602b5987531366c573448ece62a27357e36"
+        },
+        "tidbTikv": {
+          "present": false,
+          "version": null,
+          "commitSha": null
+        }
+      },
+      "evidenceSource": {
+        "kind": "lab-tv-dator-3node-smoke",
+        "runId": "tv-dator-3node-smoke-b0365602b",
+        "issueNumber": null,
+        "url": null,
+        "artifactSha256": null
+      },
+      "recordsForCombination": 1,
+      "admission": {
+        "status": "invalid-measurement",
+        "reasons": [
+          "forensic-record-not-admissible"
+        ],
+        "defectIds": []
+      }
+    },
+    {
+      "recordSha256": "1af1848e5080e49e42755e83a37b8d67ee43fd61b41e1d2e3cc9eef07b706990",
+      "combinationSha256": "eddeac79d55116c744f5869a00c92358b7a51d61cc919f7c9034670253442fff",
+      "recordedAt": "2026-11-23T16:30:49.665Z",
+      "framework": {
+        "frameworkVersion": "0.4.0",
+        "frameworkCommitSha": "b4521acd835e2b891a9fe8aac00dd95dbb74f880",
+        "scenarioId": "tidb-oltp-baseline",
+        "profileId": "scenario-a-smoke-v1",
+        "profileSha256": "2062639f3bc903789f581664dbb7b0e90d72199fc2edc5c446fec092bb6d789b",
+        "datasetSha256": "95a4381c932e2f74d1e3808dab05206b446f9b62c315df78966ebc5d1d6b4c83",
+        "workloadPlanSha256": "9f3576072d1883165ccb152810ea09a35dae043c3b9b61a8e7f65e11c53f0f60",
+        "measurementPlanSha256": "99f0800fc906c3b3f662ed720f0a554020e455b86505ede941fd551fce749492",
+        "retryPolicyId": "scenario-a-retry-v2",
+        "openLoopProfileId": "scenario-a-open-loop-v2",
+        "comparisonView": "tv-dator-3node-smoke"
+      },
+      "systems": {
+        "lagrange": {
+          "present": true,
+          "version": "0.4.0",
+          "commitSha": "b4521acd835e2b891a9fe8aac00dd95dbb74f880"
+        },
+        "tidbTikv": {
+          "present": false,
+          "version": null,
+          "commitSha": null
+        }
+      },
+      "evidenceSource": {
+        "kind": "lab-tv-dator-3node-smoke",
+        "runId": "tv-dator-3node-smoke-b4521acd8",
+        "issueNumber": null,
+        "url": null,
+        "artifactSha256": null
+      },
+      "recordsForCombination": 1,
+      "admission": {
+        "status": "invalid-measurement",
+        "reasons": [
+          "forensic-record-not-admissible"
+        ],
+        "defectIds": []
+      }
+    },
+    {
+      "recordSha256": "d3946dba5bbf448ab2184f3e1e036b15d4f5181b0dd400e2e8dab2046e4da519",
+      "combinationSha256": "28e10dcb3ba68b35fd2085f38bdbfe2c81304db489bd9da789d28142eb895eb5",
+      "recordedAt": "2026-11-23T16:57:59.415Z",
+      "framework": {
+        "frameworkVersion": "0.4.0",
+        "frameworkCommitSha": "b1b35a6bb3d2a40fdf2d47c5083c5ac5dbe7b952",
+        "scenarioId": "tidb-oltp-baseline",
+        "profileId": "scenario-a-smoke-v1",
+        "profileSha256": "2062639f3bc903789f581664dbb7b0e90d72199fc2edc5c446fec092bb6d789b",
+        "datasetSha256": "95a4381c932e2f74d1e3808dab05206b446f9b62c315df78966ebc5d1d6b4c83",
+        "workloadPlanSha256": "9f3576072d1883165ccb152810ea09a35dae043c3b9b61a8e7f65e11c53f0f60",
+        "measurementPlanSha256": "99f0800fc906c3b3f662ed720f0a554020e455b86505ede941fd551fce749492",
+        "retryPolicyId": "scenario-a-retry-v2",
+        "openLoopProfileId": "scenario-a-open-loop-v2",
+        "comparisonView": "tv-dator-stage3-wifi-eval"
+      },
+      "systems": {
+        "lagrange": {
+          "present": true,
+          "version": "0.4.0",
+          "commitSha": "b1b35a6bb3d2a40fdf2d47c5083c5ac5dbe7b952"
+        },
+        "tidbTikv": {
+          "present": false,
+          "version": null,
+          "commitSha": null
+        }
+      },
+      "evidenceSource": {
+        "kind": "lab-tv-dator-3node-smoke",
+        "runId": "tv-dator-stage3-wifi-eval-b1b35a6bb",
+        "issueNumber": null,
+        "url": null,
+        "artifactSha256": null
+      },
+      "recordsForCombination": 1,
+      "admission": {
+        "status": "invalid-measurement",
+        "reasons": [
+          "forensic-record-not-admissible"
+        ],
+        "defectIds": []
+      }
+    },
+    {
+      "recordSha256": "4c7b5c0e44a5bc123d8c0d7d6d046048d2c4329369d4fe853fc689eb9159a70b",
+      "combinationSha256": "a42e9da13fad564c7ba3324630b468f2f478f9032253277f28f36347c393e259",
+      "recordedAt": "2026-11-23T17:07:03.265Z",
+      "framework": {
+        "frameworkVersion": "0.4.0",
+        "frameworkCommitSha": "3f963bfe18e719a637c6e56ba6da25412e1c43f4",
+        "scenarioId": "tidb-oltp-baseline",
+        "profileId": "scenario-a-smoke-v1",
+        "profileSha256": "2062639f3bc903789f581664dbb7b0e90d72199fc2edc5c446fec092bb6d789b",
+        "datasetSha256": "95a4381c932e2f74d1e3808dab05206b446f9b62c315df78966ebc5d1d6b4c83",
+        "workloadPlanSha256": "9f3576072d1883165ccb152810ea09a35dae043c3b9b61a8e7f65e11c53f0f60",
+        "measurementPlanSha256": "99f0800fc906c3b3f662ed720f0a554020e455b86505ede941fd551fce749492",
+        "retryPolicyId": "scenario-a-retry-v2",
+        "openLoopProfileId": "scenario-a-open-loop-v2",
+        "comparisonView": "tv-dator-3node-smoke"
+      },
+      "systems": {
+        "lagrange": {
+          "present": true,
+          "version": "0.4.0",
+          "commitSha": "3f963bfe18e719a637c6e56ba6da25412e1c43f4"
+        },
+        "tidbTikv": {
+          "present": false,
+          "version": null,
+          "commitSha": null
+        }
+      },
+      "evidenceSource": {
+        "kind": "lab-tv-dator-3node-smoke",
+        "runId": "tv-dator-3node-smoke-3f963bfe1",
+        "issueNumber": null,
+        "url": null,
+        "artifactSha256": null
+      },
+      "recordsForCombination": 1,
+      "admission": {
+        "status": "invalid-measurement",
+        "reasons": [
+          "forensic-record-not-admissible"
+        ],
+        "defectIds": []
+      }
+    },
+    {
+      "recordSha256": "f6f4df17eaab8e4dd06e2c58bf4b1b527c79826951447bf6e07cd63eecbd95b9",
+      "combinationSha256": "b9340bab080bca85cddcd09e1d030cdc18b0520f626de28b1fff971777f89112",
+      "recordedAt": "2026-11-23T18:02:41.325Z",
+      "framework": {
+        "frameworkVersion": "0.4.0",
+        "frameworkCommitSha": "3c2d9cd8bbb859524f4f0ab5bd70556eab1db2d6",
+        "scenarioId": "tidb-oltp-baseline",
+        "profileId": "scenario-a-smoke-v1",
+        "profileSha256": "2062639f3bc903789f581664dbb7b0e90d72199fc2edc5c446fec092bb6d789b",
+        "datasetSha256": "95a4381c932e2f74d1e3808dab05206b446f9b62c315df78966ebc5d1d6b4c83",
+        "workloadPlanSha256": "9f3576072d1883165ccb152810ea09a35dae043c3b9b61a8e7f65e11c53f0f60",
+        "measurementPlanSha256": "99f0800fc906c3b3f662ed720f0a554020e455b86505ede941fd551fce749492",
+        "retryPolicyId": "scenario-a-retry-v2",
+        "openLoopProfileId": "scenario-a-open-loop-v2",
+        "comparisonView": "tv-dator-3node-smoke"
+      },
+      "systems": {
+        "lagrange": {
+          "present": true,
+          "version": "0.4.0",
+          "commitSha": "3c2d9cd8bbb859524f4f0ab5bd70556eab1db2d6"
+        },
+        "tidbTikv": {
+          "present": false,
+          "version": null,
+          "commitSha": null
+        }
+      },
+      "evidenceSource": {
+        "kind": "lab-tv-dator-3node-smoke",
+        "runId": "tv-dator-3node-smoke-3c2d9cd8b",
+        "issueNumber": null,
+        "url": null,
+        "artifactSha256": null
+      },
+      "recordsForCombination": 1,
+      "admission": {
+        "status": "invalid-measurement",
+        "reasons": [
+          "forensic-record-not-admissible"
+        ],
+        "defectIds": []
+      }
+    },
+    {
+      "recordSha256": "4eb6af934ded9a4681ae1c480582d6cbb713adfd0ddb84ad49a2dd33790a68b7",
+      "combinationSha256": "bc1828ecb57351fc1fc1c91e9e31981822c7e899b3cf94a8faf5a8e28bdc0431",
+      "recordedAt": "2026-11-23T18:10:05.283Z",
+      "framework": {
+        "frameworkVersion": "0.4.0",
+        "frameworkCommitSha": "3c2d9cd8bbb859524f4f0ab5bd70556eab1db2d6",
+        "scenarioId": "tidb-oltp-baseline",
+        "profileId": "scenario-a-smoke-v1",
+        "profileSha256": "2062639f3bc903789f581664dbb7b0e90d72199fc2edc5c446fec092bb6d789b",
+        "datasetSha256": "95a4381c932e2f74d1e3808dab05206b446f9b62c315df78966ebc5d1d6b4c83",
+        "workloadPlanSha256": "9f3576072d1883165ccb152810ea09a35dae043c3b9b61a8e7f65e11c53f0f60",
+        "measurementPlanSha256": "99f0800fc906c3b3f662ed720f0a554020e455b86505ede941fd551fce749492",
+        "retryPolicyId": "scenario-a-retry-v2",
+        "openLoopProfileId": "scenario-a-open-loop-v2",
+        "comparisonView": "tv-dator-3node-smoke-full"
+      },
+      "systems": {
+        "lagrange": {
+          "present": true,
+          "version": "0.4.0",
+          "commitSha": "3c2d9cd8bbb859524f4f0ab5bd70556eab1db2d6"
+        },
+        "tidbTikv": {
+          "present": false,
+          "version": null,
+          "commitSha": null
+        }
+      },
+      "evidenceSource": {
+        "kind": "lab-tv-dator-3node-smoke",
+        "runId": "tv-dator-3node-smoke-full-3c2d9cd8b",
+        "issueNumber": null,
+        "url": null,
+        "artifactSha256": null
+      },
+      "recordsForCombination": 1,
+      "admission": {
+        "status": "invalid-measurement",
+        "reasons": [
+          "forensic-record-not-admissible"
+        ],
+        "defectIds": []
+      }
+    },
+    {
+      "recordSha256": "58f5a3364fd72873140badb18c94014d16459fbdbfa48e3e11808bf8bbd001e0",
+      "combinationSha256": "fd82301eb103ced9bdd169492a246298acaf2ed2d8e2e92b658b81999495e89b",
+      "recordedAt": "2026-11-23T18:50:16.767Z",
+      "framework": {
+        "frameworkVersion": "0.4.0",
+        "frameworkCommitSha": "47b3d57da9cbb84bf7ed0a89882b13ade2a9c4d5",
+        "scenarioId": "tidb-oltp-baseline",
+        "profileId": "scenario-a-smoke-v1",
+        "profileSha256": "2062639f3bc903789f581664dbb7b0e90d72199fc2edc5c446fec092bb6d789b",
+        "datasetSha256": "95a4381c932e2f74d1e3808dab05206b446f9b62c315df78966ebc5d1d6b4c83",
+        "workloadPlanSha256": "9f3576072d1883165ccb152810ea09a35dae043c3b9b61a8e7f65e11c53f0f60",
+        "measurementPlanSha256": "99f0800fc906c3b3f662ed720f0a554020e455b86505ede941fd551fce749492",
+        "retryPolicyId": "scenario-a-retry-v2",
+        "openLoopProfileId": "scenario-a-open-loop-v2",
+        "comparisonView": "tv-dator-3node-smoke"
+      },
+      "systems": {
+        "lagrange": {
+          "present": true,
+          "version": "0.4.0",
+          "commitSha": "47b3d57da9cbb84bf7ed0a89882b13ade2a9c4d5"
+        },
+        "tidbTikv": {
+          "present": false,
+          "version": null,
+          "commitSha": null
+        }
+      },
+      "evidenceSource": {
+        "kind": "lab-tv-dator-3node-smoke",
+        "runId": "tv-dator-3node-smoke-47b3d57da",
+        "issueNumber": null,
+        "url": null,
+        "artifactSha256": null
+      },
+      "recordsForCombination": 1,
+      "admission": {
+        "status": "invalid-measurement",
+        "reasons": [
+          "forensic-record-not-admissible"
+        ],
+        "defectIds": []
+      }
+    },
+    {
+      "recordSha256": "9e1a7915b3a5ae2b3170122d25010bc57980792ab5ad966df8a6080e57cc7724",
+      "combinationSha256": "c3951c64eb1d51847703dd57f3a22d7e8b653a0413788408518eb5ded0d1408f",
+      "recordedAt": "2026-11-23T19:00:23.226Z",
+      "framework": {
+        "frameworkVersion": "0.4.0",
+        "frameworkCommitSha": "47b3d57da9cbb84bf7ed0a89882b13ade2a9c4d5",
+        "scenarioId": "tidb-oltp-baseline",
+        "profileId": "scenario-a-smoke-v1",
+        "profileSha256": "2062639f3bc903789f581664dbb7b0e90d72199fc2edc5c446fec092bb6d789b",
+        "datasetSha256": "95a4381c932e2f74d1e3808dab05206b446f9b62c315df78966ebc5d1d6b4c83",
+        "workloadPlanSha256": "9f3576072d1883165ccb152810ea09a35dae043c3b9b61a8e7f65e11c53f0f60",
+        "measurementPlanSha256": "99f0800fc906c3b3f662ed720f0a554020e455b86505ede941fd551fce749492",
+        "retryPolicyId": "scenario-a-retry-v2",
+        "openLoopProfileId": "scenario-a-open-loop-v2",
+        "comparisonView": "tv-dator-3node-smoke-full"
+      },
+      "systems": {
+        "lagrange": {
+          "present": true,
+          "version": "0.4.0",
+          "commitSha": "47b3d57da9cbb84bf7ed0a89882b13ade2a9c4d5"
+        },
+        "tidbTikv": {
+          "present": false,
+          "version": null,
+          "commitSha": null
+        }
+      },
+      "evidenceSource": {
+        "kind": "lab-tv-dator-3node-smoke",
+        "runId": "tv-dator-3node-smoke-full-47b3d57da",
+        "issueNumber": null,
+        "url": null,
+        "artifactSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "recordsForCombination": 1,
+      "admission": {
+        "status": "invalid-measurement",
+        "reasons": [
+          "forensic-record-not-admissible"
+        ],
+        "defectIds": []
+      }
+    },
+    {
+      "recordSha256": "bc4600edaecb4b283e64d60058a19c361db921fd55336d58719e180723488e74",
+      "combinationSha256": "a2b1c3a8be69e71641196150b9f91af15e13467c771ca502839b6ab16d25ca14",
+      "recordedAt": "2026-11-23T19:27:21.686Z",
+      "framework": {
+        "frameworkVersion": "0.4.0",
+        "frameworkCommitSha": "5bdd4f221b0fd3a2f894ae21b040a39342ce2601",
+        "scenarioId": "tidb-oltp-baseline",
+        "profileId": "scenario-a-smoke-v1",
+        "profileSha256": "2062639f3bc903789f581664dbb7b0e90d72199fc2edc5c446fec092bb6d789b",
+        "datasetSha256": "95a4381c932e2f74d1e3808dab05206b446f9b62c315df78966ebc5d1d6b4c83",
+        "workloadPlanSha256": "9f3576072d1883165ccb152810ea09a35dae043c3b9b61a8e7f65e11c53f0f60",
+        "measurementPlanSha256": "99f0800fc906c3b3f662ed720f0a554020e455b86505ede941fd551fce749492",
+        "retryPolicyId": "scenario-a-retry-v2",
+        "openLoopProfileId": "scenario-a-open-loop-v2",
+        "comparisonView": "tv-dator-3node-smoke"
+      },
+      "systems": {
+        "lagrange": {
+          "present": true,
+          "version": "0.4.0",
+          "commitSha": "5bdd4f221b0fd3a2f894ae21b040a39342ce2601"
+        },
+        "tidbTikv": {
+          "present": false,
+          "version": null,
+          "commitSha": null
+        }
+      },
+      "evidenceSource": {
+        "kind": "lab-tv-dator-3node-smoke",
+        "runId": "tv-dator-3node-smoke-5bdd4f221",
+        "issueNumber": null,
+        "url": null,
+        "artifactSha256": null
+      },
+      "recordsForCombination": 1,
+      "admission": {
+        "status": "invalid-measurement",
+        "reasons": [
+          "forensic-record-not-admissible"
+        ],
+        "defectIds": []
+      }
+    },
+    {
+      "recordSha256": "b5d270ef55e1d6eeea307fec45cb398f54f9893453d168460c91ac0fc844bd8f",
+      "combinationSha256": "d9d759debb5b470bf03e66429c8edd5ce4a0ecd0b96f3731fbc6a53edb8dc0fd",
+      "recordedAt": "2026-11-23T20:19:11.135Z",
+      "framework": {
+        "frameworkVersion": "0.4.0",
+        "frameworkCommitSha": "613b120aca445e622e1e8de5d2d0a35c64f1ce54",
+        "scenarioId": "tidb-oltp-baseline",
+        "profileId": "scenario-a-smoke-v1",
+        "profileSha256": "2062639f3bc903789f581664dbb7b0e90d72199fc2edc5c446fec092bb6d789b",
+        "datasetSha256": "95a4381c932e2f74d1e3808dab05206b446f9b62c315df78966ebc5d1d6b4c83",
+        "workloadPlanSha256": "9f3576072d1883165ccb152810ea09a35dae043c3b9b61a8e7f65e11c53f0f60",
+        "measurementPlanSha256": "99f0800fc906c3b3f662ed720f0a554020e455b86505ede941fd551fce749492",
+        "retryPolicyId": "scenario-a-retry-v2",
+        "openLoopProfileId": "scenario-a-open-loop-v2",
+        "comparisonView": "tv-dator-3node-smoke"
+      },
+      "systems": {
+        "lagrange": {
+          "present": true,
+          "version": "0.4.0",
+          "commitSha": "613b120aca445e622e1e8de5d2d0a35c64f1ce54"
+        },
+        "tidbTikv": {
+          "present": false,
+          "version": null,
+          "commitSha": null
+        }
+      },
+      "evidenceSource": {
+        "kind": "lab-tv-dator-3node-smoke",
+        "runId": "tv-dator-3node-smoke-613b120ac",
+        "issueNumber": null,
+        "url": null,
+        "artifactSha256": "acef7940be1a140f79982f226a1ea49770d03ccaaddb0f9c6ba9bb9b4d3632e2"
+      },
+      "recordsForCombination": 1,
+      "admission": {
+        "status": "invalid-measurement",
+        "reasons": [
+          "forensic-record-not-admissible"
+        ],
+        "defectIds": []
+      }
+    },
+    {
+      "recordSha256": "4c7dc9719235561d00f49df9c5cb314dd41e8051e2df1065a461c147a4bb6c40",
+      "combinationSha256": "815d518f0f48f463de607c88213b724616f002e859186779fbe8cdf5c8f2f92a",
+      "recordedAt": "2026-11-23T20:22:59.572Z",
+      "framework": {
+        "frameworkVersion": "0.4.0",
+        "frameworkCommitSha": "613b120aca445e622e1e8de5d2d0a35c64f1ce54",
+        "scenarioId": "tidb-oltp-baseline",
+        "profileId": "scenario-a-smoke-v1",
+        "profileSha256": "2062639f3bc903789f581664dbb7b0e90d72199fc2edc5c446fec092bb6d789b",
+        "datasetSha256": "95a4381c932e2f74d1e3808dab05206b446f9b62c315df78966ebc5d1d6b4c83",
+        "workloadPlanSha256": "9f3576072d1883165ccb152810ea09a35dae043c3b9b61a8e7f65e11c53f0f60",
+        "measurementPlanSha256": "99f0800fc906c3b3f662ed720f0a554020e455b86505ede941fd551fce749492",
+        "retryPolicyId": "scenario-a-retry-v2",
+        "openLoopProfileId": "scenario-a-open-loop-v2",
+        "comparisonView": "tv-dator-stage3-wifi-eval"
+      },
+      "systems": {
+        "lagrange": {
+          "present": true,
+          "version": "0.4.0",
+          "commitSha": "613b120aca445e622e1e8de5d2d0a35c64f1ce54"
+        },
+        "tidbTikv": {
+          "present": false,
+          "version": null,
+          "commitSha": null
+        }
+      },
+      "evidenceSource": {
+        "kind": "lab-tv-dator-3node-smoke",
+        "runId": "tv-dator-stage3-wifi-eval-613b120ac",
+        "issueNumber": null,
+        "url": null,
+        "artifactSha256": null
+      },
+      "recordsForCombination": 1,
+      "admission": {
+        "status": "invalid-measurement",
+        "reasons": [
+          "forensic-record-not-admissible"
+        ],
+        "defectIds": []
+      }
+    },
+    {
+      "recordSha256": "30407165e3c5a8329f628f2722158273009e82833b705cf142f547dcf794cdb3",
+      "combinationSha256": "affdef40f90912327f8a889388e146db0a750b164b12c5fded2a6f1e4368f6fe",
+      "recordedAt": "2026-11-23T21:11:29.558Z",
+      "framework": {
+        "frameworkVersion": "0.4.0",
+        "frameworkCommitSha": "480cf0f298513fd44a604479e16ab34eca3336d1",
+        "scenarioId": "tidb-oltp-baseline",
+        "profileId": "scenario-a-smoke-v1",
+        "profileSha256": "2062639f3bc903789f581664dbb7b0e90d72199fc2edc5c446fec092bb6d789b",
+        "datasetSha256": "95a4381c932e2f74d1e3808dab05206b446f9b62c315df78966ebc5d1d6b4c83",
+        "workloadPlanSha256": "9f3576072d1883165ccb152810ea09a35dae043c3b9b61a8e7f65e11c53f0f60",
+        "measurementPlanSha256": "99f0800fc906c3b3f662ed720f0a554020e455b86505ede941fd551fce749492",
+        "retryPolicyId": "scenario-a-retry-v2",
+        "openLoopProfileId": "scenario-a-open-loop-v2",
+        "comparisonView": "gcp-smoke"
+      },
+      "systems": {
+        "lagrange": {
+          "present": true,
+          "version": "0.4.0",
+          "commitSha": "480cf0f298513fd44a604479e16ab34eca3336d1"
+        },
+        "tidbTikv": {
+          "present": false,
+          "version": null,
+          "commitSha": null
+        }
+      },
+      "evidenceSource": {
+        "kind": "gcp-comparative-smoke",
+        "runId": "bench-gcp-lagrange-smoke-480cf0f29-20261123-r001",
+        "issueNumber": null,
+        "url": null,
+        "artifactSha256": "54080bc93264d1b67e6f5953ef7801f6c977edf18f1d03c406f8ae0ef104c2d4"
+      },
+      "recordsForCombination": 1,
+      "admission": {
+        "status": "invalid-measurement",
+        "reasons": [
+          "forensic-record-not-admissible"
+        ],
+        "defectIds": []
+      }
+    },
+    {
+      "recordSha256": "b088457700f6b99f8fb8d075579365db93df86cdad7c2bdcb810b3a3c0a389cd",
+      "combinationSha256": "9a92151147cb2daa71591eba24b34fba502bc8f34cf33baac30bd8aea6558856",
+      "recordedAt": "2026-11-23T21:17:07.710Z",
+      "framework": {
+        "frameworkVersion": "0.4.0",
+        "frameworkCommitSha": "480cf0f298513fd44a604479e16ab34eca3336d1",
+        "scenarioId": "tidb-oltp-baseline",
+        "profileId": "scenario-a-smoke-v1",
+        "profileSha256": "2062639f3bc903789f581664dbb7b0e90d72199fc2edc5c446fec092bb6d789b",
+        "datasetSha256": "95a4381c932e2f74d1e3808dab05206b446f9b62c315df78966ebc5d1d6b4c83",
+        "workloadPlanSha256": "9f3576072d1883165ccb152810ea09a35dae043c3b9b61a8e7f65e11c53f0f60",
+        "measurementPlanSha256": "99f0800fc906c3b3f662ed720f0a554020e455b86505ede941fd551fce749492",
+        "retryPolicyId": "scenario-a-retry-v2",
+        "openLoopProfileId": "scenario-a-open-loop-v2",
+        "comparisonView": "gcp-smoke-r2"
+      },
+      "systems": {
+        "lagrange": {
+          "present": true,
+          "version": "0.4.0",
+          "commitSha": "480cf0f298513fd44a604479e16ab34eca3336d1"
+        },
+        "tidbTikv": {
+          "present": false,
+          "version": null,
+          "commitSha": null
+        }
+      },
+      "evidenceSource": {
+        "kind": "gcp-comparative-smoke",
+        "runId": "bench-gcp-lagrange-smoke-480cf0f29-r2-20261123-r001",
+        "issueNumber": null,
+        "url": null,
+        "artifactSha256": "77443a45c5fc68388be014b1b22e46a778d27dd041e395e78ea872767f78a2ec"
+      },
+      "recordsForCombination": 1,
+      "admission": {
+        "status": "invalid-measurement",
+        "reasons": [
+          "forensic-record-not-admissible"
+        ],
+        "defectIds": []
+      }
+    },
+    {
+      "recordSha256": "1b3dc052e33adda42fea56a8739bd63bdce2b55721fcf862d40a6e4735f622e4",
+      "combinationSha256": "cec3016278ba0b83789569c51ca1706c7e5b5af7060044cb426277c4cf850637",
+      "recordedAt": "2026-11-23T22:45:58.413Z",
+      "framework": {
+        "frameworkVersion": "0.4.0",
+        "frameworkCommitSha": "3908f1e597e11428c2d245c7ca7e60356c01ed6b",
+        "scenarioId": "tidb-oltp-baseline",
+        "profileId": "scenario-a-smoke-v1",
+        "profileSha256": "2062639f3bc903789f581664dbb7b0e90d72199fc2edc5c446fec092bb6d789b",
+        "datasetSha256": "95a4381c932e2f74d1e3808dab05206b446f9b62c315df78966ebc5d1d6b4c83",
+        "workloadPlanSha256": "9f3576072d1883165ccb152810ea09a35dae043c3b9b61a8e7f65e11c53f0f60",
+        "measurementPlanSha256": "99f0800fc906c3b3f662ed720f0a554020e455b86505ede941fd551fce749492",
+        "retryPolicyId": "scenario-a-retry-v2",
+        "openLoopProfileId": "scenario-a-open-loop-v2",
+        "comparisonView": "gcp-smoke"
+      },
+      "systems": {
+        "lagrange": {
+          "present": true,
+          "version": "0.4.0",
+          "commitSha": "3908f1e597e11428c2d245c7ca7e60356c01ed6b"
+        },
+        "tidbTikv": {
+          "present": false,
+          "version": null,
+          "commitSha": null
+        }
+      },
+      "evidenceSource": {
+        "kind": "gcp-comparative-smoke",
+        "runId": "bench-gcp-lagrange-smoke-3908f1e59-20261123-r001",
+        "issueNumber": null,
+        "url": null,
+        "artifactSha256": "702829d8a62432b63ba19b244ba500cc3a308937448f2f03bfb347276e59ede5"
+      },
+      "recordsForCombination": 1,
+      "admission": {
+        "status": "invalid-measurement",
+        "reasons": [
+          "forensic-record-not-admissible"
+        ],
+        "defectIds": []
+      }
+    },
+    {
+      "recordSha256": "22233b4ae3dbf82f910ab65a266fcb78b6c587c8e16aeea4c46f8e759b042f1c",
+      "combinationSha256": "4b1c3837a8ae18f65ae1af6a72e431b33e3583489abb5eacf7c8a42e11ff7b7c",
+      "recordedAt": "2026-11-24T00:48:11.734Z",
+      "framework": {
+        "frameworkVersion": "0.4.0",
+        "frameworkCommitSha": "b1e097b09912507b3f04d82dfca3bd1cf2e801df",
+        "scenarioId": "tidb-oltp-baseline",
+        "profileId": "scenario-a-smoke-v1",
+        "profileSha256": "2062639f3bc903789f581664dbb7b0e90d72199fc2edc5c446fec092bb6d789b",
+        "datasetSha256": "95a4381c932e2f74d1e3808dab05206b446f9b62c315df78966ebc5d1d6b4c83",
+        "workloadPlanSha256": "9f3576072d1883165ccb152810ea09a35dae043c3b9b61a8e7f65e11c53f0f60",
+        "measurementPlanSha256": "99f0800fc906c3b3f662ed720f0a554020e455b86505ede941fd551fce749492",
+        "retryPolicyId": "scenario-a-retry-v2",
+        "openLoopProfileId": "scenario-a-open-loop-v2",
+        "comparisonView": "gcp-smoke"
+      },
+      "systems": {
+        "lagrange": {
+          "present": true,
+          "version": "0.4.0",
+          "commitSha": "b1e097b09912507b3f04d82dfca3bd1cf2e801df"
+        },
+        "tidbTikv": {
+          "present": true,
+          "version": "v8.5.8",
+          "commitSha": "v8.5.8"
+        }
+      },
+      "evidenceSource": {
+        "kind": "gcp-comparative-smoke",
+        "runId": "bench-gcp-lagrange-smoke-b1e097b09-20261124-r001",
+        "issueNumber": null,
+        "url": null,
+        "artifactSha256": "bb0378fa070837466cf2bfe59baf33453fceaf1df9fc003de667a876a638242b"
+      },
+      "recordsForCombination": 1,
+      "admission": {
+        "status": "invalid-measurement",
+        "reasons": [
+          "forensic-record-not-admissible"
+        ],
+        "defectIds": []
+      }
+    },
+    {
+      "recordSha256": "30e663c97e0eb0f1e3f6bef3ac7c6b7e17146df45291af7cb92043d8c9cc43e4",
+      "combinationSha256": "a38e2d2ccdc30385c269bc1e2c8017fa4f75fc925bacb7ef0c5e29d1281fd4d7",
+      "recordedAt": "2026-11-24T01:06:22.897Z",
+      "framework": {
+        "frameworkVersion": "0.4.0",
+        "frameworkCommitSha": "b1e097b09912507b3f04d82dfca3bd1cf2e801df",
+        "scenarioId": "tidb-oltp-baseline",
+        "profileId": "scenario-a-smoke-v1",
+        "profileSha256": "2062639f3bc903789f581664dbb7b0e90d72199fc2edc5c446fec092bb6d789b",
+        "datasetSha256": "95a4381c932e2f74d1e3808dab05206b446f9b62c315df78966ebc5d1d6b4c83",
+        "workloadPlanSha256": "9f3576072d1883165ccb152810ea09a35dae043c3b9b61a8e7f65e11c53f0f60",
+        "measurementPlanSha256": "99f0800fc906c3b3f662ed720f0a554020e455b86505ede941fd551fce749492",
+        "retryPolicyId": "scenario-a-retry-v2",
+        "openLoopProfileId": "scenario-a-open-loop-v2",
+        "comparisonView": "tv-dator-3node-smoke"
+      },
+      "systems": {
+        "lagrange": {
+          "present": true,
+          "version": "0.4.0",
+          "commitSha": "b1e097b09912507b3f04d82dfca3bd1cf2e801df"
+        },
+        "tidbTikv": {
+          "present": false,
+          "version": null,
+          "commitSha": null
+        }
+      },
+      "evidenceSource": {
+        "kind": "lab-tv-dator-3node-smoke",
+        "runId": "tv-dator-3node-smoke-b1e097b09",
+        "issueNumber": null,
+        "url": null,
+        "artifactSha256": "acef7940be1a140f79982f226a1ea49770d03ccaaddb0f9c6ba9bb9b4d3632e2"
+      },
+      "recordsForCombination": 1,
+      "admission": {
+        "status": "invalid-measurement",
+        "reasons": [
+          "forensic-record-not-admissible"
+        ],
+        "defectIds": []
+      }
+    },
+    {
+      "recordSha256": "2f69d8b5ef9ac5313abb47583eb7312c17dc925cd9a8e4ff03ab88ec9d70803e",
+      "combinationSha256": "8213b7c4f64cbb1930133924374839616c476aaceaa3becfc1f994b7a6053884",
+      "recordedAt": "2026-11-24T06:50:13.779Z",
+      "framework": {
+        "frameworkVersion": "0.4.0",
+        "frameworkCommitSha": "88700710744c2b66af5a329e2c411892666085e2",
+        "scenarioId": "tidb-oltp-baseline",
+        "profileId": "scenario-a-smoke-v1",
+        "profileSha256": "2062639f3bc903789f581664dbb7b0e90d72199fc2edc5c446fec092bb6d789b",
+        "datasetSha256": "95a4381c932e2f74d1e3808dab05206b446f9b62c315df78966ebc5d1d6b4c83",
+        "workloadPlanSha256": "9f3576072d1883165ccb152810ea09a35dae043c3b9b61a8e7f65e11c53f0f60",
+        "measurementPlanSha256": "99f0800fc906c3b3f662ed720f0a554020e455b86505ede941fd551fce749492",
+        "retryPolicyId": "scenario-a-retry-v2",
+        "openLoopProfileId": "scenario-a-open-loop-v2",
+        "comparisonView": "gcp-smoke"
+      },
+      "systems": {
+        "lagrange": {
+          "present": true,
+          "version": "0.4.0",
+          "commitSha": "88700710744c2b66af5a329e2c411892666085e2"
+        },
+        "tidbTikv": {
+          "present": true,
+          "version": "v8.5.8",
+          "commitSha": "v8.5.8"
+        }
+      },
+      "evidenceSource": {
+        "kind": "gcp-comparative-smoke",
+        "runId": "bench-gcp-3sys-smoke-887007107-20261124-r001",
+        "issueNumber": null,
+        "url": null,
+        "artifactSha256": "bece660d8bda3ad63a21e8f731a0244fc1e75e5949fcaade5b91c6454bd848ab"
+      },
+      "recordsForCombination": 1,
+      "admission": {
+        "status": "invalid-measurement",
+        "reasons": [
+          "forensic-record-not-admissible"
+        ],
+        "defectIds": []
+      }
+    },
+    {
+      "recordSha256": "7473cf1aaddc889de83f0c067ff93f3df837e46279a39f8a1dd2c70da6e3e52c",
+      "combinationSha256": "451007b67fc2e85cd90960de16b9cfd52a572668595629de691e0f784cb10e55",
+      "recordedAt": "2026-11-24T06:51:08.127Z",
+      "framework": {
+        "frameworkVersion": "0.4.0",
+        "frameworkCommitSha": "88700710744c2b66af5a329e2c411892666085e2",
+        "scenarioId": "tidb-oltp-baseline",
+        "profileId": "scenario-a-smoke-v1",
+        "profileSha256": "2062639f3bc903789f581664dbb7b0e90d72199fc2edc5c446fec092bb6d789b",
+        "datasetSha256": "95a4381c932e2f74d1e3808dab05206b446f9b62c315df78966ebc5d1d6b4c83",
+        "workloadPlanSha256": "9f3576072d1883165ccb152810ea09a35dae043c3b9b61a8e7f65e11c53f0f60",
+        "measurementPlanSha256": "99f0800fc906c3b3f662ed720f0a554020e455b86505ede941fd551fce749492",
+        "retryPolicyId": "scenario-a-retry-v2",
+        "openLoopProfileId": "scenario-a-open-loop-v2",
+        "comparisonView": "tv-dator-3node-smoke"
+      },
+      "systems": {
+        "lagrange": {
+          "present": true,
+          "version": "0.4.0",
+          "commitSha": "88700710744c2b66af5a329e2c411892666085e2"
+        },
+        "tidbTikv": {
+          "present": false,
+          "version": null,
+          "commitSha": null
+        }
+      },
+      "evidenceSource": {
+        "kind": "lab-tv-dator-3node-smoke",
+        "runId": "tv-dator-3node-smoke-887007107",
+        "issueNumber": null,
+        "url": null,
+        "artifactSha256": "acef7940be1a140f79982f226a1ea49770d03ccaaddb0f9c6ba9bb9b4d3632e2"
+      },
+      "recordsForCombination": 1,
+      "admission": {
+        "status": "invalid-measurement",
+        "reasons": [
+          "forensic-record-not-admissible"
+        ],
+        "defectIds": []
+      }
+    },
+    {
+      "recordSha256": "bf8769ce47c5347629b7391edc15ff6e28c47786526472c73824458a8a7e5981",
+      "combinationSha256": "9aa2835835ff8c4837de68ddcbf733a4ad663e8c741fa115678a065f6df48af1",
+      "recordedAt": "2026-11-24T07:46:02.310Z",
+      "framework": {
+        "frameworkVersion": "0.4.0",
+        "frameworkCommitSha": "88700710744c2b66af5a329e2c411892666085e2",
+        "scenarioId": "tidb-oltp-baseline",
+        "profileId": "scenario-a-smoke-v1",
+        "profileSha256": "2062639f3bc903789f581664dbb7b0e90d72199fc2edc5c446fec092bb6d789b",
+        "datasetSha256": "95a4381c932e2f74d1e3808dab05206b446f9b62c315df78966ebc5d1d6b4c83",
+        "workloadPlanSha256": "9f3576072d1883165ccb152810ea09a35dae043c3b9b61a8e7f65e11c53f0f60",
+        "measurementPlanSha256": "99f0800fc906c3b3f662ed720f0a554020e455b86505ede941fd551fce749492",
+        "retryPolicyId": "scenario-a-retry-v2",
+        "openLoopProfileId": "scenario-a-open-loop-v2",
+        "comparisonView": "gcp-smoke-r2"
+      },
+      "systems": {
+        "lagrange": {
+          "present": true,
+          "version": "0.4.0",
+          "commitSha": "88700710744c2b66af5a329e2c411892666085e2"
+        },
+        "tidbTikv": {
+          "present": false,
+          "version": null,
+          "commitSha": null
+        }
+      },
+      "evidenceSource": {
+        "kind": "gcp-comparative-smoke",
+        "runId": "bench-gcp-lagrange-smoke-887007107-r2-20261124-r001",
+        "issueNumber": null,
+        "url": null,
+        "artifactSha256": "c25dde4efd0fffb5c38760dc92b5104734cd8ccdf8605c9aa067478fb65755b2"
+      },
+      "recordsForCombination": 1,
+      "admission": {
+        "status": "invalid-measurement",
+        "reasons": [
+          "forensic-record-not-admissible"
+        ],
+        "defectIds": []
+      }
     }
   ],
   "withdrawal": {
-    "ledgerEntries": 12,
-    "entriesWithDefectIds": 9,
-    "entriesWithRecordIds": 6,
-    "historyRecords": 20,
-    "historyRecordsWithoutEntry": 5,
+    "ledgerEntries": 25,
+    "entriesWithDefectIds": 10,
+    "entriesWithRecordIds": 8,
+    "historyRecords": 43,
+    "historyRecordsWithoutEntry": 23,
     "admissionRule": "forensic-record-not-admissible"
   },
-  "summarySha256": "7786992942a12084a251048d7b37587c372aef2519156b71a4bdc7d9acf2fc8f"
+  "summarySha256": "23396152d31f88783ca89dd25466c99d739c4b9ce69b8e813472d5911e8cbcaa"
 }

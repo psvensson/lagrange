@@ -4,7 +4,7 @@
 
 A scale-out claim needs Scenario A runs at both node counts with observed process placement; replica placement needs its own observation and is never derived from the replication factor.
 
-Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 12 entries; 9 of them name the defect ids behind the withdrawal and 6 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 5 of 20 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
+Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 25 entries; 10 of them name the defect ids behind the withdrawal and 8 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 23 of 43 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
 
 ![Three-to-five-node scale-out](scaleout-3to5-node-rf3-progress.svg)
 
@@ -61,6 +61,6 @@ Every comparative result published before 2026-11-01 was withdrawn; the records 
 
 ## Sources
 
-- `data/tidb-comparison/raw-observations.ndjson` sha256:e62e8740e1aed4a6ae4bd01feea43b1264e693168a316fb00235a51e1ac4b69b
+- `data/tidb-comparison/raw-observations.ndjson` sha256:11b313cf249014fcd2d632a9162a67b529911a675da59c0a6e9d96a59037892c
 - `data/tidb-comparison/forensic/raw-observations-86e795c44.ndjson` sha256:79698d1b6cd709d227c9712e75c3471243ee99f473212c495ad15c6c1e96f32e
-- `data/tidb-comparison/invalidations.ndjson` sha256:2d37217a8d18b67cf585437e6b62816ff9419d3930cdb7686597b510fc115a5c
+- `data/tidb-comparison/invalidations.ndjson` sha256:0fd25fbc78b78cab95d75320dab2f89d8b675c3b4358905502712e4fd563f630

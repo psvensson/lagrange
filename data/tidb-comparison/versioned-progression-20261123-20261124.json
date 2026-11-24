@@ -1,0 +1,722 @@
+{
+  "schemaVersion": 1,
+  "cutoffStart": "2026-11-23T00:00:00.000Z",
+  "gcpRuns": [
+    {
+      "commit": "234f478e034b738328c63900e74b6bea3ee63bb8",
+      "view": "gcp-smoke",
+      "sourceFiles": [
+        "gcp-bench-234f478e0/raw-observations-smoke.ndjson"
+      ],
+      "targets": [
+        {
+          "targetId": "lagrange",
+          "runId": "bench-gcp-lagrange-smoke-234f478e0-20261123-r001",
+          "runStatus": "warmup-failed",
+          "readiness": "ready",
+          "semanticGate": "incomplete",
+          "semanticProofs": 31,
+          "opsPerSec": 0,
+          "accounting": {
+            "offered": 100,
+            "issued": 0,
+            "unissued": 100,
+            "attempts": 0,
+            "committed": 0,
+            "conflicts": 0,
+            "conflictExhausted": 0,
+            "terminalFailures": {
+              "product_error": 0,
+              "correctness_failure": 0,
+              "transport_failure": 0,
+              "harness_fault": 0
+            },
+            "unresolved": 0,
+            "ambiguousCommits": 0
+          },
+          "latencyMs": null
+        }
+      ]
+    },
+    {
+      "commit": "357783544d0098de6b41c50f9bd754bad7d42482",
+      "view": "gcp-smoke",
+      "sourceFiles": [
+        "gcp-bench-357783544/raw-observations-smoke.ndjson"
+      ],
+      "targets": [
+        {
+          "targetId": "lagrange",
+          "runId": "bench-gcp-lagrange-smoke-357783544-20261123-r001",
+          "runStatus": "setup-failed",
+          "readiness": "ready",
+          "semanticGate": "incomplete",
+          "semanticProofs": 0,
+          "opsPerSec": 0,
+          "accounting": {
+            "offered": 100,
+            "issued": 0,
+            "unissued": 100,
+            "attempts": 0,
+            "committed": 0,
+            "conflicts": 0,
+            "conflictExhausted": 0,
+            "terminalFailures": {
+              "product_error": 0,
+              "correctness_failure": 0,
+              "transport_failure": 0,
+              "harness_fault": 0
+            },
+            "unresolved": 0,
+            "ambiguousCommits": 0
+          },
+          "latencyMs": null
+        }
+      ]
+    },
+    {
+      "commit": "09e4e64ea12e073eb369c48bd3e017615648f26c",
+      "view": "gcp-smoke",
+      "sourceFiles": [
+        "gcp-bench-09e4e64ea/raw-observations-smoke.ndjson"
+      ],
+      "targets": [
+        {
+          "targetId": "lagrange",
+          "runId": "bench-gcp-lagrange-smoke-09e4e64ea-v2-20261123-r001",
+          "runStatus": "warmup-failed",
+          "readiness": "ready",
+          "semanticGate": "incomplete",
+          "semanticProofs": 31,
+          "opsPerSec": 0,
+          "accounting": {
+            "offered": 100,
+            "issued": 0,
+            "unissued": 100,
+            "attempts": 0,
+            "committed": 0,
+            "conflicts": 0,
+            "conflictExhausted": 0,
+            "terminalFailures": {
+              "product_error": 0,
+              "correctness_failure": 0,
+              "transport_failure": 0,
+              "harness_fault": 0
+            },
+            "unresolved": 0,
+            "ambiguousCommits": 0
+          },
+          "latencyMs": null
+        }
+      ]
+    },
+    {
+      "commit": "480cf0f298513fd44a604479e16ab34eca3336d1",
+      "view": "gcp-smoke",
+      "sourceFiles": [
+        "gcp-bench-480cf0f29/raw-observations-lagrange-smoke.ndjson"
+      ],
+      "targets": [
+        {
+          "targetId": "lagrange",
+          "runId": "bench-gcp-lagrange-smoke-480cf0f29-20261123-r001",
+          "runStatus": "setup-failed",
+          "readiness": "exhausted",
+          "semanticGate": null,
+          "semanticProofs": 0,
+          "opsPerSec": 0,
+          "accounting": {
+            "offered": 100,
+            "issued": 0,
+            "unissued": 100,
+            "attempts": 0,
+            "committed": 0,
+            "conflicts": 0,
+            "conflictExhausted": 0,
+            "terminalFailures": {
+              "product_error": 0,
+              "correctness_failure": 0,
+              "transport_failure": 0,
+              "harness_fault": 0
+            },
+            "unresolved": 0,
+            "ambiguousCommits": 0
+          },
+          "latencyMs": null
+        }
+      ]
+    },
+    {
+      "commit": "480cf0f298513fd44a604479e16ab34eca3336d1",
+      "view": "gcp-smoke-r2",
+      "sourceFiles": [
+        "gcp-bench-480cf0f29/raw-observations-lagrange-smoke-r2.ndjson"
+      ],
+      "targets": [
+        {
+          "targetId": "lagrange",
+          "runId": "bench-gcp-lagrange-smoke-480cf0f29-r2-20261123-r001",
+          "readiness": "exhausted",
+          "semanticGate": null,
+          "semanticProofs": 0,
+          "opsPerSec": null,
+          "accounting": null,
+          "latencyMs": null
+        }
+      ]
+    },
+    {
+      "commit": "3908f1e597e11428c2d245c7ca7e60356c01ed6b",
+      "view": "gcp-smoke",
+      "sourceFiles": [
+        "gcp-bench-3908f1e59/raw-observations-lagrange-smoke.ndjson"
+      ],
+      "targets": [
+        {
+          "targetId": "lagrange",
+          "runId": "bench-gcp-lagrange-smoke-3908f1e59-20261123-r001",
+          "runStatus": "warmup-failed",
+          "readiness": "ready",
+          "semanticGate": "passed",
+          "semanticProofs": 33,
+          "opsPerSec": 0,
+          "accounting": {
+            "offered": 100,
+            "issued": 0,
+            "unissued": 100,
+            "attempts": 0,
+            "committed": 0,
+            "conflicts": 0,
+            "conflictExhausted": 0,
+            "terminalFailures": {
+              "product_error": 0,
+              "correctness_failure": 0,
+              "transport_failure": 0,
+              "harness_fault": 0
+            },
+            "unresolved": 0,
+            "ambiguousCommits": 0
+          },
+          "latencyMs": null
+        }
+      ]
+    },
+    {
+      "commit": "b1e097b09912507b3f04d82dfca3bd1cf2e801df",
+      "view": "gcp-smoke",
+      "sourceFiles": [
+        "gcp-bench-b1e097b09/raw-observations-lagrange-smoke.ndjson",
+        "gcp-bench-b1e097b09/raw-observations-comparators-tidb-pg-single-smoke.ndjson"
+      ],
+      "targets": [
+        {
+          "targetId": "lagrange",
+          "runId": "bench-gcp-lagrange-smoke-b1e097b09-20261124-r001",
+          "runStatus": "completed",
+          "readiness": "ready",
+          "semanticGate": "passed",
+          "semanticProofs": 33,
+          "opsPerSec": 0.401,
+          "accounting": {
+            "offered": 100,
+            "issued": 100,
+            "unissued": 0,
+            "attempts": 143,
+            "committed": 98,
+            "conflicts": 45,
+            "conflictExhausted": 2,
+            "terminalFailures": {
+              "product_error": 0,
+              "correctness_failure": 0,
+              "transport_failure": 0,
+              "harness_fault": 0
+            },
+            "unresolved": 0,
+            "ambiguousCommits": 0
+          },
+          "latencyMs": {
+            "samples": 98,
+            "p50": 90818.503,
+            "p95": 218041.689,
+            "p99": 224535.014
+          }
+        },
+        {
+          "targetId": "tidb-tikv",
+          "runId": "bench-gcp-comparators-b1e097b09-20261124-r001",
+          "runStatus": "completed",
+          "readiness": "ready",
+          "semanticGate": "passed",
+          "semanticProofs": 33,
+          "opsPerSec": 5,
+          "accounting": {
+            "offered": 100,
+            "issued": 100,
+            "unissued": 0,
+            "attempts": 100,
+            "committed": 100,
+            "conflicts": 0,
+            "conflictExhausted": 0,
+            "terminalFailures": {
+              "product_error": 0,
+              "correctness_failure": 0,
+              "transport_failure": 0,
+              "harness_fault": 0
+            },
+            "unresolved": 0,
+            "ambiguousCommits": 0
+          },
+          "latencyMs": {
+            "samples": 100,
+            "p50": 59.494,
+            "p95": 120.976,
+            "p99": 135.99
+          }
+        },
+        {
+          "targetId": "pg-single-primary",
+          "runId": "bench-gcp-comparators-b1e097b09-20261124-r002",
+          "runStatus": "completed",
+          "readiness": "ready",
+          "semanticGate": "passed",
+          "semanticProofs": 33,
+          "opsPerSec": 5,
+          "accounting": {
+            "offered": 100,
+            "issued": 100,
+            "unissued": 0,
+            "attempts": 100,
+            "committed": 100,
+            "conflicts": 0,
+            "conflictExhausted": 0,
+            "terminalFailures": {
+              "product_error": 0,
+              "correctness_failure": 0,
+              "transport_failure": 0,
+              "harness_fault": 0
+            },
+            "unresolved": 0,
+            "ambiguousCommits": 0
+          },
+          "latencyMs": {
+            "samples": 100,
+            "p50": 23.533,
+            "p95": 48.458,
+            "p99": 51.832
+          }
+        }
+      ]
+    },
+    {
+      "commit": "88700710744c2b66af5a329e2c411892666085e2",
+      "view": "gcp-smoke",
+      "sourceFiles": [
+        "gcp-bench-887007107/raw-observations-3sys-smoke.ndjson",
+        "gcp-bench-887007107/raw-observations-pg-ha-smoke.ndjson"
+      ],
+      "targets": [
+        {
+          "targetId": "lagrange",
+          "runId": "bench-gcp-3sys-smoke-887007107-20261124-r001",
+          "runStatus": "setup-failed",
+          "readiness": "exhausted",
+          "semanticGate": null,
+          "semanticProofs": 0,
+          "opsPerSec": 0,
+          "accounting": {
+            "offered": 100,
+            "issued": 0,
+            "unissued": 100,
+            "attempts": 0,
+            "committed": 0,
+            "conflicts": 0,
+            "conflictExhausted": 0,
+            "terminalFailures": {
+              "product_error": 0,
+              "correctness_failure": 0,
+              "transport_failure": 0,
+              "harness_fault": 0
+            },
+            "unresolved": 0,
+            "ambiguousCommits": 0
+          },
+          "latencyMs": null
+        },
+        {
+          "targetId": "tidb-tikv",
+          "runId": "bench-gcp-3sys-smoke-887007107-20261124-r002",
+          "runStatus": "completed",
+          "readiness": "ready",
+          "semanticGate": "passed",
+          "semanticProofs": 33,
+          "opsPerSec": 5,
+          "accounting": {
+            "offered": 100,
+            "issued": 100,
+            "unissued": 0,
+            "attempts": 100,
+            "committed": 100,
+            "conflicts": 0,
+            "conflictExhausted": 0,
+            "terminalFailures": {
+              "product_error": 0,
+              "correctness_failure": 0,
+              "transport_failure": 0,
+              "harness_fault": 0
+            },
+            "unresolved": 0,
+            "ambiguousCommits": 0
+          },
+          "latencyMs": {
+            "samples": 100,
+            "p50": 69.513,
+            "p95": 170.674,
+            "p99": 198.039
+          }
+        },
+        {
+          "targetId": "pg-single-primary",
+          "runId": "bench-gcp-3sys-smoke-887007107-20261124-r003",
+          "runStatus": "completed",
+          "readiness": "ready",
+          "semanticGate": "passed",
+          "semanticProofs": 33,
+          "opsPerSec": 5,
+          "accounting": {
+            "offered": 100,
+            "issued": 100,
+            "unissued": 0,
+            "attempts": 100,
+            "committed": 100,
+            "conflicts": 0,
+            "conflictExhausted": 0,
+            "terminalFailures": {
+              "product_error": 0,
+              "correctness_failure": 0,
+              "transport_failure": 0,
+              "harness_fault": 0
+            },
+            "unresolved": 0,
+            "ambiguousCommits": 0
+          },
+          "latencyMs": {
+            "samples": 100,
+            "p50": 21.11,
+            "p95": 44.452,
+            "p99": 51.172
+          }
+        },
+        {
+          "targetId": "pg-patroni-sync-ha-rf3",
+          "runId": "bench-gcp-pg-ha-smoke-887007107-20261124-r001",
+          "runStatus": "completed",
+          "readiness": "ready",
+          "semanticGate": "passed",
+          "semanticProofs": 33,
+          "opsPerSec": 5,
+          "accounting": {
+            "offered": 100,
+            "issued": 100,
+            "unissued": 0,
+            "attempts": 100,
+            "committed": 100,
+            "conflicts": 0,
+            "conflictExhausted": 0,
+            "terminalFailures": {
+              "product_error": 0,
+              "correctness_failure": 0,
+              "transport_failure": 0,
+              "harness_fault": 0
+            },
+            "unresolved": 0,
+            "ambiguousCommits": 0
+          },
+          "latencyMs": {
+            "samples": 100,
+            "p50": 23.567,
+            "p95": 49.238,
+            "p99": 55.185
+          }
+        }
+      ]
+    },
+    {
+      "commit": "88700710744c2b66af5a329e2c411892666085e2",
+      "view": "gcp-smoke-r2",
+      "sourceFiles": [
+        "gcp-bench-887007107/raw-observations-lagrange-smoke-r2.ndjson"
+      ],
+      "targets": [
+        {
+          "targetId": "lagrange",
+          "runId": "bench-gcp-lagrange-smoke-887007107-r2-20261124-r001",
+          "readiness": "exhausted",
+          "semanticGate": null,
+          "semanticProofs": 0,
+          "opsPerSec": null,
+          "accounting": null,
+          "latencyMs": null
+        }
+      ]
+    }
+  ],
+  "lab3NodeRuns": [
+    {
+      "commit": "9265a47d257d97a2319257e0f3cfc8857209b03c",
+      "view": "tv-dator-3node-smoke",
+      "passed": false,
+      "formationSec": 113.42,
+      "semanticGate": {
+        "status": "incomplete",
+        "passedCount": 31
+      },
+      "extraJoinerDurabilityPassed": null,
+      "workload": null
+    },
+    {
+      "commit": "b0365602b5987531366c573448ece62a27357e36",
+      "view": "tv-dator-3node-smoke",
+      "passed": false,
+      "formationSec": 110.49,
+      "semanticGate": {
+        "status": "incomplete",
+        "passedCount": 31
+      },
+      "extraJoinerDurabilityPassed": null,
+      "workload": null
+    },
+    {
+      "commit": "b4521acd835e2b891a9fe8aac00dd95dbb74f880",
+      "view": "tv-dator-3node-smoke",
+      "passed": false,
+      "formationSec": 115.69,
+      "semanticGate": {
+        "status": "passed",
+        "passedCount": 33
+      },
+      "extraJoinerDurabilityPassed": null,
+      "workload": null
+    },
+    {
+      "commit": "b1b35a6bb3d2a40fdf2d47c5083c5ac5dbe7b952",
+      "view": "tv-dator-stage3-wifi-eval",
+      "passed": false,
+      "formationSec": null,
+      "semanticGate": null,
+      "extraJoinerDurabilityPassed": null,
+      "workload": null
+    },
+    {
+      "commit": "3f963bfe18e719a637c6e56ba6da25412e1c43f4",
+      "view": "tv-dator-3node-smoke",
+      "passed": false,
+      "formationSec": 160.44,
+      "semanticGate": {
+        "status": "passed",
+        "passedCount": 33
+      },
+      "extraJoinerDurabilityPassed": null,
+      "workload": null
+    },
+    {
+      "commit": "3c2d9cd8bbb859524f4f0ab5bd70556eab1db2d6",
+      "view": "tv-dator-3node-smoke",
+      "passed": false,
+      "formationSec": 117.71,
+      "semanticGate": {
+        "status": "passed",
+        "passedCount": 33
+      },
+      "extraJoinerDurabilityPassed": null,
+      "workload": null
+    },
+    {
+      "commit": "3c2d9cd8bbb859524f4f0ab5bd70556eab1db2d6",
+      "view": "tv-dator-3node-smoke-full",
+      "passed": false,
+      "formationSec": 119.4,
+      "semanticGate": {
+        "status": "incomplete",
+        "passedCount": 31
+      },
+      "extraJoinerDurabilityPassed": null,
+      "workload": null
+    },
+    {
+      "commit": "47b3d57da9cbb84bf7ed0a89882b13ade2a9c4d5",
+      "view": "tv-dator-3node-smoke",
+      "passed": false,
+      "formationSec": 169.6,
+      "semanticGate": {
+        "status": "passed",
+        "passedCount": 33
+      },
+      "extraJoinerDurabilityPassed": null,
+      "workload": null
+    },
+    {
+      "commit": "47b3d57da9cbb84bf7ed0a89882b13ade2a9c4d5",
+      "view": "tv-dator-3node-smoke-full",
+      "passed": false,
+      "formationSec": 138.66,
+      "semanticGate": {
+        "status": "passed",
+        "passedCount": 33
+      },
+      "extraJoinerDurabilityPassed": true,
+      "workload": {
+        "opsPerSec": 0,
+        "accounting": {
+          "offered": 100,
+          "issued": 0,
+          "unissued": 100,
+          "attempts": 0,
+          "committed": 0,
+          "conflicts": 0,
+          "conflictExhausted": 0,
+          "terminalFailures": {
+            "product_error": 0,
+            "correctness_failure": 0,
+            "transport_failure": 0,
+            "harness_fault": 0
+          },
+          "unresolved": 0,
+          "ambiguousCommits": 0
+        },
+        "latencyMs": null
+      }
+    },
+    {
+      "commit": "5bdd4f221b0fd3a2f894ae21b040a39342ce2601",
+      "view": "tv-dator-3node-smoke",
+      "passed": false,
+      "formationSec": 138.17,
+      "semanticGate": {
+        "status": "incomplete",
+        "passedCount": 31
+      },
+      "extraJoinerDurabilityPassed": null,
+      "workload": null
+    },
+    {
+      "commit": "613b120aca445e622e1e8de5d2d0a35c64f1ce54",
+      "view": "tv-dator-3node-smoke",
+      "passed": true,
+      "formationSec": 167.13,
+      "semanticGate": {
+        "status": "passed",
+        "passedCount": 33
+      },
+      "extraJoinerDurabilityPassed": true,
+      "workload": {
+        "opsPerSec": 0.51,
+        "accounting": {
+          "offered": 100,
+          "issued": 100,
+          "unissued": 0,
+          "attempts": 140,
+          "committed": 95,
+          "conflicts": 44,
+          "conflictExhausted": 4,
+          "terminalFailures": {
+            "product_error": 1,
+            "correctness_failure": 0,
+            "transport_failure": 0,
+            "harness_fault": 0
+          },
+          "unresolved": 0,
+          "ambiguousCommits": 0
+        },
+        "latencyMs": {
+          "samples": 95,
+          "p50": 53975.823,
+          "p95": 157474.908,
+          "p99": 166636.444
+        }
+      }
+    },
+    {
+      "commit": "613b120aca445e622e1e8de5d2d0a35c64f1ce54",
+      "view": "tv-dator-stage3-wifi-eval",
+      "passed": false,
+      "formationSec": null,
+      "semanticGate": null,
+      "extraJoinerDurabilityPassed": null,
+      "workload": null
+    },
+    {
+      "commit": "b1e097b09912507b3f04d82dfca3bd1cf2e801df",
+      "view": "tv-dator-3node-smoke",
+      "passed": true,
+      "formationSec": 111.11,
+      "semanticGate": {
+        "status": "passed",
+        "passedCount": 33
+      },
+      "extraJoinerDurabilityPassed": true,
+      "workload": {
+        "opsPerSec": 0.743,
+        "accounting": {
+          "offered": 100,
+          "issued": 100,
+          "unissued": 0,
+          "attempts": 141,
+          "committed": 96,
+          "conflicts": 45,
+          "conflictExhausted": 4,
+          "terminalFailures": {
+            "product_error": 0,
+            "correctness_failure": 0,
+            "transport_failure": 0,
+            "harness_fault": 0
+          },
+          "unresolved": 0,
+          "ambiguousCommits": 0
+        },
+        "latencyMs": {
+          "samples": 96,
+          "p50": 34539.5,
+          "p95": 107131.724,
+          "p99": 109671.584
+        }
+      }
+    },
+    {
+      "commit": "88700710744c2b66af5a329e2c411892666085e2",
+      "view": "tv-dator-3node-smoke",
+      "passed": true,
+      "formationSec": 136.91,
+      "semanticGate": {
+        "status": "passed",
+        "passedCount": 33
+      },
+      "extraJoinerDurabilityPassed": true,
+      "workload": {
+        "opsPerSec": 0.942,
+        "accounting": {
+          "offered": 100,
+          "issued": 100,
+          "unissued": 0,
+          "attempts": 128,
+          "committed": 98,
+          "conflicts": 30,
+          "conflictExhausted": 2,
+          "terminalFailures": {
+            "product_error": 0,
+            "correctness_failure": 0,
+            "transport_failure": 0,
+            "harness_fault": 0
+          },
+          "unresolved": 0,
+          "ambiguousCommits": 0
+        },
+        "latencyMs": {
+          "samples": 98,
+          "p50": 32338.756,
+          "p95": 81423.99,
+          "p99": 84379.284
+        }
+      }
+    }
+  ]
+}

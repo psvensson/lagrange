@@ -2,9 +2,9 @@
 
 # Lagrange and TiDB comparison history
 
-The history holds 20 records over 20 combinations. History records are forensic: none is admitted as a current result.
+The history holds 43 records over 43 combinations. History records are forensic: none is admitted as a current result.
 
-Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 12 entries; 9 of them name the defect ids behind the withdrawal and 6 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 5 of 20 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
+Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 25 entries; 10 of them name the defect ids behind the withdrawal and 8 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 23 of 43 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
 
 ![Lagrange and TiDB comparison history](tidb-comparison-progress.svg)
 
@@ -23,15 +23,38 @@ Definition: tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline. Latest re
 
 | Configuration | Admission |
 | --- | --- |
-| 2026-09-12T20:07:34.061Z tidb-oltp-baseline/oltp-baseline-v1 [github-actions-gcp] ae6bd0386ece | invalid-measurement (forensic-record-not-admissible) |
-| 2026-10-29T18:53:52.000Z tidb-oltp-baseline/oltp-baseline-v1 [lagrange-lab-5node] 6cca9aa074d2 | invalid-measurement (forensic-record-not-admissible) |
-| 2026-11-01T09:58:24.579Z tidb-oltp-baseline/oltp-baseline-v1 [lagrange-lab-5node] 4452b6dd51e2 | invalid-measurement (forensic-record-not-admissible) |
+| 2026-09-12T20:07:34.061Z tidb-oltp-baseline/oltp-baseline-v1 [github-actions-gcp] ae6bd0386ece | invalid-measurement (closed-loop-throughput, forensic-record-not-admissible, invalidated:inv-0013, non-canonical-workload) |
+| 2026-10-29T18:53:52.000Z tidb-oltp-baseline/oltp-baseline-v1 [lagrange-lab-5node] 6cca9aa074d2 | invalid-measurement (closed-loop-throughput, forensic-record-not-admissible, invalidated:inv-0013, non-canonical-workload) |
+| 2026-11-01T09:58:24.579Z tidb-oltp-baseline/oltp-baseline-v1 [lagrange-lab-5node] 4452b6dd51e2 | invalid-measurement (closed-loop-throughput, forensic-record-not-admissible, invalidated:inv-0013, non-canonical-workload) |
 | 2026-11-01T11:56:02.023Z tidb-oltp-baseline/3-node-rf3-multi-host-oltp [observed-paired-run] 59a7afbf1b8e | invalid-measurement (fabricated-history-metrics, forensic-record-not-admissible, invalidated:inv-0008) |
 | 2026-11-01T11:57:02.023Z tidb-oltp-baseline/5-node-rf3-multi-host-oltp [observed-paired-run] 7aaf3fda8eca | invalid-measurement (fabricated-history-metrics, forensic-record-not-admissible, invalidated:inv-0008) |
 | 2026-11-01T14:06:39.413Z tidb-oltp-baseline/5-node-rf3-multi-host-oltp [observed-paired-run] e2b828ec15de | invalid-measurement (fabricated-history-metrics, forensic-record-not-admissible, invalidated:inv-0008) |
 | 2026-11-01T14:06:39.413Z tidb-oltp-baseline/3-node-rf3-multi-host-oltp [observed-paired-run] 4ae39281b8b5 | invalid-measurement (fabricated-history-metrics, forensic-record-not-admissible, invalidated:inv-0008) |
 | 2026-11-01T17:35:57.365Z tidb-oltp-baseline/3-node-rf3-multi-host-oltp [observed-paired-run] 87b6a4711010 | invalid-measurement (fabricated-history-metrics, forensic-record-not-admissible, invalidated:inv-0008) |
 | 2026-11-01T17:35:57.365Z tidb-oltp-baseline/5-node-rf3-multi-host-oltp [observed-paired-run] e07746af4c34 | invalid-measurement (fabricated-history-metrics, forensic-record-not-admissible, invalidated:inv-0008) |
+| 2026-11-23T11:44:38.133Z tidb-oltp-baseline/scenario-a-smoke-v1 [gcp-comparative-smoke] 02cb32c61e4c | invalid-measurement (forensic-record-not-admissible) |
+| 2026-11-23T13:21:50.503Z tidb-oltp-baseline/scenario-a-smoke-v1 [gcp-comparative-smoke] 0271fe00357a | invalid-measurement (forensic-record-not-admissible) |
+| 2026-11-23T13:55:14.228Z tidb-oltp-baseline/scenario-a-smoke-v1 [gcp-comparative-smoke] 45071ffbbb3f | invalid-measurement (forensic-record-not-admissible) |
+| 2026-11-23T15:18:21.791Z tidb-oltp-baseline/scenario-a-smoke-v1 [lab-tv-dator-3node-smoke] d4ddf353fda7 | invalid-measurement (forensic-record-not-admissible) |
+| 2026-11-23T15:59:58.927Z tidb-oltp-baseline/scenario-a-smoke-v1 [lab-tv-dator-3node-smoke] ab02c707e154 | invalid-measurement (forensic-record-not-admissible) |
+| 2026-11-23T16:30:49.665Z tidb-oltp-baseline/scenario-a-smoke-v1 [lab-tv-dator-3node-smoke] 1af1848e5080 | invalid-measurement (forensic-record-not-admissible) |
+| 2026-11-23T16:57:59.415Z tidb-oltp-baseline/scenario-a-smoke-v1 [lab-tv-dator-3node-smoke] d3946dba5bbf | invalid-measurement (forensic-record-not-admissible) |
+| 2026-11-23T17:07:03.265Z tidb-oltp-baseline/scenario-a-smoke-v1 [lab-tv-dator-3node-smoke] 4c7b5c0e44a5 | invalid-measurement (forensic-record-not-admissible) |
+| 2026-11-23T18:02:41.325Z tidb-oltp-baseline/scenario-a-smoke-v1 [lab-tv-dator-3node-smoke] f6f4df17eaab | invalid-measurement (forensic-record-not-admissible) |
+| 2026-11-23T18:10:05.283Z tidb-oltp-baseline/scenario-a-smoke-v1 [lab-tv-dator-3node-smoke] 4eb6af934ded | invalid-measurement (forensic-record-not-admissible) |
+| 2026-11-23T18:50:16.767Z tidb-oltp-baseline/scenario-a-smoke-v1 [lab-tv-dator-3node-smoke] 58f5a3364fd7 | invalid-measurement (forensic-record-not-admissible) |
+| 2026-11-23T19:00:23.226Z tidb-oltp-baseline/scenario-a-smoke-v1 [lab-tv-dator-3node-smoke] 9e1a7915b3a5 | invalid-measurement (forensic-record-not-admissible) |
+| 2026-11-23T19:27:21.686Z tidb-oltp-baseline/scenario-a-smoke-v1 [lab-tv-dator-3node-smoke] bc4600edaecb | invalid-measurement (forensic-record-not-admissible) |
+| 2026-11-23T20:19:11.135Z tidb-oltp-baseline/scenario-a-smoke-v1 [lab-tv-dator-3node-smoke] b5d270ef55e1 | invalid-measurement (forensic-record-not-admissible) |
+| 2026-11-23T20:22:59.572Z tidb-oltp-baseline/scenario-a-smoke-v1 [lab-tv-dator-3node-smoke] 4c7dc9719235 | invalid-measurement (forensic-record-not-admissible) |
+| 2026-11-23T21:11:29.558Z tidb-oltp-baseline/scenario-a-smoke-v1 [gcp-comparative-smoke] 30407165e3c5 | invalid-measurement (forensic-record-not-admissible) |
+| 2026-11-23T21:17:07.710Z tidb-oltp-baseline/scenario-a-smoke-v1 [gcp-comparative-smoke] b088457700f6 | invalid-measurement (forensic-record-not-admissible) |
+| 2026-11-23T22:45:58.413Z tidb-oltp-baseline/scenario-a-smoke-v1 [gcp-comparative-smoke] 1b3dc052e33a | invalid-measurement (forensic-record-not-admissible) |
+| 2026-11-24T00:48:11.734Z tidb-oltp-baseline/scenario-a-smoke-v1 [gcp-comparative-smoke] 22233b4ae3db | invalid-measurement (forensic-record-not-admissible) |
+| 2026-11-24T01:06:22.897Z tidb-oltp-baseline/scenario-a-smoke-v1 [lab-tv-dator-3node-smoke] 30e663c97e0e | invalid-measurement (forensic-record-not-admissible) |
+| 2026-11-24T06:50:13.779Z tidb-oltp-baseline/scenario-a-smoke-v1 [gcp-comparative-smoke] 2f69d8b5ef9a | invalid-measurement (forensic-record-not-admissible) |
+| 2026-11-24T06:51:08.127Z tidb-oltp-baseline/scenario-a-smoke-v1 [lab-tv-dator-3node-smoke] 7473cf1aaddc | invalid-measurement (forensic-record-not-admissible) |
+| 2026-11-24T07:46:02.310Z tidb-oltp-baseline/scenario-a-smoke-v1 [gcp-comparative-smoke] bf8769ce47c5 | invalid-measurement (forensic-record-not-admissible) |
 
 ## Scenario B history
 
@@ -55,9 +78,9 @@ Latest record per combination.
 
 | Configuration | Admission |
 | --- | --- |
-| 2026-10-30T11:45:00.000Z scenario-a-semantic-closure/scenario-a-semantic-v1 [github-actions-live] 66d08c67e9e3 | invalid-measurement (forensic-record-not-admissible) |
-| 2026-10-30T12:11:36.102Z scenario-a-semantic-closure/scenario-a-semantic-v1 [github-actions-semantic-closure] 0157b6d79ab0 | invalid-measurement (forensic-record-not-admissible) |
+| 2026-10-30T11:45:00.000Z scenario-a-semantic-closure/scenario-a-semantic-v1 [github-actions-live] 66d08c67e9e3 | invalid-measurement (closed-loop-throughput, forensic-record-not-admissible, invalidated:inv-0013, non-canonical-workload) |
+| 2026-10-30T12:11:36.102Z scenario-a-semantic-closure/scenario-a-semantic-v1 [github-actions-semantic-closure] 0157b6d79ab0 | invalid-measurement (closed-loop-throughput, forensic-record-not-admissible, invalidated:inv-0013, non-canonical-workload) |
 
 ## Sources
 
-- `data/tidb-comparison/progress-summary.json` sha256:7786992942a12084a251048d7b37587c372aef2519156b71a4bdc7d9acf2fc8f
+- `data/tidb-comparison/progress-summary.json` sha256:23396152d31f88783ca89dd25466c99d739c4b9ce69b8e813472d5911e8cbcaa

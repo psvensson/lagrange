@@ -13,7 +13,7 @@
   "sources": [
     {
       "path": "data/tidb-comparison/raw-observations.ndjson",
-      "sha256": "sha256:e62e8740e1aed4a6ae4bd01feea43b1264e693168a316fb00235a51e1ac4b69b"
+      "sha256": "sha256:11b313cf249014fcd2d632a9162a67b529911a675da59c0a6e9d96a59037892c"
     },
     {
       "path": "data/tidb-comparison/forensic/raw-observations-86e795c44.ndjson",
@@ -21,15 +21,15 @@
     },
     {
       "path": "data/tidb-comparison/invalidations.ndjson",
-      "sha256": "sha256:2d37217a8d18b67cf585437e6b62816ff9419d3930cdb7686597b510fc115a5c"
+      "sha256": "sha256:0fd25fbc78b78cab95d75320dab2f89d8b675c3b4358905502712e4fd563f630"
     }
   ],
   "withdrawal": {
-    "ledgerEntries": 12,
-    "entriesWithDefectIds": 9,
-    "entriesWithRecordIds": 6,
-    "historyRecords": 20,
-    "historyRecordsWithoutEntry": 5,
+    "ledgerEntries": 25,
+    "entriesWithDefectIds": 10,
+    "entriesWithRecordIds": 8,
+    "historyRecords": 43,
+    "historyRecordsWithoutEntry": 23,
     "admissionRule": "forensic-record-not-admissible"
   },
   "scenarios": [
@@ -118,11 +118,10 @@
         "scenarioA/smoke": {
           "claimKey": "lagrange/scenarioA/smoke",
           "claimKind": "throughput",
-          "status": "invalid-measurement",
+          "status": "product-failure",
           "reasons": [
-            "duplicate-claim",
-            "mixed-campaign",
-            "record-rejected:missing-field"
+            "no-committed-operations",
+            "readiness-exhausted"
           ],
           "defectIds": [
             "D33",
@@ -136,52 +135,104 @@
           ],
           "evidence": {
             "runIds": [
-              "bench-live-20261101-b-r9-r001",
-              "bench-lab-20261116T0206Z-r001",
-              "bench-lab-20261116T0431Z-r001",
-              "bench-lab-20261116T0744Z-r001"
+              "bench-gcp-3sys-smoke-887007107-20261124-r001"
             ],
             "rawObservationsDigests": [
-              "sha256:3bd3f6b62dd5cc487dd8962f6d168872fa5e3cafc72c7976d87d551717d8d980",
-              "sha256:55e555b005cb599e752139569794934f26a8a0f05ecbb7871774d1587f789032",
-              "sha256:74c26bb55085158be85f46671b6d56b96dec1dafcf0929c3fc484372605226f2",
-              "sha256:adc680cf6f377f249aada144f143566c74b7cd1afeb607a3e611b2e5b4a0b280"
+              "sha256:bece660d8bda3ad63a21e8f731a0244fc1e75e5949fcaade5b91c6454bd848ab"
             ],
             "invalidatedRunIds": [
               "bench-live-20261101-b-r6-r001",
               "bench-live-20261101-b-r7-r001",
-              "bench-live-20261101-b-r8-r001"
+              "bench-live-20261101-b-r8-r001",
+              "bench-live-20261101-b-r9-r001",
+              "bench-lab-20261116T0206Z-r001",
+              "bench-lab-20261116T0431Z-r001",
+              "bench-lab-20261116T0744Z-r001",
+              "bench-gcp-lagrange-smoke-234f478e0-20261123-r001",
+              "bench-gcp-lagrange-smoke-357783544-20261123-r001",
+              "bench-gcp-lagrange-smoke-09e4e64ea-v2-20261123-r001",
+              "bench-lab-lagrange-smoke-9265a47d2-20261123-r001",
+              "bench-lab-lagrange-smoke-wifi-9265a47d2-20261123-r001",
+              "bench-gcp-lagrange-smoke-480cf0f29-20261123-r001",
+              "bench-gcp-lagrange-smoke-480cf0f29-r2-20261123-r001",
+              "bench-gcp-lagrange-smoke-3908f1e59-20261123-r001",
+              "bench-gcp-lagrange-smoke-b1e097b09-20261124-r001",
+              "bench-gcp-lagrange-smoke-887007107-r2-20261124-r001"
             ],
             "forensic": [],
-            "semanticProofIds": [
-              "failureAtomicity:terminal_logical_request_must_not_leave_partial_transaction_effects",
-              "forbidden:dirty_read",
-              "forbidden:duplicate_success_effect",
-              "forbidden:lost_successful_write",
-              "forbidden:partial_commit",
-              "isolation:dirtyReadsForbidden",
-              "isolation:lostSuccessfulWriteForbidden",
-              "isolation:readYourOwnWritesRequired",
-              "isolation:successfulEffectsExactlyOnce",
-              "outcome:retryableConflictSqlState:40001",
-              "transaction:delivery:customer_balance_increases_by_selected_line_total",
-              "transaction:delivery:customer_delivery_count_advances_once_per_delivered_order",
-              "transaction:delivery:selected_new_order_is_removed_once_per_serviced_district",
-              "transaction:delivery:selected_order_carrier_is_set_once",
-              "transaction:delivery:selected_order_lines_are_marked_delivered",
-              "transaction:new_order:district_next_order_id_advances_once",
-              "transaction:new_order:one_new_order_row_created_for_allocated_order_id",
-              "transaction:new_order:one_order_line_created_per_input_line",
-              "transaction:new_order:one_order_row_created_for_allocated_order_id",
-              "transaction:new_order:stock_effects_applied_once_per_input_line",
-              "transaction:payment:customer_balance_decreases_by_payment_amount",
-              "transaction:payment:customer_payment_counters_advance_once",
-              "transaction:payment:district_ytd_increases_by_payment_amount",
-              "transaction:payment:one_history_row_created_for_logical_payment",
-              "transaction:payment:warehouse_ytd_increases_by_payment_amount"
-            ]
+            "semanticProofIds": []
           },
-          "metrics": null
+          "metrics": {
+            "profileClass": "smoke",
+            "sufficiencyRuleId": "comparative-capacity-sufficiency-v1",
+            "accounting": {
+              "offered": 100,
+              "issued": 0,
+              "unissued": 100,
+              "attempts": 0,
+              "committed": 0,
+              "conflicts": 0,
+              "conflictExhausted": 0,
+              "terminalFailures": {
+                "product_error": 0,
+                "correctness_failure": 0,
+                "transport_failure": 0,
+                "harness_fault": 0
+              },
+              "unresolved": 0,
+              "ambiguousCommits": 0
+            },
+            "runs": [
+              {
+                "runId": "bench-gcp-3sys-smoke-887007107-20261124-r001",
+                "runStatus": "setup-failed",
+                "offeredRatePerSec": 5,
+                "repetition": 1,
+                "accounting": {
+                  "offered": 100,
+                  "issued": 0,
+                  "unissued": 100,
+                  "attempts": 0,
+                  "committed": 0,
+                  "conflicts": 0,
+                  "conflictExhausted": 0,
+                  "terminalFailures": {
+                    "product_error": 0,
+                    "correctness_failure": 0,
+                    "transport_failure": 0,
+                    "harness_fault": 0
+                  },
+                  "unresolved": 0,
+                  "ambiguousCommits": 0
+                },
+                "drainOverrunMs": 0,
+                "maxLatencyMs": null
+              }
+            ],
+            "setupFailures": [
+              {
+                "runId": "bench-gcp-3sys-smoke-887007107-20261124-r001",
+                "failureClass": "product_error",
+                "sqlState": null,
+                "code": "readiness_exhausted",
+                "message": "lagrange-system-tables did not report ready before 240000ms formation deadline after 49 attempts",
+                "readinessDenial": {
+                  "component": "lagrange-system-tables",
+                  "attempts": 49,
+                  "elapsedMs": 156738,
+                  "phase": "cluster-readiness",
+                  "state": "denied",
+                  "reasons": [
+                    "partition_under_replicated:wasm_operations-p1",
+                    "replica_operations_in_flight:00000000-0000-4000-8000-000000000001:1",
+                    "replica_operations_in_flight:00000000-0000-4000-8000-000000000003:1",
+                    "replica_operations_in_flight:00000000-0000-4000-8000-000000000002:1"
+                  ]
+                }
+              }
+            ],
+            "capacity": null
+          }
         },
         "scenarioB/local-only": {
           "claimKey": "lagrange/scenarioB/local-only",
@@ -1184,9 +1235,9 @@
         "scenarioA/smoke": {
           "claimKey": "tidb-tikv/scenarioA/smoke",
           "claimKind": "throughput",
-          "status": "unsupported",
+          "status": "valid-observed",
           "reasons": [
-            "semantic-gate-client-missing:tidb-tikv"
+            "smoke-profile-no-capacity-claim"
           ],
           "defectIds": [
             "D33",
@@ -1200,20 +1251,105 @@
           ],
           "evidence": {
             "runIds": [
-              "bench-live-20261101-b-r9-r002"
+              "bench-gcp-3sys-smoke-887007107-20261124-r002"
             ],
             "rawObservationsDigests": [
-              "sha256:fbe78dce5a61062beae1a4255c9ecf5530976536a277f6d741efb581c2a142ca"
+              "sha256:239e65563d8dc49c5c2d480655b8f2179fb82558b48beb774398fe9afb2ac47e"
             ],
             "invalidatedRunIds": [
               "bench-live-20261101-b-r6-r002",
               "bench-live-20261101-b-r7-r002",
-              "bench-live-20261101-b-r8-r002"
+              "bench-live-20261101-b-r8-r002",
+              "bench-live-20261101-b-r9-r002",
+              "bench-gcp-comparators-b1e097b09-20261124-r001"
             ],
             "forensic": [],
-            "semanticProofIds": []
+            "semanticProofIds": [
+              "failureAtomicity:terminal_logical_request_must_not_leave_partial_transaction_effects",
+              "forbidden:dirty_read",
+              "forbidden:duplicate_success_effect",
+              "forbidden:lost_successful_write",
+              "forbidden:partial_commit",
+              "forbidden:read_only_transaction_mutation",
+              "isolation:atomicCommitRequired",
+              "isolation:dirtyReadsForbidden",
+              "isolation:lostSuccessfulWriteForbidden",
+              "isolation:readYourOwnWritesRequired",
+              "isolation:successfulCommitDurable",
+              "isolation:successfulEffectsExactlyOnce",
+              "outcome:retryableConflictSqlState:40001",
+              "transaction:delivery:customer_balance_increases_by_selected_line_total",
+              "transaction:delivery:customer_delivery_count_advances_once_per_delivered_order",
+              "transaction:delivery:selected_new_order_is_removed_once_per_serviced_district",
+              "transaction:delivery:selected_order_carrier_is_set_once",
+              "transaction:delivery:selected_order_lines_are_marked_delivered",
+              "transaction:new_order:district_next_order_id_advances_once",
+              "transaction:new_order:one_new_order_row_created_for_allocated_order_id",
+              "transaction:new_order:one_order_line_created_per_input_line",
+              "transaction:new_order:one_order_row_created_for_allocated_order_id",
+              "transaction:new_order:stock_effects_applied_once_per_input_line",
+              "transaction:order_status:database_state_is_unchanged",
+              "transaction:order_status:latest_customer_order_is_returned_when_present",
+              "transaction:order_status:returned_lines_belong_to_returned_order",
+              "transaction:payment:customer_balance_decreases_by_payment_amount",
+              "transaction:payment:customer_payment_counters_advance_once",
+              "transaction:payment:district_ytd_increases_by_payment_amount",
+              "transaction:payment:one_history_row_created_for_logical_payment",
+              "transaction:payment:warehouse_ytd_increases_by_payment_amount",
+              "transaction:stock_level:database_state_is_unchanged",
+              "transaction:stock_level:reported_low_stock_count_uses_canonical_recent_order_window"
+            ]
           },
-          "metrics": null
+          "metrics": {
+            "profileClass": "smoke",
+            "sufficiencyRuleId": "comparative-capacity-sufficiency-v1",
+            "accounting": {
+              "offered": 100,
+              "issued": 100,
+              "unissued": 0,
+              "attempts": 100,
+              "committed": 100,
+              "conflicts": 0,
+              "conflictExhausted": 0,
+              "terminalFailures": {
+                "product_error": 0,
+                "correctness_failure": 0,
+                "transport_failure": 0,
+                "harness_fault": 0
+              },
+              "unresolved": 0,
+              "ambiguousCommits": 0
+            },
+            "runs": [
+              {
+                "runId": "bench-gcp-3sys-smoke-887007107-20261124-r002",
+                "runStatus": "completed",
+                "offeredRatePerSec": 5,
+                "repetition": 1,
+                "accounting": {
+                  "offered": 100,
+                  "issued": 100,
+                  "unissued": 0,
+                  "attempts": 100,
+                  "committed": 100,
+                  "conflicts": 0,
+                  "conflictExhausted": 0,
+                  "terminalFailures": {
+                    "product_error": 0,
+                    "correctness_failure": 0,
+                    "transport_failure": 0,
+                    "harness_fault": 0
+                  },
+                  "unresolved": 0,
+                  "ambiguousCommits": 0
+                },
+                "drainOverrunMs": 0,
+                "maxLatencyMs": 203.88
+              }
+            ],
+            "setupFailures": [],
+            "capacity": null
+          }
         },
         "scenarioB/local-only": {
           "claimKey": "tidb-tikv/scenarioB/local-only",
@@ -1719,7 +1855,6 @@
           "claimKind": "throughput",
           "status": "valid-observed",
           "reasons": [
-            "semantic-gate-incomplete",
             "smoke-profile-no-capacity-claim"
           ],
           "defectIds": [
@@ -1734,15 +1869,17 @@
           ],
           "evidence": {
             "runIds": [
-              "bench-live-20261101-b-r9-r003"
+              "bench-gcp-3sys-smoke-887007107-20261124-r003"
             ],
             "rawObservationsDigests": [
-              "sha256:c5da8e4f8d7d6a73dbf201f504e2e56465c8e2772a66febccb48c459dc9aa496"
+              "sha256:aa8178b50574d7d7c070cbc665b1fc962218a4cc22879e79d70cca3ebf7e8f11"
             ],
             "invalidatedRunIds": [
               "bench-live-20261101-b-r6-r003",
               "bench-live-20261101-b-r7-r003",
-              "bench-live-20261101-b-r8-r003"
+              "bench-live-20261101-b-r8-r003",
+              "bench-live-20261101-b-r9-r003",
+              "bench-gcp-comparators-b1e097b09-20261124-r002"
             ],
             "forensic": [],
             "semanticProofIds": [
@@ -1752,9 +1889,11 @@
               "forbidden:lost_successful_write",
               "forbidden:partial_commit",
               "forbidden:read_only_transaction_mutation",
+              "isolation:atomicCommitRequired",
               "isolation:dirtyReadsForbidden",
               "isolation:lostSuccessfulWriteForbidden",
               "isolation:readYourOwnWritesRequired",
+              "isolation:successfulCommitDurable",
               "isolation:successfulEffectsExactlyOnce",
               "outcome:retryableConflictSqlState:40001",
               "transaction:delivery:customer_balance_increases_by_selected_line_total",
@@ -1801,7 +1940,7 @@
             },
             "runs": [
               {
-                "runId": "bench-live-20261101-b-r9-r003",
+                "runId": "bench-gcp-3sys-smoke-887007107-20261124-r003",
                 "runStatus": "completed",
                 "offeredRatePerSec": 5,
                 "repetition": 1,
@@ -1822,8 +1961,8 @@
                   "unresolved": 0,
                   "ambiguousCommits": 0
                 },
-                "drainOverrunMs": 6817.312,
-                "maxLatencyMs": 7530.812
+                "drainOverrunMs": 0,
+                "maxLatencyMs": 53.556
               }
             ],
             "setupFailures": [],
@@ -2368,17 +2507,106 @@
         "scenarioA/smoke": {
           "claimKey": "pg-patroni-sync-ha-rf3/scenarioA/smoke",
           "claimKind": "throughput",
-          "status": "not-measured",
+          "status": "valid-observed",
           "reasons": [
-            "no-observation"
+            "smoke-profile-no-capacity-claim"
           ],
           "defectIds": [],
           "evidence": {
-            "runIds": [],
-            "rawObservationsDigests": [],
-            "forensic": []
+            "runIds": [
+              "bench-gcp-pg-ha-smoke-887007107-20261124-r001"
+            ],
+            "rawObservationsDigests": [
+              "sha256:d878b3b64758d07d842c3208a2fe7d2c2ff238d902689bf9fd45973e4fa9824b"
+            ],
+            "invalidatedRunIds": [],
+            "forensic": [],
+            "semanticProofIds": [
+              "failureAtomicity:terminal_logical_request_must_not_leave_partial_transaction_effects",
+              "forbidden:dirty_read",
+              "forbidden:duplicate_success_effect",
+              "forbidden:lost_successful_write",
+              "forbidden:partial_commit",
+              "forbidden:read_only_transaction_mutation",
+              "isolation:atomicCommitRequired",
+              "isolation:dirtyReadsForbidden",
+              "isolation:lostSuccessfulWriteForbidden",
+              "isolation:readYourOwnWritesRequired",
+              "isolation:successfulCommitDurable",
+              "isolation:successfulEffectsExactlyOnce",
+              "outcome:retryableConflictSqlState:40001",
+              "transaction:delivery:customer_balance_increases_by_selected_line_total",
+              "transaction:delivery:customer_delivery_count_advances_once_per_delivered_order",
+              "transaction:delivery:selected_new_order_is_removed_once_per_serviced_district",
+              "transaction:delivery:selected_order_carrier_is_set_once",
+              "transaction:delivery:selected_order_lines_are_marked_delivered",
+              "transaction:new_order:district_next_order_id_advances_once",
+              "transaction:new_order:one_new_order_row_created_for_allocated_order_id",
+              "transaction:new_order:one_order_line_created_per_input_line",
+              "transaction:new_order:one_order_row_created_for_allocated_order_id",
+              "transaction:new_order:stock_effects_applied_once_per_input_line",
+              "transaction:order_status:database_state_is_unchanged",
+              "transaction:order_status:latest_customer_order_is_returned_when_present",
+              "transaction:order_status:returned_lines_belong_to_returned_order",
+              "transaction:payment:customer_balance_decreases_by_payment_amount",
+              "transaction:payment:customer_payment_counters_advance_once",
+              "transaction:payment:district_ytd_increases_by_payment_amount",
+              "transaction:payment:one_history_row_created_for_logical_payment",
+              "transaction:payment:warehouse_ytd_increases_by_payment_amount",
+              "transaction:stock_level:database_state_is_unchanged",
+              "transaction:stock_level:reported_low_stock_count_uses_canonical_recent_order_window"
+            ]
           },
-          "metrics": null
+          "metrics": {
+            "profileClass": "smoke",
+            "sufficiencyRuleId": "comparative-capacity-sufficiency-v1",
+            "accounting": {
+              "offered": 100,
+              "issued": 100,
+              "unissued": 0,
+              "attempts": 100,
+              "committed": 100,
+              "conflicts": 0,
+              "conflictExhausted": 0,
+              "terminalFailures": {
+                "product_error": 0,
+                "correctness_failure": 0,
+                "transport_failure": 0,
+                "harness_fault": 0
+              },
+              "unresolved": 0,
+              "ambiguousCommits": 0
+            },
+            "runs": [
+              {
+                "runId": "bench-gcp-pg-ha-smoke-887007107-20261124-r001",
+                "runStatus": "completed",
+                "offeredRatePerSec": 5,
+                "repetition": 1,
+                "accounting": {
+                  "offered": 100,
+                  "issued": 100,
+                  "unissued": 0,
+                  "attempts": 100,
+                  "committed": 100,
+                  "conflicts": 0,
+                  "conflictExhausted": 0,
+                  "terminalFailures": {
+                    "product_error": 0,
+                    "correctness_failure": 0,
+                    "transport_failure": 0,
+                    "harness_fault": 0
+                  },
+                  "unresolved": 0,
+                  "ambiguousCommits": 0
+                },
+                "drainOverrunMs": 0,
+                "maxLatencyMs": 60.186
+              }
+            ],
+            "setupFailures": [],
+            "capacity": null
+          }
         },
         "scenarioB/local-only": {
           "claimKey": "pg-patroni-sync-ha-rf3/scenarioB/local-only",
