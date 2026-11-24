@@ -1,11 +1,7 @@
 // Durability evidence handoff from Scenario A semantic gates into claim
 // admission (`raw-observation-record.js` + `benchmark-claim-admission.js`):
-// covers all 3 systems (`lagrange`, `postgresql`, `tidb-tikv`) across local
-// PG-wire (`runScenarioASemanticProofJourney`), remote PG-wire
-// (`runRemotePgWireSemanticGate` via `createSemanticGateStage` +
-// `loadGeneratorHost`), and TiDB (`runTiDbSemanticGate`, local and remote),
-// for both `smoke` and `main` (capacity) profiles, plus fail-closed negative
-// controls.
+// covers `lagrange`, `postgresql`, and `tidb-tikv` across local/remote gates,
+// `smoke` and `main` profiles, and digest-recomputed semantic mutations.
 import {Buffer} from 'node:buffer';
 import {readFileSync} from 'node:fs';
 import assert from 'node:assert/strict';
@@ -752,6 +748,16 @@ test('semantic mutations with recomputed rawObservationsDigest fail closed along
   assert.equal(arrayIncludes(fixturePhysicalCell.reasons, ADMISSION_REASON.EMULATED_PRODUCT), true);
 });
 
+function assertStrippedWithdrawnGateRejected(rec, gate, dur) {
+  assert.equal(validateCanonicalDurabilityCaseRecord(dur, rec).valid, false, rec.runId);
+  for (const stripped of [{...gate, cases: []}, {...gate, cases: undefined}]) {
+    const clone = {...rec, correctness: {...rec.correctness, semanticGate: stripped}};
+    assert.equal(
+      arrayIncludes(checkSemanticGate(clone), ADMISSION_REASON.SEMANTIC_GATE_INCOMPLETE), true);
+    assert.deepEqual(awardedProofIds(stripped, clone), []);
+  }
+}
+
 test('persisted v2 raw-observations.ndjson live passing gates satisfy canonical case and ' +
   'durability validators while pre-887007107 and historical v1 lines are rejected/forensic', () => {
   const lines = arrayFilter(
@@ -774,13 +780,7 @@ test('persisted v2 raw-observations.ndjson live passing gates satisfy canonical 
     const dur = arrayFind(gate.cases, (c) => c.caseId === 'durability');
     if (!dur?.faultEvidence) {
       withdrawnMissingFaultGates += 1;
-      assert.equal(validateCanonicalDurabilityCaseRecord(dur, rec).valid, false, rec.runId);
-      for (const stripped of [{...gate, cases: []}, {...gate, cases: undefined}]) {
-        const clone = {...rec, correctness: {...rec.correctness, semanticGate: stripped}};
-        assert.equal(arrayIncludes(checkSemanticGate(clone),
-          ADMISSION_REASON.SEMANTIC_GATE_INCOMPLETE), true);
-        assert.deepEqual(awardedProofIds(stripped, clone), []);
-      }
+      assertStrippedWithdrawnGateRejected(rec, gate, dur);
       continue;
     }
     livePassedGates += 1;
@@ -790,5 +790,7 @@ test('persisted v2 raw-observations.ndjson live passing gates satisfy canonical 
     }
     assert.equal(validateCanonicalDurabilityCaseRecord(dur, rec).valid, true, rec.runId);
   }
-  assert.ok(livePassedGates >= 3 && withdrawnMissingFaultGates >= 1 && v1ForensicCount > 0);
+  assert.ok(livePassedGates >= 3);
+  assert.ok(withdrawnMissingFaultGates >= 1);
+  assert.ok(v1ForensicCount > 0);
 });
