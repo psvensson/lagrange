@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {scaleByMachineFactor} from '../../scripts/test-machine-factor.js';
+import {EventEmitter} from 'node:events';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {CDC_OPERATION, SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
 import {ROUTER_MESSAGE_TYPE} from '../../src/constants/transport.js';
@@ -14,12 +14,21 @@ import {buildControlPlaneReadAuthority} from
 import {MessageGroupService} from '../../src/message-group/message-group-service.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {CancellationToken} from '../../src/query/cancellation-token.js';
-import {QUERY_MESSAGE_TYPE} from '../../src/query/query-constants.js';
+import {QUERY_ERROR_CODE, QUERY_MESSAGE_TYPE} from '../../src/query/query-constants.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
+import {
+  QUERY_RESULT_BUDGET_ERROR_CODE,
+  QUERY_RESULT_REQUEST_FIELD,
+} from '../../src/query/query-result-budget.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {RAFT_LEADERSHIP_TRANSFER_SUCCESSOR, RAFT_OPERATION_OUTCOME} from
   '../../src/raft/raft-operation-port-constants.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
+import {
+  buildDataRow,
+  encodeDataRowChunks,
+} from '../../src/runtime/pgwire-message-builders.js';
+import {PgWireOutputWriter} from '../../src/runtime/pgwire-output-writer.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {ROUTER_MESSAGE_TIMEOUT_ERROR_CODE} from '../../src/transport/transport-error-codes.js';
@@ -54,7 +63,6 @@ const GRANT_PROBES = 6;
 const MAX_INSPECTIONS_PER_OBSERVATION = 8;
 const ROUTING_SPIN = 'routing repeatedly inspected unchanged eligibility without waiting';
 const FIXTURE_BUDGET_MS = 10000;
-const FIXTURE_REAL_CLOCK_HEADROOM_MS = 60000;
 const CANCEL_REASON = 'witness caller cancelled';
 const RECOVERY = CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
 const SCHEMA = {columns: [
@@ -130,7 +138,19 @@ function publishPartition(cache, partition) {
   });
 }
 
-async function openPartitions(t, fixture, target, cache, resources, options) {
+function wirePartitionTimeSource(partition, clock) {
+  partition.stopPeriodicSizeUpdates?.();
+  partition.stopPreparedStateHoldTimeoutSweep?.();
+  partition.timeSource = clock;
+  if (partition.hlcClock) {
+    partition.hlcClock.timeSource = clock;
+  }
+  if (partition.proposalQueue) {
+    partition.proposalQueue.timeSource = clock;
+  }
+}
+
+async function openPartitions(t, fixture, target, cache, resources, options, clock) {
   const serviceOptions = {tableId: TABLE, tableName: TABLE, schema: SCHEMA};
   if (options.withAlternate) {
     const group = await formAdmittedGroup({
@@ -142,6 +162,7 @@ async function openPartitions(t, fixture, target, cache, resources, options) {
     const [leader, follower] = group.services;
     assert.equal(leader.raft.readStatus().role, RAFT_ROLE.LEADER);
     assert.equal(follower.raft.readStatus().role, RAFT_ROLE.FOLLOWER);
+    group.services.forEach((service) => wirePartitionTimeSource(service, clock));
     // Query traffic uses the real remote routers and the actual partition
     // handlers. Only the fixture's native Raft/admission traffic uses loopback.
     target.router.register(leader.unifiedAddress, leader.transportHandler);
@@ -163,6 +184,7 @@ async function openPartitions(t, fixture, target, cache, resources, options) {
       });
     };
     return {
+      primaryPartition: leader,
       primaryAddress: leader.unifiedAddress, alternate,
       alternateAddress: follower.unifiedAddress, publishAlternate,
       handoff: () => transfer(leader, follower),
@@ -172,7 +194,7 @@ async function openPartitions(t, fixture, target, cache, resources, options) {
   }
   const partition = new PartitionService(withFoundingStamp(withTestDbPath({
     ...serviceOptions, partitionId: PARTITION, replicaId: REPLICA, nodeId: TARGET,
-    transport: target.router, systemTableCache: cache,
+    transport: target.router, systemTableCache: cache, timeSource: clock,
   })));
   resources.disposePartitions = () => partition.shutdown();
   await partition.initialize();
@@ -181,19 +203,13 @@ async function openPartitions(t, fixture, target, cache, resources, options) {
     'actual SQLite partition becomes its singleton Raft leader');
   seedRows(partition);
   publishPartition(cache, partition);
-  return {primaryAddress: partition.unifiedAddress};
+  return {primaryPartition: partition, primaryAddress: partition.unifiedAddress};
 }
 
 async function openFixture(t, options = {}) {
   const {holdAck = true} = options;
   const fixture = createRouterEnvelopeFixture(import.meta.url, SOURCE);
-  // PartitionService's real-clock collectBoundedTypedRowSet checks
-  // Date.now() >= deadlineMs; starting the virtual sender clock ahead of wall
-  // time prevents real setup duration under host load from expiring virtual
-  // caller grants while keeping every virtual-clock duration identical.
-  const clock = new VirtualTimeSource({
-    startMs: Date.now() + scaleByMachineFactor(FIXTURE_REAL_CLOCK_HEADROOM_MS),
-  });
+  const clock = new VirtualTimeSource({startMs: Date.now()});
   await fixture.setup();
   const resources = {};
   t.teardown(async () => {
@@ -218,9 +234,9 @@ async function openFixture(t, options = {}) {
   resources.group = group;
   await group.initialize();
   sender.router.setQueryMessageGroupServiceResolver(() => ({service: group}));
-  const {primaryAddress, alternate, alternateAddress, handoff, handoffToPrimary,
+  const {primaryPartition, primaryAddress, alternate, alternateAddress, handoff, handoffToPrimary,
     publishAlternate, releaseAdmission} =
-    await openPartitions(t, fixture, target, cache, resources, options);
+    await openPartitions(t, fixture, target, cache, resources, options, clock);
   cache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.INSERT, {
     partition_id: PARTITION, table_id: TABLE, leader_node_id: TARGET,
   });
@@ -264,7 +280,7 @@ async function openFixture(t, options = {}) {
   }
   return {
     clock, group, probeMs, read, executor, handoff, publishAlternate, source: sender.router,
-    primaryAddress, alternateAddress,
+    primaryPartition, primaryAddress, alternateAddress,
     async establishSessionPin() {
       await handoff();
       await releaseAdmission();
@@ -592,4 +608,120 @@ test('session affinity orders eligible routes and cannot introduce an excluded r
   t.equal(f.sent().length, primaryCount, 'all-excluded adds no primary wire submission');
   t.equal(f.alternateSends().length, alternateCount, 'all-excluded adds no pinned wire submission');
   assertRetired(f, t);
+});
+
+test('receiver result-deadline expiry fails collectBoundedTypedRowSet closed on the injected clock',
+  async (t) => {
+    const f = await openFixture(t, {holdAck: false});
+    f.executor.readRetryAttempts = 1;
+    const callerGrant = f.clock.now() + GRANT_PROBES * f.probeMs;
+    const receiverDeadline = f.clock.now() + f.probeMs;
+    const originalHandleRemoteQuery =
+      f.primaryPartition.handleRemoteQuery.bind(f.primaryPartition);
+    f.primaryPartition.handleRemoteQuery = async (payload) => {
+      if (payload?.sql === SQL && payload?.params?.[0] === HELD_KEY) {
+        // Advance the shared injected clock to the request's resultDeadlineMs
+        // right before the receiver executes collectBoundedTypedRowSet.
+        f.clock.advance(f.probeMs);
+        return originalHandleRemoteQuery({
+          ...payload,
+          [QUERY_RESULT_REQUEST_FIELD.DEADLINE_MS]: receiverDeadline,
+        });
+      }
+      return originalHandleRemoteQuery(payload);
+    };
+    const pending = f.read(HELD_KEY, callerGrant);
+    await settleUntil(t, () => f.held()[0]?.answer !== undefined,
+      'receiver answered after injected clock reached resultDeadlineMs');
+    const [delivery] = f.held();
+    t.equal(delivery.answer.success, false,
+      'receiver collectBoundedTypedRowSet fails closed when injected clock reaches resultDeadlineMs');
+    t.equal(delivery.answer.errorCode, QUERY_RESULT_BUDGET_ERROR_CODE.WALL_TIME_EXHAUSTED,
+      'receiver reports wall-time budget exhausted code');
+    t.equal(delivery.answer.failureCode, QUERY_ERROR_CODE.QUERY_EXECUTION_DEADLINE_EXCEEDED,
+      'receiver surfaces QUERY_EXECUTION_DEADLINE_EXCEEDED failureCode');
+    t.equal(delivery.answer.rows, undefined, 'no rows shipped on receiver deadline expiry');
+    t.equal(delivery.answer.rowSet, undefined, 'no rowSet shipped on receiver deadline expiry');
+    releaseFrames(delivery);
+    const outcome = await pending;
+    t.equal(outcome.success, false, 'caller receives receiver deadline refusal');
+    t.equal(outcome.errorCode, QUERY_RESULT_BUDGET_ERROR_CODE.WALL_TIME_EXHAUSTED);
+    t.equal(outcome.failureCode, QUERY_ERROR_CODE.QUERY_EXECUTION_DEADLINE_EXCEEDED);
+    t.equal(f.held().length, 1, 'single receiver execution attempt');
+    assertRetired(f, t);
+  });
+
+test('oversized DataRow encoding streams bounded <= 64 KiB chunks without duplicate ' +
+  'frame allocation and yields so a pre-encode short query runs mid-encode', async (t) => {
+  const chunkMaxBytes = 64 * 1024;
+  const oversizedText = '0123456789abcdef'.repeat((512 * 1024) / 16);
+  const columns = [
+    {name: 'id', oid: 23},
+    {name: 'payload', oid: 25},
+    {name: 'bin', oid: 17},
+    {name: 'nullable', oid: 25},
+  ];
+  const values = [7, oversizedText, Buffer.from('deadbeefcafebabe', 'hex'), null];
+  const fullFrame = buildDataRow(values, columns);
+  const streamedChunks = [...encodeDataRowChunks(values, columns, chunkMaxBytes)];
+  t.ok(streamedChunks.length >= 9, '512 KiB row splits into >= 9 bounded chunks');
+  for (const chunk of streamedChunks) {
+    t.ok(chunk.length <= chunkMaxBytes, `chunk (${chunk.length}) <= ${chunkMaxBytes}`);
+  }
+  t.equal(Buffer.compare(Buffer.concat(streamedChunks), fullFrame), 0,
+    'streamed chunks concatenate byte-for-byte to buildDataRow');
+
+  // Verify pre-encode and mid-encode event-loop fairness on PgWireOutputWriter.
+  const writtenChunks = [];
+  const socket = new EventEmitter();
+  socket.destroyed = false;
+  socket.writableEnded = false;
+  socket.writable = true;
+  socket.write = (chunk) => {
+    writtenChunks.push(Buffer.from(chunk));
+    return true;
+  };
+
+  const encodedProgress = [];
+  const writer = new PgWireOutputWriter({
+    getSocket: () => socket,
+    isClosed: () => false,
+    batchMaxBytes: chunkMaxBytes,
+    onDataRowChunkEncoded(progress) {
+      encodedProgress.push(progress);
+    },
+  });
+
+  let preEncodeShortQueryChunksSeen = null;
+  let midEncodeShortQueryChunksSeen = null;
+  // Schedule the short-query fairness witness BEFORE large-value encoding begins.
+  setImmediate(() => {
+    preEncodeShortQueryChunksSeen = writer.encodedDataRowChunks;
+    setImmediate(() => {
+      midEncodeShortQueryChunksSeen = writer.encodedDataRowChunks;
+    });
+  });
+
+  const writePromise = writer.writeExecutionRows({
+    columns: ['id', 'payload', 'bin', 'nullable'],
+    rawRows: [values],
+  }, {
+    extended: true,
+    portalDescription: {columns},
+  });
+
+  await writePromise;
+
+  t.equal(preEncodeShortQueryChunksSeen, 0,
+    'short query scheduled before oversized encoding runs before chunk 1 is encoded');
+  t.ok(
+    midEncodeShortQueryChunksSeen > 0 &&
+      midEncodeShortQueryChunksSeen < writer.encodedDataRowChunks,
+    `second short query turn runs mid-encode (${midEncodeShortQueryChunksSeen} / ` +
+      `${writer.encodedDataRowChunks} chunks)`,
+  );
+  t.ok(writer.maxEncodedChunkBytes <= chunkMaxBytes,
+    `maxEncodedChunkBytes (${writer.maxEncodedChunkBytes}) <= ${chunkMaxBytes}`);
+  t.equal(Buffer.compare(Buffer.concat(writtenChunks), fullFrame), 0,
+    'writer streamed chunks reassemble to exact DataRow frame');
 });

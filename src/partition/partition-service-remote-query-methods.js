@@ -32,7 +32,10 @@ import {prepareWaitingRowKeySessionForReevaluation} from
   './partition-participant-transaction-staging.js';
 import {coordinatorTableSchemaRefusal} from
   '../query/distributed/distributed-transaction-schema-enforcement.js';
-import {QUERY_RESULT_REQUEST_FIELD} from '../query/query-result-budget.js';
+import {
+  QUERY_RESULT_BUDGET_ERROR_CODE,
+  QUERY_RESULT_REQUEST_FIELD,
+} from '../query/query-result-budget.js';
 import {decodeTypedParams} from '../query/sql-value-codec.js';
 import {
   admitPartitionStatement,
@@ -255,6 +258,7 @@ async function executeRemoteQuery(service, payload, appliedPositionRead) {
       [STATEMENT_INGRESS_FIELD]: payload[STATEMENT_INGRESS_FIELD] || null,
     });
   }
+  const nowFn = () => service.timeSource.now();
   return service.executeQuery(sql, params, {
     entryId: payload[QUERY_PAYLOAD_FIELD_ENTRY_ID] || null,
     operationId: payload[QUERY_PAYLOAD_FIELD_OPERATION_ID] || null,
@@ -265,6 +269,9 @@ async function executeRemoteQuery(service, payload, appliedPositionRead) {
     resultDeadlineMs: payload[QUERY_RESULT_REQUEST_FIELD.DEADLINE_MS],
     resultMaxBytes: payload[QUERY_RESULT_REQUEST_FIELD.MAX_BYTES],
     resultMaxRows: payload[QUERY_RESULT_REQUEST_FIELD.MAX_ROWS],
+    timeSource: service.timeSource,
+    nowFn,
+    cancellationToken: {timeSource: service.timeSource, nowFn},
     wireRead: true,
     appliedPositionRead,
   });
@@ -306,8 +313,17 @@ function remoteQueryFailure(service, sql, error) {
     error: error.message,
     partitionId: service.partitionId,
   });
-  return {success: false, error: error.message,
-    errorCode: error.code || null, partitionId: service.partitionId};
+  const isDeadlineExceeded =
+    error?.code === QUERY_RESULT_BUDGET_ERROR_CODE.WALL_TIME_EXHAUSTED;
+  return {
+    success: false,
+    error: error.message,
+    errorCode: error.code || null,
+    ...(isDeadlineExceeded ?
+      {failureCode: QUERY_ERROR_CODE.QUERY_EXECUTION_DEADLINE_EXCEEDED} :
+      {}),
+    partitionId: service.partitionId,
+  };
 }
 
 function safeIndexOf(value) {

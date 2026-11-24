@@ -28,6 +28,15 @@ const PG_BOOL_FALSE = 'f';
 const PG_BOOL_TRUE_LITERALS = new Set(['true', 't', 'TRUE', '1']);
 const BYTEA_HEX_PREFIX = '\\x';
 const BYTEA_HEX_RADIX = 'hex';
+const BYTEA_HEX_PREFIX_BUF = Buffer.from(BYTEA_HEX_PREFIX, 'utf8');
+const EMPTY_CHUNK_BUF = Buffer.alloc(0);
+const DEFAULT_DATA_ROW_CHUNK_BYTES = 64 * 1024;
+const DATA_ROW_HEADER_BYTES = PG_BUFFER_LIMIT.MSG_HEADER_SIZE + LOCAL_NUM_TWO;
+const DATA_ROW_COL_KIND_NULL = 0;
+const DATA_ROW_COL_KIND_TEXT = 1;
+const DATA_ROW_COL_KIND_BYTEA = 2;
+const HIGH_SURROGATE_MIN = 0xd800;
+const HIGH_SURROGATE_MAX = 0xdbff;
 const LOCAL_STR_UTF8 = 'utf8';
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_OBJECT = 'object';
@@ -232,41 +241,421 @@ function encodeColumnTextValue(value, col) {
   return String(value);
 }
 
+function normalizeRowValues(rowOrValues, columns) {
+  if (Array.isArray(rowOrValues)) {
+    return rowOrValues;
+  }
+  if (!rowOrValues || typeof rowOrValues !== LOCAL_STR_OBJECT) {
+    return [];
+  }
+  if (Array.isArray(columns) && columns.length > 0) {
+    return columns.map((col) => {
+      const key = typeof col === LOCAL_STR_STRING ? col : col?.name;
+      return rowOrValues[key];
+    });
+  }
+  return Object.values(rowOrValues);
+}
+
+function describeDataRowColumn(value, col) {
+  let columnType = DATA_ROW_COL_KIND_TEXT;
+  let byteLength = 0;
+  let text = '';
+  let buffer = EMPTY_CHUNK_BUF;
+  if (value === null || value === undefined) {
+    columnType = DATA_ROW_COL_KIND_NULL;
+  } else if (col?.oid === OID_BYTEA && Buffer.isBuffer(value)) {
+    columnType = DATA_ROW_COL_KIND_BYTEA;
+    byteLength = BYTEA_HEX_PREFIX_BUF.length + value.length * LOCAL_NUM_TWO;
+    buffer = value;
+  } else {
+    text =
+      typeof value === LOCAL_STR_STRING && col?.oid !== OID_BOOL ?
+        value :
+        encodeColumnTextValue(value, col);
+    byteLength = Buffer.byteLength(text, LOCAL_STR_UTF8);
+  }
+  return {columnType, byteLength, text, buffer};
+}
+
 /**
- * Build DataRow message from column values.
+ * Measure and describe each column of a DataRow without allocating a payload
+ * buffer or eagerly materializing oversized BYTEA hex strings.
+ * @param {Array<unknown>|Object} rowOrValues - Column values or row object.
+ * @param {Array<Object|string>} [columns] - Optional column descriptors.
+ * @return {{descriptors: Array<Object>, payloadLength: number, frameByteLength: number}}
+ */
+function prepareDataRowColumns(rowOrValues, columns = []) {
+  const values = normalizeRowValues(rowOrValues, columns);
+  const descriptors = new Array(values.length);
+  let payloadLength = LOCAL_NUM_TWO;
+  for (let idx = 0; idx < values.length; idx += 1) {
+    const desc = describeDataRowColumn(values[idx], columns[idx]);
+    descriptors[idx] = desc;
+    payloadLength +=
+      desc.columnType === DATA_ROW_COL_KIND_NULL ?
+        LOCAL_NUM_FOUR :
+        LOCAL_NUM_FOUR + desc.byteLength;
+  }
+  return {
+    descriptors,
+    payloadLength,
+    frameByteLength: PG_BUFFER_LIMIT.MSG_HEADER_SIZE + payloadLength,
+  };
+}
+
+function getPreparedDataRowFrameLength(prepared) {
+  return prepared.frameByteLength;
+}
+
+function writePreparedColumnToFrame(frame, offset, desc) {
+  if (desc.columnType === DATA_ROW_COL_KIND_NULL) {
+    frame.writeInt32BE(VARIABLE_SIZE, offset);
+    return offset + LOCAL_NUM_FOUR;
+  }
+  frame.writeInt32BE(desc.byteLength, offset);
+  let nextOffset = offset + LOCAL_NUM_FOUR;
+  if (desc.columnType === DATA_ROW_COL_KIND_BYTEA) {
+    BYTEA_HEX_PREFIX_BUF.copy(frame, nextOffset);
+    nextOffset += BYTEA_HEX_PREFIX_BUF.length;
+    if (desc.buffer.length > 0) {
+      const hexLen = desc.byteLength - BYTEA_HEX_PREFIX_BUF.length;
+      frame.write(
+        desc.buffer.toString(BYTEA_HEX_RADIX),
+        nextOffset,
+        hexLen,
+        LOCAL_STR_UTF8,
+      );
+      nextOffset += hexLen;
+    }
+    return nextOffset;
+  }
+  if (desc.byteLength > 0) {
+    frame.write(desc.text, nextOffset, desc.byteLength, LOCAL_STR_UTF8);
+    nextOffset += desc.byteLength;
+  }
+  return nextOffset;
+}
+
+/**
+ * Encode a prepared DataRow directly into a single pre-sized frame buffer
+ * ('D' + UInt32BE length + Int16BE colCount + column values), eliminating
+ * any intermediate payload buffer allocation or full-row copy.
+ * @param {{descriptors: Array<Object>, payloadLength: number, frameByteLength: number}} prepared
+ * @return {Buffer}
+ */
+function buildPreparedDataRowFrame(prepared) {
+  const {descriptors, payloadLength, frameByteLength} = prepared;
+  const frame = Buffer.allocUnsafe(frameByteLength);
+  frame[0] = PG_BACKEND_MSG.DATA_ROW;
+  frame.writeInt32BE(PG_BUFFER_LIMIT.LENGTH_FIELD_SIZE + payloadLength, 1);
+  frame.writeInt16BE(descriptors.length, PG_BUFFER_LIMIT.MSG_HEADER_SIZE);
+  let off = DATA_ROW_HEADER_BYTES;
+  for (let idx = 0; idx < descriptors.length; idx += 1) {
+    off = writePreparedColumnToFrame(frame, off, descriptors[idx]);
+  }
+  return frame;
+}
+
+/**
+ * Build DataRow message from column values in a single frame allocation.
  * @param {Array<unknown>} values - Column values (null for SQL NULL).
  * @param {Array<Object>} [columns] - Optional column descriptors for typed text encoding.
  * @return {Buffer}
  */
 function buildDataRow(values, columns = []) {
-  const encodedValues = values.map((v, idx) => {
-    if (v === null || v === undefined) return null;
-    return encodeColumnTextValue(v, columns[idx]);
-  });
-  let size = LOCAL_NUM_TWO;
-  for (const encoded of encodedValues) {
-    if (encoded === null) {
-      size += LOCAL_NUM_FOUR;
-    } else {
-      size += LOCAL_NUM_FOUR + Buffer.byteLength(encoded, LOCAL_STR_UTF8);
+  return buildPreparedDataRowFrame(prepareDataRowColumns(values, columns));
+}
+
+function isHighSurrogateCode(code) {
+  return code >= HIGH_SURROGATE_MIN && code <= HIGH_SURROGATE_MAX;
+}
+
+function clampSurrogateBoundary(text, candidateEnd) {
+  if (
+    candidateEnd < text.length &&
+    isHighSurrogateCode(text.charCodeAt(candidateEnd - 1))
+  ) {
+    return candidateEnd - 1;
+  }
+  return candidateEnd;
+}
+
+function takeUtf8SliceWithinBytes(text, charOffset, maxBytes) {
+  if (maxBytes <= 0 || charOffset >= text.length) {
+    return {slice: '', byteLen: 0, nextCharOffset: charOffset};
+  }
+  const firstUnits =
+    isHighSurrogateCode(text.charCodeAt(charOffset)) &&
+    charOffset + 1 < text.length ?
+      LOCAL_NUM_TWO :
+      1;
+  const firstSlice = text.slice(charOffset, charOffset + firstUnits);
+  const firstByteLen = Buffer.byteLength(firstSlice, LOCAL_STR_UTF8);
+  if (firstByteLen > maxBytes) {
+    return {
+      slice: '',
+      byteLen: 0,
+      nextCharOffset: charOffset,
+      firstSlice,
+      firstByteLen,
+      firstUnits,
+    };
+  }
+  let end = clampSurrogateBoundary(
+    text,
+    Math.min(text.length, charOffset + maxBytes),
+  );
+  if (end <= charOffset) {
+    end = charOffset + firstUnits;
+  }
+  let slice = text.slice(charOffset, end);
+  let byteLen = Buffer.byteLength(slice, LOCAL_STR_UTF8);
+  while (byteLen > maxBytes) {
+    const charCount = end - charOffset;
+    const scaled = Math.max(
+      firstUnits,
+      Math.floor(charCount * (maxBytes / byteLen)),
+    );
+    end = clampSurrogateBoundary(
+      text,
+      charOffset + Math.min(charCount - 1, scaled),
+    );
+    if (end <= charOffset) {
+      end = charOffset + firstUnits;
+    }
+    slice = text.slice(charOffset, end);
+    byteLen = Buffer.byteLength(slice, LOCAL_STR_UTF8);
+  }
+  return {slice, byteLen, nextCharOffset: end};
+}
+
+function ensureChunkBuffer(state, minCapacity = 1) {
+  if (!state.hasChunk) {
+    const size = Math.max(
+      minCapacity,
+      Math.min(state.chunkMaxBytes, state.remainingFrameBytes),
+    );
+    state.buffer = Buffer.allocUnsafe(size);
+    state.chunkOffset = 0;
+    state.hasChunk = true;
+  }
+}
+
+function takeBufferedChunk(state, endOffset) {
+  const emitted =
+    endOffset === state.buffer.length ?
+      state.buffer :
+      state.buffer.subarray(0, endOffset);
+  state.buffer = EMPTY_CHUNK_BUF;
+  state.chunkOffset = 0;
+  state.hasChunk = false;
+  return emitted;
+}
+
+function recordChunkProgress(state, writtenBytes) {
+  state.chunkOffset += writtenBytes;
+  state.remainingFrameBytes -= writtenBytes;
+}
+
+function* emitRawHeaderBytes(state, headerBuf) {
+  let pos = 0;
+  while (pos < headerBuf.length) {
+    ensureChunkBuffer(state);
+    const avail = state.buffer.length - state.chunkOffset;
+    const toCopy = Math.min(avail, headerBuf.length - pos);
+    headerBuf.copy(state.buffer, state.chunkOffset, pos, pos + toCopy);
+    recordChunkProgress(state, toCopy);
+    pos += toCopy;
+    if (state.hasChunk && state.chunkOffset === state.buffer.length) {
+      yield takeBufferedChunk(state, state.buffer.length);
     }
   }
-  const payload = Buffer.allocUnsafe(size);
-  payload.writeInt16BE(encodedValues.length, 0);
-  let off = LOCAL_NUM_TWO;
-  for (const encoded of encodedValues) {
-    if (encoded === null) {
-      payload.writeInt32BE(VARIABLE_SIZE, off);
-      off += LOCAL_NUM_FOUR;
-    } else {
-      const len = Buffer.byteLength(encoded, LOCAL_STR_UTF8);
-      payload.writeInt32BE(len, off);
-      off += LOCAL_NUM_FOUR;
-      payload.write(encoded, off, LOCAL_STR_UTF8);
-      off += len;
+}
+
+function* emitByteaColumnBytes(state, buffer) {
+  yield* emitRawHeaderBytes(state, BYTEA_HEX_PREFIX_BUF);
+  let bufOffset = 0;
+  while (bufOffset < buffer.length) {
+    ensureChunkBuffer(state, LOCAL_NUM_TWO);
+    const avail = state.buffer.length - state.chunkOffset;
+    if (avail < LOCAL_NUM_TWO && state.chunkOffset > 0) {
+      yield takeBufferedChunk(state, state.chunkOffset);
+      continue;
+    }
+    const bytesToEncode = Math.min(
+      buffer.length - bufOffset,
+      Math.max(1, Math.floor(avail / LOCAL_NUM_TWO)),
+    );
+    const hexByteLen = bytesToEncode * LOCAL_NUM_TWO;
+    const hexSlice = buffer.toString(
+      BYTEA_HEX_RADIX,
+      bufOffset,
+      bufOffset + bytesToEncode,
+    );
+    state.buffer.write(hexSlice, state.chunkOffset, hexByteLen, LOCAL_STR_UTF8);
+    recordChunkProgress(state, hexByteLen);
+    bufOffset += bytesToEncode;
+    if (state.hasChunk && state.chunkOffset === state.buffer.length) {
+      yield takeBufferedChunk(state, state.buffer.length);
     }
   }
-  return buildMessage(PG_BACKEND_MSG.DATA_ROW, payload);
+}
+
+function computeNextTextSlice(state, text, charOffset, remainingColBytes) {
+  const avail = state.buffer.length - state.chunkOffset;
+  if (charOffset === 0 && remainingColBytes <= avail) {
+    return {
+      needsFlush: false,
+      slice: text,
+      byteLen: remainingColBytes,
+      nextCharOffset: text.length,
+    };
+  }
+  const taken = takeUtf8SliceWithinBytes(
+    text,
+    charOffset,
+    Math.min(avail, remainingColBytes),
+  );
+  if (taken.byteLen > 0) {
+    return {
+      needsFlush: false,
+      slice: taken.slice,
+      byteLen: taken.byteLen,
+      nextCharOffset: taken.nextCharOffset,
+    };
+  }
+  if (state.chunkOffset > 0) {
+    return {
+      needsFlush: true,
+      slice: '',
+      byteLen: 0,
+      nextCharOffset: charOffset,
+    };
+  }
+  state.buffer = Buffer.allocUnsafe(taken.firstByteLen);
+  state.chunkOffset = 0;
+  state.hasChunk = true;
+  return {
+    needsFlush: false,
+    slice: taken.firstSlice,
+    byteLen: taken.firstByteLen,
+    nextCharOffset: charOffset + taken.firstUnits,
+  };
+}
+
+function* emitTextColumnBytes(state, text, totalByteLength) {
+  let charOffset = 0;
+  let remainingColBytes = totalByteLength;
+  while (remainingColBytes > 0) {
+    ensureChunkBuffer(state);
+    const step = computeNextTextSlice(
+      state,
+      text,
+      charOffset,
+      remainingColBytes,
+    );
+    if (step.needsFlush) {
+      yield takeBufferedChunk(state, state.chunkOffset);
+      continue;
+    }
+    state.buffer.write(
+      step.slice,
+      state.chunkOffset,
+      step.byteLen,
+      LOCAL_STR_UTF8,
+    );
+    recordChunkProgress(state, step.byteLen);
+    remainingColBytes -= step.byteLen;
+    charOffset = step.nextCharOffset;
+    if (state.hasChunk && state.chunkOffset === state.buffer.length) {
+      yield takeBufferedChunk(state, state.buffer.length);
+    }
+  }
+}
+
+function* emitPreparedColumnChunks(state, colLenHeader, desc) {
+  if (desc.columnType === DATA_ROW_COL_KIND_NULL) {
+    colLenHeader.writeInt32BE(VARIABLE_SIZE, 0);
+    yield* emitRawHeaderBytes(state, colLenHeader);
+    return;
+  }
+  colLenHeader.writeInt32BE(desc.byteLength, 0);
+  yield* emitRawHeaderBytes(state, colLenHeader);
+  if (desc.columnType === DATA_ROW_COL_KIND_BYTEA) {
+    yield* emitByteaColumnBytes(state, desc.buffer);
+    return;
+  }
+  if (desc.byteLength > 0) {
+    yield* emitTextColumnBytes(state, desc.text, desc.byteLength);
+  }
+}
+
+/**
+ * Stream a prepared DataRow as bounded <= chunkMaxBytes buffers without
+ * allocating a multi-megabyte contiguous frame buffer.
+ * @param {{descriptors: Array<Object>, payloadLength: number, frameByteLength: number}} prepared
+ * @param {number} [chunkMaxBytes]
+ * @yields {Buffer}
+ */
+function* encodePreparedDataRowChunks(
+  prepared,
+  chunkMaxBytes = DEFAULT_DATA_ROW_CHUNK_BYTES,
+) {
+  const maxChunk =
+    Number.isSafeInteger(chunkMaxBytes) && chunkMaxBytes > 0 ?
+      chunkMaxBytes :
+      DEFAULT_DATA_ROW_CHUNK_BYTES;
+  if (prepared.frameByteLength <= maxChunk) {
+    yield buildPreparedDataRowFrame(prepared);
+    return;
+  }
+  const state = {
+    buffer: EMPTY_CHUNK_BUF,
+    chunkOffset: 0,
+    hasChunk: false,
+    chunkMaxBytes: maxChunk,
+    remainingFrameBytes: prepared.frameByteLength,
+  };
+  const rowHeader = Buffer.allocUnsafe(DATA_ROW_HEADER_BYTES);
+  rowHeader[0] = PG_BACKEND_MSG.DATA_ROW;
+  rowHeader.writeInt32BE(
+    PG_BUFFER_LIMIT.LENGTH_FIELD_SIZE + prepared.payloadLength,
+    1,
+  );
+  rowHeader.writeInt16BE(
+    prepared.descriptors.length,
+    PG_BUFFER_LIMIT.MSG_HEADER_SIZE,
+  );
+  yield* emitRawHeaderBytes(state, rowHeader);
+  const colLenHeader = Buffer.allocUnsafe(LOCAL_NUM_FOUR);
+  for (let idx = 0; idx < prepared.descriptors.length; idx += 1) {
+    yield* emitPreparedColumnChunks(
+      state,
+      colLenHeader,
+      prepared.descriptors[idx],
+    );
+  }
+  if (state.hasChunk && state.chunkOffset > 0) {
+    yield takeBufferedChunk(state, state.chunkOffset);
+  }
+}
+
+/**
+ * Stream a DataRow as bounded <= chunkMaxBytes frame segments so synchronous
+ * UTF-8 / BYTEA encoding work per step is bounded to at most chunkMaxBytes.
+ * @param {Array<unknown>|Object} rowOrValues - Column values or row object.
+ * @param {Array<Object|string>} [columns] - Optional column descriptors.
+ * @param {number} [chunkMaxBytes] - Max bytes per emitted chunk buffer.
+ * @yields {Buffer}
+ */
+function* encodeDataRowChunks(
+  rowOrValues,
+  columns = [],
+  chunkMaxBytes = DEFAULT_DATA_ROW_CHUNK_BYTES,
+) {
+  const prepared = prepareDataRowColumns(rowOrValues, columns);
+  yield* encodePreparedDataRowChunks(prepared, chunkMaxBytes);
 }
 
 /**
@@ -332,6 +721,11 @@ export {
   buildParameterDescription,
   buildRowDescription,
   buildDataRow,
+  buildPreparedDataRowFrame,
+  encodeDataRowChunks,
+  encodePreparedDataRowChunks,
+  getPreparedDataRowFrameLength,
+  prepareDataRowColumns,
   buildCommandComplete,
   buildParseComplete,
   buildBindComplete,

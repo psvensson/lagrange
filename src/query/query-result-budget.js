@@ -42,23 +42,78 @@ function positiveSafeLimit(value) {
   return Number.isSafeInteger(value) && value >= 0 ? value : null;
 }
 
+function readClockNowFromTarget(target) {
+  if (!target) {
+    return null;
+  }
+  if (target.nowFn) {
+    return target.nowFn();
+  }
+  if (target.timeSource) {
+    return target.timeSource.now();
+  }
+  return null;
+}
+
+function resolveQueryResultBudgetNowMs(options) {
+  const direct = readClockNowFromTarget(options);
+  if (direct !== null) {
+    return direct;
+  }
+  const fromToken = readClockNowFromTarget(options?.cancellationToken);
+  return fromToken !== null ? fromToken : Date.now();
+}
+
+function hasActiveBudgetOrCancellation(maxBytes, maxRows, deadlineMs, options) {
+  return (
+    maxBytes !== null ||
+    maxRows !== null ||
+    deadlineMs !== null ||
+    Boolean(options.cancellationToken)
+  );
+}
+
+function assertRowCountWithinLimit(nextRowCount, maxRows) {
+  if (maxRows !== null && nextRowCount > maxRows) {
+    throw new QueryResultBudgetError(
+      QUERY_RESULT_BUDGET_ERROR_CODE.ROWS_EXHAUSTED,
+      QUERY_RESULT_BUDGET_ERROR_MESSAGE.ROWS_EXHAUSTED,
+      {actual: nextRowCount, limit: maxRows},
+    );
+  }
+}
+
+function assertByteCountWithinLimit(nextBytes, maxBytes) {
+  if (maxBytes !== null && nextBytes > maxBytes) {
+    throw new QueryResultBudgetError(
+      QUERY_RESULT_BUDGET_ERROR_CODE.BYTES_EXHAUSTED,
+      QUERY_RESULT_BUDGET_ERROR_MESSAGE.BYTES_EXHAUSTED,
+      {actual: nextBytes, limit: maxBytes},
+    );
+  }
+}
+
 function assertQueryResultDeadline(options, progress) {
   options.cancellationToken?.throwIfCancelled?.();
   const deadlineMs = positiveSafeLimit(options.deadlineMs);
-  if (deadlineMs !== null && Date.now() >= deadlineMs) {
+  if (deadlineMs === null) {
+    return;
+  }
+  const nowMs = resolveQueryResultBudgetNowMs(options);
+  if (nowMs >= deadlineMs) {
     reportWaitBoundSpent(null, {
       ...RESULT_DEADLINE_WAIT,
       boundMs: null,
       lastObserved: {
         ...progress,
         deadlineMs,
-        overshootMs: Date.now() - deadlineMs,
+        overshootMs: nowMs - deadlineMs,
       },
     });
     throw new QueryResultBudgetError(
       QUERY_RESULT_BUDGET_ERROR_CODE.WALL_TIME_EXHAUSTED,
       QUERY_RESULT_BUDGET_ERROR_MESSAGE.WALL_TIME_EXHAUSTED,
-      {actual: Date.now(), limit: deadlineMs},
+      {actual: nowMs, limit: deadlineMs},
     );
   }
 }
@@ -69,8 +124,7 @@ function collectBoundedSqliteRows(statement, params = [], options = {}) {
   const maxBytes = positiveSafeLimit(options.maxBytes);
   const maxRows = positiveSafeLimit(options.maxRows);
   const deadlineMs = positiveSafeLimit(options.deadlineMs);
-  if (maxBytes === null && maxRows === null && deadlineMs === null &&
-      !options.cancellationToken) {
+  if (!hasActiveBudgetOrCancellation(maxBytes, maxRows, deadlineMs, options)) {
     return statement.all(...params);
   }
   const rows = [];
@@ -81,26 +135,13 @@ function collectBoundedSqliteRows(statement, params = [], options = {}) {
       rowsCollected: rows.length,
       bytesCollected: totalBytes,
     });
-    const nextRowCount = rows.length + 1;
-    if (maxRows !== null && nextRowCount > maxRows) {
-      throw new QueryResultBudgetError(
-        QUERY_RESULT_BUDGET_ERROR_CODE.ROWS_EXHAUSTED,
-        QUERY_RESULT_BUDGET_ERROR_MESSAGE.ROWS_EXHAUSTED,
-        {actual: nextRowCount, limit: maxRows},
-      );
-    }
+    assertRowCountWithinLimit(rows.length + 1, maxRows);
     const rowBytes = Buffer.byteLength(
       JSON.stringify(row),
       BYTE_ENCODING,
     );
     const nextBytes = totalBytes + rowBytes;
-    if (maxBytes !== null && nextBytes > maxBytes) {
-      throw new QueryResultBudgetError(
-        QUERY_RESULT_BUDGET_ERROR_CODE.BYTES_EXHAUSTED,
-        QUERY_RESULT_BUDGET_ERROR_MESSAGE.BYTES_EXHAUSTED,
-        {actual: nextBytes, limit: maxBytes},
-      );
-    }
+    assertByteCountWithinLimit(nextBytes, maxBytes);
     rows.push(row);
     totalBytes = nextBytes;
   }
