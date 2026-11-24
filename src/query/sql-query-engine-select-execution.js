@@ -38,6 +38,9 @@ import {
 import {
   executeSelectWithGlobalIndexSupport,
 } from './sql-query-engine-global-index-integration.js';
+import {
+  cloneResultWithMetadata,
+} from './distributed/parallel-query-partition-outcomes.js';
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_WAIT_FOR_CONDITION = 'wait_for_condition';
@@ -99,8 +102,7 @@ function buildSelectExecutionEnvelope(
   planningDurationMs,
   executionDurationMs,
 ) {
-  return {
-    ...result,
+  return cloneResultWithMetadata(result, {
     tableName,
     dualWriteMode,
     distributedPlan,
@@ -108,10 +110,10 @@ function buildSelectExecutionEnvelope(
     distributedMetrics: {
       planningDurationMs,
       executionDurationMs,
-      fanout: result.distributedMetrics?.fanout || null,
-      mergeDurationMs: result.distributedMetrics?.mergeDurationMs || 0,
+      fanout: result?.distributedMetrics?.fanout || null,
+      mergeDurationMs: result?.distributedMetrics?.mergeDurationMs || 0,
     },
-  };
+  });
 }
 
 class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverlay {
@@ -553,8 +555,7 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       .map((partition) => partition?.partition_id)
       .filter((partitionId) => typeof partitionId === 'string');
 
-    return {
-      ...localResult,
+    return cloneResultWithMetadata(localResult, {
       partitions,
       tableName,
       distributedPlan: null,
@@ -565,7 +566,7 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
         fanout: partitions.length,
         mergeDurationMs: 0,
       },
-    };
+    });
   }
 
   /**

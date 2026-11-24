@@ -15,7 +15,11 @@ import {
   encodeTypedParams,
   typedRowSetByteLength,
 } from './sql-value-codec.js';
-import {presentSqlValue} from './sql-value-presentation.js';
+import {
+  defineLazyRowObjectsGetter,
+  materializeAndPresentRowObjects,
+  presentSqlValue,
+} from './sql-value-presentation.js';
 import {
   estimateJsonStringChars,
   estimateJsonValueChars,
@@ -185,7 +189,6 @@ function createDefaultPartitionRequestBuilder({
 
 const LAZY_ROWS_GETTER_SYMBOL_KEY = 'lagrange.query.lazyRowsGetter';
 const LAZY_ROWS_GETTER_SYMBOL = Symbol.for(LAZY_ROWS_GETTER_SYMBOL_KEY);
-const PROP_ROWS = 'rows';
 const UTF16_BYTES_PER_CHAR = 2;
 
 function presentDecodedRowsInPlaceAndMeasureBytes(columns, rawRows, safeIntegers) {
@@ -234,49 +237,15 @@ function materializePresentedRowObjects(
   safeIntegers,
   residentBytes,
 ) {
-  const colCount = Array.isArray(columns) ? columns.length : 0;
-  const rows = new Array(rawRows.length);
-  for (let r = 0; r < rawRows.length; r += 1) {
-    const rawRow = rawRows[r];
-    const obj = {};
-    for (let c = 0; c < colCount; c += 1) {
-      obj[columns[c]] = rawRow[c] === undefined ? null : rawRow[c];
-    }
-    rows[r] = obj;
-  }
-  return stampPresentedRowCollection(rows, safeIntegers, residentBytes);
+  return materializeAndPresentRowObjects(columns, rawRows, {
+    safeIntegers,
+    residentBytes,
+    alreadyPresented: true,
+  });
 }
 
 function attachLazyRowsProperty(target, getRows) {
-  Object.defineProperty(target, LAZY_ROWS_GETTER_SYMBOL, {
-    value: getRows,
-    writable: true,
-    enumerable: false,
-    configurable: true,
-  });
-  Object.defineProperty(target, PROP_ROWS, {
-    enumerable: true,
-    configurable: true,
-    get() {
-      const materialized = getRows();
-      Object.defineProperty(target, PROP_ROWS, {
-        value: materialized,
-        writable: true,
-        enumerable: true,
-        configurable: true,
-      });
-      return materialized;
-    },
-    set(nextRows) {
-      Object.defineProperty(target, PROP_ROWS, {
-        value: nextRows,
-        writable: true,
-        enumerable: true,
-        configurable: true,
-      });
-    },
-  });
-  return target;
+  return defineLazyRowObjectsGetter(target, getRows);
 }
 
 function decodePartitionResponseRows(response, executionOptions) {
@@ -323,6 +292,12 @@ function copyOptionalDecodedFields(target, decodedPayload) {
   if (decodedPayload.columns) target.columns = decodedPayload.columns;
   if (decodedPayload.rowSet) target.rowSet = decodedPayload.rowSet;
   if (decodedPayload.byteLength > 0) target.byteLength = decodedPayload.byteLength;
+  if (
+    Number.isSafeInteger(decodedPayload.residentBytes) &&
+    decodedPayload.residentBytes >= 0
+  ) {
+    target.residentBytes = decodedPayload.residentBytes;
+  }
 }
 
 function copyOptionalResponseFields(target, response) {

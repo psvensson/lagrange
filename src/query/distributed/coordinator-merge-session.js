@@ -36,6 +36,10 @@ import {
   encodeAndMeasureTypedRow,
   encodeTypedParams,
 } from '../sql-value-codec.js';
+import {
+  defineLazyRowObjectsGetter,
+  materializeAndPresentRowObjects,
+} from '../sql-value-presentation.js';
 import {renderSqliteIdentifier} from '../sqlite-identifier.js';
 
 const MEMORY_DATABASE = ':memory:';
@@ -155,16 +159,26 @@ function verifyEngineIdentityParity(expectedEnvelope, actualEnvelope) {
  * @return {Array<Object>}
  */
 function materializeRowObjects(columns, rawRows) {
-  const result = new Array(rawRows.length);
-  for (let rowIndex = 0; rowIndex < rawRows.length; rowIndex += 1) {
-    const rawRow = rawRows[rowIndex];
-    const rowObject = {};
-    for (let colIndex = 0; colIndex < columns.length; colIndex += 1) {
-      rowObject[columns[colIndex]] = rawRow[colIndex];
-    }
-    result[rowIndex] = rowObject;
-  }
-  return result;
+  return materializeAndPresentRowObjects(columns, rawRows, {
+    safeIntegers: true,
+    alreadyPresented: true,
+  });
+}
+
+function buildLazyMergedRowResult(columns, rawRows, rowSet, byteLength) {
+  return defineLazyRowObjectsGetter(
+    {
+      columns,
+      rawRows,
+      rowSet,
+      byteLength,
+    },
+    {
+      columns,
+      rawRows,
+      safeIntegers: true,
+    },
+  );
 }
 
 function mapSqliteMergeError(error, {partialAggregate = false} = {}) {
@@ -603,13 +617,12 @@ class CoordinatorMergeSession {
           }
         }
         this.assertActiveAndWithinDeadline();
-        return {
+        return buildLazyMergedRowResult(
           columns,
           rawRows,
-          rows: materializeRowObjects(columns, rawRows),
-          rowSet: assembleTypedRowSet(columns, encodedRows),
-          byteLength: totalBytes,
-        };
+          assembleTypedRowSet(columns, encodedRows),
+          totalBytes,
+        );
       } finally {
         iterator.return?.();
       }
@@ -660,13 +673,12 @@ class CoordinatorMergeSession {
       );
     }
     this.assertActiveAndWithinDeadline();
-    return {
+    return buildLazyMergedRowResult(
       columns,
       rawRows,
-      rows: materializeRowObjects(columns, rawRows),
-      rowSet: assembleTypedRowSet(columns, encodedRows),
-      byteLength: totalBytes,
-    };
+      assembleTypedRowSet(columns, encodedRows),
+      totalBytes,
+    );
   }
 
   close() {
@@ -681,6 +693,7 @@ class CoordinatorMergeSession {
 export {
   CoordinatorMergeSession,
   GUARD_OUTCOME,
+  buildLazyMergedRowResult,
   createMergeError,
   materializeRowObjects,
 };

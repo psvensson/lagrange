@@ -26,6 +26,7 @@ import {
   buildPartitionExecutionFailureOutcome,
   buildPartitionExecutionSuccessOutcome,
   getResultRowCount,
+  normalizeFailureString,
   normalizePartitionExecutionFailureSnapshot,
 } from './parallel-query-partition-outcomes.js';
 import {
@@ -82,7 +83,6 @@ function estimateResultPayloadBytes(result) {
 }
 
 const QUERY_CANCELLED_ERROR = 'Query cancelled';
-const METHOD_ACCEPT_SPECULATIVE_RESULT = 'acceptSpeculativeResult';
 
 /**
  * ParallelQueryCoordinator handles parallel query execution across partitions
@@ -641,6 +641,59 @@ class ParallelQueryCoordinator {
   }
 
   /**
+   * Accept a completed speculative attempt. A failed hedge can never win
+   * the partition; a successful hedge wins only when the primary has not
+   * already settled, in which case its metrics and canonical success
+   * outcome are recorded without forcing lazy object-row materialization.
+   * @param {Object} input - Speculative completion context.
+   * @return {Object} The raw speculative result (for promise chaining).
+   * @private
+   */
+  acceptSpeculativeResult({
+    partitionId,
+    result,
+    speculativeMetrics,
+    metrics,
+    results,
+    pendingPartitions,
+    hedging,
+  }) {
+    if (result && result.success === false) {
+      const errorText = normalizeFailureString(result.error);
+      speculativeMetrics.fail(
+        new Error(
+          errorText === null ? QUERY_ERROR_MSG.QUERY_ROUTING_FAILED : errorText,
+        ),
+        result,
+      );
+      return result;
+    }
+    speculativeMetrics.complete(
+      getResultRowCount(result),
+      estimateResultPayloadBytes(result),
+    );
+    if (results.has(partitionId)) {
+      this.logger.debug(QUERY_LOG_MSG.HEDGE_LOSER_RESULT_DISCARDED, {
+        partitionId,
+      });
+      return result;
+    }
+    metrics.addPartitionMetrics(speculativeMetrics);
+    const outcome = buildPartitionExecutionSuccessOutcome(
+      partitionId,
+      speculativeMetrics,
+      result,
+    );
+    if (hedging) {
+      settleHedgedPartition(hedging, partitionId, outcome);
+      return result;
+    }
+    results.set(partitionId, outcome);
+    pendingPartitions.delete(partitionId);
+    return result;
+  }
+
+  /**
    * Get current resource usage.
    * @return {Object} Resource usage stats.
    */
@@ -655,54 +708,6 @@ class ParallelQueryCoordinator {
 }
 
 installParallelQueryCoordinatorHedgingMethods(ParallelQueryCoordinator);
-
-const baseAcceptSpeculativeResult =
-  ParallelQueryCoordinator.prototype.acceptSpeculativeResult;
-Object.defineProperty(
-  ParallelQueryCoordinator.prototype,
-  METHOD_ACCEPT_SPECULATIVE_RESULT,
-  {
-    configurable: true,
-    writable: true,
-    value: function acceptSpeculativeResult(input) {
-      const {
-        partitionId,
-        result,
-        speculativeMetrics,
-        metrics,
-        results,
-        pendingPartitions,
-        hedging,
-      } = input;
-      if (result && result.success === false) {
-        return baseAcceptSpeculativeResult.call(this, input);
-      }
-      speculativeMetrics.complete(
-        getResultRowCount(result),
-        estimateResultPayloadBytes(result),
-      );
-      if (results.has(partitionId)) {
-        this.logger.debug(QUERY_LOG_MSG.HEDGE_LOSER_RESULT_DISCARDED, {
-          partitionId,
-        });
-        return result;
-      }
-      metrics.addPartitionMetrics(speculativeMetrics);
-      const outcome = buildPartitionExecutionSuccessOutcome(
-        partitionId,
-        speculativeMetrics,
-        result,
-      );
-      if (hedging) {
-        settleHedgedPartition(hedging, partitionId, outcome);
-        return result;
-      }
-      results.set(partitionId, outcome);
-      pendingPartitions.delete(partitionId);
-      return result;
-    },
-  },
-);
 
 export {
   ParallelQueryCoordinator,

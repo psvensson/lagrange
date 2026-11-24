@@ -34,6 +34,7 @@ const APPLICATION_DATABASE_RESULT_FIELD = Object.freeze({
   ROWS: 'rows',
   STATEMENT_TYPE: 'statementType',
 });
+const LAZY_ROWS_GETTER_SYMBOL = Symbol.for('lagrange.query.lazyRowsGetter');
 const APPLICATION_DATABASE_CAUSE_FIELD = Object.freeze({
   CODE: 'code',
   MESSAGE: 'message',
@@ -93,8 +94,23 @@ function projectRow(row) {
   return projected;
 }
 
+function readResultRowsForProjection(result) {
+  const ownDataRows = readOwnDataValue(
+    result,
+    APPLICATION_DATABASE_RESULT_FIELD.ROWS,
+  );
+  if (ownDataRows !== undefined) {
+    return ownDataRows;
+  }
+  const lazyGetter = readOwnDataValue(result, LAZY_ROWS_GETTER_SYMBOL);
+  if (typeof lazyGetter === LOCAL_STR_FUNCTION) {
+    return reflectApply(lazyGetter, result, []);
+  }
+  return undefined;
+}
+
 function projectRows(result) {
-  const rows = readOwnDataValue(result, APPLICATION_DATABASE_RESULT_FIELD.ROWS);
+  const rows = readResultRowsForProjection(result);
   if (!arrayIsArray(rows) || isProxy(rows)) return new ArrayConstructor(0);
   const projected = new ArrayConstructor(rows.length);
   for (let index = 0; index < rows.length; index++) {
@@ -119,6 +135,38 @@ function readAffectedRowCount(result) {
     NO_AFFECTED_ROW_COUNT;
 }
 
+function copyResultPreservingLazyRows(result) {
+  const copy = {};
+  const keys = objectKeys(result);
+  for (let index = 0; index < keys.length; index++) {
+    const key = keys[index];
+    const descriptor = objectGetOwnPropertyDescriptor(result, key);
+    if (!descriptor) continue;
+    if (
+      key === APPLICATION_DATABASE_RESULT_FIELD.ROWS &&
+      Boolean(descriptor.get)
+    ) {
+      reflectApply(objectDefineProperty, Object, [copy, key, descriptor]);
+      continue;
+    }
+    defineDataProperty(copy, key, result[key]);
+  }
+  const lazyGetter = readOwnDataValue(result, LAZY_ROWS_GETTER_SYMBOL);
+  if (typeof lazyGetter === LOCAL_STR_FUNCTION) {
+    reflectApply(objectDefineProperty, Object, [
+      copy,
+      LAZY_ROWS_GETTER_SYMBOL,
+      {
+        configurable: true,
+        enumerable: false,
+        value: lazyGetter,
+        writable: true,
+      },
+    ]);
+  }
+  return copy;
+}
+
 /**
  * Stamp the kind of the statement SqlCore executed on its result.
  * @param {Object} result - SqlCore result.
@@ -129,8 +177,13 @@ function readAffectedRowCount(result) {
  */
 function withExecutedStatementType(result, statementType) {
   if (result === null || typeof result !== LOCAL_STR_OBJECT) return result;
-  return {...result, [APPLICATION_DATABASE_RESULT_FIELD.STATEMENT_TYPE]:
-    statementType};
+  const copy = copyResultPreservingLazyRows(result);
+  defineDataProperty(
+    copy,
+    APPLICATION_DATABASE_RESULT_FIELD.STATEMENT_TYPE,
+    statementType,
+  );
+  return copy;
 }
 
 /**

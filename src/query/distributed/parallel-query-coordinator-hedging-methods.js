@@ -11,16 +11,13 @@
  */
 
 import {
-  QUERY_ERROR_MSG,
   QUERY_LOG_MSG,
 } from '../query-constants.js';
 import {
-  estimateResultBytes,
   PartitionQueryMetrics,
 } from './parallel-query-execution-metrics.js';
 import {
   buildPartitionExecutionFailureOutcome,
-  buildPartitionExecutionSuccessOutcome,
   normalizePartitionExecutionFailureSnapshot,
 } from './parallel-query-partition-outcomes.js';
 import {
@@ -344,66 +341,17 @@ const parallelQueryCoordinatorHedgingMethods = {
       executionOptions: {},
     };
   },
-
-  /**
-   * Accept a completed speculative attempt. A failed hedge can never win
-   * the partition; a successful hedge wins only when the primary has not
-   * already settled, in which case its metrics and canonical success
-   * outcome are recorded. The losing primary's later completion attempts
-   * to re-add its own partition metrics; QueryExecutionMetrics'
-   * first-completion-wins rule discards that re-add so fan-out totals
-   * count each partition exactly once.
-   * @param {Object} input - Speculative completion context.
-   * @return {Object} The raw speculative result (for promise chaining).
-   * @private
-   */
-  acceptSpeculativeResult({
-    partitionId,
-    result,
-    speculativeMetrics,
-    metrics,
-    results,
-    pendingPartitions,
-    hedging,
-  }) {
-    if (result && result.success === false) {
-      speculativeMetrics.fail(
-        new Error(result.error || QUERY_ERROR_MSG.QUERY_ROUTING_FAILED),
-        result,
-      );
-      return result;
-    }
-    speculativeMetrics.complete(
-      result.rows?.length || 0,
-      estimateResultBytes(result.rows),
-    );
-    if (results.has(partitionId)) {
-      this.logger.debug(QUERY_LOG_MSG.HEDGE_LOSER_RESULT_DISCARDED, {
-        partitionId,
-      });
-      return result;
-    }
-    metrics.addPartitionMetrics(speculativeMetrics);
-    const outcome = buildPartitionExecutionSuccessOutcome(
-      partitionId,
-      speculativeMetrics,
-      result,
-    );
-    if (hedging) {
-      settleHedgedPartition(hedging, partitionId, outcome);
-      return result;
-    }
-    results.set(partitionId, outcome);
-    pendingPartitions.delete(partitionId);
-    return result;
-  },
-
 };
 
 function installParallelQueryCoordinatorHedgingMethods(target) {
   for (const [name, value] of Object.entries(
     parallelQueryCoordinatorHedgingMethods,
   )) {
+    if (Object.hasOwn(target.prototype, name)) {
+      throw new Error(
+        `Duplicate method "${name}" in ${target.name} hedging composition`,
+      );
+    }
     Object.defineProperty(target.prototype, name, {
       value,
       configurable: true,
@@ -412,4 +360,7 @@ function installParallelQueryCoordinatorHedgingMethods(target) {
   }
 }
 
-export {installParallelQueryCoordinatorHedgingMethods};
+export {
+  installParallelQueryCoordinatorHedgingMethods,
+  parallelQueryCoordinatorHedgingMethods,
+};

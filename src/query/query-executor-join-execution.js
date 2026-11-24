@@ -179,12 +179,18 @@ function lookupPlannedPartitionsForTable(tablePlans, tableName, aliasName = null
   return Array.isArray(entry?.partitions) ? entry.partitions : [];
 }
 
+function sumSucceededRowCount(res) {
+  return Array.isArray(res?.rawRows) ?
+    res.rawRows.length :
+    (Array.isArray(res?.rows) ? res.rows.length : 0);
+}
+
 function sumSucceededUsage(results) {
   let usedRows = 0;
   let usedBytes = 0;
   for (const res of results) {
     if (res?.success) {
-      usedRows += Array.isArray(res.rows) ? res.rows.length : 0;
+      usedRows += sumSucceededRowCount(res);
       usedBytes += Number.isSafeInteger(res.byteLength) ? res.byteLength : 0;
     }
   }
@@ -192,8 +198,7 @@ function sumSucceededUsage(results) {
 }
 
 function remainingBudgetLimit(totalLimit, usedAmount) {
-  if (!Number.isSafeInteger(totalLimit)) return totalLimit;
-  return Math.max(0, totalLimit - usedAmount);
+  return Number.isSafeInteger(totalLimit) ? Math.max(0, totalLimit - usedAmount) : totalLimit;
 }
 
 const queryExecutorJoinExecutionMethods = {
@@ -211,20 +216,12 @@ const queryExecutorJoinExecutionMethods = {
     ) {
       return true;
     }
-    const msg = String(result.error || '');
     return /query_result_(?:rows|bytes)_exhausted|Query result (?:row|byte) budget exhausted/u
-      .test(msg);
+      .test(String(result.error || ''));
   },
 
   async refetchCapExhaustedPartitions(
-    results,
-    partitionIds,
-    sql,
-    sqlParams,
-    queryTimestamp,
-    preferLeader,
-    options,
-    buildExecOpts,
+    results, partitionIds, sql, sqlParams, queryTimestamp, preferLeader, options, buildExecOpts,
   ) {
     if (partitionIds.length <= 1) return;
     const capIndices = [];
@@ -253,7 +250,7 @@ const queryExecutorJoinExecutionMethods = {
       );
       results[idx] = refetched;
       if (refetched?.success) {
-        usedRows += Array.isArray(refetched.rows) ? refetched.rows.length : 0;
+        usedRows += sumSucceededRowCount(refetched);
         usedBytes += Number.isSafeInteger(refetched.byteLength) ? refetched.byteLength : 0;
       }
     }

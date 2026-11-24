@@ -108,6 +108,9 @@ function resolveLoggedRowCount(result, statementType) {
   if (COUNTED_WRITE_TYPES.has(statementType)) {
     return readAffectedRowCount(result);
   }
+  if (Array.isArray(result?.rawRows)) {
+    return result.rawRows.length;
+  }
   return Array.isArray(result?.rows) ? result.rows.length : null;
 }
 
