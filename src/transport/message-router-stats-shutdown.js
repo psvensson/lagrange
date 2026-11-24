@@ -117,48 +117,19 @@ function buildOutboundQueueAdmissionPressureFacts(queue) {
   };
 }
 
-function computeLivePressureStateSignature(router) {
+function readRouterPressureRevisionCounters(router) {
   const owner = router.outboundDeliveryRegistryOwner;
-  const ownerRevision = owner ? owner.pressureRevision : TRANSPORT_NUM.ZERO;
+  const ownerRev = owner && Number.isSafeInteger(owner.pressureRevision) ?
+    owner.pressureRevision :
+    TRANSPORT_NUM.ZERO;
   const bulkRegistry = router.bulkChannelRegistry;
-  const bulkRevision = bulkRegistry && bulkRegistry.getPressureRevision ?
+  const bulkRev = bulkRegistry && bulkRegistry.getPressureRevision ?
     bulkRegistry.getPressureRevision() :
     TRANSPORT_NUM.ZERO;
-  const bulkStats = !bulkRevision && bulkRegistry && bulkRegistry.getStats ?
-    bulkRegistry.getStats() :
-    null;
-  const bulkPending = bulkStats ? bulkStats.pendingRequests : TRANSPORT_NUM.ZERO;
-  const bulkSaturated = bulkStats ?
-    bulkStats.saturatedPeerCount :
+  const bulkAttachRev = Number.isSafeInteger(router._bulkRegistryAttachRevision) ?
+    router._bulkRegistryAttachRevision :
     TRANSPORT_NUM.ZERO;
-  let signature =
-    `${ownerRevision}:${bulkRevision}:${bulkPending}:${bulkSaturated}:` +
-    `${router.outboundQueues.size}`;
-  for (const [nodeId, queue] of router.outboundQueues) {
-    const pendingLength = Array.isArray(queue.pending) ?
-      queue.pending.length :
-      TRANSPORT_NUM.ZERO;
-    const pendingCritical = countPendingByPriority(
-      queue,
-      OutboundDeliveryPriority.CRITICAL,
-    );
-    const pendingReserveEligible = countPendingCriticalReserveEligible(queue);
-    const pendingReadiness = countPendingByPriority(
-      queue,
-      OutboundDeliveryPriority.READINESS,
-    );
-    const pendingBackground = countPendingByPriority(
-      queue,
-      OutboundDeliveryPriority.BACKGROUND,
-    );
-    signature +=
-      `|${nodeId}:${pendingLength}:${pendingCritical}:` +
-      `${pendingReserveEligible}:${pendingReadiness}:${pendingBackground}:` +
-      `${queue.inFlight}:${queue.inFlightCritical}:` +
-      `${queue.inFlightBackground}:${queue.inFlightReadinessReserve}:` +
-      `${queue.maxPending}:${queue.criticalReserve}:${queue.readinessReserve}`;
-  }
-  return signature;
+  return {ownerRev, bulkRev, bulkAttachRev};
 }
 
 /**
@@ -168,9 +139,16 @@ function computeLivePressureStateSignature(router) {
  */
 class MessageRouterStatsShutdown {
   getPressureRevision() {
-    const signature = computeLivePressureStateSignature(this);
-    if (this._lastPressureStateSignature !== signature) {
-      this._lastPressureStateSignature = signature;
+    const {ownerRev, bulkRev, bulkAttachRev} =
+      readRouterPressureRevisionCounters(this);
+    if (
+      this._lastOwnerPressureRev !== ownerRev ||
+      this._lastBulkPressureRev !== bulkRev ||
+      this._lastBulkAttachRev !== bulkAttachRev
+    ) {
+      this._lastOwnerPressureRev = ownerRev;
+      this._lastBulkPressureRev = bulkRev;
+      this._lastBulkAttachRev = bulkAttachRev;
       const current = Number.isSafeInteger(this._effectivePressureRevision) ?
         this._effectivePressureRevision :
         TRANSPORT_NUM.ZERO;

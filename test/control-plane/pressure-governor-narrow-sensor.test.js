@@ -604,3 +604,190 @@ test('PressureGovernor narrow sensor preserves bulk separation, critical and ' +
     cleanupTestEnvironment();
   }
 });
+
+test('PressureGovernor 100-waiter pass with attached BulkTransferChannelRegistry ' +
+  'is O(1) per waiter (1 bulkChannel.getStats call, 0 extra queue.pending ' +
+  'rescans across remaining 99 waiters) and invalidates on mid-pass ' +
+  'attachBulkChannelRegistry', async (t) => {
+  initTestEnvironment();
+  const router = new MessageRouter({
+    bootIncarnation: TEST_BOOT_INCARNATION,
+    nodeId: LOCAL_NODE_ID,
+    nodeAddress: LOCAL_ADDRESS,
+    startServer: false,
+    outboundQueueMaxConcurrent: 1,
+    outboundQueueMaxPending: 4,
+    outboundQueueCriticalReserve: 1,
+    outboundQueueReadinessReserve: 1,
+  });
+  await router.initialize();
+
+  const baseBulkRegistry = createBulkTransferChannelRegistry({
+    nodeId: LOCAL_NODE_ID,
+  });
+  let bulkGetStatsCalls = 0;
+  const spiedBulkRegistry = Object.freeze({
+    ...baseBulkRegistry,
+    getStats() {
+      bulkGetStatsCalls += 1;
+      return baseBulkRegistry.getStats();
+    },
+  });
+  router.attachBulkChannelRegistry(spiedBulkRegistry);
+
+  let getFactsCalls = 0;
+  const origGetFacts = router.getAdmissionPressureFacts.bind(router);
+  router.getAdmissionPressureFacts = () => {
+    getFactsCalls += 1;
+    return origGetFacts();
+  };
+
+  const held = holdDelivery();
+  const pendingPromises = [];
+  try {
+    pendingPromises.push(
+      router.enqueueOutbound(PEER_NODE_ID, held.deliverFn, {
+        deliveryPriority: 'critical',
+      }),
+    );
+    await Promise.resolve();
+    pendingPromises.push(
+      router.enqueueOutbound(
+        PEER_NODE_ID,
+        async () => ({acknowledged: true}),
+        {deliveryPriority: 'critical'},
+      ),
+    );
+    for (let i = 0; i < 3; i += 1) {
+      pendingPromises.push(
+        router.enqueueOutbound(
+          PEER_NODE_ID,
+          async () => ({acknowledged: true}),
+          {deliveryPriority: 'background'},
+        ),
+      );
+    }
+    await Promise.resolve();
+
+    const governor = new PressureGovernor({
+      nodeId: LOCAL_NODE_ID,
+      messageRouter: router,
+    });
+
+    // Park 100 background waiters while saturated.
+    for (let i = 0; i < 100; i += 1) {
+      governor.admit({
+        workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+        resourceKeys: ['query-plane:read'],
+      });
+    }
+    t.equal(governor.admissionWaiters.length, 100, '100 waiters parked');
+
+    // Wrap queue.pending in a Proxy to count indexed element reads during the pass.
+    const queue = router.getOutboundQueue(PEER_NODE_ID);
+    const rawPending = queue.pending;
+    let pendingElemReads = 0;
+    queue.pending = new Proxy(rawPending, {
+      get(target, prop, receiver) {
+        if (typeof prop === 'string' && /^\d+$/u.test(prop)) {
+          pendingElemReads += 1;
+        }
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+
+    // Measure 1 single-fact read baseline for queue.pending element reads.
+    pendingElemReads = 0;
+    router.getAdmissionPressureFacts();
+    const singleFactsReadElemReads = pendingElemReads;
+    t.ok(singleFactsReadElemReads > 0,
+      'a single getAdmissionPressureFacts() call scans queue.pending once');
+
+    // Now run a full 100-waiter pass with unchanged pressureRevision.
+    getFactsCalls = 0;
+    bulkGetStatsCalls = 0;
+    pendingElemReads = 0;
+    governor.runAdmissionPollPass();
+
+    t.equal(getFactsCalls, 1,
+      'getAdmissionPressureFacts() called exactly once across 100 parked waiters');
+    t.equal(bulkGetStatsCalls, 1,
+      'bulkChannelRegistry.getStats() called exactly once across 100 parked waiters (not 102)');
+    t.equal(pendingElemReads, singleFactsReadElemReads,
+      'queue.pending elements read only during the single getAdmissionPressureFacts() call (0 extra reads across remaining 99 waiters)');
+
+    // Restore raw pending array and verify mid-pass attachBulkChannelRegistry
+    // bumps pressureRevision and invalidates the pass snapshot.
+    queue.pending = rawPending;
+    const revBeforeAttach = router.getPressureRevision();
+    const drainedBucket = createByteRateTokenBucket({
+      bytesPerSecond: 0,
+      capacityBytes: 1,
+    });
+    await drainedBucket.acquire(1);
+    const saturatedBulkRegistry = createBulkTransferChannelRegistry({
+      nodeId: LOCAL_NODE_ID,
+      tokenBucket: drainedBucket,
+      maxPendingSends: 1,
+    });
+    const pair = createInProcWebSocketPair();
+    const conn = saturatedBulkRegistry.adoptIncomingSocket({
+      nodeId: PEER_NODE_ID,
+      ws: pair.b,
+    });
+    const bulkSend = conn.sendChunkFrame(Buffer.alloc(32));
+    await Promise.resolve();
+
+    let bulkDecisionBeforeAttach = null;
+    let bulkDecisionAfterAttach = null;
+    getFactsCalls = 0;
+    governor.runAdmissionPollPass = () => {
+      return governor.evaluate({
+        workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+        resourceKeys: ['snapshot-transfer:chunk-serve'],
+      });
+    };
+    // Exercise mid-pass attachBulkChannelRegistry inside one active evaluation pass.
+    const watchEvents = [];
+    governor.watchPressureRelease(
+      {
+        workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+        resourceKeys: ['snapshot-transfer:chunk-serve'],
+      },
+      (ev) => {
+        bulkDecisionBeforeAttach = ev.decision;
+        router.attachBulkChannelRegistry(saturatedBulkRegistry);
+        bulkDecisionAfterAttach = governor.evaluate({
+          workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+          resourceKeys: ['snapshot-transfer:chunk-serve'],
+        });
+        watchEvents.push(ev);
+      },
+    );
+
+    // Run real poll pass: watch releases on spiedBulkRegistry (clear), listener attaches
+    // saturatedBulkRegistry mid-pass and re-evaluates inside the same pass!
+    delete governor.runAdmissionPollPass;
+    getFactsCalls = 0;
+    governor.runAdmissionPollPass();
+
+    t.ok(router.getPressureRevision() > revBeforeAttach,
+      'attachBulkChannelRegistry advances router pressureRevision');
+    t.equal(bulkDecisionBeforeAttach?.action, PRESSURE_GOVERNOR_ACTION.ALLOW,
+      'before mid-pass attachBulkChannelRegistry, bulk partition was ALLOW');
+    t.equal(bulkDecisionAfterAttach?.action, PRESSURE_GOVERNOR_ACTION.DEFER,
+      'after mid-pass attachBulkChannelRegistry, same-pass evaluation invalidated snapshot and saw saturated bulk registry (DEFER)');
+    t.equal(getFactsCalls, 2,
+      'mid-pass attachBulkChannelRegistry triggered a second getAdmissionPressureFacts() read');
+
+    saturatedBulkRegistry.closeAll();
+    await Promise.allSettled([bulkSend]);
+    governor.dispose();
+  } finally {
+    held.release();
+    baseBulkRegistry.closeAll();
+    await Promise.allSettled(pendingPromises);
+    await router.shutdown();
+    cleanupTestEnvironment();
+  }
+});
