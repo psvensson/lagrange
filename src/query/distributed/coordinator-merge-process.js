@@ -36,8 +36,15 @@ import {
 } from './coordinator-merge-session.js';
 
 const WORKER_FLAG = '--lagrange-coordinator-merge-worker';
-const WORKER_MODULE_PATH = fileURLToPath(import.meta.url);
+const SEA_BUILD_FLAG = 'true';
 const FORWARD_CHUNK_MAX_ROWS = NUM.TEN_THOUSAND;
+
+function resolveWorkerModulePath() {
+  if (process.env.SEA_BUILD === SEA_BUILD_FLAG) {
+    return process.argv[1];
+  }
+  return fileURLToPath(import.meta.url);
+}
 const DEFAULT_POOL_SIZE = 2;
 const KILL_SIGNAL = 'SIGKILL';
 
@@ -372,7 +379,7 @@ class CoordinatorMergeProcessPool {
   }
 
   spawnWorker() {
-    const child = fork(WORKER_MODULE_PATH, [WORKER_FLAG], {
+    const child = fork(resolveWorkerModulePath(), [WORKER_FLAG], {
       env: {
         ...process.env,
         SQLITE_TMPDIR: this.spillDir,

@@ -26,7 +26,10 @@ function snapshotProcessEnvironment() {
   return Object.freeze(snapshot);
 }
 
+const COORDINATOR_MERGE_WORKER_FLAG = '--lagrange-coordinator-merge-worker';
+
 async function main() {
+  if (process.argv.includes(COORDINATOR_MERGE_WORKER_FLAG)) return;
   if (checkVersionFlag(VERSION)) return;
 
   const cliArgs = parseCommandLineArgs();

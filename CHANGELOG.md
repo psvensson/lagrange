@@ -10,6 +10,12 @@ releases without a compatibility guarantee.
 
 ## [Unreleased]
 
+## [0.4.2] — 2026-11-24
+
+### Fixed
+- **Lazy SEA-aware coordinator merge worker path resolution (`src/query/distributed/coordinator-merge-process.js`, `src/index.js`):**
+  resolves the `CoordinatorMergeProcessPool` child-process entrypoint lazily through `resolveWorkerModulePath()` (returning `process.argv[1]` under `SEA_BUILD` and `fileURLToPath(import.meta.url)` under ESM) and skips `main()` in `src/index.js` when spawned with `--lagrange-coordinator-merge-worker`, so the CJS single-executable bundle (`dist/lagrange --dry-run`) boots cleanly during release artifact packaging.
+
 ## [0.4.1] — 2026-11-24
 
 ### Changed
@@ -766,7 +772,8 @@ extensively tested, but not production-hardened; see _Known limitations_ below.
 - Alpha surface: SQL coverage, wire protocols, and admin/CLI behaviour may
   change between `0.x` releases without migration guarantees.
 
-[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/psvensson/lagrange/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/psvensson/lagrange/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/psvensson/lagrange/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/psvensson/lagrange/compare/v0.3.2...v0.3.3
