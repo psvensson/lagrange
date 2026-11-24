@@ -1,5 +1,11 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  INITIAL_PARTITION_IDS,
+} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {
+  classifySystemPartition,
+} from '../../src/bootstrap/system-partition-classification.js';
+import {
   LEADER_HANDOFF_RETRY_AFTER_MS,
   USER_TABLE_LEADER_PLACEMENT_CURE_STATE,
   applyUserTableLeaderPlacementCure,
@@ -514,5 +520,276 @@ test('transport backpressure still blocks the cure', async (t) => {
   await evaluateLeaderPlacementCureBehindPrioritySpreadGate(stub, blocker);
   await evaluateLeaderPlacementCureBehindPrioritySpreadGate(stub, blocker);
   t.equal(stub.deliveries.length, 0);
+  t.end();
+});
+
+function buildSystemCohortState() {
+  const nodes = [NODE_1, NODE_2, NODE_3];
+  const entries = Object.entries(INITIAL_PARTITION_IDS)
+    .sort(([, leftId], [, rightId]) => leftId.localeCompare(rightId));
+  const sysPartitions = entries.map(([tableId, partitionId]) => ({
+    leader_node_id: NODE_1,
+    partition_id: partitionId,
+    replica_count: 3,
+    state: 'normal',
+    table_id: tableId,
+  }));
+  const sysServices = [];
+  for (const [, partitionId] of entries) {
+    for (const [index, nodeId] of nodes.entries()) {
+      sysServices.push({
+        node_id: nodeId,
+        partition_id: partitionId,
+        raft_role: nodeId === NODE_1 ? 'leader' : 'follower',
+        service_id: `${partitionId}-r${index + 1}`,
+        service_type: 'partition',
+        status: 'active',
+      });
+    }
+  }
+  return {
+    operationRows: [],
+    partitionRows: sysPartitions,
+    serviceRows: sysServices,
+    stabilized: true,
+  };
+}
+
+function buildSystemPartitionRebalancer(state, partitionId, nodeId = NODE_1) {
+  const stub = buildStubRebalancer(state);
+  const replicaIndex = [NODE_1, NODE_2, NODE_3].indexOf(nodeId) + 1;
+  stub.entityId = partitionId;
+  stub.nodeId = nodeId;
+  stub.replicaId = `${partitionId}-r${replicaIndex}`;
+  stub.getCurrentReplicas = () =>
+    state.serviceRows.filter((row) => row.partition_id === partitionId);
+  stub.systemTableCache.filter = (tableName, predicate) => {
+    const rows = tableName === 'partitions' ?
+      state.partitionRows :
+      tableName === 'services' ?
+        state.serviceRows :
+        tableName === 'replica_operations' ?
+          state.operationRows :
+          [];
+    return rows.filter(predicate);
+  };
+  return stub;
+}
+
+function isPriorityOrFormationSystemPartition(partitionId) {
+  const classification = classifySystemPartition({partitionId});
+  return classification.priorityControlPlane ||
+    classification.formationLivenessDependency;
+}
+
+async function assertSystemCohortPassOne(t, stubsByPartitionId) {
+  let prioritySkippedCount = 0;
+  let anchoredOnSeedCount = 0;
+  let unstablePassOneCount = 0;
+  for (const [partitionId, stub] of stubsByPartitionId.entries()) {
+    const first = await applyUserTableLeaderPlacementCure(
+      stub, {nowMs: NOW_MS});
+    if (isPriorityOrFormationSystemPartition(partitionId)) {
+      t.equal(first, null, `${partitionId} stays outside cure fence`);
+      prioritySkippedCount += 1;
+    } else if (
+      first.state === USER_TABLE_LEADER_PLACEMENT_CURE_STATE.ANCHOR_RETAINED
+    ) {
+      anchoredOnSeedCount += 1;
+    } else {
+      t.equal(
+        first.state,
+        USER_TABLE_LEADER_PLACEMENT_CURE_STATE.CENSUS_UNSTABLE,
+        `${partitionId} requires two-pass census stability`,
+      );
+      unstablePassOneCount += 1;
+    }
+    t.equal(stub.deliveries.length, 0);
+  }
+  t.equal(prioritySkippedCount, 7);
+  t.equal(anchoredOnSeedCount, 13);
+  t.equal(unstablePassOneCount, 26);
+}
+
+async function assertSystemCohortPassTwoHandoffs(
+  t,
+  state,
+  stubsByPartitionId,
+) {
+  const handoffTargetsByNode = {[NODE_2]: 0, [NODE_3]: 0};
+  const leaderByPartitionId = new Map(
+    state.partitionRows.map((row) => [row.partition_id, NODE_1]),
+  );
+  for (const [partitionId, stub] of stubsByPartitionId.entries()) {
+    const second = await applyUserTableLeaderPlacementCure(
+      stub, {nowMs: NOW_MS + 1});
+    if (second === null) {
+      continue;
+    }
+    if (
+      second.state === USER_TABLE_LEADER_PLACEMENT_CURE_STATE.DISPATCH_HANDOFF
+    ) {
+      handoffTargetsByNode[second.target.nodeId] += 1;
+      t.equal(stub.deliveries.length, 2);
+      leaderByPartitionId.set(partitionId, second.target.nodeId);
+    } else {
+      t.equal(
+        second.state,
+        USER_TABLE_LEADER_PLACEMENT_CURE_STATE.ANCHOR_RETAINED,
+      );
+      t.equal(stub.deliveries.length, 0);
+    }
+  }
+  t.equal(handoffTargetsByNode[NODE_2], 13);
+  t.equal(handoffTargetsByNode[NODE_3], 13);
+  return leaderByPartitionId;
+}
+
+async function assertSystemCohortPostHandoffQuiescence(
+  t,
+  state,
+  leaderByPartitionId,
+) {
+  for (const row of state.partitionRows) {
+    row.leader_node_id = leaderByPartitionId.get(row.partition_id);
+  }
+  for (const row of state.serviceRows) {
+    const leaderNodeId = leaderByPartitionId.get(row.partition_id);
+    row.raft_role = row.node_id === leaderNodeId ? 'leader' : 'follower';
+  }
+  for (const row of state.partitionRows) {
+    if (isPriorityOrFormationSystemPartition(row.partition_id)) {
+      continue;
+    }
+    const leaderNodeId = leaderByPartitionId.get(row.partition_id);
+    const settledStub = buildSystemPartitionRebalancer(
+      state, row.partition_id, leaderNodeId);
+    const passOne = await applyUserTableLeaderPlacementCure(
+      settledStub, {nowMs: NOW_MS + 2});
+    const passTwo = await applyUserTableLeaderPlacementCure(
+      settledStub, {nowMs: NOW_MS + 3});
+    t.equal(
+      passOne.state,
+      USER_TABLE_LEADER_PLACEMENT_CURE_STATE.SPREAD_SATISFIED,
+    );
+    t.equal(
+      passTwo.state,
+      USER_TABLE_LEADER_PLACEMENT_CURE_STATE.SPREAD_SATISFIED,
+    );
+    t.equal(settledStub.deliveries.length, 0);
+  }
+}
+
+test('46-system-partition cohort deterministically distributes 39 ' +
+  'non-priority system partitions 13/13/13 with zero limit cycles while ' +
+  'keeping 7 priority/formation partitions untouched', async (t) => {
+  const state = buildSystemCohortState();
+  t.equal(state.partitionRows.length, 46);
+
+  const metaStub = buildSystemPartitionRebalancer(state, '_meta-p1', NODE_1);
+  const metaDecision = await applyUserTableLeaderPlacementCure(
+    metaStub, {nowMs: NOW_MS});
+  t.equal(
+    metaDecision.state,
+    USER_TABLE_LEADER_PLACEMENT_CURE_STATE.ANCHOR_RETAINED,
+  );
+  t.equal(metaStub.deliveries.length, 0);
+
+  const inFlightPartitionId = 'artifact_payloads-p1';
+  state.operationRows.push({
+    entity_id: inFlightPartitionId,
+    operation_id: 'op-inflight-1',
+    partition_id: inFlightPartitionId,
+    status: 'syncing',
+    type: 'GROWTH_PROMOTE',
+    workflow_step: 'SYNCING',
+  });
+  const inFlightStub = buildSystemPartitionRebalancer(
+    state, inFlightPartitionId, NODE_1);
+  const blockedByOp = await applyUserTableLeaderPlacementCure(
+    inFlightStub, {nowMs: NOW_MS});
+  t.equal(
+    blockedByOp.state,
+    USER_TABLE_LEADER_PLACEMENT_CURE_STATE.NO_ELIGIBLE_TARGET,
+  );
+  t.equal(inFlightStub.deliveries.length, 0);
+  state.operationRows.length = 0;
+
+  const stubsByPartitionId = new Map(
+    state.partitionRows.map((row) => [
+      row.partition_id,
+      buildSystemPartitionRebalancer(state, row.partition_id, NODE_1),
+    ]),
+  );
+
+  await assertSystemCohortPassOne(t, stubsByPartitionId);
+  const leaderByPartitionId = await assertSystemCohortPassTwoHandoffs(
+    t, state, stubsByPartitionId);
+  await assertSystemCohortPostHandoffQuiescence(
+    t, state, leaderByPartitionId);
+  t.end();
+});
+
+test('a non-priority system partition at RF=2 in a 3-node cluster waits ' +
+  'until node-3 becomes an active voter before handing off in one hop',
+async (t) => {
+  const state = buildSystemCohortState();
+  const targetPartitionId = 'artifact_payloads-p1';
+  for (const row of state.serviceRows) {
+    if (isPriorityOrFormationSystemPartition(row.partition_id)) {
+      continue;
+    }
+    if (row.partition_id === targetPartitionId) {
+      if (row.node_id === NODE_3) {
+        row.raft_role = 'learner';
+        row.status = 'syncing';
+      }
+      continue;
+    }
+    if (row.node_id !== NODE_1) {
+      row.raft_role = 'learner';
+      row.status = 'syncing';
+    }
+  }
+  const stub = buildSystemPartitionRebalancer(
+    state, targetPartitionId, NODE_1);
+  const rf2PassOne = await applyUserTableLeaderPlacementCure(
+    stub, {nowMs: NOW_MS});
+  const rf2PassTwo = await applyUserTableLeaderPlacementCure(
+    stub, {nowMs: NOW_MS + 1});
+  t.equal(
+    rf2PassOne.state,
+    USER_TABLE_LEADER_PLACEMENT_CURE_STATE.NO_ELIGIBLE_TARGET,
+  );
+  t.equal(
+    rf2PassTwo.state,
+    USER_TABLE_LEADER_PLACEMENT_CURE_STATE.NO_ELIGIBLE_TARGET,
+  );
+  t.equal(stub.deliveries.length, 0);
+
+  for (const row of state.serviceRows) {
+    if (
+      row.partition_id === targetPartitionId &&
+      row.node_id === NODE_3
+    ) {
+      row.raft_role = 'follower';
+      row.status = 'active';
+    }
+  }
+  const rf3PassOne = await applyUserTableLeaderPlacementCure(
+    stub, {nowMs: NOW_MS + 2});
+  t.equal(
+    rf3PassOne.state,
+    USER_TABLE_LEADER_PLACEMENT_CURE_STATE.CENSUS_UNSTABLE,
+  );
+  t.equal(stub.deliveries.length, 0);
+  const rf3PassTwo = await applyUserTableLeaderPlacementCure(
+    stub, {nowMs: NOW_MS + 3});
+  t.equal(
+    rf3PassTwo.state,
+    USER_TABLE_LEADER_PLACEMENT_CURE_STATE.DISPATCH_HANDOFF,
+  );
+  t.equal(rf3PassTwo.target.nodeId, NODE_2);
+  t.equal(stub.deliveries.length, 2);
   t.end();
 });

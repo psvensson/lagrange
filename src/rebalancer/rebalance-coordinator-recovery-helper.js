@@ -1,10 +1,15 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {filterConcurrentAddBudgetOperations} from './rebalance-coordinator-priority-budget-helper.js';
+import {normalizeServiceRow} from '../control-plane/system-row-normalizers.js';
+import {
+  applyUserTableLeaderPlacementCure,
+} from './user-table-leader-placement-cure.js';
 
 const {
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
   OperationType,
   SERVICE_TYPE,
+  SYSTEM_TABLE_NAME,
 } = REBALANCE_COORDINATOR_SHARED;
 
 function checkTimeouts(coordinator) {
@@ -49,8 +54,100 @@ async function reconcileRecoveryOperation(coordinator, op) {
   return coordinator.workflowOwner.reconcileRecoveryOperation(op);
 }
 
+function resolveCoordinatorLocalPartitionServices(coordinator) {
+  const provided =
+    coordinator?.cdcIntegrationService?.partitionServicesProvider?.();
+  return provided instanceof Map ? provided : null;
+}
+
+function resolvePartitionServiceCureContext(coordinator, service) {
+  if (!service.userTableLeaderPlacementCureContext) {
+    service.userTableLeaderPlacementCureContext = {
+      entityId: service.partitionId,
+      entityType: SERVICE_TYPE.PARTITION,
+      getCurrentReplicas: () =>
+        coordinator.systemTableCache.filter(
+          SYSTEM_TABLE_NAME.SERVICES,
+          (row) => {
+            const norm = normalizeServiceRow(row);
+            return norm.serviceType === SERVICE_TYPE.PARTITION &&
+              norm.partitionId === service.partitionId;
+          },
+        ),
+      get isLeader() {
+        return service.isLeader === true;
+      },
+      get isShuttingDown() {
+        return Boolean(service.isShutdown);
+      },
+      isStabilized: () => true,
+      get logger() {
+        return coordinator.logger;
+      },
+      get messageRouter() {
+        return coordinator.messageRouter;
+      },
+      nodeId: coordinator.nodeId,
+      replicaId: service.replicaId,
+      get systemTableCache() {
+        return coordinator.systemTableCache;
+      },
+      userTableLeaderPlacementCureState: null,
+    };
+  }
+  return service.userTableLeaderPlacementCureContext;
+}
+
+function isEligibleCoordinatorCurePartitionService(service) {
+  return Boolean(service) && !service.rebalancer;
+}
+
+function isReadyLeaderPartitionService(service) {
+  return service.isLeader === true &&
+    !service.isShutdown &&
+    service.isMetadataPublicationReady?.() !== false;
+}
+
+async function reconcileSinglePartitionLeaderPlacementCure(
+  coordinator,
+  service,
+  nowMs,
+) {
+  if (!isEligibleCoordinatorCurePartitionService(service)) {
+    return;
+  }
+  if (!isReadyLeaderPartitionService(service)) {
+    delete service.userTableLeaderPlacementCureContext;
+    return;
+  }
+  const context = resolvePartitionServiceCureContext(coordinator, service);
+  await applyUserTableLeaderPlacementCure(context, {nowMs});
+}
+
+async function reconcileCoordinatorPartitionLeaderPlacementCure(coordinator) {
+  if (!coordinator || coordinator.isShuttingDown) {
+    return;
+  }
+  const partitionServices =
+    resolveCoordinatorLocalPartitionServices(coordinator);
+  if (!(partitionServices instanceof Map) || partitionServices.size === 0) {
+    return;
+  }
+  const nowMs = coordinator.nowFn();
+  for (const service of partitionServices.values()) {
+    await reconcileSinglePartitionLeaderPlacementCure(
+      coordinator,
+      service,
+      nowMs,
+    );
+  }
+}
+
 async function reconcileMessageGroupMembershipDebt(coordinator) {
-  return coordinator.workflowOwner.reconcileMessageGroupMembershipDebt();
+  const result =
+    await coordinator.workflowOwner.reconcileMessageGroupMembershipDebt();
+  await reconcileCoordinatorPartitionLeaderPlacementCure(coordinator);
+  return result;
 }
 
 async function reconcileSyncingOperation(coordinator, operation) {

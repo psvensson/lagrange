@@ -25,16 +25,10 @@ import {deliveryAnswerOf} from '../transport/transport-semantic-outcome.js';
  * No new timers.
  *
  * Every handoff PAIRS the source handoff with the target election
- * (quest user-table-leader-handoff-demotion-pairing). On the rs-raft
- * port both are one leader-mediated leadership transfer
- * (PartitionService.requestLeadershipTransfer): the target names itself,
- * the source hands leadership to its most caught-up voter, and the core
- * moves it without a leaderless timer race. The pairing was introduced
- * for the retired directed election, which a healthy leader's heartbeat
- * re-armed away (run 20260810T221340Z: two completed dispatches, zero
- * campaigns in 420s); a lost dispatch falls back to the bounded
- * ordinal-staggered election and census re-shed keeps the actuator
- * convergent.
+ * (quest user-table-leader-handoff-demotion-pairing): on the rs-raft port
+ * both are one leader-mediated leadership transfer
+ * (PartitionService.requestLeadershipTransfer), moving leadership without
+ * a leaderless timer race.
  */
 
 import {
@@ -42,6 +36,9 @@ import {
   getPartitionRowFromCache,
   resolvePartitionTableId,
 } from '../bootstrap/system-partition-classification.js';
+import {
+  resolveDesiredReplicationFactor,
+} from '../bootstrap/replication-target-authority.js';
 import {normalizeServiceRow} from '../control-plane/system-row-normalizers.js';
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 import {SERVICE_STATUS} from '../constants/service-status.js';
@@ -58,9 +55,17 @@ import {
   REBALANCE_PLANNING_GATE,
 } from './rebalancer-planning-gate-constants.js';
 
-const {EntityType, SYSTEM_TABLE_NAME} = UNIFIED_REBALANCER_SHARED;
+const {
+  EntityType,
+  SYSTEM_TABLE_NAME,
+  TERMINAL_STATUSES,
+  isTerminalReplicaOperationRecord,
+  normalizeReplicaOperationRecord,
+} = UNIFIED_REBALANCER_SHARED;
 const {PRIORITY_PUBLICATION_LEADER_HANDOFF_EVIDENCE} =
   OPERATION_WORKFLOW_OWNER_SHARED;
+
+const META_ANCHOR_PARTITION_ID = '_meta-p1';
 
 const CURE_LITERAL = Object.freeze({
   ZERO: 0,
@@ -92,7 +97,7 @@ const REPLICA_HANDLER_TARGET_SUFFIX = '/service/replica-handler';
 
 // Partition rows in SPLITTING/MERGING survive until dissolution; acting
 // on them would bake a transient topology into the census.
-const TRANSITIONAL_PARTITION_STATES = Object.freeze(new Set([
+const SPLIT_OR_MERGE_PARTITION_STATES = Object.freeze(new Set([
   'splitting',
   'merging',
 ]));
@@ -153,8 +158,8 @@ function readText(value) {
     null;
 }
 
-function isTransitionalPartitionState(state) {
-  return TRANSITIONAL_PARTITION_STATES.has(
+function isSplitOrMergePartitionState(state) {
+  return SPLIT_OR_MERGE_PARTITION_STATES.has(
     String(state || CURE_LITERAL.EMPTY).toLowerCase(),
   );
 }
@@ -254,41 +259,216 @@ function evaluateUserTableLeaderPlacementCure(evidence) {
   });
 }
 
-function collectSettledTablePartitions(rebalancer, tableId) {
-  const rows = rebalancer.systemTableCache.filter(
-    SYSTEM_TABLE_NAME.PARTITIONS,
-    (row) => resolvePartitionTableId({partitionRow: row}) === tableId,
-  );
-  const settled = [];
-  for (const row of rows) {
-    if (isTransitionalPartitionState(row?.state)) {
-      continue;
-    }
-    const partitionId = readText(row?.partition_id) ||
-      readText(row?.partitionId);
-    if (!partitionId) {
-      continue;
-    }
-    // The own row's durable leader column lags; the proven-local signal
-    // is authoritative for the partition this rebalancer leads.
-    const leaderNodeId = partitionId === rebalancer.entityId ?
-      rebalancer.nodeId :
-      readText(row?.leader_node_id) || readText(row?.leaderNodeId);
-    settled.push({leaderNodeId, partitionId});
-  }
-  return settled;
+function isNonPrioritySystemTablePartition(options = {}) {
+  const classification = classifySystemPartition(options);
+  return classification.systemTable === true &&
+    classification.priorityControlPlane === false &&
+    classification.formationLivenessDependency === false;
 }
 
-function collectEligibleVoterHosts(rebalancer, settledPartitions) {
-  const partitionIds = new Set(
-    settledPartitions.map((entry) => entry.partitionId),
+function buildSystemCohortCensus(evidence) {
+  const settled = evidence.settledPartitions;
+  const ownIds = evidence.partitionId !== META_ANCHOR_PARTITION_ID ?
+    [evidence.partitionId] :
+    [];
+  const sortedSystemPartitionIds = [
+    ...new Set([...settled.map((entry) => entry.partitionId), ...ownIds]),
+  ].sort();
+  const ownVoterFollowers = evidence.ownVoterFollowers;
+  const ownActiveVoterHosts = [
+    ...new Set([
+      evidence.nodeId,
+      ...ownVoterFollowers.map((follower) => follower.nodeId),
+    ]),
+  ].sort();
+  const distinctLeaderHosts = new Set(
+    settled.map((entry) => entry.leaderNodeId).filter(Boolean),
   );
+  const targetReplicaCount =
+    Number.isSafeInteger(evidence.targetReplicaCount) &&
+    evidence.targetReplicaCount > CURE_LITERAL.ZERO ?
+      evidence.targetReplicaCount :
+      CURE_LITERAL.ZERO;
+  const eligibleVoterHostCount = Math.max(
+    ownActiveVoterHosts.length,
+    evidence.eligibleVoterHosts.size,
+    targetReplicaCount,
+  );
+  const requiredLeaderHosts = Math.min(
+    sortedSystemPartitionIds.length,
+    ownActiveVoterHosts.length,
+  );
+  const fingerprint =
+    `${evidence.partitionId}|${evidence.nodeId}|` +
+    ownActiveVoterHosts.join(CURE_LITERAL.FINGERPRINT_SEPARATOR);
+  return {
+    census: Object.freeze({
+      distinctLeaderHostCount: distinctLeaderHosts.size,
+      eligibleVoterHostCount,
+      fingerprint,
+      requiredLeaderHostCount: requiredLeaderHosts,
+      settledPartitionCount: sortedSystemPartitionIds.length,
+    }),
+    distinctLeaderHosts,
+    eligibleVoterHostCount,
+    fingerprint,
+    ownActiveVoterHosts,
+    ownVoterFollowers,
+    requiredLeaderHosts,
+    sortedSystemPartitionIds,
+  };
+}
+
+function isSystemPartitionRetrySuppressed(evidence) {
+  return Number.isFinite(evidence.lastDispatchAtMs) &&
+    evidence.nowMs - evidence.lastDispatchAtMs <
+      LEADER_HANDOFF_RETRY_AFTER_MS;
+}
+
+function isSystemPartitionTargetIneligible(evidence, cohort) {
+  return cohort.ownVoterFollowers.length === CURE_LITERAL.ZERO ||
+    cohort.ownActiveVoterHosts.length < cohort.eligibleVoterHostCount ||
+    evidence.hasInFlightReplicaOperation === true;
+}
+
+function evaluateSystemTableLeaderPlacementCure(evidence) {
+  const cohort = buildSystemCohortCensus(evidence);
+  const decide = (state, extra = {}) =>
+    Object.freeze({census: cohort.census, state, ...extra});
+
+  if (evidence.partitionId === META_ANCHOR_PARTITION_ID) {
+    return decide(USER_TABLE_LEADER_PLACEMENT_CURE_STATE.ANCHOR_RETAINED);
+  }
+  if (cohort.sortedSystemPartitionIds.length < MIN_SETTLED_PARTITION_COUNT) {
+    return decide(
+      USER_TABLE_LEADER_PLACEMENT_CURE_STATE.BELOW_MIN_PARTITION_COUNT);
+  }
+  if (isSystemPartitionTargetIneligible(evidence, cohort)) {
+    return decide(USER_TABLE_LEADER_PLACEMENT_CURE_STATE.NO_ELIGIBLE_TARGET);
+  }
+  const cohortIndex =
+    cohort.sortedSystemPartitionIds.indexOf(evidence.partitionId);
+  const assignedHost =
+    cohort.ownActiveVoterHosts[cohortIndex % cohort.ownActiveVoterHosts.length];
+  if (assignedHost === evidence.nodeId) {
+    return decide(
+      cohort.distinctLeaderHosts.size >= cohort.requiredLeaderHosts ?
+        USER_TABLE_LEADER_PLACEMENT_CURE_STATE.SPREAD_SATISFIED :
+        USER_TABLE_LEADER_PLACEMENT_CURE_STATE.ANCHOR_RETAINED,
+    );
+  }
+  if (cohort.fingerprint !== evidence.previousCensusFingerprint) {
+    return decide(USER_TABLE_LEADER_PLACEMENT_CURE_STATE.CENSUS_UNSTABLE);
+  }
+  if (isSystemPartitionRetrySuppressed(evidence)) {
+    return decide(USER_TABLE_LEADER_PLACEMENT_CURE_STATE.RETRY_SUPPRESSED);
+  }
+  const target = cohort.ownVoterFollowers.find(
+    (replica) => replica.nodeId === assignedHost,
+  );
+  if (!target) {
+    return decide(USER_TABLE_LEADER_PLACEMENT_CURE_STATE.NO_ELIGIBLE_TARGET);
+  }
+  return decide(USER_TABLE_LEADER_PLACEMENT_CURE_STATE.DISPATCH_HANDOFF, {
+    target: Object.freeze({
+      nodeId: target.nodeId,
+      replicaId: target.replicaId,
+    }),
+  });
+}
+
+function readPartitionIdFromRow(row) {
+  return readText(row?.partition_id) || readText(row?.partitionId);
+}
+
+function readLeaderNodeIdFromRow(rebalancer, partitionId, row) {
+  return partitionId === rebalancer.entityId ?
+    rebalancer.nodeId :
+    readText(row?.leader_node_id) || readText(row?.leaderNodeId);
+}
+
+function collectSettledPartitionsWhere(rebalancer, predicate) {
+  const rows = rebalancer.systemTableCache.filter(
+    SYSTEM_TABLE_NAME.PARTITIONS,
+    predicate,
+  );
+  const byPartitionId = new Map();
+  for (const row of rows) {
+    if (isSplitOrMergePartitionState(row?.state)) {
+      continue;
+    }
+    const partitionId = readPartitionIdFromRow(row);
+    if (partitionId) {
+      byPartitionId.set(partitionId, {
+        leaderNodeId: readLeaderNodeIdFromRow(rebalancer, partitionId, row),
+        partitionId,
+      });
+    }
+  }
+  return byPartitionId;
+}
+
+function collectSettledSystemPartitions(rebalancer) {
+  const byPartitionId = collectSettledPartitionsWhere(
+    rebalancer,
+    (row) => {
+      const partitionId = readPartitionIdFromRow(row);
+      return Boolean(partitionId) &&
+        isNonPrioritySystemTablePartition({partitionId, partitionRow: row});
+    },
+  );
+  if (
+    rebalancer.entityId !== META_ANCHOR_PARTITION_ID &&
+    !byPartitionId.has(rebalancer.entityId)
+  ) {
+    byPartitionId.set(rebalancer.entityId, {
+      leaderNodeId: rebalancer.nodeId,
+      partitionId: rebalancer.entityId,
+    });
+  }
+  return [...byPartitionId.values()];
+}
+
+function isNonTerminalReplicaOperationForPartition(row, partitionId, nowMs) {
+  if (!row || typeof row !== 'object') {
+    return false;
+  }
+  const normalized = normalizeReplicaOperationRecord(row, {nowMs});
+  const matchesPartition =
+    normalized.partitionId === partitionId ||
+    normalized.entityId === partitionId;
+  if (!matchesPartition) {
+    return false;
+  }
+  if (normalized.type.length > CURE_LITERAL.ZERO) {
+    return !isTerminalReplicaOperationRecord(normalized);
+  }
+  return !TERMINAL_STATUSES.includes(normalized.status);
+}
+
+function hasNonTerminalPartitionReplicaOperation(rebalancer, partitionId, nowMs) {
+  const rows = rebalancer.systemTableCache.filter(
+    SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+    (row) => isNonTerminalReplicaOperationForPartition(row, partitionId, nowMs),
+  );
+  return Array.isArray(rows) && rows.length > CURE_LITERAL.ZERO;
+}
+
+function collectSettledTablePartitions(rebalancer, tableId) {
+  return [...collectSettledPartitionsWhere(
+    rebalancer,
+    (row) => resolvePartitionTableId({partitionRow: row}) === tableId,
+  ).values()];
+}
+
+function collectEligibleVoterHostsWhere(rebalancer, matchesPartitionId) {
   const rows = rebalancer.systemTableCache.filter(
     SYSTEM_TABLE_NAME.SERVICES,
     (row) => {
       const service = normalizeServiceRow(row);
       return service.serviceType === EntityType.PARTITION &&
-        partitionIds.has(service.partitionId);
+        Boolean(service.partitionId) &&
+        matchesPartitionId(service.partitionId);
     },
   );
   const hosts = new Set();
@@ -303,6 +483,14 @@ function collectEligibleVoterHosts(rebalancer, settledPartitions) {
     }
   }
   return hosts;
+}
+
+function collectEligibleVoterHosts(rebalancer, settledPartitions) {
+  const partitionIds = new Set(settledPartitions.map((entry) => entry.partitionId));
+  return collectEligibleVoterHostsWhere(
+    rebalancer,
+    (partitionId) => partitionIds.has(partitionId),
+  );
 }
 
 function collectOwnVoterFollowers(rebalancer) {
@@ -455,7 +643,10 @@ async function dispatchLeaderHandoff(rebalancer, decision, nowMs) {
 }
 
 function isOrdinaryUserTablePartition(rebalancer, partitionRow) {
-  if (rebalancer.entityType !== EntityType.PARTITION) {
+  if (
+    rebalancer.entityType !== EntityType.PARTITION ||
+    rebalancer.entityId === META_ANCHOR_PARTITION_ID
+  ) {
     return false;
   }
   return classifySystemPartition({
@@ -464,49 +655,48 @@ function isOrdinaryUserTablePartition(rebalancer, partitionRow) {
   }).systemTable === false;
 }
 
-/**
- * Evaluate and (when decided) dispatch the leader-placement cure for an
- * ordinary user-table partition. Called from the quiescent branch of the
- * periodic check — after the planning gates passed and replica-shape
- * evaluation found no work — so the recorded stabilization and
- * anti-churn levers stay structurally upstream of every handoff.
- *
- * @param {Object} rebalancer The UnifiedRebalancer instance.
- * @param {Object} [options]
- * @param {number} [options.nowMs]
- * @return {Promise<Object|null>} The frozen decision, or null when the
- *   partition is out of the cure's scope.
- */
-async function applyUserTableLeaderPlacementCure(rebalancer, options = {}) {
-  if (
-    rebalancer.isShuttingDown ||
-    rebalancer.isLeader !== true ||
-    typeof rebalancer.isStabilized === 'function' &&
-      !rebalancer.isStabilized()
-  ) {
-    return null;
+function isSystemTableCohortCurePartition(rebalancer, partitionRow) {
+  if (rebalancer.entityType !== EntityType.PARTITION) {
+    return false;
   }
-  const partitionRow = getPartitionRowFromCache(
-    rebalancer.systemTableCache,
-    rebalancer.entityId,
-  );
-  if (!isOrdinaryUserTablePartition(rebalancer, partitionRow)) {
-    return null;
+  if (rebalancer.entityId === META_ANCHOR_PARTITION_ID) {
+    return true;
   }
-  const nowMs = Number.isFinite(options.nowMs) ? options.nowMs : Date.now();
-  const tableId = resolvePartitionTableId({
+  return isNonPrioritySystemTablePartition({
     partitionId: rebalancer.entityId,
     partitionRow,
   });
-  if (!tableId) {
-    return null;
-  }
-  const settledPartitions =
-    collectSettledTablePartitions(rebalancer, tableId);
-  const cureState = resolveCureState(rebalancer);
-  const decision = evaluateUserTableLeaderPlacementCure({
-    eligibleVoterHosts:
-      collectEligibleVoterHosts(rebalancer, settledPartitions),
+}
+
+function collectSystemEligibleVoterHosts(rebalancer) {
+  return collectEligibleVoterHostsWhere(
+    rebalancer,
+    (partitionId) => classifySystemPartition({partitionId}).systemTable === true,
+  );
+}
+
+function evaluateSystemCohortCureForRebalancer(rebalancer, partitionRow, cureState, nowMs) {
+  const settledPartitions = collectSettledSystemPartitions(rebalancer);
+  const {replicationFactor} = resolveDesiredReplicationFactor(partitionRow);
+  return evaluateSystemTableLeaderPlacementCure({
+    eligibleVoterHosts: collectSystemEligibleVoterHosts(rebalancer),
+    hasInFlightReplicaOperation: hasNonTerminalPartitionReplicaOperation(
+      rebalancer, rebalancer.entityId, nowMs),
+    lastDispatchAtMs: cureState.lastDispatchAtMs,
+    nodeId: rebalancer.nodeId,
+    nowMs,
+    ownVoterFollowers: collectOwnVoterFollowers(rebalancer),
+    partitionId: rebalancer.entityId,
+    previousCensusFingerprint: cureState.censusFingerprint,
+    settledPartitions,
+    targetReplicaCount: replicationFactor,
+  });
+}
+
+function evaluateUserTableCureForRebalancer(rebalancer, tableId, cureState, nowMs) {
+  const settledPartitions = collectSettledTablePartitions(rebalancer, tableId);
+  return evaluateUserTableLeaderPlacementCure({
+    eligibleVoterHosts: collectEligibleVoterHosts(rebalancer, settledPartitions),
     lastDispatchAtMs: cureState.lastDispatchAtMs,
     nodeId: rebalancer.nodeId,
     nowMs,
@@ -515,7 +705,20 @@ async function applyUserTableLeaderPlacementCure(rebalancer, options = {}) {
     previousCensusFingerprint: cureState.censusFingerprint,
     settledPartitions,
   });
-  cureState.censusFingerprint = decision.census.fingerprint;
+}
+
+function isRebalancerEligibleForCure(rebalancer) {
+  return !rebalancer.isShuttingDown &&
+    rebalancer.isLeader === true &&
+    rebalancer.isStabilized?.() !== false;
+}
+
+function recordAndLogCureEvaluation(rebalancer, cureState, decision) {
+  cureState.censusFingerprint =
+    decision.state ===
+      USER_TABLE_LEADER_PLACEMENT_CURE_STATE.NO_ELIGIBLE_TARGET ?
+      null :
+      decision.census.fingerprint;
   if (decision.state !== cureState.lastLoggedState) {
     cureState.lastLoggedState = decision.state;
     rebalancer.logger.info(CURE_LOG_MSG.DECISION, {
@@ -524,6 +727,40 @@ async function applyUserTableLeaderPlacementCure(rebalancer, options = {}) {
       state: decision.state,
     });
   }
+}
+
+async function applyUserTableLeaderPlacementCure(rebalancer, options = {}) {
+  if (!isRebalancerEligibleForCure(rebalancer)) {
+    return null;
+  }
+  const partitionRow = getPartitionRowFromCache(
+    rebalancer.systemTableCache,
+    rebalancer.entityId,
+  );
+  const systemCohort = isSystemTableCohortCurePartition(
+    rebalancer,
+    partitionRow,
+  );
+  const tableId = systemCohort ?
+    null :
+    resolvePartitionTableId({partitionId: rebalancer.entityId, partitionRow});
+  if (
+    !systemCohort &&
+    (!isOrdinaryUserTablePartition(rebalancer, partitionRow) || !tableId)
+  ) {
+    return null;
+  }
+  const nowMs = Number.isFinite(options.nowMs) ? options.nowMs : Date.now();
+  const cureState = resolveCureState(rebalancer);
+  const decision = systemCohort ?
+    evaluateSystemCohortCureForRebalancer(
+      rebalancer,
+      partitionRow,
+      cureState,
+      nowMs,
+    ) :
+    evaluateUserTableCureForRebalancer(rebalancer, tableId, cureState, nowMs);
+  recordAndLogCureEvaluation(rebalancer, cureState, decision);
   if (
     decision.state ===
       USER_TABLE_LEADER_PLACEMENT_CURE_STATE.DISPATCH_HANDOFF
@@ -533,18 +770,6 @@ async function applyUserTableLeaderPlacementCure(rebalancer, options = {}) {
   return decision;
 }
 
-// The cross-partition priority-spread deferral protects the shared
-// move/creation actuators (coordinator budget, create lanes) while
-// system partitions finish their spread; a user-table leader handoff
-// consumes none of them, so the cure still evaluates behind exactly
-// this gate. Every partition-local gate (readiness, start delay,
-// stabilization, topology settling) precedes it in the planning-gate
-// decision order, so being blocked there proves those passed;
-// transport backpressure is ordered after it and is checked
-// explicitly. Witnessed live: three consecutive runs where a rotating
-// system-partition wobble (syncing tail, stale spread census, failed
-// replica) held the deferral closed for the entire multi-minute
-// window, starving an otherwise-ready leader cure.
 async function evaluateLeaderPlacementCureBehindPrioritySpreadGate(
   rebalancer,
   blocker,
