@@ -4,8 +4,10 @@ import {
   SERVICE_TYPE,
   TABLES,
 } from '../constants/index.js';
-import {getSystemCachePrimaryKeyFieldOrFallback} from
-  './system-cache-key-descriptor.js';
+import {
+  getSystemCachePrimaryKeyField,
+  hasSystemCacheKeyDescriptor,
+} from './system-cache-key-descriptor.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {
   LATENCY_TOPOLOGY_DELIVERY_SOURCE,
@@ -138,6 +140,12 @@ function resolveCriticalVisibilityDeliverySource(events = []) {
   );
 }
 
+function normalizeExplicitPrimaryKeyField(fieldName) {
+  return typeof fieldName === 'string' && fieldName.trim().length > 0 ?
+    fieldName.trim() :
+    null;
+}
+
 function resolveCdcPropagationPrimaryKeyValue(event = null) {
   const tableName = normalizeCdcPropagationTableName(event?.tableName);
   const data = event?.data && typeof event.data === 'object' ?
@@ -146,7 +154,12 @@ function resolveCdcPropagationPrimaryKeyValue(event = null) {
   if (!tableName || !data) {
     return null;
   }
-  const primaryKeyField = getSystemCachePrimaryKeyFieldOrFallback(tableName);
+  const primaryKeyField = hasSystemCacheKeyDescriptor(tableName) ?
+    getSystemCachePrimaryKeyField(tableName) :
+    normalizeExplicitPrimaryKeyField(event?.primaryKeyField);
+  if (!primaryKeyField) {
+    return null;
+  }
   return normalizeCdcPropagationReplacementValue(data[primaryKeyField]);
 }
 
@@ -235,6 +248,7 @@ function normalizeCdcPropagationEvents(events) {
         tableName: normalizeCdcPropagationTableName(event.tableName),
         operation: normalizeCdcPropagationOperation(event.operation),
         data: event.data && typeof event.data === 'object' ? event.data : null,
+        primaryKeyField: normalizeExplicitPrimaryKeyField(event.primaryKeyField),
       })) :
     [];
 }

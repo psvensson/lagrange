@@ -15,6 +15,9 @@ import {
   SYSTEM_TABLES,
   CDC_OPERATIONS,
 } from '../../src/cache/system-table-cache.js';
+import {
+  getSystemCachePrimaryKeyField,
+} from '../../src/cache/system-cache-key-descriptor.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 
@@ -48,7 +51,13 @@ const cdcEventArbitrary = fc.record({
     status: fc.constantFrom('active', 'inactive', 'pending'),
     value: fc.integer({min: 0, max: 1000}),
   }),
-});
+}).map((event) => ({
+  ...event,
+  data: {
+    ...event.data,
+    [getSystemCachePrimaryKeyField(event.tableName)]: event.data.id,
+  },
+}));
 
 /**
  * Generate a sequence of CDC events.
@@ -268,7 +277,11 @@ test('Property 4: Notification record matches applied change', async (t) => {
           receivedRecord = record;
         });
 
-        cache.applySystemTableChange(tableName, CDC_OPERATIONS.INSERT, data);
+        const canonicalData = {
+          ...data,
+          [getSystemCachePrimaryKeyField(tableName)]: data.id,
+        };
+        cache.applySystemTableChange(tableName, CDC_OPERATIONS.INSERT, canonicalData);
 
         await new Promise((resolve) => setImmediate(resolve));
 

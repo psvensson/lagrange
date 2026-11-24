@@ -7,7 +7,7 @@ import {
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL,
   buildControlPlaneCacheReconcileContract,
   canonicalizeSystemTableRow,
-  getSystemCachePrimaryKeyFieldOrFallback,
+  getSystemCachePrimaryKeyField,
 } from './control-plane-system-table-gateway-shared.js';
 import {isUsableSystemCacheKey} from
   '../cache/system-cache-key-descriptor.js';
@@ -551,7 +551,7 @@ function publishAuthoritativeObservation(options) {
 
 function buildReconciliationContext(options) {
   const primaryKeyField = options.reconcileOptions?.primaryKeyField ||
-    getSystemCachePrimaryKeyFieldOrFallback(options.tableName, 'id');
+    getSystemCachePrimaryKeyField(options.tableName);
   const authoritativeEntries = Array.isArray(options.authoritativeRows) ?
     options.authoritativeRows :
     [];

@@ -16,10 +16,8 @@ import {
   MOVE_REPLICA_ASSIGNMENT_INVALIDATION_REASON,
 } from '../bootstrap-api-constants.js';
 import {
-  getSystemCachePrimaryKeyFieldOrFallback,
+  getSystemCachePrimaryKeyField,
 } from '../../cache/system-cache-key-descriptor.js';
-
-const MOVE_REPLICA_ASSIGNMENT_ROW_FALLBACK_PRIMARY_KEY = 'id';
 
 function normalizeMoveReplicaAssignmentObservedRowKey(value) {
   if (typeof value !== 'string') {
@@ -30,12 +28,9 @@ function normalizeMoveReplicaAssignmentObservedRowKey(value) {
 }
 
 function readMoveReplicaAssignmentObservedRowKey(tableName, row) {
-  const keyField = getSystemCachePrimaryKeyFieldOrFallback(
-    tableName,
-    MOVE_REPLICA_ASSIGNMENT_ROW_FALLBACK_PRIMARY_KEY,
-  );
+  const keyField = getSystemCachePrimaryKeyField(tableName);
   return normalizeMoveReplicaAssignmentObservedRowKey(
-    row?.[keyField] ?? row?.id ?? null,
+    row?.[keyField] ?? null,
   );
 }
 

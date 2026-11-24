@@ -15,8 +15,8 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
     options.buildForwardTopologyRepairReadOptions;
   const resolveCDCForwardDeliveryProfile =
     options.resolveCDCForwardDeliveryProfile;
-  const getSystemCachePrimaryKeyFieldOrFallback =
-    options.getSystemCachePrimaryKeyFieldOrFallback;
+  const getSystemCachePrimaryKeyField =
+    options.getSystemCachePrimaryKeyField;
   const buildControlPlaneWorkloadProfile =
     options.buildControlPlaneWorkloadProfile;
   const normalizeCauseId = options.normalizeCauseId;
@@ -263,7 +263,7 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
         tableName,
         rows,
         {
-          primaryKeyField: getSystemCachePrimaryKeyFieldOrFallback(tableName),
+          primaryKeyField: getSystemCachePrimaryKeyField(tableName),
           deleteMissing: false,
           areRowsEqual: (left, right) =>
             service.areForwardTopologyRowsEqual(left, right),

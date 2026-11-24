@@ -4,7 +4,7 @@ import {
   NUM,
 } from '../../constants/index.js';
 import {
-  getSystemCachePrimaryKeyFieldOrFallback,
+  getSystemCachePrimaryKeyField,
 } from '../../cache/system-cache-key-descriptor.js';
 
 const LOCAL_STR_EMPTY = '';
@@ -79,8 +79,8 @@ function normalizeBootstrapTopologySnapshotRowKey(value) {
 }
 
 function readBootstrapTopologySnapshotRowKey(tableName, row) {
-  const keyField = getSystemCachePrimaryKeyFieldOrFallback(tableName, 'id');
-  return normalizeBootstrapTopologySnapshotRowKey(row?.[keyField] ?? row?.id);
+  const keyField = getSystemCachePrimaryKeyField(tableName);
+  return normalizeBootstrapTopologySnapshotRowKey(row?.[keyField]);
 }
 
 function readBootstrapTopologySnapshotPartitionLeaderNodeId(row) {

@@ -13,7 +13,7 @@ export {
   SYSTEM_TABLE_NAME,
 } from '../bootstrap/system-table-schemas-constants.js';
 export {
-  getSystemCachePrimaryKeyFieldOrFallback,
+  getSystemCachePrimaryKeyField,
 } from '../cache/system-cache-key-descriptor.js';
 export {
   CONTROL_PLANE_READINESS_DIMENSION,

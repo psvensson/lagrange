@@ -7,7 +7,7 @@ import {
 } from '../../constants/index.js';
 import {RAFT_ROLE} from '../../raft/constants.js';
 import {
-  getSystemCachePrimaryKeyFieldOrFallback,
+  getSystemCachePrimaryKeyField,
 } from '../../cache/system-cache-key-descriptor.js';
 import {
   BOOTSTRAP_API_ERROR,
@@ -510,13 +510,13 @@ const bootstrapTopologySnapshotOwnerAuthoritativeRowsMethods = {
     return rowSets;
   },
   mergeAuthoritativeSystemTableRowSets(tableName, rowSets) {
-    const keyField = getSystemCachePrimaryKeyFieldOrFallback(tableName, 'id');
+    const keyField = getSystemCachePrimaryKeyField(tableName);
     const mergedRows = new Map();
 
     for (const rowSet of rowSets) {
       const rows = Array.isArray(rowSet) ? rowSet : [];
       for (const row of rows) {
-        const key = row?.[keyField] ?? row?.id;
+        const key = row?.[keyField];
         if (typeof key === 'undefined' || key === null) {
           continue;
         }

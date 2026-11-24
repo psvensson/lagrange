@@ -89,7 +89,10 @@ import {
 } from '../bootstrap/traffic-readiness-utils.js';
 import {AddressManager} from '../address/address-manager.js';
 import {isSystemTableWriteReady} from '../cache/leader-readiness-gate.js';
-import {getSystemCachePrimaryKeyFieldOrFallback} from '../cache/system-cache-key-descriptor.js';
+import {
+  getSystemCachePrimaryKeyField,
+  hasSystemCacheKeyDescriptor,
+} from '../cache/system-cache-key-descriptor.js';
 import {
   COLUMN,
   CDC_OPERATION,
@@ -349,7 +352,8 @@ export const PARTITION_SERVICE_SHARED = {
   createControlPlaneRuntimeBundle,
   extractPartitionSplitRoutingKey,
   fs,
-  getSystemCachePrimaryKeyFieldOrFallback,
+  getSystemCachePrimaryKeyField,
+  hasSystemCacheKeyDescriptor,
   getTrafficReadinessSnapshot,
   hasPriorityRecoverySpreadGap,
   isBackgroundWorkLifecycleReady,

@@ -21,7 +21,6 @@ const JOIN_HTTP_POST_WAIT = Object.freeze({
 
 const {
   BootstrapTopologySnapshotOwner,
-  CACHE_DEFAULT,
   CDCPipelineReadinessGate,
   CDC_PROPAGATED_TABLES,
   COLUMN,
@@ -41,7 +40,7 @@ const {
   canonicalizeSystemTableRow,
   compareJoinSchemaVersions,
   extractJoinSchemaVersionFromRecord,
-  getSystemCachePrimaryKeyFieldOrFallback,
+  getSystemCachePrimaryKeyField,
   isDeliveredTransportDeliveryOutcome,
   resolveCanonicalLeaderIdentitySnapshot,
 } = NODE_JOINING_SERVICE_SHARED;
@@ -288,18 +287,13 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
    * @private
    */
   mergeBackfillRowSets(tableName, rowSets) {
-    const keyField = getSystemCachePrimaryKeyFieldOrFallback(
-      tableName,
-      CACHE_DEFAULT.PRIMARY_KEY_FALLBACK,
-    );
+    const keyField = getSystemCachePrimaryKeyField(tableName);
     const mergedRows = new Map();
     for (const rowSet of rowSets) {
       const rows = Array.isArray(rowSet) ? rowSet : [];
       for (const row of rows) {
         const canonicalRow = canonicalizeSystemTableRow(tableName, row);
-        const key =
-          canonicalRow?.[keyField] ??
-          canonicalRow?.[CACHE_DEFAULT.PRIMARY_KEY_FALLBACK];
+        const key = canonicalRow?.[keyField];
         if (typeof key === 'undefined' || key === null) {
           continue;
         }

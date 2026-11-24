@@ -8,10 +8,6 @@ import fc from 'fast-check';
 import {
   PartitionSplitMergeManager,
 } from '../../src/partition/partition-split-merge-manager.js';
-import {
-  KeyRange,
-  KeyRangeManager,
-} from '../../src/partition/key-range-manager.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
@@ -101,9 +97,14 @@ function buildServices(nodeId, budgetBytes) {
 }
 
 function buildManager(options = {}) {
-  const keyRangeManager = new KeyRangeManager('test-table');
-  keyRangeManager.addPartition(
-    'partition-1', KeyRange.fullRange());
+  const listPartitions = () => [
+    {
+      partition_id: 'partition-1',
+      table_id: 'test-table',
+      partition_key_start: null,
+      partition_key_end: null,
+    },
+  ];
 
   const metricsMap = options.metricsMap || {
     'partition-1': {
@@ -113,7 +114,7 @@ function buildManager(options = {}) {
   };
 
   const manager = new PartitionSplitMergeManager({
-    keyRangeManager,
+    listPartitions,
     getPartitionMetrics: async (id) => metricsMap[id] || {},
     tablePolicyService: {
       getPolicyForPartition: async () => ({targetReplicaCount: 3, minReplicaCount: 3}),
@@ -122,7 +123,7 @@ function buildManager(options = {}) {
     storageAccountingService: options.accounting || null,
   });
 
-  return {manager, keyRangeManager};
+  return {manager};
 }
 
 beforeEach(() => {

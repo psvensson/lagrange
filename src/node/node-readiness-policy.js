@@ -301,38 +301,83 @@ function isNodeReadyWithConnection(options = {}) {
   return router.getConnectionState(nodeId) === STATE.CONNECTED;
 }
 
+function isRouterConnectionTransportReady(router, nodeId, requireOutboundQueue) {
+  if (!router || router.getConnectionState?.(nodeId) !== STATE.CONNECTED) {
+    return false;
+  }
+  if (requireOutboundQueue &&
+      router.isOutboundQueueAvailable?.(nodeId) === false) {
+    return false;
+  }
+  return true;
+}
+
 /**
- * Check node readiness with optional transport-level checks.
- * @param {Object} options - Readiness options.
- * @param {boolean} options.requireOutboundQueue - Require outbound queue.
- * @param {boolean} options.enableReadinessPing - Require ping success.
- * @param {number} options.readinessPingTimeoutMs - Ping timeout.
- * @return {Promise<boolean>} True when node is transport-ready.
+ * Check transport-only reachability for a node (connection state, optional
+ * outbound queue availability, and optional readiness ping) without
+ * re-evaluating serving-readiness admission. Callers invoke this after either
+ * ordinary serving-readiness admission or formation-recovery eligibility
+ * admission succeeds.
+ * @param {Object} options - Transport readiness options.
+ * @param {string} options.nodeId - Node ID.
+ * @param {Object} options.messageRouter - Message router.
+ * @param {boolean} [options.requireOutboundQueue] - Require outbound queue.
+ * @param {boolean} [options.enableReadinessPing] - Require ping success.
+ * @param {number} [options.readinessPingTimeoutMs] - Ping timeout in ms.
+ * @return {Promise<boolean>} True when node transport is reachable and ready.
  */
-async function isNodeReadyWithTransport(options = {}) {
-  if (!isNodeReadyWithConnection(options)) {
-    return false;
-  }
-
+async function isNodeTransportReady(options = {}) {
+  const nodeId = options.nodeId;
   const router = options.messageRouter;
-  if (options.requireOutboundQueue &&
-      typeof router.isOutboundQueueAvailable === 'function' &&
-      !router.isOutboundQueueAvailable(options.nodeId)) {
+  if (!nodeId ||
+      !isRouterConnectionTransportReady(
+        router,
+        nodeId,
+        options.requireOutboundQueue === true,
+      )) {
     return false;
   }
 
-  if (options.enableReadinessPing &&
-      typeof router.pingNode === 'function') {
+  if (options.enableReadinessPing && router.pingNode) {
     const pingTimeout = Number.isFinite(options.readinessPingTimeoutMs) ?
       options.readinessPingTimeoutMs :
       0;
-    const ok = await router.pingNode(options.nodeId, pingTimeout);
+    const ok = await router.pingNode(nodeId, pingTimeout);
     if (!ok) {
       return false;
     }
   }
 
   return true;
+}
+
+/**
+ * Check node readiness with optional transport-level checks.
+ * Composes serving-readiness record admission with the canonical
+ * transport-only capability check.
+ * @param {Object} options - Readiness options.
+ * @param {boolean} options.requireOutboundQueue - Require outbound queue.
+ * @param {boolean} options.enableReadinessPing - Require ping success.
+ * @param {number} options.readinessPingTimeoutMs - Ping timeout.
+ * @return {Promise<boolean>} True when node is record- and transport-ready.
+ */
+async function isNodeReadyWithTransport(options = {}) {
+  const nodeId = options.nodeId;
+  if (!nodeId) {
+    return false;
+  }
+
+  const cache = options.systemTableCache;
+  if (!cache || typeof cache.get !== 'function') {
+    return false;
+  }
+
+  const nodeRow = cache.get(SYSTEM_TABLE_NAME.NODES, nodeId);
+  if (!isNodeRecordReady(nodeRow, options)) {
+    return false;
+  }
+
+  return isNodeTransportReady(options);
 }
 
 export {
@@ -345,5 +390,6 @@ export {
   isNodeReadyLeaseExplicitlyCleared,
   isNodeReadyWithConnection,
   isNodeReadyWithTransport,
+  isNodeTransportReady,
   wasNodeRecordReadyWhenWritten,
 };
