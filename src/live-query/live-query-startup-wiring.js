@@ -91,11 +91,17 @@ function dispatchTopologyChange(operation, record, onPartitionTopologyChange, lo
 function createLiveQueryCacheTopologyAdapter(options = {}) {
   const systemTableCache = options.systemTableCache || null;
   const onPartitionTopologyChange = options.onPartitionTopologyChange || null;
+  const onAvailabilityChange = options.onAvailabilityChange || null;
   const logger = initLogger();
 
   const cacheListener = (tableName, operation, record) => {
     if (tableName === TABLES.PARTITIONS && onPartitionTopologyChange) {
       dispatchTopologyChange(operation, record, onPartitionTopologyChange, logger);
+      return;
+    }
+    if ((tableName === TABLES.SERVICES || tableName === TABLES.PARTITION_REPLICAS) &&
+        onAvailabilityChange) {
+      onAvailabilityChange(tableName, operation, record);
     }
   };
 
@@ -281,6 +287,11 @@ function subscribePartitionWithOptions(options, {
           remoteCdc.trackLocal(
             partitionId, queryId, partition, handler, wrappedHandler, subOptions,
           );
+        } else if (subResult.result.cancelled !== true && subResult.result.retryable !== false) {
+          remoteCdc.trackPending(
+            partitionId, queryId, handler, wrappedHandler, subOptions,
+            subResult.result.retryAfterMs ?? null,
+          );
         } else {
           partitionSubscribers.delete(subKey);
         }
@@ -353,6 +364,11 @@ function createLiveQueryStartupWiring(options = {}) {
       await liveQueryManager.handlePartitionTopologyChange(change);
       await remoteCdc?.reconcileSubscriptionsOnTopologyChange(change);
     },
+    onAvailabilityChange: () => {
+      remoteCdc?.flushPendingSubscriptions({immediateUnresolved: true}).catch((error) => {
+        logger.debug(LOG_MSG_PARTITION_HANDLER_FAILED, {error: error.message});
+      });
+    },
   });
 
   const handlerContext = {
@@ -366,6 +382,7 @@ function createLiveQueryStartupWiring(options = {}) {
     nodeId: options.nodeId,
     metadataStore: options.systemTableCache,
     messageRouter: options.messageRouter,
+    messageRouterProvider: options.messageRouterProvider,
     timeSource: options.timeSource,
     shutdownDrainTimeoutMs: options.shutdownDrainTimeoutMs,
     findGroupById: (id) => liveQueryManager.findGroupByQueryId(id),
