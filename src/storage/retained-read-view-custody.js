@@ -435,15 +435,21 @@ function isPathWithinDataDir(dbPath, normalizedDataDir) {
     dbPath.startsWith(`${normalizedDataDir}${path.sep}`);
 }
 
-function statDbFileIdentity(dbPath) {
-  const dbStat = fs.statSync(dbPath, {bigint: true, throwIfNoEntry: false});
-  if (!dbStat) {
-    return null;
+const ERR_CODE_ENOENT = 'ENOENT';
+
+function defaultStatDbFile(dbPath, options) {
+  return fs.statSync(dbPath, options);
+}
+
+function statDbFileIdentity(dbPath, statFile = defaultStatDbFile) {
+  let dbStat = null;
+  try {
+    dbStat = statFile(dbPath, {bigint: true});
+  } catch (error) {
+    if (error?.code === ERR_CODE_ENOENT) return null;
+    throw error;
   }
-  return Object.freeze({
-    dev: dbStat.dev,
-    ino: dbStat.ino,
-  });
+  return dbStat ? Object.freeze({dev: dbStat.dev, ino: dbStat.ino}) : null;
 }
 
 function isTermReaderEntryCurrent(entry, fileStat, partitionId, replicaId) {
@@ -487,6 +493,7 @@ function createPersistedPartitionTermObserver(options = {}) {
   const openDatabase = options.openDatabase || defaultOpenTermReaderDb;
   const closeDatabase = options.closeDatabase || defaultCloseTermReaderDb;
   const readTermInDb = options.readTermInDb || defaultReadPersistedTermInDb;
+  const statFile = options.statFile || defaultStatDbFile;
   const activeReaders = new Map();
   const unclosedReaders = new Map();
   let readerSeq = 0;
@@ -644,7 +651,8 @@ function createPersistedPartitionTermObserver(options = {}) {
   }
 
   function handleTermObservationError(entry, error, normalizedDbPath, identity) {
-    if (entry) settleReaderClosure(entry, TERM_READER_RETIRE_REASON.READ_ERROR);
+    const readerToRetire = entry || (normalizedDbPath ? activeReaders.get(normalizedDbPath) : null);
+    if (readerToRetire) settleReaderClosure(readerToRetire, TERM_READER_RETIRE_REASON.READ_ERROR);
     const errorMessage = String(error?.message || error);
     const {partitionId = null, replicaId = null} = identity || {};
     identity?.logger?.debug?.(
@@ -665,7 +673,7 @@ function createPersistedPartitionTermObserver(options = {}) {
         PERSISTED_TERM_UNAVAILABLE_REASON.CUSTODY_CLOSE_FAILED,
         {dbPath: normalizedDbPath, partitionId, replicaId})};
     }
-    const fileStat = statDbFileIdentity(normalizedDbPath);
+    const fileStat = statDbFileIdentity(normalizedDbPath, statFile);
     if (!fileStat) {
       invalidatePath(normalizedDbPath, TERM_READER_RETIRE_REASON.STORAGE_ABSENT);
       return {fileStat: null, unavailable: buildUnavailableTermOutcome(
@@ -678,13 +686,12 @@ function createPersistedPartitionTermObserver(options = {}) {
   function observePersistedPartitionTerm(exactReplicaIdentity) {
     const partitionId = exactReplicaIdentity?.partitionId ?? null;
     const replicaId = exactReplicaIdentity?.replicaId ?? null;
-    const normalizedDbPath = resolveExactReplicaDbPath(exactReplicaIdentity);
-    const preOpen = checkPreOpenAvailability(normalizedDbPath, partitionId, replicaId);
-    if (preOpen.unavailable) {
-      return preOpen.unavailable;
-    }
+    let normalizedDbPath = null;
     let entry = null;
     try {
+      normalizedDbPath = resolveExactReplicaDbPath(exactReplicaIdentity);
+      const preOpen = checkPreOpenAvailability(normalizedDbPath, partitionId, replicaId);
+      if (preOpen.unavailable) return preOpen.unavailable;
       const acquired = resolveOrOpenReader(
         normalizedDbPath, preOpen.fileStat, partitionId, replicaId);
       if (!acquired.entry) {
