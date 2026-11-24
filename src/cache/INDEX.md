@@ -15,7 +15,7 @@ documentClass: generated
 - [leader-readiness-gate.js](leader-readiness-gate.js) - Check if a partition has any leader service (even without address). (importers: many)
 - [read-only-system-table-cache.js](read-only-system-table-cache.js) - Read-Only System Table Cache Wrapper. (importers: hub)
 - [shared-row-read.js](shared-row-read.js) - Call-site helpers that route an audited read-only hot path through the cache's no-clone shared-row read... (importers: many)
-- [system-cache-client.js](system-cache-client.js) - SystemCacheClient - Unified read-only cache client abstraction. (importers: few)
+- [system-cache-client.js](system-cache-client.js) - SystemCacheClient - Unified read-only cache client abstraction. (importers: many)
 - [system-cache-key-descriptor.js](system-cache-key-descriptor.js) - Canonical primary-key descriptor for system-table cache operations. (importers: hub)
 - [system-table-cache-authoritative-absence-sweep.js](system-table-cache-authoritative-absence-sweep.js) - No leading comment; first export: reconcileSystemTableCacheAgainstAuthoritativeTruth. (importers: one)
 - [system-table-cache-authoritative-reconciliation.js](system-table-cache-authoritative-reconciliation.js) - No leading comment; first export: areAuthoritativeSystemTableCacheRowsAligned. (importers: many)

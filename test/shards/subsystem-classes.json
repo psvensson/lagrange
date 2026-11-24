@@ -7,28 +7,28 @@
     "bootstrap-membership": 360,
     "cdc-metadata": 81,
     "cli-tooling": 99,
-    "control-plane": 242,
+    "control-plane": 243,
     "convergence-topology": 88,
     "distributed-harness": 225,
     "examples-e2e": 8,
     "pgwire-compat": 23,
     "placement-rebalance": 312,
-    "query-sql": 223,
+    "query-sql": 225,
     "release-packaging": 15,
     "runtime-primitives": 24,
     "services-runtime": 163,
     "solver-tooling": 7,
-    "storage-partition": 258,
+    "storage-partition": 260,
     "storage-raft": 171,
     "test-infrastructure": 170,
     "transactions": 17,
     "transport-messaging": 123,
     "wasm-toolchain": 74
   },
-  "censusSize": 2827,
-  "digest": "fnv1a32-db764b7a",
+  "censusSize": 2832,
+  "digest": "fnv1a32-3b1562b5",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-335546b6",
+  "observationDigest": "fnv1a32-d887804e",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -364,6 +364,7 @@
     "test/cache/system-table-cache-lifecycle-reconciliation-differential.test.js": "storage-partition",
     "test/cache/system-table-cache-mutation-version-survives-clear.test.js": "storage-partition",
     "test/cache/system-table-cache-observation.test.js": "storage-partition",
+    "test/cache/system-table-cache-partition-service-index.test.js": "storage-partition",
     "test/cache/system-table-cache-row-preview.test.js": "storage-partition",
     "test/cache/system-table-cache-services-lifecycle-merge.test.js": "storage-partition",
     "test/cache/system-table-cache-time-authority.test.js": "storage-partition",
@@ -680,6 +681,7 @@
     "test/control-plane/owner-outcome-contract.test.js": "control-plane",
     "test/control-plane/phase-exit-criteria.test.js": "control-plane",
     "test/control-plane/postgres-wire-scale.test.js": "control-plane",
+    "test/control-plane/pressure-governor-narrow-sensor.test.js": "control-plane",
     "test/control-plane/pressure-governor.test.js": "control-plane",
     "test/control-plane/priority-partition-census-self-diagnosis-adversarial.test.js": "control-plane",
     "test/control-plane/priority-partition-census-self-diagnosis.test.js": "control-plane",
@@ -1507,6 +1509,7 @@
     "test/partition/partition-leader-address-from-raft-status.test.js": "storage-partition",
     "test/partition/partition-leader-row-publication-integrity.test.js": "storage-partition",
     "test/partition/partition-legacy-consensus-state.test.js": "storage-partition",
+    "test/partition/partition-participant-durable-read-dependencies.test.js": "storage-partition",
     "test/partition/partition-participant-release-admission.test.js": "storage-partition",
     "test/partition/partition-participant-transaction-apply.test.js": "storage-partition",
     "test/partition/partition-participant-transaction-staging.test.js": "storage-partition",
@@ -1742,6 +1745,7 @@
     "test/query/query-executor-warn-throttle.test.js": "query-sql",
     "test/query/query-executor.test.js": "query-sql",
     "test/query/queryable-core-j2-sql-key-read-journey.test.js": "query-sql",
+    "test/query/read-completion-authority-and-storage-term.test.js": "query-sql",
     "test/query/readiness-routing-denial-observability.test.js": "query-sql",
     "test/query/reduce-by-key.test.js": "query-sql",
     "test/query/reduce-continuation.test.js": "query-sql",
@@ -1823,6 +1827,7 @@
     "test/query/transaction-review-adversarial.test.js": "query-sql",
     "test/query/transaction-schema-enforcement.test.js": "query-sql",
     "test/query/transaction-session-reads.test.js": "query-sql",
+    "test/query/tx-metadata-pgwire-and-result-representation.test.js": "query-sql",
     "test/query/unknown-outcome-redelivery-budget.test.js": "query-sql",
     "test/query/unknown-outcome-same-entry.test.js": "query-sql",
     "test/query/write-exactly-once-property.test.js": "query-sql",
@@ -4683,6 +4688,11 @@
         "src/control-plane/membership-planning-version-key.js"
       ]
     },
+    "test/cache/system-table-cache-partition-service-index.test.js": {
+      "files": [
+        "src/cache/cache-constants.js"
+      ]
+    },
     "test/cache/system-table-cache-row-preview.test.js": {
       "files": [
         "src/cache/system-table-cache-observation-methods.js"
@@ -6250,6 +6260,11 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/owners/postgres-wire-scale-contract.js",
         "src/partition/partition-committed-statement-outcome-constants.js"
+      ]
+    },
+    "test/control-plane/pressure-governor-narrow-sensor.test.js": {
+      "files": [
+        "src/control-plane/pressure-governor-release-watch.js"
       ]
     },
     "test/control-plane/priority-recovery-authoritative-summary-inventory-alignment.test.js": {
@@ -15299,6 +15314,28 @@
         "src/partition/partition-raft-storage.js"
       ]
     },
+    "test/partition/partition-participant-durable-read-dependencies.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/query/distributed/transaction-participant-error-projection.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
     "test/partition/partition-participant-release-admission.test.js": {
       "files": [
         "src/bootstrap/shared/partition-service-construction.js",
@@ -17811,6 +17848,13 @@
         "test/test-helpers/participant-protocol-double.js"
       ]
     },
+    "test/query/read-completion-authority-and-storage-term.test.js": {
+      "files": [
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "test/control-plane/serve-eligibility-test-support.js"
+      ]
+    },
     "test/query/readiness-routing-denial-observability.test.js": {
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
@@ -18629,6 +18673,24 @@
         "test/test-helpers/participant-protocol-double.js",
         "test/test-helpers/participant-transaction-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js",
+        "test/test-helpers/transaction-persistence-gateway.js"
+      ]
+    },
+    "test/query/tx-metadata-pgwire-and-result-representation.test.js": {
+      "files": [
+        "src/cdc/cdc-system-table-mutation-sql-helpers.js",
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/projection-readiness-constants.js",
+        "src/partition/partition-participant-transaction-bytes.js",
+        "src/partition/partition-participant-transaction-constants.js",
+        "src/query/distributed/distributed-merge-engine.js",
+        "src/query/distributed/distributed-select-fanout-plan.js",
+        "src/query/distributed/distributed-transaction-telemetry.js",
+        "src/transport/transport-semantic-outcome.js",
+        "test/control-plane/serve-eligibility-test-support.js",
+        "test/distributed/harness/oltp-open-loop-step-owner.js",
+        "test/test-helpers/participant-protocol-double.js",
         "test/test-helpers/transaction-persistence-gateway.js"
       ]
     },
@@ -26024,11 +26086,18 @@
         "docs/benchmarks/tidb-scenario-b-comparison.svg",
         "package.json",
         "scripts/check-file-size-thresholds.js",
+        "scripts/check-guideline-ambient-intrinsics.js",
+        "scripts/check-guideline-decision-boundaries.js",
+        "scripts/check-guideline-literals.js",
+        "scripts/check-guideline-navigability.js",
+        "scripts/check-guideline-silent-catch.js",
+        "scripts/check-staged-constant-names.js",
         "scripts/checks/push-gate-corpus-worktree.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/comparative-coverage-manifest.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/scaleout-series-experiments.js"
       ],
