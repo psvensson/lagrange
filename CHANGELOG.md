@@ -10,7 +10,11 @@ releases without a compatibility guarantee.
 
 ## [Unreleased]
 
+## [0.4.1] — 2026-11-24
+
 ### Changed
+- **Zero-legacy single-owner consolidation and coordinator-SQLite merge (`src/raft/`, `src/query/`, `src/rebalancer/`, `src/bootstrap/`, `src/control-plane/`, `src/live-query/`, `src/partition/`, `src/service/`):**
+  removes retired consensus storage (`SQLiteLogAdapter`, `PartitionRaftStorage`, and legacy schema migrations) in favor of `RaftRsDurableStore`; consolidates SQLite write-key extraction, batch uniqueness, live-query predicate evaluation, and lazy-row projection onto single canonical owners; requires authoritative row readback on `AuthoritativeRowMutationHelper`; enforces strict construction contracts across `ReadinessPlanningSnapshotOwner`, `LeaderReadinessGate`, `BootIncarnationOwner`, and managed split/merge topology adapters; unifies distributed transaction recovery and sweep eligibility on `isFullyTerminalTransactionRow`; and parallelizes seed system-table registration, partition size updates, dynamic configuration seeding, settled learner promotion parking, incremental placement operation signatures, and single-pass boot source provenance.
 - **One query budget shape; the budget classes are no longer exported (`query-budget-constants.js`, `src/query/index.js`, `src/public-api.js`):**
   a query budget has exactly one shape, the UPPER_SNAKE limit names of `DEFAULT_QUERY_BUDGET`
   (for example `RESULT_MAX_ROWS`, `WALL_TIME_LIMIT_MS`). `normalizeQueryBudget` is its only
@@ -825,7 +829,8 @@ extensively tested, but not production-hardened; see _Known limitations_ below.
 - Alpha surface: SQL coverage, wire protocols, and admin/CLI behaviour may
   change between `0.x` releases without migration guarantees.
 
-[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/psvensson/lagrange/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/psvensson/lagrange/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/psvensson/lagrange/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/psvensson/lagrange/compare/v0.3.0...v0.3.2
