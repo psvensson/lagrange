@@ -211,7 +211,7 @@ function createRemoteLiveQueryCdcCoordinator({
     const {attempt} = transitionRemoteCdcSubscription(sub, {
       type: REMOTE_CDC_EVENT.START_REFRESH,
     });
-    if (!attempt) return {started: false, settled: false, outcome: null};
+    if (!attempt) return {started: false, settled: false};
     const outcome = await group.refreshQueryResultWithOutcome();
     const settledResult = transitionRemoteCdcSubscription(sub, {
       type: REMOTE_CDC_EVENT.REFRESH_SETTLED,
@@ -787,4 +787,4 @@ function createRemoteLiveQueryCdcCoordinator({
   };
 }
 
-export {createRemoteLiveQueryCdcCoordinator, resolveRemotePartitionTarget};
+export {createRemoteLiveQueryCdcCoordinator};

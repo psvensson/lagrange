@@ -174,46 +174,42 @@ class DynamicConfigService extends EventEmitter {
    *   gateway owner.
    * @return {Promise<Object>} Seeding result.
    */
-  async seedConfiguration(
-    updatedBy = CONFIG_SEED_SOURCE.SYSTEM,
-    _options = {},
-  ) {
+  async seedConfiguration(updatedBy = CONFIG_SEED_SOURCE.SYSTEM, _options = {}) {
     const counts = {seeded: [], alreadyPresent: [], refused: [], unknown: []};
-    // The rows are stamped by the node seeding them.
     const now = resolveConfigStampMs(_options.nowMs, this.now);
-
-    for (const [key, definition] of Object.entries(CONFIG_DEFINITIONS)) {
-      const envKey = this.keyToEnvVar(key);
-      const envValue = process.env[envKey];
-      const value = envValue !== undefined ?
-        this.parseEnvValue(envValue, definition.type) :
-        this.profileTiming.seedDefault(key, definition);
-      const row = {
-        [CONFIG_TABLE_COLUMN.KEY]: key,
-        [CONFIG_TABLE_COLUMN.VALUE]: this.serializeValue(value, definition.type),
-        [CONFIG_TABLE_COLUMN.VALUE_TYPE]: definition.type,
-        [CONFIG_TABLE_COLUMN.REQUIRES_RESTART]: definition.requiresRestart ? 1 : 0,
-        [CONFIG_TABLE_COLUMN.DESCRIPTION]: definition.description,
-        [CONFIG_TABLE_COLUMN.DEFAULT_VALUE]:
-          this.serializeValue(definition.defaultValue, definition.type),
-        [CONFIG_TABLE_COLUMN.UPDATED_BY]: updatedBy,
-        [CONFIG_TABLE_COLUMN.UPDATED_AT]: now,
-        [CONFIG_TABLE_COLUMN.CREATED_AT]: now,
-      };
-      const writeOptions = {
-        workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-        deliveryPriority: CONFIG_MUTATION_DELIVERY_PRIORITY, ignoreExisting: true,
-      };
-      const mutationResult = await this.getControlPlaneSystemTableGateway()
-        .insertSystemTableRow(SYSTEM_TABLE_NAME.CONFIG, row, writeOptions);
+    const gateway = this.getControlPlaneSystemTableGateway();
+    const writeOptions = {
+      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+      deliveryPriority: CONFIG_MUTATION_DELIVERY_PRIORITY, ignoreExisting: true,
+    };
+    const outcomes = await Promise.all(
+      Object.entries(CONFIG_DEFINITIONS).map(async ([key, definition]) => {
+        const envValue = process.env[this.keyToEnvVar(key)];
+        const value = envValue !== undefined ?
+          this.parseEnvValue(envValue, definition.type) :
+          this.profileTiming.seedDefault(key, definition);
+        const row = {
+          [CONFIG_TABLE_COLUMN.KEY]: key,
+          [CONFIG_TABLE_COLUMN.VALUE]: this.serializeValue(value, definition.type),
+          [CONFIG_TABLE_COLUMN.VALUE_TYPE]: definition.type,
+          [CONFIG_TABLE_COLUMN.REQUIRES_RESTART]: definition.requiresRestart ? 1 : 0,
+          [CONFIG_TABLE_COLUMN.DESCRIPTION]: definition.description,
+          [CONFIG_TABLE_COLUMN.DEFAULT_VALUE]:
+            this.serializeValue(definition.defaultValue, definition.type),
+          [CONFIG_TABLE_COLUMN.UPDATED_BY]: updatedBy,
+          [CONFIG_TABLE_COLUMN.UPDATED_AT]: now,
+          [CONFIG_TABLE_COLUMN.CREATED_AT]: now,
+        };
+        return {key, mutationResult: await gateway.insertSystemTableRow(
+          SYSTEM_TABLE_NAME.CONFIG, row, writeOptions)};
+      }),
+    );
+    for (const {key, mutationResult} of outcomes) {
       selectSeedOutcomeBucket(counts, mutationResult).push(key);
     }
-
     this.logger.info(CONFIG_LOG_MSG.SEEDING_COMPLETE, {
-      seeded: counts.seeded.length,
-      alreadyPresent: counts.alreadyPresent.length,
-      refused: counts.refused.length,
-      unknown: counts.unknown.length,
+      seeded: counts.seeded.length, alreadyPresent: counts.alreadyPresent.length,
+      refused: counts.refused.length, unknown: counts.unknown.length,
     });
     return assertSeedConfigurationComplete(counts);
   }

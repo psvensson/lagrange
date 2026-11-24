@@ -19,16 +19,16 @@
     "services-runtime": 160,
     "solver-tooling": 7,
     "storage-partition": 259,
-    "storage-raft": 171,
+    "storage-raft": 164,
     "test-infrastructure": 170,
     "transactions": 17,
     "transport-messaging": 123,
     "wasm-toolchain": 73
   },
-  "censusSize": 2826,
-  "digest": "fnv1a32-a233fe85",
+  "censusSize": 2819,
+  "digest": "fnv1a32-030d0503",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-16e87811",
+  "observationDigest": "fnv1a32-2109e5a2",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1977,7 +1977,6 @@
     "test/raft/snapshot-checkpoint-sqlite-payload.test.js": "storage-raft",
     "test/raft/snapshot-compaction-catchup-integration.test.js": "storage-raft",
     "test/raft/snapshot-dispatcher-wiring.test.js": "storage-raft",
-    "test/raft/snapshot-gated-compaction-contract.test.js": "storage-raft",
     "test/raft/snapshot-install-restart-states.test.js": "storage-raft",
     "test/raft/snapshot-install-transition.test.js": "storage-raft",
     "test/raft/snapshot-lifecycle-staging.test.js": "storage-raft",
@@ -1987,12 +1986,6 @@
     "test/raft/snapshot-recorded-gaps.test.js": "storage-raft",
     "test/raft/snapshot-retention-sweep.test.js": "storage-raft",
     "test/raft/snapshot-transfer-protocol.test.js": "storage-raft",
-    "test/raft/sqlite-log-adapter-committed-truncation-guard.test.js": "storage-raft",
-    "test/raft/sqlite-log-adapter-committed-watermark.test.js": "storage-raft",
-    "test/raft/sqlite-log-adapter-committed-write-paths.test.js": "storage-raft",
-    "test/raft/sqlite-log-adapter-contract.test.js": "storage-raft",
-    "test/raft/sqlite-log-adapter-round-trip.property.test.js": "storage-raft",
-    "test/raft/sqlite-schema-migration.test.js": "storage-raft",
     "test/random/dt5-jitter-seam.test.js": "runtime-primitives",
     "test/random/random-source.test.js": "runtime-primitives",
     "test/rebalancer/active-handoff-operation-visibility.integration.test.js": "placement-rebalance",
@@ -6190,7 +6183,6 @@
         "src/control-plane/heartbeat-service.js",
         "src/control-plane/node-lifecycle-publication.js",
         "src/control-plane/node-ready-lease-authority.js",
-        "src/message-group/message-group-target-resolver.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-service-constants.js",
         "src/partition/partition-service-entry-apply-base.js",
@@ -6478,7 +6470,6 @@
       "files": [
         "src/control-plane/control-plane-readiness-constants.js",
         "src/control-plane/control-plane-system-table-gateway-constants.js",
-        "src/control-plane/membership-planning-version-key.js",
         "src/control-plane/membership-publication-coordinator.js",
         "src/control-plane/node-liveness-semantic-projection-owner.js",
         "src/control-plane/projection-readiness-constants.js",
@@ -15684,6 +15675,7 @@
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",
         "src/query/sql-query-engine-partition-routing-readiness.js",
+        "src/query/sql-query-engine.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
@@ -19103,7 +19095,7 @@
     },
     "test/raft/raft-log-write-owner.test.js": {
       "files": [
-        "src/raft/sqlite-log-adapter.js"
+        "src/raft/raft-rs-durable-store-constants.js"
       ],
       "directories": [
         "src"
@@ -20739,7 +20731,6 @@
         "src/entrypoint-runtime-provenance.js",
         "src/raft/constants.js",
         "src/raft/raft-packet-utils.js",
-        "src/raft/sqlite-log-adapter.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/config-parser.js"
       ],

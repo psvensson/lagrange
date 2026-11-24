@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-24T17:29:03.933Z",
-  "rawViolationCount": 1620,
+  "generatedAt": "2026-11-24T19:11:15.854Z",
+  "rawViolationCount": 1616,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
@@ -1085,7 +1085,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 407,
+      "line": 406,
       "column": 12,
       "functionName": "getBootstrapTopologySnapshotActiveNodeIds",
       "kind": "two_source_fallback_reads",
@@ -1094,7 +1094,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 416,
+      "line": 415,
       "column": 12,
       "functionName": "getBootstrapTopologySnapshotEpoch",
       "kind": "two_source_fallback_reads",
@@ -1103,7 +1103,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 489,
+      "line": 488,
       "column": 25,
       "functionName": "getWsPort",
       "kind": "two_source_fallback_reads",
@@ -1112,7 +1112,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 565,
+      "line": 564,
       "column": 25,
       "functionName": "getWsPort",
       "kind": "two_source_fallback_reads",
@@ -1463,7 +1463,7 @@
     },
     {
       "filePath": "src/bootstrap/phases/seed-cache-hydration-phase.js",
-      "line": 594,
+      "line": 593,
       "column": 22,
       "functionName": "waitForSystemServiceLeadersInCache",
       "kind": "two_source_fallback_reads",
@@ -1868,7 +1868,7 @@
     },
     {
       "filePath": "src/cdc/cdc-integration-service-local-system-table-routing.js",
-      "line": 361,
+      "line": 355,
       "column": 4,
       "functionName": "resolvePartitionServicesForTable",
       "kind": "two_source_fallback_reads",
@@ -6674,7 +6674,7 @@
     },
     {
       "filePath": "src/message-group/message-group-service-metadata-publication.js",
-      "line": 310,
+      "line": 301,
       "column": 18,
       "functionName": "onAsyncError",
       "kind": "two_source_fallback_reads",
@@ -6683,7 +6683,7 @@
     },
     {
       "filePath": "src/message-group/message-group-service-metadata-publication.js",
-      "line": 377,
+      "line": 359,
       "column": 26,
       "functionName": "onAsyncError",
       "kind": "two_source_fallback_reads",
@@ -7457,7 +7457,7 @@
     },
     {
       "filePath": "src/partition/managed-merge-workflow.js",
-      "line": 67,
+      "line": 65,
       "column": 4,
       "functionName": "<anonymous>",
       "kind": "two_source_fallback_reads",
@@ -7466,7 +7466,7 @@
     },
     {
       "filePath": "src/partition/managed-merge-workflow.js",
-      "line": 72,
+      "line": 70,
       "column": 4,
       "functionName": "<anonymous>",
       "kind": "two_source_fallback_reads",
@@ -7475,7 +7475,7 @@
     },
     {
       "filePath": "src/partition/managed-merge-workflow.js",
-      "line": 75,
+      "line": 73,
       "column": 4,
       "functionName": "<anonymous>",
       "kind": "two_source_fallback_reads",
@@ -7484,7 +7484,7 @@
     },
     {
       "filePath": "src/partition/managed-merge-workflow.js",
-      "line": 84,
+      "line": 82,
       "column": 4,
       "functionName": "<anonymous>",
       "kind": "two_source_fallback_reads",
@@ -7493,16 +7493,7 @@
     },
     {
       "filePath": "src/partition/managed-merge-workflow.js",
-      "line": 146,
-      "column": 8,
-      "functionName": "constructor",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-merge-workflow.js",
-      "line": 243,
+      "line": 230,
       "column": 10,
       "functionName": "<anonymous>",
       "kind": "two_source_fallback_reads",
@@ -7511,7 +7502,7 @@
     },
     {
       "filePath": "src/partition/managed-merge-workflow.js",
-      "line": 540,
+      "line": 527,
       "column": 10,
       "functionName": "planMergeTargetProvisioning",
       "kind": "two_source_fallback_reads",
@@ -7520,7 +7511,7 @@
     },
     {
       "filePath": "src/partition/managed-merge-workflow.js",
-      "line": 689,
+      "line": 676,
       "column": 8,
       "functionName": "runAdmittedMergeExecution",
       "kind": "two_source_fallback_reads",
@@ -7646,7 +7637,7 @@
     },
     {
       "filePath": "src/partition/managed-split-workflow-topology-bindings.js",
-      "line": 145,
+      "line": 134,
       "column": 4,
       "functionName": "applyManagedSplitTopologyBindings",
       "kind": "two_source_fallback_reads",
@@ -7655,7 +7646,7 @@
     },
     {
       "filePath": "src/partition/managed-split-workflow-topology-bindings.js",
-      "line": 148,
+      "line": 137,
       "column": 4,
       "functionName": "applyManagedSplitTopologyBindings",
       "kind": "two_source_fallback_reads",
@@ -8006,7 +7997,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-methods.js",
-      "line": 574,
+      "line": 578,
       "column": 26,
       "functionName": "collectInFlightAddLikeOperationsForPromotion",
       "kind": "two_source_fallback_reads",
@@ -8015,7 +8006,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-methods.js",
-      "line": 575,
+      "line": 579,
       "column": 29,
       "functionName": "collectInFlightAddLikeOperationsForPromotion",
       "kind": "two_source_fallback_reads",
@@ -8024,7 +8015,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-methods.js",
-      "line": 629,
+      "line": 633,
       "column": 12,
       "functionName": "collectActiveVoterCensusForPromotion",
       "kind": "two_source_fallback_reads",
@@ -8087,7 +8078,7 @@
     },
     {
       "filePath": "src/partition/partition-service-metadata-mutation-helpers.js",
-      "line": 313,
+      "line": 303,
       "column": 16,
       "functionName": "onObservedStateChanged",
       "kind": "two_source_fallback_reads",
@@ -8096,7 +8087,7 @@
     },
     {
       "filePath": "src/partition/partition-service-metadata-mutation-helpers.js",
-      "line": 324,
+      "line": 314,
       "column": 16,
       "functionName": "onAsyncError",
       "kind": "two_source_fallback_reads",
@@ -8105,7 +8096,7 @@
     },
     {
       "filePath": "src/partition/partition-service-metadata-mutation-helpers.js",
-      "line": 419,
+      "line": 396,
       "column": 24,
       "functionName": "onObservedStateChanged",
       "kind": "two_source_fallback_reads",
@@ -8114,7 +8105,7 @@
     },
     {
       "filePath": "src/partition/partition-service-metadata-mutation-helpers.js",
-      "line": 430,
+      "line": 407,
       "column": 24,
       "functionName": "onAsyncError",
       "kind": "two_source_fallback_reads",
@@ -8654,7 +8645,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-recovery.js",
-      "line": 166,
+      "line": 177,
       "column": 27,
       "functionName": "recoveryObligationStageRefusal",
       "kind": "two_source_fallback_reads",
@@ -8663,7 +8654,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-recovery.js",
-      "line": 764,
+      "line": 765,
       "column": 19,
       "functionName": "recoverFromSystemTables",
       "kind": "two_source_fallback_reads",
@@ -8672,7 +8663,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-recovery.js",
-      "line": 765,
+      "line": 766,
       "column": 19,
       "functionName": "recoverFromSystemTables",
       "kind": "two_source_fallback_reads",
@@ -8810,15 +8801,6 @@
       "line": 178,
       "column": 8,
       "functionName": "authenticate",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/provisioning-completion-summary.js",
-      "line": 49,
-      "column": 18,
-      "functionName": "buildProvisioningCompletionSummary",
       "kind": "two_source_fallback_reads",
       "reason": "one fact read from two sources; read the one authority for that fact",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -9293,7 +9275,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
-      "line": 611,
+      "line": 612,
       "column": 12,
       "functionName": "provisionInitialTablePartition",
       "kind": "two_source_fallback_reads",
@@ -9572,7 +9554,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-transaction-recovery-methods.js",
-      "line": 220,
+      "line": 230,
       "column": 6,
       "functionName": "buildDistributedTransactionMutationOptions",
       "kind": "two_source_fallback_reads",
@@ -9680,25 +9662,7 @@
     },
     {
       "filePath": "src/query/table-creation-service-completion.js",
-      "line": 91,
-      "column": 6,
-      "functionName": "normalizeProvisioningSummary",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-completion.js",
-      "line": 94,
-      "column": 6,
-      "functionName": "normalizeProvisioningSummary",
-      "kind": "two_source_fallback_reads",
-      "reason": "one fact read from two sources; read the one authority for that fact",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-completion.js",
-      "line": 155,
+      "line": 73,
       "column": 4,
       "functionName": "pickStrongerTableCreationContractOutcome",
       "kind": "two_source_fallback_reads",
@@ -9707,7 +9671,7 @@
     },
     {
       "filePath": "src/query/table-creation-service-completion.js",
-      "line": 158,
+      "line": 76,
       "column": 4,
       "functionName": "pickStrongerTableCreationContractOutcome",
       "kind": "two_source_fallback_reads",
@@ -9716,7 +9680,7 @@
     },
     {
       "filePath": "src/raft/authoritative-row-mutation-helper.js",
-      "line": 227,
+      "line": 223,
       "column": 8,
       "functionName": "resolvePreparedFlush",
       "kind": "two_source_fallback_reads",
@@ -9725,7 +9689,7 @@
     },
     {
       "filePath": "src/raft/authoritative-row-mutation-helper.js",
-      "line": 347,
+      "line": 340,
       "column": 8,
       "functionName": "resolvePreMutationOwnership",
       "kind": "two_source_fallback_reads",
@@ -12929,7 +12893,7 @@
     },
     {
       "filePath": "src/service/call-direct-invocation-replay.js",
-      "line": 342,
+      "line": 347,
       "column": 10,
       "functionName": "recordFailure",
       "kind": "two_source_fallback_reads",
@@ -12938,7 +12902,7 @@
     },
     {
       "filePath": "src/service/call-direct-invocation-replay.js",
-      "line": 343,
+      "line": 348,
       "column": 14,
       "functionName": "recordFailure",
       "kind": "two_source_fallback_reads",
@@ -12947,7 +12911,7 @@
     },
     {
       "filePath": "src/service/call-direct-invocation-replay.js",
-      "line": 369,
+      "line": 374,
       "column": 4,
       "functionName": "resolveKeyedDirectCallRoute",
       "kind": "two_source_fallback_reads",
@@ -14225,7 +14189,7 @@
     },
     {
       "filePath": "src/wasm-service/wasm-service-metadata-mutation-helpers.js",
-      "line": 121,
+      "line": 106,
       "column": 14,
       "functionName": "onAsyncError",
       "kind": "two_source_fallback_reads",
@@ -14234,7 +14198,7 @@
     },
     {
       "filePath": "src/wasm-service/wasm-service-metadata-mutation-helpers.js",
-      "line": 174,
+      "line": 155,
       "column": 22,
       "functionName": "onAsyncError",
       "kind": "two_source_fallback_reads",

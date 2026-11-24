@@ -1462,40 +1462,25 @@ test('formation work is priority-ordered and shutdown cancels pending builds',
       },
     });
     const deferredLocal = readiness.getNodeReadinessSync('node-0');
-    t.equal(
-      deferredLocal.readinessPlanningTokenStatus,
-      'stale',
-      'cold local work defers while a connected formation owner is reserved',
-    );
+    t.equal(deferredLocal.readinessPlanningTokenStatus, 'stale',
+      'cold local work defers while a connected formation owner is reserved');
     const formation = readiness.getNodeReadinessSync('node-4');
-    t.notOk(
-      formation.reasons.some((reason) =>
-        reason?.code === 'planning_snapshot_refresh_pending'),
-      'the connected JOINING owner consumes the single cold build',
-    );
-    cache.applySystemTableChange(
-      TABLES.CONTROL_PLANE_PUBLICATIONS,
-      'UPDATE',
-      churnRow(TABLES.CONTROL_PLANE_PUBLICATIONS, 80),
-    );
+    t.notOk(formation.reasons.some((reason) =>
+      reason?.code === 'planning_snapshot_refresh_pending'),
+    'the connected JOINING owner consumes the single cold build');
+    cache.applySystemTableChange(TABLES.CONTROL_PLANE_PUBLICATIONS, 'UPDATE',
+      churnRow(TABLES.CONTROL_PLANE_PUBLICATIONS, 80));
     scheduled.shift()();
     await Promise.resolve();
     await Promise.resolve();
-    t.equal(
-      readiness.getReadinessPlanningDiagnostics().buildOwnerKeys[0],
-      'node-4',
-      'formation owner is promoted ahead of older background work',
-    );
-    const buildsBeforeShutdown =
-      readiness.getReadinessPlanningDiagnostics().buildCount;
+    t.equal(readiness.getReadinessPlanningDiagnostics().buildOwnerKeys[0], 'node-4',
+      'formation owner is promoted ahead of older background work');
+    const buildsBeforeShutdown = readiness.getReadinessPlanningDiagnostics().buildCount;
     readiness.shutdownReadinessPlanningOwner();
     while (scheduled.length > 0) {
       scheduled.shift()();
       await Promise.resolve();
     }
-    t.equal(
-      readiness.getReadinessPlanningDiagnostics().buildCount,
-      buildsBeforeShutdown,
-      'shutdown prevents every queued heavy build',
-    );
+    t.equal(readiness.getReadinessPlanningDiagnostics().buildCount, buildsBeforeShutdown,
+      'shutdown prevents every queued heavy build');
   });

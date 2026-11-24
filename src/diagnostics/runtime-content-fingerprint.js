@@ -1,7 +1,7 @@
 // The source/build manifest owner enumerates the executable content of a
 // deployment: source and the installed production dependency closure named
 // by npm's lock. Package bodies are measured, not inferred from versions.
-import {readFile, readdir, realpath, stat} from 'node:fs/promises';
+import {readFile, readdir, readlink, realpath, stat} from 'node:fs/promises';
 import path from 'node:path';
 import {computeContentRecordsFingerprint} from './source-fingerprint.js';
 
@@ -14,6 +14,8 @@ const DIRECTORY_CYCLE = 'runtime dependency directory cycle';
 const RUNTIME_BUILD_MANIFEST = 'runtime-content-manifest.json';
 const MISSING_FILE_CODE = 'ENOENT';
 const MAX_FS_CONCURRENCY = 16;
+const UTF8_ENCODING = 'utf8';
+const SHORT_FINGERPRINT_HEX_LENGTH = 16;
 
 async function mapBounded(items, limit, worker) {
   if (items.length === 0) return [];
@@ -60,7 +62,7 @@ async function collectEntries(
         path.join(actual, entry.name),
       );
     } else if (entry.isFile()) {
-      fileTargets.push({absolute, relativePath});
+      fileTargets.push({absolute, relativePath, isSymlink: false});
     } else {
       // Follow installed symlinks: the running module consumes their body,
       // so hashing only the link text would not identify executable bytes.
@@ -68,17 +70,24 @@ async function collectEntries(
       if (shape.isDirectory()) {
         await collectEntries(absolute, relativePath, lineage, skipNested, fileTargets);
       } else if (shape.isFile()) {
-        fileTargets.push({absolute, relativePath});
+        fileTargets.push({absolute, relativePath, isSymlink: entry.isSymbolicLink()});
       }
     }
   }
 }
 
 async function readFileTargets(fileTargets) {
-  return mapBounded(fileTargets, MAX_FS_CONCURRENCY, async ({absolute, relativePath}) => ({
-    relativePath,
-    content: await readFile(absolute),
-  }));
+  return mapBounded(
+    fileTargets,
+    MAX_FS_CONCURRENCY,
+    async ({absolute, relativePath, isSymlink}) => ({
+      relativePath,
+      content: await readFile(absolute),
+      shortContent: isSymlink ?
+        Buffer.from(await readlink(absolute), UTF8_ENCODING) :
+        null,
+    }),
+  );
 }
 
 async function contentRecords(directory, prefix, ancestors = new Set(), skipNested = true) {
@@ -129,8 +138,16 @@ async function measureRuntimeContent(root) {
     {relativePath: DEPENDENCY_LOCK, content: lockBytes},
     {relativePath: PACKAGE_MANIFEST, content: manifestBytes},
   ];
+  const shortSourceRecords = source.map(({relativePath, content, shortContent}) => ({
+    relativePath: relativePath.startsWith(`${SOURCE_DIRECTORY}/`) ?
+      relativePath.slice(SOURCE_DIRECTORY.length + 1) :
+      relativePath,
+    content: shortContent ?? content,
+  }));
   return Object.freeze({
     sourceDigest: computeContentRecordsFingerprint(source),
+    shortSourceFingerprint: computeContentRecordsFingerprint(shortSourceRecords)
+      .slice(0, SHORT_FINGERPRINT_HEX_LENGTH),
     dependencyDigest: computeContentRecordsFingerprint(dependencies),
     manifestDigest: computeContentRecordsFingerprint(manifests),
     dependencyFileCount: dependencies.length,

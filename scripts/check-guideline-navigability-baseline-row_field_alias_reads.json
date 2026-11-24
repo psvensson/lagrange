@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-24T17:29:03.928Z",
+  "generatedAt": "2026-11-24T19:11:15.847Z",
   "rawViolationCount": 627,
   "violations": [
     {
@@ -2885,7 +2885,7 @@
     },
     {
       "filePath": "src/partition/managed-merge-workflow.js",
-      "line": 540,
+      "line": 527,
       "column": 10,
       "functionName": "planMergeTargetProvisioning",
       "kind": "row_field_alias_reads",
@@ -2894,7 +2894,7 @@
     },
     {
       "filePath": "src/partition/managed-merge-workflow.js",
-      "line": 639,
+      "line": 626,
       "column": 24,
       "functionName": "runAdmittedMergeExecution",
       "kind": "row_field_alias_reads",
@@ -2903,7 +2903,7 @@
     },
     {
       "filePath": "src/partition/managed-merge-workflow.js",
-      "line": 641,
+      "line": 628,
       "column": 25,
       "functionName": "runAdmittedMergeExecution",
       "kind": "row_field_alias_reads",
@@ -2930,7 +2930,7 @@
     },
     {
       "filePath": "src/partition/managed-split-topology-adapter.js",
-      "line": 143,
+      "line": 172,
       "column": 25,
       "functionName": "<anonymous>",
       "kind": "row_field_alias_reads",
@@ -2939,7 +2939,7 @@
     },
     {
       "filePath": "src/partition/managed-split-topology-adapter.js",
-      "line": 159,
+      "line": 188,
       "column": 29,
       "functionName": "<anonymous>",
       "kind": "row_field_alias_reads",
@@ -2948,7 +2948,7 @@
     },
     {
       "filePath": "src/partition/managed-split-topology-adapter.js",
-      "line": 229,
+      "line": 258,
       "column": 33,
       "functionName": "<anonymous>",
       "kind": "row_field_alias_reads",
@@ -3470,7 +3470,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-recovery.js",
-      "line": 220,
+      "line": 231,
       "column": 30,
       "functionName": "<anonymous>",
       "kind": "row_field_alias_reads",
@@ -3479,7 +3479,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-recovery.js",
-      "line": 233,
+      "line": 244,
       "column": 30,
       "functionName": "<anonymous>",
       "kind": "row_field_alias_reads",
@@ -3488,7 +3488,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-recovery.js",
-      "line": 597,
+      "line": 608,
       "column": 12,
       "functionName": "recoverFromSystemTables",
       "kind": "row_field_alias_reads",
@@ -3497,7 +3497,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-recovery.js",
-      "line": 597,
+      "line": 608,
       "column": 58,
       "functionName": "recoverFromSystemTables",
       "kind": "row_field_alias_reads",
@@ -3506,7 +3506,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-recovery.js",
-      "line": 642,
+      "line": 643,
       "column": 22,
       "functionName": "<anonymous>",
       "kind": "row_field_alias_reads",
@@ -3515,25 +3515,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-recovery.js",
-      "line": 644,
-      "column": 26,
-      "functionName": "loadWorkflow",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/distributed/distributed-transaction-recovery.js",
       "line": 645,
-      "column": 30,
-      "functionName": "loadWorkflow",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/distributed/distributed-transaction-recovery.js",
-      "line": 656,
       "column": 26,
       "functionName": "loadWorkflow",
       "kind": "row_field_alias_reads",
@@ -3542,7 +3524,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-recovery.js",
-      "line": 692,
+      "line": 646,
       "column": 30,
       "functionName": "loadWorkflow",
       "kind": "row_field_alias_reads",
@@ -3551,7 +3533,25 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-recovery.js",
-      "line": 695,
+      "line": 657,
+      "column": 26,
+      "functionName": "loadWorkflow",
+      "kind": "row_field_alias_reads",
+      "reason": "one field read in two spellings; decode the row once in one row decoder",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/query/distributed/distributed-transaction-recovery.js",
+      "line": 693,
+      "column": 30,
+      "functionName": "loadWorkflow",
+      "kind": "row_field_alias_reads",
+      "reason": "one field read in two spellings; decode the row once in one row decoder",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/query/distributed/distributed-transaction-recovery.js",
+      "line": 696,
       "column": 21,
       "functionName": "loadWorkflow",
       "kind": "row_field_alias_reads",
@@ -3560,7 +3560,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-recovery.js",
-      "line": 700,
+      "line": 701,
       "column": 30,
       "functionName": "loadParticipant",
       "kind": "row_field_alias_reads",
@@ -3569,7 +3569,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-recovery.js",
-      "line": 701,
+      "line": 702,
       "column": 28,
       "functionName": "loadParticipant",
       "kind": "row_field_alias_reads",
@@ -3578,7 +3578,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-recovery.js",
-      "line": 709,
+      "line": 710,
       "column": 12,
       "functionName": "loadParticipant",
       "kind": "row_field_alias_reads",
@@ -3587,16 +3587,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-recovery.js",
-      "line": 715,
-      "column": 21,
-      "functionName": "loadParticipant",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/distributed/distributed-transaction-recovery.js",
-      "line": 717,
+      "line": 716,
       "column": 21,
       "functionName": "loadParticipant",
       "kind": "row_field_alias_reads",
@@ -3614,26 +3605,26 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-recovery.js",
-      "line": 733,
-      "column": 28,
-      "functionName": "recoverFromSystemTables",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/distributed/distributed-transaction-recovery.js",
-      "line": 745,
-      "column": 28,
-      "functionName": "recoverFromSystemTables",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/distributed/distributed-transaction-recovery.js",
-      "line": 754,
+      "line": 719,
       "column": 21,
+      "functionName": "loadParticipant",
+      "kind": "row_field_alias_reads",
+      "reason": "one field read in two spellings; decode the row once in one row decoder",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/query/distributed/distributed-transaction-recovery.js",
+      "line": 734,
+      "column": 28,
+      "functionName": "recoverFromSystemTables",
+      "kind": "row_field_alias_reads",
+      "reason": "one field read in two spellings; decode the row once in one row decoder",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/query/distributed/distributed-transaction-recovery.js",
+      "line": 746,
+      "column": 28,
       "functionName": "recoverFromSystemTables",
       "kind": "row_field_alias_reads",
       "reason": "one field read in two spellings; decode the row once in one row decoder",
@@ -3642,33 +3633,6 @@
     {
       "filePath": "src/query/distributed/distributed-transaction-recovery.js",
       "line": 755,
-      "column": 23,
-      "functionName": "recoverFromSystemTables",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/distributed/distributed-transaction-recovery.js",
-      "line": 757,
-      "column": 10,
-      "functionName": "recoverFromSystemTables",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/distributed/distributed-transaction-recovery.js",
-      "line": 759,
-      "column": 24,
-      "functionName": "recoverFromSystemTables",
-      "kind": "row_field_alias_reads",
-      "reason": "one field read in two spellings; decode the row once in one row decoder",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/distributed/distributed-transaction-recovery.js",
-      "line": 760,
       "column": 21,
       "functionName": "recoverFromSystemTables",
       "kind": "row_field_alias_reads",
@@ -3677,8 +3641,35 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-recovery.js",
-      "line": 762,
-      "column": 20,
+      "line": 756,
+      "column": 23,
+      "functionName": "recoverFromSystemTables",
+      "kind": "row_field_alias_reads",
+      "reason": "one field read in two spellings; decode the row once in one row decoder",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/query/distributed/distributed-transaction-recovery.js",
+      "line": 758,
+      "column": 10,
+      "functionName": "recoverFromSystemTables",
+      "kind": "row_field_alias_reads",
+      "reason": "one field read in two spellings; decode the row once in one row decoder",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/query/distributed/distributed-transaction-recovery.js",
+      "line": 760,
+      "column": 24,
+      "functionName": "recoverFromSystemTables",
+      "kind": "row_field_alias_reads",
+      "reason": "one field read in two spellings; decode the row once in one row decoder",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/query/distributed/distributed-transaction-recovery.js",
+      "line": 761,
+      "column": 21,
       "functionName": "recoverFromSystemTables",
       "kind": "row_field_alias_reads",
       "reason": "one field read in two spellings; decode the row once in one row decoder",
@@ -3687,7 +3678,7 @@
     {
       "filePath": "src/query/distributed/distributed-transaction-recovery.js",
       "line": 763,
-      "column": 19,
+      "column": 20,
       "functionName": "recoverFromSystemTables",
       "kind": "row_field_alias_reads",
       "reason": "one field read in two spellings; decode the row once in one row decoder",
@@ -3705,6 +3696,15 @@
     {
       "filePath": "src/query/distributed/distributed-transaction-recovery.js",
       "line": 765,
+      "column": 19,
+      "functionName": "recoverFromSystemTables",
+      "kind": "row_field_alias_reads",
+      "reason": "one field read in two spellings; decode the row once in one row decoder",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
+      "filePath": "src/query/distributed/distributed-transaction-recovery.js",
+      "line": 766,
       "column": 19,
       "functionName": "recoverFromSystemTables",
       "kind": "row_field_alias_reads",

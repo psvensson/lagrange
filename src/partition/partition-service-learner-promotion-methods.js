@@ -42,6 +42,7 @@ const {
 const UNDECLARED_PROMOTION_TARGET_REPLICA_COUNT = 0;
 const LOCAL_STR_REPLACE = 'REPLACE';
 const LOCAL_STR_GROWTH_PROMOTE_OWNED = 'growth_promote_owned';
+const LOCAL_STR_PENDING = 'pending';
 
 // The two identities one in-flight add-like row states, read once per row so
 // the traversal below asks each question a single time.
@@ -473,9 +474,13 @@ class PartitionServiceLearnerPromotionMethods {
         countCheckInputs:
           this.buildLearnerPromotionCountCheckPayload(observation, decision),
       });
-      this.scheduleLearnerPromotion(
-        PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON.DEFERRED_RECHECK,
-      );
+      const hasPendingAdmission =
+        this.pendingReplicaAdmission?.state === LOCAL_STR_PENDING;
+      if (decision.refused || hasPendingAdmission) {
+        this.scheduleLearnerPromotion(
+          PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON.DEFERRED_RECHECK,
+        );
+      }
       return;
     }
     this.logFirstLearnerPromotionCountCheckPass(observation, decision);

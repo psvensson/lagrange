@@ -33,6 +33,12 @@ function createWriterRecorder() {
       calls.push({type: 'upsert', tableName, row});
       return {success: true};
     },
+    async upsertSystemTableRows(tableName, batch) {
+      for (const row of batch) {
+        calls.push({type: 'upsert', tableName, row});
+      }
+      return {success: true};
+    },
     async updateSystemTableRow(tableName, whereClause, row) {
       calls.push({type: 'update', tableName, whereClause, row});
       return {success: true};

@@ -24,6 +24,12 @@ class BootstrapSystemTableWriter {
     );
   }
 
+  upsertSystemTableRows(tableName, rows, options = {}) {
+    return this.cdcIntegrationService.upsertSystemTableRows(
+      tableName, rows, options,
+    );
+  }
+
   updateSystemTableRow(tableName, keyData, updateData, options = {}) {
     return this.cdcIntegrationService.updateSystemTableRow(
       tableName,
@@ -60,6 +66,12 @@ class RoutedSqlSystemTableWriter {
   upsertSystemTableRow(tableName, data, options = {}) {
     return this.cdcIntegrationService.upsertSystemTableRow(
       tableName, data, options,
+    );
+  }
+
+  upsertSystemTableRows(tableName, rows, options = {}) {
+    return this.cdcIntegrationService.upsertSystemTableRows(
+      tableName, rows, options,
     );
   }
 

@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-24T17:29:03.938Z",
-  "rawViolationCount": 931,
+  "generatedAt": "2026-11-24T19:11:15.860Z",
+  "rawViolationCount": 929,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
@@ -545,7 +545,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-service.js",
-      "line": 146,
+      "line": 145,
       "column": 2,
       "functionName": "resolveBootstrapWorkflowDataDir",
       "kind": "typeof_dual_paths",
@@ -554,7 +554,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-service.js",
-      "line": 192,
+      "line": 191,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -563,7 +563,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-service.js",
-      "line": 199,
+      "line": 198,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -572,7 +572,7 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-service.js",
-      "line": 243,
+      "line": 242,
       "column": 6,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -1247,7 +1247,7 @@
     },
     {
       "filePath": "src/bootstrap/phases/seed-cache-hydration-phase.js",
-      "line": 766,
+      "line": 765,
       "column": 4,
       "functionName": "resolveCdcPropagationMessageGroup",
       "kind": "typeof_dual_paths",
@@ -2012,7 +2012,7 @@
     },
     {
       "filePath": "src/cache/leader-readiness-gate.js",
-      "line": 367,
+      "line": 332,
       "column": 4,
       "functionName": "getBlockingSystemServiceLeaders",
       "kind": "typeof_dual_paths",
@@ -2246,7 +2246,7 @@
     },
     {
       "filePath": "src/cdc/cdc-integration-service-local-system-table-routing.js",
-      "line": 253,
+      "line": 251,
       "column": 9,
       "functionName": "resolvePartitionRowsFromCache",
       "kind": "typeof_dual_paths",
@@ -2255,7 +2255,7 @@
     },
     {
       "filePath": "src/cdc/cdc-integration-service-local-system-table-routing.js",
-      "line": 255,
+      "line": 253,
       "column": 4,
       "functionName": "resolvePartitionRowsFromCache",
       "kind": "typeof_dual_paths",
@@ -2264,7 +2264,7 @@
     },
     {
       "filePath": "src/cdc/cdc-integration-service-local-system-table-routing.js",
-      "line": 303,
+      "line": 297,
       "column": 2,
       "functionName": "resolveLeaderRole",
       "kind": "typeof_dual_paths",
@@ -2273,7 +2273,7 @@
     },
     {
       "filePath": "src/cdc/cdc-integration-service-local-system-table-routing.js",
-      "line": 325,
+      "line": 319,
       "column": 2,
       "functionName": "resolvePartitionServicesForSegment",
       "kind": "typeof_dual_paths",
@@ -2282,16 +2282,7 @@
     },
     {
       "filePath": "src/cdc/cdc-integration-service-local-system-table-routing.js",
-      "line": 403,
-      "column": 2,
-      "functionName": "executeSystemTableRead",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/cdc/cdc-integration-service-local-system-table-routing.js",
-      "line": 406,
+      "line": 397,
       "column": 2,
       "functionName": "executeSystemTableRead",
       "kind": "typeof_dual_paths",
@@ -3730,15 +3721,6 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/control-plane/readiness-planning-completion-admission-methods.js",
-      "line": 219,
-      "column": 11,
-      "functionName": "readCompletedSourceGeneration",
-      "kind": "typeof_dual_paths",
-      "reason": "typeof dual path; keep one path and delete the other",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/control-plane/readiness-planning-publication-contract.js",
       "line": 63,
       "column": 11,
@@ -3803,7 +3785,7 @@
     },
     {
       "filePath": "src/control-plane/readiness-planning-snapshot-owner.js",
-      "line": 139,
+      "line": 120,
       "column": 21,
       "functionName": "createPlanningQueue",
       "kind": "typeof_dual_paths",
@@ -3812,7 +3794,7 @@
     },
     {
       "filePath": "src/control-plane/readiness-planning-snapshot-owner.js",
-      "line": 166,
+      "line": 147,
       "column": 15,
       "functionName": "constructor",
       "kind": "typeof_dual_paths",
@@ -3821,7 +3803,7 @@
     },
     {
       "filePath": "src/control-plane/readiness-planning-snapshot-owner.js",
-      "line": 216,
+      "line": 197,
       "column": 4,
       "functionName": "subscribe",
       "kind": "typeof_dual_paths",
@@ -3830,7 +3812,7 @@
     },
     {
       "filePath": "src/control-plane/readiness-planning-snapshot-owner.js",
-      "line": 235,
+      "line": 216,
       "column": 4,
       "functionName": "captureBuildOptionsKey",
       "kind": "typeof_dual_paths",
@@ -4442,7 +4424,7 @@
     },
     {
       "filePath": "src/message-group/message-group-target-resolver.js",
-      "line": 78,
+      "line": 51,
       "column": 26,
       "functionName": "preferConnectedCandidates",
       "kind": "typeof_dual_paths",
@@ -4451,7 +4433,7 @@
     },
     {
       "filePath": "src/message-group/message-group-target-resolver.js",
-      "line": 266,
+      "line": 239,
       "column": 26,
       "functionName": "resolveMessageGroupTargetAddressFromCache",
       "kind": "typeof_dual_paths",
@@ -4910,7 +4892,7 @@
     },
     {
       "filePath": "src/partition/managed-merge-workflow.js",
-      "line": 514,
+      "line": 501,
       "column": 7,
       "functionName": "resolveMergeExecutionTimeoutBudget",
       "kind": "typeof_dual_paths",
@@ -5936,7 +5918,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-transaction-recovery-methods.js",
-      "line": 64,
+      "line": 66,
       "column": 4,
       "functionName": "resumeRecoveredDistributedTransactions",
       "kind": "typeof_dual_paths",
@@ -5945,7 +5927,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-transaction-recovery-methods.js",
-      "line": 134,
+      "line": 136,
       "column": 4,
       "functionName": "loadSystemTableRows",
       "kind": "typeof_dual_paths",
@@ -5954,7 +5936,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-transaction-recovery-methods.js",
-      "line": 137,
+      "line": 139,
       "column": 4,
       "functionName": "loadSystemTableRows",
       "kind": "typeof_dual_paths",
@@ -5963,7 +5945,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-transaction-recovery-methods.js",
-      "line": 200,
+      "line": 210,
       "column": 4,
       "functionName": "canPersistDistributedTransactionState",
       "kind": "typeof_dual_paths",
@@ -6071,7 +6053,7 @@
     },
     {
       "filePath": "src/raft/authoritative-row-mutation-helper.js",
-      "line": 511,
+      "line": 499,
       "column": 6,
       "functionName": "probeAuthoritativeRow",
       "kind": "typeof_dual_paths",

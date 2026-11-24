@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-24T17:29:03.925Z",
+  "generatedAt": "2026-11-24T19:11:15.844Z",
   "rawViolationCount": 56,
   "violations": [
     {
@@ -284,7 +284,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-transaction-recovery-methods.js",
-      "line": 26,
+      "line": 28,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",

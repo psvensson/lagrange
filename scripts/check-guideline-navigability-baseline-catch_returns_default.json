@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-24T17:29:03.940Z",
-  "rawViolationCount": 357,
+  "generatedAt": "2026-11-24T19:11:15.861Z",
+  "rawViolationCount": 356,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-diagnostic-loss-accounting.js",
@@ -968,7 +968,7 @@
     },
     {
       "filePath": "src/control-plane/readiness-planning-semantic-currency-methods.js",
-      "line": 285,
+      "line": 282,
       "column": 6,
       "functionName": "refreshLivenessSemanticIdentities",
       "kind": "catch_returns_default",
@@ -977,7 +977,7 @@
     },
     {
       "filePath": "src/control-plane/readiness-planning-semantic-currency-methods.js",
-      "line": 298,
+      "line": 295,
       "column": 6,
       "functionName": "refreshCapacitySemanticIdentity",
       "kind": "catch_returns_default",
@@ -1913,7 +1913,7 @@
     },
     {
       "filePath": "src/raft/authoritative-row-mutation-helper.js",
-      "line": 475,
+      "line": 463,
       "column": 6,
       "functionName": "probeAuthoritativeRow",
       "kind": "catch_returns_default",
@@ -2087,15 +2087,6 @@
       "line": 272,
       "column": 4,
       "functionName": "readDescriptorFile",
-      "kind": "catch_returns_default",
-      "reason": "catch that returns a default; surface a typed refusal instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/raft/snapshot-compaction.js",
-      "line": 112,
-      "column": 4,
-      "functionName": "parseEntryHlc",
       "kind": "catch_returns_default",
       "reason": "catch that returns a default; surface a typed refusal instead",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"

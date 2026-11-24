@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-24T17:29:03.868Z",
+  "generatedAt": "2026-11-24T19:11:15.831Z",
   "rawViolationCount": 59,
   "violations": [
     {
@@ -275,7 +275,7 @@
     },
     {
       "filePath": "src/partition/partition-service-learner-promotion-methods.js",
-      "line": 646,
+      "line": 650,
       "column": 4,
       "functionName": "createPartitionServiceLearnerPromotionMethods",
       "kind": "prototype_copy_bags",

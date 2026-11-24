@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-24T17:29:03.827Z",
+  "generatedAt": "2026-11-24T19:11:15.830Z",
   "rawViolationCount": 77,
   "violations": [
     {
@@ -14,7 +14,7 @@
     },
     {
       "filePath": "src/bootstrap/boot-incarnation-owner.js",
-      "line": 90,
+      "line": 93,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "identity_keyed_module_state",

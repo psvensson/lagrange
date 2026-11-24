@@ -405,41 +405,38 @@ class SeedRegistrationPhase {
     const d = this.delegates;
     const logger = d.getLogger();
     const systemTableWriter = this.ensureSystemTableWriter();
+    const nodeId = d.getNodeId();
+    const tableRows = SYSTEM_TABLE_SCHEMAS.map((schema) =>
+      seedTableRow(schema, now),
+    );
+    const partitionRows = SYSTEM_TABLE_SCHEMAS.map((schema) =>
+      seedPartitionRow(schema, nodeId, now),
+    );
 
-    for (const schema of SYSTEM_TABLE_SCHEMAS) {
-      const tableName = schema.tableName;
-      const partitionId = INITIAL_PARTITION_IDS[tableName];
+    try {
+      await systemTableWriter.upsertSystemTableRows(
+        SYSTEM_TABLE_NAME.TABLES,
+        tableRows,
+      );
+    } catch (error) {
+      logger.error(BOOTSTRAP_LOG_MSG.TABLE_REGISTER_FAILED, {
+        tableName: tableRows[0]?.table_name ?? null,
+        error: error.message,
+      });
+      throw error;
+    }
 
-      const tableData = seedTableRow(schema, now);
-
-      try {
-        await systemTableWriter.upsertSystemTableRow(
-          SYSTEM_TABLE_NAME.TABLES,
-          tableData,
-        );
-      } catch (error) {
-        logger.error(BOOTSTRAP_LOG_MSG.TABLE_REGISTER_FAILED, {
-          tableName,
-          error: error.message,
-        });
-        throw error;
-      }
-
-      const partitionData = seedPartitionRow(schema, d.getNodeId(), now);
-
-      try {
-        await systemTableWriter.upsertSystemTableRow(
-          SYSTEM_TABLE_NAME.PARTITIONS,
-          partitionData,
-        );
-      } catch (error) {
-        logger.error(
-          BOOTSTRAP_LOG_MSG.PARTITION_REGISTER_FAILED, {
-            partitionId,
-            error: error.message,
-          });
-        throw error;
-      }
+    try {
+      await systemTableWriter.upsertSystemTableRows(
+        SYSTEM_TABLE_NAME.PARTITIONS,
+        partitionRows,
+      );
+    } catch (error) {
+      logger.error(BOOTSTRAP_LOG_MSG.PARTITION_REGISTER_FAILED, {
+        partitionId: partitionRows[0]?.partition_id ?? null,
+        error: error.message,
+      });
+      throw error;
     }
 
     logger.debug(BOOTSTRAP_LOG_MSG.SYSTEM_TABLES_REGISTERED, {
@@ -457,29 +454,25 @@ class SeedRegistrationPhase {
     const systemTableWriter = this.ensureSystemTableWriter();
 
     const updatedPartitions = new Set();
-    let updatedCount = 0;
-
-    for (const [_replicaId, partitionService] of
-      d.getPartitionServices()) {
+    const uniquePartitionServices = [];
+    for (const [_replicaId, partitionService] of d.getPartitionServices()) {
       const partitionId = partitionService.partitionId;
-
       if (updatedPartitions.has(partitionId)) {
         continue;
       }
+      updatedPartitions.add(partitionId);
+      uniquePartitionServices.push(partitionService);
+    }
 
+    await Promise.all(uniquePartitionServices.map(async (partitionService) => {
+      const partitionId = partitionService.partitionId;
       try {
-        const sizeBytes =
-          await partitionService.calculatePartitionSize();
-
+        const sizeBytes = await partitionService.calculatePartitionSize();
         await systemTableWriter.updateSystemTableRow(
           SYSTEM_TABLE_NAME.PARTITIONS,
           {partition_id: partitionId},
           {size_bytes: sizeBytes, updated_at: resolveHostedNodeClock(this.delegates)()},
         );
-
-        updatedPartitions.add(partitionId);
-        updatedCount++;
-
         logger.debug(BOOTSTRAP_LOG_MSG.PARTITION_SIZE_UPDATED, {
           partitionId,
           sizeBytes,
@@ -492,10 +485,10 @@ class SeedRegistrationPhase {
           });
         throw error;
       }
-    }
+    }));
 
     logger.debug(BOOTSTRAP_LOG_MSG.PARTITION_SIZES_UPDATED, {
-      updatedCount,
+      updatedCount: uniquePartitionServices.length,
       totalPartitions: updatedPartitions.size,
     });
   }

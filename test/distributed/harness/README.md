@@ -41,15 +41,8 @@ causal evidence is available.
 The docker stat gate (`bash scripts/rolling-restart-stat-gate.sh <N>`) is expensive
 (~5–10 min/run). **Start with the lowest N that could answer the question and
 escalate only when a small run is inconclusive** — the burden is on justifying a
-LARGER N, never a smaller one (full rationale in
+LARGER N, never a smaller one (see the authoritative iteration and closure contract in
 [`test/distributed/operational-ground-truth.md`](../../../test/distributed/operational-ground-truth.md)).
 
-- **Default N=3.** It is also the `rolling-restart-core-stability` doneWhen streak
-  (3 consecutive scenario-PASS), so a clean 3/3 satisfies closure — confirm with
-  `node scripts/solve.js probe --id rolling-restart-core-stability --probe scenario-harness --scenario rolling-restart --consecutive 3 --metric priority`.
-  A hard breach / corruption is conclusive even sooner; stop early.
-- **Escalate to N≥8 only** for a borderline pass rate you need to separate from
-  variance, or a convergence-*rate* promotion verdict where the statistic is the
-  claim. Do not default to N=8/N=10 every iteration.
 - Before queuing any gate, run `npm run analyze:latent-blockers` (step 0) — don't
   spend a gate to learn a layer the corpus already reveals.

@@ -112,7 +112,7 @@ documentClass: generated
 - [membership-lifecycle-constants.js](membership-lifecycle-constants.js) - No leading comment; first export: MEMBERSHIP_LIFECYCLE_EPOCH_BOUNDARY. (importers: hub)
 - [membership-lifecycle-controller.js](membership-lifecycle-controller.js) - No leading comment; first export: MEMBERSHIP_LIFECYCLE_INTENT. (importers: hub)
 - [membership-owner-shadow.js](membership-owner-shadow.js) - Single-owner cutover - divergence diff helper. (importers: few)
-- [membership-planning-version-key.js](membership-planning-version-key.js) - No leading comment; first export: readMembershipPlanningDerivationVersionKey. (importers: many)
+- [membership-planning-version-key.js](membership-planning-version-key.js) - No leading comment; first export: readMembershipPlanningDerivationVersionKey. (importers: few)
 - [membership-publication-acknowledgement.js](membership-publication-acknowledgement.js) - No leading comment; first export: acknowledgeMembershipPublication. (importers: few)
 - [membership-publication-active-gate-reconcile.js](membership-publication-active-gate-reconcile.js) - No leading comment; first export: ACTIVE_GATE_MEMBERSHIP_PUBLICATION_RECONCILE_CONTEXT_FIELD. (importers: few)
 - [membership-publication-candidate-derivation.js](membership-publication-candidate-derivation.js) - No leading comment; first export: buildPublicationMetadataRefreshRow. (importers: one)

@@ -1,46 +1,25 @@
-import {OwnerKeyReconcileQueue} from
-  '../workflow/owner-key-reconcile-queue.js';
+import {OwnerKeyReconcileQueue} from '../workflow/owner-key-reconcile-queue.js';
 import {
-  READINESS_PLANNING_DEPENDENCY_REGISTRY,
-  READINESS_PLANNING_OWNER_DEPENDENCIES,
-  READINESS_PLANNING_REASON,
-  READINESS_PLANNING_TABLES,
-  appendArrayValue,
-  buildQueueOwnerKey,
-  defaultMacrotaskScheduler,
-  freezeToken,
-  getReadinessBuildFailureReason,
-  getReadinessBuildRetryAfterMs,
-  isReadinessBuildFailureRetryable,
-  nextSemanticGeneration,
-  readConnectedNodeFingerprint,
-  shouldResetReadinessBuildAttempts,
+  READINESS_PLANNING_DEPENDENCY_REGISTRY, READINESS_PLANNING_OWNER_DEPENDENCIES,
+  READINESS_PLANNING_REASON, READINESS_PLANNING_TABLES, appendArrayValue,
+  buildQueueOwnerKey, defaultMacrotaskScheduler, freezeToken,
+  getReadinessBuildFailureReason, getReadinessBuildRetryAfterMs,
+  isReadinessBuildFailureRetryable, nextSemanticGeneration,
+  readConnectedNodeFingerprint, shouldResetReadinessBuildAttempts,
 } from './readiness-planning-version-contract.js';
+import {ReadinessPlanningSemanticGenerationTracker} from './readiness-planning-semantic-generation.js';
+import {defineRecordValue} from './readiness-planning-publication-contract.js';
 import {
-  ReadinessPlanningSemanticGenerationTracker,
-} from './readiness-planning-semantic-generation.js';
-import {
-  defineRecordValue,
-} from './readiness-planning-publication-contract.js';
-import {
-  readSharedNodeRows,
-  readFormationBootstrapOwnerKey,
-  readFormationEpochKey,
-  readOwnerKey,
+  readSharedNodeRows, readFormationBootstrapOwnerKey, readFormationEpochKey, readOwnerKey,
 } from './readiness-planning-formation-source.js';
 import {copyDenseOwnDataArray} from '../utils/strict-own-data.js';
-import {ReadinessPlanningDiagnosticRetention} from
-  './readiness-planning-diagnostic-retention.js';
+import {ReadinessPlanningDiagnosticRetention} from './readiness-planning-diagnostic-retention.js';
 import {installReadinessPlanningSemanticCurrencyMethods} from './readiness-planning-semantic-currency-methods.js';
 import {installReadinessPlanningCompletionAdmissionMethods} from './readiness-planning-completion-admission-methods.js';
+import {runReadinessActivity} from '../diagnostics/formation-owner-attribution.js';
 import {
-  runReadinessActivity,
-} from '../diagnostics/formation-owner-attribution.js';
-import {
-  READINESS_ADMISSION_TERM_BIT,
-  beginReadinessAdmissionRead,
-  forgetReadinessAdmissionOwner,
-  forgetReadinessAdmissionVariant,
+  READINESS_ADMISSION_TERM_BIT, beginReadinessAdmissionRead,
+  forgetReadinessAdmissionOwner, forgetReadinessAdmissionVariant,
   readReadinessAdmissionEvaluatedTerms,
 } from './readiness-admission-transition-record.js';
 
@@ -54,9 +33,7 @@ const mapForEach = Function.call.bind(Map.prototype.forEach);
 const mapGet = Function.call.bind(Map.prototype.get);
 const mapHas = Function.call.bind(Map.prototype.has);
 const mapSet = Function.call.bind(Map.prototype.set);
-const mapSize = Function.call.bind(
-  Object.getOwnPropertyDescriptor(Map.prototype, 'size').get,
-);
+const mapSize = Function.call.bind(Object.getOwnPropertyDescriptor(Map.prototype, 'size').get);
 const objectCreate = Object.create;
 const objectFreeze = Object.freeze;
 const setAdd = Function.call.bind(Set.prototype.add);
@@ -70,17 +47,12 @@ const READINESS_PLANNING_QUEUE_NAME = 'readiness-planning-snapshot-owner';
 const READINESS_PLANNING_MAX_RETRY_ATTEMPTS = 3;
 const READINESS_PLANNING_MAX_OPTION_VARIANTS_PER_OWNER = 16;
 const NO_ADMISSION_TERMS = 0;
-const TYPE_FUNCTION = 'function';
 const REQUIRED_SEMANTIC_SERVICE_METHODS = Object.freeze([
-  'getNodeLivenessSemanticIdentity',
-  'getNodeRow',
-  'buildNodeReadinessSyncCurrent',
+  'getNodeLivenessSemanticIdentity', 'getNodeRow', 'buildNodeReadinessSyncCurrent',
 ]);
 const MISSING_NODE_LIVENESS_OWNER_ERROR =
-  'ReadinessPlanningSnapshotOwner requires ' +
-  'service.nodeLivenessSemanticProjectionOwner.subscribe';
-const MISSING_SEMANTIC_SERVICE_METHOD_PREFIX =
-  'ReadinessPlanningSnapshotOwner requires service.';
+  'ReadinessPlanningSnapshotOwner requires service.nodeLivenessSemanticProjectionOwner.subscribe';
+const MISSING_SEMANTIC_SERVICE_METHOD_PREFIX = 'ReadinessPlanningSnapshotOwner requires service.';
 
 function initializeBuildVariantState(owner) {
   owner.completedSnapshotsByOwnerAndBuildKey = new MapConstructor();
@@ -96,14 +68,9 @@ function initializeGenerationState(owner) {
   owner.cacheGeneration = 1;
   owner.membershipOwnerGeneration = 1;
   owner.ownerDependencyGenerations = objectCreate(null);
-  for (let index = 0;
-    index < READINESS_PLANNING_OWNER_DEPENDENCIES.length;
-    index++) {
-    defineRecordValue(
-      owner.ownerDependencyGenerations,
-      READINESS_PLANNING_OWNER_DEPENDENCIES[index],
-      1,
-    );
+  for (let index = 0; index < READINESS_PLANNING_OWNER_DEPENDENCIES.length; index++) {
+    const depKey = READINESS_PLANNING_OWNER_DEPENDENCIES[index];
+    defineRecordValue(owner.ownerDependencyGenerations, depKey, 1);
   }
   owner.readinessSnapshotGeneration = 0;
   owner.recoveryEpochRevision = 0;
@@ -112,24 +79,18 @@ function initializeGenerationState(owner) {
 }
 
 function supportsCapacitySemanticPlanning(service) {
-  return typeof service?.storageAccountingService
-    ?.subscribeCapacitySemanticChanges === 'function' &&
-    typeof service?.storageAccountingService
-      ?.getCapacitySemanticIdentity === 'function';
+  return typeof service?.storageAccountingService?.subscribeCapacitySemanticChanges === 'function' &&
+    typeof service?.storageAccountingService?.getCapacitySemanticIdentity === 'function';
 }
 
 function assertSemanticPlanningServiceContract(service) {
-  if (typeof service?.nodeLivenessSemanticProjectionOwner?.subscribe !==
-      TYPE_FUNCTION) {
+  if (!(service?.nodeLivenessSemanticProjectionOwner?.subscribe instanceof Function)) {
     throw new TypeError(MISSING_NODE_LIVENESS_OWNER_ERROR);
   }
-  for (let index = 0; index < REQUIRED_SEMANTIC_SERVICE_METHODS.length;
-    index += 1) {
+  for (let index = 0; index < REQUIRED_SEMANTIC_SERVICE_METHODS.length; index += 1) {
     const methodName = REQUIRED_SEMANTIC_SERVICE_METHODS[index];
-    if (typeof service?.[methodName] !== TYPE_FUNCTION) {
-      throw new TypeError(
-        `${MISSING_SEMANTIC_SERVICE_METHOD_PREFIX}${methodName}`,
-      );
+    if (!(service?.[methodName] instanceof Function)) {
+      throw new TypeError(`${MISSING_SEMANTIC_SERVICE_METHOD_PREFIX}${methodName}`);
     }
   }
 }

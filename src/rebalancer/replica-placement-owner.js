@@ -63,6 +63,7 @@ import {
 const PLACEMENT_RESYNC_INTERVAL_MS = 60_000;
 const ENTRY_KIND_RELEASE = 'release';
 const ENTRY_KIND_ADMIT = 'admit';
+const CACHE_OP_DELETE = 'DELETE';
 const SKIPPED_PARTITION_STATUSES = Object.freeze(new Set(['splitting', 'merging']));
 const LOG_PASS_FAILED = 'Replica placement pass failed; its triggers wait for the next wake';
 const LOG_CANDIDATE_FAILED = 'Replica placement candidate failed; the pass goes on';
@@ -161,20 +162,14 @@ class ReplicaPlacementOwner {
     if (retained && retained.intentKey === intentKey) return retained;
     const body = buildBody();
     const attempt = Object.freeze({
-      attemptKey,
-      intentKey,
-      entryId: this.nextEntryId(kind, targetId),
-      body,
-      bodyText: JSON.stringify(body),
+      attemptKey, intentKey, entryId: this.nextEntryId(kind, targetId),
+      body, bodyText: JSON.stringify(body),
     });
     this.uncertainEntryIds.set(attemptKey, attempt);
     persistUnresolvedPlacementAttempt(this.ledgerPartitionService?.db, attempt);
     return attempt;
   }
 
-  // The leadership sink's edge: a custody of the ledger's live tenure, or none.
-  // Every drive to false (and shutdown) releases the retained repair owner's
-  // ended tenures: they end with the replica's leadership, not this custody.
   setLeader(isLeader) {
     const retained = this.workflowOwner ? this.workflowOwner.repository : null;
     if (!isLeader && retained) retained.retireEndedRetainedTenures(this.ledgerPartitionService);
@@ -184,8 +179,6 @@ class ReplicaPlacementOwner {
     if (tenure !== null) this.beginCustody(tenure);
   }
 
-  // A new term without a role edge renewed the ledger's tenure (its own
-  // TERM_CHANGE listener, subscribed first, ran): a new custody.
   adoptRenewedTenure() {
     const tenure = this.ledgerPartitionService.leadershipTenure;
     if (this.custody === null || tenure === null || tenure === this.custody.tenure) return;
@@ -200,7 +193,6 @@ class ReplicaPlacementOwner {
     this.notify(PLACEMENT_TRIGGER.LEADERSHIP_START);
   }
 
-  // Its passes stop at their next checkpoint; its triggers and listeners go.
   endCustody() {
     if (this.custody === null) return;
     this.custody = null;
@@ -212,7 +204,6 @@ class ReplicaPlacementOwner {
     this.setLeader(false);
   }
 
-  // Blocked work: attempts kept because their entry key holds another record.
   blockedPlacementAttempts() {
     return this.blockedAttempts.list();
   }
@@ -230,15 +221,12 @@ class ReplicaPlacementOwner {
     this.unsubscribers.push(() => {
       ledger.off(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, onCommitted);
       ledger.off(PARTITION_SERVICE_EVENT.WRITE_PATH_RELEASED, onWriteReleased);
-    });
-    this.unsubscribers.push(
-      ledger.raft.subscribe(RAFT_EVENT.TERM_CHANGE, () => this.adoptRenewedTenure()),
-      ledger.raft.subscribe(RAFT_EVENT.APPLIED_PROGRESS, () => {
-        if (this.custody?.termStart === PLACEMENT_TERM_START.PENDING) {
-          this.notify(PLACEMENT_TRIGGER.TERM_START_APPLIED);
-        }
-      }),
-    );
+    }, ledger.raft.subscribe(RAFT_EVENT.TERM_CHANGE, () => this.adoptRenewedTenure()),
+    ledger.raft.subscribe(RAFT_EVENT.APPLIED_PROGRESS, () => {
+      if (this.custody?.termStart === PLACEMENT_TERM_START.PENDING) {
+        this.notify(PLACEMENT_TRIGGER.TERM_START_APPLIED);
+      }
+    }));
   }
 
   attachListeners() {
@@ -246,21 +234,18 @@ class ReplicaPlacementOwner {
     this.attachLedgerListeners();
     if (this.nodeAuthority) {
       this.unsubscribers.push(
-        this.nodeAuthority.subscribe(() => this.notify(PLACEMENT_TRIGGER.NODES_OR_FORMATION)),
-      );
+        this.nodeAuthority.subscribe(() => this.notify(PLACEMENT_TRIGGER.NODES_OR_FORMATION)));
     }
     const cache = this.systemTableCache;
     if (cache) {
-      const onCache = (tableName, _op, row) => this.handleCacheChange(tableName, row);
+      const onCache = (tableName, op, row) => this.handleCacheChange(tableName, row, op);
       cache.onCacheApplyChange(onCache);
       this.unsubscribers.push(() => cache.offCacheApplyChange(onCache));
     }
     const storage = this.storageAccountingService;
     if (storage) {
-      this.unsubscribers.push(
-        storage.subscribeCapacitySemanticChanges(() =>
-          this.notify(PLACEMENT_TRIGGER.TARGET_CAPACITY_CHANGED)),
-      );
+      this.unsubscribers.push(storage.subscribeCapacitySemanticChanges(() =>
+        this.notify(PLACEMENT_TRIGGER.TARGET_CAPACITY_CHANGED)));
     }
     if (this.setIntervalFn && this.resyncIntervalMs > 0) {
       this.resyncHandle = this.setIntervalFn(() => this.notify(PLACEMENT_TRIGGER.RESYNC),
@@ -269,17 +254,12 @@ class ReplicaPlacementOwner {
   }
 
   detachListeners() {
-    while (this.unsubscribers.length > 0) {
-      const unsub = this.unsubscribers.pop();
-      unsub();
-    }
-    if (this.resyncHandle !== null && this.clearIntervalFn) {
-      this.clearIntervalFn(this.resyncHandle);
-    }
+    while (this.unsubscribers.length > 0) this.unsubscribers.pop()();
+    if (this.resyncHandle !== null && this.clearIntervalFn) this.clearIntervalFn(this.resyncHandle);
     this.resyncHandle = null;
   }
 
-  handleCacheChange(tableName, row) {
+  handleCacheChange(tableName, row, op = null) {
     if (!this.isLeader) return;
     if (tableName === TABLES.SERVICES) {
       this.notify(PLACEMENT_TRIGGER.SERVICES_CHANGED);
@@ -288,14 +268,16 @@ class ReplicaPlacementOwner {
     } else if (tableName === TABLES.REPLICA_OPERATIONS && row) {
       const opId = row[COLUMN.OPERATION_ID];
       if (typeof opId === 'string') {
-        const sig = rowSignatureOf(row);
-        if (this.seenRowSignatures.get(opId) === sig) return;
-        this.seenRowSignatures.set(opId, sig);
+        if (op === CACHE_OP_DELETE) this.seenRowSignatures.delete(opId);
+        else {
+          const sig = rowSignatureOf(row);
+          if (this.seenRowSignatures.get(opId) === sig) return;
+          this.seenRowSignatures.set(opId, sig);
+        }
       }
       this.notify(PLACEMENT_TRIGGER.LEDGER_COMMIT);
     }
   }
-
   notify(trigger) {
     if (!this.isLeader) return;
     this.pendingTriggers.add(trigger);
@@ -358,11 +340,28 @@ class ReplicaPlacementOwner {
 
   recordSeenOperationSignatures() {
     if (!this.systemTableCache) return;
+    const activeIds = new Set();
     for (const row of this.systemTableCache.getAll(TABLES.REPLICA_OPERATIONS)) {
       const opId = row[COLUMN.OPERATION_ID];
       if (typeof opId === 'string') {
+        activeIds.add(opId);
         this.seenRowSignatures.set(opId, rowSignatureOf(row));
       }
+    }
+    for (const opId of this.seenRowSignatures.keys()) {
+      if (!activeIds.has(opId)) {
+        this.seenRowSignatures.delete(opId);
+      }
+    }
+  }
+
+  recordTouchedOperationSignature(operationId) {
+    if (!this.systemTableCache || typeof operationId !== 'string') return;
+    const row = this.systemTableCache
+      .getAll(TABLES.REPLICA_OPERATIONS)
+      .find((entry) => entry[COLUMN.OPERATION_ID] === operationId);
+    if (row) {
+      this.seenRowSignatures.set(operationId, rowSignatureOf(row));
     }
   }
 
@@ -411,7 +410,11 @@ class ReplicaPlacementOwner {
       }
       observePlacementAttemptAnswer(this.ledgerPartitionService?.db, this.blockedAttempts,
         attempt, answer);
-      this.recordSeenOperationSignatures();
+      if (typeof body?.operationId === 'string') {
+        this.recordTouchedOperationSignature(body.operationId);
+      } else {
+        this.recordSeenOperationSignatures();
+      }
       return answer;
     } finally {
       this.ownEntryIds.delete(entryId);

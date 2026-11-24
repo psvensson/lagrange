@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-24T17:29:03.944Z",
-  "rawViolationCount": 2549,
+  "generatedAt": "2026-11-24T19:11:15.865Z",
+  "rawViolationCount": 2522,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-local-diagnostics-methods.js",
@@ -1264,15 +1264,6 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/bootstrap/bootstrap-service.js",
-      "line": 489,
-      "column": 8,
-      "functionName": "constructor",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/bootstrap/control-plane-write-health-owner.js",
       "line": 50,
       "column": 40,
@@ -1520,15 +1511,6 @@
       "line": 13,
       "column": 2,
       "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 320,
-      "column": 8,
-      "functionName": "constructor",
       "kind": "legacy_term_identifiers",
       "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -2137,15 +2119,6 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/bootstrap/phases/seed-cache-hydration-phase.js",
-      "line": 121,
-      "column": 8,
-      "functionName": "constructor",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/bootstrap/rejoin-hints-constants.js",
       "line": 34,
       "column": 2,
@@ -2357,42 +2330,6 @@
       "line": 77,
       "column": 4,
       "functionName": "normalizePositiveInteger",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/cache/leader-readiness-gate.js",
-      "line": 13,
-      "column": 2,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/cache/leader-readiness-gate.js",
-      "line": 281,
-      "column": 8,
-      "functionName": "getMissingSystemServiceLeaders",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/cache/leader-readiness-gate.js",
-      "line": 323,
-      "column": 8,
-      "functionName": "getMissingSystemServiceLeaders",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/cache/leader-readiness-gate.js",
-      "line": 372,
-      "column": 4,
-      "functionName": "getBlockingSystemServiceLeaders",
       "kind": "legacy_term_identifiers",
       "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -4685,7 +4622,7 @@
     },
     {
       "filePath": "src/config/dynamic-config-service.js",
-      "line": 423,
+      "line": 419,
       "column": 38,
       "functionName": "notifyWatchers",
       "kind": "legacy_term_identifiers",
@@ -4694,7 +4631,7 @@
     },
     {
       "filePath": "src/config/dynamic-config-service.js",
-      "line": 431,
+      "line": 427,
       "column": 10,
       "functionName": "notifyWatchers",
       "kind": "legacy_term_identifiers",
@@ -4703,7 +4640,7 @@
     },
     {
       "filePath": "src/config/dynamic-config-service.js",
-      "line": 431,
+      "line": 427,
       "column": 21,
       "functionName": "notifyWatchers",
       "kind": "legacy_term_identifiers",
@@ -4712,7 +4649,7 @@
     },
     {
       "filePath": "src/config/dynamic-config-service.js",
-      "line": 432,
+      "line": 428,
       "column": 28,
       "functionName": "notifyWatchers",
       "kind": "legacy_term_identifiers",
@@ -4721,7 +4658,7 @@
     },
     {
       "filePath": "src/config/dynamic-config-service.js",
-      "line": 436,
+      "line": 432,
       "column": 33,
       "functionName": "notifyWatchers",
       "kind": "legacy_term_identifiers",
@@ -4730,7 +4667,7 @@
     },
     {
       "filePath": "src/config/dynamic-config-service.js",
-      "line": 448,
+      "line": 444,
       "column": 51,
       "functionName": "notifyWatchers",
       "kind": "legacy_term_identifiers",
@@ -4739,7 +4676,7 @@
     },
     {
       "filePath": "src/config/dynamic-config-service.js",
-      "line": 479,
+      "line": 475,
       "column": 12,
       "functionName": "handleCDCEvent",
       "kind": "legacy_term_identifiers",
@@ -4748,7 +4685,7 @@
     },
     {
       "filePath": "src/config/dynamic-config-service.js",
-      "line": 481,
+      "line": 477,
       "column": 10,
       "functionName": "handleCDCEvent",
       "kind": "legacy_term_identifiers",
@@ -4757,7 +4694,7 @@
     },
     {
       "filePath": "src/config/dynamic-config-service.js",
-      "line": 482,
+      "line": 478,
       "column": 14,
       "functionName": "handleCDCEvent",
       "kind": "legacy_term_identifiers",
@@ -4766,7 +4703,7 @@
     },
     {
       "filePath": "src/config/dynamic-config-service.js",
-      "line": 482,
+      "line": 478,
       "column": 35,
       "functionName": "handleCDCEvent",
       "kind": "legacy_term_identifiers",
@@ -4775,7 +4712,7 @@
     },
     {
       "filePath": "src/config/dynamic-config-service.js",
-      "line": 484,
+      "line": 480,
       "column": 30,
       "functionName": "handleCDCEvent",
       "kind": "legacy_term_identifiers",
@@ -4784,7 +4721,7 @@
     },
     {
       "filePath": "src/config/dynamic-config-service.js",
-      "line": 485,
+      "line": 481,
       "column": 49,
       "functionName": "handleCDCEvent",
       "kind": "legacy_term_identifiers",
@@ -9959,7 +9896,7 @@
     },
     {
       "filePath": "src/live-query/live-query-startup-wiring.js",
-      "line": 114,
+      "line": 120,
       "column": 8,
       "functionName": "resolveEventRowData",
       "kind": "legacy_term_identifiers",
@@ -9968,7 +9905,7 @@
     },
     {
       "filePath": "src/live-query/live-query-startup-wiring.js",
-      "line": 116,
+      "line": 122,
       "column": 16,
       "functionName": "resolveEventRowData",
       "kind": "legacy_term_identifiers",
@@ -9977,7 +9914,7 @@
     },
     {
       "filePath": "src/live-query/live-query-startup-wiring.js",
-      "line": 132,
+      "line": 138,
       "column": 15,
       "functionName": "normalizePartitionCDCEvent",
       "kind": "legacy_term_identifiers",
@@ -9986,7 +9923,7 @@
     },
     {
       "filePath": "src/live-query/live-query-startup-wiring.js",
-      "line": 139,
+      "line": 145,
       "column": 4,
       "functionName": "normalizePartitionCDCEvent",
       "kind": "legacy_term_identifiers",
@@ -9995,7 +9932,7 @@
     },
     {
       "filePath": "src/live-query/live-query-startup-wiring.js",
-      "line": 139,
+      "line": 145,
       "column": 14,
       "functionName": "normalizePartitionCDCEvent",
       "kind": "legacy_term_identifiers",
@@ -11569,98 +11506,8 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/partition/managed-merge-workflow-topology-bindings.js",
-      "line": 25,
-      "column": 33,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-merge-workflow-topology-bindings.js",
-      "line": 26,
-      "column": 29,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-merge-workflow-topology-bindings.js",
-      "line": 27,
-      "column": 31,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-merge-workflow-topology-bindings.js",
-      "line": 28,
-      "column": 41,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-merge-workflow-topology-bindings.js",
-      "line": 29,
-      "column": 42,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-merge-workflow-topology-bindings.js",
-      "line": 30,
-      "column": 46,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-merge-workflow-topology-bindings.js",
-      "line": 33,
-      "column": 41,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-merge-workflow-topology-bindings.js",
-      "line": 35,
-      "column": 45,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-merge-workflow-topology-bindings.js",
-      "line": 37,
-      "column": 55,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/managed-merge-workflow-topology-bindings.js",
-      "line": 44,
-      "column": 34,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/partition/managed-merge-workflow.js",
-      "line": 88,
+      "line": 86,
       "column": 39,
       "functionName": "resolvePositiveInteger",
       "kind": "legacy_term_identifiers",
@@ -11669,7 +11516,7 @@
     },
     {
       "filePath": "src/partition/managed-merge-workflow.js",
-      "line": 89,
+      "line": 87,
       "column": 67,
       "functionName": "resolvePositiveInteger",
       "kind": "legacy_term_identifiers",
@@ -11678,7 +11525,7 @@
     },
     {
       "filePath": "src/partition/managed-merge-workflow.js",
-      "line": 180,
+      "line": 167,
       "column": 6,
       "functionName": "initializeMergeCollaborators",
       "kind": "legacy_term_identifiers",
@@ -11687,7 +11534,7 @@
     },
     {
       "filePath": "src/partition/managed-merge-workflow.js",
-      "line": 181,
+      "line": 168,
       "column": 13,
       "functionName": "isParticipantTransitionAllowed",
       "kind": "legacy_term_identifiers",
@@ -12461,7 +12308,7 @@
     },
     {
       "filePath": "src/partition/partition-participant-transaction-constants.js",
-      "line": 134,
+      "line": 131,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
@@ -16609,24 +16456,6 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/query/table-creation-service-completion.js",
-      "line": 70,
-      "column": 8,
-      "functionName": "normalizeProvisioningSummary",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/table-creation-service-completion.js",
-      "line": 75,
-      "column": 6,
-      "functionName": "normalizeProvisioningSummary",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/raft/authoritative-row-mutation-vocabulary.js",
       "line": 164,
       "column": 28,
@@ -16910,78 +16739,6 @@
       "line": 127,
       "column": 63,
       "functionName": "optionFunction",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/raft/sqlite-log-adapter.js",
-      "line": 34,
-      "column": 6,
-      "functionName": "<anonymous>",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/raft/sqlite-log-adapter.js",
-      "line": 115,
-      "column": 22,
-      "functionName": "initializeTables",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/raft/sqlite-log-adapter.js",
-      "line": 130,
-      "column": 24,
-      "functionName": "normalizeEntry",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/raft/sqlite-log-adapter.js",
-      "line": 131,
-      "column": 36,
-      "functionName": "normalizeEntry",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/raft/sqlite-log-entry-shape.js",
-      "line": 37,
-      "column": 34,
-      "functionName": "normalizeLogEntry",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/raft/sqlite-log-entry-shape.js",
-      "line": 43,
-      "column": 61,
-      "functionName": "normalizeLogEntry",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/raft/sqlite-log-entry-shape.js",
-      "line": 44,
-      "column": 58,
-      "functionName": "normalizeLogEntry",
-      "kind": "legacy_term_identifiers",
-      "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/raft/sqlite-raft-state-constants.js",
-      "line": 12,
-      "column": 2,
-      "functionName": "<anonymous>",
       "kind": "legacy_term_identifiers",
       "reason": "legacy vocabulary in an identifier; retire the legacy path and its name",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -20192,7 +19949,7 @@
     },
     {
       "filePath": "src/service/call-direct-invocation-replay.js",
-      "line": 345,
+      "line": 350,
       "column": 42,
       "functionName": "recordFailure",
       "kind": "legacy_term_identifiers",

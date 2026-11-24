@@ -480,6 +480,9 @@ test('every-critical-table-declares-the-same-target', () => {
     }});
     phase.ensureSystemTableWriter = () => ({
       upsertSystemTableRow: async (table, row) => {rows.push([table, row]);},
+      upsertSystemTableRows: async (table, batch) => {
+        for (const row of batch) rows.push([table, row]);
+      },
     });
     await phase.registerSystemTables(1);
     // BOTH writes this phase makes. The message_groups write was unprotected:
@@ -1073,6 +1076,9 @@ test('partitions-creation-site-follows-its-own-declaration', () => {
     }});
     phase.ensureSystemTableWriter = () => ({
       upsertSystemTableRow: async (table, row) => {rows.push([table, row]);},
+      upsertSystemTableRows: async (table, batch) => {
+        for (const row of batch) rows.push([table, row]);
+      },
     });
     await phase.registerSystemTables(1);
     const partitionRows = rows.filter(([table]) => table === 'partitions');

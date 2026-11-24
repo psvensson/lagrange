@@ -384,7 +384,6 @@ const getMissingSystemServiceLeaderCount = (missing = {}) =>
 export {
   getBlockingSystemServiceLeaders,
   getOwnerRecords,
-  getOwnerRecord,
   getMissingSystemServiceLeaders,
   getMissingSystemServiceLeaderCount,
   isSystemTableWriteReady,
