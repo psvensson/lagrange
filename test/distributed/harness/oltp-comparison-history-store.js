@@ -1074,7 +1074,6 @@ export {
   buildCanonicalHistoryTransactionsFromWorkload,
   buildComparisonCombinationKey,
   buildComparisonProgressSummary,
-  buildNov2026ComparisonHistoryReconciliation,
   createComparisonHistoryRecord,
   normalizeTransactions,
   parseComparisonHistoryNdjson,
