@@ -31,12 +31,7 @@ const TERMINAL_REASON_REFUSED = 'refused';
 const TERMINAL_REASON_ATTEMPTS_EXHAUSTED = 'attempts_exhausted';
 
 const NON_DOOMABLE_SESSION_STATES = new Set([
-  'PREPARING',
-  'PREPARED',
-  'COMMITTED',
-  'COMMITTING',
-  'ROLLED_BACK',
-  'REFUSED',
+  'PREPARING', 'PREPARED', 'COMMITTED', 'COMMITTING', 'ROLLED_BACK', 'REFUSED',
 ]);
 
 const COMPLETION_TARGET_STATES = new Set([
@@ -48,15 +43,13 @@ const COMPLETION_TARGET_STATES = new Set([
 let nextWaitReceiptId = 0;
 
 function rowKeyWaitersOf(service) {
-  if (service.rowKeyWaiters === undefined) {
-    service.rowKeyWaiters = new Set();
-  }
+  if (service.rowKeyWaiters === undefined) service.rowKeyWaiters = new Set();
   return service.rowKeyWaiters;
 }
 
 function sessionWaitContextsOf(service) {
   if (service.rowKeySessionWaitContexts === undefined) {
-    service.rowKeySessionWaitContexts = new Map();
+    service.rowKeySessionWaitContexts = new WeakMap();
   }
   return service.rowKeySessionWaitContexts;
 }
@@ -66,31 +59,16 @@ function readServiceNowMs(service) {
   return Number.isFinite(now) ? now : Date.now();
 }
 
-function resolveSessionIdOf(session) {
-  return session?.identity?.sessionId ?? null;
-}
-
-function resolveParticipantIdOf(session) {
-  return session?.identity?.participantId ?? null;
-}
-
-function resolveTransactionIdOf(session) {
-  return session?.identity?.transactionId ?? null;
-}
-
-function resolveSessionEpochOf(session) {
-  return session?.identity?.transactionEpoch ?? null;
-}
+const resolveSessionIdOf = (session) => session?.identity?.sessionId ?? null;
+const resolveParticipantIdOf = (session) => session?.identity?.participantId ?? null;
+const resolveTransactionIdOf = (session) => session?.identity?.transactionId ?? null;
+const resolveSessionEpochOf = (session) => session?.identity?.transactionEpoch ?? null;
 
 function recordSessionReceipt(session, receipt) {
   if (!session || typeof session !== 'object') return;
   session.lastWaitReceipt = receipt;
-  if (!Array.isArray(session.waitReceipts)) {
-    session.waitReceipts = [];
-  }
-  if (!session.waitReceipts.includes(receipt)) {
-    session.waitReceipts.push(receipt);
-  }
+  if (!Array.isArray(session.waitReceipts)) session.waitReceipts = [];
+  if (!session.waitReceipts.includes(receipt)) session.waitReceipts.push(receipt);
 }
 
 function clearReceiptTimer(receipt) {
@@ -120,9 +98,7 @@ function isReceiptSessionClosed(service, receipt, isSessionClosedFn = null) {
 }
 
 function bindRowKeyWaitServiceNotifier(service, notifyFn) {
-  if (service && notifyFn) {
-    service.rowKeyWaiterNotifier = notifyFn;
-  }
+  if (service && notifyFn) service.rowKeyWaiterNotifier = notifyFn;
 }
 
 function triggerServiceWaiterNotification(service, cyclePolicy = null) {
@@ -132,11 +108,11 @@ function triggerServiceWaiterNotification(service, cyclePolicy = null) {
     return;
   }
   if (service.rowKeyWaiterPolicy) {
-    notifyFifoRowKeyWaiters(service, service.rowKeyWaiterPolicy);
+    runFifoRowKeyWaiterPass(service, service.rowKeyWaiterPolicy);
     return;
   }
   if (cyclePolicy) {
-    notifyFifoRowKeyWaiters(service, {
+    runFifoRowKeyWaiterPass(service, {
       isSessionClosed: cyclePolicy.isSessionClosed,
       hasConflict: (waiterSession, rowKey) =>
         cyclePolicy.listHolderSessions(service, waiterSession, rowKey).length > 0,
@@ -191,9 +167,7 @@ function clearActiveSessionWaitContext(service, session) {
  */
 function prepareSessionRowKeyWaitBudget(service, session, candidateDeadlineMs) {
   const nowMs = readServiceNowMs(service);
-  if (!session || typeof session !== 'object') {
-    return candidateDeadlineMs - nowMs;
-  }
+  if (!session || typeof session !== 'object') return candidateDeadlineMs - nowMs;
   const ctx = setActiveSessionWaitContext(service, session, {
     originalDeadlineMs: candidateDeadlineMs,
     lastReceipt: session.lastWaitReceipt ?? null,
@@ -202,13 +176,13 @@ function prepareSessionRowKeyWaitBudget(service, session, candidateDeadlineMs) {
 }
 
 function settleClosedWaiterInPass(waiters, waiter) {
+  if (waiter.state === ROW_KEY_WAIT_RECEIPT_STATE.WAITING_ON_KEY) {
+    waiter.settleTerminal(TERMINAL_REASON_SESSION_CLOSED);
+    return;
+  }
   clearReceiptTimer(waiter);
   waiters.delete(waiter);
-  if (waiter.state === ROW_KEY_WAIT_RECEIPT_STATE.WAITING_ON_KEY) {
-    waiter.state = ROW_KEY_WAIT_RECEIPT_STATE.TERMINAL;
-    waiter.terminalReason = TERMINAL_REASON_SESSION_CLOSED;
-    waiter.resolve(true);
-  } else if (waiter.state === ROW_KEY_WAIT_RECEIPT_STATE.REEVALUATING) {
+  if (waiter.state === ROW_KEY_WAIT_RECEIPT_STATE.REEVALUATING) {
     waiter.state = ROW_KEY_WAIT_RECEIPT_STATE.TERMINAL;
     waiter.terminalReason = TERMINAL_REASON_SESSION_CLOSED;
   }
@@ -224,9 +198,7 @@ function occupyPassKey(passState, awaitedKey) {
 
 function isPassKeyBlocked(passState, awaitedKey) {
   const isUnscoped = awaitedKey === passState.unscopedSentinel;
-  if (passState.wokenUnscoped || passState.wokenKeys.has(awaitedKey)) {
-    return true;
-  }
+  if (passState.wokenUnscoped || passState.wokenKeys.has(awaitedKey)) return true;
   if (isUnscoped && passState.wokenKeys.size > 0) {
     passState.wokenUnscoped = true;
     return true;
@@ -251,6 +223,22 @@ function evaluateOneWaiterInPass(service, waiters, waiter, passState) {
   }
 }
 
+function runFifoRowKeyWaiterPass(service, {
+  isSessionClosed,
+  hasConflict,
+  unscopedSentinel = DEFAULT_UNSCOPED_SENTINEL,
+}) {
+  const waiters = service?.rowKeyWaiters;
+  if (!waiters || waiters.size === 0) return;
+  const passState = {
+    isSessionClosed, hasConflict, unscopedSentinel,
+    wokenKeys: new Set(), wokenUnscoped: false,
+  };
+  for (const waiter of [...waiters]) {
+    evaluateOneWaiterInPass(service, waiters, waiter, passState);
+  }
+}
+
 /**
  * Wake eligible waiting sessions in strict FIFO registration order (at most one
  * active or reevaluating waiter per row key per notification pass), plus any
@@ -266,18 +254,7 @@ function notifyFifoRowKeyWaiters(service, {
   if (service) {
     service.rowKeyWaiterPolicy = {isSessionClosed, hasConflict, unscopedSentinel};
   }
-  const waiters = service?.rowKeyWaiters;
-  if (!waiters || waiters.size === 0) return;
-  const passState = {
-    isSessionClosed,
-    hasConflict,
-    unscopedSentinel,
-    wokenKeys: new Set(),
-    wokenUnscoped: false,
-  };
-  for (const waiter of [...waiters]) {
-    evaluateOneWaiterInPass(service, waiters, waiter, passState);
-  }
+  runFifoRowKeyWaiterPass(service, {isSessionClosed, hasConflict, unscopedSentinel});
 }
 
 function retireSupersededSessionWaiters(service, session, nextRowKey) {
@@ -309,14 +286,12 @@ function createStructuredWaitReceipt(service, session, rowKey, originalDeadlineM
     terminalReason: null,
     timer: null,
     wakeForReevaluation: null,
+    settleTerminal: null,
     triggerTimeout: null,
     resolve: null,
   };
   recordSessionReceipt(session, receipt);
-  setActiveSessionWaitContext(service, session, {
-    originalDeadlineMs,
-    lastReceipt: receipt,
-  });
+  setActiveSessionWaitContext(service, session, {originalDeadlineMs, lastReceipt: receipt});
   return receipt;
 }
 
@@ -327,10 +302,9 @@ function resolveInitialAndRemainingWaitMs(service, session, boundedWaitMs) {
   const originalDeadlineMs = Number.isFinite(ctx?.originalDeadlineMs) ?
     ctx.originalDeadlineMs :
     nowMs + requestedMs;
-  const remainingFromOriginalMs = originalDeadlineMs - nowMs;
   return {
     originalDeadlineMs,
-    effectiveWaitMs: Math.min(requestedMs, remainingFromOriginalMs),
+    effectiveWaitMs: Math.min(requestedMs, originalDeadlineMs - nowMs),
   };
 }
 
@@ -360,40 +334,32 @@ function enqueueBoundedRowKeyWaiter(service, session, rowKey, boundedWaitMs) {
     const waiters = rowKeyWaitersOf(service);
     let settledOnce = false;
     receipt.wakeForReevaluation = () => {
-      if (settledOnce) return false;
+      if (settledOnce || receipt.state !== ROW_KEY_WAIT_RECEIPT_STATE.WAITING_ON_KEY) return false;
       settledOnce = true;
       clearReceiptTimer(receipt);
       receipt.state = ROW_KEY_WAIT_RECEIPT_STATE.REEVALUATING;
       resolve({waited: true, settled: true, receipt});
       return true;
     };
-    receipt.triggerTimeout = () => {
-      if (settledOnce || receipt.state !== ROW_KEY_WAIT_RECEIPT_STATE.WAITING_ON_KEY) {
-        return false;
-      }
+    receipt.settleTerminal = (reason, extra = {}) => {
+      if (settledOnce) return false;
       settledOnce = true;
       clearReceiptTimer(receipt);
       waiters.delete(receipt);
-      const sessionClosedOrReplaced = isReceiptSessionClosed(service, receipt);
       receipt.state = ROW_KEY_WAIT_RECEIPT_STATE.TERMINAL;
-      receipt.terminalReason = sessionClosedOrReplaced ?
-        TERMINAL_REASON_STALE_EPOCH :
-        TERMINAL_REASON_EXPIRED;
-      if (!sessionClosedOrReplaced) {
-        clearActiveSessionWaitContext(service, session);
-      }
-      resolve({
-        waited: true,
-        settled: false,
-        receipt,
-        ...(sessionClosedOrReplaced ? {staleEpochIgnored: true} : {}),
-      });
+      receipt.terminalReason = reason;
+      resolve({waited: true, settled: false, receipt, ...extra});
       return true;
     };
-    receipt.resolve = (settled) => {
-      if (settled === true) return receipt.wakeForReevaluation();
-      return receipt.triggerTimeout();
+    receipt.triggerTimeout = () => {
+      if (settledOnce || receipt.state !== ROW_KEY_WAIT_RECEIPT_STATE.WAITING_ON_KEY) return false;
+      const closedOrReplaced = isReceiptSessionClosed(service, receipt);
+      const reason = closedOrReplaced ? TERMINAL_REASON_STALE_EPOCH : TERMINAL_REASON_EXPIRED;
+      if (!closedOrReplaced) clearActiveSessionWaitContext(service, session);
+      return receipt.settleTerminal(reason, closedOrReplaced ? {staleEpochIgnored: true} : {});
     };
+    receipt.resolve = (settled) =>
+      (settled === true ? receipt.wakeForReevaluation() : receipt.triggerTimeout());
     waiters.add(receipt);
     receipt.timer = setTimeout(() => {
       receipt.triggerTimeout();
@@ -412,18 +378,14 @@ function enqueueBoundedRowKeyWaiter(service, session, rowKey, boundedWaitMs) {
  * @return {Object} Receipt in REEVALUATING (or TERMINAL) state.
  */
 function ensureRowKeyReevaluationReceipt(
-  service,
-  session,
-  rowKey,
-  originalDeadlineMs,
-  existingReceipt = null,
+  service, session, rowKey, originalDeadlineMs, existingReceipt = null,
 ) {
   if (existingReceipt) return existingReceipt;
-  const ctx = getActiveSessionWaitContext(service, session);
-  if (ctx?.lastReceipt &&
-      ctx.lastReceipt.awaitedKey === rowKey &&
-      ctx.lastReceipt.state === ROW_KEY_WAIT_RECEIPT_STATE.TERMINAL) {
-    return ctx.lastReceipt;
+  const lastReceipt = session?.lastWaitReceipt ?? null;
+  if (lastReceipt &&
+      lastReceipt.awaitedKey === rowKey &&
+      lastReceipt.state === ROW_KEY_WAIT_RECEIPT_STATE.TERMINAL) {
+    return lastReceipt;
   }
   const receipt = createStructuredWaitReceipt(service, session, rowKey, originalDeadlineMs);
   receipt.state = ROW_KEY_WAIT_RECEIPT_STATE.REEVALUATING;
@@ -435,27 +397,45 @@ function isReparkedOutcome(outcome) {
   return typeof outcome.nextRowKey === 'string' && outcome.nextRowKey.length > 0;
 }
 
-function isAcquiredOutcome(outcome) {
-  return outcome.acquired === true || outcome.answer?.success === true;
-}
+const isAcquiredOutcome = (outcome) =>
+  outcome.acquired === true || outcome.answer?.success === true;
 
 function resolveReevaluationTargetState(outcome = {}) {
-  if (COMPLETION_TARGET_STATES.has(outcome.state)) {
-    return outcome.state;
-  }
-  if (isReparkedOutcome(outcome)) {
-    return ROW_KEY_WAIT_RECEIPT_STATE.REPARKED;
-  }
+  if (COMPLETION_TARGET_STATES.has(outcome.state)) return outcome.state;
+  if (isReparkedOutcome(outcome)) return ROW_KEY_WAIT_RECEIPT_STATE.REPARKED;
   return isAcquiredOutcome(outcome) ?
     ROW_KEY_WAIT_RECEIPT_STATE.ACQUIRED :
     ROW_KEY_WAIT_RECEIPT_STATE.TERMINAL;
+}
+
+function applyReceiptCompletionState(service, receipt, targetState, outcome) {
+  clearReceiptTimer(receipt);
+  service?.rowKeyWaiters?.delete(receipt);
+  if (COMPLETION_TARGET_STATES.has(receipt.state)) {
+    if (receipt.state !== ROW_KEY_WAIT_RECEIPT_STATE.REPARKED) {
+      clearActiveSessionWaitContext(service, receipt.session);
+    }
+    return receipt.state;
+  }
+  receipt.state = targetState;
+  if (targetState === ROW_KEY_WAIT_RECEIPT_STATE.REPARKED) {
+    receipt.nextRowKey = outcome.nextRowKey ?? null;
+    setActiveSessionWaitContext(service, receipt.session, {
+      originalDeadlineMs: receipt.originalDeadlineMs,
+      lastReceipt: receipt,
+    });
+  } else {
+    receipt.terminalReason = outcome.reason ?? null;
+    clearActiveSessionWaitContext(service, receipt.session);
+  }
+  return targetState;
 }
 
 /**
  * Single owner completion transition for row-key wait reevaluation.
  * Performs queue removal, timer cleanup, state transition
  * (`REEVALUATING -> REPARKED | ACQUIRED | TERMINAL`), budget custody update,
- * and old-key FIFO wake handoff.
+ * and old-key FIFO wake handoff. Completed receipts remain immutable.
  * @param {Object} service - Partition service leader.
  * @param {Object|null} receipt - Wait receipt being completed.
  * @param {Object} [outcome] - Reevaluation outcome descriptor.
@@ -463,27 +443,11 @@ function resolveReevaluationTargetState(outcome = {}) {
  */
 function completeRowKeyWaitReevaluation(service, receipt, outcome = {}) {
   const targetState = resolveReevaluationTargetState(outcome);
-  if (receipt) {
-    clearReceiptTimer(receipt);
-    service?.rowKeyWaiters?.delete(receipt);
-    receipt.state = targetState;
-    if (targetState === ROW_KEY_WAIT_RECEIPT_STATE.REPARKED) {
-      receipt.nextRowKey = outcome.nextRowKey ?? null;
-      setActiveSessionWaitContext(service, receipt.session, {
-        originalDeadlineMs: receipt.originalDeadlineMs,
-        lastReceipt: receipt,
-      });
-    } else {
-      receipt.terminalReason = outcome.reason ?? null;
-      clearActiveSessionWaitContext(service, receipt.session);
-    }
-  }
+  const effectiveState = receipt ?
+    applyReceiptCompletionState(service, receipt, targetState, outcome) :
+    targetState;
   triggerServiceWaiterNotification(service, outcome.policy ?? null);
-  return {
-    state: targetState,
-    receipt: receipt ?? null,
-    answer: outcome.answer ?? null,
-  };
+  return {state: effectiveState, receipt: receipt ?? null, answer: outcome.answer ?? null};
 }
 
 function clearProvisionalSessionFootprint(session) {
@@ -515,14 +479,14 @@ function terminateSessionWaitReceipts(service, session) {
   let removed = false;
   for (const receipt of [...waiters]) {
     if (receipt.session !== session) continue;
-    clearReceiptTimer(receipt);
-    waiters.delete(receipt);
     removed = true;
-    const wasWaiting = receipt.state === ROW_KEY_WAIT_RECEIPT_STATE.WAITING_ON_KEY;
-    receipt.state = ROW_KEY_WAIT_RECEIPT_STATE.TERMINAL;
-    receipt.terminalReason = TERMINAL_REASON_CLAIMS_RELEASED;
-    if (wasWaiting) {
-      receipt.resolve(false);
+    if (receipt.state === ROW_KEY_WAIT_RECEIPT_STATE.WAITING_ON_KEY) {
+      receipt.settleTerminal(TERMINAL_REASON_CLAIMS_RELEASED);
+    } else {
+      clearReceiptTimer(receipt);
+      waiters.delete(receipt);
+      receipt.state = ROW_KEY_WAIT_RECEIPT_STATE.TERMINAL;
+      receipt.terminalReason = TERMINAL_REASON_CLAIMS_RELEASED;
     }
   }
   return removed;
@@ -593,9 +557,7 @@ function isActiveSessionPhase(session) {
 
 /**
  * Determine whether `session` is an ACTIVE, unproposed session that can be
- * safely doomed on local wait-for cycle detection. Sessions in PREPARING,
- * PREPARED, COMMITTED, or with sealed/in-flight proposals retain recovery
- * custody and are NEVER doomed locally.
+ * safely doomed on local wait-for cycle detection.
  * @param {Object|null} session - Candidate participant session.
  * @return {boolean}
  */
@@ -615,34 +577,25 @@ function doomActiveSessionOnWaitCycle(service, session, rowKey, policy) {
   if (!canDoomSessionOnLocalWaitCycle(session)) {
     return {doomed: false, released: false, receipt: null};
   }
+  const ctx = getActiveSessionWaitContext(service, session);
+  const originalDeadlineMs = ctx?.originalDeadlineMs ?? readServiceNowMs(service);
   session.phase = SESSION_PHASE_DOOMED;
-  if (session.status !== undefined) {
-    session.status = SESSION_PHASE_DOOMED;
-  }
+  if (session.status !== undefined) session.status = SESSION_PHASE_DOOMED;
   session.doomCode = ROW_KEY_WAIT_CYCLE_FAILURE_CODE;
   session.failureReason = ROW_KEY_WAIT_CYCLE_FAILURE_REASON;
   session.deadlockDetected = true;
   session.cycleAwaitedRowKey = rowKey;
-  const ctx = getActiveSessionWaitContext(service, session);
-  const originalDeadlineMs = ctx?.originalDeadlineMs ?? readServiceNowMs(service);
+  const {released} = releaseRowKeySessionClaims(service, session, policy);
   const receipt = createStructuredWaitReceipt(service, session, rowKey, originalDeadlineMs);
   receipt.state = ROW_KEY_WAIT_RECEIPT_STATE.TERMINAL;
   receipt.terminalReason = ROW_KEY_WAIT_CYCLE_FAILURE_REASON;
-  const {released} = releaseRowKeySessionClaims(service, session, policy);
-  setActiveSessionWaitContext(service, session, {
-    originalDeadlineMs,
-    lastReceipt: receipt,
-  });
+  clearActiveSessionWaitContext(service, session);
   return {doomed: true, released, receipt};
 }
 
 /**
  * Detect whether parking `session` on `rowKey` creates a wait-for cycle with
  * currently parked row-key waiters on the same partition service.
- * When a cycle is detected on an `ACTIVE`, unproposed session, immediately
- * dooms the victim session and releases its provisional row-key claims via
- * `releaseRowKeySessionClaims` so the waiting peer wakes without waiting for
- * an external `ROLLBACK` RPC.
  * @param {Object} service - Partition service leader.
  * @param {Object|null} session - Candidate waiting participant session.
  * @param {string} rowKey - Conflicting row key or sentinel.
@@ -670,10 +623,7 @@ function hasRowKeyWaitForCycle(service, session, rowKey, {
     }
   }
   if (cycleDetected) {
-    doomActiveSessionOnWaitCycle(service, session, rowKey, {
-      isSessionClosed,
-      listHolderSessions,
-    });
+    doomActiveSessionOnWaitCycle(service, session, rowKey, {isSessionClosed, listHolderSessions});
   }
   return cycleDetected;
 }
@@ -739,14 +689,34 @@ function decorateParticipantRowKeyWaitFailure(service, session, answer) {
   };
 }
 
-function finishTerminalRowKeyWaitReevaluation(service, session, receipt, reason, answer) {
-  const effectiveReason = reason ??
-    (session?.deadlockDetected === true ?
-      ROW_KEY_WAIT_CYCLE_FAILURE_REASON :
-      TERMINAL_REASON_EXPIRED);
-  completeRowKeyWaitReevaluation(service, receipt, {
+function resolveTerminalAttemptReceipt(service, session, receipt, awaitedKey, originalDeadlineMs) {
+  const needsFreshAttemptReceipt =
+    (!receipt ||
+      (COMPLETION_TARGET_STATES.has(receipt.state) &&
+        receipt.state !== ROW_KEY_WAIT_RECEIPT_STATE.TERMINAL)) &&
+    typeof awaitedKey === 'string' &&
+    awaitedKey.length > 0;
+  if (!needsFreshAttemptReceipt) return receipt;
+  const deadlineMs = Number.isFinite(originalDeadlineMs) ?
+    originalDeadlineMs :
+    readServiceNowMs(service);
+  const created = createStructuredWaitReceipt(service, session, awaitedKey, deadlineMs);
+  created.state = ROW_KEY_WAIT_RECEIPT_STATE.REEVALUATING;
+  return created;
+}
+
+function finishTerminalRowKeyWaitReevaluation(
+  service, session, receipt, reason, answer, awaitedKey = null, originalDeadlineMs = null,
+) {
+  const targetReceipt = resolveTerminalAttemptReceipt(
+    service, session, receipt, awaitedKey, originalDeadlineMs);
+  const existingReason = targetReceipt?.terminalReason ?? null;
+  const defaultReason = session?.deadlockDetected === true ?
+    ROW_KEY_WAIT_CYCLE_FAILURE_REASON :
+    TERMINAL_REASON_EXPIRED;
+  completeRowKeyWaitReevaluation(service, targetReceipt, {
     state: ROW_KEY_WAIT_RECEIPT_STATE.TERMINAL,
-    reason: effectiveReason,
+    reason: reason ?? existingReason ?? defaultReason,
     answer,
   });
   return decorateParticipantRowKeyWaitFailure(service, session, answer);
@@ -757,9 +727,12 @@ function finishRebaseRefusedRowKeyWaitReevaluation(service, session, receipt, an
     service, session, receipt, TERMINAL_REASON_REBASE_REFUSED, answer);
 }
 
-function finishAttemptsExhaustedRowKeyWaitReevaluation(service, session, receipt, answer) {
+function finishAttemptsExhaustedRowKeyWaitReevaluation(
+  service, session, receipt, answer, originalDeadlineMs = null,
+) {
   return finishTerminalRowKeyWaitReevaluation(
-    service, session, receipt, TERMINAL_REASON_ATTEMPTS_EXHAUSTED, answer);
+    service, session, receipt, TERMINAL_REASON_ATTEMPTS_EXHAUSTED,
+    answer, answer?.detail ?? null, originalDeadlineMs);
 }
 
 export {

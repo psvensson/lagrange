@@ -531,11 +531,11 @@ class DistributedTransactionCoordinator {
   }
 
   async rollbackOwned(sessionId, expectedTransactionId) {
-    const settledCycleRollback = this.consumeSettledCycleRollback?.(
-      sessionId, expectedTransactionId);
-    if (settledCycleRollback) return settledCycleRollback;
     const tx = this.transactionsBySession.get(sessionId);
     if (!tx || tx.transactionId !== expectedTransactionId) {
+      const settledCycleRollback = this.consumeSettledCycleRollback?.(
+        sessionId, expectedTransactionId);
+      if (settledCycleRollback) return settledCycleRollback;
       return this.recoveryObligationAnswer(expectedTransactionId,
         QUERY_OPERATION.ROLLBACK) ?? {
         success: false,

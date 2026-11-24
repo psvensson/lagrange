@@ -23,7 +23,10 @@ import {
 } from '../../src/partition/partition-participant-transaction-session.js';
 import {
   canDoomSessionOnLocalWaitCycle,
+  enqueueBoundedRowKeyWaiter,
   hasRowKeyWaitForCycle,
+  notifyFifoRowKeyWaiters,
+  releaseRowKeySessionClaims,
 } from '../../src/partition/partition-row-key-waiters.js';
 
 const ROW_KEY_WAIT_CYCLE_FAILURE_REASON = 'ROW_KEY_WAIT_CYCLE_DETECTED';
@@ -586,6 +589,42 @@ test('Review §5: coordinator drives canonical rollbackTransaction on cycle vict
     assert.deepEqual(settledRollback.participants, [leader.partitionId]);
     assert.equal(coordinator.getTransaction('sess-coord-2'), null);
     assert.equal(t2WriteA.participantDetails?.[0]?.status, TRANSACTION_STATUS.ACTIVE);
+
+    // Witness (d): failed victim rollback is NOT cached in settledCycleRollbacksBySession;
+    // subsequent rollbackTransaction re-drives runRollbackProtocol on the live tx and succeeds.
+    let failNextRollback = true;
+    const retryCoordinator = new DistributedTransactionCoordinator({
+      participantRetryMaxRetries: 0,
+      beginParticipant: async (sId, _pId, id) =>
+        send(leader, beginMessage({...id, sessionId: sId})),
+      rollbackParticipant: async (sId, _pId, req) => {
+        if (failNextRollback) {
+          failNextRollback = false;
+          throw new Error('simulated transient rollback delivery failure');
+        }
+        const msg = txMessage(PARTITION_SERVICE_OPERATION.ROLLBACK, {...req, sessionId: sId}, req);
+        return send(leader, msg);
+      },
+    });
+    const t3Begin = await retryCoordinator.begin('sess-coord-retry');
+    assert.equal(t3Begin.success, true);
+    const failedCycleWrite = await retryCoordinator.executeWriteStatement(
+      'sess-coord-retry',
+      {operationId: 'op-t3-cycle', partitionIds: [leader.partitionId]},
+      async () => ({
+        success: false,
+        failureCode: CODE.ALREADY_ACTIVE,
+        failureReason: ROW_KEY_WAIT_CYCLE_FAILURE_REASON,
+        deadlockDetected: true,
+      }),
+    );
+    assert.equal(failedCycleWrite.rollback?.success, false);
+    assert.notEqual(retryCoordinator.getTransaction('sess-coord-retry'), null);
+    const redrivenRollback = await retryCoordinator.rollbackTransaction('sess-coord-retry', {
+      expectedTransactionId: t3Begin.transactionId,
+    });
+    assert.equal(redrivenRollback.success, true);
+    assert.equal(retryCoordinator.getTransaction('sess-coord-retry'), null);
   });
 });
 
@@ -644,11 +683,13 @@ test('Review §5: wait-receipt budget and epoch binding preserves originalDeadli
     const w1ElapsedMs = Date.now() - w1StartMs;
     assert.equal(w1Res.success, false);
     assert.equal(w1Res.failureCode, CODE.ALREADY_ACTIVE);
+    assert.equal(receiptOnA.state, ROW_KEY_WAIT_RECEIPT_STATE.REPARKED);
     assert.equal(receiptOnB.state, ROW_KEY_WAIT_RECEIPT_STATE.TERMINAL);
+    assert.equal(receiptOnB.terminalReason, 'expired');
     assert.equal(w1ElapsedMs < 400, true, `W1 must honor original 120ms deadline (got ${w1ElapsedMs}ms)`);
     assert.equal((await rollbackParticipantTx(leader, w1)).success, true);
 
-    // Epoch binding witness: late timer from earlier epoch/session is a no-op on replacement session:
+    // Witness (a): live stale-epoch timeout on an UNSETTLED WAITING_ON_KEY receipt:
     leader.conflictSettleWaitMs = 3000;
     const oldEpochTx = identityOf('da'.repeat(16), {sessionId: 'sess-epoch-bind', transactionEpoch: 21});
     assert.equal((await send(leader, beginMessage(oldEpochTx))).success, true);
@@ -658,9 +699,6 @@ test('Review §5: wait-receipt budget and epoch binding preserves originalDeadli
     const oldReceipt = oldSession.lastWaitReceipt;
     assert.equal(oldReceipt.state, ROW_KEY_WAIT_RECEIPT_STATE.WAITING_ON_KEY);
 
-    assert.equal((await rollbackParticipantTx(leader, oldEpochTx)).success, true);
-    await oldWaitPromise;
-
     const newEpochTx = identityOf('db'.repeat(16), {sessionId: 'sess-epoch-bind', transactionEpoch: 22});
     assert.equal((await send(leader, beginMessage(newEpochTx))).success, true);
     const newWaitPromise = leader.handleRemoteQuery(queryMessage(newEpochTx, UPDATE_SQL, ['new-b', 'k-b']));
@@ -669,10 +707,36 @@ test('Review §5: wait-receipt budget and epoch binding preserves originalDeadli
     const newReceipt = newSession.lastWaitReceipt;
     assert.equal(newReceipt.state, ROW_KEY_WAIT_RECEIPT_STATE.WAITING_ON_KEY);
 
-    assert.equal(oldReceipt.triggerTimeout(), false);
+    // Advance oldSession's epoch while oldReceipt is STILL WAITING_ON_KEY, then fire oldReceipt's timeout:
     oldSession.identity = Object.freeze({...oldSession.identity, transactionEpoch: 99});
+    assert.equal(oldReceipt.triggerTimeout(), true);
+    assert.equal(oldReceipt.state, ROW_KEY_WAIT_RECEIPT_STATE.TERMINAL);
+    assert.equal(oldReceipt.terminalReason, 'stale_epoch_timeout');
+    assert.equal((await oldWaitPromise).success, false);
+    assert.equal(oldReceipt.terminalReason, 'stale_epoch_timeout');
     assert.equal(newSession.phase, PHASE.ACTIVE);
     assert.equal(newReceipt.state, ROW_KEY_WAIT_RECEIPT_STATE.WAITING_ON_KEY);
+    oldSession.identity = Object.freeze({...oldSession.identity, transactionEpoch: 21});
+    assert.equal((await rollbackParticipantTx(leader, oldEpochTx)).success, true);
+
+    // Witness (b) & (c): releaseRowKeySessionClaims and notifyFifoRowKeyWaiters settle
+    // WAITING_ON_KEY waiters promptly with settled: false and state: TERMINAL.
+    const claimSession = {identity: {sessionId: 's-claim', transactionEpoch: 1}, phase: PHASE.ACTIVE};
+    const claimWaitPromise = enqueueBoundedRowKeyWaiter(leader, claimSession, 'k-b', 3000);
+    releaseRowKeySessionClaims(leader, claimSession);
+    const claimWaitOut = await claimWaitPromise;
+    assert.equal(claimWaitOut.settled, false);
+    assert.equal(claimWaitOut.receipt.state, ROW_KEY_WAIT_RECEIPT_STATE.TERMINAL);
+    assert.equal(claimWaitOut.receipt.terminalReason, 'claims_released');
+
+    const closedSession = {identity: {sessionId: 's-closed', transactionEpoch: 1}, phase: PHASE.ACTIVE};
+    const closedWaitPromise = enqueueBoundedRowKeyWaiter(leader, closedSession, 'k-b', 3000);
+    closedSession.phase = PHASE.DOOMED;
+    notifyFifoRowKeyWaiters(leader, leader.rowKeyWaiterPolicy);
+    const closedWaitOut = await closedWaitPromise;
+    assert.equal(closedWaitOut.settled, false);
+    assert.equal(closedWaitOut.receipt.state, ROW_KEY_WAIT_RECEIPT_STATE.TERMINAL);
+    assert.equal(closedWaitOut.receipt.terminalReason, 'session_closed');
 
     await commitParticipantTx(leader, proposed, h2);
     assert.equal((await newWaitPromise).success, true);

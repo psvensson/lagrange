@@ -55,7 +55,10 @@ async function settleCycleVictimTransaction(coordinator, sessionId, tx, result) 
     failureReason: ROW_KEY_WAIT_CYCLE_DETECTED,
     deadlockDetected: true,
   };
-  settledCycleRollbacksOf(coordinator).set(sessionId, rollbackResult);
+  if (rawRollback?.success === true &&
+      !coordinator.transactionsBySession.has(sessionId)) {
+    settledCycleRollbacksOf(coordinator).set(sessionId, rollbackResult);
+  }
   return {
     ...result,
     failureReason: ROW_KEY_WAIT_CYCLE_DETECTED,

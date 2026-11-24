@@ -114,7 +114,14 @@ async function runOneConflictWaitStep(service, payload, participantAnswer, origi
     return {
       done: true,
       answer: finishTerminalRowKeyWaitReevaluation(
-        service, session, session?.lastWaitReceipt ?? null, null, participantAnswer),
+        service,
+        session,
+        session?.lastWaitReceipt ?? null,
+        null,
+        participantAnswer,
+        participantAnswer.detail,
+        originalDeadlineMs,
+      ),
     };
   }
   const waitOutcome = await waitForConflictingRowKeyHolderToSettle(
@@ -152,7 +159,7 @@ async function resolveParticipantRemoteQueryAnswer(service, payload) {
   }
   const session = findParticipantSession(service, payload);
   return finishAttemptsExhaustedRowKeyWaitReevaluation(
-    service, session, session?.lastWaitReceipt ?? null, participantAnswer);
+    service, session, session?.lastWaitReceipt ?? null, participantAnswer, originalDeadlineMs);
 }
 
 const {
