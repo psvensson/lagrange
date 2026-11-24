@@ -2365,6 +2365,21 @@
           },
           "metrics": null
         },
+        "scenarioA/smoke": {
+          "claimKey": "pg-patroni-sync-ha-rf3/scenarioA/smoke",
+          "claimKind": "throughput",
+          "status": "not-measured",
+          "reasons": [
+            "no-observation"
+          ],
+          "defectIds": [],
+          "evidence": {
+            "runIds": [],
+            "rawObservationsDigests": [],
+            "forensic": []
+          },
+          "metrics": null
+        },
         "scenarioB/local-only": {
           "claimKey": "pg-patroni-sync-ha-rf3/scenarioB/local-only",
           "claimKind": "decision-throughput",

@@ -49,6 +49,7 @@ The named smoke profile scenario-a-smoke-v1: the canonical workload executed end
 | Lagrange 0.4.0 (3 nodes) | invalid-measurement (duplicate-claim, mixed-campaign, record-rejected:missing-field) |
 | TiDB + TiKV v8.5.8 | unsupported (semantic-gate-client-missing:tidb-tikv) |
 | PostgreSQL 17 (single primary) | valid-observed (semantic-gate-incomplete, smoke-profile-no-capacity-claim): smoke profile: offered 100, issued 100, committed 100, conflict-exhausted 0, product_error 0, correctness_failure 0, transport_failure 0, harness_fault 0, unresolved 0, unissued 0 |
+| PostgreSQL 17 (primary + 2 streaming standbys, synchronous_standby_names) | not-measured (no-observation) |
 
 ## Per-phase time breakdown
 

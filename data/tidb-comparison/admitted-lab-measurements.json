@@ -5069,6 +5069,21 @@
       "metrics": null
     },
     {
+      "claimKey": "pg-patroni-sync-ha-rf3/scenarioA/smoke",
+      "claimKind": "throughput",
+      "status": "not-measured",
+      "reasons": [
+        "no-observation"
+      ],
+      "defectIds": [],
+      "evidence": {
+        "runIds": [],
+        "rawObservationsDigests": [],
+        "forensic": []
+      },
+      "metrics": null
+    },
+    {
       "claimKey": "pg-patroni-sync-ha-rf3/scenarioB/fan-out",
       "claimKind": "decision-throughput",
       "status": "invalid-measurement",
