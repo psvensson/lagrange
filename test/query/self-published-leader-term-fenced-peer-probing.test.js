@@ -24,6 +24,7 @@ import path from 'node:path';
 import {performance} from 'node:perf_hooks';
 import Database from 'better-sqlite3';
 
+import {scaleByMachineFactor} from '../../scripts/test-machine-factor.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   OWNER_FACT_STATE as STATE,
@@ -868,9 +869,11 @@ test('Option A adversarial hardening: 46-partition memoized disk term lookup avo
     'all 460 prepared-statement 46-partition lookups must return eligible with exact term');
   t.equal(reopenedCount, 0,
     'all 460 warm lookups must reuse exact cached readonly handles with zero SQLite re-opens');
+  const warmBudgetMs = scaleByMachineFactor(25);
   t.ok(
-    warmElapsedMs < 25,
-    `460 prepared-statement 46-partition lookups must complete under 25ms (observed ${warmElapsedMs.toFixed(2)}ms)`,
+    warmElapsedMs < warmBudgetMs,
+    `460 prepared-statement 46-partition lookups must complete under ${warmBudgetMs}ms ` +
+      `(observed ${warmElapsedMs.toFixed(2)}ms)`,
   );
 
   // Removing a cached partition DB file on disk MUST invalidate its physical

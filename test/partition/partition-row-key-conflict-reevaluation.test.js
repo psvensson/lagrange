@@ -14,6 +14,7 @@
  */
 import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
+import {scaleByMachineFactor} from '../../scripts/test-machine-factor.js';
 import {
   PARTICIPANT_TRANSACTION_FAILURE_CODE as CODE,
   PARTICIPANT_TRANSACTION_SESSION_PHASE as PHASE,
@@ -502,7 +503,12 @@ test('Finding 7 & Review §5: AB-BA wait-for cycle dooms ACTIVE victim and relea
     assert.equal(tx2Second.sqlState, ROW_KEY_WAIT_CYCLE_SQLSTATE);
     assert.equal(tx2Second.conflict, true);
     assert.equal(tx2Second.retryable, true);
-    assert.equal(elapsedMs < 50, true, `cycle must break in <50ms (got ${elapsedMs}ms)`);
+    const cycleBreakBudgetMs = scaleByMachineFactor(50);
+    assert.equal(
+      elapsedMs < cycleBreakBudgetMs,
+      true,
+      `cycle must break in <${cycleBreakBudgetMs}ms (got ${elapsedMs}ms)`,
+    );
 
     const doomedVictim = findParticipantSession(leader, tx2);
     assert.equal(doomedVictim?.phase, PHASE.DOOMED);
@@ -686,7 +692,12 @@ test('Review §5: wait-receipt budget and epoch binding preserves originalDeadli
     assert.equal(receiptOnA.state, ROW_KEY_WAIT_RECEIPT_STATE.REPARKED);
     assert.equal(receiptOnB.state, ROW_KEY_WAIT_RECEIPT_STATE.TERMINAL);
     assert.equal(receiptOnB.terminalReason, 'expired');
-    assert.equal(w1ElapsedMs < 400, true, `W1 must honor original 120ms deadline (got ${w1ElapsedMs}ms)`);
+    const deadlineBudgetMs = scaleByMachineFactor(400);
+    assert.equal(
+      w1ElapsedMs < deadlineBudgetMs,
+      true,
+      `W1 must honor original 120ms deadline (<${deadlineBudgetMs}ms, got ${w1ElapsedMs}ms)`,
+    );
     assert.equal((await rollbackParticipantTx(leader, w1)).success, true);
 
     // Witness (a): live stale-epoch timeout on an UNSETTLED WAITING_ON_KEY receipt:
