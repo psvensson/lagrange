@@ -521,23 +521,14 @@ function createDiskBackedWalPartitions(dbDir, partitionRowsMap) {
     });
     insertMany(rows);
     databases.set(partitionId, db);
+    const runQuery = (renderedSql, boundParams = []) => {
+      const matchedRows = db.prepare(renderedSql).all(...boundParams);
+      return {count: matchedRows.length, partitionId, rows: matchedRows, success: true};
+    };
     partitionServices.set(partitionId, {
-      dbPath,
-      executeQuery: async (renderedSql, boundParams = []) => {
-        const matchedRows = db.prepare(renderedSql).all(...boundParams);
-        return {
-          count: matchedRows.length,
-          partitionId,
-          rows: matchedRows,
-          success: true,
-        };
-      },
-      initialized: true,
-      isLeader: true,
-      partitionId,
-      raftRole: 'leader',
-      status: 'active',
-      storageBackend: {db, dbPath},
+      dbPath, executeLocalQuery: runQuery, executeQuery: async (s, p = []) => runQuery(s, p),
+      getRole: () => 'leader', initialized: true, isLeader: true, partitionId,
+      raftRole: 'leader', status: 'active', storageBackend: {db, dbPath},
     });
   }
 

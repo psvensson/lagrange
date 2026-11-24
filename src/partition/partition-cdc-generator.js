@@ -369,7 +369,7 @@ class PartitionCDCGenerator {
       }
 
       // For INSERT queries without params, parse literal values from SQL
-      if ((entryType === PARTITION_SERVICE_OPERATION.INSERT ||
+      if (!hasPlaceholders && (entryType === PARTITION_SERVICE_OPERATION.INSERT ||
         entryType === PARTITION_SERVICE_OPERATION.UPSERT) &&
           Object.keys(cdcData).length === 0) {
         cdcData = this.extractInsertDataFromSQL(entry.sql, tableName);

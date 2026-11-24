@@ -46,7 +46,7 @@ const BOOT_INCARNATION_ERROR_CODE = Object.freeze({
 });
 const FILE_NOT_FOUND_ERROR = 'ENOENT';
 const DATA_DIRECTORY_OWNER_DB_PREFIX = '.lagrange-data-directory-owner.sqlite';
-const TRANSIENT_FILE_SUFFIXES = Object.freeze(['.tmp', '.lock']);
+const TRANSIENT_FILE_SUFFIXES = Object.freeze(['.tmp', '.lock', '.log']);
 const TRANSIENT_EXACT_NAMES = Object.freeze(new Set(['.write-test']));
 // "This data directory has issued nothing yet": a count, never an
 // incarnation handed to a lifecycle.

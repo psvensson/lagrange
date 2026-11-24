@@ -406,38 +406,38 @@ class SeedRegistrationPhase {
     const logger = d.getLogger();
     const systemTableWriter = this.ensureSystemTableWriter();
     const nodeId = d.getNodeId();
-    const tableRows = SYSTEM_TABLE_SCHEMAS.map((schema) =>
-      seedTableRow(schema, now),
-    );
-    const partitionRows = SYSTEM_TABLE_SCHEMAS.map((schema) =>
-      seedPartitionRow(schema, nodeId, now),
-    );
 
-    try {
-      await systemTableWriter.upsertSystemTableRows(
-        SYSTEM_TABLE_NAME.TABLES,
-        tableRows,
-      );
-    } catch (error) {
-      logger.error(BOOTSTRAP_LOG_MSG.TABLE_REGISTER_FAILED, {
-        tableName: tableRows[0]?.table_name ?? null,
-        error: error.message,
-      });
-      throw error;
-    }
+    await Promise.all(SYSTEM_TABLE_SCHEMAS.map(async (schema) => {
+      const tableData = seedTableRow(schema, now);
+      try {
+        await systemTableWriter.upsertSystemTableRow(
+          SYSTEM_TABLE_NAME.TABLES,
+          tableData,
+        );
+      } catch (error) {
+        logger.error(BOOTSTRAP_LOG_MSG.TABLE_REGISTER_FAILED, {
+          tableName: schema.tableName,
+          error: error.message,
+        });
+        throw error;
+      }
+    }));
 
-    try {
-      await systemTableWriter.upsertSystemTableRows(
-        SYSTEM_TABLE_NAME.PARTITIONS,
-        partitionRows,
-      );
-    } catch (error) {
-      logger.error(BOOTSTRAP_LOG_MSG.PARTITION_REGISTER_FAILED, {
-        partitionId: partitionRows[0]?.partition_id ?? null,
-        error: error.message,
-      });
-      throw error;
-    }
+    await Promise.all(SYSTEM_TABLE_SCHEMAS.map(async (schema) => {
+      const partitionData = seedPartitionRow(schema, nodeId, now);
+      try {
+        await systemTableWriter.upsertSystemTableRow(
+          SYSTEM_TABLE_NAME.PARTITIONS,
+          partitionData,
+        );
+      } catch (error) {
+        logger.error(BOOTSTRAP_LOG_MSG.PARTITION_REGISTER_FAILED, {
+          partitionId: partitionData.partition_id,
+          error: error.message,
+        });
+        throw error;
+      }
+    }));
 
     logger.debug(BOOTSTRAP_LOG_MSG.SYSTEM_TABLES_REGISTERED, {
       tableCount: SYSTEM_TABLE_SCHEMAS.length,
