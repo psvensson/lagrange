@@ -4,8 +4,11 @@ import {
 import {
   defaultRoutingWaitPollIntervalMs,
 } from './managed-split-workflow-cutover-readiness-methods.js';
+import {
+  applyWorkflowTopologyBindings,
+} from './managed-workflow-topology-binding-contract.js';
 
-const LOCAL_STR_FUNCTION = 'function';
+const WORKFLOW_NAME = 'ManagedSplitWorkflow';
 const LOCAL_STR_GETCDCINTEGRATIONSERVICE = 'getCDCIntegrationService';
 const LOCAL_STR_GETPARTITIONINFO = 'getPartitionInfo';
 const LOCAL_STR_GETTABLEINFO = 'getTableInfo';
@@ -15,16 +18,20 @@ const LOCAL_STR_ISLOCALMANAGEDSPLITLEADER = 'isLocalManagedSplitLeader';
 const LOCAL_STR_RESOLVEACTIVEPARTITIONVERSION = 'resolveActivePartitionVersion';
 const LOCAL_STR_BUILDMANAGEDSPLITPLAN = 'buildManagedSplitPlan';
 const LOCAL_STR_RESOLVEPROVISIONTARGETNODEIDS = 'resolveProvisionTargetNodeIds';
-const LOCAL_STR_GETROUTABLEPARTITIONSERVICENODEIDS = 'getRoutablePartitionServiceNodeIds';
+const LOCAL_STR_GETROUTABLEPARTITIONSERVICENODEIDS =
+  'getRoutablePartitionServiceNodeIds';
 const LOCAL_STR_ISSYSTEMTABLEPARTITIONID = 'isSystemTablePartitionId';
 const LOCAL_STR_CAPTURETOPOLOGYSNAPSHOT = 'captureTopologySnapshot';
 const LOCAL_STR_CALCULATEQUORUMREPLICACOUNT = 'calculateQuorumReplicaCount';
 const LOCAL_STR_CREATEEXECUTIONTIMEOUTBUDGET = 'createExecutionTimeoutBudget';
 const LOCAL_STR_ESTIMATESPLITADMISSIONBYTES = 'estimateSplitAdmissionBytes';
 const LOCAL_STR_WAITFORTABLEPARTITIONMETADATA = 'waitForTablePartitionMetadata';
-const LOCAL_STR_PROBEINITIALTABLEPARTITIONPROVISIONING = 'probeInitialTablePartitionProvisioning';
-const LOCAL_STR_PROVISIONINITIALTABLEPARTITION = 'provisionInitialTablePartition';
-const LOCAL_STR_STARTSPLITREPLICATIONONSOURCEPARTITION = 'startSplitReplicationOnSourcePartition';
+const LOCAL_STR_PROBEINITIALTABLEPARTITIONPROVISIONING =
+  'probeInitialTablePartitionProvisioning';
+const LOCAL_STR_PROVISIONINITIALTABLEPARTITION =
+  'provisionInitialTablePartition';
+const LOCAL_STR_STARTSPLITREPLICATIONONSOURCEPARTITION =
+  'startSplitReplicationOnSourcePartition';
 const LOCAL_STR_LISTTABLEPARTITIONROWS = 'listTablePartitionRows';
 const LOCAL_STR_LISTPARTITIONSERVICEROWS = 'listPartitionServiceRows';
 const LOCAL_STR_DELIVERREPLICAREMOVAL = 'deliverReplicaRemoval';
@@ -37,9 +44,6 @@ const LOCAL_STR_REPAIRSPLITCHILDLEADERROUTINGEVIDENCE =
 const LOCAL_STR_RESOLVEROUTINGWAITPOLLINTERVALMS =
   'resolveRoutingWaitPollIntervalMs';
 const LOCAL_STR_DELAY = 'delay';
-
-const MISSING_TOPOLOGY_BINDING_PREFIX =
-  'ManagedSplitWorkflow requires topology binding: ';
 
 const returnsNull = () => () => null;
 const returnsEmptyList = () => () => [];
@@ -112,24 +116,6 @@ const TOPOLOGY_METHOD_BINDINGS = Object.freeze([
   },
 ]);
 
-function bindTopologyMethod(topologyAdapter, methodName) {
-  if (!topologyAdapter ||
-      typeof topologyAdapter[methodName] !== LOCAL_STR_FUNCTION) {
-    return null;
-  }
-  return topologyAdapter[methodName].bind(topologyAdapter);
-}
-
-function resolveTopologyBinding(workflow, options, spec) {
-  const {property, required, inertBinding} = spec;
-  const bound = bindTopologyMethod(workflow.topologyAdapter, property) ||
-    options[property] || null;
-  if (required && !bound) {
-    throw new TypeError(`${MISSING_TOPOLOGY_BINDING_PREFIX}${property}`);
-  }
-  return bound || inertBinding(options, workflow);
-}
-
 /**
  * Bind the workflow's topology collaborators and validate required adapter
  * methods at binding time.
@@ -138,9 +124,12 @@ function resolveTopologyBinding(workflow, options, spec) {
  * @return {void}
  */
 function applyManagedSplitTopologyBindings(workflow, options) {
-  for (const spec of TOPOLOGY_METHOD_BINDINGS) {
-    workflow[spec.property] = resolveTopologyBinding(workflow, options, spec);
-  }
+  applyWorkflowTopologyBindings(
+    workflow,
+    options,
+    TOPOLOGY_METHOD_BINDINGS,
+    WORKFLOW_NAME,
+  );
   workflow.storageAdmissionService =
     options.storageAdmissionService ||
     workflow.topologyAdapter?.storageAdmissionService || null;

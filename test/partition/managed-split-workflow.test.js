@@ -39,16 +39,24 @@ import {
 import {
   ManagedMergeTopologyAdapter,
 } from '../../src/partition/managed-merge-topology-adapter.js';
+import {
+  applyManagedMergeTopologyBindings,
+} from '../../src/partition/managed-merge-workflow-topology-bindings.js';
+import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+
+function createStubTopologySqlQueryEngine(overrides = {}) {
+  return Object.assign(Object.create(SQLQueryEngine.prototype), overrides);
+}
 
 test('managed topology adapters preserve coordinator-backed system-table truth',
   (t) => {
-    const sqlQueryEngine = {
+    const sqlQueryEngine = createStubTopologySqlQueryEngine({
       rebalanceCoordinator: {
         isCriticalSystemPartition() {
           return true;
         },
       },
-    };
+    });
     const adapters = [
       new ManagedSplitTopologyAdapter({sqlQueryEngine}),
       new ManagedMergeTopologyAdapter({sqlQueryEngine}),
@@ -60,9 +68,42 @@ test('managed topology adapters preserve coordinator-backed system-table truth',
       t.equal(adapter.isSystemTablePartitionId('users-p1'), false);
     }
     const missingCoordinator = new ManagedSplitTopologyAdapter({
-      sqlQueryEngine: {},
+      sqlQueryEngine: createStubTopologySqlQueryEngine(),
     });
     t.equal(missingCoordinator.isSystemTablePartitionId('nodes-p1'), false);
+    t.end();
+  });
+
+test('managed topology adapters fail fast on missing sqlQueryEngine or required engine methods',
+  (t) => {
+    for (const [AdapterClass, name, missingMethod] of [
+      [ManagedSplitTopologyAdapter, 'ManagedSplitTopologyAdapter', 'buildManagedSplitPlan'],
+      [ManagedMergeTopologyAdapter, 'ManagedMergeTopologyAdapter', 'provisionInitialTablePartition'],
+    ]) {
+      t.throws(
+        () => new AdapterClass(),
+        new RegExp(`${name} requires options\\.sqlQueryEngine`),
+        `${name} rejects missing options.sqlQueryEngine with TypeError`,
+      );
+      t.throws(
+        () => new AdapterClass({sqlQueryEngine: null}),
+        TypeError,
+        `${name} rejects null sqlQueryEngine with TypeError`,
+      );
+      t.throws(
+        () => new AdapterClass({sqlQueryEngine: {}}),
+        TypeError,
+        `${name} rejects empty sqlQueryEngine missing required methods`,
+      );
+      const incompleteEngine = createStubTopologySqlQueryEngine({
+        [missingMethod]: null,
+      });
+      t.throws(
+        () => new AdapterClass({sqlQueryEngine: incompleteEngine}),
+        new RegExp(`${name} requires sqlQueryEngine\\.${missingMethod}\\(\\)`),
+        `${name} names missing required engine method ${missingMethod}`,
+      );
+    }
     t.end();
   });
 
@@ -1394,6 +1435,11 @@ test('ManagedSplitWorkflow fails closed at binding time when required ' +
     }, {}),
     /startSplitReplicationOnSourcePartition/,
     'missing required split effect binding throws at binding time',
+  );
+  t.throws(
+    () => applyManagedMergeTopologyBindings({}, {}),
+    /ManagedMergeWorkflow requires topology binding: resolveProvisionTargetNodeIds/,
+    'missing required merge topology binding throws at binding time via shared contract',
   );
   t.end();
 });

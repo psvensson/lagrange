@@ -1,64 +1,64 @@
-const LOCAL_STR_FUNCTION = 'function';
-const SPEC_DEFAULT_KEY = 'fallback';
-const MISSING_TOPOLOGY_BINDING_PREFIX =
-  'ManagedMergeWorkflow requires topology binding: ';
+import {
+  applyWorkflowTopologyBindings,
+} from './managed-workflow-topology-binding-contract.js';
 
-function requiredTopologyBinding(property) {
-  const spec = {property};
-  Object.defineProperty(spec, SPEC_DEFAULT_KEY, {
-    enumerable: true,
-    get() {
-      throw new TypeError(`${MISSING_TOPOLOGY_BINDING_PREFIX}${property}`);
-    },
-  });
-  return Object.freeze(spec);
-}
+const WORKFLOW_NAME = 'ManagedMergeWorkflow';
+
+const returnsNull = () => () => null;
+const returnsEmptyList = () => () => [];
+const returnsFalse = () => () => false;
+const absent = () => null;
 
 /**
- * Topology-adapter method bindings resolved in constructor order:
- * bound adapter method, then explicit option, then the listed default for
- * optional read/hook collaborators. Required effect, quorum, and membership
- * collaborators fail closed at binding time when omitted.
- * @type {ReadonlyArray<{property: string, fallback: Function|null}>}
+ * Topology collaborators the ManagedMergeWorkflow owner consumes, in
+ * binding order. Required effect, quorum, and membership collaborators fail
+ * closed at binding time when omitted; optional read and hook collaborators
+ * use their typed default.
+ * @type {ReadonlyArray<{property: string, required?: boolean, inertBinding?: Function}>}
  */
-const TOPOLOGY_BOUND_METHOD_SPECS = Object.freeze([
-  {property: 'getPartitionInfo', fallback: () => null},
-  {property: 'getTableInfo', fallback: () => null},
-  {property: 'listTableInfos', fallback: () => []},
-  {property: 'parsePartitionTransition', fallback: () => null},
-  {property: 'isLocalManagedMergeLeader', fallback: () => false},
-  {property: 'resolveActivePartitionVersion', fallback: () => 1},
-  requiredTopologyBinding('resolveProvisionTargetNodeIds'),
-  requiredTopologyBinding('getRoutablePartitionServiceNodeIds'),
-  {property: 'isSystemTablePartitionId', fallback: () => false},
-  requiredTopologyBinding('calculateQuorumReplicaCount'),
-  {property: 'createExecutionTimeoutBudget', fallback: null},
-  requiredTopologyBinding('waitForTablePartitionMetadata'),
-  {property: 'probeInitialTablePartitionProvisioning', fallback: null},
-  requiredTopologyBinding('provisionInitialTablePartition'),
-  requiredTopologyBinding('startMergeReplicationOnSourcePartition'),
-  requiredTopologyBinding('listTablePartitionRows'),
-  requiredTopologyBinding('listPartitionServiceRows'),
-  requiredTopologyBinding('deliverReplicaRemoval'),
-  requiredTopologyBinding('readCommittedGroupMembers'),
-  {property: 'observeSystemRows', fallback: () => null},
+const TOPOLOGY_METHOD_BINDINGS = Object.freeze([
+  {
+    property: 'getCDCIntegrationService',
+    inertBinding: (options) => () => options.cdcIntegrationService || null,
+  },
+  {property: 'getPartitionInfo', inertBinding: returnsNull},
+  {property: 'getTableInfo', inertBinding: returnsNull},
+  {property: 'listTableInfos', inertBinding: returnsEmptyList},
+  {property: 'parsePartitionTransition', inertBinding: returnsNull},
+  {property: 'isLocalManagedMergeLeader', inertBinding: returnsFalse},
+  {property: 'resolveActivePartitionVersion', inertBinding: () => () => 1},
+  {property: 'resolveProvisionTargetNodeIds', required: true},
+  {property: 'getRoutablePartitionServiceNodeIds', required: true},
+  {property: 'isSystemTablePartitionId', inertBinding: returnsFalse},
+  {property: 'calculateQuorumReplicaCount', required: true},
+  {property: 'createExecutionTimeoutBudget', inertBinding: absent},
+  {property: 'waitForTablePartitionMetadata', required: true},
+  {property: 'probeInitialTablePartitionProvisioning', inertBinding: absent},
+  {property: 'provisionInitialTablePartition', required: true},
+  {property: 'startMergeReplicationOnSourcePartition', required: true},
+  {property: 'listTablePartitionRows', required: true},
+  {property: 'listPartitionServiceRows', required: true},
+  {property: 'deliverReplicaRemoval', required: true},
+  {property: 'readCommittedGroupMembers', required: true},
+  {property: 'observeSystemRows', inertBinding: () => () => null},
 ]);
 
 /**
- * Bind a topology adapter method when the adapter provides it.
- * @param {?Object} topologyAdapter - Wired topology adapter, when present.
- * @param {string} methodName - Adapter method name to bind.
- * @return {?Function} Bound adapter method, or null when absent.
+ * Bind the merge workflow's topology collaborators and validate required
+ * adapter methods at binding time.
+ * @param {ManagedMergeWorkflow} workflow - Workflow instance.
+ * @param {Object} options - Constructor options.
+ * @return {void}
  */
-function bindTopologyMethod(topologyAdapter, methodName) {
-  if (!topologyAdapter ||
-      typeof topologyAdapter[methodName] !== LOCAL_STR_FUNCTION) {
-    return null;
-  }
-  return topologyAdapter[methodName].bind(topologyAdapter);
+function applyManagedMergeTopologyBindings(workflow, options) {
+  applyWorkflowTopologyBindings(
+    workflow,
+    options,
+    TOPOLOGY_METHOD_BINDINGS,
+    WORKFLOW_NAME,
+  );
 }
 
 export {
-  TOPOLOGY_BOUND_METHOD_SPECS,
-  bindTopologyMethod,
+  applyManagedMergeTopologyBindings,
 };

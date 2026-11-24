@@ -6,7 +6,6 @@ import {
   dispatchLeaderHandoff,
   evaluateRebalancerLeaderPlacementCurePass,
   readPartitionServiceRows,
-  refreshSharedPassInFlightReplicaOperations,
 } from './user-table-leader-placement-cure.js';
 
 const {
@@ -210,7 +209,7 @@ function createHandoffCancellationPredicate(
     if (cancelController.cancelled) {
       return true;
     }
-    if (coordinator?.isShuttingDown) {
+    if (!isCoordinatorCureActive(coordinator)) {
       return true;
     }
     return Boolean(service?.isShutdown);
@@ -248,10 +247,9 @@ async function continueCoordinatorCurePassWithHandoffs(passState) {
     nextOffset,
     nowMs,
     services,
-    sharedPassCensus,
     startIndex,
   } = passState;
-  let {dispatchedCount, evaluatedCount} = passState;
+  let {dispatchedCount, evaluatedCount, sharedPassCensus} = passState;
   dispatchedCount += CURE_COUNT_ONE;
   cancelController.dispatchedCount = dispatchedCount;
   cancelController.evaluatedCount = evaluatedCount;
@@ -261,8 +259,9 @@ async function continueCoordinatorCurePassWithHandoffs(passState) {
       firstStep.service,
       cancelController,
     ),
+    nowFn: () => coordinator.nowFn(),
   });
-  let refreshedInFlightSinceLastWait = false;
+  let needsFreshCensus = true;
   for (
     let offset = nextOffset;
     offset < services.length;
@@ -276,13 +275,15 @@ async function continueCoordinatorCurePassWithHandoffs(passState) {
       break;
     }
     const stepNowMs = coordinator.nowFn();
-    if (!refreshedInFlightSinceLastWait) {
-      refreshSharedPassInFlightReplicaOperations(
-        coordinator.systemTableCache,
-        sharedPassCensus,
+    if (needsFreshCensus) {
+      sharedPassCensus = buildSharedLeaderPlacementPassCensus(
+        coordinator,
         stepNowMs,
       );
-      refreshedInFlightSinceLastWait = true;
+      if (!sharedPassCensus) {
+        break;
+      }
+      needsFreshCensus = false;
     }
     const serviceIndex = (startIndex + offset) % services.length;
     const service = services[serviceIndex];
@@ -312,8 +313,9 @@ async function continueCoordinatorCurePassWithHandoffs(passState) {
           service,
           cancelController,
         ),
+        nowFn: () => coordinator.nowFn(),
       });
-      refreshedInFlightSinceLastWait = false;
+      needsFreshCensus = true;
     }
   }
   return {
