@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
 import {
+  ADMISSION_REASON,
   CLAIM_CELL_STATUS,
 } from '../benchmark-claim-admission.js';
 import {
@@ -252,13 +253,37 @@ test('deployment-bound-claim-admission: complete 9-case TiDB gate admits smoke r
     deployment,
   });
 
-  const cell = admitTiDbRunPairWithGate({
+  const durabilityCase = arrayFilter(result.gate.cases, (c) => c.caseId === 'durability')[0];
+  assert.ok(durabilityCase?.faultEvidence,
+    'durability case record must retain faultEvidence for admission');
+
+  const smokeCell = admitTiDbRunPairWithGate({
     targetId: 'tidb-tikv',
     subkind: 'smoke',
     gate: result.gate,
     endpointContainerId: deployment.endpoint.containerId,
   });
 
-  assert.equal(cell.status, CLAIM_CELL_STATUS.VALID_OBSERVED,
-    `expected cell valid-observed, got ${cell.status}: ${cell.reasons.join(', ')}`);
+  assert.equal(smokeCell.status, CLAIM_CELL_STATUS.VALID_OBSERVED,
+    `expected smoke cell valid-observed, got ${smokeCell.status}: ${smokeCell.reasons.join(', ')}`);
+  assert.equal(arrayIncludes(smokeCell.reasons, ADMISSION_REASON.SEMANTIC_GATE_INCOMPLETE), false,
+    `passed 9-case gate must not carry semantic-gate-incomplete: ${smokeCell.reasons.join(', ')}`);
+  assert.equal(smokeCell.evidence.semanticProofIds.length,
+    OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS.length,
+    'smoke admission must award all 33 canonical proof IDs');
+
+  const capacityCell = admitTiDbRunPairWithGate({
+    targetId: 'tidb-tikv',
+    subkind: 'main',
+    gate: result.gate,
+    endpointContainerId: deployment.endpoint.containerId,
+  });
+
+  assert.equal(capacityCell.status, CLAIM_CELL_STATUS.VALID_OBSERVED,
+    `expected capacity cell valid-observed, got ${capacityCell.status}: ${capacityCell.reasons.join(', ')}`);
+  assert.deepEqual(capacityCell.reasons, [],
+    `passed 9-case capacity gate must emit zero reasons: ${capacityCell.reasons.join(', ')}`);
+  assert.equal(capacityCell.evidence.semanticProofIds.length,
+    OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS.length,
+    'capacity admission must award all 33 canonical proof IDs');
 });
