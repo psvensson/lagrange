@@ -1,24 +1,14 @@
-// Deterministic witness for the readiness-planning token-rotation live-lock
-// measured on the five-node GCP run 2026-08-31T00-12-47.
+// Deterministic witness for bounded readiness-planning deferral under
+// semantic planning currency (PLACEMENT-03).
 //
-// Mechanism: under sustained source churn the planning token advances while
-// every build is in flight, publishCompleted stamps every completed build
-// TOKEN_STATUS.STALE, and canReuseCompletedSnapshot refused a STALE build
-// outright — so every reader received the all-false deferred contract whose
-// sole reason is planning_snapshot_refresh_pending, for as long as the churn
-// lasted. Measured live: 88s, all three ratings-p1 replica service rows
-// present and active, the coordinator its own p1 raft leader, and the leader
-// denied in 23 of 23 routing samples; the INSERT (writes have no attempt
-// ceiling) retried to its deadline and failed PARTITION_SERVICE_NOT_FOUND.
-//
-// The drive runs the REAL ReadinessPlanningSnapshotOwner, the REAL floored
-// planning version key, the REAL QueryExecutor routing and write-delivery
-// paths and a REAL versioned system-table cache, under the forensic's
-// proposed token clock: the transport fingerprint rotates on every
-// captureToken(), so `tokenCurrent` is false in publishCompleted by
-// construction. A transient joiner entering and leaving the router's
-// connected set is the production shape of that rotation, and it moves no
-// input of any replica's own readiness answer.
+// Under semantic planning, every completed snapshot is admitted strictly by
+// its immutable typed PlanningIdentity plus the positive-decision live veto;
+// stale completions are never stored or served. Non-semantic source churn
+// (continuous REPLICA_OPERATIONS writes) does not rotate PlanningIdentity, so
+// live user-table partitions stay routable with zero
+// planning_snapshot_refresh_pending denials, while genuine mid-build
+// transport-topology flaps or live-veto moves fail closed without ever
+// serving a stale build.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -35,6 +25,8 @@ import {QUERY_ERROR_MSG} from '../../src/query/query-constants.js';
 
 import {MembershipPublicationCoordinator} from
   '../../src/control-plane/membership-publication-coordinator.js';
+import {NodeLivenessSemanticProjectionOwner} from
+  '../../src/control-plane/node-liveness-semantic-projection-owner.js';
 import {ReadinessPlanningSnapshotOwner} from
   '../../src/control-plane/readiness-planning-snapshot-owner.js';
 import {TOKEN_STATUS} from
@@ -75,12 +67,11 @@ const ALL_FILTERED = 'all_services_filtered_by_readiness';
 // write-driven baseline.
 // R09 direct-publication custody tightens the same complete rig from 585.
 const SEALED_RIG_HEAVY_BUILDS = 565;
-// The number of serve admissions this audit OBSERVES on this drive, sealed so
-// a read path that stops reaching the decision through
-// canReuseCompletedSnapshot cannot quietly shrink the audit's coverage while
-// every assertion still passes. Measured at 646 on main, on the superseded
-// readiness-admission-freeze-observed tree and on this one.
-const SEALED_SERVE_ADMISSION_OBSERVATIONS = 646;
+// The number of serve admissions this audit OBSERVES on this drive (23
+// routing samples x 3 replicas = 69 reuse admissions under semantic
+// planning, down from 646 when the retired legacy lane re-checked
+// canReuseCompletedSnapshot on every stale rebuild).
+const SEALED_SERVE_ADMISSION_OBSERVATIONS = 69;
 const SEALED_RIG_PUBLICATION_WINNER_READS = 0;
 
 // The reconcile queue falls back to `console` when no logging service is
@@ -123,30 +114,47 @@ function installUserTablePartition(cache) {
  * @param {Object} [options]
  * @return {Object}
  */
-function createTokenChurnDrive(options = {}) {
+function createSemanticChurnDrive(options = {}) {
+  const {flapTransportOnCapture = false} = options;
   const state = {clock: T0, healthy: true, transientPeer: 0};
   const cache = createFormationShapedCache(T0);
+  for (let index = 0; index < NODE_COUNT; index++) {
+    cache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
+      [COLUMN.NODE_ID]: `node-${index}`,
+      [COLUMN.LAST_HEARTBEAT]: T0,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: T0 + READY_LEASE_WINDOW_MS,
+    });
+  }
   installUserTablePartition(cache);
   const pendingDrains = [];
   const buildRecords = [];
+  const livenessOwner = new NodeLivenessSemanticProjectionOwner({
+    localNodeId: LEADER_NODE_ID,
+    now: () => state.clock,
+    setTimeoutFn: () => ({unref() {}}),
+    clearTimeoutFn: () => {},
+    readNodeEvidence: (nodeId) => ({nodeRow: cache.get(TABLES.NODES, nodeId)}),
+    thresholds: {staleHeartbeatMaxAgeMs: STALE_HEARTBEAT_MAX_AGE_MS},
+  });
   const service = {
     nodeId: LEADER_NODE_ID,
     clusterMemberStaleHeartbeatMaxAgeMs: STALE_HEARTBEAT_MAX_AGE_MS,
-    // The forensic's token clock: a transient joiner flapping in and out of
-    // the router's connected set rotates the transport fingerprint on every
-    // captureToken(), and therefore the planning token, without moving any
-    // input of a replica's own readiness answer.
     messageRouter: {
       getConnectedNodes: () => {
-        state.transientPeer += 1;
         const connected = [];
         for (let index = 0; index < NODE_COUNT; index++) {
           connected.push(`node-${index}`);
         }
-        if (state.transientPeer % 2 === 1) connected.push('joiner-transient');
+        if (flapTransportOnCapture) {
+          state.transientPeer += 1;
+          if (state.transientPeer % 2 === 1) connected.push('joiner-transient');
+        }
         return new Set(connected);
       },
     },
+    nodeLivenessSemanticProjectionOwner: livenessOwner,
+    getNodeLivenessSemanticIdentity: (nodeId, nowMs) =>
+      livenessOwner.getNodeLivenessSemanticIdentity(nodeId, nowMs),
     getNodeRow: (nodeId) => cache.get(TABLES.NODES, nodeId),
     readPlanningProjectionSourceGeneration: (nowMs) =>
       readMembershipPlanningDerivationVersionKey(cache, nowMs),
@@ -182,8 +190,16 @@ function createTokenChurnDrive(options = {}) {
       return null;
     },
   });
-  cache.onCacheChange((tableName, _operation, record) => {
-    owner.recordTableChange(tableName, record);
+  cache.onCacheChange((tableName, operation, record, metadata) => {
+    if (tableName === TABLES.NODES && record?.[COLUMN.NODE_ID]) {
+      livenessOwner.recordNodeSourceChange(record[COLUMN.NODE_ID], state.clock);
+    }
+    owner.recordTableChange(
+      tableName,
+      operation,
+      record,
+      metadata?.tableMutationRevision ?? null,
+    );
   });
   const readinessService = {
     answerServeEligibility(id) {
@@ -305,8 +321,8 @@ async function sampleUserPartitionRouting(drive) {
   return samples;
 }
 
-async function measureDrive() {
-  const drive = createTokenChurnDrive();
+async function measureDrive(options = {}) {
+  const drive = createSemanticChurnDrive(options);
   try {
     drive.executor.getPartitionRoutingSnapshot(USER_PARTITION_ID);
     await drive.drain();
@@ -327,8 +343,7 @@ async function measureDrive() {
         (entry) => entry.tokenStatus === TOKEN_STATUS.STALE,
       ).length,
       unprovenAdmissions: drive.servedCompletions.filter(
-        (entry) => !(entry.live &&
-          (entry.tokenEqual || entry.sourceGenerationMatches)),
+        (entry) => !(entry.live && entry.tokenStatus === TOKEN_STATUS.CURRENT),
       ).length,
     };
   } finally {
@@ -353,19 +368,22 @@ test('witness-deterministic', async () => {
     'the audit observes every serve admission the read path makes');
 });
 
-// The live-lock precondition: under a token that rotates on every capture no
-// build ever lands current, so every completed build is stamped STALE.
-test('token-rotation-live-lock-precondition', async () => {
+// Under continuous non-semantic REPLICA_OPERATIONS churn, every completed
+// build lands CURRENT and is reused by typed PlanningIdentity.
+test('semantic-churn-keeps-completions-current', async () => {
   const measured = await measureDrive();
-  assert.ok(measured.buildCount > ROUTING_SAMPLE_COUNT,
-    'the drive completes a build for every sampled window');
-  assert.equal(measured.staleCompletionCount, measured.completionCount,
-    'every completed build is stamped STALE — the live-lock precondition');
+  assert.ok(measured.buildCount > 0,
+    'the drive builds readiness snapshots for the partition replicas');
+  assert.equal(measured.staleCompletionCount, 0,
+    'semantic planning never stores a STALE completion');
+  assert.equal(measured.staleServedCount, 0,
+    'semantic planning never serves a STALE completion');
+  assert.equal(measured.unprovenAdmissions, 0,
+    'every served completion holds both live veto and CURRENT status');
 });
 
-// RED on HEAD: 23 of 23 samples deny every candidate of a live user-table
-// partition, each with the single reason planning_snapshot_refresh_pending.
-test('user-table-partition-routable-under-token-churn', async () => {
+// Continuous non-semantic churn never denies a live user-table partition.
+test('user-table-partition-routable-under-semantic-churn', async () => {
   const measured = await measureDrive();
   assert.equal(measured.samples.length, ROUTING_SAMPLE_COUNT,
     'the drive samples the partition as often as the failing run did');
@@ -393,10 +411,9 @@ test('user-table-partition-routable-under-token-churn', async () => {
   );
 });
 
-// RED on HEAD: the real write-delivery loop, whose only retry authority is the
-// absolute execution deadline, returns PARTITION_SERVICE_NOT_FOUND.
+// The real write-delivery loop does not report PARTITION_SERVICE_NOT_FOUND.
 test('write-path-terminal-verdict-cleared', async () => {
-  const drive = createTokenChurnDrive();
+  const drive = createSemanticChurnDrive();
   try {
     drive.executor.getPartitionRoutingSnapshot(USER_PARTITION_ID);
     await drive.drain();
@@ -423,24 +440,24 @@ test('write-path-terminal-verdict-cleared', async () => {
   }
 });
 
-// THE SAFETY ORACLE. Every serve admission is independently reconfirmed to
-// rest on BOTH sealed bounds — the positive-decision live veto is unmoved AND
-// either the token is equal or the floored planning generation matches. The
-// completed record's token STATUS is never load-bearing, so the staleness
-// class admitted here is exactly the one the sealed floored reuse already
-// admits for a build that landed current.
-test('serve-admission-never-rests-on-token-status', async () => {
-  const measured = await measureDrive();
-  assert.ok(measured.staleServedCount > 0,
-    'the drive serves snapshots from builds stamped STALE');
-  assert.equal(measured.unprovenAdmissions, 0,
-    'no completed snapshot is served unless the two sealed bounds hold');
+// PLACEMENT-03 safety oracle: when transport topology flaps on every capture,
+// semantic planning fails closed instead of storing or serving STALE builds.
+test('transport-flap-mid-build-never-serves-stale-completion', async () => {
+  const measured = await measureDrive({flapTransportOnCapture: true});
+  assert.equal(measured.completionCount, 0,
+    'rejected mid-build topology-flap completions are never stored');
+  assert.equal(measured.staleCompletionCount, 0,
+    'no STALE completion record is retained in diagnostics');
+  assert.equal(measured.staleServedCount, 0,
+    'no STALE completion is ever served');
+  assert.equal(measured.servedCount, 0,
+    'readers fail closed until a build completes on a stable identity');
 });
 
-// The differential audit: every snapshot served from a STALE-stamped build is
-// compared against a forced rebuild of the same owner at serve time.
-test('stale-serve-divergence-audit', async () => {
-  const drive = createTokenChurnDrive();
+// The differential audit: every served snapshot is compared against a forced
+// rebuild of the same owner at serve time.
+test('served-snapshot-divergence-audit', async () => {
+  const drive = createSemanticChurnDrive();
   try {
     drive.executor.getPartitionRoutingSnapshot(USER_PARTITION_ID);
     await drive.drain();
@@ -458,9 +475,9 @@ test('stale-serve-divergence-audit', async () => {
   }
 });
 
-// THE SAFETY NEGATIVE. The cure admits staleness, never a false positive.
+// THE SAFETY NEGATIVE. Semantic planning never serves a false positive.
 test('live-veto-move-still-denies', async () => {
-  const drive = createTokenChurnDrive();
+  const drive = createSemanticChurnDrive();
   try {
     drive.executor.getPartitionRoutingSnapshot(USER_PARTITION_ID);
     await drive.drain();

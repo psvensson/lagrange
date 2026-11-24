@@ -35,8 +35,8 @@ import {
   BOOTSTRAP_API_SUBSYSTEM,
 } from './bootstrap-api-constants.js';
 import {
-  BootstrapReadinessState,
-} from './bootstrap-readiness-state.js';
+  LifecycleController,
+} from './lifecycle-controller.js';
 import {
   CONTROL_PLANE_ROLLOUT_REQUIRED,
   assertRequiredControlPlaneRollout,
@@ -194,7 +194,7 @@ class BootstrapAPI {
     this.moveReplicaAssignmentReservations = new Map();
     this.moveReplicaAssignmentSweepTimer = null;
     this.readinessState = options.readinessState ||
-      new BootstrapReadinessState({
+      new LifecycleController({
         readyStableWindowMs: options.readyStableWindowMs,
         demotionFailureThreshold: options.demotionFailureThreshold,
         retryAfterMs: options.retryAfterMs,

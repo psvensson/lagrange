@@ -3,7 +3,7 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {BootstrapReadinessState} from '../../src/bootstrap/bootstrap-readiness-state.js';
+import {LifecycleController} from '../../src/bootstrap/lifecycle-controller.js';
 import {READINESS_EVENT} from '../../src/bootstrap/bootstrap-readiness-state-constants.js';
 
 const DEPENDENCY_STARTUP_COMPLETE = 'startup_complete';
@@ -44,7 +44,7 @@ function setAllDependenciesReady(readiness) {
 
 test('BootstrapReadinessState - enforces promotion stable window', async (t) => {
   const clock = createTestClock();
-  const readiness = new BootstrapReadinessState({
+  const readiness = new LifecycleController({
     readyStableWindowMs: 50,
     demotionFailureThreshold: 2,
     now: clock.now,
@@ -74,7 +74,7 @@ test('BootstrapReadinessState - enforces promotion stable window', async (t) => 
 
 test('BootstrapReadinessState - demotes only after failure threshold', async (t) => {
   const clock = createTestClock();
-  const readiness = new BootstrapReadinessState({
+  const readiness = new LifecycleController({
     readyStableWindowMs: 0,
     demotionFailureThreshold: 2,
     now: clock.now,
@@ -104,7 +104,7 @@ test('BootstrapReadinessState - demotes only after failure threshold', async (t)
 
 test('BootstrapReadinessState - reports all active blockers in snapshot', async (t) => {
   const clock = createTestClock();
-  const readiness = new BootstrapReadinessState({
+  const readiness = new LifecycleController({
     readyStableWindowMs: 0,
     demotionFailureThreshold: 1,
     now: clock.now,
@@ -140,7 +140,7 @@ test('BootstrapReadinessState - reports all active blockers in snapshot', async 
 test('BootstrapReadinessState - emits transition payload with prior and current state details',
   async (t) => {
     const clock = createTestClock();
-    const readiness = new BootstrapReadinessState({
+    const readiness = new LifecycleController({
       readyStableWindowMs: 0,
       demotionFailureThreshold: 1,
       now: clock.now,
@@ -179,7 +179,7 @@ test('BootstrapReadinessState - emits transition payload with prior and current 
 test('BootstrapReadinessState - emits blocked duration and aggregates probe metrics by status class',
   async (t) => {
     const clock = createTestClock();
-    const readiness = new BootstrapReadinessState({
+    const readiness = new LifecycleController({
       readyStableWindowMs: 0,
       demotionFailureThreshold: 1,
       now: clock.now,

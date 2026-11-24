@@ -111,13 +111,13 @@ test(DURABLE_REJOIN_FINAL_HANDOFF_TEST.name, async (t) => {
   service.lifecycleStateMachine.transition(
     DURABLE_REJOIN_FINAL_HANDOFF_TEST.lifecycleJoining,
   );
-  service.activateControlPlaneBackgroundWriters = () => {};
+  service.runtimeHandoffOwner.activateControlPlaneBackgroundWriters = () => {};
   service.createMessageGroupPhase = {
     flushDeferredCreateSelfHostedMetadata() {
       return Promise.resolve({success: true});
     },
   };
-  service.startLatencyTopologyLifecycle = () => {};
+  service.runtimeHandoffOwner.startLatencyTopologyLifecycle = () => {};
 
   service.completeSuccessfulJoin();
   t.equal(

@@ -138,55 +138,55 @@ test('NodeJoiningService - full join with CREATE_SELF_HOSTED', async (t) => {
     });
 
     // Mock the WebSocket connection to seed node (no real seed WS server in this test)
-    service.phaseConnectWebSocket = async function() {
+    service.connectWebSocketPhase.phaseConnectWebSocket = async () => {
       // Initialize MessageRouter for local communication only
       const {MessageRouter} = await import('../../src/transport/message-router.js');
-      this.messageRouter = new MessageRouter({
+      service.messageRouter = new MessageRouter({
         bootIncarnation: TEST_BOOT_INCARNATION,
-        nodeId: this.nodeId,
-        nodeAddress: this.nodeAddress,
-        wsPort: this.wsPort,
+        nodeId: service.nodeId,
+        nodeAddress: service.nodeAddress,
+        wsPort: service.wsPort,
       });
-      this.messageRouter.setServiceNodeResolver((address) => {
+      service.messageRouter.setServiceNodeResolver((address) => {
         const match = address.match(/^([^/]+)\//);
         return match ? match[1] : null;
       });
-      await this.messageRouter.initialize({startServer: true});
-      this.transport = this.messageRouter;
+      await service.messageRouter.initialize({startServer: true});
+      service.transport = service.messageRouter;
     };
     service.triggerJoinReconciler = async function() {};
     service.getLeaderMessageGroupService = function() {
       const firstService = this.messageGroupServices.values().next().value;
       return firstService || null;
     };
-    service.phaseCreateSelfHostedMessageGroup = async function() {
+    service.createMessageGroupPhase.phaseCreateSelfHostedMessageGroup = async () => {
       const replicaId = 'mg-join-r1';
-      const unifiedAddress = `${this.nodeId}/message-group/${replicaId}`;
+      const unifiedAddress = `${service.nodeId}/message-group/${replicaId}`;
       // The replica's exact handler identity (activation checks identity).
       const transportHandler = async () => (null);
-      this.messageGroupServices.set(replicaId, {
+      service.messageGroupServices.set(replicaId, {
         groupId: 'mg-1',
         unifiedAddress,
         transportHandler,
         isLeaderReplica: () => true,
         getLeaderId: () => replicaId,
       });
-      this.messageRouter.register(unifiedAddress, transportHandler);
+      service.messageRouter.register(unifiedAddress, transportHandler);
     };
 
     // Mock phases that require system tables (not available in this unit test)
-    service.phaseQuerySystemState = async function() {
+    service.querySystemStatePhase.phaseQuerySystemState = async () => {
       // Registration: this boot's NODES row and its endpoint, both at the
       // boot incarnation.
       publishRegisteredEndpoint(NodeService.getInstance().getSystemTableCache(), {
-        endpoint_id: `postgres-wire-endpoint-${this.nodeId}`,
+        endpoint_id: `postgres-wire-endpoint-${service.nodeId}`,
         service_id: META_SERVICE_ID.POSTGRES_WIRE,
-        node_id: this.nodeId,
+        node_id: service.nodeId,
         protocol: 'tcp',
-        address: this.nodeId,
+        address: service.nodeId,
         port: 5432,
         metadata: '{}',
-        boot_incarnation: this.bootIncarnation,
+        boot_incarnation: service.bootIncarnation,
       }, TABLES.SERVICE_ENDPOINTS);
     };
     service.initializeReplicaHandler = function() {
@@ -217,7 +217,7 @@ test('NodeJoiningService - full join with CREATE_SELF_HOSTED', async (t) => {
     service.registerMessageGroupService = async function() {
       // Skip seed-side /register-service dependency in this unit fixture.
     };
-    service.phaseWaitForLeadership = async function() {
+    service.waitForLeadershipPhase.phaseWaitForLeadership = async () => {
       // Skip raft leadership wait in unit test environment
     };
     service.signalReadyForReplicas = async function() {
@@ -287,7 +287,7 @@ test('NodeJoiningService - signals readiness after querying state', async (t) =>
     unifiedAddress: 'seed-node-1/message-group/mg-1-r0',
   });
 
-  service.phaseContactSeed = async () => {
+  service.contactSeedPhase.phaseContactSeed = async () => {
     service.bootstrapResponse = {
       seedNodeId: 'seed-node-1',
       seedNodeWsAddress: 'ws://localhost:8080',
@@ -308,19 +308,19 @@ test('NodeJoiningService - signals readiness after querying state', async (t) =>
     service.seedNodeId = 'seed-node-1';
     service.seedNodeWsAddress = 'ws://localhost:8080';
   };
-  service.phaseConnectWebSocket = async () => {
+  service.connectWebSocketPhase.phaseConnectWebSocket = async () => {
     service.messageRouter = {
       deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
     };
     service.controlPlaneTargetAddress = 'seed-node-1/message-group/mg-1-r0';
   };
-  service.phaseCreateSelfHostedMessageGroup = async () => {};
-  service.phaseWaitForLeadership = async () => {};
+  service.createMessageGroupPhase.phaseCreateSelfHostedMessageGroup = async () => {};
+  service.waitForLeadershipPhase.phaseWaitForLeadership = async () => {};
   service.initializeReplicaHandler = () => {};
   service.initializeMessageGroupServiceHandler = () => {};
   service.initializeControlPlaneService = async () => {};
   service.initializeRuntimeServiceHandler = () => {};
-  service.phaseQuerySystemState = async () => {
+  service.querySystemStatePhase.phaseQuerySystemState = async () => {
     order.push('query');
   };
   service.activateMessageGroupServiceRows = async () => {
@@ -574,7 +574,7 @@ test('NodeJoiningService - activates message-group rows after membership write',
     });
 
     service.getLeaderMessageGroupService = () => ({});
-    service.phaseContactSeed = async () => {
+    service.contactSeedPhase.phaseContactSeed = async () => {
       service.bootstrapResponse = {
         success: true,
         seedNodeId: 'seed-node-1',
@@ -596,12 +596,12 @@ test('NodeJoiningService - activates message-group rows after membership write',
       service.seedNodeId = 'seed-node-1';
       service.seedNodeWsAddress = 'ws://localhost:8080';
     };
-    service.phaseConnectWebSocket = async () => {
+    service.connectWebSocketPhase.phaseConnectWebSocket = async () => {
       service.messageRouter = {
         deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
       };
     };
-    service.phaseCreateSelfHostedMessageGroup = async () => {
+    service.createMessageGroupPhase.phaseCreateSelfHostedMessageGroup = async () => {
       service.messageGroupServices.set('mg-1-r0', {
         groupId: 'mg-1',
         unifiedAddress: 'joining-node-activate-1/message-group/mg-1-r0',
@@ -609,7 +609,7 @@ test('NodeJoiningService - activates message-group rows after membership write',
         getLeaderId: () => 'mg-1-r0',
       });
     };
-    service.phaseWaitForLeadership = async () => {};
+    service.waitForLeadershipPhase.phaseWaitForLeadership = async () => {};
     service.createCdcIntegrationService = () => {
       service.cdcIntegrationService = {
         updateSystemTableRow: async () => ({success: true}),
@@ -625,7 +625,7 @@ test('NodeJoiningService - activates message-group rows after membership write',
       service.heartbeatService = {ready: true};
     };
     service.initializeRuntimeServiceHandler = () => {};
-    service.phaseQuerySystemState = async () => {
+    service.querySystemStatePhase.phaseQuerySystemState = async () => {
       order.push('query');
     };
     service.activateMessageGroupServiceRows = async () => {
@@ -638,8 +638,8 @@ test('NodeJoiningService - activates message-group rows after membership write',
     service.signalReadyForReplicas = async () => {
       order.push('ready-signal');
     };
-    service.activateControlPlaneBackgroundWriters = () => {};
-    service.startLatencyTopologyLifecycle = () => {};
+    service.runtimeHandoffOwner.activateControlPlaneBackgroundWriters = () => {};
+    service.runtimeHandoffOwner.startLatencyTopologyLifecycle = () => {};
 
     const result = await service.join();
 
@@ -681,7 +681,7 @@ test('NodeJoiningService - resumes same join session without replaying ' +
     error: error.message,
   });
   service.getLeaderMessageGroupService = () => ({});
-  service.phaseContactSeed = async () => {
+  service.contactSeedPhase.phaseContactSeed = async () => {
     phaseCalls.push('contact');
     service.bootstrapResponse = {
       success: true,
@@ -704,14 +704,14 @@ test('NodeJoiningService - resumes same join session without replaying ' +
     service.seedNodeId = 'seed-node-1';
     service.seedNodeWsAddress = 'ws://localhost:8080';
   };
-  service.phaseConnectWebSocket = async () => {
+  service.connectWebSocketPhase.phaseConnectWebSocket = async () => {
     phaseCalls.push('connect');
     service.messageRouter = {
       deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
     };
     service.controlPlaneTargetAddress = 'seed-node-1/message-group/mg-1-r0';
   };
-  service.phaseCreateSelfHostedMessageGroup = async () => {
+  service.createMessageGroupPhase.phaseCreateSelfHostedMessageGroup = async () => {
     phaseCalls.push('message-group');
     service.messageGroupServices.set('mg-1-r0', {
       groupId: 'mg-1',
@@ -720,7 +720,7 @@ test('NodeJoiningService - resumes same join session without replaying ' +
       getLeaderId: () => 'mg-1-r0',
     });
   };
-  service.phaseWaitForLeadership = async () => {
+  service.waitForLeadershipPhase.phaseWaitForLeadership = async () => {
     phaseCalls.push('leadership');
   };
   service.createCdcIntegrationService = () => {
@@ -749,7 +749,7 @@ test('NodeJoiningService - resumes same join session without replaying ' +
   service.initializeRuntimeServiceHandler = () => {
     phaseCalls.push('runtime-handler');
   };
-  service.phaseQuerySystemState = async () => {
+  service.querySystemStatePhase.phaseQuerySystemState = async () => {
     phaseCalls.push('query');
     queryAttempts += 1;
     if (queryAttempts === 1) {
@@ -766,10 +766,10 @@ test('NodeJoiningService - resumes same join session without replaying ' +
   service.signalReadyForReplicas = async () => {
     phaseCalls.push('ready-signal');
   };
-  service.activateControlPlaneBackgroundWriters = () => {
+  service.runtimeHandoffOwner.activateControlPlaneBackgroundWriters = () => {
     phaseCalls.push('activate');
   };
-  service.startLatencyTopologyLifecycle = () => {
+  service.runtimeHandoffOwner.startLatencyTopologyLifecycle = () => {
     phaseCalls.push('latency-start');
   };
 
@@ -843,7 +843,7 @@ test('NodeJoiningService - auto-resumes retryable join failures in the same proc
       retryable: true,
       retryAfterMs: error.retryAfterMs,
     });
-    service.phaseContactSeed = async () => {
+    service.contactSeedPhase.phaseContactSeed = async () => {
       phaseCalls.push('contact');
       service.bootstrapResponse = {
         success: true,
@@ -866,14 +866,14 @@ test('NodeJoiningService - auto-resumes retryable join failures in the same proc
       service.seedNodeId = 'seed-node-1';
       service.seedNodeWsAddress = 'ws://localhost:8080';
     };
-    service.phaseConnectWebSocket = async () => {
+    service.connectWebSocketPhase.phaseConnectWebSocket = async () => {
       phaseCalls.push('connect');
       service.messageRouter = {
         deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
       };
       service.controlPlaneTargetAddress = 'seed-node-1/message-group/mg-1-r0';
     };
-    service.phaseCreateSelfHostedMessageGroup = async () => {
+    service.createMessageGroupPhase.phaseCreateSelfHostedMessageGroup = async () => {
       phaseCalls.push('message-group');
       service.messageGroupServices.set('mg-1-r0', {
         groupId: 'mg-1',
@@ -882,7 +882,7 @@ test('NodeJoiningService - auto-resumes retryable join failures in the same proc
         getLeaderId: () => 'mg-1-r0',
       });
     };
-    service.phaseWaitForLeadership = async () => {
+    service.waitForLeadershipPhase.phaseWaitForLeadership = async () => {
       phaseCalls.push('leadership');
     };
     service.createCdcIntegrationService = () => {
@@ -910,7 +910,7 @@ test('NodeJoiningService - auto-resumes retryable join failures in the same proc
     service.initializeRuntimeServiceHandler = () => {
       phaseCalls.push('runtime-handler');
     };
-    service.phaseQuerySystemState = async () => {
+    service.querySystemStatePhase.phaseQuerySystemState = async () => {
       phaseCalls.push('query');
       queryAttempts += 1;
       if (queryAttempts === 1) {
@@ -929,10 +929,10 @@ test('NodeJoiningService - auto-resumes retryable join failures in the same proc
     service.signalReadyForReplicas = async () => {
       phaseCalls.push('ready-signal');
     };
-    service.activateControlPlaneBackgroundWriters = () => {
+    service.runtimeHandoffOwner.activateControlPlaneBackgroundWriters = () => {
       phaseCalls.push('activate');
     };
-    service.startLatencyTopologyLifecycle = () => {
+    service.runtimeHandoffOwner.startLatencyTopologyLifecycle = () => {
       phaseCalls.push('latency-start');
     };
 
@@ -990,7 +990,7 @@ test('NodeJoiningService - readiness retry resumes skipped checkpoints with ' +
     },
   });
 
-  service.phaseContactSeed = async () => {
+  service.contactSeedPhase.phaseContactSeed = async () => {
     service.bootstrapResponse = {
       seedNodeId: 'seed-node-1',
       seedNodeWsAddress: 'ws://localhost:8080',
@@ -1003,20 +1003,20 @@ test('NodeJoiningService - readiness retry resumes skipped checkpoints with ' +
     service.seedNodeId = 'seed-node-1';
     service.seedNodeWsAddress = 'ws://localhost:8080';
   };
-  service.phaseConnectWebSocket = async () => {
+  service.connectWebSocketPhase.phaseConnectWebSocket = async () => {
     service.messageRouter = {
       deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
       setExternalAdmissionEnabled() {},
     };
   };
-  service.phaseCreateSelfHostedMessageGroup = async () => {
+  service.createMessageGroupPhase.phaseCreateSelfHostedMessageGroup = async () => {
     service.messageGroupServices.set('mg-1-r0', {
       isLeaderReplica: () => true,
       getLeaderId: () => 'mg-1-r0',
       completeJoinConvergence() {},
     });
   };
-  service.phaseWaitForLeadership = async () => {};
+  service.waitForLeadershipPhase.phaseWaitForLeadership = async () => {};
   service.initializeJoinInfrastructure = async () => {
     calls.infrastructure += 1;
     establishJoinReplicaLifecycleOwner(service);
@@ -1030,7 +1030,7 @@ test('NodeJoiningService - readiness retry resumes skipped checkpoints with ' +
     service.latencyTopology = {};
   };
   service.notifyLocalAdminRuntimeReady = async () => {};
-  service.phaseQuerySystemState = async () => {
+  service.querySystemStatePhase.phaseQuerySystemState = async () => {
     calls.membership += 1;
     const nodeService = NodeService.getInstance();
     if (!nodeService.isInitialized()) {
@@ -1063,8 +1063,8 @@ test('NodeJoiningService - readiness retry resumes skipped checkpoints with ' +
   service.signalReadyForReplicas = async () => {
     calls.readySignal += 1;
   };
-  service.hasActiveControlPlaneBackgroundWriters = () => calls.writers > 0;
-  service.activateControlPlaneBackgroundWriters = () => {
+  service.runtimeHandoffOwner.hasActiveControlPlaneBackgroundWriters = () => calls.writers > 0;
+  service.runtimeHandoffOwner.activateControlPlaneBackgroundWriters = () => {
     t.equal(
       NodeService.getInstance().getLifecycleState(),
       STATE.READY,
@@ -1072,7 +1072,7 @@ test('NodeJoiningService - readiness retry resumes skipped checkpoints with ' +
     );
     calls.writers += 1;
   };
-  service.startLatencyTopologyLifecycle = () => {};
+  service.runtimeHandoffOwner.startLatencyTopologyLifecycle = () => {};
   service.createMessageGroupPhase.flushDeferredCreateSelfHostedMetadata =
     async () => {};
 
@@ -1254,7 +1254,7 @@ test(
       },
     });
 
-    service.phaseContactSeed = async () => {
+    service.contactSeedPhase.phaseContactSeed = async () => {
       service.bootstrapResponse = {
         success: true,
         seedNodeId: 'seed-node-1',
@@ -1276,7 +1276,7 @@ test(
       service.seedNodeId = 'seed-node-1';
       service.seedNodeWsAddress = 'ws://localhost:8080';
     };
-    service.phaseConnectWebSocket = async () => {
+    service.connectWebSocketPhase.phaseConnectWebSocket = async () => {
       service.messageRouter = {
         deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
         isRegistered: (address) =>
@@ -1284,7 +1284,7 @@ test(
       };
       service.controlPlaneTargetAddress = 'seed-node-1/message-group/mg-1-r0';
     };
-    service.phaseCreateSelfHostedMessageGroup = async () => {
+    service.createMessageGroupPhase.phaseCreateSelfHostedMessageGroup = async () => {
       service.messageGroupServices.set('mg-join-r1', {
         groupId: 'mg-1',
         unifiedAddress: 'joining-node-join-gate-1/message-group/mg-join-r1',
@@ -1292,7 +1292,7 @@ test(
         getLeaderId: () => 'mg-join-r1',
       });
     };
-    service.phaseWaitForLeadership = async () => {};
+    service.waitForLeadershipPhase.phaseWaitForLeadership = async () => {};
     service.initializeReplicaHandler = () => {};
     service.initializeMessageGroupServiceHandler = () => {
       service.messageGroupServiceHandler = {};
@@ -1313,7 +1313,7 @@ test(
       shutdown: async () => {},
     };
     service.initializeRuntimeServiceHandler = () => {};
-    service.phaseQuerySystemState = async () => {
+    service.querySystemStatePhase.phaseQuerySystemState = async () => {
       NodeService.getInstance().getSystemTableCache()
         .applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
           endpoint_id: `postgres-wire-endpoint-${service.nodeId}`,

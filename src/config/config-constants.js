@@ -86,8 +86,6 @@ const CONFIG_ERROR_MSG = Object.freeze({
   LOG_LEVEL_INVALID_PREFIX: 'Invalid log level. Must be one of: ',
   VALIDATION_FAILED_PREFIX: 'Configuration validation failed: ',
   INVALID_NUMBER_PREFIX: 'Invalid number value for ',
-  DEPRECATED_ENV_PREFIX: 'Deprecated environment variable ',
-  DEPRECATED_ENV_INFIX: ' — use ',
   SEEDING_INCOMPLETE_PREFIX: 'Configuration seeding incomplete: ',
 });
 
@@ -189,20 +187,6 @@ const ENV_MAPPINGS = {
   FORMATION_DECLARED_HOST_COUNT: CONFIG_KEY.FORMATION_DECLARED_HOST_COUNT,
 };
 
-/**
- * Deprecated environment variable names, mapped to their canonical
- * replacements (renamed 2026-07 to give every listener one prefix and the
- * short WS form: transport = TRANSPORT_WS_HOST/TRANSPORT_WS_PORT, admin =
- * ADMIN_WS_HOST/ADMIN_WS_PORT). A legacy name is honored only when its
- * canonical name is unset, and its use logs a startup deprecation warning.
- */
-const LEGACY_ENV_ALIASES = Object.freeze({
-  ADMIN_WEBSOCKET_HOST: 'ADMIN_WS_HOST',
-  ADMIN_WEBSOCKET_PORT: 'ADMIN_WS_PORT',
-  NODE_WS_PORT: 'TRANSPORT_WS_PORT',
-});
-
-
 const CONFIG_SQL = Object.freeze({
   SELECT_ALL: 'SELECT * FROM config',
   SELECT_BY_KEY: 'SELECT * FROM config WHERE config_key = ?',
@@ -233,5 +217,4 @@ export {
   CONFIG_VALUE_TYPE,
   DEFAULT_CONFIG,
   ENV_MAPPINGS,
-  LEGACY_ENV_ALIASES,
 };

@@ -594,14 +594,6 @@ class SystemTableCacheObservationMethods {
     return rows.slice();
   }
 
-  getAllShared(tableName) {
-    return this.getAll(tableName);
-  }
-
-  filterShared(tableName, predicate) {
-    return this.filter(tableName, predicate);
-  }
-
   has(tableName, key) {
     this.validateTableName(tableName);
     return this.tables.get(tableName).has(key);

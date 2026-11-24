@@ -162,6 +162,7 @@ function createOwner({onBuild = () => {}} = {}) {
   const scheduled = [];
   const service = {
     clusterMemberStaleHeartbeatMaxAgeMs: 60_000,
+    nodeLivenessSemanticProjectionOwner: {subscribe: () => () => {}},
     getNodeRow: () => ({node_id: 'owner-a'}),
     getNodeTransportState: () => ({
       connected,
@@ -200,6 +201,7 @@ test('a live veto change during build cannot publish or become reusable',
         }
       },
     });
+    owner.initialBootstrapConsumed = true;
 
     const first = owner.reconcile('owner-a', {options: {}});
     const second = owner.readSync(
@@ -219,8 +221,8 @@ test('a live veto change during build cannot publish or become reusable',
       'the disconnected caller cannot reuse the built positive snapshot');
     assertDeferredSnapshot(t, first, 'the rejected build');
     assertDeferredSnapshot(t, second, 'the rejected reuse');
-    t.equal(diagnostics.completedTokenStatusByOwnerKey['owner-a'], 'stale',
-      'diagnostics retain the rejected completion as stale');
+    t.equal(diagnostics.completedTokenStatusByOwnerKey['owner-a'], undefined,
+      'semantic planning never stores a rejected stale completion');
     owner.shutdown();
   });
 

@@ -14,7 +14,6 @@ import {
   CONFIG_SEPARATOR,
   DEFAULT_CONFIG,
   ENV_MAPPINGS,
-  LEGACY_ENV_ALIASES,
 } from './config-constants.js';
 import {
   LISTENER_PORT_ENV,
@@ -53,30 +52,6 @@ function isDangerousConfigurationKey(key) {
   return key === DANGEROUS_CONFIGURATION_KEY.PROTO_SETTER ||
     key === DANGEROUS_CONFIGURATION_KEY.CONSTRUCTOR ||
     key === DANGEROUS_CONFIGURATION_KEY.PROTOTYPE;
-}
-
-const LEGACY_ENV_NAME_BY_CANONICAL = Object.freeze(Object.fromEntries(
-  objectEntries(LEGACY_ENV_ALIASES)
-    .map(([legacy, canonical]) => [canonical, legacy]),
-));
-
-/**
- * Read an environment variable by its canonical name, falling back to its
- * deprecated legacy alias. The canonical name wins when both are set.
- * @param {string} canonicalName
- * @return {{value: (string|undefined), legacyName: (string|null)}}
- *   The resolved value, and the legacy name iff it supplied the value.
- */
-function resolveEnvironmentValue(canonicalName, environment = process.env) {
-  const canonical = environment[canonicalName];
-  if (canonical !== undefined) {
-    return {value: canonical, legacyName: null};
-  }
-  const legacyName = LEGACY_ENV_NAME_BY_CANONICAL[canonicalName] ?? null;
-  const legacy = legacyName === null ? undefined : environment[legacyName];
-  return legacy === undefined ?
-    {value: undefined, legacyName: null} :
-    {value: legacy, legacyName};
 }
 
 function hasOwnPath(value, pathParts) {
@@ -156,21 +131,13 @@ class ConfigurationManager {
     const environment = options.environment || process.env;
     const listenerPortOverrides = {
       adminWebSocketPort:
-        resolveEnvironmentValue(
-          LISTENER_PORT_ENV.ADMIN_WEBSOCKET,
-          environment,
-        ).value !==
-          undefined ||
+        environment[LISTENER_PORT_ENV.ADMIN_WEBSOCKET] !== undefined ||
         hasOwnPath(
           overrides,
           LISTENER_PORT_OVERRIDE_PATH.ADMIN_WEBSOCKET,
         ),
       transportWebSocketPort:
-        resolveEnvironmentValue(
-          LISTENER_PORT_ENV.TRANSPORT_WEBSOCKET,
-          environment,
-        )
-          .value !== undefined ||
+        environment[LISTENER_PORT_ENV.TRANSPORT_WEBSOCKET] !== undefined ||
         hasOwnPath(
           overrides,
           LISTENER_PORT_OVERRIDE_PATH.TRANSPORT_WEBSOCKET,
@@ -262,15 +229,9 @@ class ConfigurationManager {
     const mappings = objectEntries(ENV_MAPPINGS);
     for (let index = 0; index < mappings.length; index++) {
       const [envVar, configPath] = mappings[index];
-      const {value, legacyName} = resolveEnvironmentValue(envVar, environment);
+      const value = environment[envVar];
       if (value === undefined) {
         continue;
-      }
-      if (legacyName !== null) {
-        console.warn(
-          CONFIG_ERROR_MSG.DEPRECATED_ENV_PREFIX + legacyName +
-            CONFIG_ERROR_MSG.DEPRECATED_ENV_INFIX + envVar,
-        );
       }
       this.setByPath(configPath, this.parseEnvValue(value, configPath));
     }

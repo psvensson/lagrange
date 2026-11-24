@@ -3,6 +3,10 @@ import {
   AuthoritativeRowMutationHelper,
   classifyMutationFailure,
 } from '../../src/raft/authoritative-row-mutation-helper.js';
+import {
+  createWasmServiceLeaderNodeMutationHelper,
+  createWasmServiceRoleMutationHelper,
+} from '../../src/wasm-service/wasm-service-metadata-mutation-helpers.js';
 
 test('AuthoritativeRowMutationHelper - flush persists pending owner-row update',
   async (t) => {
@@ -45,7 +49,7 @@ test('AuthoritativeRowMutationHelper - flush persists pending owner-row update',
       options: {
         routingReadinessDimension: 'controlPlaneRecoveryEligible',
         deliverySource: 'control-plane:write:services',
-        recoveryCandidateSelectionKey: '{"data":{"raft_role":"leader","updated_at":123},"deliveryPriority":null,"ignoreExisting":false,"kind":"control-plane-mutation","operation":"update","routingReadinessDimension":"controlPlaneRecoveryEligible","row":null,"tableName":"services","whereClause":{"service_id":"replica-1"},"workClass":null}',
+        recoveryCandidateSelectionKey: '{"data":{"raft_role":"leader","updated_at":123},"deliveryPriority":null,"ignoreExisting":false,"kind":"control-plane-mutation","operation":"update","routingReadinessDimension":"controlPlaneRecoveryEligible","row":null,"rows":null,"tableName":"services","whereClause":{"service_id":"replica-1"},"workClass":null}',
       },
     }, 'should use the configured row key and no projection-field wait');
     t.same(result, {
@@ -71,7 +75,7 @@ test('AuthoritativeRowMutationHelper - flush persists pending owner-row update',
     t.equal(helper.pendingValue, null, 'should clear pending value after success');
   });
 
-test('AuthoritativeRowMutationHelper - flush recovers from cache visibility gap without rewrite',
+test('AuthoritativeRowMutationHelper - flush recovers from cache visibility gap via authoritative read without rewrite',
   async (t) => {
     let updateCalls = 0;
     const helper = new AuthoritativeRowMutationHelper({
@@ -81,7 +85,12 @@ test('AuthoritativeRowMutationHelper - flush recovers from cache visibility gap 
         raft_role: value,
         updated_at: now,
       }),
+      buildExpectedCacheFields: (value) => ({raft_role: value}),
       readValueFromCache: () => 'leader',
+      readAuthoritativeRow: async () => ({
+        available: true,
+        row: {service_id: 'replica-1', raft_role: 'leader'},
+      }),
       cdcIntegrationService: {
         updateSystemTableRow: async () => {
           updateCalls += 1;
@@ -94,9 +103,9 @@ test('AuthoritativeRowMutationHelper - flush recovers from cache visibility gap 
 
     const result = await helper.flush();
 
-    t.equal(updateCalls, 0, 'cache convergence should suppress a redundant rewrite');
-    t.equal(helper.persistedValue, 'leader', 'persisted value should resync from cache');
-    t.equal(helper.pendingValue, null, 'pending value should clear when cache matches');
+    t.equal(updateCalls, 0, 'authoritative convergence should suppress a redundant rewrite');
+    t.equal(helper.persistedValue, 'leader', 'persisted value should resync from authoritative row');
+    t.equal(helper.pendingValue, null, 'pending value should clear when authoritative row matches');
     t.same(result, {
       applied: false,
       authoritativeWriteApplied: false,
@@ -104,7 +113,49 @@ test('AuthoritativeRowMutationHelper - flush recovers from cache visibility gap 
       recoveredFromCacheGap: true,
       attempts: 0,
       reason: 'cache-visibility-gap-recovered',
-    }, 'should classify recovered cache gaps without another write');
+    }, 'should classify recovered gaps without another write');
+  });
+
+test('AuthoritativeRowMutationHelper - unsupported authoritative probe fails closed without legacy cache dedup',
+  async (t) => {
+    const scheduled = [];
+    let updateCalls = 0;
+    const helper = new AuthoritativeRowMutationHelper({
+      tableName: 'services',
+      buildWhereClause: () => ({service_id: 'replica-1'}),
+      buildUpdateData: (value, now) => ({
+        raft_role: value,
+        updated_at: now,
+      }),
+      buildExpectedCacheFields: (value) => ({raft_role: value}),
+      readValueFromCache: () => 'leader',
+      readAuthoritativeRow: async () => ({
+        supported: false,
+        available: false,
+        row: null,
+      }),
+      cdcIntegrationService: {
+        updateSystemTableRow: async () => {
+          updateCalls += 1;
+          return {success: true};
+        },
+      },
+      setTimeoutFn: (callback) => {
+        scheduled.push(callback);
+        return callback;
+      },
+      clearTimeoutFn: () => {},
+    });
+
+    helper.pendingValue = 'leader';
+    const result = await helper.flush();
+
+    t.equal(result.reason, 'authoritative-confirm-unavailable',
+      'unsupported probe must fail closed instead of deduping against cache');
+    t.equal(updateCalls, 0, 'no write issued while confirmation is unavailable');
+    t.equal(helper.pendingValue, 'leader', 'pending value is preserved for retry');
+    t.equal(helper.persistedValue, null, 'cache row is not treated as durability proof');
+    t.equal(scheduled.length, 1, 'retry is scheduled');
   });
 
 test('AuthoritativeRowMutationHelper - flush schedules retry when owner row is not ready',
@@ -828,4 +879,64 @@ test('AuthoritativeRowMutationHelper - guard miss refreshes the observed row so 
       'the pending publication must converge once the guard is refreshed');
     t.equal(helper.pendingValue, null,
       'the pending value should clear after the converged write');
+  });
+
+test('WASM metadata mutation helpers probe authoritative rows and fail closed when unavailable',
+  async (t) => {
+    const writes = [];
+    let readResult = {success: false, rows: []};
+    const replica = {
+      replicaId: 'wasm-svc-r1',
+      role: 'leader',
+      isLeader: true,
+      systemTableCache: null,
+      logger: {warn: () => {}},
+      isServicesLeaderAvailable: () => true,
+      controlPlaneSystemTableGateway: {
+        readAuthoritativeRows: async () => readResult,
+      },
+      writeRoleUpdate: async (role) => {
+        writes.push({kind: 'role', role});
+        return {success: true};
+      },
+      writeLeaderNodeUpdate: async (leaderNodeId) => {
+        writes.push({kind: 'leader', leaderNodeId});
+        return {success: true};
+      },
+    };
+
+    const roleHelper = createWasmServiceRoleMutationHelper(replica);
+    roleHelper.pendingValue = 'leader';
+    const unavailableRole = await roleHelper.flush();
+    t.equal(unavailableRole.reason, 'authoritative-confirm-unavailable',
+      'role helper fails closed when authoritative read is unavailable');
+    t.equal(writes.length, 0, 'no write issued without authoritative probe');
+
+    readResult = {
+      success: true,
+      rows: [{service_id: 'wasm-svc-r1', raft_role: 'follower', node_id: 'node-0'}],
+    };
+    const appliedRole = await roleHelper.flush();
+    t.equal(appliedRole.reason, 'applied',
+      'role helper persists once authoritative row is readable');
+    t.same(writes, [{kind: 'role', role: 'leader'}]);
+
+    const leaderHelper = createWasmServiceLeaderNodeMutationHelper(replica);
+    leaderHelper.pendingValue = 'node-1';
+    const appliedLeader = await leaderHelper.flush();
+    t.equal(appliedLeader.reason, 'applied',
+      'leader helper persists once authoritative row is readable');
+    t.same(writes[1], {kind: 'leader', leaderNodeId: 'node-1'});
+
+    readResult = {
+      success: true,
+      rows: [{service_id: 'wasm-svc-r1', raft_role: 'leader', node_id: 'node-2'}],
+    };
+    leaderHelper.pendingValue = 'node-2';
+    const dedupLeader = await leaderHelper.flush();
+    t.equal(dedupLeader.reason, 'cache-visibility-gap-recovered',
+      'leader helper deduplicates against authoritative row without extra write');
+    t.equal(writes.length, 2, 'authoritative dedup suppresses redundant write');
+    roleHelper.shutdown();
+    leaderHelper.shutdown();
   });

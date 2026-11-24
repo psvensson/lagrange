@@ -74,13 +74,10 @@ const HINTS_WRITER_ADAPTERS = Object.freeze({
     }).persistNow(),
 });
 
-test('B1: reservations continue above 4 across normal join/rejoin hints ' +
+test('B1: reservations continue monotonically across normal join/rejoin hints ' +
   'rewrites, never back to 1', async (t) => {
   await withDataDir(async (dataDir) => {
-    // A data directory that issued incarnation 4 before the owner existed
-    // (the counter lived in the hints document).
-    await writeFile(join(dataDir, REJOIN_HINTS_FILENAME),
-      JSON.stringify({localNodeId: NODE_ID, bootIncarnation: 4}));
+    await raiseBootIncarnationFloor(dataDir, 4);
     const first = await reserveBootIncarnation(dataDir);
     t.equal(first, 5, 'the next boot lifecycle reserves 5');
     for (const write of Object.values(HINTS_WRITER_ADAPTERS)) {
@@ -382,12 +379,8 @@ test('D-7: the NODES registration write has four typed outcomes and never ' +
   'no authority: unresolved, never assumed');
 });
 
-// B7: the legacy hints floor distinguishes ABSENT from DAMAGED. An absent
-// hints file (or legacy hints that never carried a counter) is a real
-// "issued nothing"; hints that are present but unreadable, unparseable or
-// carry a counter the owner could not have issued fail closed with the
-// owner's typed code, and nothing is reserved or persisted.
-const STATE_UNREADABLE = 'BOOT_INCARNATION_STATE_UNREADABLE';
+// B7: boot-incarnation.json is the sole authority; rejoin-hints.json is
+// never consulted as a legacy floor even when no reservation exists yet.
 const LEGACY_HINTS_COUNTER = 4;
 const DAMAGED_HINTS = Object.freeze({
   'truncated JSON': '{"localNodeId": "node-f1", "bootIncarn',
@@ -403,48 +396,44 @@ async function writeHints(dataDir, content) {
   await writeFile(join(dataDir, REJOIN_HINTS_FILENAME), content, 'utf8');
 }
 
-async function ownerStateExists(dataDir) {
-  return readFile(join(dataDir, BOOT_INCARNATION_FILENAME), 'utf8')
-    .then(() => true, () => false);
-}
+test('B7: absent owner file always starts at floor 0 regardless of rejoin hints',
+  async (t) => {
+    await withDataDir(async (dataDir) => {
+      await writeHints(dataDir, JSON.stringify({
+        localNodeId: NODE_ID, bootIncarnation: LEGACY_HINTS_COUNTER,
+      }));
+      t.equal(await readIssuedBootIncarnation(dataDir), 0,
+        'no owner file -> issued floor is NOTHING_ISSUED (0)');
+      t.equal(await reserveBootIncarnation(dataDir), 1,
+        'first reservation is 1 without reading legacy hints');
+    });
+    await withDataDir(async (dataDir) => {
+      await writeHints(dataDir, JSON.stringify({localNodeId: NODE_ID}));
+      t.equal(await reserveBootIncarnation(dataDir), 1,
+        'hints without counter -> floor 0 -> reserves 1');
+    });
+    await withDataDir(async (dataDir) => {
+      t.equal(await reserveBootIncarnation(dataDir), 1,
+        'no owner file and no hints: a virgin directory issues 1');
+    });
+  });
 
-test('B7: a legacy directory continues above its hints counter', async (t) => {
-  await withDataDir(async (dataDir) => {
-    await writeHints(dataDir, JSON.stringify({
-      localNodeId: NODE_ID, bootIncarnation: LEGACY_HINTS_COUNTER,
-    }));
-    t.equal(await reserveBootIncarnation(dataDir), LEGACY_HINTS_COUNTER + 1,
-      'no owner file, hints counter N -> the next reservation is N+1');
-  });
-  await withDataDir(async (dataDir) => {
-    await writeHints(dataDir, JSON.stringify({localNodeId: NODE_ID}));
-    t.equal(await reserveBootIncarnation(dataDir), 1,
-      'hints from before incarnations existed carry no counter: floor 0');
-  });
-  await withDataDir(async (dataDir) => {
-    t.equal(await reserveBootIncarnation(dataDir), 1,
-      'no owner file and no hints: a virgin directory issues 1');
-  });
-});
-
-test('B7: damaged legacy hints fail closed: no reservation, nothing persisted',
+test('B7: damaged rejoin hints never block or read during boot incarnation reservation',
   async (t) => {
     for (const [label, content] of Object.entries(DAMAGED_HINTS)) {
       await withDataDir(async (dataDir) => {
         await writeHints(dataDir, content);
-        await t.rejects(reserveBootIncarnation(dataDir),
-          {code: STATE_UNREADABLE}, `${label}: the reservation is refused`);
-        await t.rejects(readIssuedBootIncarnation(dataDir),
-          {code: STATE_UNREADABLE}, `${label}: the issued count is unknown`);
-        t.equal(await ownerStateExists(dataDir), false,
-          `${label}: no reservation was persisted`);
+        t.equal(await readIssuedBootIncarnation(dataDir), 0,
+          `${label}: issued floor is 0 when owner file is absent`);
+        t.equal(await reserveBootIncarnation(dataDir), 1,
+          `${label}: reservation succeeds from owner state alone`);
         t.equal(await readFile(join(dataDir, REJOIN_HINTS_FILENAME), 'utf8'),
-          content, `${label}: the damaged hints are left for inspection`);
+          content, `${label}: damaged hints are left untouched`);
       });
     }
   });
 
-test('B7: with the owner file present, legacy hints never lower it',
+test('B7: with the owner file present, rejoin hints never lower it',
   async (t) => {
     await withDataDir(async (dataDir) => {
       await reserveBootIncarnation(dataDir);
@@ -454,7 +443,7 @@ test('B7: with the owner file present, legacy hints never lower it',
         localNodeId: NODE_ID, bootIncarnation: 1,
       }));
       t.equal(await readIssuedBootIncarnation(dataDir), reserved,
-        'a lower legacy counter does not lower the owner reservation');
+        'a lower hints counter does not lower the owner reservation');
       t.equal(await reserveBootIncarnation(dataDir), reserved + 1,
         'the next reservation continues above the owner file');
     });
@@ -547,37 +536,33 @@ test('B8: with the owner present, a higher or lower legacy counter changes ' +
   });
 });
 
-test('B8: the first migration lands strictly after the highest legacy ' +
-  'incarnation, after which the hints no longer matter', async (t) => {
+test('B8: even before the owner file exists, hints are never read', async (t) => {
   await withDataDir(async (dataDir) => {
     await writeHints(dataDir, JSON.stringify({
       localNodeId: NODE_ID, bootIncarnation: HIGHER_LEGACY_COUNTER,
     }));
-    const migration = await recordTouches(
+    const first = await recordTouches(
       join(dataDir, REJOIN_HINTS_FILENAME),
       () => reserveBootIncarnation(dataDir));
-    const migrated = migration.result;
-    t.ok(migration.touched.length > 0,
-      'sanity: the instrument sees the hints read during the one migration');
-    t.equal(migrated, HIGHER_LEGACY_COUNTER + 1,
-      'the migrated reservation is strictly after the legacy counter');
+    t.same(first.touched, [],
+      'hints file is never read when creating the initial reservation');
+    t.equal(first.result, 1,
+      'initial reservation starts from floor 0 -> 1');
     await rm(join(dataDir, REJOIN_HINTS_FILENAME));
-    t.equal(await reserveBootIncarnation(dataDir), migrated + 1,
-      'deleting the hints after migration has no effect');
+    t.equal(await reserveBootIncarnation(dataDir), 2,
+      'deleting the hints has no effect');
     await writeHints(dataDir, DAMAGED_HINTS['empty file']);
-    t.equal(await reserveBootIncarnation(dataDir), migrated + 2,
-      'corrupting the hints after migration has no effect');
+    t.equal(await reserveBootIncarnation(dataDir), 3,
+      'corrupting the hints has no effect');
   });
 });
 
-test('B8: owner absent and corrupt hints still refuse the migration',
+test('B8: owner absent and corrupt hints still reserve cleanly from floor 0',
   async (t) => {
     await withDataDir(async (dataDir) => {
       await writeHints(dataDir, DAMAGED_HINTS['JSON scalar']);
-      await t.rejects(reserveBootIncarnation(dataDir),
-        {code: STATE_UNREADABLE}, 'no migration from damaged hints');
-      t.equal(await ownerStateExists(dataDir), false,
-        'no owner reservation was created');
+      t.equal(await reserveBootIncarnation(dataDir), 1,
+        'corrupt hints do not affect owner reservation');
     });
   });
 

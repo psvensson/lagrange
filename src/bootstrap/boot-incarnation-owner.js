@@ -6,8 +6,6 @@ import {
   readCanonicalJson,
   writeAtomicDurable,
 } from '../runtime/oci-host-agent-durable-files.js';
-import {readRejoinHintsOutcome} from './rejoin-hints-durable-evidence.js';
-import {DURABLE_EVIDENCE_STATE} from './rejoin-hints-constants.js';
 import {isIssuedBootIncarnation} from './boot-incarnation-contract.js';
 
 /**
@@ -34,11 +32,9 @@ import {isIssuedBootIncarnation} from './boot-incarnation-contract.js';
  * life; this owner does not acquire it, so two processes that both bypass
  * the runtime and reserve on one data directory are not excluded here.
  *
- * The rejoin hints document is only a projection of the reservation. The
- * counter it carried before this owner existed is read as a floor only while
- * no reservation exists (the one-time migration), so an upgraded data
- * directory continues above every incarnation it issued; once the
- * reservation is durable, the hints never gate, raise or lower issuance.
+ * The rejoin hints document is only a projection of the reservation; the
+ * owner's own reservation file is the sole authority for boot incarnation
+ * issuance, and hints never gate, raise or lower issuance.
  */
 const BOOT_INCARNATION_FILENAME = 'boot-incarnation.json';
 const BOOT_INCARNATION_STATE_VERSION = 1;
@@ -52,7 +48,6 @@ const FILE_NOT_FOUND_ERROR = 'ENOENT';
 // "This data directory has issued nothing yet": a count, never an
 // incarnation handed to a lifecycle.
 const NOTHING_ISSUED = 0;
-const HINTS_COUNTER_FIELD = 'bootIncarnation';
 
 function bootIncarnationError(code, cause = null) {
   const error = new Error(`Boot incarnation owner: ${code}`);
@@ -141,34 +136,6 @@ function readOwnedReservation(file) {
   return state.reserved;
 }
 
-// The legacy floor carried by the rejoin hints (consulted only before the
-// owner's reservation exists: the one-time migration), from the hints
-// reader's typed outcome. ABSENT (no hints file, or hints written before incarnations
-// existed and carrying no counter) is a real "issued nothing": floor 0.
-// PRESENT but unreadable, unparseable, or carrying a counter the owner could
-// not have issued fails closed: a damaged projection may hide an incarnation
-// already issued, so it is never collapsed to "fresh".
-async function readLegacyHintsFloor(dataDir) {
-  const hintsRead = await readRejoinHintsOutcome(dataDir);
-  if (hintsRead.state === DURABLE_EVIDENCE_STATE.MISSING) {
-    return NOTHING_ISSUED;
-  }
-  if (hintsRead.state !== DURABLE_EVIDENCE_STATE.READABLE) {
-    throw bootIncarnationError(BOOT_INCARNATION_ERROR_CODE.STATE_UNREADABLE);
-  }
-  return readHintsCounter(hintsRead.hints);
-}
-
-function readHintsCounter(hints) {
-  if (!Object.prototype.hasOwnProperty.call(hints, HINTS_COUNTER_FIELD)) {
-    return NOTHING_ISSUED;
-  }
-  if (!isIssuedBootIncarnation(hints[HINTS_COUNTER_FIELD])) {
-    throw bootIncarnationError(BOOT_INCARNATION_ERROR_CODE.STATE_UNREADABLE);
-  }
-  return hints[HINTS_COUNTER_FIELD];
-}
-
 /**
  * The highest boot incarnation this data directory has ever issued (0 when
  * it never issued one).
@@ -177,13 +144,11 @@ function readHintsCounter(hints) {
  */
 async function readIssuedBootIncarnation(dataDir) {
   const file = resolveBootIncarnationPath(dataDir);
-  // Once the owner's reservation exists it is the SOLE authority (a present
-  // but damaged one fails closed, never falling back to the hints). Legacy
-  // hints are a one-time migration source, read only while no reservation
-  // has ever been durably created.
+  // The owner's reservation file is the sole authority: absent means nothing
+  // issued yet (0); present but damaged fails closed.
   return stateFileExists(file) ?
     readOwnedReservation(file) :
-    readLegacyHintsFloor(dataDir);
+    NOTHING_ISSUED;
 }
 
 /**

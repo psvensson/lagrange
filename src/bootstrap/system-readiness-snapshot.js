@@ -11,7 +11,6 @@ function createSystemLeaderReadinessSnapshot(options = {}) {
     requiredTables = null,
     requireLeaderNodeId = false,
     isTableWriteSatisfied,
-    allowLeaderServiceFallback = false,
   } = options;
 
   const useBlockingTables =
@@ -25,14 +24,12 @@ function createSystemLeaderReadinessSnapshot(options = {}) {
       {
         requireLeaderNodeId,
         isTableWriteSatisfied,
-        allowLeaderServiceFallback,
       },
     ) :
     getMissingSystemServiceLeaders(
       systemTableCache,
       {
         requireLeaderNodeId,
-        allowLeaderServiceFallback,
       },
     );
   const missingCount =

@@ -553,21 +553,21 @@ test('NodeJoiningService - full join hosts its own message group; mg-1 ' +
     });
 
     // Mock the WebSocket connection to seed node (no real seed WS server in this test)
-    service.phaseConnectWebSocket = async function() {
+    service.connectWebSocketPhase.phaseConnectWebSocket = async () => {
       // Initialize MessageRouter for local communication only
       const {MessageRouter} = await import('../../src/transport/message-router.js');
-      this.messageRouter = new MessageRouter({
+      service.messageRouter = new MessageRouter({
         bootIncarnation: TEST_BOOT_INCARNATION,
-        nodeId: this.nodeId,
-        nodeAddress: this.nodeAddress,
-        wsPort: this.wsPort,
+        nodeId: service.nodeId,
+        nodeAddress: service.nodeAddress,
+        wsPort: service.wsPort,
       });
-      this.messageRouter.setServiceNodeResolver((address) => {
+      service.messageRouter.setServiceNodeResolver((address) => {
         const match = address.match(/^([^/]+)\//);
         return match ? match[1] : null;
       });
-      await this.messageRouter.initialize({startServer: true});
-      this.transport = this.messageRouter;
+      await service.messageRouter.initialize({startServer: true});
+      service.transport = service.messageRouter;
     };
     service.triggerJoinReconciler = async function() {};
 
@@ -576,7 +576,7 @@ test('NodeJoiningService - full join hosts its own message group; mg-1 ' +
     service.createMessageGroupPhase.phaseCreateSelfHostedMessageGroup =
       async function() {};
 
-    service.phaseWaitForLeadership = async () => {
+    service.waitForLeadershipPhase.phaseWaitForLeadership = async () => {
       throw new Error('leadership timeout (test)');
     };
 
@@ -704,49 +704,49 @@ test('NodeJoiningService - emits events', async (t) => {
     });
 
     // Mock the WebSocket connection to seed node (no real seed WS server in this test)
-    service.phaseConnectWebSocket = async function() {
+    service.connectWebSocketPhase.phaseConnectWebSocket = async () => {
       // Initialize MessageRouter for local communication only
       const {MessageRouter} = await import('../../src/transport/message-router.js');
-      this.messageRouter = new MessageRouter({
+      service.messageRouter = new MessageRouter({
         bootIncarnation: TEST_BOOT_INCARNATION,
-        nodeId: this.nodeId,
-        nodeAddress: this.nodeAddress,
-        wsPort: this.wsPort,
+        nodeId: service.nodeId,
+        nodeAddress: service.nodeAddress,
+        wsPort: service.wsPort,
       });
-      this.messageRouter.setServiceNodeResolver((address) => {
+      service.messageRouter.setServiceNodeResolver((address) => {
         const match = address.match(/^([^/]+)\//);
         return match ? match[1] : null;
       });
-      await this.messageRouter.initialize({startServer: true});
-      this.transport = this.messageRouter;
+      await service.messageRouter.initialize({startServer: true});
+      service.transport = service.messageRouter;
     };
     service.triggerJoinReconciler = async function() {};
-    service.phaseCreateSelfHostedMessageGroup = async function() {
+    service.createMessageGroupPhase.phaseCreateSelfHostedMessageGroup = async () => {
       const replicaId = 'mg-join-r1';
-      const unifiedAddress = `${this.nodeId}/message-group/${replicaId}`;
-      this.messageGroupServices.set(replicaId, {
+      const unifiedAddress = `${service.nodeId}/message-group/${replicaId}`;
+      service.messageGroupServices.set(replicaId, {
         groupId: 'mg-1',
         unifiedAddress,
         isLeaderReplica: () => true,
         getLeaderId: () => replicaId,
       });
-      this.messageRouter.register(unifiedAddress, async () => (null));
+      service.messageRouter.register(unifiedAddress, async () => (null));
     };
-    service.phaseWaitForLeadership = async function() {};
+    service.waitForLeadershipPhase.phaseWaitForLeadership = async () => {};
     service.getLeaderMessageGroupService = function() {
       const firstService = this.messageGroupServices.values().next().value;
       return firstService || null;
     };
 
     // Mock phases that require system tables (not available in this unit test)
-    service.phaseQuerySystemState = async function() {
+    service.querySystemStatePhase.phaseQuerySystemState = async () => {
       NodeService.getInstance().getSystemTableCache()
         .applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
-          endpoint_id: `postgres-wire-endpoint-${this.nodeId}`,
+          endpoint_id: `postgres-wire-endpoint-${service.nodeId}`,
           service_id: META_SERVICE_ID.POSTGRES_WIRE,
-          node_id: this.nodeId,
+          node_id: service.nodeId,
           protocol: 'tcp',
-          address: this.nodeId,
+          address: service.nodeId,
           port: 5432,
           metadata: '{}',
         });

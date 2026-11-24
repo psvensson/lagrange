@@ -19,17 +19,9 @@ import {
   writeAtomicDurable,
 } from '../runtime/oci-host-agent-durable-files.js';
 
-import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
-import {SQLITE_RAFT_STATE_KEY} from './sqlite-raft-state-constants.js';
-import {readSnapshotBoundary} from './snapshot-boundary.js';
 import {
-  RAFT_SNAPSHOT_BOUNDARY_STATE_KEY,
-} from './snapshot-install-constants.js';
-import {
-  RAFT_CHECKPOINT_APPLIED_STATE_KEY,
   RAFT_CHECKPOINT_CREATION_OUTCOME,
   RAFT_CHECKPOINT_DESCRIPTOR_FILE,
-  RAFT_CHECKPOINT_EXCLUDED_TABLES,
   RAFT_CHECKPOINT_PAYLOAD_FILE,
   RAFT_CHECKPOINT_PAYLOAD_KIND,
   RAFT_CHECKPOINT_PAYLOAD_SIDECAR_SUFFIXES,
@@ -62,18 +54,7 @@ const CREATION = RAFT_CHECKPOINT_CREATION_OUTCOME;
 const VALIDATION = RAFT_CHECKPOINT_VALIDATION_OUTCOME;
 const STAGING_PREFIX = '.staging-';
 const STAGING_RANDOM_BYTES = 8;
-const SELECT_STATE_VALUE = 'SELECT value FROM _raft_state WHERE key = ?';
-const SELECT_LOG_TERM = 'SELECT term FROM _raft_log WHERE log_index = ?';
-const DROP_TABLE_PREFIX = 'DROP TABLE IF EXISTS ';
-const VACUUM_SQL = 'VACUUM';
-const DECIMAL_RADIX = 10;
-const EMPTY_LOG_INDEX = 0;
-// CL-042 discipline: an empty log's last-log-term is 0.
-const EMPTY_LOG_TERM = 0;
-const RAFT_RS_LOCAL_TABLES = Object.freeze([
-  '_raft_rs_log', '_raft_rs_hard_state', '_raft_rs_applied_state',
-  '_raft_rs_snapshot',
-]);
+const NO_COMMITTED_HLC = '0';
 const MAX_SAFE_EXACT = BigInt(Number.MAX_SAFE_INTEGER);
 
 function creationResult(outcome, reasons = [], extra = {}) {
@@ -82,124 +63,6 @@ function creationResult(outcome, reasons = [], extra = {}) {
     reasons: Object.freeze([...reasons]),
     ...extra,
   });
-}
-
-function readStateInteger(copyDb, key) {
-  const row = copyDb.prepare(SELECT_STATE_VALUE).get(key);
-  if (!row) return {present: false, value: EMPTY_LOG_INDEX};
-  const value = Number.parseInt(row.value, DECIMAL_RADIX);
-  return {present: Number.isSafeInteger(value), value};
-}
-
-// Read both watermarks from the backup COPY itself so the sealed metadata is
-// exact for the copied image. Legacy-tolerant on the committed key.
-function readCopyWatermarks(copyDb) {
-  const committed = readStateInteger(
-    copyDb, SQLITE_RAFT_STATE_KEY.COMMITTED_INDEX);
-  const legacy = readStateInteger(
-    copyDb, SQLITE_RAFT_STATE_KEY.LEGACY_COMMIT_INDEX);
-  const applied = readStateInteger(
-    copyDb, RAFT_CHECKPOINT_APPLIED_STATE_KEY.LAST_APPLIED_INDEX);
-  const directApply = copyDb.prepare(SELECT_STATE_VALUE).get(
-    RAFT_CHECKPOINT_APPLIED_STATE_KEY.DIRECT_APPLY_MARKER);
-  const appliedGap = copyDb.prepare(SELECT_STATE_VALUE).get(
-    RAFT_CHECKPOINT_APPLIED_STATE_KEY.APPLIED_GAP_MARKER);
-  return {
-    committedIndex: committed.present ? committed.value : legacy.value,
-    appliedIndex: applied.value,
-    appliedPresent: applied.present,
-    directApplyMarked: Boolean(directApply),
-    appliedGapMarked: Boolean(appliedGap),
-  };
-}
-
-// The applied-watermark gate (fail-closed): creation refuses any image whose
-// applied prefix is not exactly certified by its committed watermark. Rows
-// are ordered; the first failing row names the canonical reason.
-const WATERMARK_GATE_RULES = Object.freeze([
-  Object.freeze({
-    reason: 'direct_apply_marker',
-    holds: (w) => !w.directApplyMarked,
-  }),
-  Object.freeze({
-    reason: 'applied_gap_marker',
-    holds: (w) => !w.appliedGapMarked,
-  }),
-  Object.freeze({
-    reason: 'applied_watermark_absent',
-    holds: (w) => w.appliedPresent,
-  }),
-  Object.freeze({
-    reason: 'applied_committed_mismatch',
-    holds: (w) => w.appliedIndex === w.committedIndex,
-  }),
-]);
-
-function evaluateWatermarkGate(watermarks) {
-  const failed = WATERMARK_GATE_RULES.find((rule) => !rule.holds(watermarks));
-  return failed ?
-    creationResult(CREATION.APPLY_WATERMARK_DIVERGENCE, [failed.reason]) :
-    creationResult(CREATION.CREATED);
-}
-
-function readLastIncludedTerm(copyDb, lastIncludedIndex) {
-  if (lastIncludedIndex === EMPTY_LOG_INDEX) {
-    return {found: true, term: EMPTY_LOG_TERM};
-  }
-  const row = copyDb.prepare(SELECT_LOG_TERM).get(lastIncludedIndex);
-  if (row) {
-    return {found: true, term: row.term};
-  }
-  // A freshly installed replica's log is compacted-empty at its boundary;
-  // the boundary keys are the exact term source for that index (S2
-  // amendment — without this the replica could never re-checkpoint at its
-  // own boundary).
-  const boundary = readSnapshotBoundary(copyDb);
-  if (boundary.lastIncludedIndex === lastIncludedIndex) {
-    return {found: true, term: boundary.lastIncludedTerm};
-  }
-  return {found: false, term: EMPTY_LOG_TERM};
-}
-
-const NO_COMMITTED_HLC = '0';
-const SELECT_LOG_COMMANDS = 'SELECT command FROM _raft_log ORDER BY log_index';
-function parseEntryData(rawCommand) {
-  try {
-    const envelope = JSON.parse(rawCommand);
-    return envelope && typeof envelope.command === 'object' ?
-      envelope.command : null;
-  } catch {
-    return null;
-  }
-}
-
-// Max committed HLC sealed into the descriptor: max over the copy's own log
-// command timestamps AND the copy's prior maxCommittedHlc key, so a
-// checkpoint OF an installed replica never regresses the sealed clock.
-function computeMaxCommittedHlc(copyDb) {
-  let max = null;
-  for (const row of copyDb.prepare(SELECT_LOG_COMMANDS).iterate()) {
-    const data = parseEntryData(row.command);
-    const parsed = data && typeof data.timestamp === 'string' ?
-      HLCTimestamp.tryFromString(data.timestamp) : null;
-    if (parsed && (max === null || parsed.compare(max) > 0)) {
-      max = parsed;
-    }
-  }
-  const priorRow = copyDb.prepare(SELECT_STATE_VALUE).get(
-    RAFT_SNAPSHOT_BOUNDARY_STATE_KEY.MAX_COMMITTED_HLC);
-  const prior = priorRow ? HLCTimestamp.tryFromString(priorRow.value) : null;
-  if (prior && (max === null || prior.compare(max) > 0)) {
-    max = prior;
-  }
-  return max === null ? NO_COMMITTED_HLC : max.toString();
-}
-
-function scrubCopy(copyDb) {
-  for (const table of RAFT_CHECKPOINT_EXCLUDED_TABLES) {
-    copyDb.exec(`${DROP_TABLE_PREFIX}${table}`);
-  }
-  copyDb.exec(VACUUM_SQL);
 }
 
 function readRaftRsRecord(copyDb, groupId) {
@@ -282,35 +145,6 @@ function prepareRaftRsCheckpointCopy(copyDb, groupId, entityKind) {
   };
 }
 
-function prepareSqliteCheckpointCopy(copyDb) {
-  if (holdsRaftRsLocalState(copyDb)) {
-    return {gate: creationResult(CREATION.UNSUPPORTED_ADAPTER,
-      [RAFT_RS_CHECKPOINT_REASON.PAYLOAD_KIND_REQUIRED])};
-  }
-  if (hasPendingPreparedParticipantTransactions(copyDb)) {
-    return {gate: creationResult(CREATION.PREPARED_TRANSACTIONS_PENDING,
-      [RAFT_RS_CHECKPOINT_REASON.PREPARED_TRANSACTIONS])};
-  }
-  const watermarks = readCopyWatermarks(copyDb);
-  let gate = evaluateWatermarkGate(watermarks);
-  if (gate.outcome !== CREATION.CREATED) return {gate};
-  const lastIncluded = readLastIncludedTerm(copyDb, watermarks.committedIndex);
-  if (!lastIncluded.found) {
-    gate = creationResult(
-      CREATION.APPLY_WATERMARK_DIVERGENCE, ['missing_log_entry']);
-  }
-  if (gate.outcome !== CREATION.CREATED) return {gate};
-  const maxCommittedHlc = computeMaxCommittedHlc(copyDb);
-  scrubCopy(copyDb);
-  return {gate, watermarks, lastIncluded, maxCommittedHlc};
-}
-
-function holdsRaftRsLocalState(db) {
-  const present = db.prepare(
-    'SELECT 1 FROM sqlite_master WHERE type=\'table\' AND name = ?');
-  return RAFT_RS_LOCAL_TABLES.some((table) => present.get(table));
-}
-
 function fsyncFile(file) {
   const descriptor = fs.openSync(file, 'r');
   try {
@@ -329,11 +163,8 @@ function removeStagingDirectory(stagingDir) {
   fs.rmSync(stagingDir, {recursive: true, force: true});
 }
 
-function buildCreatedCheckpointDescriptor(
-  identity, prepared, payloadBytes, raftRsGroupId) {
-  const payloadKind = raftRsGroupId ?
-    RAFT_CHECKPOINT_PAYLOAD_KIND.RAFT_RS_REPLICA_IMAGE :
-    RAFT_CHECKPOINT_PAYLOAD_KIND.SQLITE_STATE_MACHINE_IMAGE;
+function buildCreatedCheckpointDescriptor(identity, prepared, payloadBytes) {
+  const payloadKind = RAFT_CHECKPOINT_PAYLOAD_KIND.RAFT_RS_REPLICA_IMAGE;
   return buildCheckpointDescriptor({
     clusterId: identity.clusterId,
     raftGroupId: identity.raftGroupId,
@@ -346,29 +177,34 @@ function buildCreatedCheckpointDescriptor(
     payloadVersion: RAFT_CHECKPOINT_PAYLOAD_VERSION[payloadKind],
     payloadByteLength: payloadBytes.length,
     payloadDigest: sha256Digest(payloadBytes),
-    ...(raftRsGroupId ? {raftRs: prepared.raftRsDescriptor} : {}),
+    raftRs: prepared.raftRsDescriptor,
   });
 }
 
 /**
- * Create one sealed checkpoint generation from a live file-backed SQLite
- * partition database. Fail-closed: memory-backed databases and images whose
- * applied watermark diverges from the committed watermark are typed
- * rejections, never checkpoints.
+ * Create one sealed raft-rs checkpoint generation from a live file-backed
+ * SQLite replica database. Fail-closed: memory-backed databases, missing
+ * `raftRsGroupId`, and images whose applied watermark diverges from the
+ * committed watermark are typed rejections, never checkpoints.
  * @param {Object} options creation options
  * @param {Database} options.db live better-sqlite3 handle (source)
  * @param {Object} options.identity creating owner identity
  *   ({clusterId, raftGroupId, entity: {kind, id}, membershipEpoch})
  * @param {string} options.checkpointsRoot durable checkpoint root directory
+ * @param {string} options.raftRsGroupId canonical raft-rs group identifier
  * @param {number[]} [options.inProcessPins] in-process retention pins (the
  *   S4 dispatcher's in-flight generation indexes) honored by the
  *   opportunistic post-creation sweep
  * @return {Promise<Object>} typed creation result
  */
 async function createSqliteStateMachineCheckpoint(options) {
-  const {db, identity, checkpointsRoot} = options;
+  const {db, identity, checkpointsRoot, raftRsGroupId} = options;
   if (!db || db.memory || !db.open) {
     return creationResult(CREATION.UNSUPPORTED_ADAPTER, ['memory_backed_db']);
+  }
+  if (typeof raftRsGroupId !== 'string' || raftRsGroupId.trim().length === 0) {
+    return creationResult(CREATION.UNSUPPORTED_ADAPTER,
+      [RAFT_RS_CHECKPOINT_REASON.PAYLOAD_KIND_REQUIRED]);
   }
   if (db.inTransaction) {
     return creationResult(CREATION.PREPARED_TRANSACTIONS_PENDING,
@@ -386,10 +222,8 @@ async function createSqliteStateMachineCheckpoint(options) {
     const copyDb = new Database(stagingPayload);
     let prepared;
     try {
-      prepared = options.raftRsGroupId ?
-        prepareRaftRsCheckpointCopy(
-          copyDb, options.raftRsGroupId, identity?.entity?.kind) :
-        prepareSqliteCheckpointCopy(copyDb);
+      prepared = prepareRaftRsCheckpointCopy(
+        copyDb, raftRsGroupId, identity?.entity?.kind);
     } finally {
       copyDb.close();
     }
@@ -403,7 +237,7 @@ async function createSqliteStateMachineCheckpoint(options) {
     fsyncFile(stagingPayload);
     const payloadBytes = fs.readFileSync(stagingPayload);
     const descriptor = buildCreatedCheckpointDescriptor(
-      identity, prepared, payloadBytes, options.raftRsGroupId);
+      identity, prepared, payloadBytes);
     const generationDir = path.join(
       checkpointsRoot, String(watermarks.committedIndex));
     ensureDirectory(generationDir);

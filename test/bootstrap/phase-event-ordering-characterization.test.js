@@ -133,8 +133,8 @@ test('Seed bootstrap - emits phase:start and phase:complete in correct order',
     bootstrap.registerSeedNodeWithControlPlane = async () => {};
     bootstrap.activateMessageGroupServiceRows = async () => {};
     bootstrap.initializeRuntimeServiceHandler = () => {};
-    bootstrap.startLatencyTopologyLifecycle = () => {};
-    bootstrap.activateControlPlaneBackgroundWriters = () => {};
+    bootstrap.runtimeHandoffOwner.startLatencyTopologyLifecycle = () => {};
+    bootstrap.runtimeHandoffOwner.activateControlPlaneBackgroundWriters = () => {};
     bootstrap.logger = SILENT_LOGGER;
 
     const events = [];
@@ -202,8 +202,8 @@ test('Seed bootstrap - emits BOOTSTRAP_EVENT.PHASE_START/COMPLETE in correct ord
     bootstrap.registerSeedNodeWithControlPlane = async () => {};
     bootstrap.activateMessageGroupServiceRows = async () => {};
     bootstrap.initializeRuntimeServiceHandler = () => {};
-    bootstrap.startLatencyTopologyLifecycle = () => {};
-    bootstrap.activateControlPlaneBackgroundWriters = () => {};
+    bootstrap.runtimeHandoffOwner.startLatencyTopologyLifecycle = () => {};
+    bootstrap.runtimeHandoffOwner.activateControlPlaneBackgroundWriters = () => {};
     bootstrap.logger = SILENT_LOGGER;
 
     const events = [];
@@ -266,8 +266,8 @@ test('Seed bootstrap - emits COMPLETE event after all phases', async (t) => {
   bootstrap.registerSeedNodeWithControlPlane = async () => {};
   bootstrap.activateMessageGroupServiceRows = async () => {};
   bootstrap.initializeRuntimeServiceHandler = () => {};
-  bootstrap.startLatencyTopologyLifecycle = () => {};
-  bootstrap.activateControlPlaneBackgroundWriters = () => {};
+  bootstrap.runtimeHandoffOwner.startLatencyTopologyLifecycle = () => {};
+  bootstrap.runtimeHandoffOwner.activateControlPlaneBackgroundWriters = () => {};
   bootstrap.logger = SILENT_LOGGER;
 
   const allEvents = [];
@@ -332,8 +332,8 @@ test('Seed bootstrap - phase failure emits phase:failed and phaseFailed events',
     bootstrap.registerSeedNodeWithControlPlane = async () => {};
     bootstrap.activateMessageGroupServiceRows = async () => {};
     bootstrap.initializeRuntimeServiceHandler = () => {};
-    bootstrap.startLatencyTopologyLifecycle = () => {};
-    bootstrap.activateControlPlaneBackgroundWriters = () => {};
+    bootstrap.runtimeHandoffOwner.startLatencyTopologyLifecycle = () => {};
+    bootstrap.runtimeHandoffOwner.activateControlPlaneBackgroundWriters = () => {};
     bootstrap.handleBootstrapFailure = async (error) => ({
       success: false,
       error: error.message,
@@ -434,8 +434,8 @@ function stubJoinServiceForEventOrdering(service, assignmentStrategy) {
   service.initializeJoinInfrastructure = async () => {};
   service.completeSuccessfulJoin = () => {
     service.lifecycleStateMachine.transition('ready');
-    service.activateControlPlaneBackgroundWriters = () => {};
-    service.startLatencyTopologyLifecycle = () => {};
+    service.runtimeHandoffOwner.activateControlPlaneBackgroundWriters = () => {};
+    service.runtimeHandoffOwner.startLatencyTopologyLifecycle = () => {};
     service.phase = JOINING_PHASE.COMPLETE;
 
     const duration = service.now() - service.startTime;
@@ -716,8 +716,8 @@ test('Seed bootstrap - phase event payloads include phase and nodeId',
     bootstrap.registerSeedNodeWithControlPlane = async () => {};
     bootstrap.activateMessageGroupServiceRows = async () => {};
     bootstrap.initializeRuntimeServiceHandler = () => {};
-    bootstrap.startLatencyTopologyLifecycle = () => {};
-    bootstrap.activateControlPlaneBackgroundWriters = () => {};
+    bootstrap.runtimeHandoffOwner.startLatencyTopologyLifecycle = () => {};
+    bootstrap.runtimeHandoffOwner.activateControlPlaneBackgroundWriters = () => {};
     bootstrap.logger = SILENT_LOGGER;
 
     const startPayloads = [];
@@ -850,8 +850,8 @@ async (t) => {
   bootstrap.registerSeedNodeWithControlPlane = async () => {};
   bootstrap.activateMessageGroupServiceRows = async () => {};
   bootstrap.initializeRuntimeServiceHandler = () => {};
-  bootstrap.startLatencyTopologyLifecycle = () => {};
-  bootstrap.activateControlPlaneBackgroundWriters = () => {};
+  bootstrap.runtimeHandoffOwner.startLatencyTopologyLifecycle = () => {};
+  bootstrap.runtimeHandoffOwner.activateControlPlaneBackgroundWriters = () => {};
   bootstrap.logger = SILENT_LOGGER;
 
   const startPayloads = [];
@@ -954,8 +954,8 @@ async (t) => {
   bootstrap.registerSeedNodeWithControlPlane = async () => {};
   bootstrap.activateMessageGroupServiceRows = async () => {};
   bootstrap.initializeRuntimeServiceHandler = () => {};
-  bootstrap.startLatencyTopologyLifecycle = () => {};
-  bootstrap.activateControlPlaneBackgroundWriters = () => {};
+  bootstrap.runtimeHandoffOwner.startLatencyTopologyLifecycle = () => {};
+  bootstrap.runtimeHandoffOwner.activateControlPlaneBackgroundWriters = () => {};
   bootstrap.handleBootstrapFailure = async (error) => ({
     success: false,
     error: error.message,
@@ -1143,8 +1143,8 @@ async (t) => {
   bootstrap.registerSeedNodeWithControlPlane = async () => {};
   bootstrap.activateMessageGroupServiceRows = async () => {};
   bootstrap.initializeRuntimeServiceHandler = () => {};
-  bootstrap.startLatencyTopologyLifecycle = () => {};
-  bootstrap.activateControlPlaneBackgroundWriters = () => {};
+  bootstrap.runtimeHandoffOwner.startLatencyTopologyLifecycle = () => {};
+  bootstrap.runtimeHandoffOwner.activateControlPlaneBackgroundWriters = () => {};
   bootstrap.logger = SILENT_LOGGER;
 
   const seedComplete = [];

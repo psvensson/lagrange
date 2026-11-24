@@ -38,20 +38,21 @@ const LOCAL_STR_RESOLVEROUTINGWAITPOLLINTERVALMS =
   'resolveRoutingWaitPollIntervalMs';
 const LOCAL_STR_DELAY = 'delay';
 
-const DEFAULT_QUORUM_REPLICA_COUNT = 1;
+const MISSING_TOPOLOGY_BINDING_PREFIX =
+  'ManagedSplitWorkflow requires topology binding: ';
 
 const returnsNull = () => () => null;
 const returnsEmptyList = () => () => [];
 const returnsFalse = () => () => false;
-const resolvesVoid = () => async () => {};
 const absent = () => null;
 
 /**
- * Topology collaborators the ManagedSplitWorkflow owner observes, in
- * binding order. Each resolves to the topology adapter's method when
- * one is wired, else the explicit option of the same name, else the
- * typed inert default built by `inertBinding(options, workflow)`.
- * @type {ReadonlyArray<{property: string, inertBinding: Function}>}
+ * Topology collaborators the ManagedSplitWorkflow owner consumes, in
+ * binding order. Each resolves to the topology adapter's method when one is
+ * wired, else the explicit option of the same name. Required effect, quorum,
+ * and membership collaborators are validated at binding time; optional read
+ * and hook collaborators use their typed default.
+ * @type {ReadonlyArray<{property: string, required?: boolean, inertBinding?: Function}>}
  */
 const TOPOLOGY_METHOD_BINDINGS = Object.freeze([
   {
@@ -70,35 +71,25 @@ const TOPOLOGY_METHOD_BINDINGS = Object.freeze([
       throw new Error(QUERY_ERROR_MSG.TABLE_SPLIT_START_FAILED);
     },
   },
-  {property: LOCAL_STR_RESOLVEPROVISIONTARGETNODEIDS, inertBinding: returnsEmptyList},
-  {
-    property: LOCAL_STR_GETROUTABLEPARTITIONSERVICENODEIDS,
-    inertBinding: returnsEmptyList,
-  },
+  {property: LOCAL_STR_RESOLVEPROVISIONTARGETNODEIDS, required: true},
+  {property: LOCAL_STR_GETROUTABLEPARTITIONSERVICENODEIDS, required: true},
   {property: LOCAL_STR_ISSYSTEMTABLEPARTITIONID, inertBinding: returnsFalse},
   {property: LOCAL_STR_CAPTURETOPOLOGYSNAPSHOT, inertBinding: absent},
-  {
-    property: LOCAL_STR_CALCULATEQUORUMREPLICACOUNT,
-    inertBinding: () => () => DEFAULT_QUORUM_REPLICA_COUNT,
-  },
+  {property: LOCAL_STR_CALCULATEQUORUMREPLICACOUNT, required: true},
   {property: LOCAL_STR_CREATEEXECUTIONTIMEOUTBUDGET, inertBinding: absent},
   {
     property: LOCAL_STR_ESTIMATESPLITADMISSIONBYTES,
     inertBinding: (_options, workflow) =>
       (partitionInfo) => workflow.defaultEstimateSplitAdmissionBytes(partitionInfo),
   },
-  {property: LOCAL_STR_WAITFORTABLEPARTITIONMETADATA, inertBinding: resolvesVoid},
+  {property: LOCAL_STR_WAITFORTABLEPARTITIONMETADATA, required: true},
   {property: LOCAL_STR_PROBEINITIALTABLEPARTITIONPROVISIONING, inertBinding: absent},
-  {property: LOCAL_STR_PROVISIONINITIALTABLEPARTITION, inertBinding: resolvesVoid},
-  {
-    property: LOCAL_STR_STARTSPLITREPLICATIONONSOURCEPARTITION,
-    inertBinding: resolvesVoid,
-  },
-  {property: LOCAL_STR_LISTTABLEPARTITIONROWS, inertBinding: returnsEmptyList},
-  {property: LOCAL_STR_LISTPARTITIONSERVICEROWS, inertBinding: returnsEmptyList},
-  {property: LOCAL_STR_DELIVERREPLICAREMOVAL, inertBinding: () => async () => null},
-  // No reader: membership unavailable, never "no members".
-  {property: LOCAL_STR_READCOMMITTEDGROUPMEMBERS, inertBinding: () => async () => []},
+  {property: LOCAL_STR_PROVISIONINITIALTABLEPARTITION, required: true},
+  {property: LOCAL_STR_STARTSPLITREPLICATIONONSOURCEPARTITION, required: true},
+  {property: LOCAL_STR_LISTTABLEPARTITIONROWS, required: true},
+  {property: LOCAL_STR_LISTPARTITIONSERVICEROWS, required: true},
+  {property: LOCAL_STR_DELIVERREPLICAREMOVAL, required: true},
+  {property: LOCAL_STR_READCOMMITTEDGROUPMEMBERS, required: true},
   {property: LOCAL_STR_OBSERVESYSTEMROWS, inertBinding: () => () => null},
   // Cutover readiness evidence (child canonical leader + serve-routable
   // node ids) is observed from the query plane; the owner decides.
@@ -129,21 +120,26 @@ function bindTopologyMethod(topologyAdapter, methodName) {
   return topologyAdapter[methodName].bind(topologyAdapter);
 }
 
+function resolveTopologyBinding(workflow, options, spec) {
+  const {property, required, inertBinding} = spec;
+  const bound = bindTopologyMethod(workflow.topologyAdapter, property) ||
+    options[property] || null;
+  if (required && !bound) {
+    throw new TypeError(`${MISSING_TOPOLOGY_BINDING_PREFIX}${property}`);
+  }
+  return bound || inertBinding(options, workflow);
+}
+
 /**
- * Bind the workflow's topology collaborators: every observation the
- * ManagedSplitWorkflow owner consumes comes from the topology adapter
- * when one is wired, else from the explicit option, else from a typed
- * inert default. The owner decides; these bindings only observe.
+ * Bind the workflow's topology collaborators and validate required adapter
+ * methods at binding time.
  * @param {ManagedSplitWorkflow} workflow - Workflow instance.
  * @param {Object} options - Constructor options.
  * @return {void}
  */
 function applyManagedSplitTopologyBindings(workflow, options) {
-  for (const {property, inertBinding} of TOPOLOGY_METHOD_BINDINGS) {
-    workflow[property] =
-      bindTopologyMethod(workflow.topologyAdapter, property) ||
-      options[property] ||
-      inertBinding(options, workflow);
+  for (const spec of TOPOLOGY_METHOD_BINDINGS) {
+    workflow[spec.property] = resolveTopologyBinding(workflow, options, spec);
   }
   workflow.storageAdmissionService =
     options.storageAdmissionService ||

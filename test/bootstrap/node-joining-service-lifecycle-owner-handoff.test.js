@@ -58,7 +58,7 @@ function stubDurableRejoin(service, calls, options = {}) {
     Number.isInteger(options.readinessFailures) ?
       options.readinessFailures :
       0;
-  service.phaseContactSeed = async () => {
+  service.contactSeedPhase.phaseContactSeed = async () => {
     service.bootstrapResponse = {
       seedNodeId: 'seed-node-1',
       seedNodeWsAddress: 'ws://localhost:8080',
@@ -72,21 +72,21 @@ function stubDurableRejoin(service, calls, options = {}) {
     service.seedNodeId = 'seed-node-1';
     service.seedNodeWsAddress = 'ws://localhost:8080';
   };
-  service.phaseConnectWebSocket = async () => {
+  service.connectWebSocketPhase.phaseConnectWebSocket = async () => {
     service.messageRouter = {
       deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
       setExternalAdmissionEnabled() {},
       unregister() {},
     };
   };
-  service.phaseCreateSelfHostedMessageGroup = async () => {
+  service.createMessageGroupPhase.phaseCreateSelfHostedMessageGroup = async () => {
     service.messageGroupServices.set('mg-owner-handoff-r0', {
       isLeaderReplica: () => true,
       getLeaderId: () => 'mg-owner-handoff-r0',
       completeJoinConvergence() {},
     });
   };
-  service.phaseWaitForLeadership = async () => {};
+  service.waitForLeadershipPhase.phaseWaitForLeadership = async () => {};
   service.initializeJoinInfrastructure = async () => {
     calls.infrastructure.push(attempt);
     establishJoinReplicaLifecycleOwner(service);
@@ -102,7 +102,7 @@ function stubDurableRejoin(service, calls, options = {}) {
     service.latencyTopology = {};
   };
   service.notifyLocalAdminRuntimeReady = async () => {};
-  service.phaseQuerySystemState = async () => {
+  service.querySystemStatePhase.phaseQuerySystemState = async () => {
     calls.membership.push(attempt);
     await service.querySystemStatePhase.hydrateSystemCacheFromBootstrap();
     publishMembershipState(calls, {
@@ -185,8 +185,9 @@ function stubDurableRejoin(service, calls, options = {}) {
       connectionState: STATE.CONNECTED,
     });
   };
-  service.hasActiveControlPlaneBackgroundWriters = () => calls.writers > 0;
-  service.activateControlPlaneBackgroundWriters = () => {
+  service.runtimeHandoffOwner.hasActiveControlPlaneBackgroundWriters =
+    () => calls.writers > 0;
+  service.runtimeHandoffOwner.activateControlPlaneBackgroundWriters = () => {
     calls.writerLifecycleStates.push(
       NodeService.getInstance().getLifecycleState(),
     );
@@ -197,7 +198,7 @@ function stubDurableRejoin(service, calls, options = {}) {
     );
     calls.writers += 1;
   };
-  service.startLatencyTopologyLifecycle = () => {};
+  service.runtimeHandoffOwner.startLatencyTopologyLifecycle = () => {};
   service.createMessageGroupPhase.flushDeferredCreateSelfHostedMetadata =
     async () => {};
 }

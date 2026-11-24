@@ -85,10 +85,6 @@ const readinessPlanningSemanticCurrencyMethods = {
       this,
       this.tableRevisions[tableName],
     );
-    if (!this.semanticPlanningEnabled) {
-      this.enqueueOwnerKeys(READINESS_PLANNING_REASON.SOURCE_CHANGED, record);
-      return;
-    }
     const observation = this.readCurrentSourceObservation();
     this.applyPlanningImpact(this.semanticGenerationTracker.recordTableChange(
       tableName,
@@ -191,8 +187,7 @@ const readinessPlanningSemanticCurrencyMethods = {
     buildOptionsKey,
     snapshot,
   ) {
-    if (!this.semanticPlanningEnabled ||
-        this.recordFeedbackSemanticChange(ownerKey, snapshot) !== true) {
+    if (this.recordFeedbackSemanticChange(ownerKey, snapshot) !== true) {
       return false;
     }
     this.readinessSnapshotGeneration = nextSemanticGeneration(

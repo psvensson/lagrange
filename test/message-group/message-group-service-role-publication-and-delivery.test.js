@@ -60,6 +60,10 @@ test('MessageGroupService - publishes leader state as follower metadata in servi
   const {router, nodeId, cleanup} = await createTestTransport();
   const updates = [];
   const mockCdcIntegrationService = {
+    executeAuthoritativeSystemTableRead: async () => ({
+      success: true,
+      rows: [{[COLUMN.SERVICE_ID]: 'mg-1-r1', [COLUMN.RAFT_ROLE]: RaftRole.LEADER}],
+    }),
     updateSystemTableRow: async (tableName, whereClause, data, options) => {
       updates.push({tableName, whereClause, data, options});
       return {success: true};
@@ -140,6 +144,10 @@ test('MessageGroupService - demotes non-control-plane role publication to backgr
   const {router, nodeId, cleanup} = await createTestTransport();
   const updates = [];
   const mockCdcIntegrationService = {
+    executeAuthoritativeSystemTableRead: async () => ({
+      success: true,
+      rows: [{[COLUMN.SERVICE_ID]: 'mg-user-1-r1', [COLUMN.RAFT_ROLE]: RaftRole.LEADER}],
+    }),
     updateSystemTableRow: async (tableName, whereClause, data, options) => {
       updates.push({tableName, whereClause, data, options});
       return {success: true};
@@ -201,6 +209,10 @@ test('MessageGroupService - publishes candidate role as follower metadata', asyn
   const {router, nodeId, cleanup} = await createTestTransport();
   const updates = [];
   const mockCdcIntegrationService = {
+    executeAuthoritativeSystemTableRead: async () => ({
+      success: true,
+      rows: [{[COLUMN.SERVICE_ID]: 'mg-1-r1', [COLUMN.RAFT_ROLE]: RaftRole.CANDIDATE}],
+    }),
     updateSystemTableRow: async (tableName, whereClause, data, options) => {
       updates.push({tableName, whereClause, data, options});
       return {success: true};
@@ -344,6 +356,10 @@ test(
     const {router, nodeId, cleanup} = await createTestTransport();
     let updateCalls = 0;
     const mockCdcIntegrationService = {
+      executeAuthoritativeSystemTableRead: async () => ({
+        success: true,
+        rows: [{[COLUMN.SERVICE_ID]: 'mg-1-r1', [COLUMN.RAFT_ROLE]: RaftRole.LEADER}],
+      }),
       updateSystemTableRow: async () => {
         updateCalls += 1;
         return {success: true};
@@ -406,6 +422,10 @@ test('MessageGroupService - flushes services role update when local services lea
     const updates = [];
     const mockCdcIntegrationService = {
       canWriteSystemTableLocally: (tableName) => tableName === SYSTEM_TABLE_NAME.SERVICES,
+      executeAuthoritativeSystemTableRead: async () => ({
+        success: true,
+        rows: [{[COLUMN.SERVICE_ID]: 'mg-1-r1', [COLUMN.RAFT_ROLE]: null}],
+      }),
       updateSystemTableRow: async (tableName, whereClause, data) => {
         updates.push({tableName, whereClause, data});
         return {success: true};
@@ -461,6 +481,10 @@ test('MessageGroupService - flushes message-group leader update when local owner
     const mockCdcIntegrationService = {
       canWriteSystemTableLocally: (tableName) =>
         tableName === SYSTEM_TABLE_NAME.MESSAGE_GROUPS,
+      executeAuthoritativeSystemTableRead: async () => ({
+        success: true,
+        rows: [{[COLUMN.GROUP_ID]: 'mg-1', [COLUMN.LEADER_NODE_ID]: null}],
+      }),
       updateSystemTableRow: async (tableName, whereClause, data) => {
         updates.push({tableName, whereClause, data});
         return {success: true};
@@ -527,6 +551,10 @@ test(
     const mockCdcIntegrationService = {
       canWriteSystemTableLocally: (tableName) =>
         tableName === SYSTEM_TABLE_NAME.SERVICES,
+      executeAuthoritativeSystemTableRead: async () => ({
+        success: true,
+        rows: [{[COLUMN.SERVICE_ID]: 'mg-1-r1', [COLUMN.RAFT_ROLE]: RaftRole.LEADER}],
+      }),
       updateSystemTableRow: async (tableName, whereClause, data) => {
         updates.push({tableName, whereClause, data});
         return {success: true};
@@ -662,6 +690,10 @@ test('MessageGroupService - persists leader node updates to message groups table
   const {router, nodeId, cleanup} = await createTestTransport();
   const updates = [];
   const mockCdcIntegrationService = {
+    executeAuthoritativeSystemTableRead: async () => ({
+      success: true,
+      rows: [{[COLUMN.GROUP_ID]: 'mg-1', [COLUMN.LEADER_NODE_ID]: null}],
+    }),
     updateSystemTableRow: async (tableName, whereClause, data, options) => {
       updates.push({tableName, whereClause, data, options});
       return {success: true};

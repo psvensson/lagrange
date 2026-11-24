@@ -1,47 +1,41 @@
 /**
- * Call-site helpers that route an audited read-only hot path through the
- * cache's no-clone shared-row read (`getAllShared`/`filterShared`) when
- * available, and fall back to `getAll`/`filter` otherwise.
+ * Call-site helpers for audited read-only system-table scans.
  *
- * Why a helper rather than calling `getAllShared`/`filterShared` directly:
- * several consumers are constructed with mock caches that only implement
- * `getAll`/`filter`. The fallback keeps those paths working. The real cache's
- * scan reads return frozen-shared rows unconditionally (the per-read deep clone
- * was eliminated), so callers must treat returned rows as read-only.
+ * The canonical SystemTableCache `getAll`/`filter` methods return frozen,
+ * shared rows unconditionally (no per-read deep clone), so callers must treat
+ * returned rows as read-only. Missing or non-conforming caches fail closed
+ * with a TypeError rather than silently returning an empty list.
  */
 
 const TYPE_FUNCTION = 'function';
+const MISSING_CACHE_GET_ALL_ERROR =
+  'readAllSharedRows requires a system table cache with getAll(tableName)';
+const MISSING_CACHE_FILTER_ERROR =
+  'filterSharedRows requires a system table cache with filter(tableName, predicate)';
 
 /**
- * @param {Object} cache - System table cache (or mock).
+ * @param {Object} cache - System table cache with `getAll(tableName)`.
  * @param {string} tableName - System table name.
- * @return {Array<Object>} Rows (frozen+shared under the lever, else clones).
+ * @return {Array<Object>} Rows (frozen+shared on SystemTableCache).
  */
 function readAllSharedRows(cache, tableName) {
-  if (cache && typeof cache.getAllShared === TYPE_FUNCTION) {
-    return cache.getAllShared(tableName) || [];
+  if (!cache || typeof cache.getAll !== TYPE_FUNCTION) {
+    throw new TypeError(MISSING_CACHE_GET_ALL_ERROR);
   }
-  if (cache && typeof cache.getAll === TYPE_FUNCTION) {
-    return cache.getAll(tableName) || [];
-  }
-  return [];
+  return cache.getAll(tableName) || [];
 }
 
 /**
- * @param {Object} cache - System table cache (or mock).
+ * @param {Object} cache - System table cache with `filter(tableName, predicate)`.
  * @param {string} tableName - System table name.
  * @param {Function} predicate - Returns true for matching rows.
- * @return {Array<Object>} Matching rows (frozen+shared under the lever, else
- *   clones).
+ * @return {Array<Object>} Matching rows (frozen+shared on SystemTableCache).
  */
 function filterSharedRows(cache, tableName, predicate) {
-  if (cache && typeof cache.filterShared === TYPE_FUNCTION) {
-    return cache.filterShared(tableName, predicate) || [];
+  if (!cache || typeof cache.filter !== TYPE_FUNCTION) {
+    throw new TypeError(MISSING_CACHE_FILTER_ERROR);
   }
-  if (cache && typeof cache.filter === TYPE_FUNCTION) {
-    return cache.filter(tableName, predicate) || [];
-  }
-  return [];
+  return cache.filter(tableName, predicate) || [];
 }
 
 export {filterSharedRows, readAllSharedRows};

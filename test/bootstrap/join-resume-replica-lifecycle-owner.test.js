@@ -179,7 +179,7 @@ test('F3: a preserved join resume keeps exactly one replica lifecycle owner ' +
     throw new Error(TERMINAL_SUBSCRIBE_ERROR);
   };
 
-  service.phaseContactSeed = async () => {
+  service.contactSeedPhase.phaseContactSeed = async () => {
     service.bootstrapResponse = {
       success: true,
       seedNodeId: 'seed-node-1',
@@ -193,18 +193,18 @@ test('F3: a preserved join resume keeps exactly one replica lifecycle owner ' +
     service.seedNodeId = 'seed-node-1';
     service.seedNodeWsAddress = 'ws://localhost:8080';
   };
-  service.phaseConnectWebSocket = async () => {
+  service.connectWebSocketPhase.phaseConnectWebSocket = async () => {
     if (!service.messageRouter) {
       service.messageRouter = buildRouter();
     }
   };
-  service.phaseCreateSelfHostedMessageGroup = async () => {
+  service.createMessageGroupPhase.phaseCreateSelfHostedMessageGroup = async () => {
     if (!service.messageGroupServices.has('mg-1-r0')) {
       service.messageGroupServices.set('mg-1-r0',
         buildLeaderMessageGroup(onSubscribe));
     }
   };
-  service.phaseWaitForLeadership = async () => {};
+  service.waitForLeadershipPhase.phaseWaitForLeadership = async () => {};
   service.createCdcIntegrationService = () => {
     if (!service.cdcIntegrationService) {
       const cdc = new EventEmitter();
@@ -431,7 +431,7 @@ function buildJoiner(runtime, {bootIncarnation, fault, onMembership}) {
     faultOnce(FAULT.EXTERNAL_ADMISSION);
     return setExternalAdmissionEnabled.call(router, enabled);
   };
-  service.phaseContactSeed = async () => {
+  service.contactSeedPhase.phaseContactSeed = async () => {
     service.bootstrapResponse = {
       success: true,
       seedNodeId: 'seed-node-1',
@@ -445,17 +445,17 @@ function buildJoiner(runtime, {bootIncarnation, fault, onMembership}) {
     service.seedNodeId = 'seed-node-1';
     service.seedNodeWsAddress = 'ws://localhost:8080';
   };
-  service.phaseConnectWebSocket = async () => {
+  service.connectWebSocketPhase.phaseConnectWebSocket = async () => {
     service.messageRouter = service.messageRouter || router;
   };
-  service.phaseCreateSelfHostedMessageGroup = async () => {
+  service.createMessageGroupPhase.phaseCreateSelfHostedMessageGroup = async () => {
     if (!service.messageGroupServices.has('mg-1-r0')) {
       service.messageGroupServices.set('mg-1-r0',
         buildLeaderMessageGroup(async () =>
           faultOnce(FAULT.CONTROL_PLANE)));
     }
   };
-  service.phaseWaitForLeadership = async () => {};
+  service.waitForLeadershipPhase.phaseWaitForLeadership = async () => {};
   service.createCdcIntegrationService = () => {
     if (!service.cdcIntegrationService) {
       const cdc = new EventEmitter();
@@ -474,7 +474,7 @@ function buildJoiner(runtime, {bootIncarnation, fault, onMembership}) {
     faultOnce(FAULT.MESSAGE_GROUP_HANDLER);
     return originalMessageGroupHandler();
   };
-  service.phaseQuerySystemState = async () => {
+  service.querySystemStatePhase.phaseQuerySystemState = async () => {
     await onMembership(service);
     throw outerReattemptError();
   };
