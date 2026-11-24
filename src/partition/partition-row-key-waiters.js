@@ -40,6 +40,8 @@ const COMPLETION_TARGET_STATES = new Set([
   ROW_KEY_WAIT_RECEIPT_STATE.TERMINAL,
 ]);
 
+const MAX_RETAINED_WAIT_RECEIPTS = 8;
+
 let nextWaitReceiptId = 0;
 
 function rowKeyWaitersOf(service) {
@@ -64,11 +66,26 @@ const resolveParticipantIdOf = (session) => session?.identity?.participantId ?? 
 const resolveTransactionIdOf = (session) => session?.identity?.transactionId ?? null;
 const resolveSessionEpochOf = (session) => session?.identity?.transactionEpoch ?? null;
 
-function recordSessionReceipt(session, receipt) {
+function clearSessionActiveWaitReceipt(session, receipt = null) {
   if (!session || typeof session !== 'object') return;
+  if (receipt === null || session.activeWaitReceipt === receipt) {
+    session.activeWaitReceipt = null;
+  }
+}
+
+function recordSessionReceipt(session, receipt) {
+  if (!session || typeof session !== 'object' || !receipt) return;
+  const isNewReceipt = session.lastWaitReceipt !== receipt;
+  session.activeWaitReceipt = receipt;
   session.lastWaitReceipt = receipt;
   if (!Array.isArray(session.waitReceipts)) session.waitReceipts = [];
-  if (!session.waitReceipts.includes(receipt)) session.waitReceipts.push(receipt);
+  if (isNewReceipt) {
+    session.waitReceiptCount = (Number(session.waitReceiptCount) || 0) + 1;
+    if (session.waitReceipts.length >= MAX_RETAINED_WAIT_RECEIPTS) {
+      session.waitReceipts.shift();
+    }
+    session.waitReceipts.push(receipt);
+  }
 }
 
 function clearReceiptTimer(receipt) {
@@ -186,6 +203,7 @@ function settleClosedWaiterInPass(waiters, waiter) {
     waiter.state = ROW_KEY_WAIT_RECEIPT_STATE.TERMINAL;
     waiter.terminalReason = TERMINAL_REASON_SESSION_CLOSED;
   }
+  clearSessionActiveWaitReceipt(waiter.session, waiter);
 }
 
 function occupyPassKey(passState, awaitedKey) {
@@ -266,6 +284,7 @@ function retireSupersededSessionWaiters(service, session, nextRowKey) {
       existing.state = ROW_KEY_WAIT_RECEIPT_STATE.REPARKED;
       existing.nextRowKey = nextRowKey;
       service.rowKeyWaiters.delete(existing);
+      clearSessionActiveWaitReceipt(session, existing);
     }
   }
 }
@@ -327,6 +346,7 @@ function enqueueBoundedRowKeyWaiter(service, session, rowKey, boundedWaitMs) {
   if (effectiveWaitMs <= 0) {
     receipt.state = ROW_KEY_WAIT_RECEIPT_STATE.TERMINAL;
     receipt.terminalReason = TERMINAL_REASON_EXPIRED;
+    clearSessionActiveWaitReceipt(session, receipt);
     clearActiveSessionWaitContext(service, session);
     return Promise.resolve({waited: false, settled: false, receipt});
   }
@@ -348,6 +368,7 @@ function enqueueBoundedRowKeyWaiter(service, session, rowKey, boundedWaitMs) {
       waiters.delete(receipt);
       receipt.state = ROW_KEY_WAIT_RECEIPT_STATE.TERMINAL;
       receipt.terminalReason = reason;
+      clearSessionActiveWaitReceipt(session, receipt);
       resolve({waited: true, settled: false, receipt, ...extra});
       return true;
     };
@@ -411,6 +432,7 @@ function resolveReevaluationTargetState(outcome = {}) {
 function applyReceiptCompletionState(service, receipt, targetState, outcome) {
   clearReceiptTimer(receipt);
   service?.rowKeyWaiters?.delete(receipt);
+  clearSessionActiveWaitReceipt(receipt.session, receipt);
   if (COMPLETION_TARGET_STATES.has(receipt.state)) {
     if (receipt.state !== ROW_KEY_WAIT_RECEIPT_STATE.REPARKED) {
       clearActiveSessionWaitContext(service, receipt.session);
@@ -504,6 +526,7 @@ function terminateSessionWaitReceipts(service, session) {
 function releaseRowKeySessionClaims(service, session, cyclePolicy = null) {
   const released = clearProvisionalSessionFootprint(session);
   const terminatedWaiters = terminateSessionWaitReceipts(service, session);
+  clearSessionActiveWaitReceipt(session);
   clearActiveSessionWaitContext(service, session);
   triggerServiceWaiterNotification(service, cyclePolicy);
   return {released, terminatedWaiters};
@@ -589,6 +612,7 @@ function doomActiveSessionOnWaitCycle(service, session, rowKey, policy) {
   const receipt = createStructuredWaitReceipt(service, session, rowKey, originalDeadlineMs);
   receipt.state = ROW_KEY_WAIT_RECEIPT_STATE.TERMINAL;
   receipt.terminalReason = ROW_KEY_WAIT_CYCLE_FAILURE_REASON;
+  clearSessionActiveWaitReceipt(session, receipt);
   clearActiveSessionWaitContext(service, session);
   return {doomed: true, released, receipt};
 }

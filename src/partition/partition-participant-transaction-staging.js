@@ -87,6 +87,8 @@ const ONE = 1;
 const EMPTY_ARRAY_BRACKET_BYTES = 2;
 const ARRAY_ELEMENT_COMMA_BYTES = 1;
 const MAX_MEMOIZED_FOOTPRINT_PLANS = 256;
+const MAX_MEMOIZED_FOOTPRINT_STATEMENT_BYTES = 4096;
+const MAX_MEMOIZED_FOOTPRINT_RETAINED_BYTES = 262144;
 const STAT_EMPTY_READ_DIRECT = 'emptyReadDirectExecutions';
 const STAT_DISJOINT_DIRECT_READS = 'disjointDirectReads';
 const PG_PARAM_PATTERN = /\$[1-9]\d*/u;
@@ -103,6 +105,7 @@ const VALIDATION_COMPLETE = Object.freeze({validationComplete: true});
 const STAGING_REPLAY_STATS = new WeakMap();
 const footprintPlanMemo = {
   entries: new Map(),
+  retainedBytes: ZERO,
   hitCount: ZERO,
   missCount: ZERO,
 };
@@ -147,16 +150,35 @@ function hasNoSubqueryClauses(ast) {
   return !clauses.some(containsAstSubquery);
 }
 
-function buildFootprintPlanEntry(trimmedStatement) {
+function buildFootprintPlanEntry(trimmedStatement, entryBytes = ZERO) {
   try {
     const dialect = PG_PARAM_PATTERN.test(trimmedStatement) ? SQL_DIALECT_PG : SQL_DIALECT_SQLITE;
     const parser = new SQLParser(trimmedStatement, {dialect});
     parser.logger = {debug() {}, info() {}, warn() {}, error() {}};
     const ast = deepFreezeAst(parser.parse());
     const eligibleSelect = isBaseSingleTableSelectAst(ast) && hasNoSubqueryClauses(ast);
-    return Object.freeze({ast, eligibleSelect});
+    return Object.freeze({ast, eligibleSelect, entryBytes});
   } catch {
-    return Object.freeze({ast: null, eligibleSelect: false});
+    return Object.freeze({ast: null, eligibleSelect: false, entryBytes});
+  }
+}
+
+function evictOldestFootprintMemoEntries(incomingBytes) {
+  const entries = footprintPlanMemo.entries;
+  while (
+    entries.size > ZERO &&
+    (entries.size >= MAX_MEMOIZED_FOOTPRINT_PLANS ||
+      footprintPlanMemo.retainedBytes + incomingBytes > MAX_MEMOIZED_FOOTPRINT_RETAINED_BYTES)
+  ) {
+    const oldestKey = entries.keys().next().value;
+    if (oldestKey === undefined) break;
+    const evicted = entries.get(oldestKey);
+    entries.delete(oldestKey);
+    const evictedBytes = evicted?.entryBytes ?? Buffer.byteLength(oldestKey, TEXT_ENCODING);
+    footprintPlanMemo.retainedBytes = Math.max(
+      ZERO,
+      footprintPlanMemo.retainedBytes - evictedBytes,
+    );
   }
 }
 
@@ -164,6 +186,14 @@ function resolveFootprintPlanEntry(statementText) {
   if (typeof statementText !== 'string') return null;
   const trimmed = statementText.trim();
   if (trimmed.length === ZERO) return null;
+  const trimmedBytes = Buffer.byteLength(trimmed, TEXT_ENCODING);
+  const rawBytes = statementText.length === trimmed.length ?
+    trimmedBytes : Buffer.byteLength(statementText, TEXT_ENCODING);
+  if (rawBytes > MAX_MEMOIZED_FOOTPRINT_STATEMENT_BYTES ||
+      trimmedBytes > MAX_MEMOIZED_FOOTPRINT_STATEMENT_BYTES) {
+    footprintPlanMemo.missCount += ONE;
+    return buildFootprintPlanEntry(trimmed, trimmedBytes);
+  }
   const entries = footprintPlanMemo.entries;
   if (entries.has(trimmed)) {
     const existing = entries.get(trimmed);
@@ -173,13 +203,18 @@ function resolveFootprintPlanEntry(statementText) {
     return existing;
   }
   footprintPlanMemo.missCount += ONE;
-  const entry = buildFootprintPlanEntry(trimmed);
-  if (entries.size >= MAX_MEMOIZED_FOOTPRINT_PLANS) {
-    const oldestKey = entries.keys().next().value;
-    if (oldestKey !== undefined) entries.delete(oldestKey);
-  }
+  const entry = buildFootprintPlanEntry(trimmed, trimmedBytes);
+  evictOldestFootprintMemoEntries(trimmedBytes);
   entries.set(trimmed, entry);
+  footprintPlanMemo.retainedBytes += trimmedBytes;
   return entry;
+}
+
+function clearFootprintAstCache() {
+  footprintPlanMemo.entries.clear();
+  footprintPlanMemo.retainedBytes = ZERO;
+  footprintPlanMemo.hitCount = ZERO;
+  footprintPlanMemo.missCount = ZERO;
 }
 
 function resolveStatementFootprintAst(statementText) {
@@ -190,13 +225,24 @@ function getOrParseCachedStatementFootprintAst(statementText) {
   return resolveStatementFootprintAst(statementText);
 }
 
-function getFootprintPlanCacheStats() {
+function readFootprintMemoStats() {
   return {
     hitCount: footprintPlanMemo.hitCount,
     missCount: footprintPlanMemo.missCount,
     size: footprintPlanMemo.entries.size,
+    retainedBytes: footprintPlanMemo.retainedBytes,
     maxEntries: MAX_MEMOIZED_FOOTPRINT_PLANS,
+    maxSqlBytes: MAX_MEMOIZED_FOOTPRINT_STATEMENT_BYTES,
+    maxRetainedBytes: MAX_MEMOIZED_FOOTPRINT_RETAINED_BYTES,
   };
+}
+
+function getFootprintAstCacheStats() {
+  return readFootprintMemoStats();
+}
+
+function getFootprintPlanCacheStats() {
+  return readFootprintMemoStats();
 }
 
 function parseScopedSelectAst(sql, tableName) {
@@ -682,6 +728,8 @@ function runParticipantSessionStatement(service, session, request) {
 }
 
 export {
+  clearFootprintAstCache,
+  getFootprintAstCacheStats,
   getFootprintPlanCacheStats,
   getOrParseCachedStatementFootprintAst,
   getStagingReplayStats,

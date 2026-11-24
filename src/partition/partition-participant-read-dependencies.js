@@ -101,6 +101,14 @@ class ParticipantReadDependencyAccumulator {
   #scope = SCOPE.NONE;
   #keys = new Set();
   #byteCount = ZERO;
+  #overflowed = false;
+  #revision = ZERO;
+  #cachedSnapshot = null;
+  #cachedSnapshotRevision = -ONE;
+  #cachedSortedKeys = EMPTY_KEYS;
+  #cachedKeySet = EMPTY_KEY_SET;
+  #cachedKeysRevision = -ONE;
+  #snapshotBuildCount = ZERO;
   #maxKeys;
   #maxBytes;
 
@@ -113,95 +121,145 @@ class ParticipantReadDependencyAccumulator {
   get readScope() {
     return this.#scope;
   }
-
+  get mode() {
+    return this.#scope;
+  }
   get hasUnscopedRead() {
     return this.#scope === SCOPE.PARTITION;
   }
-
+  get overflowed() {
+    return this.#overflowed;
+  }
   get keyCount() {
     return this.#keys.size;
   }
-
   get byteCount() {
     return this.#byteCount;
   }
-
   get maxKeys() {
     return this.#maxKeys;
   }
-
   get maxBytes() {
     return this.#maxBytes;
   }
-
+  get revision() {
+    return this.#revision;
+  }
+  get cachedSnapshot() {
+    return this.#cachedSnapshot;
+  }
+  get cachedSnapshotRevision() {
+    return this.#cachedSnapshotRevision;
+  }
+  get snapshotBuildCount() {
+    return this.#snapshotBuildCount;
+  }
   hasKey(rowKey) {
     return this.#scope === SCOPE.KEYS && this.#keys.has(rowKey);
   }
-
-  keys() {
-    return this.#scope === SCOPE.KEYS ?
-      Object.freeze([...this.#keys].sort()) : EMPTY_KEYS;
+  #ensureCachedKeys() {
+    if (this.#scope !== SCOPE.KEYS) return EMPTY_KEYS;
+    if (this.#cachedKeysRevision !== this.#revision) {
+      this.#cachedSortedKeys = Object.freeze([...this.#keys].sort());
+      this.#cachedKeySet = Object.freeze(new Set(this.#cachedSortedKeys));
+      this.#cachedKeysRevision = this.#revision;
+    }
+    return this.#cachedSortedKeys;
   }
-
+  keys() {
+    return this.#ensureCachedKeys();
+  }
   values() {
     return this.#keys.values();
   }
-
-  widenToPartitionScope() {
+  #widenScope(overflowed = false) {
+    const nextOverflowed = this.#overflowed || Boolean(overflowed);
+    if (this.#scope === SCOPE.PARTITION &&
+        this.#keys.size === ZERO &&
+        this.#byteCount === ZERO &&
+        this.#overflowed === nextOverflowed) {
+      return this.#scope;
+    }
     this.#scope = SCOPE.PARTITION;
     this.#keys.clear();
     this.#byteCount = ZERO;
-    return this.snapshot();
+    this.#overflowed = nextOverflowed;
+    this.#revision += ONE;
+    return this.#scope;
   }
-
+  widenToPartitionScope() {
+    return this.#widenScope(false);
+  }
+  recordPartitionRead() {
+    return this.#widenScope(false);
+  }
   #tryAddKey(rowKey) {
     if (!isNonEmptyString(rowKey)) {
-      this.widenToPartitionScope();
+      this.#widenScope(false);
       return false;
     }
     if (this.#keys.has(rowKey)) return true;
     const keyBytes = Buffer.byteLength(rowKey, TEXT_ENCODING);
     if (this.#keys.size + ONE > this.#maxKeys ||
         this.#byteCount + keyBytes > this.#maxBytes) {
-      this.widenToPartitionScope();
+      this.#widenScope(true);
       return false;
     }
     this.#keys.add(rowKey);
     this.#byteCount += keyBytes;
     this.#scope = SCOPE.KEYS;
+    this.#revision += ONE;
     return true;
   }
-
-  recordReadFootprint(footprint) {
-    if (this.#scope === SCOPE.PARTITION) {
-      return this.snapshot();
+  recordKeyReads(keys) {
+    if (this.#scope === SCOPE.PARTITION) return this.#scope;
+    const list = collectNormalizedKeyArray(keys);
+    if (list === null || list.length === ZERO) return this.#widenScope(false);
+    for (let i = ZERO; i < list.length; i += ONE) {
+      if (!this.#tryAddKey(list[i])) break;
     }
+    return this.#scope;
+  }
+  recordReadFootprint(footprint) {
+    if (this.#scope === SCOPE.PARTITION) return this.#scope;
     if (!footprint || footprint.scoped !== true ||
         !Array.isArray(footprint.rowKeys) || footprint.rowKeys.length === ZERO) {
-      return this.widenToPartitionScope();
+      return this.#widenScope(false);
     }
     for (let i = ZERO; i < footprint.rowKeys.length; i += ONE) {
       if (!this.#tryAddKey(footprint.rowKeys[i])) break;
     }
-    return this.snapshot();
+    return this.#scope;
   }
-
-  snapshot() {
-    if (this.#scope === SCOPE.NONE) return NONE_READ_DEPENDENCY_SNAPSHOT;
-    if (this.#scope === SCOPE.PARTITION) return FAIL_CLOSED_READ_DEPENDENCY_SNAPSHOT;
-    const readKeys = this.keys();
-    return Object.freeze({
-      readScope: SCOPE.KEYS,
-      readKeys,
-      readKeysSet: new Set(readKeys),
-      keyCount: readKeys.length,
-      byteCount: this.#byteCount,
-      hasUnscopedRead: false,
-      canonicalRecord: Object.freeze({
+  getSnapshot() {
+    if (this.#cachedSnapshot !== null &&
+        this.#cachedSnapshotRevision === this.#revision) {
+      return this.#cachedSnapshot;
+    }
+    this.#snapshotBuildCount += ONE;
+    let built;
+    if (this.#scope === SCOPE.NONE) {
+      built = NONE_READ_DEPENDENCY_SNAPSHOT;
+    } else if (this.#scope === SCOPE.PARTITION) {
+      built = FAIL_CLOSED_READ_DEPENDENCY_SNAPSHOT;
+    } else {
+      const readKeys = this.#ensureCachedKeys();
+      built = Object.freeze({
         readScope: SCOPE.KEYS,
         readKeys,
-      }),
-    });
+        readKeysSet: this.#cachedKeySet,
+        keyCount: readKeys.length,
+        byteCount: this.#byteCount,
+        hasUnscopedRead: false,
+        canonicalRecord: Object.freeze({readScope: SCOPE.KEYS, readKeys}),
+      });
+    }
+    this.#cachedSnapshot = built;
+    this.#cachedSnapshotRevision = this.#revision;
+    return built;
+  }
+  snapshot() {
+    return this.getSnapshot();
   }
 }
 
@@ -258,18 +316,18 @@ function attachSessionReadDependencyAccumulator(session, options = {}) {
 }
 
 function recordSessionReadDependencyFootprint(session, footprint) {
-  if (!session?.readDependencies) return FAIL_CLOSED_READ_DEPENDENCY_SNAPSHOT;
+  if (!session?.readDependencies) return FAIL_CLOSED_READ_DEPENDENCY_SNAPSHOT.readScope;
   return session.readDependencies.recordReadFootprint(footprint);
 }
 
 function widenSessionReadToPartition(session) {
-  if (!session?.readDependencies) return FAIL_CLOSED_READ_DEPENDENCY_SNAPSHOT;
+  if (!session?.readDependencies) return FAIL_CLOSED_READ_DEPENDENCY_SNAPSHOT.readScope;
   return session.readDependencies.widenToPartitionScope();
 }
 
 function getSessionReadDependencySnapshot(session) {
   if (!session?.readDependencies) return FAIL_CLOSED_READ_DEPENDENCY_SNAPSHOT;
-  return session.readDependencies.snapshot();
+  return session.readDependencies.getSnapshot();
 }
 
 function validateAndMeasureSortedReadKeys(keys, maxKeys, maxBytes) {
@@ -465,6 +523,11 @@ function unwrapNestedReadSource(source) {
 function resolveReadHalf(source) {
   if (!source || typeof source !== 'object') return PARTITION_READ_HALF;
   const nested = unwrapNestedReadSource(source);
+  if (nested instanceof ParticipantReadDependencyAccumulator) {
+    if (nested.readScope === SCOPE.NONE) return NONE_READ_HALF;
+    if (nested.readScope === SCOPE.PARTITION) return PARTITION_READ_HALF;
+    return buildScopedOrPartitionReadHalf(nested.getSnapshot().readKeysSet);
+  }
   if (nested.hasUnscopedRead === true || nested.readScope === SCOPE.PARTITION) {
     return PARTITION_READ_HALF;
   }
