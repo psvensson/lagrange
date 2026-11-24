@@ -976,34 +976,25 @@ async (t) => {
 
       const cache = new SystemTableCache();
       cache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.INSERT, {
-        leader_claim_raft_term: 5,
-        leader_node_id: 'node-a',
-        partition_id: PARTITION,
-        table_id: TABLE,
+        leader_claim_raft_term: 5, leader_node_id: 'node-a',
+        partition_id: PARTITION, table_id: TABLE,
       });
       cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
-        address: `node-a/partition/${PARTITION}`,
-        node_id: 'node-a',
-        partition_id: PARTITION,
-        replica_id: replicaId,
-        service_id: replicaId,
-        service_type: SERVICE_TYPE.PARTITION,
-        status: SERVICE_STATUS.ACTIVE,
+        address: `node-a/partition/${PARTITION}`, node_id: 'node-a',
+        partition_id: PARTITION, replica_id: replicaId, service_id: replicaId,
+        service_type: SERVICE_TYPE.PARTITION, status: SERVICE_STATUS.ACTIVE,
       });
 
       // Prime the persisted term reader cache while no live replica is open.
       let liveReplicas = [];
       const executor = new QueryExecutor({
         controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
-        dataDir,
-        getLocalPartitionReplicas: () => liveReplicas,
+        dataDir, getLocalPartitionReplicas: () => liveReplicas,
         messageRouter: {deliver: async () => null, nodeId: 'node-a'},
-        nodeId: 'node-a',
-        systemCache: cache,
+        nodeId: 'node-a', systemCache: cache,
       });
       const snapshot = executor.getPartitionRoutingSnapshot(
-        PARTITION,
-        DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+        PARTITION, DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
       );
       const diskFloor = resolveSelfPublishedLeaderTermFloor(executor, PARTITION, snapshot);
       t.equal(diskFloor.eligible, true);
@@ -1014,112 +1005,120 @@ async (t) => {
         partitionId: PARTITION,
         raft: {
           observeCurrentAuthority: () => ({
-            groupId: PARTITION,
-            outcome: RAFT_OPERATION_OUTCOME.CORE_UNAVAILABLE,
+            groupId: PARTITION, outcome: RAFT_OPERATION_OUTCOME.CORE_UNAVAILABLE,
             replicaIdentity: replicaId,
           }),
         },
         replicaId,
       }];
       const liveUnavailableFloor = resolveSelfPublishedLeaderTermFloor(
-        executor,
-        PARTITION,
-        snapshot,
+        executor, PARTITION, snapshot,
       );
       t.equal(liveUnavailableFloor.eligible, false,
         'live authority owner unavailable answer must fail closed and never fall back to disk term 9');
       t.equal(liveUnavailableFloor.termFloor, null);
-      t.equal(
-        getRetainedPersistedTermReader({dataDir, partitionId: PARTITION, replicaId}),
-        null,
-        'presence of live local replica invalidates cached disk term reader',
-      );
+      t.equal(getRetainedPersistedTermReader({dataDir, partitionId: PARTITION, replicaId}), null,
+        'presence of live local replica invalidates cached disk term reader');
     });
 });
 
-test('Review #375 regression guards: committed write past deadline, cached latestRoutes active floor refresh, ' +
+test('Review #375 regression guards: committed write past deadline or abort, cached latestRoutes active floor refresh, ' +
   'superseded readDelivery.redirect completion classification, and dataDir-scoped partition invalidation',
 async (t) => {
-  await t.test('1. committed write (forRead = false) reply arriving past deadlineMs is preserved, while read rejects',
-    async (t) => {
-      const clock = new VirtualTimeSource({startMs: 20_000});
-      const cache = new SystemTableCache();
-      cache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.INSERT, {
-        leader_node_id: 'node-a',
-        partition_id: PARTITION,
-        table_id: TABLE,
-      });
-      cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
-        address: `node-a/partition/${PARTITION}`,
-        node_id: 'node-a',
-        partition_id: PARTITION,
-        replica_id: `${PARTITION}-r1`,
-        service_id: `${PARTITION}-r1`,
-        service_type: SERVICE_TYPE.PARTITION,
-        status: SERVICE_STATUS.ACTIVE,
-      });
-      const writeEntered = createDeferred();
-      const releaseWriteReply = createDeferred();
-      const executor = new QueryExecutor({
-        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
-        getLocalPartitionReplicas: () => [],
-        messageRouter: {
-          deliver: async () => {
-            writeEntered.resolve();
-            await releaseWriteReply.promise;
-            return buildDeliveryEnvelope({acknowledged: true}, {
-              changes: 1,
-              lastInsertRowid: 99,
-              success: true,
-            });
-          },
-          getCurrentPrimaryConnectionBootIncarnation: (nodeId) => ({
-            bootIncarnation: `boot-${nodeId}-1`,
-            connectionId: `conn-${nodeId}-1`,
-            nodeId,
-          }),
-          nodeId: 'node-a',
-          timeSource: clock,
-        },
-        nodeId: 'node-a',
-        nowFn: () => clock.now(),
-        sleepFn: async (ms) => {
-          clock.advance(ms);
-        },
-        systemCache: cache,
-      });
-
-      const writeDeadlineMs = clock.now() + 250;
-      const writeSql = 'UPDATE sys_ledger SET workflow_step = ? WHERE operation_id = ?';
-      await t.rejects(
-        executor.executeOnPartition(
-          PARTITION, writeSql, ['bad-pos-args', OPERATION],
-          'entry-id-misplaced', {deadlineMs: writeDeadlineMs},
-        ),
-        TypeError,
-        'executeOnPartition(partitionId, sql, params, entryId, {deadlineMs}) throws TypeError',
-      );
-      await t.rejects(
-        executor.executeOnPartition(
-          PARTITION, writeSql, ['bad-pos-args', OPERATION], false, {deadlineMs: writeDeadlineMs},
-        ),
-        TypeError,
-        'executeOnPartition(partitionId, sql, params, false, {deadlineMs}) throws TypeError',
-      );
-      const writePromise = executor.executeOnPartition(
-        PARTITION, writeSql, ['committed-write', OPERATION], false, false, false,
-        {deadlineMs: writeDeadlineMs, preserveCommittedWritePastDeadline: true, timeoutMs: 250},
-      );
-      await writeEntered.promise;
-      clock.advance(500);
-      t.ok(clock.now() > writeDeadlineMs, 'effective execution budget expired before reply');
-      releaseWriteReply.resolve();
-      const writeOutcome = await writePromise;
-      t.equal(writeOutcome.success, true,
-        'confirmed write reply arriving after deadlineMs must still be returned as committed');
-      t.equal(writeOutcome.changes, 1);
-      t.equal(writeOutcome.partitionId, PARTITION);
+  await t.test('1. committed write (forRead = false) reply arriving past deadlineMs or after AbortSignal ' +
+    'abort is preserved, while authority-bound read and unsettled write reject on abort',
+  async (t) => {
+    const clock = new VirtualTimeSource({startMs: 20_000});
+    const cache = new SystemTableCache();
+    cache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.INSERT, {
+      leader_node_id: 'node-a', partition_id: PARTITION, table_id: TABLE,
     });
+    cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
+      address: `node-a/partition/${PARTITION}`, node_id: 'node-a', partition_id: PARTITION,
+      replica_id: `${PARTITION}-r1`, service_id: `${PARTITION}-r1`,
+      service_type: SERVICE_TYPE.PARTITION, status: SERVICE_STATUS.ACTIVE,
+    });
+    let writeEntered = createDeferred();
+    let releaseWriteReply = createDeferred();
+    let nextReply = {changes: 1, lastInsertRowid: 99, success: true};
+    const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      getLocalPartitionReplicas: () => [],
+      messageRouter: {
+        deliver: async () => {
+          writeEntered.resolve();
+          await releaseWriteReply.promise;
+          return buildDeliveryEnvelope({acknowledged: true}, nextReply);
+        },
+        getCurrentPrimaryConnectionBootIncarnation: (nodeId) => ({
+          bootIncarnation: `boot-${nodeId}-1`, connectionId: `conn-${nodeId}-1`, nodeId,
+        }),
+        nodeId: 'node-a', timeSource: clock,
+      },
+      nodeId: 'node-a', nowFn: () => clock.now(),
+      sleepFn: async (ms) => clock.advance(ms), systemCache: cache,
+    });
+
+    const writeDeadlineMs = clock.now() + 250;
+    const writeSql = 'UPDATE sys_ledger SET workflow_step = ? WHERE operation_id = ?';
+    await t.rejects(executor.executeOnPartition(
+      PARTITION, writeSql, ['bad-pos-args', OPERATION], 'entry-id-misplaced', {deadlineMs: writeDeadlineMs},
+    ), TypeError, 'executeOnPartition(partitionId, sql, params, entryId, {deadlineMs}) throws TypeError');
+    await t.rejects(executor.executeOnPartition(
+      PARTITION, writeSql, ['bad-pos-args', OPERATION], false, {deadlineMs: writeDeadlineMs},
+    ), TypeError, 'executeOnPartition(partitionId, sql, params, false, {deadlineMs}) throws TypeError');
+    const writePromise = executor.executeOnPartition(
+      PARTITION, writeSql, ['committed-write', OPERATION], false, false, false,
+      {deadlineMs: writeDeadlineMs, preserveCommittedWritePastDeadline: true, timeoutMs: 250},
+    );
+    await writeEntered.promise;
+    clock.advance(500);
+    t.ok(clock.now() > writeDeadlineMs, 'effective execution budget expired before reply');
+    releaseWriteReply.resolve();
+    const writeOutcome = await writePromise;
+    t.equal(writeOutcome.success, true,
+      'confirmed write reply arriving after deadlineMs must still be returned as committed');
+    t.equal(writeOutcome.changes, 1);
+    t.equal(writeOutcome.partitionId, PARTITION);
+
+    // Hold a successful write response, abort signal before completion processing, then release.
+    writeEntered = createDeferred();
+    releaseWriteReply = createDeferred();
+    nextReply = {changes: 1, lastInsertRowid: 100, success: true};
+    const writeAbort = new AbortController();
+    const abortedWritePromise = executor.executeOnPartition(
+      PARTITION, writeSql, ['settled-write-after-abort', OPERATION], false, false, false,
+      {signal: writeAbort.signal, timeoutMs: 1000},
+    );
+    await writeEntered.promise;
+    writeAbort.abort(Object.assign(new Error('write_aborted_after_commit'), {name: 'AbortError'}));
+    releaseWriteReply.resolve();
+    const abortedWriteOutcome = await abortedWritePromise;
+    t.equal(abortedWriteOutcome.success, true,
+      'already-received settled write outcome is preserved when signal aborts before completion');
+    t.equal(abortedWriteOutcome.changes, 1);
+
+    // Pair with an authority-bound read: aborting signal before completion rejects obsolete read.
+    writeEntered = createDeferred();
+    releaseWriteReply = createDeferred();
+    nextReply = {
+      readAuthorityWitness: buildLeaderWitness({
+        nodeId: 'node-a', replicaId: `${PARTITION}-r1`, term: 6,
+      }),
+      rowSetComplete: true, rows: [{operation_id: OPERATION, workflow_step: 'obsolete-read'}],
+      success: true,
+    };
+    const readAbort = new AbortController();
+    const abortedReadPromise = executor.executeOnPartition(
+      PARTITION, READ_SQL, [OPERATION], true, true, false,
+      {signal: readAbort.signal, timeoutMs: 1000},
+    );
+    await writeEntered.promise;
+    readAbort.abort(Object.assign(new Error('read_aborted_in_flight'), {name: 'AbortError'}));
+    releaseWriteReply.resolve();
+    await t.rejects(abortedReadPromise, /read_aborted_in_flight|aborted/i,
+      'aborting signal before completion prevents obsolete authority-bound read from being accepted');
+  });
 
   await t.test('2. observe(latestRoutes) without resolveCandidates refreshes active self-leader term floor on completion',
     async (t) => {

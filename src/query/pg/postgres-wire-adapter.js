@@ -47,6 +47,11 @@ import {
 
 const CLOSED_SESSION_ROLLBACK_STATEMENT = 'ROLLBACK';
 const NO_TRANSACTION_ERROR_CODE = 'NO_TRANSACTION';
+const BEGIN_STATEMENT_PATTERN = /^\s*(?:BEGIN|START\s+TRANSACTION)\b/i;
+
+function isBeginStatementSql(sql) {
+  return typeof sql === 'string' && BEGIN_STATEMENT_PATTERN.test(sql);
+}
 
 function resolveStatementAuthorizationAction(statement) {
   const classification = classifyServiceLifecycleSql(statement);
@@ -178,6 +183,9 @@ class PostgresWireAdapter {
       tenantId: authResult.context.tenantId,
       user: authResult.context.principal,
       state: PG_SESSION_STATE.AUTHENTICATED,
+      closed: false,
+      inFlightBeginCount: 0,
+      rollbackPromise: null,
       createdAt: Date.now(),
       securityContext: authResult.context,
     };
@@ -268,7 +276,29 @@ class PostgresWireAdapter {
       tenantId: request.tenantId,
       executionMode: request.executionMode,
     });
-    const result = await this.sqlCore.executeRequest(request);
+    const isBegin = isBeginStatementSql(sql);
+    if (isBegin) {
+      session.inFlightBeginCount += 1;
+    }
+    let result;
+    try {
+      result = await this.sqlCore.executeRequest(request);
+    } finally {
+      if (isBegin) {
+        session.inFlightBeginCount = Math.max(0, session.inFlightBeginCount - 1);
+      }
+    }
+    if (session.closed === true) {
+      if (result?.transactionId && session.rollbackPromise === null) {
+        session.rollbackPromise = this.rollbackClosedSessionTransaction(
+          session,
+          result.transactionId,
+        );
+      }
+      if (session.rollbackPromise !== null) {
+        await session.rollbackPromise;
+      }
+    }
     return this._projectExecutedResult(sql, result);
   }
 
@@ -362,33 +392,64 @@ class PostgresWireAdapter {
    */
   closeSession(sessionId, options = {}) {
     const session = this.sessions.get(sessionId);
-    if (session && options.transactionOpen === true) {
-      this.rollbackClosedSessionTransaction(sessionId);
+    if (!session) {
+      return null;
     }
-    if (session) {
-      session.state = PG_SESSION_STATE.CLOSED;
-      this.sessions.delete(sessionId);
+    session.closed = true;
+    session.state = PG_SESSION_STATE.CLOSED;
+    this.sessions.delete(sessionId);
+    if (options.transactionOpen === true || session.inFlightBeginCount > 0) {
+      session.rollbackPromise = this.rollbackClosedSessionTransaction(session);
     }
+    return session.rollbackPromise;
   }
 
   /**
    * Roll back the engine transaction of a session being closed. The
-   * request is built before the session is released; its answer is only
+   * request is built from the captured session record; its answer is only
    * logged (NO_TRANSACTION: the engine had already ended it).
-   * @param {string} sessionId - Session identifier.
+   * @param {Object|string} sessionOrId - Session record or session identifier.
+   * @param {string|null} [expectedTransactionId] - Optional transaction ID.
+   * @return {Promise<Object|null>}
    * @private
    */
-  rollbackClosedSessionTransaction(sessionId) {
+  rollbackClosedSessionTransaction(sessionOrId, expectedTransactionId = null) {
+    const session = typeof sessionOrId === 'object' && sessionOrId !== null ?
+      sessionOrId :
+      this.sessions.get(sessionOrId);
+    const sessionId = session?.sessionId ?? sessionOrId;
     const logFailure = (error) => this.logger.warn(
       ADAPTER_LOG_MSG.CLOSED_SESSION_ROLLBACK_FAILED, {sessionId, error});
-    this.execute(sessionId, CLOSED_SESSION_ROLLBACK_STATEMENT).then(
+    if (!session) {
+      return Promise.resolve(null);
+    }
+    const budgets = normalizeQueryBudget();
+    const request = createSqlRequest({
+      statement: CLOSED_SESSION_ROLLBACK_STATEMENT,
+      parameters: [],
+      tenantId: session.tenantId,
+      sessionId,
+      executionMode: EXECUTION_MODE.SQL_STATEMENT,
+      budgets,
+      dialect: PARSER_DIALECT.POSTGRESQL,
+      timeoutBudget: createTimeoutBudget({
+        configuredBudgetMs: budgets.WALL_TIME_LIMIT_MS,
+      }),
+      securityContext: session.securityContext,
+      expectedTransactionId,
+    });
+    return this.sqlCore.executeRequest(request).then(
       (result) => {
         if (result?.success === false &&
             result.errorCode !== NO_TRANSACTION_ERROR_CODE) {
           logFailure(result.error ?? result.errorCode);
         }
+        return result;
       },
-      (error) => logFailure(error?.message ?? String(error)),
+      (error) => {
+        logFailure(error?.message ?? String(error));
+        return null;
+      },
     );
   }
 

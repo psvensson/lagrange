@@ -64,10 +64,10 @@ function resetEnvironment() {
   LoggingService.getInstance().initialize({level: 'fatal'});
 }
 
-function createRealAdapterAndEngine() {
+function createRealAdapterAndEngine(gatewayOptions = {}) {
   resetEnvironment();
   let clockMs = 1000;
-  const gateway = createTransactionPersistenceGateway();
+  const gateway = createTransactionPersistenceGateway(gatewayOptions);
   const cache = createMockSystemCache(
     [{table_name: TABLE_NAME, primaryKey: 'id'}],
     [PARTITION_ENTRY],
@@ -377,6 +377,108 @@ test('Finding 2 Witness: simple-query and extended-query BEGIN record session ' 
       'extended-query BEGIN disconnect before drain must roll back immediately',
     );
     assert.equal(engine.activeTransactions.size, 0);
+  }
+
+  // 3. Disconnect while BEGIN is still in-flight registering its durable row ->
+  //    late-completing BEGIN immediately rolls back and disposes the transaction.
+  {
+    const beginPersistEntered = Promise.withResolvers();
+    const releaseBeginPersist = Promise.withResolvers();
+    let holdInsert = true;
+    const {adapter, engine, gateway} = createRealAdapterAndEngine({
+      async beforeMutation(mutation) {
+        if (holdInsert &&
+            mutation.operation === 'insert' &&
+            mutation.tableName === 'sql_transactions') {
+          holdInsert = false;
+          beginPersistEntered.resolve(mutation.row?.transaction_id ?? null);
+          await releaseBeginPersist.promise;
+        }
+      },
+    });
+    const socket = new ControlledBackpressureSocket();
+    const handler = new PgWireProtocolHandler({
+      adapter,
+      socket,
+      logger: SILENT_LOGGER,
+    });
+    handler.start();
+    socket.emit('data', buildStartupBuffer());
+    await handler._processing;
+    socket.resetStats();
+
+    const session = handler.getSession();
+    const sessionId = session.sessionId;
+    socket.emit('data', buildQueryBuffer('BEGIN'));
+    const registeringTxId = await beginPersistEntered.promise;
+    assert.ok(registeringTxId, 'durable BEGIN registration must have minted a transactionId');
+    assert.equal(session.getTransactionState(), PG_TRANSACTION_STATE.IDLE,
+      'PgWireSession is still IDLE while BEGIN registration is in flight');
+    assert.equal(session.transactionId, null,
+      'PgWireSession has no transactionId while BEGIN is still in flight');
+
+    // Client disconnects while BEGIN is still awaiting durable registration.
+    socket.destroy();
+    assert.equal(adapter.hasSession(sessionId), false,
+      'adapter session is closed while BEGIN registration is still in flight');
+
+    // Release durable BEGIN registration and await handler settlement.
+    releaseBeginPersist.resolve();
+    await handler._processing;
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.equal(engine.hasActiveTransaction(sessionId), false,
+      'late-registered BEGIN on a closed session must be rolled back immediately');
+    assert.equal(engine.activeTransactions.size, 0,
+      'zero active transactions may remain after in-flight BEGIN disconnect');
+    const persistedRows = gateway.rows('sql_transactions');
+    assert.equal(persistedRows.length, 1);
+    assert.equal(persistedRows[0].transaction_id, registeringTxId);
+    assert.equal(persistedRows[0].status, 'ROLLED_BACK',
+      'durable transaction row must be settled to ROLLED_BACK immediately');
+  }
+
+  // 4. Direct PostgresWireAdapter.closeSession(sessionId) while adapter.execute('BEGIN')
+  //    is in-flight registering its durable row -> immediately rolled back and disposed.
+  {
+    const beginPersistEntered = Promise.withResolvers();
+    const releaseBeginPersist = Promise.withResolvers();
+    let holdInsert = true;
+    const {adapter, engine, gateway} = createRealAdapterAndEngine({
+      async beforeMutation(mutation) {
+        if (holdInsert &&
+            mutation.operation === 'insert' &&
+            mutation.tableName === 'sql_transactions') {
+          holdInsert = false;
+          beginPersistEntered.resolve(mutation.row?.transaction_id ?? null);
+          await releaseBeginPersist.promise;
+        }
+      },
+    });
+    const sessionId = 'direct-adapter-inflight-begin';
+    await adapter.authenticate(sessionId, {
+      tenantId: 'test',
+      user: 'test',
+    });
+    const beginPromise = adapter.execute(sessionId, 'BEGIN');
+    const registeringTxId = await beginPersistEntered.promise;
+    assert.ok(registeringTxId);
+    assert.equal(engine.activeTransactions.size, 1);
+
+    // Close the adapter session directly while BEGIN is still registering.
+    const rollbackSettlement = adapter.closeSession(sessionId);
+    assert.equal(adapter.hasSession(sessionId), false);
+
+    releaseBeginPersist.resolve();
+    await Promise.all([beginPromise, rollbackSettlement]);
+
+    assert.equal(engine.hasActiveTransaction(sessionId), false);
+    assert.equal(engine.activeTransactions.size, 0,
+      'direct closeSession during in-flight BEGIN leaves 0 activeTransactions');
+    const persistedRows = gateway.rows('sql_transactions');
+    assert.equal(persistedRows.length, 1);
+    assert.equal(persistedRows[0].transaction_id, registeringTxId);
+    assert.equal(persistedRows[0].status, 'ROLLED_BACK');
   }
 });
 
