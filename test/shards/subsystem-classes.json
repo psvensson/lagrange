@@ -9,7 +9,7 @@
     "cli-tooling": 99,
     "control-plane": 242,
     "convergence-topology": 88,
-    "distributed-harness": 223,
+    "distributed-harness": 225,
     "examples-e2e": 8,
     "pgwire-compat": 23,
     "placement-rebalance": 312,
@@ -25,10 +25,10 @@
     "transport-messaging": 123,
     "wasm-toolchain": 74
   },
-  "censusSize": 2824,
-  "digest": "fnv1a32-ee52031c",
+  "censusSize": 2826,
+  "digest": "fnv1a32-8c4f6180",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-80eaabb5",
+  "observationDigest": "fnv1a32-51351ef6",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1045,6 +1045,7 @@
     "test/distributed/harness/__tests__/real-product-cluster-deployer-security-census.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/real-product-cluster-deployer-topology.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/real-product-lagrange-operation-deadlines.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/real-product-postgres-sync-ha-standby.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/real-product-remote-shell-and-attribution.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/real-product-tidb-postgres-operation-deadlines.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/real-product-workload-driver-dispatch.test.js": "distributed-harness",
@@ -1070,6 +1071,7 @@
     "test/distributed/harness/__tests__/scenario-registry.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/scenario-run-artifact-hygiene.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/seed-restart-under-load-scenario.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/semantic-gate-durability-evidence-admission.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/seven-node-load-during-partitioning-scenario.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/seven-node-postgres-baseline-partition-split-low-throughput-scenario.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/seven-node-postgres-baseline-partition-split-scenario.test.js": "distributed-harness",
@@ -10395,6 +10397,47 @@
         "test/distributed/config/local.json"
       ]
     },
+    "test/distributed/harness/__tests__/semantic-gate-durability-evidence-admission.test.js": {
+      "files": [
+        "Dockerfile",
+        "README.md",
+        "data/tidb-comparison/admitted-lab-measurements.json",
+        "data/tidb-comparison/history.ndjson",
+        "data/tidb-comparison/invalidations.ndjson",
+        "data/tidb-comparison/multi-system-matrix.json",
+        "data/tidb-comparison/progress-summary.json",
+        "data/tidb-comparison/raw-observations.ndjson",
+        "docs/benchmarks/README.md",
+        "docs/benchmarks/tidb-comparison-progress.html",
+        "docs/benchmarks/tidb-comparison-progress.md",
+        "docs/benchmarks/tidb-comparison-progress.svg",
+        "docs/benchmarks/tidb-scenario-b-comparison.svg",
+        "src/admin/admin-owner-operations.js",
+        "src/admin/static/playback-viewer.html",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/distributed/harness/raw-observation-campaign-specs.js",
+        "test/distributed/harness/scaleout-series-experiments.js"
+      ],
+      "directories": [
+        "data/tidb-comparison",
+        "data/tidb-comparison/forensic",
+        "docs/benchmarks",
+        "src"
+      ],
+      "env": [
+        "LAGRANGE_SCENARIO_A_CONFLICT_EVIDENCE_PATH",
+        "LAGRANGE_SCENARIO_A_CONTENTION_EVIDENCE_PATH",
+        "LAGRANGE_SCENARIO_A_DELIVERY_EVIDENCE_PATH",
+        "LAGRANGE_SCENARIO_A_DURABILITY_EVIDENCE_PATH",
+        "LAGRANGE_SCENARIO_A_FAILURE_ATOMICITY_EVIDENCE_PATH",
+        "LAGRANGE_SCENARIO_A_ORDER_STATUS_EVIDENCE_PATH",
+        "LAGRANGE_SCENARIO_A_PAYMENT_EVIDENCE_PATH",
+        "LAGRANGE_SCENARIO_A_STOCK_LEVEL_EVIDENCE_PATH",
+        "LAGRANGE_SCENARIO_A_VISIBILITY_EVIDENCE_PATH"
+      ]
+    },
     "test/distributed/harness/__tests__/seven-node-load-during-partitioning-scenario.test.js": {
       "files": [
         "Dockerfile",
@@ -16874,7 +16917,15 @@
       "files": [
         "src/bootstrap/shared/partition-service-construction.js",
         "src/config/configuration-manager.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",

@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2798,
+    "ordinary": 2800,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2824,
-  "digest": "fnv1a32-1fdfa02e",
+  "censusSize": 2826,
+  "digest": "fnv1a32-e5e6e3f0",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1025,6 +1025,7 @@
     "test/distributed/harness/__tests__/real-product-cluster-deployer-security-census.test.js": "ordinary",
     "test/distributed/harness/__tests__/real-product-cluster-deployer-topology.test.js": "ordinary",
     "test/distributed/harness/__tests__/real-product-lagrange-operation-deadlines.test.js": "ordinary",
+    "test/distributed/harness/__tests__/real-product-postgres-sync-ha-standby.test.js": "ordinary",
     "test/distributed/harness/__tests__/real-product-remote-shell-and-attribution.test.js": "ordinary",
     "test/distributed/harness/__tests__/real-product-tidb-postgres-operation-deadlines.test.js": "ordinary",
     "test/distributed/harness/__tests__/real-product-workload-driver-dispatch.test.js": "ordinary",
@@ -1050,6 +1051,7 @@
     "test/distributed/harness/__tests__/scenario-registry.test.js": "ordinary",
     "test/distributed/harness/__tests__/scenario-run-artifact-hygiene.test.js": "ordinary",
     "test/distributed/harness/__tests__/seed-restart-under-load-scenario.test.js": "ordinary",
+    "test/distributed/harness/__tests__/semantic-gate-durability-evidence-admission.test.js": "ordinary",
     "test/distributed/harness/__tests__/seven-node-load-during-partitioning-scenario.test.js": "ordinary",
     "test/distributed/harness/__tests__/seven-node-postgres-baseline-partition-split-low-throughput-scenario.test.js": "ordinary",
     "test/distributed/harness/__tests__/seven-node-postgres-baseline-partition-split-scenario.test.js": "ordinary",
