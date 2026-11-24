@@ -814,3 +814,47 @@ test('Review §5: safety guard prevents PREPARING, PREPARED, or COMMITTED sessio
     assert.equal(readRowValue(leader, 'k-2'), 'g2-tx1');
   });
 });
+
+test('Opportunity 4: session wait receipt history is bounded to at most 8 retained receipts across 32 sequential waits', async () => {
+  await onLeader(async (leader) => {
+    setupRowKeyLeader(leader, 3000);
+    const waiterSession = {
+      identity: {
+        sessionId: 'sess-opp4-bounded-ring',
+        participantId: 'p-opp4',
+        transactionId: 'f8'.repeat(16),
+        transactionEpoch: 1,
+      },
+      phase: PHASE.ACTIVE,
+    };
+
+    const allReceipts = [];
+    for (let step = 0; step < 32; step += 1) {
+      const rowKey = `k-seq-${step}`;
+      const waitPromise = enqueueBoundedRowKeyWaiter(leader, waiterSession, rowKey, 3000);
+      assert.notEqual(waiterSession.activeWaitReceipt, null);
+      assert.equal(waiterSession.activeWaitReceipt, waiterSession.lastWaitReceipt);
+      assert.equal(
+        waiterSession.activeWaitReceipt.state,
+        ROW_KEY_WAIT_RECEIPT_STATE.WAITING_ON_KEY,
+      );
+      allReceipts.push(waiterSession.lastWaitReceipt);
+      waiterSession.lastWaitReceipt.settleTerminal('claims_released');
+      const out = await waitPromise;
+      assert.equal(out.settled, false);
+      assert.equal(out.receipt.state, ROW_KEY_WAIT_RECEIPT_STATE.TERMINAL);
+      assert.equal(waiterSession.activeWaitReceipt, null);
+      assert.equal(
+        waiterSession.waitReceipts.length <= 8,
+        true,
+        `waitReceipts length (${waiterSession.waitReceipts.length}) must not exceed 8 at step ${step}`,
+      );
+      assert.equal(waiterSession.waitReceiptCount, step + 1);
+    }
+
+    assert.equal(waiterSession.waitReceiptCount, 32);
+    assert.equal(waiterSession.waitReceipts.length, 8);
+    assert.equal(waiterSession.lastWaitReceipt, allReceipts[31]);
+    assert.deepEqual(waiterSession.waitReceipts, allReceipts.slice(24, 32));
+  });
+});

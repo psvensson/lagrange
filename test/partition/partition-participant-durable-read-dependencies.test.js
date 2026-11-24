@@ -37,6 +37,7 @@ import {
 import {
   decodeParticipantValidationText,
   doTransactionFootprintsConflict,
+  getSessionReadDependencySnapshot,
 } from '../../src/partition/partition-participant-read-dependencies.js';
 import {
   discardParticipantSessions,
@@ -44,6 +45,8 @@ import {
   resetParticipantRowKeyHistory,
 } from '../../src/partition/partition-participant-transaction-session.js';
 import {
+  clearFootprintAstCache,
+  getFootprintAstCacheStats,
   getFootprintPlanCacheStats,
   getOrParseCachedStatementFootprintAst,
   getStagingReplayStats,
@@ -888,6 +891,195 @@ test('Review §5 Witness 5: footprint plan cache reuse, incremental staged byte 
     assert.equal(prepCmd.operationsText, JSON.stringify(session.operations));
     assert.equal(readRowValue(leader, 'item-1'), '101');
     assert.equal(readRowValue(leader, 'item-2'), '202');
+  } finally {
+    await shutdownAll(leader);
+  }
+});
+
+test('Finding 4 (P2): footprint AST cache admission policy enforces 4096-byte SQL ceiling and 262144-byte aggregate retained-byte budget', async () => {
+  const {leader, proposed} = await startLeader();
+  try {
+    configureRowKeyLeader(leader, 3000);
+    await seedInitialRows(leader, proposed, [
+      ['item-a', 'va'],
+      ['item-b', 'vb'],
+    ]);
+
+    clearFootprintAstCache();
+    const initialStats = getFootprintAstCacheStats();
+    assert.equal(initialStats.size, 0);
+    assert.equal(initialStats.retainedBytes, 0);
+    assert.equal(initialStats.maxEntries, 256);
+    assert.equal(initialStats.maxSqlBytes, 4096);
+    assert.equal(initialStats.maxRetainedBytes, 262144);
+
+    // 1. Statements > 4,096 UTF-8 bytes parse and execute accurately without entering cache:
+    const txOversized = identityOf('b4'.repeat(16), {sessionId: 'sess-f4-oversized'});
+    assert.equal((await send(leader, beginMessage(txOversized))).success, true);
+    const oversizedSession = findParticipantSession(leader, txOversized);
+    const pad5k = 'x'.repeat(4200);
+    const oversizedSelectSql =
+      `SELECT id, value, '${pad5k}' AS filler FROM ${TABLE} WHERE id = ?`;
+    const oversizedUpdateSql =
+      `UPDATE ${TABLE} SET value = CASE WHEN '${pad5k}' = '${pad5k}' THEN ? ELSE value END WHERE id = ?`;
+    assert.equal(Buffer.byteLength(oversizedSelectSql, 'utf8') > 4096, true);
+    assert.equal(Buffer.byteLength(oversizedUpdateSql, 'utf8') > 4096, true);
+
+    const oversizedRead = await leader.handleRemoteQuery(
+      queryMessage(txOversized, oversizedSelectSql, ['item-a']),
+    );
+    assert.equal(oversizedRead.success, true);
+    assert.equal(oversizedRead.rows?.[0]?.value, 'va');
+    assert.deepEqual([...oversizedSession.readRowKeys], ['item-a']);
+
+    const statsAfterOversizedRead = getFootprintAstCacheStats();
+    assert.equal(statsAfterOversizedRead.size, 0, 'oversized SELECT must not enter footprint AST cache');
+    assert.equal(
+      statsAfterOversizedRead.retainedBytes,
+      0,
+      'oversized SELECT must not increase retainedBytes',
+    );
+
+    const oversizedWrite = await leader.handleRemoteQuery(
+      queryMessage(txOversized, oversizedUpdateSql, ['va-5k', 'item-a']),
+    );
+    assert.equal(oversizedWrite.success, true);
+    assert.deepEqual([...oversizedSession.touchedRowKeys], ['item-a']);
+
+    const statsAfterOversizedWrite = getFootprintAstCacheStats();
+    assert.equal(statsAfterOversizedWrite.size, 0, 'oversized UPDATE must not enter footprint AST cache');
+    assert.equal(
+      statsAfterOversizedWrite.retainedBytes,
+      0,
+      'oversized UPDATE must not increase retainedBytes',
+    );
+    await commitParticipantTx(leader, proposed, txOversized);
+    assert.equal(readRowValue(leader, 'item-a'), 'va-5k');
+
+    // 2. Many distinct 3–3.8 KiB statements (<= 4096 bytes each) evict oldest entries
+    // when aggregate retainedBytes would exceed 262,144 bytes (even with size < 256):
+    clearFootprintAstCache();
+    let expectedTotalInsertedBytes = 0;
+    const insertedSqlList = [];
+    for (let idx = 0; idx < 96; idx += 1) {
+      const filler = `tag_${String(idx).padStart(3, '0')}_${'z'.repeat(3400)}`;
+      const sql = `SELECT id, value, '${filler}' AS tag FROM ${TABLE} WHERE id = ?`;
+      const sqlBytes = Buffer.byteLength(sql, 'utf8');
+      assert.equal(sqlBytes >= 2048 && sqlBytes <= 4096, true);
+      expectedTotalInsertedBytes += sqlBytes;
+      insertedSqlList.push({sql, sqlBytes});
+      const ast = getOrParseCachedStatementFootprintAst(sql);
+      assert.notEqual(ast, null);
+      const stats = getFootprintAstCacheStats();
+      assert.equal(
+        stats.retainedBytes <= 262144,
+        true,
+        `retainedBytes (${stats.retainedBytes}) must never exceed 262144 at step ${idx}`,
+      );
+      assert.equal(
+        stats.size <= 256,
+        true,
+        `size (${stats.size}) must never exceed 256 at step ${idx}`,
+      );
+    }
+
+    assert.equal(expectedTotalInsertedBytes > 262144, true);
+    const finalStats = getFootprintAstCacheStats();
+    assert.equal(finalStats.retainedBytes <= 262144, true);
+    assert.equal(finalStats.size < 96, true, 'byte budget must evict oldest entries before 256 entry cap');
+
+    // Re-lookup of the most recently inserted statement hits cache without changing retainedBytes:
+    const recentSql = insertedSqlList[insertedSqlList.length - 1].sql;
+    getOrParseCachedStatementFootprintAst(recentSql);
+    const afterRecentHit = getFootprintAstCacheStats();
+    assert.equal(afterRecentHit.hitCount, finalStats.hitCount + 1);
+    assert.equal(afterRecentHit.retainedBytes, finalStats.retainedBytes);
+
+    clearFootprintAstCache();
+    assert.equal(getFootprintAstCacheStats().size, 0);
+    assert.equal(getFootprintAstCacheStats().retainedBytes, 0);
+  } finally {
+    await shutdownAll(leader);
+  }
+});
+
+test('Opportunity 2: read-dependency snapshots are built lazily on demand at PREPARE and cached by revision across duplicate reads', async () => {
+  const {leader, proposed} = await startLeader();
+  try {
+    configureRowKeyLeader(leader, 3000);
+    await seedInitialRows(leader, proposed, [
+      ['rk-1', '10'],
+      ['rk-2', '20'],
+      ['rk-3', '30'],
+    ]);
+
+    const tx = identityOf('b6'.repeat(16), {sessionId: 'sess-opp2-lazy'});
+    assert.equal((await send(leader, beginMessage(tx))).success, true);
+    const session = findParticipantSession(leader, tx);
+    const accumulator = session.readDependencies;
+
+    assert.equal(accumulator.revision, 0);
+    assert.equal(accumulator.cachedSnapshot, null);
+    assert.equal(accumulator.snapshotBuildCount, 0);
+
+    // 1. First scoped read on rk-1 updates mutable state and bumps revision to 1 without building a snapshot:
+    assert.equal(
+      (await leader.handleRemoteQuery(queryMessage(tx, SELECT_BY_ID_SQL, ['rk-1']))).success,
+      true,
+    );
+    assert.equal(accumulator.revision, 1);
+    assert.equal(accumulator.cachedSnapshot, null, 'recordReadFootprint must not allocate intermediate snapshot');
+    assert.equal(accumulator.snapshotBuildCount, 0);
+
+    // 2. Duplicate read on rk-1 does NOT bump revision and does NOT allocate a snapshot:
+    assert.equal(
+      (await leader.handleRemoteQuery(queryMessage(tx, SELECT_BY_ID_SQL, ['rk-1']))).success,
+      true,
+    );
+    assert.equal(accumulator.revision, 1, 'duplicate key read must not advance revision');
+    assert.equal(accumulator.cachedSnapshot, null);
+    assert.equal(accumulator.snapshotBuildCount, 0);
+
+    // 3. Second distinct read on rk-2 advances revision to 2, still with 0 snapshots built:
+    assert.equal(
+      (await leader.handleRemoteQuery(queryMessage(tx, SELECT_BY_ID_SQL, ['rk-2']))).success,
+      true,
+    );
+    assert.equal(accumulator.revision, 2);
+    assert.equal(accumulator.cachedSnapshot, null);
+    assert.equal(accumulator.snapshotBuildCount, 0);
+
+    // 4. First on-demand getSnapshot() builds and freezes the snapshot once for revision 2:
+    const snap1 = accumulator.getSnapshot();
+    assert.equal(accumulator.snapshotBuildCount, 1);
+    assert.equal(accumulator.cachedSnapshotRevision, 2);
+    assert.equal(Object.isFrozen(snap1), true);
+    assert.equal(Object.isFrozen(snap1.readKeys), true);
+    assert.equal(Object.isFrozen(snap1.readKeysSet), true);
+    assert.deepEqual(snap1.readKeys, ['rk-1', 'rk-2']);
+
+    // Consecutive getSnapshot() / getSessionReadDependencySnapshot() calls at the same revision
+    // (even after another duplicate read on rk-2!) return the exact same frozen reference (===):
+    assert.equal(
+      (await leader.handleRemoteQuery(queryMessage(tx, SELECT_BY_ID_SQL, ['rk-2']))).success,
+      true,
+    );
+    const snap2 = accumulator.getSnapshot();
+    const snap3 = getSessionReadDependencySnapshot(session);
+    assert.equal(snap2, snap1);
+    assert.equal(snap3, snap1);
+    assert.equal(snap2.readKeys, snap1.readKeys);
+    assert.equal(snap2.readKeysSet, snap1.readKeysSet);
+    assert.equal(accumulator.snapshotBuildCount, 1);
+
+    // 5. PREPARE consumes the snapshot and commits cleanly:
+    assert.equal(
+      (await leader.handleRemoteQuery(queryMessage(tx, UPDATE_BY_ID_SQL, ['31', 'rk-3']))).success,
+      true,
+    );
+    await commitParticipantTx(leader, proposed, tx);
+    assert.equal(accumulator.snapshotBuildCount, 1, 'PREPARE reuses cached snapshot when revision is unchanged');
+    assert.equal(readRowValue(leader, 'rk-3'), '31');
   } finally {
     await shutdownAll(leader);
   }
