@@ -8,10 +8,12 @@ import {
   OPERATION_WORKFLOW_HISTORY_FRESHNESS_STATE,
   OPERATION_WORKFLOW_IDENTIFIER_VARIANTS,
   OPERATION_WORKFLOW_LEASE_FRESHNESS_STATE,
+  OPERATION_WORKFLOW_OUTCOME_VALUES,
   OPERATION_WORKFLOW_OWNER,
   OPERATION_WORKFLOW_OWNER_AUTHORITY_STATE,
   OPERATION_WORKFLOW_PROGRESS_DECISION_KERNEL,
   OPERATION_WORKFLOW_PUBLICATION_FENCE_STATE,
+  OPERATION_WORKFLOW_REASON_CODE_VALUES,
   OPERATION_WORKFLOW_RETRY_BUDGET_STATE,
   OPERATION_WORKFLOW_RETRY_DEADLINE_STATE,
   OPERATION_WORKFLOW_REVISION_VARIANTS,
@@ -33,11 +35,11 @@ import {
   OPERATION_WORKFLOW_PROGRESS_STATES,
 } from '../../src/rebalancer/operation-workflow-owner-state.js';
 import {
-  OPERATION_WORKFLOW_PROGRESS_DECISION_TABLE,
-  OPERATION_WORKFLOW_PROGRESS_OUTCOMES,
-  OPERATION_WORKFLOW_REASON_CODES,
-  decideOperationWorkflowProgress,
-} from '../../src/rebalancer/operation-workflow-owner-decision.js';
+  decideOperationLifecycle,
+} from '../../src/rebalancer/operation-lifecycle.js';
+
+const OPERATION_WORKFLOW_PROGRESS_OUTCOMES = OPERATION_WORKFLOW_OUTCOME_VALUES;
+const OPERATION_WORKFLOW_REASON_CODES = OPERATION_WORKFLOW_REASON_CODE_VALUES;
 
 const TEST_OPERATION_KEY = 'operation-kernel-test';
 const TEST_CORRELATION_KEY = 'operation-kernel-correlation';
@@ -56,20 +58,6 @@ const TEST_REBALANCER_HANDOFF_RETRY_OUTCOME =
   'wait_for_rebalancer_handoff_retry';
 const TEST_REBALANCER_HANDOFF_RETRY_REASON =
   'remote_handoff_retry_scheduled';
-
-const EXPECTED_DECISION_TABLE_STATES = Object.freeze([
-  OPERATION_WORKFLOW_PROGRESS_STATES.OPERATION_INPUT_REJECTED,
-  OPERATION_WORKFLOW_PROGRESS_STATES.TERMINAL_FAILURE_OBSERVED,
-  OPERATION_WORKFLOW_PROGRESS_STATES.TERMINAL_SUCCESS_OBSERVED,
-  OPERATION_WORKFLOW_PROGRESS_STATES.AUTHORITATIVE_VISIBILITY_DEFERRED,
-  OPERATION_WORKFLOW_PROGRESS_STATES.STALE_PROGRESS_RECONCILE_REQUIRED,
-  OPERATION_WORKFLOW_PROGRESS_STATES.SERIAL_DEPENDENCY_PENDING,
-  OPERATION_WORKFLOW_PROGRESS_STATES.LOCAL_OWNER_DISPATCH_READY,
-  TEST_REBALANCER_HANDOFF_RETRY_STATE,
-  OPERATION_WORKFLOW_PROGRESS_STATES.REMOTE_OWNER_WAKE_REQUIRED,
-  OPERATION_WORKFLOW_PROGRESS_STATES.EXISTING_OPERATION_ADVANCEMENT_READY,
-  OPERATION_WORKFLOW_PROGRESS_STATES.OWNER_PROGRESS_WAIT_REQUIRED,
-]);
 
 function buildDurableOperation(overrides = {}) {
   return {
@@ -174,7 +162,7 @@ function buildEvidence(overrides = {}) {
 }
 
 function assertOutcome(t, input, expected) {
-  const outcome = decideOperationWorkflowProgress(input);
+  const outcome = decideOperationLifecycle(input);
   t.equal(outcome.owner, OPERATION_WORKFLOW_OWNER, expected.name);
   t.equal(
     outcome.boundary,
@@ -195,14 +183,6 @@ function assertOutcome(t, input, expected) {
   t.equal(Object.isFrozen(outcome), true, expected.name);
   return outcome;
 }
-
-test('operation workflow decision table covers frozen state vocabulary', (t) => {
-  t.same(
-    OPERATION_WORKFLOW_PROGRESS_DECISION_TABLE.map((entry) => entry.state),
-    EXPECTED_DECISION_TABLE_STATES,
-  );
-  t.end();
-});
 
 test('operation workflow normalizer emits explicit absence variants', (t) => {
   const evidence = normalizeOperationWorkflowEvidence({
@@ -601,7 +581,7 @@ test('operation workflow decisions map representative blocker states', (t) => {
 });
 
 test('operation workflow effect command shape is explicit and inert', (t) => {
-  const outcome = decideOperationWorkflowProgress(buildEvidence({
+  const outcome = decideOperationLifecycle(buildEvidence({
     durableOperation: buildDurableOperation({
       dispatchState: OPERATION_WORKFLOW_DISPATCH_STATE.NOT_OBSERVED,
     }),

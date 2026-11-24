@@ -964,8 +964,8 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
   );
 
   test(
-    'getOperationByIdVisibilityObservation preserves deferred cache-backed ' +
-      'visibility when priority recovery blocks authoritative reads',
+    'getOperationByIdVisibilityObservation surfaces deferred visibility ' +
+      'without fabricating an operation from cache when priority recovery blocks authoritative reads',
     async (t) => {
       let readCalls = 0;
       const cachedRow = makeRow({
@@ -1023,17 +1023,17 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
 
       t.ok(
         readCalls >= 1,
-        'single-operation visibility should still attempt an authoritative read before falling back',
+        'single-operation visibility should query the authoritative owner path',
       );
       t.equal(
         observation?.state,
-        INCOMPLETE_OPERATION_OBSERVATION_STATE.PRESENT,
-        'deferred authoritative visibility should keep cache-backed operations visible',
+        INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED,
+        'deferred authoritative visibility should remain DEFERRED rather than fabricating PRESENT from cache',
       );
       t.equal(
-        observation?.operation?.operationId,
-        cachedRow.operation_id,
-        'single-operation visibility should fall back to the repository-owned query result',
+        observation?.operation,
+        null,
+        'single-operation visibility must not fall back to cache when authoritative read did not return an operation',
       );
       t.equal(
         observation?.deferredOutcome?.completionState,
@@ -1045,6 +1045,71 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
         250,
         'single-operation visibility should preserve bounded retry guidance',
       );
+    },
+  );
+
+  test(
+    'getOperationByIdVisibilityObservation never falls back to cache on confirmed authoritative absence or OWNER_RPC_REQUIRED',
+    async (t) => {
+      const cachedRow = makeRow({
+        operation_id: TEST_CACHE_BACKED_VISIBILITY_OPERATION_ID,
+        status: TEST_PENDING_STATUS,
+        workflow_step: WORKFLOW_STEP.PENDING,
+      });
+      const cache = {
+        get(tableName, key) {
+          return tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
+            key === cachedRow.operation_id ?
+            cachedRow :
+            null;
+        },
+        getAll() {
+          return [cachedRow];
+        },
+        filter(_tableName, predicate) {
+          return [cachedRow].filter(predicate);
+        },
+      };
+      const absentRepo = createTestRepository({
+        controlPlaneSystemTableGateway: {
+          readRows: async () => ({success: true, rows: []}),
+          executeQuery: async () => ({success: true}),
+        },
+        systemTableCache: cache,
+      });
+      const absentObservation = await absentRepo.getOperationByIdVisibilityObservation(
+        cachedRow.operation_id,
+      );
+      t.equal(absentObservation?.state, INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY);
+      t.equal(absentObservation?.operation, null,
+        'confirmed authoritative absence must not be replaced by a stale cache read');
+      t.equal(absentObservation?.deferredOutcome, null);
+
+      const strictRepo = createTestRepository({
+        controlPlaneSystemTableGateway: {
+          readRows: async () => ({
+            success: false,
+            error: 'Control-plane owner RPC unavailable',
+            retryAfterMs: 100,
+          }),
+          executeQuery: async () => ({success: true}),
+        },
+        systemTableCache: cache,
+      });
+      strictRepo.replicaOperationReadRetryTimeoutMs = 0;
+      const strictObservation = await strictRepo.getOperationByIdVisibilityObservation(
+        cachedRow.operation_id,
+        {
+          authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+          allowOwnerPersistedTransitionDeferredVisibility: false,
+          requireAbsenceConfirmation: true,
+        },
+      );
+      t.equal(strictObservation?.state, INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED);
+      t.equal(strictObservation?.operation, null,
+        'OWNER_RPC_REQUIRED deferral must not fall back to cache');
+      t.ok(strictObservation?.deferredOutcome,
+        'OWNER_RPC_REQUIRED failure surfaces explicit deferredOutcome');
     },
   );
 

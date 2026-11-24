@@ -5,7 +5,6 @@ import {
   CONTROL_PLANE_READ_STRATEGY,
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_ERROR,
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL,
-  CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_SOURCE,
   INITIAL_PARTITION_IDS,
   canonicalizeSystemTableRow,
   buildAuthoritativeControlPlaneReadRequestOptions,
@@ -375,51 +374,16 @@ const controlPlaneSystemTableGatewayReadStrategyMethods = {
       sql,
     });
     const {
-      authoritativeReadModeContract,
       requestOptions,
     } = buildAuthoritativeControlPlaneReadRequestOptions(
       options.readAuthority,
       options,
       queryOptions,
     );
-    const allowSqlFallback = authoritativeReadModeContract.allowSqlFallback;
     if (
       typeof cdcIntegrationService?.executeAuthoritativeSystemTableRead !==
       'function'
     ) {
-      if (
-        allowSqlFallback &&
-        strategy !== CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED
-      ) {
-        const sqlQueryEngine = this.resolveSqlQueryEngine();
-        if (typeof sqlQueryEngine?.executeQuery === 'function') {
-          const result = await sqlQueryEngine.executeQuery(
-            sql,
-            params,
-            queryOptions,
-          );
-          return this.attachAuthoritativeObservationReceipt(
-            this.buildGatewayReadResult(
-              result,
-              tableName,
-              strategy,
-              result?.success === true ?
-                CONTROL_PLANE_READ_OUTCOME.AUTHORITATIVE :
-                CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY,
-              {
-                source:
-                  CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_SOURCE.SQL_QUERY_ENGINE,
-                usedSqlFallback: true,
-              },
-            ),
-            tableName,
-            sql,
-            params,
-            strategy,
-            observationOptions,
-          );
-        }
-      }
       return this.buildUnavailableGatewayReadResult(
         tableName,
         strategy,

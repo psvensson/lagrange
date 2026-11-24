@@ -39,8 +39,8 @@ coordination, storage admission, and execution handoff for topology changes.
   from durable operation evidence into progress advances and effects.
 - `operation-workflow-owner-ports.js` before changing owner-side effect
   execution.
-- `operation-workflow-owner-decision.js` only as the compatibility facade for
-  existing workflow decision callers.
+- `operation-lifecycle.js` (`decideOperationLifecycle`) for workflow progress
+  decisions.
 - `src/rebalancer/rebalance-coordinator.js`,
   `src/rebalancer/unified-rebalancer.js`, and their focused collaborator modules
   under `src/rebalancer/` (for example

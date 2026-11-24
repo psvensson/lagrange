@@ -127,7 +127,9 @@ async function resolveAmbiguousCreateDeliveryFailure(
     REBALANCE_COORDINATOR_ERROR_MSG.MESSAGE_NOT_ACKED,
   );
   const observation = await observeCreateDeliveryAdmission(owner, operation);
-  const authoritativeOperation = observation?.operation || null;
+  const authoritativeOperation = observation?.deferredOutcome ?
+    null :
+    (observation?.operation || null);
   if (isRetainedAdmission(owner, operation, authoritativeOperation)) {
     Object.assign(operation, authoritativeOperation);
     return buildRetainedCreateDelivery(operation, errorMsg, owner);
