@@ -67,45 +67,45 @@ function resolveParticipantConflictWaitBudgetMs(service) {
   return DEFAULT_PARTICIPANT_CONFLICT_WAIT_MS;
 }
 
+function reevaluateWaitingRowKeyQuery(service, payload, participantAnswer) {
+  if (!prepareWaitingRowKeySessionForReevaluation(service, payload)) {
+    notifyRowKeySettlementWaiters(service);
+    return {done: true, answer: participantAnswer};
+  }
+  const awaitedKey = participantAnswer.detail;
+  const reevaluated = answerParticipantSessionQuery(service, payload);
+  if (reevaluated === null) {
+    notifyRowKeySettlementWaiters(service);
+    return {done: true, answer: null};
+  }
+  if (reevaluated.failureCode !== PARTICIPANT_CODE.ALREADY_ACTIVE) {
+    if (reevaluated.success !== true) notifyRowKeySettlementWaiters(service);
+    return {done: true, answer: reevaluated};
+  }
+  if (reevaluated.detail !== awaitedKey) notifyRowKeySettlementWaiters(service);
+  return {done: false, answer: reevaluated};
+}
+
 async function resolveParticipantRemoteQueryAnswer(service, payload) {
   let participantAnswer = answerParticipantSessionQuery(service, payload);
   if (participantAnswer === null) return null;
   let deadlineMs = null;
-  for (
-    let attempt = 0;
-    attempt < MAX_PARTICIPANT_CONFLICT_REEVAL_ATTEMPTS;
-    attempt += 1
-  ) {
+  for (let attempt = 0; attempt < MAX_PARTICIPANT_CONFLICT_REEVAL_ATTEMPTS; attempt += 1) {
     if (participantAnswer.failureCode !== PARTICIPANT_CODE.ALREADY_ACTIVE ||
         typeof participantAnswer.detail !== 'string') {
       return participantAnswer;
     }
     if (deadlineMs === null) {
-      deadlineMs = service.timeSource.now() +
-        resolveParticipantConflictWaitBudgetMs(service);
+      deadlineMs = service.timeSource.now() + resolveParticipantConflictWaitBudgetMs(service);
     }
     const remainingMs = deadlineMs - service.timeSource.now();
     if (remainingMs <= 0) return participantAnswer;
     const waitOutcome = await waitForConflictingRowKeyHolderToSettle(
-      service,
-      payload,
-      participantAnswer.detail,
-      remainingMs,
-    );
+      service, payload, participantAnswer.detail, remainingMs);
     if (!waitOutcome.settled) return participantAnswer;
-    if (!prepareWaitingRowKeySessionForReevaluation(service, payload)) {
-      notifyRowKeySettlementWaiters(service);
-      return participantAnswer;
-    }
-    const reevaluated = answerParticipantSessionQuery(service, payload);
-    if (reevaluated === null) return null;
-    if (reevaluated.failureCode !== PARTICIPANT_CODE.ALREADY_ACTIVE) {
-      if (reevaluated.success !== true) {
-        notifyRowKeySettlementWaiters(service);
-      }
-      return reevaluated;
-    }
-    participantAnswer = reevaluated;
+    const step = reevaluateWaitingRowKeyQuery(service, payload, participantAnswer);
+    if (step.done) return step.answer;
+    participantAnswer = step.answer;
   }
   notifyRowKeySettlementWaiters(service);
   return participantAnswer;

@@ -51,8 +51,11 @@ import {
 } from './partition-participant-transaction-constants.js';
 import {
   canAdvanceRowKeySessionGeneration,
+  canRebaseEmptyWaitingSession,
   checkAndRecordSessionRowKey,
   findParticipantSession,
+  isRowKeyConcurrencyEnabled,
+  notifyRowKeySettlementWaiters,
   revertSessionRowKeyCheck,
 } from './partition-participant-transaction-session.js';
 import {
@@ -62,7 +65,10 @@ import {
 import {
   readOptionalPartitionWriteGeneration,
   readPartitionWriteGeneration,
+  readTableFootprintMetadata,
 } from './partition-participant-transaction-store.js';
+import {SQLParser} from '../query/sql-parser.js';
+import {extractStatementWriteFootprint} from './partition-write-footprint-contract.js';
 
 const {
   PARTITION_SERVICE_OPERATION,
@@ -74,10 +80,91 @@ const TEXT_ENCODING = 'utf8';
 const PRAGMA_SCHEMA_VERSION = 'schema_version';
 const ZERO = 0;
 const ONE = 1;
+const PG_PARAM_PATTERN = /\$[1-9]\d*/u;
+const SQL_DIALECT_PG = 'postgresql';
+const SQL_DIALECT_SQLITE = 'sqlite';
+const SELECT_AST_TYPE = 'SELECT';
+const TABLE_SOURCE_TYPE = 'table';
+const SUBQUERY_NODE_TYPES = new Set(['subquery', 'exists']);
+const UNSCOPED_SELECT_AST = Object.freeze({unscoped: true});
 // The private value that ends a validation: thrown inside its transaction,
 // so better-sqlite3 rolls every replayed and new effect back.
 const VALIDATION_COMPLETE = Object.freeze({validationComplete: true});
 const STAGING_REPLAY_STATS = new WeakMap();
+
+function containsAstSubquery(node) {
+  if (!node || typeof node !== 'object') return false;
+  if (Array.isArray(node)) return node.some(containsAstSubquery);
+  const type = String(node.type ?? '').toLowerCase();
+  if (SUBQUERY_NODE_TYPES.has(type) || Boolean(node.subquery) || Boolean(node.query)) {
+    return true;
+  }
+  return Object.values(node).some(containsAstSubquery);
+}
+
+function isPlainTableFrom(from, tableName) {
+  if (from?.type !== TABLE_SOURCE_TYPE || typeof from.name !== 'string' || from.subquery) {
+    return false;
+  }
+  const hasTable = typeof tableName === 'string' && tableName.length > ZERO;
+  return !hasTable || from.name.toLowerCase() === tableName.toLowerCase();
+}
+
+function isSingleTableSelectShape(ast, tableName) {
+  const isSelect = Boolean(ast) && String(ast.type ?? '').toUpperCase() === SELECT_AST_TYPE;
+  const hasJoins = Array.isArray(ast?.joins) && ast.joins.length > ZERO;
+  return isSelect && !ast.ctes && !ast.setOperation && !hasJoins &&
+    isPlainTableFrom(ast.from, tableName);
+}
+
+function hasNoSubqueryClauses(ast) {
+  const clauses = [ast.columns, ast.groupBy, ast.having, ast.orderBy, ast.limit];
+  return !clauses.some(containsAstSubquery);
+}
+
+function parseScopedSelectAst(sql, tableName) {
+  if (typeof sql !== 'string' || sql.trim().length === ZERO) return UNSCOPED_SELECT_AST;
+  try {
+    const dialect = PG_PARAM_PATTERN.test(sql) ? SQL_DIALECT_PG : SQL_DIALECT_SQLITE;
+    const parser = new SQLParser(sql, {dialect});
+    parser.logger = {debug() {}, info() {}, warn() {}, error() {}};
+    const ast = parser.parse();
+    return isSingleTableSelectShape(ast, tableName) && hasNoSubqueryClauses(ast) ?
+      ast : UNSCOPED_SELECT_AST;
+  } catch {
+    return UNSCOPED_SELECT_AST;
+  }
+}
+
+function recordSessionReadFootprint(service, session, sql, params) {
+  if (!session || session.hasUnscopedRead === true) return;
+  if (!isRowKeyConcurrencyEnabled(service)) {
+    session.hasUnscopedRead = true;
+    return;
+  }
+  const ast = parseScopedSelectAst(sql, service.tableName);
+  if (ast === UNSCOPED_SELECT_AST) {
+    session.hasUnscopedRead = true;
+    return;
+  }
+  const {pkCols, allCols, uniqueConstraintCols, hasUnscopedSchemaConstraints} =
+    readTableFootprintMetadata(service?.db, service?.tableName);
+  const footprint = extractStatementWriteFootprint({
+    ast,
+    params: Array.isArray(params) ? params : [],
+    pkCols,
+    allCols,
+    uniqueConstraintCols,
+    hasUnscopedSchemaConstraints,
+  });
+  if (!footprint.scoped || footprint.rowKeys.length === ZERO) {
+    session.hasUnscopedRead = true;
+    return;
+  }
+  for (let i = ZERO; i < footprint.rowKeys.length; i += ONE) {
+    session.readRowKeys?.add(footprint.rowKeys[i]);
+  }
+}
 
 function replayStatsOf(service) {
   let stats = STAGING_REPLAY_STATS.get(service);
@@ -233,6 +320,9 @@ function canDirectValidateDisjoint(service, session, rowKeyCheck) {
 function doomSession(service, session, failure) {
   session.phase = PHASE.DOOMED;
   session.doomCode = CODE.REPLAY_DIVERGED;
+  if (session.hasUnscopedWrite === true || session.touchedRowKeys?.size > ZERO) {
+    notifyRowKeySettlementWaiters(service);
+  }
   service.logger.warn(LOG_MSG.SESSION_DOOMED, {
     partitionId: service.partitionId,
     transactionId: session.identity.transactionId,
@@ -379,7 +469,7 @@ function readInSession(service, session, request, params) {
       rowBudgetOptions,
     );
     if (directRead?.success === true) {
-      session.hasExecutedRead = true;
+      recordSessionReadFootprint(service, session, request.sql, params);
     }
     return directRead;
   }
@@ -395,16 +485,17 @@ function readInSession(service, session, request, params) {
       error: String(outcome.failure?.message ?? outcome.failure),
       errorCode: outcome.failure?.code ?? null});
   }
-  session.hasExecutedRead = true;
+  recordSessionReadFootprint(service, session, request.sql, params);
   return buildSessionReadAnswer(service, outcome.ran);
 }
 
 /**
  * Prepare a waiting active session for in-place re-evaluation after its
- * conflicting row-key holder settles. Sessions without prior reads rebase
- * generationBase when empty (and schema unchanged) or when prior staged
- * operations pass canAdvanceRowKeySessionGeneration; sessions that already
- * executed a read proceed only when partition generation is unchanged.
+ * conflicting row-key holder settles. Sessions without prior unscoped reads
+ * rebase generationBase when empty (and any read row keys are untouched) or
+ * when staged operations and read row keys pass
+ * canAdvanceRowKeySessionGeneration; sessions with unscoped or overlapping
+ * read footprints proceed only when partition generation is unchanged.
  * @param {Object} service - The partition leader.
  * @param {Object} payload - The remote QUERY payload.
  * @return {boolean} True when answerParticipantSessionQuery may re-run.
@@ -418,12 +509,11 @@ function prepareWaitingRowKeySessionForReevaluation(service, payload) {
   if (currentGeneration === session.generationBase) {
     return true;
   }
-  if (session.hasExecutedRead === true) {
+  if (session.hasUnscopedRead === true) {
     return false;
   }
   if (session.operations.length === ZERO) {
-    if (typeof session.schemaVersionBase === 'number' &&
-        readSchemaVersion(service.db) !== session.schemaVersionBase) {
+    if (!canRebaseEmptyWaitingSession(service, session, currentGeneration)) {
       return false;
     }
     session.generationBase = currentGeneration;
