@@ -18,6 +18,10 @@ import {EXPR_TYPE} from '../query/parser-constants.js';
 import {PG_EXPR_TYPE} from '../query/pg/pg-compat-constants.js';
 import {renderSelect} from '../query/sql-statement-renderer.js';
 import {
+  isPartitionVisibleForRouting,
+  resolveActivePartitionVersion,
+} from '../query/sql-query-engine-table-routing-methods.js';
+import {
   LIVE_QUERY_AST_TYPE,
   LIVE_QUERY_EVENT,
   LIVE_QUERY_GROUP_STATE,
@@ -37,7 +41,6 @@ const LOCAL_NUM_ZERO_POINT_SEVEN = 0.7;
 const LOCAL_STR_NUMBER = 'number';
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_STRING = 'string';
-const LOCAL_STR_NORMAL = 'NORMAL';
 const DEFAULT_JOIN_TYPE = 'INNER';
 const DEFAULT_ORDER_DIRECTION = 'ASC';
 const WILDCARD_COLUMN = '*';
@@ -348,55 +351,6 @@ function compareVersions(a, b) {
   } catch {
     return String(a) < String(b) ? -1 : (String(a) > String(b) ? 1 : 0);
   }
-}
-
-/**
- * Resolve active partition version from canonical table metadata.
- * Returns null when `active_partition_version` is absent or invalid.
- * @param {Object|null} tableInfo
- * @return {number|null}
- */
-function resolveActivePartitionVersion(tableInfo) {
-  if (!tableInfo || typeof tableInfo !== LOCAL_STR_OBJECT) {
-    return null;
-  }
-  const value = tableInfo.active_partition_version;
-  if (value === null || value === undefined || value === '') {
-    return null;
-  }
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 1) {
-    return null;
-  }
-  return parsed;
-}
-
-/**
- * Check if partition is visible for routing given active version.
- * Requires canonical `partition_version` and `state` fields without defaults.
- * @param {Object} partition
- * @param {number|null} activePartitionVersion
- * @return {boolean}
- */
-function isPartitionVisibleForRouting(partition, activePartitionVersion) {
-  if (!partition || typeof partition !== LOCAL_STR_OBJECT) {
-    return false;
-  }
-  if (!Number.isInteger(activePartitionVersion) || activePartitionVersion < 1) {
-    return false;
-  }
-  const rawVersion = partition.partition_version;
-  if (rawVersion === null || rawVersion === undefined || rawVersion === '') {
-    return false;
-  }
-  const partitionVersion = Number(rawVersion);
-  if (!Number.isInteger(partitionVersion) || partitionVersion !== activePartitionVersion) {
-    return false;
-  }
-  if (typeof partition.state !== LOCAL_STR_STRING) {
-    return false;
-  }
-  return partition.state.toUpperCase() === LOCAL_STR_NORMAL;
 }
 
 /**

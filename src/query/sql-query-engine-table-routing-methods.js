@@ -48,15 +48,13 @@ function parsePositivePartitionVersion(value) {
 
 /**
  * Resolve active partition version from table metadata.
- * Requires an explicit valid integer `active_partition_version` /
- * `activePartitionVersion`; returns `null` when missing or invalid.
+ * Requires an explicit valid integer `active_partition_version`;
+ * returns `null` when missing or invalid.
  * @param {Object|null} tableInfo - Table metadata row.
  * @return {number|null} Active partition-set version or null.
  */
 function resolveActivePartitionVersion(tableInfo) {
-  const value = tableInfo?.active_partition_version ??
-    tableInfo?.activePartitionVersion;
-  return parsePositivePartitionVersion(value);
+  return parsePositivePartitionVersion(tableInfo?.active_partition_version);
 }
 
 /**
@@ -73,7 +71,7 @@ function isPartitionVisibleForRouting(partition, activePartitionVersion) {
     return false;
   }
   const partitionVersion = parsePositivePartitionVersion(
-    partition?.partition_version ?? partition?.partitionVersion,
+    partition?.partition_version,
   );
   if (partitionVersion === null || partitionVersion !== expectedVersion) {
     return false;

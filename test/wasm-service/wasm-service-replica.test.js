@@ -556,6 +556,19 @@ describe('WasmServiceReplica', () => {
       let writePayload = null;
       const replica = createReplica(defaultOpts({
         systemTableCache: createWriteReadySystemTableCache(),
+        cdcIntegrationService: {
+          executeAuthoritativeSystemTableRead: async () => ({
+            success: true,
+            rows: [
+              {
+                [COLUMN.SERVICE_ID]: 'wsr-1',
+                [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.WASM_SERVICE,
+                [COLUMN.NODE_ID]: 'node-1',
+                [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
+              },
+            ],
+          }),
+        },
         roleUpdateWriter: async (payload) => {
           writePayload = payload;
         },
@@ -579,6 +592,17 @@ describe('WasmServiceReplica', () => {
         const replica = createReplica(defaultOpts({
           systemTableCache: createWriteReadySystemTableCache(),
           cdcIntegrationService: {
+            executeAuthoritativeSystemTableRead: async () => ({
+              success: true,
+              rows: [
+                {
+                  [COLUMN.SERVICE_ID]: 'wsr-1',
+                  [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.WASM_SERVICE,
+                  [COLUMN.NODE_ID]: 'node-1',
+                  [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
+                },
+              ],
+            }),
             updateSystemTableRow: async (...args) => {
               updateArgs = args;
             },
@@ -609,6 +633,19 @@ describe('WasmServiceReplica', () => {
       let writePayload = null;
       const replica = createReplica(defaultOpts({
         systemTableCache: createWriteReadySystemTableCache(),
+        cdcIntegrationService: {
+          executeAuthoritativeSystemTableRead: async () => ({
+            success: true,
+            rows: [
+              {
+                [COLUMN.SERVICE_ID]: 'wsr-1',
+                [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.WASM_SERVICE,
+                [COLUMN.NODE_ID]: 'node-1',
+                [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
+              },
+            ],
+          }),
+        },
         leaderNodeUpdateWriter: async (payload) => {
           writePayload = payload;
         },
@@ -634,6 +671,17 @@ describe('WasmServiceReplica', () => {
         const replica = createReplica(defaultOpts({
           systemTableCache: createWriteReadySystemTableCache(),
           cdcIntegrationService: {
+            executeAuthoritativeSystemTableRead: async () => ({
+              success: true,
+              rows: [
+                {
+                  [COLUMN.SERVICE_ID]: 'wsr-1',
+                  [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.WASM_SERVICE,
+                  [COLUMN.NODE_ID]: 'node-1',
+                  [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
+                },
+              ],
+            }),
             updateSystemTableRow: async (...args) => {
               updateArgs = args;
             },
