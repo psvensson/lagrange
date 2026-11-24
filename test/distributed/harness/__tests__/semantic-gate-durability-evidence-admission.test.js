@@ -404,22 +404,15 @@ async () => {
         ...args,
         createClient: engine.createPgClient,
       }),
-      sshRun,
-      opts: {},
-      evidenceDirOf: () => null,
-      now: () => 0,
+      sshRun, opts: {}, evidenceDirOf: () => null, now: () => 0,
     });
     const result = await stage({
       run: {runId: `r-local-${system}`, system},
-      manifest: {campaignId: 'camp-dur-admit'},
-      deployment,
+      manifest: {campaignId: 'camp-dur-admit'}, deployment,
     });
     assertPassedGateAdmitsCleanly({
-      label: `local-pg-journey:${system}`,
-      gate: result.gate,
-      targetId,
-      endpointContainerId: deployment.endpoint.containerId,
-      expectedRole,
+      label: `local-pg-journey:${system}`, gate: result.gate, targetId,
+      endpointContainerId: deployment.endpoint.containerId, expectedRole,
     });
   }
 });
@@ -436,32 +429,23 @@ async () => {
     const engine = createPgWireMockStore();
     const {sshRun} = createScriptedSsh([
       remoteActionRule({createPgClient: engine.createPgClient}),
-      ...dockerRules(ledger),
-      restartRuleForLedger(ledger),
+      ...dockerRules(ledger), restartRuleForLedger(ledger),
     ]);
     const deployment = createPgDeploymentArm(ledger, {system, persistent: true});
     const stage = createSemanticGateStage({
       journey: async () => {
         throw new Error('local journey must not run when loadGeneratorHost is supplied');
       },
-      sshRun,
-      opts: {},
-      loadGeneratorHost: LOAD_GENERATOR_HOST,
-      evidenceDirOf: () => null,
-      now: () => 0,
+      sshRun, opts: {}, loadGeneratorHost: LOAD_GENERATOR_HOST,
+      evidenceDirOf: () => null, now: () => 0,
     });
     const result = await stage({
       run: {runId: `r-remote-${targetId}`, system},
-      manifest: {campaignId: 'camp-dur-admit'},
-      deployment,
+      manifest: {campaignId: 'camp-dur-admit'}, deployment,
     });
     assertPassedGateAdmitsCleanly({
-      label: `remote-pg-gate:${targetId}`,
-      gate: result.gate,
-      targetId,
-      endpointContainerId: deployment.endpoint.containerId,
-      expectedRole,
-      subkinds,
+      label: `remote-pg-gate:${targetId}`, gate: result.gate, targetId,
+      endpointContainerId: deployment.endpoint.containerId, expectedRole, subkinds,
     });
   }
 });
@@ -474,8 +458,7 @@ test('TiDB semantic gate (local and remote loadGeneratorHost) retains durability
     const rules = [
       ...(useRemote ?
         [remoteActionRule({createMysqlConnection: engine.createMysqlConnection})] : []),
-      ...dockerRules(ledger),
-      restartRuleForLedger(ledger),
+      ...dockerRules(ledger), restartRuleForLedger(ledger),
     ];
     const {sshRun} = createScriptedSsh(rules);
     const deployment = tidbClusterArmOf(ledger, {persistent: true});
@@ -483,23 +466,17 @@ test('TiDB semantic gate (local and remote loadGeneratorHost) retains durability
       journey: async () => {
         throw new Error('PG journey must not run for TiDB');
       },
-      sshRun,
-      opts: {},
-      loadGeneratorHost: useRemote ? LOAD_GENERATOR_HOST : null,
+      sshRun, opts: {}, loadGeneratorHost: useRemote ? LOAD_GENERATOR_HOST : null,
       createMysqlConnection: useRemote ? null : engine.createMysqlConnection,
-      evidenceDirOf: () => null,
-      now: () => 0,
+      evidenceDirOf: () => null, now: () => 0,
     });
     const result = await stage({
       run: {runId: `r-tidb-${useRemote ? 'remote' : 'local'}`, system: 'tidb-tikv'},
-      manifest: {campaignId: 'camp-dur-admit'},
-      deployment,
+      manifest: {campaignId: 'camp-dur-admit'}, deployment,
     });
     assertPassedGateAdmitsCleanly({
-      label: `tidb-gate:${useRemote ? 'remote' : 'local'}`,
-      gate: result.gate,
-      targetId: 'tidb-tikv',
-      endpointContainerId: deployment.endpoint.containerId,
+      label: `tidb-gate:${useRemote ? 'remote' : 'local'}`, gate: result.gate,
+      targetId: 'tidb-tikv', endpointContainerId: deployment.endpoint.containerId,
       expectedRole: 'tikv',
     });
   }
@@ -731,15 +708,27 @@ test('semantic mutations with recomputed rawObservationsDigest fail closed along
       arrayIncludes(unboundCell.reasons, ADMISSION_REASON.SEMANTIC_GATE_INCOMPLETE), true);
   }
 
-  // 4. Flip a failed case summary status to passed without valid faultEvidence / proof IDs.
-  const flippedCell = admitMutatedSubmission({...base, mutate: (run) => {
-    const firstCase = run.correctness.semanticGate.cases[0];
-    firstCase.status = 'passed';
-    firstCase.proofIds = [];
-    firstCase.failureKind = 'product_anomaly';
-  }});
-  assert.equal(arrayIncludes(flippedCell.reasons, ADMISSION_REASON.SEMANTIC_GATE_INCOMPLETE), true);
-  assert.equal(arrayIncludes(flippedCell.reasons, ADMISSION_REASON.SEMANTIC_GATE_NOT_PASSED), true);
+  // 4. Flip a failed case summary status to passed or strip gate.cases ([] / delete cases).
+  for (const mutateCases of [
+    (gate) => {
+      Object.assign(gate.cases[0], {status: 'passed', proofIds: [], failureKind: 'product_anomaly'});
+    },
+    (gate) => {
+      gate.cases = [];
+    },
+    (gate) => {
+      delete gate.cases;
+    },
+  ]) {
+    const flippedCell = admitMutatedSubmission({...base, mutate: (run) => {
+      mutateCases(run.correctness.semanticGate);
+    }});
+    assert.equal(
+      arrayIncludes(flippedCell.reasons, ADMISSION_REASON.SEMANTIC_GATE_INCOMPLETE), true);
+    assert.equal(
+      arrayIncludes(flippedCell.reasons, ADMISSION_REASON.SEMANTIC_GATE_NOT_PASSED), true);
+    assert.equal(flippedCell.evidence.semanticProofIds.length < EXPECTED_PROOF_COUNT, true);
+  }
 
   // 5. Transplant an older candidate's artifact / mismatched harness.gitCommit or fingerprint.
   const commitCell = admitMutatedSubmission({...base, mutate: (run) => {
@@ -786,6 +775,12 @@ test('persisted v2 raw-observations.ndjson live passing gates satisfy canonical 
     if (!dur?.faultEvidence) {
       withdrawnMissingFaultGates += 1;
       assert.equal(validateCanonicalDurabilityCaseRecord(dur, rec).valid, false, rec.runId);
+      for (const stripped of [{...gate, cases: []}, {...gate, cases: undefined}]) {
+        const clone = {...rec, correctness: {...rec.correctness, semanticGate: stripped}};
+        assert.equal(arrayIncludes(checkSemanticGate(clone),
+          ADMISSION_REASON.SEMANTIC_GATE_INCOMPLETE), true);
+        assert.deepEqual(awardedProofIds(stripped, clone), []);
+      }
       continue;
     }
     livePassedGates += 1;
@@ -795,7 +790,5 @@ test('persisted v2 raw-observations.ndjson live passing gates satisfy canonical 
     }
     assert.equal(validateCanonicalDurabilityCaseRecord(dur, rec).valid, true, rec.runId);
   }
-  assert.ok(livePassedGates >= 3);
-  assert.ok(withdrawnMissingFaultGates >= 1);
-  assert.ok(v1ForensicCount > 0);
+  assert.ok(livePassedGates >= 3 && withdrawnMissingFaultGates >= 1 && v1ForensicCount > 0);
 });

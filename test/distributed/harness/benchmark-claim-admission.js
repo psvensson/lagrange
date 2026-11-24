@@ -660,6 +660,25 @@ function gateBindingHolds(run, binding, gate = null) {
   return gateCaseBindingsHold(checkedGate.cases, matches);
 }
 
+const DURABILITY_PROOF_ID_SET = Object.freeze([
+  'isolation:atomicCommitRequired',
+  'isolation:successfulCommitDurable',
+]);
+
+function claimsDurabilityProofIdsInPassed(gate) {
+  return Array.isArray(gate.passed) &&
+    arraySome(gate.passed, (id) => arrayIncludes(DURABILITY_PROOF_ID_SET, id));
+}
+
+function isMissingRequiredCasesOnPassedGate(gate, run) {
+  if (Array.isArray(gate.cases)) {
+    return gate.cases.length === 0 &&
+      (gate.status === GATE_STATUS.PASSED || claimsDurabilityProofIdsInPassed(gate));
+  }
+  if (claimsDurabilityProofIdsInPassed(gate)) return true;
+  return Boolean(run && isClaimedPhysicalRun(run) && gate.status === GATE_STATUS.PASSED);
+}
+
 function isAdmissibleAwardedCase(proofCase, run = null) {
   return validateCanonicalSemanticGateCaseRecord(proofCase, run).valid;
 }
@@ -667,6 +686,7 @@ function isAdmissibleAwardedCase(proofCase, run = null) {
 function awardedProofIds(gate, run = null) {
   if (!gate) return [];
   if (!Array.isArray(gate.cases)) {
+    if (isMissingRequiredCasesOnPassedGate(gate, run)) return [];
     return Array.isArray(gate.passed) ? [...gate.passed].sort() : [];
   }
   const passedIds = new Set();
@@ -736,12 +756,14 @@ function hasNonEmptyArray(value) {
   return Array.isArray(value) && value.length > 0;
 }
 
+function hasInvalidClaimedPassedCase(cases, run) {
+  return arraySome(cases, (c) => isClaimedPassedStatus(c.status) && !isPassedAndValidCase(c, run));
+}
+
 function gateCasesHaveInconsistentSummary(gate, run) {
+  if (isMissingRequiredCasesOnPassedGate(gate, run)) return true;
   if (!hasNonEmptyArray(gate.cases)) return false;
-  if (arraySome(gate.cases, (c) =>
-    isClaimedPassedStatus(c.status) && !isPassedAndValidCase(c, run))) {
-    return true;
-  }
+  if (hasInvalidClaimedPassedCase(gate.cases, run)) return true;
   const awarded = awardedProofIds(gate, run);
   const awardedSet = new Set(awarded);
   if (Array.isArray(gate.passed) && arraySome(gate.passed, (id) => !awardedSet.has(id))) {
