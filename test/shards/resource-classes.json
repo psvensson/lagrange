@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2806,
+    "ordinary": 2808,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2832,
-  "digest": "fnv1a32-d8e4e19f",
+  "censusSize": 2834,
+  "digest": "fnv1a32-bbd96c3d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1018,6 +1018,7 @@
     "test/distributed/harness/__tests__/publication-convergence-claim.test.js": "ordinary",
     "test/distributed/harness/__tests__/publication-evidence-open-membership.test.js": "ordinary",
     "test/distributed/harness/__tests__/publication-evidence-replay.test.js": "ordinary",
+    "test/distributed/harness/__tests__/readiness-summary-and-history-accounting.test.js": "ordinary",
     "test/distributed/harness/__tests__/real-product-cluster-deployer-cleanup.test.js": "ordinary",
     "test/distributed/harness/__tests__/real-product-cluster-deployer-dataset.test.js": "ordinary",
     "test/distributed/harness/__tests__/real-product-cluster-deployer-identity.test.js": "ordinary",
@@ -2338,6 +2339,7 @@
     "test/runtime/oci-host-agent-tpm-counter.test.js": "ordinary",
     "test/runtime/oci-registry-policy.test.js": "ordinary",
     "test/runtime/pgwire-auth-handler.test.js": "ordinary",
+    "test/runtime/pgwire-begin-disconnect-and-oversized-row.test.js": "ordinary",
     "test/runtime/pgwire-commit-outcome-coordinator.test.js": "ordinary",
     "test/runtime/pgwire-cutover-guard.test.js": "ordinary",
     "test/runtime/pgwire-descriptor.test.js": "ordinary",
