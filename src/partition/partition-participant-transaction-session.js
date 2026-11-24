@@ -1,4 +1,4 @@
-// Public entry: openParticipantSession, checkAndRecordSessionRowKey, isPartitionReservedForPrepare, canAdvanceCommittedValidationText, inspectRetainedPreparedObligations, stagePreparedParticipantRowKeys, recordCommittedParticipantRowKeys, recordCommittedAutocommitRowKeys, discardParticipantSessions, resetParticipantRowKeyHistory, sweepParticipantTransactionHolds.
+// Public entry: openParticipantSession, checkAndRecordSessionRowKey, classifyPartitionPrepareReservation, canAdvanceCommittedValidationText, inspectRetainedPreparedObligations, stagePreparedParticipantRowKeys, recordCommittedParticipantRowKeys, recordCommittedAutocommitRowKeys, discardParticipantSessions, resetParticipantRowKeyHistory, sweepParticipantTransactionHolds.
 // Required collaborators: partition-participant-transaction-store.js and partition-write-footprint-contract.js.
 // Durable authority / commit point: _participant_transactions, _partition_write_generation and _partition_write_generation_history in SQLite.
 // Permitted post-commit work: volatile staging session lifecycle, hold sweep reporting, and settlement waiter notifications.
@@ -12,7 +12,7 @@ import {operationsOf} from './partition-participant-transaction-bytes.js';
 import {
   FAIL_CLOSED_READ_DEPENDENCY_SNAPSHOT, areGenerationRowsDisjointFromCandidate,
   attachSessionReadDependencyAccumulator, buildPreparedEntryFromFootprintAndValidation,
-  buildStagedPreparedEntry, collectPreparedContradictions,
+  buildStagedPreparedEntry, classifyTransactionFootprintConflict, collectPreparedContradictions,
   decodeParticipantValidationForPartition, doTransactionFootprintsConflict,
   getSessionReadDependencySnapshot, hasScopedCandidateFootprint,
   isEntryDisjointFromCommittedMap, normalizeTransactionFootprint,
@@ -342,18 +342,23 @@ function hydrateDurablePreparedAndCommittedState(service) {
   }
 }
 
-function isPartitionReservedForPrepare(
+function classifyPartitionPrepareReservation(
   service, selfParticipantId, rowKeysOrFootprint, hasUnscopedWrite = false, readDependencies = null,
 ) {
-  if (!isPartitionReserved(service.db)) return false;
-  if (!isRowKeyConcurrencyEnabled(service)) return true;
+  if (!isPartitionReserved(service.db)) return {reserved: false, readWriteConflict: false};
+  if (!isRowKeyConcurrencyEnabled(service)) return {reserved: true, readWriteConflict: false};
   hydrateDurablePreparedAndCommittedState(service);
   const candidate = normalizeTransactionFootprint(
     rowKeysOrFootprint, hasUnscopedWrite, readDependencies);
-  const preparedIds = readPreparedParticipantIds(service.db);
   const preparedMap = PREPARED_PARTICIPANT_ROW_KEYS.get(service);
-  return preparedIds.some((otherId) => otherId !== selfParticipantId &&
-    doTransactionFootprintsConflict(preparedMap?.get(otherId), candidate));
+  let reserved = false;
+  for (const otherId of readPreparedParticipantIds(service.db)) {
+    if (otherId === selfParticipantId) continue;
+    const res = classifyTransactionFootprintConflict(preparedMap?.get(otherId), candidate);
+    if (res.readWriteConflict) return {reserved: true, readWriteConflict: true};
+    reserved ||= res.conflict;
+  }
+  return {reserved, readWriteConflict: false};
 }
 
 function findMinActiveGenerationBase(service) {
@@ -556,10 +561,9 @@ function isSessionSchemaCurrent(service, session) {
 }
 
 function isScopedRowKeySession(service, session) {
-  return isRowKeyConcurrencyEnabled(service) &&
-    Boolean(session) &&
-    session.hasUnscopedWrite !== true &&
-    session.hasUnscopedRead !== true &&
+  return isRowKeyConcurrencyEnabled(service) && Boolean(session) &&
+    session.hasUnscopedWrite !== true && session.hasUnscopedRead !== true &&
+    session.touchedRowKeys instanceof Set && session.touchedRowKeys.size > 0 &&
     isSessionSchemaCurrent(service, session);
 }
 
@@ -782,10 +786,10 @@ function sweepParticipantTransactionHolds(service, nowMs) {
 export {
   canAdmitConcurrentParticipantSession, canAdvanceCommittedValidationText,
   canAdvanceRowKeySessionGeneration, canRebaseEmptyWaitingSession,
-  checkAndRecordSessionRowKey, clearPreparedParticipantRowKeys,
+  checkAndRecordSessionRowKey, classifyPartitionPrepareReservation, clearPreparedParticipantRowKeys,
   discardParticipantSessions, endParticipantSession, extractOperationsRowKeyFootprint,
   findParticipantSession, getRetainedRowKeyHistoryStats, hasParticipantSession,
-  inspectRetainedPreparedObligations, isPartitionReservedForPrepare, isRowKeyConcurrencyEnabled,
+  inspectRetainedPreparedObligations, isRowKeyConcurrencyEnabled,
   listActiveParticipantSessions, notifyRowKeySettlementWaiters, openParticipantSession,
   participantRoutingSessionCollision, participantTransactionActive,
   recordCommittedAutocommitRowKeys, recordCommittedParticipantRowKeys,

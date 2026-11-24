@@ -77,11 +77,10 @@ import {
 } from './partition-participant-transaction-constants.js';
 import {recordCommittedWriteTraffic} from './partition-write-traffic.js';
 import {
-  canAdvanceCommittedValidationText, clearPreparedParticipantRowKeys,
-  extractOperationsRowKeyFootprint, inspectRetainedPreparedObligations,
-  isPartitionReservedForPrepare, isRowKeyConcurrencyEnabled,
-  recordCommittedParticipantRowKeys, resetParticipantRowKeyHistory,
-  stagePreparedParticipantRowKeys,
+  canAdvanceCommittedValidationText, classifyPartitionPrepareReservation,
+  clearPreparedParticipantRowKeys, extractOperationsRowKeyFootprint,
+  inspectRetainedPreparedObligations, recordCommittedParticipantRowKeys,
+  resetParticipantRowKeyHistory, stagePreparedParticipantRowKeys,
 } from './partition-participant-transaction-session.js';
 import {decodeParticipantValidationText} from './partition-participant-read-dependencies.js';
 import {clearPartitionTransactionMemoryReservations} from
@@ -337,14 +336,15 @@ function applyParticipantPrepare(service, committed) {
   }
   const operations = operationsOf(command.operationsText);
   const footprint = extractOperationsRowKeyFootprint(service, operations);
-  if (isPartitionReservedForPrepare(
+  const reservation = classifyPartitionPrepareReservation(
     service, command.participantId, footprint.rowKeys,
     footprint.hasUnscopedWrite, decodedValidation.readDependencies,
-  )) {
-    if (isRowKeyConcurrencyEnabled(service)) {
-      return refusePrepare(service, committed,
-        {cause: CAUSE.CONFLICT, detail: null});
-    }
+  );
+  if (reservation.readWriteConflict) {
+    return refusePrepare(service, committed,
+      {cause: CAUSE.CONFLICT, detail: null});
+  }
+  if (reservation.reserved) {
     consumedRefusal(service, committed, CODE.RESERVED,
       {deferRetry: true, ...participantOutcomeOf(null)});
     return OUTCOME.RESERVED_REFUSED;

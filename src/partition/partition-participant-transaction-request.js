@@ -42,10 +42,10 @@ import {
 import {operationResultsOf} from './partition-participant-transaction-apply.js';
 import {
   canAdmitConcurrentParticipantSession, canAdvanceRowKeySessionGeneration,
+  canRebaseEmptyWaitingSession, classifyPartitionPrepareReservation,
   clearPreparedParticipantRowKeys, endParticipantSession, findParticipantSession,
-  isPartitionReservedForPrepare, isRowKeyConcurrencyEnabled, openParticipantSession,
-  participantRoutingSessionCollision, participantTransactionActive,
-  stagePreparedParticipantRowKeys,
+  isRowKeyConcurrencyEnabled, openParticipantSession, participantRoutingSessionCollision,
+  participantTransactionActive, stagePreparedParticipantRowKeys,
 } from './partition-participant-transaction-session.js';
 import {
   assembleSessionOperationsText,
@@ -324,27 +324,42 @@ async function proposeSealedPrepare(service, payload, session) {
   return answer;
 }
 
-function isSessionReservedForPrepare(service, session, readDeps) {
-  return isPartitionReservedForPrepare(
+function prepareReservationRefusalOf(service, payload, session, readDeps) {
+  const reservation = classifyPartitionPrepareReservation(
     service, session.identity.participantId,
     session.touchedRowKeys, session.hasUnscopedWrite, readDeps);
+  if (reservation.readWriteConflict) {
+    endParticipantSession(service, session);
+    return refusalOf(service, payload, CODE.PREPARE_REFUSED,
+      {refusalCause: CAUSE.CONFLICT, ...participantOutcomeOf(null)});
+  }
+  return reservation.reserved ? refusalOf(service, payload, CODE.RESERVED,
+    {deferRetry: true, ...participantOutcomeOf(null, volatileStateOf(session))}) : null;
+}
+
+function canAdvanceSessionForSeal(service, session, currentGeneration) {
+  if (!isRowKeyConcurrencyEnabled(service)) return false;
+  return session.operations.length === 0 && session.touchedRowKeys.size === 0 &&
+      session.hasUnscopedWrite !== true ?
+    canRebaseEmptyWaitingSession(service, session, currentGeneration) :
+    canAdvanceRowKeySessionGeneration(service, session, currentGeneration);
 }
 
 function sealSession(service, payload, session) {
   // Advisory: the apply is the authority over the carried base.
   const currentGeneration = readPartitionWriteGeneration(service.db);
   if (currentGeneration !== session.generationBase &&
-      canAdvanceRowKeySessionGeneration(service, session, currentGeneration)) {
+      canAdvanceSessionForSeal(service, session, currentGeneration)) {
     session.generationBase = currentGeneration;
   }
-  const readDeps = getSessionReadDependencySnapshot(session);
-  if (currentGeneration !== session.generationBase ||
-      (isRowKeyConcurrencyEnabled(service) &&
-        isSessionReservedForPrepare(service, session, readDeps))) {
+  if (currentGeneration !== session.generationBase) {
     endParticipantSession(service, session);
     return refusalOf(service, payload, CODE.PREPARE_REFUSED,
       {refusalCause: CAUSE.CONFLICT, ...participantOutcomeOf(null)});
   }
+  const readDeps = getSessionReadDependencySnapshot(session);
+  const reservationRefusal = prepareReservationRefusalOf(service, payload, session, readDeps);
+  if (reservationRefusal !== null) return reservationRefusal;
   const lockConflict = checkOperationsLockingReadConflict(service, {
     operations: session.operations,
     transactionId: session.identity.transactionId,
@@ -385,16 +400,9 @@ async function prepareSession(service, payload, session) {
   if (session.sealed !== null && session.sealed.commitMode !== payload.commitMode) {
     return refusalOf(service, payload, CODE.IDENTITY_MISMATCH);
   }
-  const readDeps = getSessionReadDependencySnapshot(session);
-  if (isSessionReservedForPrepare(service, session, readDeps)) {
-    if (isRowKeyConcurrencyEnabled(service)) {
-      endParticipantSession(service, session);
-      return refusalOf(service, payload, CODE.PREPARE_REFUSED,
-        {refusalCause: CAUSE.CONFLICT, ...participantOutcomeOf(null)});
-    }
-    return refusalOf(service, payload, CODE.RESERVED,
-      {deferRetry: true, ...participantOutcomeOf(null, volatileStateOf(session))});
-  }
+  const reservationRefusal = prepareReservationRefusalOf(
+    service, payload, session, getSessionReadDependencySnapshot(session));
+  if (reservationRefusal !== null) return reservationRefusal;
   clearStaleRowKeySealedPrepare(service, session);
   // A sealed command already submitted belongs to its outcome owner. Only a
   // new PREPARE is admission (release fence, then topology); retries retain

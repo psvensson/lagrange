@@ -6,7 +6,8 @@
 //   getSessionReadDependencySnapshot, encodeCanonicalReadDependencyRecord,
 //   decodeCanonicalReadDependencyRecord, decodeParticipantValidationText,
 //   resolveValidationRecordBaseGeneration, normalizeTransactionFootprint,
-//   doTransactionFootprintsConflict, isKeyTouchedByTransactionFootprint.
+//   classifyTransactionFootprintConflict, doTransactionFootprintsConflict,
+//   isKeyTouchedByTransactionFootprint.
 // - Invariants:
 //   1. Read dependencies accumulate through one owner method with private state
 //      counting both distinct keys and cumulative UTF-8 bytes. Reaching either
@@ -528,13 +529,24 @@ function doesWriteOverlapRead(writer, reader) {
   return setsIntersect(writer.rowKeys, reader.readKeys);
 }
 
+const NO_FOOTPRINT_CONFLICT = Object.freeze({conflict: false, readWriteConflict: false});
+const WRITE_ONLY_FOOTPRINT_CONFLICT = Object.freeze({conflict: true, readWriteConflict: false});
+const READ_WRITE_FOOTPRINT_CONFLICT = Object.freeze({conflict: true, readWriteConflict: true});
+
+function classifyTransactionFootprintConflict(existingEntry, candidateFootprint) {
+  if (!existingEntry || !candidateFootprint) return WRITE_ONLY_FOOTPRINT_CONFLICT;
+  const normalizedExisting = normalizeTransactionFootprint(existingEntry);
+  const normalizedCandidate = normalizeTransactionFootprint(candidateFootprint);
+  if (doesWriteOverlapRead(normalizedExisting, normalizedCandidate) ||
+      doesWriteOverlapRead(normalizedCandidate, normalizedExisting)) {
+    return READ_WRITE_FOOTPRINT_CONFLICT;
+  }
+  return doesWriteOverlapWrite(normalizedExisting, normalizedCandidate) ?
+    WRITE_ONLY_FOOTPRINT_CONFLICT : NO_FOOTPRINT_CONFLICT;
+}
+
 function doTransactionFootprintsConflict(first, second) {
-  if (!first || !second) return true;
-  const normalizedFirst = normalizeTransactionFootprint(first);
-  const normalizedSecond = normalizeTransactionFootprint(second);
-  return doesWriteOverlapWrite(normalizedFirst, normalizedSecond) ||
-    doesWriteOverlapRead(normalizedFirst, normalizedSecond) ||
-    doesWriteOverlapRead(normalizedSecond, normalizedFirst);
+  return classifyTransactionFootprintConflict(first, second).conflict;
 }
 
 function isKeyTouchedByTransactionFootprint(footprint, rowKey) {
@@ -693,6 +705,7 @@ export {
   attachSessionReadDependencyAccumulator,
   buildPreparedEntryFromFootprintAndValidation,
   buildStagedPreparedEntry,
+  classifyTransactionFootprintConflict,
   collectPreparedContradictions,
   decodeParticipantValidationForPartition,
   decodeParticipantValidationText,
