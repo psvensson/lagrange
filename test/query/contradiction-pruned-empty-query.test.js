@@ -74,6 +74,7 @@ function createEngineFixture({orderLineRows = []} = {}) {
     table_name: 'order_line',
     schema_definition: JSON.stringify(ORDER_LINE_SCHEMA),
     partition_key: 'warehouse_id,district_id,order_id,line_number',
+    active_partition_version: 1,
     replica_count: 3,
   });
   cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
@@ -82,6 +83,8 @@ function createEngineFixture({orderLineRows = []} = {}) {
     table_name: 'order_line',
     partition_key_start: null,
     partition_key_end: null,
+    partition_version: 1,
+    state: 'NORMAL',
     leader_node_id: 'node-1',
     replica_count: 3,
   });
@@ -100,6 +103,7 @@ function createEngineFixture({orderLineRows = []} = {}) {
     table_name: 'stock',
     schema_definition: JSON.stringify(STOCK_SCHEMA),
     partition_key: 'warehouse_id,item_id',
+    active_partition_version: 1,
     replica_count: 3,
   });
   cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
@@ -108,6 +112,8 @@ function createEngineFixture({orderLineRows = []} = {}) {
     table_name: 'stock',
     partition_key_start: null,
     partition_key_end: null,
+    partition_version: 1,
+    state: 'NORMAL',
     leader_node_id: 'node-1',
     replica_count: 3,
   });
@@ -127,6 +133,7 @@ function createEngineFixture({orderLineRows = []} = {}) {
     table_name: 'missing_parts',
     schema_definition: JSON.stringify(UNPARTITIONED_MISSING_SCHEMA),
     partition_key: 'id',
+    active_partition_version: 1,
     replica_count: 3,
   });
 

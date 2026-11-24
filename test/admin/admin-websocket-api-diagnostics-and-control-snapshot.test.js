@@ -633,6 +633,7 @@ test('AdminWebSocketAPI - local control snapshot exposes structured control-plan
     });
     cache.applySystemTableChange(TABLES.TABLES, 'UPDATE', {
       id: 'table-1',
+      table_id: 'table-1',
       partition_transition_state: 'failed',
       partition_transition_metadata: JSON.stringify({
         workflowId,

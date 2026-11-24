@@ -397,30 +397,44 @@ export function createPopulatedCache() {
 
   cache.applySystemTableChange('services', 'INSERT', {
     id: 'service-1',
+    service_id: 'service-1',
     nodeId: 'node-1',
+    node_id: 'node-1',
     type: 'partition',
+    service_type: 'partition',
   });
 
   cache.applySystemTableChange('partitions', 'INSERT', {
     id: 'partition-1',
+    partition_id: 'partition-1',
     tableId: 'table-1',
+    table_id: 'table-1',
+    partition_version: 1,
+    state: 'NORMAL',
     keyStart: null,
     keyEnd: null,
   });
 
   cache.applySystemTableChange('tables', 'INSERT', {
     id: 'table-1',
+    table_id: 'table-1',
     name: 'test_table',
+    table_name: 'test_table',
+    active_partition_version: 1,
   });
 
   cache.applySystemTableChange('message_groups', 'INSERT', {
     id: 'mg-1',
+    group_id: 'mg-1',
     replicaCount: 3,
   });
 
   cache.applySystemTableChange('indices', 'INSERT', {
     id: 'index-1',
+    index_id: 'index-1',
+    index_name: 'index-1',
     tableId: 'table-1',
+    table_id: 'table-1',
     column: 'name',
   });
 
@@ -559,6 +573,7 @@ export function seedRoutedTableDiscoveryRows(cache) {
 
   cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
     id: 'service-benchmark-events-node-1',
+    service_id: 'service-benchmark-events-node-1',
     service_type: 'partition',
     partition_id: 'partition-benchmark-events-1',
     node_id: 'node-1',
@@ -581,6 +596,7 @@ export function seedTableDiscoveryRowsWithLocalLearner(cache) {
 
   cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
     id: 'service-benchmark-events-node-2',
+    service_id: 'service-benchmark-events-node-2',
     service_type: 'partition',
     partition_id: 'partition-benchmark-events-1',
     node_id: 'node-2',
@@ -603,6 +619,7 @@ export function seedTableDiscoveryRowsWithLocalCandidate(cache) {
 
   cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
     id: 'service-benchmark-events-node-2',
+    service_id: 'service-benchmark-events-node-2',
     service_type: 'partition',
     partition_id: 'partition-benchmark-events-1',
     node_id: 'node-2',
@@ -623,6 +640,7 @@ export function seedTableDiscoveryRowsWithLocalFollower(cache) {
 
   cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
     id: 'service-benchmark-events-node-2',
+    service_id: 'service-benchmark-events-node-2',
     service_type: 'partition',
     partition_id: 'partition-benchmark-events-1',
     node_id: 'node-2',
@@ -752,6 +770,7 @@ export function seedPartitionScopedDiscoveryRowsWithoutTableRecord(cache, update
 
   cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
     id: 'service-benchmark-events-node-1',
+    service_id: 'service-benchmark-events-node-1',
     service_type: 'partition',
     partition_id: 'partition-benchmark-events-1',
     node_id: 'node-1',
@@ -804,6 +823,7 @@ export function seedPartitionScopedDiscoveryRowsWithoutTableName(cache, updatedA
 
   cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
     id: 'service-benchmark-events-node-1',
+    service_id: 'service-benchmark-events-node-1',
     service_type: 'partition',
     partition_id: 'partition-benchmark-events-1',
     node_id: 'node-1',

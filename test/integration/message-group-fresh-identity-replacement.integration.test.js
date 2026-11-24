@@ -232,8 +232,10 @@ async function ensureLeaderWithAppliedTerm(liveReplicas, preferredReplicaId = nu
     leader = preferred;
   }
   if (!leader.raft.readStatus().currentTermApplied) {
+    const barrierNodeId = `term-barrier-${leader.replicaId}-${Date.now()}`;
     await leader.applyCDCEvent(TABLES.NODES, 'INSERT', {
-      id: `term-barrier-${leader.replicaId}-${Date.now()}`,
+      id: barrierNodeId,
+      node_id: barrierNodeId,
       address: '127.0.0.1:7999',
       status: 'active',
     });
@@ -991,6 +993,7 @@ test('mg-1 survives physical seed storage loss from two distinct off-seed voters
       );
       const postSeedLossRow = {
         id: 'node-after-seed-loss',
+        node_id: 'node-after-seed-loss',
         address: '10.42.0.4:7000',
         status: 'active',
       };
@@ -1049,6 +1052,7 @@ test('mg-1 survives physical seed storage loss from two distinct off-seed voters
       const reopenedLeader = await ensureLeaderWithAppliedTerm(liveReplicas());
       const postRestartRow = {
         id: 'node-after-offseed-restart',
+        node_id: 'node-after-offseed-restart',
         address: '10.42.0.5:7000',
         status: 'active',
       };

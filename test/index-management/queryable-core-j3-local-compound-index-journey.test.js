@@ -512,10 +512,13 @@ async function verifyChildPartitionLifecycle(engine, context, t) {
   partitionsMap.set('orders-p3', p3);
   cache.partitions.push({
     partition_id: 'orders-p3',
+    table_id: 'orders',
     table_name: 'orders',
     partition_key_start: 100,
     partition_key_end: null,
     partition_key_type: 'INTEGER',
+    partition_version: 1,
+    state: 'NORMAL',
     leader_node_id: 'test-node',
   });
   cache.services.push({

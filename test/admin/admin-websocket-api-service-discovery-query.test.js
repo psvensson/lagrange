@@ -737,6 +737,7 @@ test(
     writableCache.applySystemTableChange(TABLES.NODES, 'INSERT', {
       boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       id: 'node-2',
+      node_id: 'node-2',
       address: 'localhost:8081',
       status: 'active',
     });
@@ -808,6 +809,7 @@ test(
     writableCache.applySystemTableChange(TABLES.NODES, 'INSERT', {
       boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       id: 'node-2',
+      node_id: 'node-2',
       address: 'localhost:8081',
       status: 'active',
     });
@@ -827,6 +829,7 @@ test(
     });
     writableCache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
       id: 'service-benchmark-events-node-1',
+      service_id: 'service-benchmark-events-node-1',
       service_type: 'partition',
       partition_id: 'partition-benchmark-events-1',
       node_id: 'node-1',
@@ -903,6 +906,7 @@ test(
     writableCache.applySystemTableChange(TABLES.NODES, 'INSERT', {
       boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       id: 'node-2',
+      node_id: 'node-2',
       address: 'localhost:8081',
       status: 'active',
     });
@@ -922,6 +926,7 @@ test(
     });
     writableCache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
       id: 'service-benchmark-events-node-1',
+      service_id: 'service-benchmark-events-node-1',
       service_type: 'partition',
       partition_id: 'partition-benchmark-events-1',
       node_id: 'node-1',
@@ -1015,6 +1020,7 @@ test(
     writableCache.applySystemTableChange(TABLES.NODES, 'INSERT', {
       boot_incarnation: FIXTURE_ENDPOINT_INCARNATION,
       id: 'node-2',
+      node_id: 'node-2',
       address: 'localhost:8081',
       status: 'active',
     });
@@ -1034,6 +1040,7 @@ test(
     });
     writableCache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
       id: 'service-benchmark-events-node-1',
+      service_id: 'service-benchmark-events-node-1',
       service_type: 'partition',
       partition_id: 'partition-benchmark-events-1',
       node_id: 'node-1',

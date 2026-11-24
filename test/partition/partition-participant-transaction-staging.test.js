@@ -422,9 +422,9 @@ test('TX1 inc4 origin columns: a generation table created before the origin colu
     await shutdownAll(created);
     const raw = new Database(dbPath);
     try {
-      raw.exec('DROP TABLE _partition_write_generation; CREATE TABLE ' +
-        '_partition_write_generation (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), ' +
-        'generation INTEGER NOT NULL); INSERT INTO _partition_write_generation VALUES (1, 5)');
+      raw.exec('DELETE FROM _partition_write_generation; ' +
+        'INSERT INTO _partition_write_generation (singleton, generation, origin_index, origin_term) ' +
+        'VALUES (1, 5, NULL, NULL)');
     } finally {
       raw.close();
     }

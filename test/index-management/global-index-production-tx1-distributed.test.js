@@ -258,17 +258,20 @@ async function setupStrictCluster(t, options = {}) {
       systemCache,
     });
     partitionServices.set(ps.replicaId, ps);
-    const partRow = ctx.partitionMetadata || {
+    const partRow = {
       partition_id: ctx.partitionId,
       table_id: ctx.tableId || ctx.tableName,
       table_name: ctx.tableName,
       partition_key_start: null,
       partition_key_end: null,
       partition_key_type: 'TEXT',
+      partition_version: 1,
+      state: 'NORMAL',
+      ...(ctx.partitionMetadata || {}),
       leader_node_id: 'test-node',
     };
     await gateway.insertSystemTableRow(TABLES.PARTITIONS, partRow);
-    systemCache.applySystemTableChange(TABLES.PARTITIONS, CACHE_CDC_OPERATIONS.INSERT, partRow);
+    systemCache.applySystemTableChange(TABLES.PARTITIONS, CACHE_CDC_OPERATIONS.UPSERT, partRow);
     systemCache.applySystemTableChange(TABLES.SERVICES, CACHE_CDC_OPERATIONS.INSERT, {
       service_id: ps.replicaId,
       service_type: 'partition',
