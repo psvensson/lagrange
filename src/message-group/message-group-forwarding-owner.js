@@ -7,7 +7,7 @@ import {
   TABLES,
   TYPEOF,
 } from '../constants/index.js';
-import {getSystemCachePrimaryKeyFieldOrFallback} from
+import {getSystemCachePrimaryKeyField} from
   '../cache/system-cache-key-descriptor.js';
 import {ControlPlaneField} from '../control-plane/control-plane-constants.js';
 import {
@@ -647,7 +647,7 @@ Object.assign(
     buildMessageGroupLeaderIdentitySnapshot,
     buildForwardTopologyRepairReadOptions,
     resolveCDCForwardDeliveryProfile,
-    getSystemCachePrimaryKeyFieldOrFallback,
+    getSystemCachePrimaryKeyField,
     buildControlPlaneWorkloadProfile,
     normalizeCauseId,
     column: COLUMN,

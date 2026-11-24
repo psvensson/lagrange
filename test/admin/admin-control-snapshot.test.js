@@ -151,6 +151,66 @@ test(
       CDC_PROPAGATION_DELIVERY_STATE.STANDARD_VISIBILITY,
       'partial message-group SERVICES UPDATE must remain STANDARD_VISIBILITY',
     );
+    t.equal(
+      partialMessageGroupServiceUpdate.deliveryPriority,
+      CDC_PROPAGATION_DELIVERY_PRIORITY.BACKGROUND,
+      'partial message-group SERVICES UPDATE must remain BACKGROUND deliveryPriority',
+    );
+
+    const systemRowWithoutDeclaredKey = resolveCdcPropagationDeliveryProfile([
+      {
+        tableName: TABLES.NODES,
+        operation: 'UPDATE',
+        data: {id: 'node-generic-id', updated_at: 100},
+      },
+    ]);
+    t.equal(
+      systemRowWithoutDeclaredKey.deliverySource,
+      'latency.cdc.propagation.visibility.table:nodes',
+      'known system table without declared primary key must not fall back to generic id',
+    );
+    t.equal(
+      systemRowWithoutDeclaredKey.replacePendingKey,
+      null,
+      'known system table without declared primary key must not derive replacePendingKey from generic id',
+    );
+
+    const userTableWithoutExplicitDescriptor = resolveCdcPropagationDeliveryProfile([
+      {
+        tableName: 'user_orders',
+        operation: 'UPDATE',
+        data: {id: 'order-1', updated_at: 100},
+      },
+    ]);
+    t.equal(
+      userTableWithoutExplicitDescriptor.deliverySource,
+      'latency.cdc.propagation.visibility.table:user_orders',
+      'user-table CDC without explicit primaryKeyField must not guess generic id',
+    );
+    t.equal(
+      userTableWithoutExplicitDescriptor.replacePendingKey,
+      null,
+      'user-table CDC without explicit primaryKeyField must not synthesize replacePendingKey from id',
+    );
+
+    const userTableWithExplicitDescriptor = resolveCdcPropagationDeliveryProfile([
+      {
+        tableName: 'user_orders',
+        operation: 'UPDATE',
+        primaryKeyField: 'order_id',
+        data: {order_id: 'order-42', updated_at: 200},
+      },
+    ]);
+    t.equal(
+      userTableWithExplicitDescriptor.deliverySource,
+      'latency.cdc.propagation.visibility.row:user_orders:order-42',
+      'user-table CDC with explicit primaryKeyField resolves row-scoped delivery source',
+    );
+    t.equal(
+      userTableWithExplicitDescriptor.replacePendingKey,
+      'latency.cdc.propagation.visibility.replace:user_orders:order-42:UPDATE:200',
+      'user-table CDC with explicit primaryKeyField resolves replacePendingKey',
+    );
   },
 );
 

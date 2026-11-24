@@ -1,8 +1,5 @@
 import {
-  CACHE_DEFAULT,
-} from '../../cache/cache-constants.js';
-import {
-  getSystemCachePrimaryKeyFieldOrFallback,
+  getSystemCachePrimaryKeyField,
 } from '../../cache/system-cache-key-descriptor.js';
 import {
   resolveControlPlaneSnapshotRevisionMetadata,
@@ -122,13 +119,8 @@ function getSnapshotHydrationOperation({
   logger,
   nodeId,
 } = {}) {
-  const pkField = getSystemCachePrimaryKeyFieldOrFallback(
-    tableName,
-    CACHE_DEFAULT.PRIMARY_KEY_FALLBACK,
-  );
-  const key =
-    record?.[pkField] ??
-    record?.[CACHE_DEFAULT.PRIMARY_KEY_FALLBACK];
+  const pkField = getSystemCachePrimaryKeyField(tableName);
+  const key = record?.[pkField];
 
   // Let cache validation handle malformed rows with no key.
   if (typeof key === 'undefined' || key === null) {

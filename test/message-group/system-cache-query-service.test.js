@@ -52,21 +52,26 @@ beforeEach(async () => {
 
   // Add test data
   await messageGroup.applyCDCEvent('nodes', 'INSERT', {
+    node_id: 'node-1',
     id: 'node-1',
     address: '127.0.0.1:8080',
     status: 'active',
   });
   await messageGroup.applyCDCEvent('nodes', 'INSERT', {
+    node_id: 'node-2',
     id: 'node-2',
     address: '127.0.0.1:8081',
     status: 'inactive',
   });
   await messageGroup.applyCDCEvent('partitions', 'INSERT', {
+    partition_id: 'partition-1',
     id: 'partition-1',
+    table_id: 'table-1',
     tableId: 'table-1',
     status: 'active',
   });
   await messageGroup.applyCDCEvent('tables', 'INSERT', {
+    table_id: 'table-1',
     id: 'table-1',
     name: 'users',
   });

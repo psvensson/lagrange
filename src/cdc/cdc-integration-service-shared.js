@@ -87,7 +87,7 @@ import {
   getSchemaByTableName,
 } from '../bootstrap/system-table-schemas-constants.js';
 import {resolveSystemTableMutationDeliveryPriority} from '../bootstrap/system-partition-classification.js';
-import {getSystemCachePrimaryKeyFieldOrFallback} from '../cache/system-cache-key-descriptor.js';
+import {getSystemCachePrimaryKeyField} from '../cache/system-cache-key-descriptor.js';
 import {isTableInternalCachePropagationEnabled} from '../cache/cdc-table-policy.js';
 import {isReroutableWriteFailureCode} from
   '../partition/partition-write-kernel.js';
@@ -752,7 +752,7 @@ export const CDC_INTEGRATION_SERVICE_SHARED = {
   getControlPlaneRetryAfterMs,
   getRemainingBudgetMs,
   getSchemaByTableName,
-  getSystemCachePrimaryKeyFieldOrFallback,
+  getSystemCachePrimaryKeyField,
   hasControlPlaneMutationRoutingGapFailureSignature,
   hasSystemTableOwnerHandoffFailureSignature,
   isCacheVisibilityTimeoutError,

@@ -1,5 +1,5 @@
 import {CDC_OPERATION, COLUMN, TABLES} from '../constants/index.js';
-import {getSystemCachePrimaryKeyFieldOrFallback} from
+import {getSystemCachePrimaryKeyField} from
   '../cache/system-cache-key-descriptor.js';
 import {resolveTimeSource} from '../time/time-source.js';
 import {
@@ -75,11 +75,11 @@ function readSourceRowKey(tableName, record) {
   if (!record) return null;
   let field;
   try {
-    field = getSystemCachePrimaryKeyFieldOrFallback(tableName);
+    field = getSystemCachePrimaryKeyField(tableName);
   } catch {
     return null;
   }
-  const value = record[field] ?? record.id;
+  const value = record[field];
   if ((typeof value !== 'string' && typeof value !== 'number') || value === '') {
     return null;
   }

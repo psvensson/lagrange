@@ -11,7 +11,10 @@ LoggingService.getInstance().initialize({level: 'error'});
 function buildScheduler() {
   let nowMs = 1_000_000;
   const requests = [];
-  const manager = new PartitionSplitMergeManager({now: () => nowMs});
+  const manager = new PartitionSplitMergeManager({
+    now: () => nowMs,
+    listPartitions: () => [],
+  });
   manager.requestEvaluation = (context) => requests.push(context);
   return {
     manager,

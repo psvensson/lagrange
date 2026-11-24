@@ -15,8 +15,6 @@ const SYSTEM_CACHE_KEY_DESCRIPTOR_ERROR_MSG = Object.freeze({
     `System cache key descriptor missing for table: ${tableName}`,
 });
 
-const SYSTEM_CACHE_KEY_FALLBACK = 'id';
-
 /**
  * Resolve the canonical key field for a table schema.
  * Uses explicit composite primaryKey metadata first, then column-level flags.
@@ -50,6 +48,17 @@ for (const schema of SYSTEM_TABLE_SCHEMAS) {
 const SYSTEM_CACHE_KEY_DESCRIPTOR = Object.freeze({...descriptor});
 
 /**
+ * Check whether a table name has a canonical system-table cache key descriptor.
+ *
+ * @param {string} tableName - Candidate table name.
+ * @return {boolean} True when tableName is a known system table with a descriptor.
+ */
+function hasSystemCacheKeyDescriptor(tableName) {
+  return typeof tableName === 'string' &&
+    Object.prototype.hasOwnProperty.call(SYSTEM_CACHE_KEY_DESCRIPTOR, tableName);
+}
+
+/**
  * Get canonical key field for a system table.
  * Fails fast when descriptor is missing.
  *
@@ -57,33 +66,29 @@ const SYSTEM_CACHE_KEY_DESCRIPTOR = Object.freeze({...descriptor});
  * @return {string} Canonical key field.
  */
 function getSystemCachePrimaryKeyField(tableName) {
-  const keyField = SYSTEM_CACHE_KEY_DESCRIPTOR[tableName];
-  if (!keyField) {
+  if (!hasSystemCacheKeyDescriptor(tableName)) {
     throw new Error(
       SYSTEM_CACHE_KEY_DESCRIPTOR_ERROR_MSG.missingDescriptor(tableName),
     );
   }
-  return keyField;
+  return SYSTEM_CACHE_KEY_DESCRIPTOR[tableName];
 }
 
 /**
- * Get canonical key field for a system table with fallback.
+ * Resolve the canonical primary-key value for a known system-table row.
+ * Requires the table's declared primary-key field; never falls back to generic `id`.
  *
  * @param {string} tableName - System table name.
- * @param {string} fallback - Fallback key field.
- * @return {string} Canonical key field or fallback.
+ * @param {Object} row - Row record.
+ * @return {*} Declared primary-key value, or undefined when missing/empty.
  */
-function getSystemCachePrimaryKeyFieldOrFallback(
-  tableName,
-  fallback = SYSTEM_CACHE_KEY_FALLBACK,
-) {
-  const keyField = SYSTEM_CACHE_KEY_DESCRIPTOR[tableName];
-  return keyField || fallback;
-}
-
 function resolveSystemCacheRowKey(tableName, row) {
   const keyField = getSystemCachePrimaryKeyField(tableName);
-  return row?.[keyField] || row?.[SYSTEM_CACHE_KEY_FALLBACK];
+  const value = row?.[keyField];
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+  return value;
 }
 
 function isUsableSystemCacheKey(value) {
@@ -93,9 +98,8 @@ function isUsableSystemCacheKey(value) {
 export {
   SYSTEM_CACHE_KEY_DESCRIPTOR,
   SYSTEM_CACHE_KEY_DESCRIPTOR_ERROR_MSG,
-  SYSTEM_CACHE_KEY_FALLBACK,
   getSystemCachePrimaryKeyField,
-  getSystemCachePrimaryKeyFieldOrFallback,
+  hasSystemCacheKeyDescriptor,
   isUsableSystemCacheKey,
   resolveSystemCacheRowKey,
 };

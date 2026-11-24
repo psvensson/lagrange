@@ -49,7 +49,7 @@ import {
 } from '../cache/cache-constants.js';
 import {CDCPipelineReadinessGate} from '../cdc/cdc-pipeline-readiness-gate.js';
 import {CDC_LIFECYCLE_LOG_MSG} from '../constants/cdc-lifecycle-constants.js';
-import {getSystemCachePrimaryKeyFieldOrFallback} from '../cache/system-cache-key-descriptor.js';
+import {getSystemCachePrimaryKeyField} from '../cache/system-cache-key-descriptor.js';
 import {SQLQueryEngine} from '../query/sql-query-engine.js';
 import {resolveCanonicalLeaderIdentitySnapshot} from '../query/canonical-leader-routing.js';
 import {wireMigrationWorkflowOwners} from '../migration/migration-composition.js';
@@ -427,7 +427,7 @@ const NODE_JOINING_SERVICE_ROUTING_HELPER_SHARED = Object.freeze({
   getControlPlaneMessageRequiredTables,
   getControlPlaneNodeStatePublicationProfile,
   getControlPlaneRetryAfterMs,
-  getSystemCachePrimaryKeyFieldOrFallback,
+  getSystemCachePrimaryKeyField,
   isDeliveredTransportDeliveryOutcome,
   isHeartbeatEscalatedControlPlaneNodeStatePublicationMode,
   isRetryableControlPlaneError,

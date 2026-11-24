@@ -31,6 +31,15 @@ const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_OBJECT = 'object';
 const REACTIVE_EVALUATION_TRIGGER = 'reactive_request';
 const REACTIVE_PRESSURE_BYPASS_REASON_WRITE_ACTIVITY = 'write_activity';
+const EVALUATION_PARTITION_ERROR_MSG = Object.freeze({
+  LIST_PARTITIONS_PROVIDER_REQUIRED:
+    'PartitionSplitMergeManager requires a canonical listPartitions provider',
+  INVALID_EVALUATION_PARTITIONS_LIST:
+    'listPartitions must return an array of canonical partition descriptors',
+  INVALID_PARTITION_DESCRIPTOR:
+    'Partition evaluation requires canonical partition descriptor objects ' +
+    'with a non-empty string partition_id',
+});
 
 function cloneStringArray(values) {
   if (!Array.isArray(values)) {
@@ -173,75 +182,93 @@ class PartitionSplitMergeManagerCoreMethods {
   }
 
   /**
-   * List partitions eligible for evaluation.
-   * Falls back to KeyRangeManager partition IDs for legacy/unit-test paths.
-   * @return {Promise<Array>} Partition descriptors or partition IDs.
+   * List canonical partition descriptors eligible for evaluation.
+   * Requires the canonical listPartitions provider.
+   * @return {Promise<Array<Object>>} Canonical partition descriptors.
    * @private
    */
   async loadEvaluationPartitions() {
-    if (typeof this.listPartitions === LOCAL_STR_FUNCTION) {
-      const partitions = await this.listPartitions();
-      return Array.isArray(partitions) ? partitions : [];
+    if (typeof this.listPartitions !== LOCAL_STR_FUNCTION) {
+      throw new Error(
+        EVALUATION_PARTITION_ERROR_MSG.LIST_PARTITIONS_PROVIDER_REQUIRED,
+      );
     }
-    if (!this.keyRangeManager) {
-      return [];
+    const partitions = await this.listPartitions();
+    if (!Array.isArray(partitions)) {
+      throw new Error(
+        EVALUATION_PARTITION_ERROR_MSG.INVALID_EVALUATION_PARTITIONS_LIST,
+      );
     }
-    return this.keyRangeManager.getAllPartitions();
+    for (const partition of partitions) {
+      if (!this.getPartitionId(partition)) {
+        throw new Error(
+          EVALUATION_PARTITION_ERROR_MSG.INVALID_PARTITION_DESCRIPTOR,
+        );
+      }
+    }
+    return partitions;
   }
 
   /**
-   * Normalize a partition identifier from either a string or row object.
-   * @param {string|Object} partition - Partition descriptor.
+   * Read the canonical partition identifier from a partition descriptor row.
+   * @param {Object} partition - Canonical partition descriptor.
    * @return {string|null} Partition ID.
    * @private
    */
   getPartitionId(partition) {
-    if (typeof partition === LOCAL_STR_STRING) {
-      return partition;
-    }
-    if (!partition || typeof partition !== LOCAL_STR_OBJECT) {
+    if (!partition || typeof partition !== LOCAL_STR_OBJECT ||
+        Array.isArray(partition)) {
       return null;
     }
-    return partition.partition_id || partition.partitionId || null;
+    return typeof partition.partition_id === LOCAL_STR_STRING &&
+      partition.partition_id.length > 0 ?
+      partition.partition_id :
+      null;
   }
 
   /**
-   * Resolve table ID for grouping partition rows.
-   * @param {Object} partition - Partition descriptor.
+   * Read the canonical table ID for grouping partition rows.
+   * @param {Object} partition - Canonical partition descriptor.
    * @return {string|null} Table ID.
    * @private
    */
   getPartitionTableId(partition) {
-    if (!partition || typeof partition !== LOCAL_STR_OBJECT) {
+    if (!partition || typeof partition !== LOCAL_STR_OBJECT ||
+        Array.isArray(partition)) {
       return null;
     }
-    return partition.table_id || partition.tableId || null;
+    return typeof partition.table_id === LOCAL_STR_STRING &&
+      partition.table_id.length > 0 ?
+      partition.table_id :
+      null;
   }
 
   /**
-   * Resolve partition sort start key for adjacency ordering.
-   * @param {Object} partition - Partition descriptor.
+   * Read the canonical partition sort start key for adjacency ordering.
+   * @param {Object} partition - Canonical partition descriptor.
    * @return {*} Start key.
    * @private
    */
   getPartitionStartKey(partition) {
-    if (!partition || typeof partition !== LOCAL_STR_OBJECT) {
+    if (!partition || typeof partition !== LOCAL_STR_OBJECT ||
+        Array.isArray(partition)) {
       return null;
     }
-    return partition.partition_key_start ?? partition.partitionKeyStart ?? null;
+    return partition.partition_key_start ?? null;
   }
 
   /**
-   * Resolve partition sort end key for adjacency ordering.
-   * @param {Object} partition - Partition descriptor.
+   * Read the canonical partition sort end key for adjacency ordering.
+   * @param {Object} partition - Canonical partition descriptor.
    * @return {*} End key.
    * @private
    */
   getPartitionEndKey(partition) {
-    if (!partition || typeof partition !== LOCAL_STR_OBJECT) {
+    if (!partition || typeof partition !== LOCAL_STR_OBJECT ||
+        Array.isArray(partition)) {
       return null;
     }
-    return partition.partition_key_end ?? partition.partitionKeyEnd ?? null;
+    return partition.partition_key_end ?? null;
   }
 
   /**
@@ -315,7 +342,7 @@ class PartitionSplitMergeManagerCoreMethods {
         partition &&
         typeof partition === LOCAL_STR_OBJECT) {
       const sizeBytes = Number(
-        partition.size_bytes ?? partition.sizeBytes ?? 0,
+        partition.size_bytes ?? 0,
       );
       metrics.sizeBytes = Number.isFinite(sizeBytes) ? sizeBytes : 0;
     }

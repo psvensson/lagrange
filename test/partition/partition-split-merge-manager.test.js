@@ -1088,6 +1088,7 @@ test('PartitionSplitMergeManager - exposes split evaluation diagnostics',
   async (t) => {
     const manager = new PartitionSplitMergeManager({
       reactiveEvaluationDebounceMs: 0,
+      listPartitions: async () => [],
     });
 
     manager.requestEvaluation({
@@ -1113,3 +1114,39 @@ test('PartitionSplitMergeManager - exposes split evaluation diagnostics',
 
     manager.shutdown();
   });
+
+test('PartitionSplitMergeManager - loadEvaluationPartitions requires canonical ' +
+  'listPartitions provider and descriptor shape', async (t) => {
+  const keyRangeManager = new KeyRangeManager('tbl-users');
+  keyRangeManager.addPartition('users-p1', KeyRange.fullRange());
+
+  const missingProviderManager = new PartitionSplitMergeManager({
+    keyRangeManager,
+  });
+  await t.rejects(
+    missingProviderManager.evaluateAllPartitions(),
+    /requires a canonical listPartitions provider/,
+    'must reject missing listPartitions instead of falling back to KeyRangeManager',
+  );
+  missingProviderManager.shutdown();
+
+  const stringIdManager = new PartitionSplitMergeManager({
+    listPartitions: async () => ['users-p1'],
+  });
+  await t.rejects(
+    stringIdManager.evaluateAllPartitions(),
+    /canonical partition descriptor objects/,
+    'must reject string-only partition IDs',
+  );
+  stringIdManager.shutdown();
+
+  const camelAliasManager = new PartitionSplitMergeManager({
+    listPartitions: async () => [{partitionId: 'users-p1', tableId: 'tbl-users'}],
+  });
+  await t.rejects(
+    camelAliasManager.evaluateAllPartitions(),
+    /canonical partition descriptor objects/,
+    'must reject non-canonical camelCase partitionId aliases',
+  );
+  camelAliasManager.shutdown();
+});

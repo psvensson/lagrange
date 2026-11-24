@@ -28,11 +28,13 @@ beforeEach(() => {
   underlyingCache = new SystemTableCache();
   // Pre-populate with test data
   underlyingCache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
+    node_id: 'node-1',
     id: 'node-1',
     address: '127.0.0.1:8080',
     status: 'active',
   });
   underlyingCache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
+    node_id: 'node-2',
     id: 'node-2',
     address: '127.0.0.1:8081',
     status: 'inactive',
@@ -265,6 +267,7 @@ test('createReadOnlyCache - reflects underlying cache changes', async (t) => {
 
   // Modify underlying cache (simulating CDC handler)
   underlyingCache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
+    node_id: 'node-3',
     id: 'node-3',
     address: '127.0.0.1:8082',
   });

@@ -8,7 +8,7 @@ import {
   TABLES,
   TRANSPORT_TYPE,
 } from '../../src/constants/index.js';
-import {getSystemCachePrimaryKeyFieldOrFallback} from
+import {getSystemCachePrimaryKeyField} from
   '../../src/cache/system-cache-key-descriptor.js';
 import {
   ReadinessPlanningSemanticGenerationTracker,
@@ -45,7 +45,7 @@ function createFixture(initialRows = {}) {
     revisions.set(tableName, 0);
     const rows = initialRows[tableName] || [];
     for (const row of rows) {
-      const keyField = getSystemCachePrimaryKeyFieldOrFallback(tableName);
+      const keyField = getSystemCachePrimaryKeyField(tableName);
       rowsByTable.get(tableName).set(
         String(row[keyField]),
         Object.freeze({...row}),
@@ -63,7 +63,7 @@ function createFixture(initialRows = {}) {
 
   const apply = (tableName, operation, row, options = {}) => {
     const tableRows = rowsByTable.get(tableName);
-    const keyField = getSystemCachePrimaryKeyFieldOrFallback(tableName);
+    const keyField = getSystemCachePrimaryKeyField(tableName);
     const key = String(row?.[keyField]);
     let eventRecord = row;
     if (operation === CDC_OPERATION.DELETE) {

@@ -18,7 +18,7 @@ import {
   CDC_CONFIRMATION_ERROR_TYPE,
 } from '../constants/cdc-lifecycle-constants.js';
 import {
-  getSystemCachePrimaryKeyFieldOrFallback,
+  getSystemCachePrimaryKeyField,
 } from '../cache/system-cache-key-descriptor.js';
 import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
 
@@ -270,7 +270,7 @@ class CDCConfirmationTracker {
       return Promise.reject(this._shutdownError(tableName, primaryKey));
     }
 
-    const pkField = getSystemCachePrimaryKeyFieldOrFallback(tableName);
+    const pkField = getSystemCachePrimaryKeyField(tableName);
     if (hasMatchingRecentEvent(this.recentEvents, key, normalized, pkField)) {
       return Promise.resolve();
     }
@@ -313,7 +313,7 @@ class CDCConfirmationTracker {
    * @param {Object} [metadata]
    */
   onEventApplied(tableName, operation, data, metadata) {
-    const pkField = getSystemCachePrimaryKeyFieldOrFallback(tableName);
+    const pkField = getSystemCachePrimaryKeyField(tableName);
     const pkValue = data && data[pkField];
     if (pkValue === undefined || pkValue === null) {
       return;

@@ -10,12 +10,11 @@ import {createMockControlPlaneReadinessService} from './test-helpers.js';
  * (Phase 5, Task 21) must satisfy.
  *
  * Covered paths:
- * - UnifiedRebalancer.isNodeReady (repairEligible + transport + ping)
- * - UnifiedRebalancer.isTransportReady (connection + outbound queue)
- * - UnifiedRebalancer.checkReadinessPing (ping timeout)
+ * - UnifiedRebalancer.isNodeReady (repairEligible / formation recovery + canonical transport)
  * - UnifiedRebalancer.getAvailableNodes (repairEligible filter)
  * - RebalanceCoordinator.isNodeReadyForRouting (repairEligible only)
- * - node-readiness-policy isNodeReadyWithConnection / isNodeReadyWithTransport
+ * - node-readiness-policy isNodeReadyWithConnection / isNodeTransportReady /
+ *   isNodeReadyWithTransport
  * - Skip reason granularity: lease, status, connection, ping, transport queue
  *
  * Validates: Requirements 5.1, 5.2, 5.3, 9.2
@@ -30,7 +29,11 @@ import {
   isNodeReadyWithConnection,
   isNodeReadyWithTransport,
   isNodeRecordReady,
+  isNodeTransportReady,
 } from '../../src/node/node-readiness-policy.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   READINESS_SKIP_DETAIL,
   REBALANCER_SKIP_REASON,
@@ -299,10 +302,10 @@ test('rebalancer isNodeReady — missing node row returns false', async (t) => {
   ConfigurationManager.resetInstance();
 });
 
-// ── 2. Characterize rebalancer isTransportReady behavior ───────────
+// ── 2. Characterize canonical transport-only policy owner ──────────
 
-test('rebalancer isTransportReady — connected with outbound queue ' +
-  'returns true', async (t) => {
+test('isNodeTransportReady — connected with outbound queue returns true ' +
+  'and rebalancer has no duplicate transport helpers', async (t) => {
   ConfigurationManager.resetInstance();
   const config = ConfigurationManager.getInstance();
   config.initialize();
@@ -312,63 +315,114 @@ test('rebalancer isTransportReady — connected with outbound queue ' +
   const router = createRouter();
   const rebalancer = createRebalancer(cache, router);
 
-  t.equal(rebalancer.isTransportReady(NODE_ID_A), true,
-    'connected transport with outbound queue is ready');
+  t.equal(rebalancer.isTransportReady, undefined,
+    'rebalancer does not duplicate isTransportReady');
+  t.equal(rebalancer.checkReadinessPing, undefined,
+    'rebalancer does not duplicate checkReadinessPing');
+  t.equal(await isNodeTransportReady({
+    nodeId: NODE_ID_A,
+    messageRouter: router,
+    requireOutboundQueue: true,
+  }), true,
+  'connected transport with outbound queue is ready');
 
   rebalancer.shutdown();
   ConfigurationManager.resetInstance();
 });
 
-test('rebalancer isTransportReady — disconnected returns false', async (t) => {
-  ConfigurationManager.resetInstance();
-  const config = ConfigurationManager.getInstance();
-  config.initialize();
-
-  const nodeRow = createNodeRow(NODE_ID_A);
-  const cache = createSystemCache(nodeRow);
+test('isNodeTransportReady — disconnected returns false', async (t) => {
   const router = createRouter({connectionState: STATE.DISCONNECTED});
-  const rebalancer = createRebalancer(cache, router);
 
-  t.equal(rebalancer.isTransportReady(NODE_ID_A), false,
-    'disconnected transport is not ready');
-
-  rebalancer.shutdown();
-  ConfigurationManager.resetInstance();
+  t.equal(await isNodeTransportReady({
+    nodeId: NODE_ID_A,
+    messageRouter: router,
+    requireOutboundQueue: true,
+  }), false,
+  'disconnected transport is not ready');
 });
 
-test('rebalancer isTransportReady — unavailable outbound queue ' +
-  'returns false', async (t) => {
-  ConfigurationManager.resetInstance();
-  const config = ConfigurationManager.getInstance();
-  config.initialize();
+test('isNodeTransportReady — unavailable outbound queue returns false',
+  async (t) => {
+    const router = createRouter({outboundAvailable: false});
 
-  const nodeRow = createNodeRow(NODE_ID_A);
-  const cache = createSystemCache(nodeRow);
-  const router = createRouter({outboundAvailable: false});
-  const rebalancer = createRebalancer(cache, router);
-
-  t.equal(rebalancer.isTransportReady(NODE_ID_A), false,
+    t.equal(await isNodeTransportReady({
+      nodeId: NODE_ID_A,
+      messageRouter: router,
+      requireOutboundQueue: true,
+    }), false,
     'unavailable outbound queue makes transport not ready');
+  });
 
-  rebalancer.shutdown();
-  ConfigurationManager.resetInstance();
+test('isNodeTransportReady — missing router returns false', async (t) => {
+  t.equal(await isNodeTransportReady({
+    nodeId: NODE_ID_A,
+    messageRouter: null,
+    requireOutboundQueue: true,
+  }), false,
+  'missing router makes transport not ready');
 });
 
-test('rebalancer isTransportReady — missing router returns false', async (t) => {
+test('formation recovery admission delegates transport to canonical owner ' +
+  'while preserving recovery liveness and serving denial', async (t) => {
   ConfigurationManager.resetInstance();
   const config = ConfigurationManager.getInstance();
   config.initialize();
 
-  const nodeRow = createNodeRow(NODE_ID_A);
-  const cache = createSystemCache(nodeRow);
-  const router = createRouter();
-  const rebalancer = createRebalancer(cache, router);
-  rebalancer.messageRouter = null;
+  // Expired lease denies ordinary serving readiness (isNodeRecordReady === false),
+  // but explicit CONTROL_PLANE_RECOVERY_ELIGIBLE on a formation-liveness
+  // dependency partition admits transport-reachable nodes without circularity.
+  const expiredRow = createNodeRow(NODE_ID_A, {
+    ready_lease_expires_at: Date.now() + LEASE_OFFSET_EXPIRED,
+  });
+  const cache = createSystemCache(expiredRow);
+  const recoveryReadinessService = {
+    getNodeReadinessSync: () => ({
+      dimensions: {
+        [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
+        [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+      },
+    }),
+  };
 
-  t.equal(rebalancer.isTransportReady(NODE_ID_A), false,
-    'missing router makes transport not ready');
+  const connectedRebalancer = createRebalancer(cache, createRouter(), {
+    controlPlaneReadinessService: recoveryReadinessService,
+  });
+  connectedRebalancer.resolveNodeReadinessDecisionDimension = () =>
+    CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
+  connectedRebalancer.isFormationLivenessDependencyPartition = () => true;
 
-  rebalancer.shutdown();
+  t.equal(isNodeRecordReady(expiredRow), false,
+    'ordinary serving readiness still denies expired-lease node');
+  t.equal(await connectedRebalancer.isNodeReady(NODE_ID_A), true,
+    'formation recovery admits recovery-eligible node when transport is ready');
+  connectedRebalancer.shutdown();
+
+  const noQueueRebalancer = createRebalancer(
+    cache,
+    createRouter({outboundAvailable: false}),
+    {controlPlaneReadinessService: recoveryReadinessService},
+  );
+  noQueueRebalancer.resolveNodeReadinessDecisionDimension = () =>
+    CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
+  noQueueRebalancer.isFormationLivenessDependencyPartition = () => true;
+  t.equal(await noQueueRebalancer.isNodeReady(NODE_ID_A), false,
+    'formation recovery still denies node when outbound queue is unavailable');
+  noQueueRebalancer.shutdown();
+
+  const failedPingRebalancer = createRebalancer(
+    cache,
+    createRouter({pingResult: false}),
+    {controlPlaneReadinessService: recoveryReadinessService},
+  );
+  failedPingRebalancer.enableReadinessPing = true;
+  failedPingRebalancer.readinessPingTimeoutMs = PING_TIMEOUT_MS;
+  failedPingRebalancer.resolveNodeReadinessDecisionDimension = () =>
+    CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
+  failedPingRebalancer.isFormationLivenessDependencyPartition = () => true;
+  t.equal(await failedPingRebalancer.isNodeReady(NODE_ID_A), false,
+    'formation recovery still denies node when readiness ping fails');
+  failedPingRebalancer.shutdown();
+
   ConfigurationManager.resetInstance();
 });
 
@@ -490,19 +544,14 @@ test('isNodeReadyWithTransport — failed ping returns false', async (t) => {
     'failed ping fails transport check');
 });
 
-// ── 4. Policy equivalence: rebalancer transport vs policy ──────────
+// ── 4. Policy composition: transport-only vs record-gated checks ───
 //
-// These tests prove that for the same inputs, the rebalancer's
-// internal transport checks produce the same outcome as
-// isNodeReadyWithTransport from node-readiness-policy.
-// This is the contract that Task 21 (policy adoption) must satisfy.
+// Prove that isNodeTransportReady is the single canonical transport owner
+// composed into isNodeReadyWithTransport for connection, outbound queue,
+// and optional readiness ping gates.
 
-test('equivalence — rebalancer isTransportReady matches policy ' +
-  'isNodeReadyWithConnection for connection gate', async (t) => {
-  ConfigurationManager.resetInstance();
-  const config = ConfigurationManager.getInstance();
-  config.initialize();
-
+test('canonical transport owner — connection gate matches ' +
+  'isNodeReadyWithConnection for ready record', async (t) => {
   const now = Date.now();
   const nodeRow = createNodeRow(NODE_ID_A);
 
@@ -518,9 +567,12 @@ test('equivalence — rebalancer isTransportReady matches policy ' +
     const router = createRouter({
       connectionState: scenario.connectionState,
     });
-    const rebalancer = createRebalancer(cache, router);
 
-    const rebalancerResult = rebalancer.isTransportReady(NODE_ID_A);
+    const transportResult = await isNodeTransportReady({
+      nodeId: NODE_ID_A,
+      messageRouter: router,
+      requireOutboundQueue: true,
+    });
     const policyResult = isNodeReadyWithConnection({
       nodeId: NODE_ID_A,
       systemTableCache: cache,
@@ -528,38 +580,29 @@ test('equivalence — rebalancer isTransportReady matches policy ' +
       now,
     });
 
-    // Both should agree on connection gate for CONNECTED/DISCONNECTED.
-    // For STATE.READY, the policy checks router.getConnectionState ===
-    // STATE.CONNECTED, so it returns false. The rebalancer also checks
-    // === STATE.CONNECTED, so they agree.
-    t.equal(rebalancerResult, scenario.expected,
-      `rebalancer transport ${scenario.label}: ${scenario.expected}`);
+    t.equal(transportResult, scenario.expected,
+      `canonical transport ${scenario.label}: ${scenario.expected}`);
     t.equal(policyResult, scenario.expected,
       `policy connection ${scenario.label}: ${scenario.expected}`);
-    t.equal(rebalancerResult, policyResult,
-      `equivalence holds for ${scenario.label}`);
-
-    rebalancer.shutdown();
+    t.equal(transportResult, policyResult,
+      `connection gate agrees for ${scenario.label}`);
   }
-
-  ConfigurationManager.resetInstance();
 });
 
-test('equivalence — rebalancer outbound queue check matches ' +
-  'policy requireOutboundQueue', async (t) => {
-  ConfigurationManager.resetInstance();
-  const config = ConfigurationManager.getInstance();
-  config.initialize();
-
+test('canonical transport owner — outbound queue gate composes cleanly ' +
+  'into isNodeReadyWithTransport', async (t) => {
   const now = Date.now();
   const nodeRow = createNodeRow(NODE_ID_A);
 
   for (const outboundAvailable of [true, false]) {
     const cache = createSystemCache(nodeRow);
     const router = createRouter({outboundAvailable});
-    const rebalancer = createRebalancer(cache, router);
 
-    const rebalancerResult = rebalancer.isTransportReady(NODE_ID_A);
+    const transportResult = await isNodeTransportReady({
+      nodeId: NODE_ID_A,
+      messageRouter: router,
+      requireOutboundQueue: true,
+    });
     const policyResult = await isNodeReadyWithTransport({
       nodeId: NODE_ID_A,
       systemTableCache: cache,
@@ -568,67 +611,51 @@ test('equivalence — rebalancer outbound queue check matches ' +
       requireOutboundQueue: true,
     });
 
-    t.equal(rebalancerResult, outboundAvailable,
-      `rebalancer outbound=${outboundAvailable}: ${outboundAvailable}`);
+    t.equal(transportResult, outboundAvailable,
+      `transport outbound=${outboundAvailable}: ${outboundAvailable}`);
     t.equal(policyResult, outboundAvailable,
       `policy outbound=${outboundAvailable}: ${outboundAvailable}`);
-    t.equal(rebalancerResult, policyResult,
-      `equivalence holds for outbound=${outboundAvailable}`);
-
-    rebalancer.shutdown();
   }
-
-  ConfigurationManager.resetInstance();
 });
 
-test('equivalence — rebalancer ping check matches policy ' +
-  'enableReadinessPing', async (t) => {
-  ConfigurationManager.resetInstance();
-  const config = ConfigurationManager.getInstance();
-  config.initialize();
-
+test('canonical transport owner — ping gate composes cleanly into ' +
+  'isNodeReadyWithTransport', async (t) => {
   const now = Date.now();
   const nodeRow = createNodeRow(NODE_ID_A);
 
   for (const pingResult of [true, false]) {
     const cache = createSystemCache(nodeRow);
     const router = createRouter({pingResult});
-    const rebalancer = createRebalancer(cache, router);
-    rebalancer.enableReadinessPing = true;
-    rebalancer.readinessPingTimeoutMs = PING_TIMEOUT_MS;
 
-    const rebalancerResult =
-      await rebalancer.checkReadinessPing(NODE_ID_A);
+    const transportResult = await isNodeTransportReady({
+      nodeId: NODE_ID_A,
+      messageRouter: router,
+      requireOutboundQueue: true,
+      enableReadinessPing: true,
+      readinessPingTimeoutMs: PING_TIMEOUT_MS,
+    });
     const policyResult = await isNodeReadyWithTransport({
       nodeId: NODE_ID_A,
       systemTableCache: cache,
       messageRouter: router,
       now,
+      requireOutboundQueue: true,
       enableReadinessPing: true,
       readinessPingTimeoutMs: PING_TIMEOUT_MS,
     });
 
-    t.equal(rebalancerResult, pingResult,
-      `rebalancer ping=${pingResult}: ${pingResult}`);
+    t.equal(transportResult, pingResult,
+      `transport ping=${pingResult}: ${pingResult}`);
     t.equal(policyResult, pingResult,
       `policy ping=${pingResult}: ${pingResult}`);
-    t.equal(rebalancerResult, policyResult,
-      `equivalence holds for ping=${pingResult}`);
-
-    rebalancer.shutdown();
   }
-
-  ConfigurationManager.resetInstance();
 });
 
 // ── 5. Full isNodeReady equivalence with policy composition ────────
 //
 // The rebalancer's isNodeReady composes:
-//   repairEligible + isTransportReady + optional checkReadinessPing
-// The policy equivalent composes:
-//   isNodeRecordReady + isNodeReadyWithTransport (connection + queue + ping)
-//
-// These tests prove the composed outcomes match.
+//   admission decision (repairEligible OR explicit recoveryEligible)
+//   + canonical node-readiness-policy transport check (connection + queue + ping).
 
 test('equivalence — full isNodeReady matches composed policy ' +
   'for ready node', async (t) => {
@@ -837,43 +864,22 @@ test('getAvailableNodes — excludes nodes without node_id', async (t) => {
 //
 // **Validates: Requirements 5.1, 5.2**
 
-test('property: rebalancer transport readiness is equivalent to ' +
-  'policy isNodeReadyWithTransport for arbitrary inputs', async (t) => {
-  ConfigurationManager.resetInstance();
-  const config = ConfigurationManager.getInstance();
-  config.initialize();
-
-  const nodeStatusArb = fc.constantFrom(
-    SERVICE_STATUS.ACTIVE,
-    SERVICE_STATUS.JOINING,
-    SERVICE_STATUS.LEAVING,
-    SERVICE_STATUS.STOPPED,
-  );
+test('property: canonical isNodeTransportReady matches connection, ' +
+  'outbound queue, and ping semantics for arbitrary inputs', async (t) => {
   const connectionStateArb = fc.constantFrom(
     STATE.CONNECTED,
     STATE.DISCONNECTED,
     STATE.READY,
   );
   const boolArb = fc.boolean();
-  const leaseOffsetArb = fc.integer({min: -60000, max: 60000});
 
   await fc.assert(
     fc.asyncProperty(
-      nodeStatusArb,
-      leaseOffsetArb,
       connectionStateArb,
       boolArb,
       boolArb,
-      async (status, leaseOffset, connState, outbound, ping) => {
-        const now = Date.now();
-        const nodeRow = {
-          node_id: NODE_ID_A,
-          status,
-          connection_state: STATE.READY,
-          ready_lease_expires_at: now + leaseOffset,
-          last_heartbeat: now,
-        };
-        const cache = createSystemCache(nodeRow);
+      boolArb,
+      async (connState, outbound, enablePing, ping) => {
         const router = {
           getConnectionState: () => connState,
           isOutboundQueueAvailable: () => outbound,
@@ -881,38 +887,26 @@ test('property: rebalancer transport readiness is equivalent to ' +
           getConnectedNodes: () => [],
         };
 
-        const rebalancer = createRebalancer(cache, router);
+        const actual = await isNodeTransportReady({
+          nodeId: NODE_ID_A,
+          messageRouter: router,
+          requireOutboundQueue: true,
+          enableReadinessPing: enablePing,
+          readinessPingTimeoutMs: PING_TIMEOUT_MS,
+        });
 
-        // Rebalancer transport check (connection + outbound queue)
-        const rebalancerTransport =
-          rebalancer.isTransportReady(NODE_ID_A);
+        const expected =
+          connState === STATE.CONNECTED &&
+          outbound &&
+          (!enablePing || ping);
 
-        // Policy transport check (connection + outbound queue)
-        // Note: policy also checks record readiness first, so we
-        // isolate the transport-only portion by checking connection
-        // and outbound separately.
-        const policyConnected = connState === STATE.CONNECTED;
-        const policyOutbound = outbound;
-        const policyTransport = policyConnected && policyOutbound;
-
-        // The rebalancer's isTransportReady checks:
-        // 1. router.getConnectionState(nodeId) === STATE.CONNECTED
-        // 2. router.isOutboundQueueAvailable(nodeId)
-        // This must match the policy's equivalent checks.
-        if (rebalancerTransport !== policyTransport) {
-          rebalancer.shutdown();
-          return false;
-        }
-
-        rebalancer.shutdown();
-        return true;
+        return actual === expected;
       },
     ),
     {numRuns: 10},
   );
 
-  t.pass('transport readiness equivalence holds across arbitrary inputs');
-  ConfigurationManager.resetInstance();
+  t.pass('canonical transport readiness holds across arbitrary inputs');
 });
 
 test('property: rebalancer isNodeReady rejection matches policy ' +

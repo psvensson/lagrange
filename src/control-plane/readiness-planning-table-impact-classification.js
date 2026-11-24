@@ -15,7 +15,7 @@ import {
   isDeepStrictEqual,
 } from 'node:util';
 import {
-  getSystemCachePrimaryKeyFieldOrFallback,
+  getSystemCachePrimaryKeyField,
 } from '../cache/system-cache-key-descriptor.js';
 import {
   hasCanonicalActiveService,
@@ -109,11 +109,11 @@ function readSourceRowKey(tableName, record) {
   if (!source) return null;
   let keyField;
   try {
-    keyField = getSystemCachePrimaryKeyFieldOrFallback(tableName);
+    keyField = getSystemCachePrimaryKeyField(tableName);
   } catch {
     return null;
   }
-  const value = source[keyField] ?? source.id;
+  const value = source[keyField];
   if ((typeof value !== 'string' && typeof value !== 'number') || value === '') {
     return null;
   }

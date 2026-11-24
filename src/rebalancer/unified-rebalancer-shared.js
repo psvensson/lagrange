@@ -49,6 +49,7 @@ import {createControlPlaneRuntimeBundle} from '../control-plane/control-plane-ru
 import {
   isNodeReadyWithConnection,
   isNodeReadyWithTransport,
+  isNodeTransportReady,
   isNodeReadyLeaseExplicitlyCleared,
   isNodeRecordReady,
   wasNodeRecordReadyWhenWritten,
@@ -345,6 +346,7 @@ export const UNIFIED_REBALANCER_SHARED = {
   isNodeReadyLeaseExplicitlyCleared,
   isNodeReadyWithConnection,
   isNodeReadyWithTransport,
+  isNodeTransportReady,
   isNodeRecordReady,
   isOddReplicaCount,
   isReplaceRemoveDispatchPhase,

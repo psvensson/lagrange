@@ -12,7 +12,8 @@ import {CDC_OPERATION} from '../constants/index.js';
 import {CDC_PIPELINE_METRIC} from '../constants/cdc-lifecycle-constants.js';
 import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
 import {
-  getSystemCachePrimaryKeyFieldOrFallback,
+  getSystemCachePrimaryKeyField,
+  hasSystemCacheKeyDescriptor,
 } from '../cache/system-cache-key-descriptor.js';
 import {canonicalizeSystemTableRow} from '../control-plane/system-row-normalizers.js';
 import {resolveTimeSource} from '../time/time-source.js';
@@ -119,9 +120,22 @@ class CDCEvent {
    * @return {string} Record key (id field).
    */
   getKey() {
-    const keyField = getSystemCachePrimaryKeyFieldOrFallback(this.tableName);
-    const canonicalData = canonicalizeSystemTableRow(this.tableName, this.data);
-    return canonicalData?.[keyField] || canonicalData?.id;
+    if (hasSystemCacheKeyDescriptor(this.tableName)) {
+      const keyField = getSystemCachePrimaryKeyField(this.tableName);
+      const canonicalData = canonicalizeSystemTableRow(this.tableName, this.data);
+      const value = canonicalData?.[keyField];
+      return value === undefined || value === null || value === '' ?
+        undefined :
+        value;
+    }
+    if (typeof this.primaryKeyField === 'string' &&
+        this.primaryKeyField.trim().length > 0) {
+      const value = this.data?.[this.primaryKeyField.trim()];
+      return value === undefined || value === null || value === '' ?
+        undefined :
+        value;
+    }
+    return undefined;
   }
 
   /**

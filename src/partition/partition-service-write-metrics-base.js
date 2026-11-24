@@ -59,7 +59,8 @@ const {
   WRITE_PHASE_FIELD_SQLITE_RUN_MS,
   WRITE_PHASE_FIELD_TOTAL_MS,
   buildPartitionWriteEntry,
-  getSystemCachePrimaryKeyFieldOrFallback,
+  getSystemCachePrimaryKeyField,
+  hasSystemCacheKeyDescriptor,
 } = PARTITION_SERVICE_SHARED;
 
 function buildQueryOperation(sql, params, options) {
@@ -113,7 +114,10 @@ function resolveOperationPrimaryKeyValue(operation, pkField) {
 
 function buildWriteConfirmationTarget(service, result, operation, entry) {
   const tableName = operation.tableName || service.tableName;
-  const pkField = getSystemCachePrimaryKeyFieldOrFallback(tableName);
+  if (!hasSystemCacheKeyDescriptor(tableName)) {
+    return null;
+  }
+  const pkField = getSystemCachePrimaryKeyField(tableName);
   const pkValue = resolveOperationPrimaryKeyValue(operation, pkField);
   if (pkValue === void 0 || pkValue === null) {
     return null;

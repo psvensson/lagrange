@@ -34,7 +34,7 @@ const CACHE_ERROR_MSG = Object.freeze({
   EPOCH_MISSING_ASSIGNMENTS: 'Epoch must have an assignments object',
   LISTENER_REQUIRED: 'Listener must be a function',
   primaryKeyMissing: (pkField) =>
-    `CDC data must include primary key field "${pkField}" or "id"`,
+    `CDC data must include primary key field "${pkField}"`,
   invalidTableName: (tableName, tables) =>
     `Invalid system table name: ${tableName}. Valid tables are: ${tables.join(', ')}`,
   invalidCdcOperation: (operation, operations) =>
@@ -54,7 +54,6 @@ const CACHE_ERROR_MSG = Object.freeze({
 
 const CACHE_DEFAULT = Object.freeze({
   INITIAL_EPOCH: 0,
-  PRIMARY_KEY_FALLBACK: 'id',
   CACHE_ID_PREFIX: 'cache-',
   CACHE_ID_RADIX: 36,
   CACHE_ID_START: 2,

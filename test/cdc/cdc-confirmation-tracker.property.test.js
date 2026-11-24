@@ -25,7 +25,7 @@ import {
   CDC_CONFIRMATION_ERROR_TYPE,
 } from '../../src/constants/cdc-lifecycle-constants.js';
 import {
-  getSystemCachePrimaryKeyFieldOrFallback,
+  getSystemCachePrimaryKeyField,
 } from '../../src/cache/system-cache-key-descriptor.js';
 
 /**
@@ -108,7 +108,7 @@ test(
 
                 // Verify the pk field resolution matches expectation.
                 const resolvedPk =
-                  getSystemCachePrimaryKeyFieldOrFallback(pair.table);
+                  getSystemCachePrimaryKeyField(pair.table);
                 if (resolvedPk !== pair.pkField) {
                   return false;
                 }

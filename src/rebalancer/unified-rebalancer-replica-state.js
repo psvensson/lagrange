@@ -41,6 +41,7 @@ const {
   classifySystemPartition,
   isCoordinatorOwnedOperationType,
   isNodeReadyWithTransport,
+  isNodeTransportReady,
   isReplicaOperationInFlight,
   isReplicaOperationStale,
   isTerminalSuccessfulCreateOperation,
@@ -102,13 +103,16 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
         CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE
       ] === true;
     if (explicitFormationRecoveryEligibility) {
-      if (!this.isTransportReady(nodeId)) {
-        return false;
-      }
-      if (this.enableReadinessPing) {
-        return this.checkReadinessPing(nodeId);
-      }
-      return true;
+      // Formation recovery legitimately bypasses ordinary serving-readiness
+      // admission to avoid a formation liveness cycle, then delegates
+      // transport reachability to the single canonical transport-only owner.
+      return isNodeTransportReady({
+        nodeId,
+        messageRouter: this.messageRouter,
+        requireOutboundQueue: true,
+        enableReadinessPing: this.enableReadinessPing,
+        readinessPingTimeoutMs: this.readinessPingTimeoutMs,
+      });
     }
     if (
       !this.isReadinessDimensionSatisfied(readiness, readinessDecisionDimension)
@@ -116,8 +120,9 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
       return false;
     }
 
-    // Delegate transport-level checks (connection, outbound queue, and
-    // optional ping) to the canonical readiness policy owner.
+    // Ordinary serving-readiness admission succeeded; delegate record and
+    // transport checks (connection, outbound queue, and optional ping) to
+    // the canonical readiness policy owner.
     return isNodeReadyWithTransport({
       nodeId,
       systemTableCache: this.systemTableCache,
@@ -126,56 +131,6 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
       enableReadinessPing: this.enableReadinessPing,
       readinessPingTimeoutMs: this.readinessPingTimeoutMs,
     });
-  }
-
-  /**
-   * Thin adapter: check transport-level reachability for a node.
-   * Delegates to node-readiness-policy isNodeReadyWithTransport with
-   * rebalancer-specific defaults (outbound queue required, no ping).
-   * Kept for API compatibility; the main readiness path (isNodeReady)
-   * calls the policy owner directly.
-   * @param {string} nodeId - Node ID.
-   * @return {boolean} True when transport is ready.
-   */
-  isTransportReady(nodeId) {
-    const router = this.messageRouter;
-    if (!router || typeof router.getConnectionState !== 'function') {
-      return false;
-    }
-
-    if (router.getConnectionState(nodeId) !== STATE.CONNECTED) {
-      return false;
-    }
-
-    if (
-      typeof router.isOutboundQueueAvailable === 'function' &&
-      !router.isOutboundQueueAvailable(nodeId)
-    ) {
-      return false;
-    }
-
-    return true;
-  }
-
-  /**
-   * Thin adapter: perform an optional readiness ping via the policy
-   * owner. Composes isNodeReadyWithTransport with ping enabled and
-   * rebalancer-specific timeout.
-   * Kept for API compatibility; the main readiness path (isNodeReady)
-   * calls the policy owner directly.
-   * @param {string} nodeId - Node ID.
-   * @return {Promise<boolean>} True when ping succeeds.
-   */
-  async checkReadinessPing(nodeId) {
-    const router = this.messageRouter;
-    if (!router || typeof router.pingNode !== 'function') {
-      return true;
-    }
-
-    const pingTimeout = Number.isFinite(this.readinessPingTimeoutMs) ?
-      this.readinessPingTimeoutMs :
-      0;
-    return router.pingNode(nodeId, pingTimeout);
   }
 
   /**

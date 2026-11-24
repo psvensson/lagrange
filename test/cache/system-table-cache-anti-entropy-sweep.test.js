@@ -375,7 +375,7 @@ test('sweep upgrades a concurrent ordinary delete before late replay', (t) => {
 
 test('sweep leaves a table absent from the snapshot untouched', (t) => {
   const cache = new SystemTableCache();
-  insert(cache, TABLES.NODES, {id: 'node-1', updated_at: 1000});
+  insert(cache, TABLES.NODES, {node_id: 'node-1', updated_at: 1000});
 
   cache.reconcileAgainstAuthoritativeTruth({[TABLES.SERVICES]: []});
 

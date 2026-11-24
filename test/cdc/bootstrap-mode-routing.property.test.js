@@ -23,7 +23,7 @@ import {
   COLUMN_TYPE,
 } from '../../src/bootstrap/system-table-schema-shared-constants.js';
 import {
-  getSystemCachePrimaryKeyFieldOrFallback,
+  getSystemCachePrimaryKeyField,
 } from '../../src/cache/system-cache-key-descriptor.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -173,7 +173,7 @@ function getValidUpdateData(tableName) {
  * @return {Promise<Object>} Write result.
  */
 async function executeWrite(cdc, operation, tableName, primaryKey) {
-  const pkField = getSystemCachePrimaryKeyFieldOrFallback(tableName);
+  const pkField = getSystemCachePrimaryKeyField(tableName);
   const data = {[pkField]: primaryKey};
 
   if (tableName === SYSTEM_TABLE_NAME.NODES) {

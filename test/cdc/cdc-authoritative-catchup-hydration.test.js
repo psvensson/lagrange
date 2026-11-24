@@ -327,7 +327,7 @@ test('CL-014: authoritative catch-up hydration', async (t) => {
           services: [
             {
               success: true,
-              rows: [{id: 'svc-1'}],
+              rows: [{service_id: 'svc-1'}],
               source: 'owner_rpc_lane',
               readAuthorityWitness: {
                 state: 'observed',
@@ -392,7 +392,7 @@ test('CL-014: authoritative catch-up hydration', async (t) => {
 
       t.same(sweeps.map((s) => s.tableName), ['services'],
         'sweep runs only for the leader-witnessed owner read');
-      t.same(sweeps[0].rows, [{id: 'svc-1'}], 'sweep gets the authoritative rows');
+      t.same(sweeps[0].rows, [{service_id: 'svc-1'}], 'sweep gets the authoritative rows');
       t.equal(sweeps[0].options.readStartedAtMs, 5000,
         'sweep gets the read-start time');
       t.equal(sweeps[0].options.authoritativeObservedAtMs, 5100,

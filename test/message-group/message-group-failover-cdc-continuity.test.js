@@ -405,7 +405,7 @@ test(
       // Subscribe to CDC and apply an event before failover.
       await service.subscribeToCDC(CDC_TABLE_NODES);
       await service.applyCDCEvent(CDC_TABLE_NODES, 'INSERT', {
-        id: 'node-before-failover',
+        node_id: 'node-before-failover',
         status: 'active',
       });
 
@@ -420,7 +420,7 @@ test(
       // Apply a CDC event after failover — this proves the new leader's
       // CDC pipeline is functional without manual intervention.
       await service.applyCDCEvent(CDC_TABLE_NODES, 'INSERT', {
-        id: 'node-after-failover',
+        node_id: 'node-after-failover',
         status: 'active',
       });
 

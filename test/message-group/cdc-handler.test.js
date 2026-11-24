@@ -104,7 +104,7 @@ test('CDCHandler - handleEvent buffers events', async (t) => {
   const result = handler.handleEvent({
     tableName: 'nodes',
     operation: CDC_OPERATIONS.INSERT,
-    data: {id: 'node-1', status: 'active'},
+    data: {node_id: 'node-1', status: 'active'},
     timestamp,
   });
 
@@ -122,7 +122,7 @@ test('CDCHandler - handleEvent ignores unsubscribed tables', async (t) => {
   const result = handler.handleEvent({
     tableName: 'nodes',
     operation: CDC_OPERATIONS.INSERT,
-    data: {id: 'node-1'},
+    data: {node_id: 'node-1'},
     timestamp,
   });
 
@@ -140,7 +140,7 @@ test('CDCHandler - handleEvent deduplicates events', async (t) => {
   const event = {
     tableName: 'nodes',
     operation: CDC_OPERATIONS.INSERT,
-    data: {id: 'node-1'},
+    data: {node_id: 'node-1'},
     timestamp,
   };
 
@@ -214,7 +214,7 @@ test('CDCHandler - flushBuffer applies events to cache', async (t) => {
   handler.handleEvent({
     tableName: 'nodes',
     operation: CDC_OPERATIONS.INSERT,
-    data: {id: 'node-1', status: 'active'},
+    data: {node_id: 'node-1', status: 'active'},
     timestamp,
   });
 
@@ -246,19 +246,19 @@ test('CDCHandler - events applied in timestamp order', async (t) => {
   handler.handleEvent({
     tableName: 'nodes',
     operation: CDC_OPERATIONS.INSERT,
-    data: {id: 'node-1', version: 3},
+    data: {node_id: 'node-1', version: 3},
     timestamp: ts3,
   });
   handler.handleEvent({
     tableName: 'nodes',
     operation: CDC_OPERATIONS.UPDATE,
-    data: {id: 'node-1', version: 1},
+    data: {node_id: 'node-1', version: 1},
     timestamp: ts1,
   });
   handler.handleEvent({
     tableName: 'nodes',
     operation: CDC_OPERATIONS.UPDATE,
-    data: {id: 'node-1', version: 2},
+    data: {node_id: 'node-1', version: 2},
     timestamp: ts2,
   });
 
@@ -280,7 +280,7 @@ test('CDCHandler - applyImmediate bypasses buffer', async (t) => {
   handler.applyImmediate({
     tableName: 'nodes',
     operation: CDC_OPERATIONS.INSERT,
-    data: {id: 'node-1', status: 'active'},
+    data: {node_id: 'node-1', status: 'active'},
     timestamp,
   });
 
@@ -361,7 +361,7 @@ test('CDCHandler - applyImmediate preserves causeId in apply telemetry', async (
   handler.applyImmediate({
     tableName: 'nodes',
     operation: CDC_OPERATIONS.INSERT,
-    data: {id: 'node-cause', status: 'active'},
+    data: {node_id: 'node-cause', status: 'active'},
     timestamp,
     causeId,
   });
@@ -440,13 +440,13 @@ test(
     handler.applyImmediate({
       tableName: 'nodes',
       operation: CDC_OPERATIONS.INSERT,
-      data: {id: 'node-monotonic-a', status: 'active'},
+      data: {node_id: 'node-monotonic-a', status: 'active'},
       timestamp: newerTimestamp,
     });
     handler.applyImmediate({
       tableName: 'nodes',
       operation: CDC_OPERATIONS.INSERT,
-      data: {id: 'node-monotonic-b', status: 'active'},
+      data: {node_id: 'node-monotonic-b', status: 'active'},
       timestamp: olderTimestamp,
     });
 
@@ -482,13 +482,13 @@ test(
     handler.applyImmediate({
       tableName: 'nodes',
       operation: CDC_OPERATIONS.INSERT,
-      data: {id: 'node-a', status: 'active'},
+      data: {node_id: 'node-a', status: 'active'},
       timestamp: newerTimestamp,
     });
     handler.applyImmediate({
       tableName: 'nodes',
       operation: CDC_OPERATIONS.INSERT,
-      data: {id: 'node-b', status: 'active'},
+      data: {node_id: 'node-b', status: 'active'},
       timestamp: olderTimestamp,
     });
 
@@ -518,7 +518,7 @@ test('CDCHandler - auto-flush when buffer full', async (t) => {
   handler.handleEvent({
     tableName: 'nodes',
     operation: CDC_OPERATIONS.INSERT,
-    data: {id: 'node-1'},
+    data: {node_id: 'node-1'},
     timestamp: ts1,
   });
 
@@ -527,7 +527,7 @@ test('CDCHandler - auto-flush when buffer full', async (t) => {
   handler.handleEvent({
     tableName: 'nodes',
     operation: CDC_OPERATIONS.INSERT,
-    data: {id: 'node-2'},
+    data: {node_id: 'node-2'},
     timestamp: ts2,
   });
 
@@ -553,7 +553,7 @@ test('CDCHandler - delayed flush is demand-driven and self-clearing', async (t) 
   handler.handleEvent({
     tableName: 'nodes',
     operation: CDC_OPERATIONS.INSERT,
-    data: {id: 'node-delayed'},
+    data: {node_id: 'node-delayed'},
     timestamp: ts1,
   });
 
@@ -594,7 +594,7 @@ test('CDCHandler - shutdown flushes remaining events', async (t) => {
   handler.handleEvent({
     tableName: 'nodes',
     operation: CDC_OPERATIONS.INSERT,
-    data: {id: 'node-1'},
+    data: {node_id: 'node-1'},
     timestamp,
   });
 
@@ -612,7 +612,7 @@ test('CDCEvent - constructor creates event', async (t) => {
   const event = new CDCEvent(
     'nodes',
     CDC_OPERATIONS.INSERT,
-    {id: 'node-1', status: 'active'},
+    {node_id: 'node-1', status: 'active'},
     timestamp,
     'partition-1',
   );
@@ -627,8 +627,8 @@ test('CDCEvent - compareTimestamp orders events', async (t) => {
   const ts1 = hlcClock.now().toString();
   const ts2 = hlcClock.now().toString();
 
-  const event1 = new CDCEvent('nodes', CDC_OPERATIONS.INSERT, {id: 'n1'}, ts1);
-  const event2 = new CDCEvent('nodes', CDC_OPERATIONS.INSERT, {id: 'n2'}, ts2);
+  const event1 = new CDCEvent('nodes', CDC_OPERATIONS.INSERT, {node_id: 'n1'}, ts1);
+  const event2 = new CDCEvent('nodes', CDC_OPERATIONS.INSERT, {node_id: 'n2'}, ts2);
 
   t.ok(event1.compareTimestamp(event2) < 0, 'event1 should be before event2');
   t.ok(event2.compareTimestamp(event1) > 0, 'event2 should be after event1');

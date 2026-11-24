@@ -63,7 +63,7 @@ const {
   SQL,
   buildSystemTableMutationError,
   getSchemaByTableName,
-  getSystemCachePrimaryKeyFieldOrFallback,
+  getSystemCachePrimaryKeyField,
   logSystemTableWriteFailure,
   shouldEmitTableWriteMetric,
   shouldLogTableWriteFailure,
@@ -553,10 +553,7 @@ class CDCIntegrationServiceMutationOperations {
    * @private
    */
   getPrimaryKeyField(tableName) {
-    return getSystemCachePrimaryKeyFieldOrFallback(
-      tableName,
-      CDC_PRIMARY_KEY.FALLBACK,
-    );
+    return getSystemCachePrimaryKeyField(tableName);
   }
 
   /**

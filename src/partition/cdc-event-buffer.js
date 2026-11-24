@@ -19,7 +19,8 @@ import {
   CDC_LIFECYCLE_LOG_MSG,
 } from '../constants/cdc-lifecycle-constants.js';
 import {
-  getSystemCachePrimaryKeyFieldOrFallback,
+  getSystemCachePrimaryKeyField,
+  hasSystemCacheKeyDescriptor,
 } from '../cache/system-cache-key-descriptor.js';
 import {
   isTableInternalCachePropagationEnabled,
@@ -30,6 +31,21 @@ import {PARTITION_CDC_OBLIGATION_EVENT_FIELD} from './partition-cdc-obligation-c
 const BUFFER_SUBSYSTEM = 'CDCEventBuffer';
 const objectHasOwn = Object.hasOwn;
 const objectAssign = Object.assign;
+
+function resolveBufferedEventIdentityKey(cdcEvent) {
+  if (hasSystemCacheKeyDescriptor(cdcEvent.tableName)) {
+    const pkField = getSystemCachePrimaryKeyField(cdcEvent.tableName);
+    return cdcEvent.data ? cdcEvent.data[pkField] : '';
+  }
+  if (typeof cdcEvent.primaryKeyField === 'string' &&
+      cdcEvent.primaryKeyField.trim().length > 0) {
+    return cdcEvent.data ? cdcEvent.data[cdcEvent.primaryKeyField.trim()] : '';
+  }
+  if (cdcEvent.data && typeof cdcEvent.data === 'object') {
+    return serializeJsonData(cdcEvent.data);
+  }
+  return '';
+}
 
 /**
  * Build a deduplication identity string for a CDC event.
@@ -48,10 +64,7 @@ function buildEventIdentity(cdcEvent) {
     return serializeJsonData([CDC_EVENT_IDENTITY.DURABLE_TAG,
       cdcEvent.sourcePartition, cdcEvent.eventKey]);
   }
-  const pkField = getSystemCachePrimaryKeyFieldOrFallback(
-    cdcEvent.tableName,
-  );
-  const pkValue = cdcEvent.data ? cdcEvent.data[pkField] : '';
+  const pkValue = resolveBufferedEventIdentityKey(cdcEvent);
   return `${cdcEvent.tableName}:${cdcEvent.operation}:${pkValue}:${cdcEvent.timestamp}`;
 }
 
@@ -70,7 +83,7 @@ function buildInternalCoalescingIdentity(cdcEvent) {
     return null;
   }
 
-  const pkField = getSystemCachePrimaryKeyFieldOrFallback(
+  const pkField = getSystemCachePrimaryKeyField(
     cdcEvent.tableName,
   );
 
