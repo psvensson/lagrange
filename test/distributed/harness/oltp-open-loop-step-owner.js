@@ -1,6 +1,9 @@
 import {performance} from 'node:perf_hooks';
 
 import {
+  summarizeOltpBaselineLatencies,
+} from './oltp-baseline-workload.js';
+import {
   executePairedOltpTransactionWithRetry,
 } from './oltp-paired-retry-owner.js';
 import {
@@ -191,13 +194,54 @@ function inFlightAttemptRecord(state, closedAtMs) {
 // state, never an absent summary.
 const NO_COMMITTED_EFFECT = Object.freeze({status: 'no-committed-effect'});
 
-// The request clock's intervals from the intended issue time; null where the
+// The request clock's intervals from the intended issue time and direct
+// per-request stage intervals (scheduledIssue -> actualIssue/queueEnter,
+// queueEnter -> executionStart, executionStart -> completion); null where the
 // request never reached that point. Unclamped: a negative lag is a clock
 // defect the validator refuses.
 function requestIntervalsOf(state, completedAtMs) {
   const since = (atMs) => (atMs === null ? null : atMs - state.entry.intendedIssueTimeMs);
-  return {issueLagMs: since(state.issuedAtMs), queueDelayMs: since(state.executionStartedAtMs),
-    latencyMs: since(completedAtMs)};
+  const between = (fromMs, toMs) => (fromMs === null || toMs === null ? null : toMs - fromMs);
+  return {
+    issueLagMs: since(state.issuedAtMs),
+    workerQueueWaitMs: between(state.issuedAtMs, state.executionStartedAtMs),
+    executionElapsedMs: between(state.executionStartedAtMs, completedAtMs),
+    queueDelayMs: since(state.executionStartedAtMs),
+    latencyMs: since(completedAtMs),
+  };
+}
+
+function summarizeRecordInterval(records, field, predicate = null) {
+  const matching = arrayFilter(records, (record) =>
+    record[field] !== null && (predicate === null || predicate(record)));
+  const stats = summarizeOltpBaselineLatencies(
+    arrayMap(matching, (record) => record[field]),
+  );
+  return Object.freeze({
+    ...stats,
+    p50Ms: stats.p50,
+    p95Ms: stats.p95,
+    p99Ms: stats.p99,
+    maxMs: stats.max,
+  });
+}
+
+function summarizeIntervalDecomposition(records) {
+  const isCommitted = (record) => record.outcome === OPERATION_OUTCOME.COMMITTED;
+  return Object.freeze({
+    issueLagMs: summarizeRecordInterval(records, 'issueLagMs'),
+    workerQueueWaitMs: summarizeRecordInterval(records, 'workerQueueWaitMs'),
+    executionElapsedMs: summarizeRecordInterval(records, 'executionElapsedMs'),
+    queueDelayMs: summarizeRecordInterval(records, 'queueDelayMs'),
+    latencyMs: summarizeRecordInterval(records, 'latencyMs'),
+    committed: Object.freeze({
+      issueLagMs: summarizeRecordInterval(records, 'issueLagMs', isCommitted),
+      workerQueueWaitMs: summarizeRecordInterval(records, 'workerQueueWaitMs', isCommitted),
+      executionElapsedMs: summarizeRecordInterval(records, 'executionElapsedMs', isCommitted),
+      queueDelayMs: summarizeRecordInterval(records, 'queueDelayMs', isCommitted),
+      latencyMs: summarizeRecordInterval(records, 'latencyMs', isCommitted),
+    }),
+  });
 }
 
 // The endpoint and server connection of the request's last attempt (every
@@ -394,6 +438,7 @@ function summarizeOpenLoopStep(issuePlan, states, run, options) {
     freezeRequestRecord(state, stopDisposition(state), options.evidence, run.stoppedAtMs)));
   const accounting = validateBenchmarkAccounting(records);
   const window = summarizeWindow(issuePlan, records, options.offeredRatePerSec, run);
+  const intervalDecomposition = summarizeIntervalDecomposition(records);
   const wallClockOf = (monotonicMs) => new Date(
     Date.parse(run.originWallClockIso) + (monotonicMs - run.originMs)).toISOString();
   const firstIntendedMs = issuePlan[ZERO].intendedIssueTimeMs;
@@ -419,6 +464,11 @@ function summarizeOpenLoopStep(issuePlan, states, run, options) {
     }),
     completedPerSec: benchmarkCompletedPerSec(accounting.committed, window.accountingWindowMs),
     ...summarizeBenchmarkLatencies(records, accounting),
+    issueLagMs: intervalDecomposition.issueLagMs,
+    workerQueueWaitMs: intervalDecomposition.workerQueueWaitMs,
+    executionElapsedMs: intervalDecomposition.executionElapsedMs,
+    queueDelayMs: intervalDecomposition.queueDelayMs,
+    intervalDecomposition,
     executedOperationsDigest: computeExecutedOperationsDigest(records),
     records,
     // Completions observed after the watchdog fired: the request stays

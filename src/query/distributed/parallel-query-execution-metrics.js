@@ -188,15 +188,189 @@ class QueryExecutionMetrics {
   }
 }
 
+const RESIDENT_BYTES_SYMBOL_KEY = 'lagrange.query.residentResultBytes';
+const PRESENTED_SAFE_INTEGERS_SYMBOL_KEY =
+  'lagrange.query.presentedSafeIntegers';
+const RESIDENT_RESULT_BYTES_SYMBOL = Symbol.for(RESIDENT_BYTES_SYMBOL_KEY);
+const PRESENTED_SAFE_INTEGERS_SYMBOL = Symbol.for(
+  PRESENTED_SAFE_INTEGERS_SYMBOL_KEY,
+);
+const MAX_JSON_ESTIMATE_DEPTH = 16;
+const BYTE_THREE_DIGIT_FLOOR = 100;
+const BYTE_TWO_DIGIT_FLOOR = 10;
+const DIGITS_THREE = 3;
+const CHAR_CODE_QUOTE = 0x22;
+const CHAR_CODE_BACKSLASH = 0x5c;
+const CHAR_CODE_BACKSPACE = 0x08;
+const CHAR_CODE_VTAB = 0x0b;
+const CHAR_CODE_CR = 0x0d;
+const CHAR_CODE_SPACE = 0x20;
+const UNICODE_ESCAPE_CHARS = 6;
+const BUFFER_JSON_WRAPPER_CHARS = 27;
+const JSON_NULL_OR_TRUE_CHARS = 4;
+const JSON_FALSE_CHARS = 5;
+const TYPE_STRING = 'string';
+const TYPE_NUMBER = 'number';
+const TYPE_BOOLEAN = 'boolean';
+const TYPE_BIGINT = 'bigint';
+const TYPE_FUNCTION = 'function';
+const TYPE_SYMBOL = 'symbol';
+const TYPE_OBJECT = 'object';
+const ERR_MAX_ESTIMATE_DEPTH = 'Maximum result byte estimation depth exceeded';
+
+function byteDecimalDigits(byteValue) {
+  if (byteValue >= BYTE_THREE_DIGIT_FLOOR) return DIGITS_THREE;
+  return byteValue >= BYTE_TWO_DIGIT_FLOOR ? 2 : 1;
+}
+
+function isShortEscapedCharCode(code) {
+  if (code === CHAR_CODE_QUOTE || code === CHAR_CODE_BACKSLASH) {
+    return true;
+  }
+  return (
+    code >= CHAR_CODE_BACKSPACE &&
+    code <= CHAR_CODE_CR &&
+    code !== CHAR_CODE_VTAB
+  );
+}
+
+function estimateJsonStringChars(str) {
+  let chars = 2;
+  for (let i = 0; i < str.length; i += 1) {
+    const code = str.charCodeAt(i);
+    if (isShortEscapedCharCode(code)) {
+      chars += 2;
+    } else if (code < CHAR_CODE_SPACE) {
+      chars += UNICODE_ESCAPE_CHARS;
+    } else {
+      chars += 1;
+    }
+  }
+  return chars;
+}
+
+function estimateBufferJsonChars(buf) {
+  if (buf.length === 0) return BUFFER_JSON_WRAPPER_CHARS;
+  let chars = BUFFER_JSON_WRAPPER_CHARS + (buf.length - 1);
+  for (let i = 0; i < buf.length; i += 1) {
+    chars += byteDecimalDigits(buf[i]);
+  }
+  return chars;
+}
+
+function estimatePrimitiveJsonChars(value, type) {
+  if (type === TYPE_STRING) return estimateJsonStringChars(value);
+  if (type === TYPE_NUMBER) {
+    return Number.isFinite(value) ? String(value).length : JSON_NULL_OR_TRUE_CHARS;
+  }
+  if (type === TYPE_BOOLEAN) {
+    return value ? JSON_NULL_OR_TRUE_CHARS : JSON_FALSE_CHARS;
+  }
+  if (type === TYPE_BIGINT) return String(value).length;
+  return JSON_NULL_OR_TRUE_CHARS;
+}
+
+function isIncludedJsonPropertyValue(propVal) {
+  const propType = typeof propVal;
+  return (
+    propVal !== undefined &&
+    propType !== TYPE_FUNCTION &&
+    propType !== TYPE_SYMBOL
+  );
+}
+
+function estimateArrayJsonChars(arr, depth) {
+  if (arr.length === 0) return 2;
+  let chars = 2 + (arr.length - 1);
+  for (let i = 0; i < arr.length; i += 1) {
+    chars += estimateJsonValueChars(arr[i], depth + 1);
+  }
+  return chars;
+}
+
+function estimateObjectJsonChars(obj, depth) {
+  const keys = Object.keys(obj);
+  let chars = 2;
+  let included = 0;
+  for (let i = 0; i < keys.length; i += 1) {
+    const key = keys[i];
+    const propVal = obj[key];
+    if (!isIncludedJsonPropertyValue(propVal)) {
+      continue;
+    }
+    if (included > 0) chars += 1;
+    included += 1;
+    chars += estimateJsonStringChars(key) + 1 + estimateJsonValueChars(propVal, depth + 1);
+  }
+  return chars;
+}
+
+function estimateJsonValueChars(value, depth = 0) {
+  if (depth > MAX_JSON_ESTIMATE_DEPTH) {
+    throw new RangeError(ERR_MAX_ESTIMATE_DEPTH);
+  }
+  if (value === null || value === undefined) return JSON_NULL_OR_TRUE_CHARS;
+  const type = typeof value;
+  if (type !== TYPE_OBJECT) {
+    return estimatePrimitiveJsonChars(value, type);
+  }
+  if (Buffer.isBuffer(value) || value instanceof Uint8Array) {
+    return estimateBufferJsonChars(value);
+  }
+  return Array.isArray(value) ?
+    estimateArrayJsonChars(value, depth) :
+    estimateObjectJsonChars(value, depth);
+}
+
 /**
- * Estimate bytes in result rows.
+ * Stamp precomputed resident byte count and presentation policy onto a row array.
+ * @param {Array} collection - Row array (`rows` or `rawRows`).
+ * @param {boolean} safeIntegers - Presentation policy applied.
+ * @param {number} residentBytes - Precomputed resident UTF-16 byte estimate.
+ * @return {Array} The stamped collection.
+ */
+function stampPresentedRowCollection(collection, safeIntegers, residentBytes) {
+  if (!Array.isArray(collection)) return collection;
+  Object.defineProperty(collection, PRESENTED_SAFE_INTEGERS_SYMBOL, {
+    value: safeIntegers === true,
+    writable: true,
+    enumerable: false,
+    configurable: true,
+  });
+  if (Number.isSafeInteger(residentBytes) && residentBytes >= 0) {
+    Object.defineProperty(collection, RESIDENT_RESULT_BYTES_SYMBOL, {
+      value: residentBytes,
+      writable: true,
+      enumerable: false,
+      configurable: true,
+    });
+  }
+  return collection;
+}
+
+/**
+ * Estimate bytes in result rows without allocating a JSON.stringify string.
+ * Reuses precomputed byte accounting from the decode/presentation pass when
+ * available.
  * @param {Array} rows - Result rows.
  * @return {number} Estimated bytes.
  */
 function estimateResultBytes(rows) {
   if (!rows || rows.length === 0) return 0;
+  const precomputed = rows[RESIDENT_RESULT_BYTES_SYMBOL];
+  if (Number.isSafeInteger(precomputed) && precomputed >= 0) {
+    return precomputed;
+  }
   try {
-    return JSON.stringify(rows).length * RESULT_ESTIMATE.UTF16_BYTES_PER_CHAR;
+    const estimated =
+      estimateJsonValueChars(rows, 0) * RESULT_ESTIMATE.UTF16_BYTES_PER_CHAR;
+    Object.defineProperty(rows, RESIDENT_RESULT_BYTES_SYMBOL, {
+      value: estimated,
+      writable: true,
+      enumerable: false,
+      configurable: true,
+    });
+    return estimated;
   } catch (_estimateErr) {
     return rows.length * RESULT_ESTIMATE.FALLBACK_ROW_BYTES;
   }
@@ -252,8 +426,13 @@ function formatQueryExecutionMetrics(metrics) {
 }
 
 export {
+  PRESENTED_SAFE_INTEGERS_SYMBOL,
+  RESIDENT_RESULT_BYTES_SYMBOL,
+  estimateJsonStringChars,
+  estimateJsonValueChars,
   estimateResultBytes,
   formatQueryExecutionMetrics,
   PartitionQueryMetrics,
   QueryExecutionMetrics,
+  stampPresentedRowCollection,
 };

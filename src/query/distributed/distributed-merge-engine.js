@@ -13,6 +13,11 @@ import {
   presentRawSqlRows,
   presentSqlRowObjects,
 } from '../sql-value-presentation.js';
+import {
+  PRESENTED_SAFE_INTEGERS_SYMBOL,
+  RESIDENT_RESULT_BYTES_SYMBOL,
+  stampPresentedRowCollection,
+} from './parallel-query-execution-metrics.js';
 import {getDefaultMergeProcessPool} from './coordinator-merge-process.js';
 import {
   CoordinatorMergeSession,
@@ -84,23 +89,139 @@ function resolveCoordinatorTableName(effectivePlan, ast) {
   return DEFAULT_COORDINATOR_TABLE;
 }
 
+const LAZY_ROWS_GETTER_SYMBOL_KEY = 'lagrange.query.lazyRowsGetter';
+const LAZY_ROWS_GETTER_SYMBOL = Symbol.for(LAZY_ROWS_GETTER_SYMBOL_KEY);
+const PROP_ROWS = 'rows';
+
+function isPresentedForPolicy(collection, safeIntegers) {
+  return (
+    Array.isArray(collection) &&
+    collection[PRESENTED_SAFE_INTEGERS_SYMBOL] === safeIntegers
+  );
+}
+
+function hasUnevaluatedLazyRows(fragment) {
+  if (!fragment || typeof fragment !== 'object') return false;
+  if (!fragment[LAZY_ROWS_GETTER_SYMBOL]) return false;
+  const descriptor = Object.getOwnPropertyDescriptor(fragment, PROP_ROWS);
+  return Boolean(descriptor?.get);
+}
+
+function materializeRowObjectsFromPresentedRaw(
+  columns,
+  rawRows,
+  safeIntegers,
+  residentBytes,
+) {
+  const colCount = Array.isArray(columns) ? columns.length : 0;
+  const rows = new Array(rawRows.length);
+  for (let r = 0; r < rawRows.length; r += 1) {
+    const rawRow = rawRows[r];
+    const obj = {};
+    for (let c = 0; c < colCount; c += 1) {
+      obj[columns[c]] = rawRow[c] === undefined ? null : rawRow[c];
+    }
+    rows[r] = obj;
+  }
+  return stampPresentedRowCollection(rows, safeIntegers, residentBytes);
+}
+
+function attachLazyRowsGetter(target, getRows) {
+  Object.defineProperty(target, LAZY_ROWS_GETTER_SYMBOL, {
+    value: getRows,
+    writable: true,
+    enumerable: false,
+    configurable: true,
+  });
+  Object.defineProperty(target, PROP_ROWS, {
+    enumerable: true,
+    configurable: true,
+    get() {
+      const materialized = getRows();
+      Object.defineProperty(target, PROP_ROWS, {
+        value: materialized,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      return materialized;
+    },
+    set(nextRows) {
+      Object.defineProperty(target, PROP_ROWS, {
+        value: nextRows,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+    },
+  });
+  return target;
+}
+
+function resolveFastPathRawRows(first, normalizedSafeIntegers) {
+  if (!Array.isArray(first.rawRows)) {
+    return null;
+  }
+  if (isPresentedForPolicy(first.rawRows, normalizedSafeIntegers)) {
+    return first.rawRows;
+  }
+  return stampPresentedRowCollection(
+    presentRawSqlRows(first.rawRows, {safeIntegers: normalizedSafeIntegers}),
+    normalizedSafeIntegers,
+    first.rawRows[RESIDENT_RESULT_BYTES_SYMBOL],
+  );
+}
+
+function resolveFastPathObjectRows(first, rawRows, columns, normalizedSafeIntegers) {
+  if (isPresentedForPolicy(first.rows, normalizedSafeIntegers)) {
+    return first.rows;
+  }
+  if (Array.isArray(rawRows) && Array.isArray(columns)) {
+    return materializeRowObjectsFromPresentedRaw(
+      columns,
+      rawRows,
+      normalizedSafeIntegers,
+      rawRows[RESIDENT_RESULT_BYTES_SYMBOL],
+    );
+  }
+  if (Array.isArray(first.rows)) {
+    return stampPresentedRowCollection(
+      presentSqlRowObjects(first.rows, {safeIntegers: normalizedSafeIntegers}),
+      normalizedSafeIntegers,
+      first.rows[RESIDENT_RESULT_BYTES_SYMBOL],
+    );
+  }
+  return [];
+}
+
 function buildSinglePartitionFastPathResult(
   validFragments,
   effectivePlan,
   safeIntegers,
 ) {
+  const normalizedSafeIntegers = safeIntegers === true;
   const first = validFragments[0] || {rows: [], columns: null, rowSet: null};
-  const rawRows = Array.isArray(first.rawRows) ?
-    presentRawSqlRows(first.rawRows, {safeIntegers}) :
-    null;
-  const rows = Array.isArray(first.rows) ?
-    presentSqlRowObjects(first.rows, {safeIntegers}) :
-    [];
+  const columns = Array.isArray(first.columns) ?
+    first.columns :
+    effectivePlan.expectedColumns;
+  const rawAlreadyPresented = isPresentedForPolicy(
+    first.rawRows,
+    normalizedSafeIntegers,
+  );
+  const rawRows = resolveFastPathRawRows(first, normalizedSafeIntegers);
+  if (rawAlreadyPresented && hasUnevaluatedLazyRows(first)) {
+    return attachLazyRowsGetter({
+      guardOutcome: GUARD_OUTCOME.GUARD_HELD,
+      rawRows,
+      columns,
+      rowSet: first.rowSet || null,
+    }, first[LAZY_ROWS_GETTER_SYMBOL]);
+  }
   return {
     guardOutcome: GUARD_OUTCOME.GUARD_HELD,
-    rows,
+    rows: resolveFastPathObjectRows(first, rawRows, columns, normalizedSafeIntegers),
     rawRows,
-    columns: Array.isArray(first.columns) ? first.columns : effectivePlan.expectedColumns,
+    columns,
     rowSet: first.rowSet || null,
   };
 }
@@ -116,10 +237,26 @@ function buildGuardFailedResult() {
 }
 
 function presentMergedExecutionResult(merged, safeIntegers) {
+  const normalizedSafeIntegers = safeIntegers === true;
+  const rawRows = Array.isArray(merged.rawRows) ?
+    (isPresentedForPolicy(merged.rawRows, normalizedSafeIntegers) ?
+      merged.rawRows :
+      stampPresentedRowCollection(
+        presentRawSqlRows(merged.rawRows, {safeIntegers: normalizedSafeIntegers}),
+        normalizedSafeIntegers,
+      )) :
+    merged.rawRows;
+  const rows = Array.isArray(rawRows) && Array.isArray(merged.columns) ?
+    materializeRowObjectsFromPresentedRaw(
+      merged.columns,
+      rawRows,
+      normalizedSafeIntegers,
+    ) :
+    presentSqlRowObjects(merged.rows, {safeIntegers: normalizedSafeIntegers});
   return {
     guardOutcome: GUARD_OUTCOME.GUARD_HELD,
-    rows: presentSqlRowObjects(merged.rows, {safeIntegers}),
-    rawRows: presentRawSqlRows(merged.rawRows, {safeIntegers}),
+    rows,
+    rawRows,
     columns: merged.columns,
     rowSet: merged.rowSet,
     byteLength: merged.byteLength,

@@ -9,7 +9,12 @@ import {buildFrozenTransactionDecision} from './distributed-transaction-commit-m
 import {
   PARTICIPANT_ENLISTMENT_MODE,
   PARTICIPANT_STATUS,
+  TRANSACTION_STATUS,
 } from './distributed-transaction-coordinator-constants.js';
+import {
+  TRANSACTION_METADATA_PERSIST_PURPOSE,
+  resolveNowMs,
+} from './distributed-transaction-telemetry.js';
 
 import {participantSetTextOf, readParticipantSet} from
   './distributed-transaction-participant-manifest.js';
@@ -90,12 +95,36 @@ async function promoteReadOnlyParticipants(coordinator, tx, requested) {
   }
 }
 
+function shouldAdvanceFrozenSetToPreparing(coordinator, tx, participantCount, options) {
+  if (options?.advanceToPreparing === false || tx.recoveryDiscovered === true) {
+    return false;
+  }
+  if (tx.decision || participantCount === 0 || tx.status !== TRANSACTION_STATUS.ACTIVE) {
+    return false;
+  }
+  return !coordinator.isTransactionBudgetExceeded?.(tx);
+}
+
 const distributedTransactionParticipantSetMethods = {
   async persistAdmittedParticipantSet(tx, intended) {
+    const purpose = intended?.participantSetState === PARTICIPANT_SET_STATE.FROZEN ?
+      TRANSACTION_METADATA_PERSIST_PURPOSE.MANIFEST_FREEZE :
+      TRANSACTION_METADATA_PERSIST_PURPOSE.PARTICIPANT_ADMISSION;
+    const startedAtMs = resolveNowMs();
     try {
-      this.noteMetadataMutation?.(tx);
+      this.noteMetadataMutation?.(tx, purpose);
       await this.persistTransactionParticipantSet(intended, tx.participantSetText);
+      this.noteMetadataPersistElapsed?.(
+        tx,
+        purpose,
+        Math.max(0, resolveNowMs() - startedAtMs),
+      );
     } catch (error) {
+      this.noteMetadataPersistElapsed?.(
+        tx,
+        purpose,
+        Math.max(0, resolveNowMs() - startedAtMs),
+      );
       // Another admission/freeze or a lost answer may own the row. Keep this
       // exact ID on the existing authoritative recovery path, never old bytes.
       tx.recoveryDiscovered = true;
@@ -130,13 +159,20 @@ const distributedTransactionParticipantSetMethods = {
     }
   },
 
-  async freezeParticipantSet(tx) {
+  async freezeParticipantSet(tx, options = {}) {
     const pairs = readParticipantSet(tx.transactionId, tx.participantSetText);
     if (!pairs || pairs.length !== tx.participants.size ||
         pairs.some((pair) => !tx.participants.has(pair[1]))) throw incompleteParticipantSet();
     if (tx.participantSetState === PARTICIPANT_SET_STATE.FROZEN) return;
-    const frozen = buildFrozenTransactionDecision({transactionMode: tx.transactionMode,
-      participantCount: pairs.length, decidedAt: this.now()});
+    const decidedAt = this.now();
+    const baseFrozen = buildFrozenTransactionDecision({
+      transactionMode: tx.transactionMode,
+      participantCount: pairs.length,
+      decidedAt,
+    });
+    const frozen = shouldAdvanceFrozenSetToPreparing(this, tx, pairs.length, options) ?
+      {...baseFrozen, status: TRANSACTION_STATUS.PREPARING, updatedAt: decidedAt} :
+      baseFrozen;
     await this.persistAdmittedParticipantSet(tx, {...tx, ...frozen});
     Object.assign(tx, frozen);
   },

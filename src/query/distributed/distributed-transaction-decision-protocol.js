@@ -51,13 +51,16 @@ import {
   recordTransactionDecision,
 } from './distributed-transaction-decision.js';
 import {participantIdentityOf} from './distributed-transaction-identity.js';
-import {COMMIT_POINT_REACHED_FIELD} from
-  './distributed-transaction-commit-point.js';
+import {
+  COMMIT_POINT_REACHED_FIELD,
+  noteCommitPoint,
+} from './distributed-transaction-commit-point.js';
 import {reportTransactionBudgetSpent} from
   './distributed-transaction-protocol.js';
 import {completePrepareEvidenceOf} from
   './distributed-transaction-prepare-evidence.js';
 import {
+  TRANSACTION_METADATA_PERSIST_PURPOSE,
   finalizeTransactionTelemetry,
   resolveNowMs,
 } from './distributed-transaction-telemetry.js';
@@ -68,6 +71,31 @@ const PREPARE_SENT_TRANSACTION_STATUS = Object.freeze(new Set([
   TRANSACTION_STATUS.PREPARING,
   TRANSACTION_STATUS.PREPARED,
 ]));
+
+function progressStatusForDecision(decision) {
+  return decision === COMMIT ?
+    TRANSACTION_STATUS.COMMITTING :
+    TRANSACTION_STATUS.ROLLING_BACK;
+}
+
+function applyDecisionProgressState(coordinator, tx) {
+  const decision = tx?.decision?.decision;
+  if (decision !== COMMIT && decision !== ROLLBACK) {
+    return;
+  }
+  if (decision === COMMIT && tx.participants.size === 0) {
+    return;
+  }
+  const progressStatus = progressStatusForDecision(decision);
+  noteCommitPoint(tx, progressStatus);
+  if (
+    tx.status !== TRANSACTION_STATUS.COMMITTED &&
+    tx.status !== TRANSACTION_STATUS.ROLLED_BACK
+  ) {
+    tx.status = progressStatus;
+    tx.updatedAt = coordinator.now();
+  }
+}
 
 /**
  * Retain what a participant's PREPARE resolved with on its participant
@@ -186,13 +214,26 @@ const distributedTransactionDecisionProtocolMethods = {
    */
   async recordTransactionDecision(tx, decision) {
     const startedAtMs = resolveNowMs();
-    this.noteMetadataMutation?.(tx);
+    this.noteMetadataMutation?.(
+      tx,
+      TRANSACTION_METADATA_PERSIST_PURPOSE.DECISION_AND_COMMITTING,
+    );
     try {
-      return await recordTransactionDecision(this, tx, decision);
-    } finally {
-      if (tx?.telemetry) {
-        tx.telemetry.decisionPersistMs += Math.max(0, resolveNowMs() - startedAtMs);
+      const outcome = await recordTransactionDecision(this, tx, decision);
+      if (outcome === TRANSACTION_DECISION_RECORDING.RECORDED) {
+        applyDecisionProgressState(this, tx);
       }
+      return outcome;
+    } finally {
+      const elapsedMs = Math.max(0, resolveNowMs() - startedAtMs);
+      if (tx?.telemetry) {
+        tx.telemetry.decisionPersistMs += elapsedMs;
+      }
+      this.noteMetadataPersistElapsed?.(
+        tx,
+        TRANSACTION_METADATA_PERSIST_PURPOSE.DECISION_AND_COMMITTING,
+        elapsedMs,
+      );
     }
   },
 
@@ -318,6 +359,7 @@ const distributedTransactionDecisionProtocolMethods = {
         await this.releaseReadOnlyParticipants(tx);
         return this.buildDecisionInDoubtResult(tx);
       }
+      applyDecisionProgressState(this, tx);
     }
     if (tx.decision) {
       return this.driveTransactionDecision(tx, null);
@@ -487,7 +529,9 @@ const distributedTransactionDecisionProtocolMethods = {
       tx.telemetry.rollbackPhaseMs += Math.max(0, resolveNowMs() - startedAtMs);
     }
     if (rollbackFailures.length > 0) {
-      await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLING_BACK);
+      if (tx.status !== TRANSACTION_STATUS.ROLLING_BACK) {
+        await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLING_BACK);
+      }
     } else {
       await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLED_BACK);
       endTransaction(this, tx);
@@ -521,12 +565,16 @@ const distributedTransactionDecisionProtocolMethods = {
    */
   async runRollbackProtocol(tx) {
     if (!tx.decision && (tx.status === TRANSACTION_STATUS.COMMITTING ||
-        tx[COMMIT_POINT_REACHED_FIELD]) &&
-        await adoptRecordedTransactionDecision(this, tx) !==
+        tx[COMMIT_POINT_REACHED_FIELD])) {
+      if (await adoptRecordedTransactionDecision(this, tx) !==
           TRANSACTION_DECISION_RECORDING.RECORDED) {
-      return settleInDoubtRollback(this, tx);
+        return settleInDoubtRollback(this, tx);
+      }
+      applyDecisionProgressState(this, tx);
     }
-    if (!tx.decision) await this.freezeParticipantSet(tx);
+    if (!tx.decision) {
+      await this.freezeParticipantSet(tx, {advanceToPreparing: false});
+    }
     if (!tx.decision &&
         await this.recordTransactionDecision(tx, ROLLBACK) !==
           TRANSACTION_DECISION_RECORDING.RECORDED) {
