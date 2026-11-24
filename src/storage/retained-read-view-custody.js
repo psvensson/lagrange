@@ -740,9 +740,6 @@ const DEFAULT_PERSISTED_TERM_OBSERVER = createPersistedPartitionTermObserver();
 function observePersistedPartitionTerm(exactReplicaIdentity) {
   return DEFAULT_PERSISTED_TERM_OBSERVER.observePersistedPartitionTerm(exactReplicaIdentity);
 }
-function invalidatePersistedTermReadersForPath(dbPath, reason) {
-  return DEFAULT_PERSISTED_TERM_OBSERVER.invalidatePath(dbPath, reason);
-}
 function invalidatePartitionPersistedTermReaders(dataDir, partitionId, reason) {
   return DEFAULT_PERSISTED_TERM_OBSERVER.invalidatePartition(dataDir, partitionId, reason);
 }
@@ -786,9 +783,9 @@ export {
   assertStorageArtifactsUnlinkSafe, createPersistedPartitionTermObserver,
   endStorageIncarnationCustody, getPersistedTermReaderStats,
   getRetainedPersistedTermReader, inspectDbPathCustody,
-  invalidatePartitionPersistedTermReaders, invalidatePersistedTermReadersForPath,
+  invalidatePartitionPersistedTermReaders,
   isIncarnationAdmissible, markCustodyCloseFailed, mintStorageIncarnationId,
-  normalizeCustodyDbPath, observePersistedPartitionTerm,
+  observePersistedPartitionTerm,
   recordUnclosedReaderCustody, registerRetainedReaderCustody,
   resetPersistedTermReaders, resolveStorageIncarnation,
   unregisterRetainedReaderCustody,

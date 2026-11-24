@@ -4,12 +4,6 @@ import {
   applySuccessfulCandidateAffinity,
   resolveRedirectParticipantNodeId,
 } from './query-executor-partition-failure.js';
-import {
-  READ_COMPLETION_STATE,
-  READ_ROUTE_SUPERSEDED_ERROR,
-  REDIRECT_STEP_ACTION,
-  ROUTE_SUPERSEDED_FAILURE,
-} from './query-executor-self-leader-term-floor.js';
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 import {UNKNOWN_OUTCOME_DECISION} from './query-executor-unknown-outcome.js';
 
@@ -22,9 +16,30 @@ const {
 const RECOVERY_REDIRECT_REFUSED = Symbol('recovery redirect route is ineligible');
 const ROUTING_PROBE_ELAPSED = Symbol('routing probe elapsed');
 const READ_DELIVERY_CLOSED = 'Recovery read delivery closed';
-const READ_ROUTE_SUPERSEDED = 'Recovery read route superseded';
+const READ_ROUTE_SUPERSEDED_ERROR = 'Recovery read route superseded';
+const READ_ROUTE_SUPERSEDED_CODE = 'READ_ROUTE_SUPERSEDED';
 const EXECUTOR_SHUTDOWN = 'Query execution aborted: SQL query engine is shutting down';
 const EXECUTOR_SHUTDOWN_CODE = 'QUERY_EXECUTOR_SHUTTING_DOWN';
+
+const READ_COMPLETION_STATE = Object.freeze({
+  ACCEPTED: 'accepted',
+  BELOW_TERM_FLOOR: 'below_term_floor',
+  DEADLINE_EXPIRED: 'deadline_expired',
+  REJECTED_RESPONSE: 'rejected_response',
+  ROUTE_SUPERSEDED: 'route_superseded',
+});
+
+const REDIRECT_STEP_ACTION = Object.freeze({
+  BREAK: 'break',
+  CONTINUE: 'continue',
+  RETURN: 'return',
+});
+
+const ROUTE_SUPERSEDED_FAILURE = Object.freeze({
+  error: READ_ROUTE_SUPERSEDED_ERROR,
+  failureCode: READ_ROUTE_SUPERSEDED_CODE,
+  success: false,
+});
 
 function executorShutdownError() {
   return Object.assign(new Error(EXECUTOR_SHUTDOWN), {code: EXECUTOR_SHUTDOWN_CODE});
@@ -91,7 +106,7 @@ function createRecoveryReadDelivery(executor, options = {}) {
 
   function cancelSupersededRoute(address, record) {
     pending.delete(address);
-    record.controller.abort(new Error(READ_ROUTE_SUPERSEDED));
+    record.controller.abort(new Error(READ_ROUTE_SUPERSEDED_ERROR));
   }
 
   function currentIn(ticket, candidates) {
@@ -399,13 +414,15 @@ async function executePartitionLeaderRedirectAttempt(context) {
 }
 
 export {
+  READ_COMPLETION_STATE,
+  READ_ROUTE_SUPERSEDED_CODE,
+  REDIRECT_STEP_ACTION,
+  ROUTE_SUPERSEDED_FAILURE,
+  ROUTING_PROBE_ELAPSED,
   createRecoveryReadDelivery,
-  deliverLeaderRedirect,
   executePartitionLeaderRedirectAttempt,
   executorShutdownError,
   isCurrentPeer,
   matchesRoute,
   peerIdentityOf,
-  RECOVERY_REDIRECT_REFUSED,
-  ROUTING_PROBE_ELAPSED,
 };
