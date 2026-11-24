@@ -465,6 +465,34 @@ function awaitWithJourneySignal(promiseOrFn, request, stage, caseId = null) {
   });
 }
 
+function attachDurabilityFaultEvidence(result, proofCase, evidence) {
+  if (proofCase.id !== DURABILITY_CASE_ID || !Object.hasOwn(evidence, 'faultEvidence')) {
+    return;
+  }
+  const {faultEvidence} = evidence;
+  if (faultEvidence !== null && typeof faultEvidence === 'object' &&
+      !Array.isArray(faultEvidence)) {
+    result.faultEvidence = faultEvidence;
+  }
+}
+
+async function recordErroredCase(result, proofCase, context, journey, error) {
+  assertJourneyActive(journey, 'run-case', proofCase.id);
+  result.status = CASE_STATUS.ERRORED;
+  result.error = String(error?.message || error);
+  result.failureKind = FAILURE_KIND.EVIDENCE_INSUFFICIENT;
+  result.failureReasons = [FAILURE_REASON.CASE_ERRORED];
+  const evidencePath = await persistEvidence(
+    journey.evidenceDir,
+    context.system,
+    proofCase.id,
+    result,
+  );
+  if (evidencePath !== null) {
+    result.evidencePath = evidencePath;
+  }
+}
+
 async function runCase(proofCase, context, options, journey) {
   assertJourneyActive(journey, 'run-case', proofCase.id);
   const result = {caseId: proofCase.id, proofIds: proofCase.proofIds,
@@ -497,12 +525,7 @@ async function runCase(proofCase, context, options, journey) {
     }
     recordEvaluation(result, proofCase, outcome.evaluation);
     result.proofRecord = evidence.proofRecord;
-    const faultEvidence = proofCase.id === DURABILITY_CASE_ID &&
-      Object.hasOwn(evidence, 'faultEvidence') ? evidence.faultEvidence : null;
-    if (faultEvidence !== null && typeof faultEvidence === 'object' &&
-        !Array.isArray(faultEvidence)) {
-      result.faultEvidence = faultEvidence;
-    }
+    attachDurabilityFaultEvidence(result, proofCase, evidence);
     result.evidencePath = await persistEvidence(journey.evidenceDir, context.system,
       proofCase.id, evidence);
   } catch (error) {
@@ -511,20 +534,7 @@ async function runCase(proofCase, context, options, journey) {
       assertJourneyActive(journey, 'run-case', proofCase.id);
       throw error;
     }
-    assertJourneyActive(journey, 'run-case', proofCase.id);
-    result.status = CASE_STATUS.ERRORED;
-    result.error = String(error?.message || error);
-    result.failureKind = FAILURE_KIND.EVIDENCE_INSUFFICIENT;
-    result.failureReasons = [FAILURE_REASON.CASE_ERRORED];
-    const evidencePath = await persistEvidence(
-      journey.evidenceDir,
-      context.system,
-      proofCase.id,
-      result,
-    );
-    if (evidencePath !== null) {
-      result.evidencePath = evidencePath;
-    }
+    await recordErroredCase(result, proofCase, context, journey, error);
   }
   await closeQuietly(adapter, result, journey);
   assertJourneyActive(journey, 'after-case', proofCase.id);

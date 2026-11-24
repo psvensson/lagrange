@@ -406,6 +406,18 @@ async function commitRemoteSeq(service, seq, entryId) {
   );
 }
 
+function deriveJoinerElectionBudgetMs(services) {
+  const maxJoinerElectionMaxMs = Math.max(...services.map((svc) => {
+    const electionMaxMs = svc.effectiveRaftTiming()?.effective?.effectiveElectionMaxMs;
+    assert.ok(
+      Number.isFinite(electionMaxMs) && electionMaxMs > 0,
+      `${svc.replicaId} must report positive effectiveElectionMaxMs`,
+    );
+    return electionMaxMs;
+  }));
+  return Math.max(CONVERGENCE_BUDGET_MS, maxJoinerElectionMaxMs * 2);
+}
+
 test('single-replica deferred founder starts ticks on committed RF2/RF3 ' +
   'growth before handoff, demotes on pre-handoff isolation, and heals cleanly',
 async () => {
@@ -486,6 +498,7 @@ async () => {
     // its local handleRemoteQuery receiver reachable.
     harness.network.cut(addressOf(SEED_REPLICA), statusOf(seed).peerId);
 
+    const joinerElectionBudgetMs = deriveJoinerElectionBudgetMs([r2, r3]);
     const joinerElectionOk = await waitFor(() => {
       const joinerLeader = [r2, r3].find((svc) =>
         svc.isLeader && statusOf(svc).term > 1);
@@ -494,7 +507,7 @@ async () => {
       }
       const otherJoiner = joinerLeader === r2 ? r3 : r2;
       return statusOf(otherJoiner).leaderId === joinerLeader.replicaId;
-    }, CONVERGENCE_BUDGET_MS);
+    }, joinerElectionBudgetMs);
     assert.equal(joinerElectionOk, true,
       'surviving joiner quorum {r2, r3} must elect a term >= 2 leader');
 

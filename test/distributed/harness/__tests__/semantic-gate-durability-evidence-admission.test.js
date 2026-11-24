@@ -73,6 +73,110 @@ const LOAD_GENERATOR_HOST = Object.freeze({
   nodePath: '/usr/bin/node',
 });
 const EXPECTED_PROOF_COUNT = OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS.length;
+const WRITE_COMMANDS = Object.freeze(new Set(['INSERT', 'UPDATE', 'DELETE']));
+const PG_MISSING_TABLE_CODE = '42P01';
+const PG_SERIALIZATION_FAILURE_CODE = '40001';
+
+function createMissingTableError(table) {
+  return Object.assign(new Error(`Table not found: ${table}`), {code: PG_MISSING_TABLE_CODE});
+}
+
+function createSerializationConflictError() {
+  return Object.assign(
+    new Error('could not serialize access due to concurrent update'),
+    {code: PG_SERIALIZATION_FAILURE_CODE, sqlState: PG_SERIALIZATION_FAILURE_CODE},
+  );
+}
+
+function handlePgTableDdlSql(db, indexes, normalized) {
+  const dropTbl = /^DROP TABLE IF EXISTS ([a-z_]+)$/iu.exec(normalized);
+  if (dropTbl) {
+    db.tables.delete(dropTbl[1]);
+    for (const [name, meta] of [...indexes.entries()]) {
+      if (meta.table_name === dropTbl[1]) indexes.delete(name);
+    }
+    return {rows: [], rowCount: 0};
+  }
+  const truncateTbl = /^TRUNCATE TABLE ([a-z_]+)$/iu.exec(normalized);
+  if (truncateTbl) {
+    if (!db.tables.has(truncateTbl[1])) {
+      throw createMissingTableError(truncateTbl[1]);
+    }
+    db.tables.set(truncateTbl[1], []);
+    return {rows: [], rowCount: 0};
+  }
+  return null;
+}
+
+function handlePgIndexSql(indexes, normalized) {
+  const createIdx =
+    /^CREATE INDEX(?: IF NOT EXISTS)? ([a-z0-9_]+) ON ([a-z0-9_]+) \(([^)]+)\)$/iu
+      .exec(normalized);
+  if (createIdx) {
+    const cols = arrayMap(stringSplit(createIdx[3], ','), (col) => stringTrim(col));
+    indexes.set(createIdx[1], {
+      index_name: createIdx[1],
+      table_name: createIdx[2],
+      column_names: jsonStringify(cols),
+      state: 'READY',
+      indexdef: `CREATE INDEX ${createIdx[1]} ON public.${createIdx[2]} (${cols.join(', ')})`,
+    });
+    return {rows: [], rowCount: 0};
+  }
+  const lagrangeIdx =
+    /^SELECT index_name, .+ FROM indices WHERE table_name = '([a-z0-9_]+)'$/iu
+      .exec(normalized);
+  if (lagrangeIdx) {
+    const matching = arrayFilter([...indexes.values()], (e) => e.table_name === lagrangeIdx[1]);
+    return {rows: matching, rowCount: matching.length};
+  }
+  const pgIdx =
+    /^SELECT indexname, .+ FROM pg_indexes WHERE tablename = '([a-z0-9_]+)' AND indexname = '([a-z0-9_]+)'$/iu
+      .exec(normalized);
+  if (pgIdx) {
+    const entry = indexes.get(pgIdx[2]);
+    const rows = entry && entry.table_name === pgIdx[1] ?
+      [{indexname: entry.index_name, tablename: entry.table_name, indexdef: entry.indexdef}] : [];
+    return {rows, rowCount: rows.length};
+  }
+  return null;
+}
+
+function handlePgTableProbeSql(db, normalized) {
+  const schemaProbe = /^SELECT ([a-z_, ]+) FROM ([a-z_]+) LIMIT 1$/iu.exec(normalized);
+  if (schemaProbe) {
+    if (!db.tables.has(schemaProbe[2])) {
+      throw createMissingTableError(schemaProbe[2]);
+    }
+    const rows = db.tables.get(schemaProbe[2]).slice(0, 1);
+    return {rows, rowCount: rows.length};
+  }
+  const countProbe = /^SELECT COUNT\(\*\) AS row_count FROM ([a-z_]+)$/iu.exec(normalized);
+  if (countProbe && !db.tables.has(countProbe[1])) {
+    throw createMissingTableError(countProbe[1]);
+  }
+  return null;
+}
+
+function formatPgQueryResult(res, command) {
+  if (Array.isArray(res)) {
+    return {rows: res, rowCount: res.length, command};
+  }
+  return {rows: [], rowCount: res?.affectedRows ?? 0, command};
+}
+
+function updatePgTxState(txState, command, commitVersion) {
+  if (command === 'BEGIN') {
+    txState.active = true;
+    txState.startVersion = commitVersion;
+    txState.wrote = false;
+  } else if (command === 'ROLLBACK') {
+    txState.active = false;
+    txState.wrote = false;
+  } else if (txState.active && WRITE_COMMANDS.has(command)) {
+    txState.wrote = true;
+  }
+}
 
 function createPgWireMockStore(fault = {}) {
   const {store, createMysqlConnection} = createTiDbMockStore(fault);
@@ -81,84 +185,33 @@ function createPgWireMockStore(fault = {}) {
 
   const handlePgAdminSql = (normalized) => {
     const db = store.ensureDb(dbName);
-    const dropTbl = /^DROP TABLE IF EXISTS ([a-z_]+)$/iu.exec(normalized);
-    if (dropTbl) {
-      db.tables.delete(dropTbl[1]);
-      for (const [name, meta] of [...indexes.entries()]) {
-        if (meta.table_name === dropTbl[1]) indexes.delete(name);
-      }
-      return {rows: [], rowCount: 0};
-    }
-    const missingTableError = (table) =>
-      Object.assign(new Error(`Table not found: ${table}`), {code: '42P01'});
-    const truncateTbl = /^TRUNCATE TABLE ([a-z_]+)$/iu.exec(normalized);
-    if (truncateTbl) {
-      if (!db.tables.has(truncateTbl[1])) {
-        throw missingTableError(truncateTbl[1]);
-      }
-      db.tables.set(truncateTbl[1], []);
-      return {rows: [], rowCount: 0};
-    }
-    const createIdx =
-      /^CREATE INDEX(?: IF NOT EXISTS)? ([a-z0-9_]+) ON ([a-z0-9_]+) \(([^)]+)\)$/iu
-        .exec(normalized);
-    if (createIdx) {
-      const cols = arrayMap(stringSplit(createIdx[3], ','), (col) => stringTrim(col));
-      indexes.set(createIdx[1], {
-        index_name: createIdx[1],
-        table_name: createIdx[2],
-        column_names: jsonStringify(cols),
-        state: 'READY',
-        indexdef: `CREATE INDEX ${createIdx[1]} ON public.${createIdx[2]} (${cols.join(', ')})`,
-      });
-      return {rows: [], rowCount: 0};
-    }
-    const lagrangeIdx =
-      /^SELECT index_name, .+ FROM indices WHERE table_name = '([a-z0-9_]+)'$/iu
-        .exec(normalized);
-    if (lagrangeIdx) {
-      const matching = arrayFilter([...indexes.values()], (e) => e.table_name === lagrangeIdx[1]);
-      return {rows: matching, rowCount: matching.length};
-    }
-    const pgIdx =
-      /^SELECT indexname, .+ FROM pg_indexes WHERE tablename = '([a-z0-9_]+)' AND indexname = '([a-z0-9_]+)'$/iu
-        .exec(normalized);
-    if (pgIdx) {
-      const entry = indexes.get(pgIdx[2]);
-      const rows = entry && entry.table_name === pgIdx[1] ?
-        [{indexname: entry.index_name, tablename: entry.table_name, indexdef: entry.indexdef}] : [];
-      return {rows, rowCount: rows.length};
-    }
-    const schemaProbe = /^SELECT ([a-z_, ]+) FROM ([a-z_]+) LIMIT 1$/iu.exec(normalized);
-    if (schemaProbe) {
-      if (!db.tables.has(schemaProbe[2])) {
-        throw missingTableError(schemaProbe[2]);
-      }
-      const rows = db.tables.get(schemaProbe[2]).slice(0, 1);
-      return {rows, rowCount: rows.length};
-    }
-    const countProbe = /^SELECT COUNT\(\*\) AS row_count FROM ([a-z_]+)$/iu.exec(normalized);
-    if (countProbe && !db.tables.has(countProbe[1])) {
-      throw missingTableError(countProbe[1]);
-    }
-    return null;
+    return handlePgTableDdlSql(db, indexes, normalized) ||
+      handlePgIndexSql(indexes, normalized) ||
+      handlePgTableProbeSql(db, normalized);
   };
 
   let commitVersion = 0;
 
   const createPgClient = () => {
     let connPromise = null;
-    let txActive = false;
-    let txStartVersion = 0;
-    let txWrote = false;
+    const txState = {active: false, startVersion: 0, wrote: false};
     const ensureConn = () => {
       if (!connPromise) connPromise = createMysqlConnection({database: dbName});
       return connPromise;
     };
-    const conflictError = () => Object.assign(
-      new Error('could not serialize access due to concurrent update'),
-      {code: '40001', sqlState: '40001'},
-    );
+    const finishCommit = async (conn, sql, params) => {
+      const hadWrites = txState.wrote;
+      const stale = hadWrites && txState.startVersion !== commitVersion;
+      txState.active = false;
+      txState.wrote = false;
+      if (stale) {
+        await conn.query('ROLLBACK', []);
+        throw createSerializationConflictError();
+      }
+      if (hadWrites) commitVersion += 1;
+      await conn.query(sql, params);
+      return {rows: [], rowCount: 0, command: 'COMMIT'};
+    };
     return {
       connect: async () => {
         await ensureConn();
@@ -169,39 +222,16 @@ function createPgWireMockStore(fault = {}) {
         const admin = handlePgAdminSql(normalized);
         if (admin) return {...admin, command};
         const conn = await ensureConn();
-        if (command === 'BEGIN') {
-          txActive = true;
-          txStartVersion = commitVersion;
-          txWrote = false;
-        } else if (command === 'ROLLBACK') {
-          txActive = false;
-          txWrote = false;
-        } else if (command === 'COMMIT') {
-          const hadWrites = txWrote;
-          const stale = hadWrites && txStartVersion !== commitVersion;
-          txActive = false;
-          txWrote = false;
-          if (stale) {
-            await conn.query('ROLLBACK', []);
-            throw conflictError();
-          }
-          if (hadWrites) commitVersion += 1;
-          await conn.query(sql, params);
-          return {rows: [], rowCount: 0, command};
-        } else if (txActive && (command === 'INSERT' || command === 'UPDATE' ||
-            command === 'DELETE')) {
-          txWrote = true;
-        }
+        if (command === 'COMMIT') return finishCommit(conn, sql, params);
+        updatePgTxState(txState, command, commitVersion);
         try {
           const [res] = await conn.query(sql, params);
-          const rows = Array.isArray(res) ? res : [];
-          return {rows, rowCount: Array.isArray(res) ? rows.length : (res?.affectedRows ?? 0),
-            command};
+          return formatPgQueryResult(res, command);
         } catch (error) {
-          if (error?.sqlState === '40001') {
-            txActive = false;
-            txWrote = false;
-            throw conflictError();
+          if (error?.sqlState === PG_SERIALIZATION_FAILURE_CODE) {
+            txState.active = false;
+            txState.wrote = false;
+            throw createSerializationConflictError();
           }
           throw error;
         }

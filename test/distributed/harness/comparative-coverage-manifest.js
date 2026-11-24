@@ -105,7 +105,7 @@ const ADVERTISED_TARGETS = Object.freeze(arrayMap([
 // The products of the named Scenario A smoke profile (scenario-a-smoke-v1): it
 // proves the canonical workload ran end to end with per-request correctness and
 // complete accounting, and never carries a capacity figure.
-const SMOKE_TARGETS = Object.freeze([T.LAGRANGE, T.TIDB, T.PG_SINGLE]);
+const SMOKE_TARGETS = Object.freeze([T.LAGRANGE, T.TIDB, T.PG_SINGLE, T.PG_SYNC_STANDBYS]);
 
 const MIN_HOSTS = new Map(arrayMap(ADVERTISED_TARGETS, (t) => [t.targetId, t.minDistinctHosts]));
 MIN_HOSTS.set(T.LAGRANGE_4, 4);

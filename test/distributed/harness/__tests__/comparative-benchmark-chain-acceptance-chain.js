@@ -72,6 +72,7 @@ const SYSTEM_OF_TARGET = Object.freeze({
   'lagrange': 'lagrange',
   'tidb-tikv': 'tidb-tikv',
   'pg-single-primary': 'postgresql',
+  'pg-patroni-sync-ha-rf3': 'postgresql',
 });
 
 // The canonical capacity workload of the suite: 2 workers x 50 measured

@@ -46,6 +46,7 @@ CODE_JS_FILES=()
 DOC_FILES=()
 REGEN_INVENTORIES=0
 REGEN_TEST_METADATA=0
+REGEN_BENCHMARK_ARTIFACTS=0
 for f in "${STAGED[@]}"; do
   [ -f "$f" ] || continue
   case "$f" in
@@ -74,6 +75,9 @@ for f in "${STAGED_METADATA[@]}"; do
   esac
   case "$f" in
     test/*|scripts/*) REGEN_TEST_METADATA=1 ;;
+  esac
+  case "$f" in
+    data/tidb-comparison/*|docs/benchmarks/*) REGEN_BENCHMARK_ARTIFACTS=1 ;;
   esac
 done
 
@@ -197,6 +201,35 @@ if { [ "$REGEN_INVENTORIES" = "1" ] || [ "$REGEN_TEST_METADATA" = "1" ]; } \
   && [ -z "${LAGRANGE_SKIP_INVENTORY_REGEN:-}" ]; then
   node scripts/generate-source-owner-index.js --write > /dev/null
   git add -A -- ':(glob)src/**/INDEX.md'
+fi
+
+if [ "$REGEN_BENCHMARK_ARTIFACTS" = "1" ] \
+  && [ "$SOLVER_AUTHORIZED" = "0" ] \
+  && [ -z "${LAGRANGE_SKIP_INVENTORY_REGEN:-}" ]; then
+  mapfile -t UNSTAGED_BENCHMARK_INPUTS < <(
+    {
+      git diff --name-only -- data/tidb-comparison docs/benchmarks
+      git ls-files --others --exclude-standard -- data/tidb-comparison docs/benchmarks
+    } | sort -u
+  )
+  if [ "${#UNSTAGED_BENCHMARK_INPUTS[@]}" -gt 0 ]; then
+    echo "pre-commit: benchmark artifact regeneration needs data/tidb-comparison and docs/benchmarks to match the staged index"
+    printf 'pre-commit: stage/stash or remove: %s\n' "${UNSTAGED_BENCHMARK_INPUTS[@]}"
+    echo "pre-commit: WIP bypass: LAGRANGE_SKIP_INVENTORY_REGEN=1 git commit"
+    exit 1
+  fi
+  echo "pre-commit: regenerating comparative benchmark artifacts from admitted observations"
+  node --input-type=module -e \
+    "import {regenerateAllBenchmarkArtifactsFromAdmitted} from './test/distributed/harness/raw-observation-campaign-specs.js'; await regenerateAllBenchmarkArtifactsFromAdmitted(process.cwd());"
+  git add \
+    data/tidb-comparison/admitted-lab-measurements.json \
+    data/tidb-comparison/multi-system-matrix.json \
+    data/tidb-comparison/progress-summary.json \
+    docs/benchmarks
+  run_check "benchmark history append-only" \
+    node scripts/checks/check-benchmark-history-append-only.js
+  run_check "comparative benchmark recompute" \
+    node scripts/checks/comparative-benchmark-recompute.js
 fi
 
 if [ "$FAILURES" -gt 0 ]; then

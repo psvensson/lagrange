@@ -18,8 +18,9 @@
  *
  * The campaign runs a frozen manifest (written and digested before any run)
  * and APPENDS a v2 campaign header and one record per attempted run to the
- * raw observation store. Publication is not this runner's business: stream
- * A's regenerate path consumes admitted cells only.
+ * raw observation store. When a live campaign records attempted runs to the
+ * repository's canonical raw-observations store, it invokes stream A's single
+ * regeneration owner so derived JSONs and `docs/benchmarks/` stay in sync.
  */
 
 import {randomBytes} from 'node:crypto';
@@ -32,6 +33,9 @@ import {EXIT_CODES} from '../../../test/distributed/harness/constants.js';
 import {
   DEFAULT_RAW_OBSERVATIONS_NDJSON_PATH,
 } from '../../../test/distributed/harness/raw-observation-store.js';
+import {
+  regenerateAllBenchmarkArtifactsFromAdmitted,
+} from '../../../test/distributed/harness/raw-observation-campaign-specs.js';
 import {
   COMPARATIVE_CAPACITY_PROFILE,
   COMPARATIVE_SMOKE_PROFILE,
@@ -596,6 +600,12 @@ async function dryRunPlan({opts, manifest, dataHostCount}) {
     manifest};
 }
 
+function shouldRegenerateCanonicalBenchmarkArtifacts(opts, summary) {
+  return Array.isArray(summary?.attempted) && summary.attempted.length > 0 &&
+    path.resolve(REPO_ROOT, opts.rawObservationsPath) ===
+      path.resolve(REPO_ROOT, DEFAULT_RAW_OBSERVATIONS_NDJSON_PATH);
+}
+
 async function main() {
   const opts = parseCliArgs(process.argv.slice(2), process.env);
   if (opts.help) {
@@ -624,6 +634,11 @@ async function main() {
   fs.writeFileSync(output, `${JSON.stringify({schema: SUMMARY_SCHEMA,
     executionTarget: opts.executionTarget, rawObservationsPath: opts.rawObservationsPath,
     ...summary}, null, 2)}\n`);
+  if (shouldRegenerateCanonicalBenchmarkArtifacts(opts, summary)) {
+    await regenerateAllBenchmarkArtifactsFromAdmitted(REPO_ROOT);
+    process.stdout.write('[bench] regenerated comparative benchmark artifacts in ' +
+      'data/tidb-comparison and docs/benchmarks\n');
+  }
   process.stdout.write(`[bench] campaign ${summary.campaignId}: ${summary.attempted.length} ` +
     `runs attempted, summary ${opts.outputPath}\n`);
   process.exitCode = summary.exitCode;

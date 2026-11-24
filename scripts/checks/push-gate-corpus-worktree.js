@@ -138,6 +138,11 @@ const CORPUS_GATE_COMMANDS = Object.freeze([
   // PATH (verifier observation: bare `node` is not hermetic).
   [process.execPath, ['scripts/check-file-size-thresholds.js']],
 ]);
+const BENCHMARK_RAW_OBSERVATIONS_PATH = 'data/tidb-comparison/raw-observations.ndjson';
+const BENCHMARK_GATE_COMMANDS = Object.freeze([
+  [process.execPath, ['scripts/checks/check-benchmark-history-append-only.js']],
+  [process.execPath, ['scripts/checks/comparative-benchmark-recompute.js']],
+]);
 
 function usage() {
   process.stderr.write(LOCAL_TEXT.USAGE);
@@ -191,6 +196,7 @@ function executeCorpusCommand(command, args, worktreePath) {
   return new Promise((resolve) => {
     const child = spawn(command, args, {
       cwd: worktreePath,
+      env: gitProcessEnvironment(),
       stdio: [STDIO_IGNORE, STDIO_PIPE, STDIO_PIPE],
     });
     const stdoutChunks = [];
@@ -254,7 +260,10 @@ function reportCorpusGateResult(result, worktreePath) {
 // per command and flushing in deterministic order, returning the first failing
 // exit code (0 when all pass).
 async function runCorpusGates(worktreePath) {
-  const executions = arrayMap(CORPUS_GATE_COMMANDS, ([command, args]) =>
+  const commands = fs.existsSync(path.join(worktreePath, BENCHMARK_RAW_OBSERVATIONS_PATH)) ?
+    [...CORPUS_GATE_COMMANDS, ...BENCHMARK_GATE_COMMANDS] :
+    CORPUS_GATE_COMMANDS;
+  const executions = arrayMap(commands, ([command, args]) =>
     executeCorpusCommand(command, args, worktreePath),
   );
   const results = await Promise.all(executions);

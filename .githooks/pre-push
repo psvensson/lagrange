@@ -193,6 +193,10 @@ fi
 # proof with LAGRANGE_PUSH_PROVE_BRANCH=1.
 stage "branch-preservation-fast-path" "non-main branch preservation check"
 if [ "${ALL_NON_MAIN_BRANCH_REFS}" = "1" ] && [ -z "${LAGRANGE_PUSH_PROVE_BRANCH:-}" ]; then
+  if [ -f "data/tidb-comparison/raw-observations.ndjson" ] \
+    && [ -f "scripts/checks/comparative-benchmark-recompute.js" ]; then
+    node scripts/checks/check-pushed-benchmark-freshness.js "${REF_LINES_FILE}"
+  fi
   echo "pre-push: non-main branch preservation push - skipping local proof gate"
   echo "pre-push: remote preservation is NOT merge, Quest-land, release, or publication approval"
   echo "pre-push: set LAGRANGE_PUSH_PROVE_BRANCH=1 to prove a feature branch locally before push"
