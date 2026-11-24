@@ -1,163 +1,26 @@
 import {pickTypedWriteAnswer} from
   '../../partition/partition-write-kernel.js';
 import {pickRoutingDenialFields} from '../query-execution-budget.js';
-import {presentSqlValue} from '../sql-value-presentation.js';
+import {
+  PRESENTED_SAFE_INTEGERS_SYMBOL,
+  RESIDENT_RESULT_BYTES_SYMBOL,
+  cloneResultWithMetadata,
+  defineLazyRowObjectsGetter,
+  getResultRowCount,
+  hasLazyRowsProperty,
+  hasPositionalRowColumns,
+  presentSqlValue,
+  stampRowCollectionPresentation,
+} from '../sql-value-presentation.js';
 import {FANOUT_PLAN_KIND} from './distributed-select-fanout-plan.js';
 
-const LAZY_ROWS_GETTER_SYMBOL = Symbol.for('lagrange.query.lazyRowsGetter');
-const PRESENTED_SAFE_INTEGERS_SYMBOL = Symbol.for(
-  'lagrange.query.presentedSafeIntegers',
-);
-const RESIDENT_RESULT_BYTES_SYMBOL = Symbol.for(
-  'lagrange.query.residentResultBytes',
-);
 const PROP_ROWS = 'rows';
 const PROP_RAW_ROWS = 'rawRows';
 const PROP_COLUMNS = 'columns';
 const PROP_BYTE_LENGTH = 'byteLength';
 const PROP_RESIDENT_BYTES = 'residentBytes';
 const LOCAL_STR_BOOLEAN = 'boolean';
-const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
-
-function stampRowCollectionPresentation(collection, safeIntegers, residentBytes) {
-  if (!Array.isArray(collection)) {
-    return collection;
-  }
-  if (typeof safeIntegers === LOCAL_STR_BOOLEAN) {
-    Object.defineProperty(collection, PRESENTED_SAFE_INTEGERS_SYMBOL, {
-      value: safeIntegers,
-      writable: true,
-      enumerable: false,
-      configurable: true,
-    });
-  }
-  if (Number.isSafeInteger(residentBytes) && residentBytes >= 0) {
-    Object.defineProperty(collection, RESIDENT_RESULT_BYTES_SYMBOL, {
-      value: residentBytes,
-      writable: true,
-      enumerable: false,
-      configurable: true,
-    });
-  }
-  return collection;
-}
-
-function getResultRowCount(result) {
-  if (Array.isArray(result?.rawRows)) {
-    return result.rawRows.length;
-  }
-  if (Array.isArray(result?.rows)) {
-    return result.rows.length;
-  }
-  if (Number.isSafeInteger(result?.count) && result.count >= 0) {
-    return result.count;
-  }
-  return 0;
-}
-
-function hasLazyRowsProperty(source) {
-  if (!source || typeof source !== LOCAL_STR_OBJECT) {
-    return false;
-  }
-  const descriptor = Object.getOwnPropertyDescriptor(source, PROP_ROWS);
-  if (descriptor?.get) {
-    return true;
-  }
-  return Boolean(source[LAZY_ROWS_GETTER_SYMBOL]) && descriptor === undefined;
-}
-
-function materializeRowObjectsFromPositionalRows(
-  columns,
-  rawRows,
-  safeIntegers,
-  residentBytes,
-) {
-  const colCount = Array.isArray(columns) ? columns.length : 0;
-  const rows = new Array(rawRows.length);
-  for (let r = 0; r < rawRows.length; r += 1) {
-    const rawRow = rawRows[r];
-    const obj = {};
-    for (let c = 0; c < colCount; c += 1) {
-      obj[columns[c]] = rawRow[c] === undefined ? null : rawRow[c];
-    }
-    rows[r] = obj;
-  }
-  return stampRowCollectionPresentation(rows, safeIntegers, residentBytes);
-}
-
-function createPositionalLazyRowsBuilder(target, options = {}) {
-  const columns = Array.isArray(options.columns) ?
-    options.columns :
-    target?.columns;
-  const rawRows = Array.isArray(options.rawRows) ?
-    options.rawRows :
-    target?.rawRows;
-  const safeIntegers = typeof options.safeIntegers === LOCAL_STR_BOOLEAN ?
-    options.safeIntegers :
-    rawRows?.[PRESENTED_SAFE_INTEGERS_SYMBOL];
-  const residentBytes = Number.isSafeInteger(options.residentBytes) ?
-    options.residentBytes :
-    rawRows?.[RESIDENT_RESULT_BYTES_SYMBOL];
-  let cachedRows = null;
-  return () => {
-    if (cachedRows === null) {
-      cachedRows = Array.isArray(rawRows) && Array.isArray(columns) ?
-        materializeRowObjectsFromPositionalRows(
-          columns,
-          rawRows,
-          safeIntegers,
-          residentBytes,
-        ) :
-        [];
-    }
-    return cachedRows;
-  };
-}
-
-function resolveLazyRowsBuilder(target, getterOrOptions) {
-  if (typeof getterOrOptions === LOCAL_STR_FUNCTION) {
-    return getterOrOptions;
-  }
-  const customGetRows = getterOrOptions?.getRows;
-  if (typeof customGetRows === LOCAL_STR_FUNCTION) {
-    return customGetRows;
-  }
-  return createPositionalLazyRowsBuilder(target, getterOrOptions);
-}
-
-function defineLazyRowObjectsGetter(target, getterOrOptions = undefined) {
-  const getRows = resolveLazyRowsBuilder(target, getterOrOptions);
-  Object.defineProperty(target, LAZY_ROWS_GETTER_SYMBOL, {
-    value: getRows,
-    writable: true,
-    enumerable: false,
-    configurable: true,
-  });
-  Object.defineProperty(target, PROP_ROWS, {
-    enumerable: true,
-    configurable: true,
-    get() {
-      const materialized = getRows();
-      Object.defineProperty(target, PROP_ROWS, {
-        value: materialized,
-        writable: true,
-        enumerable: true,
-        configurable: true,
-      });
-      return materialized;
-    },
-    set(nextRows) {
-      Object.defineProperty(target, PROP_ROWS, {
-        value: nextRows,
-        writable: true,
-        enumerable: true,
-        configurable: true,
-      });
-    },
-  });
-  return target;
-}
 
 function applyLazyResultIntegerPresentation(result, safeIntegers = false) {
   const normalizedSafeIntegers = safeIntegers === true;
@@ -212,8 +75,23 @@ function resolveSinglePartitionMergeOptions(
   };
 }
 
-function hasPositionalRowColumns(source) {
-  return Array.isArray(source?.rawRows) && Array.isArray(source?.columns);
+function canReuseMaterializedPositionalRows(
+  aggregated,
+  presentedRawRows,
+  safeIntegers,
+) {
+  if (
+    !Object.hasOwn(aggregated, PROP_ROWS) ||
+    !Array.isArray(aggregated.rows) ||
+    aggregated.rows.length !== presentedRawRows.length
+  ) {
+    return false;
+  }
+  return (
+    safeIntegers === true ||
+    aggregated.rows[PRESENTED_SAFE_INTEGERS_SYMBOL] === safeIntegers ||
+    aggregated.rows.length === 0
+  );
 }
 
 function attachPositionalSelectRows(target, aggregated, safeIntegers) {
@@ -234,6 +112,20 @@ function attachPositionalSelectRows(target, aggregated, safeIntegers) {
         residentBytes,
       ),
     );
+  }
+  if (
+    canReuseMaterializedPositionalRows(
+      aggregated,
+      presentedRawRows,
+      safeIntegers,
+    )
+  ) {
+    target.rows = stampRowCollectionPresentation(
+      aggregated.rows,
+      safeIntegers,
+      residentBytes,
+    );
+    return target;
   }
   return defineLazyRowObjectsGetter(target, {
     columns: aggregated.columns,
@@ -387,7 +279,16 @@ function attachOutcomeRows(outcome, result) {
   if (hasLazyRowsProperty(result)) {
     return defineLazyRowObjectsGetter(outcome, () => result.rows);
   }
-  if (hasPositionalRowColumns(result) && !Object.hasOwn(result, PROP_ROWS)) {
+  if (
+    result &&
+    typeof result === LOCAL_STR_OBJECT &&
+    Object.hasOwn(result, PROP_ROWS) &&
+    Array.isArray(result.rows)
+  ) {
+    outcome.rows = result.rows;
+    return outcome;
+  }
+  if (hasPositionalRowColumns(result)) {
     return defineLazyRowObjectsGetter(outcome);
   }
   outcome.rows = result?.rows || [];
@@ -438,6 +339,7 @@ export {
   attachAggregatedSelectRows,
   buildPartitionExecutionFailureOutcome,
   buildPartitionExecutionSuccessOutcome,
+  cloneResultWithMetadata,
   defineLazyRowObjectsGetter,
   getResultRowCount,
   hasLazyRowsProperty,

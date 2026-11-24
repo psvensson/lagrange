@@ -45,6 +45,88 @@ function validatePrimaryKey(ast) {
   };
 }
 
+const LAZY_ROWS_GETTER_SYMBOL = Symbol.for('lagrange.query.lazyRowsGetter');
+const PROP_ROWS = 'rows';
+const INTERNAL_PARTITION_ROW_FIELD = Object.freeze({
+  PARTITION_ID_SNAKE: '_partition_id',
+  PARTITION_ID_CAMEL: '_partitionId',
+  SOURCE_PARTITION: '_sourcePartition',
+});
+
+function hasInternalPartitionRowField(row) {
+  return Boolean(
+    row &&
+      typeof row === 'object' &&
+      (INTERNAL_PARTITION_ROW_FIELD.PARTITION_ID_SNAKE in row ||
+        INTERNAL_PARTITION_ROW_FIELD.PARTITION_ID_CAMEL in row ||
+        INTERNAL_PARTITION_ROW_FIELD.SOURCE_PARTITION in row),
+  );
+}
+
+function stripInternalPartitionFieldsFromRows(rows) {
+  if (!Array.isArray(rows) || !rows.some(hasInternalPartitionRowField)) {
+    return rows;
+  }
+  return rows.map((row) => {
+    const cleanRow = {
+      ...row,
+    };
+    delete cleanRow._partition_id;
+    delete cleanRow._partitionId;
+    delete cleanRow._sourcePartition;
+    return cleanRow;
+  });
+}
+
+function attachStrippedLazyRows(target, sourceResult) {
+  let cachedRows = null;
+  const getRows = () => {
+    if (cachedRows === null) {
+      cachedRows = stripInternalPartitionFieldsFromRows(sourceResult.rows);
+    }
+    return cachedRows;
+  };
+  Object.defineProperty(target, LAZY_ROWS_GETTER_SYMBOL, {
+    value: getRows,
+    writable: true,
+    enumerable: false,
+    configurable: true,
+  });
+  Object.defineProperty(target, PROP_ROWS, {
+    enumerable: true,
+    configurable: true,
+    get() {
+      const receiver = this && typeof this === 'object' ? this : target;
+      const materialized = getRows();
+      Object.defineProperty(target, PROP_ROWS, {
+        value: materialized,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      if (receiver !== target) {
+        Object.defineProperty(receiver, PROP_ROWS, {
+          value: materialized,
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        });
+      }
+      return materialized;
+    },
+    set(nextRows) {
+      const receiver = this && typeof this === 'object' ? this : target;
+      Object.defineProperty(receiver, PROP_ROWS, {
+        value: nextRows,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+    },
+  });
+  return target;
+}
+
 /**
  * Strip partition details from query results.
  * Requirement 20.10: Never expose partition details in query results.
@@ -54,14 +136,19 @@ function validatePrimaryKey(ast) {
  * @return {Object} Result with internal partition details stripped.
  */
 function stripPartitionDetails(result) {
-  if (!result) {
+  if (!result || typeof result !== 'object') {
     return result;
   }
 
-  // Create a copy to avoid mutating the original
-  const stripped = {
-    ...result,
-  };
+  const rowsDescriptor = Object.getOwnPropertyDescriptor(result, PROP_ROWS);
+  const hasLazyRows = Boolean(rowsDescriptor?.get);
+  const stripped = {};
+  for (const key of Object.keys(result)) {
+    if (hasLazyRows && key === PROP_ROWS) {
+      continue;
+    }
+    stripped[key] = result[key];
+  }
 
   // Remove internal partition-related fields from top-level result
   // Keep 'partitions' array as it's useful metadata about which partitions were queried
@@ -71,18 +158,11 @@ function stripPartitionDetails(result) {
   delete stripped.partition_key_type;
   delete stripped.partitionKeyType;
 
-  // Strip internal partition details from rows if present
+  if (hasLazyRows) {
+    return attachStrippedLazyRows(stripped, result);
+  }
   if (Array.isArray(stripped.rows)) {
-    stripped.rows = stripped.rows.map((row) => {
-      const cleanRow = {
-        ...row,
-      };
-      // Remove internal partition tracking fields
-      delete cleanRow._partition_id;
-      delete cleanRow._partitionId;
-      delete cleanRow._sourcePartition;
-      return cleanRow;
-    });
+    stripped.rows = stripInternalPartitionFieldsFromRows(stripped.rows);
   }
   return stripped;
 }

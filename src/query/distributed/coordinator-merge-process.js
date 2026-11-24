@@ -31,8 +31,8 @@ import {
 } from '../sql-value-codec.js';
 import {
   CoordinatorMergeSession,
+  buildLazyMergedRowResult,
   createMergeError,
-  materializeRowObjects,
 } from './coordinator-merge-session.js';
 
 const WORKER_FLAG = '--lagrange-coordinator-merge-worker';
@@ -685,13 +685,12 @@ class CoordinatorMergeProcessPool {
       }, mergeTimeoutMs, sessionOptions);
 
       const decoded = decodeTypedRowSet(response.rowSet);
-      return {
-        columns: decoded.columns,
-        rawRows: decoded.rows,
-        rows: materializeRowObjects(decoded.columns, decoded.rows),
-        rowSet: response.rowSet,
-        byteLength: response.byteLength,
-      };
+      return buildLazyMergedRowResult(
+        decoded.columns,
+        decoded.rows,
+        response.rowSet,
+        response.byteLength,
+      );
     } catch (error) {
       if (isFatalWorkerCondition(error, child)) {
         workerUsable = false;

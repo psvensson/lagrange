@@ -31,12 +31,27 @@ import {
   sqlQueryEngineTransactionSetMethods,
 } from '../../src/query/sql-query-engine-transaction-set-methods.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
-import {ParallelQueryCoordinator} from
-  '../../src/query/distributed/parallel-query-coordinator.js';
 import {
+  ParallelQueryCoordinator,
+  PartitionQueryMetrics,
+} from '../../src/query/distributed/parallel-query-coordinator.js';
+import {
+  installParallelQueryCoordinatorHedgingMethods,
+  parallelQueryCoordinatorHedgingMethods,
+} from '../../src/query/distributed/parallel-query-coordinator-hedging-methods.js';
+import {
+  attachAggregatedSelectRows,
+  buildPartitionExecutionSuccessOutcome,
+  cloneResultWithMetadata,
   defineLazyRowObjectsGetter,
   hasLazyRowsProperty,
 } from '../../src/query/distributed/parallel-query-partition-outcomes.js';
+import {
+  getObjectRowMaterializationCount,
+  resetObjectRowMaterializationCount,
+} from '../../src/query/sql-value-presentation.js';
+import {PostgresWireAdapter} from
+  '../../src/query/pg/postgres-wire-adapter.js';
 import {deriveCommandTag} from '../../src/runtime/pgwire-result-mapper.js';
 import {PgWireOutputWriter} from '../../src/runtime/pgwire-output-writer.js';
 import {QUERY_ERROR_CODE, QUERY_OPERATION} from '../../src/query/query-constants.js';
@@ -222,54 +237,34 @@ test('§1 Witness: per-request open-loop interval decomposition computes ' +
 
   assert.equal(summary.records.length, 3);
   const [rec0, rec1, rec2] = summary.records;
-  assert.deepEqual(
-    {
-      issueLagMs: rec0.issueLagMs,
-      workerQueueWaitMs: rec0.workerQueueWaitMs,
-      executionElapsedMs: rec0.executionElapsedMs,
-      queueDelayMs: rec0.queueDelayMs,
-      latencyMs: rec0.latencyMs,
-    },
-    {
-      issueLagMs: 2,
-      workerQueueWaitMs: 0,
-      executionElapsedMs: 40,
-      queueDelayMs: 2,
-      latencyMs: 42,
-    },
-  );
-  assert.deepEqual(
-    {
-      issueLagMs: rec1.issueLagMs,
-      workerQueueWaitMs: rec1.workerQueueWaitMs,
-      executionElapsedMs: rec1.executionElapsedMs,
-      queueDelayMs: rec1.queueDelayMs,
-      latencyMs: rec1.latencyMs,
-    },
-    {
-      issueLagMs: 1,
-      workerQueueWaitMs: 31,
-      executionElapsedMs: 10,
-      queueDelayMs: 32,
-      latencyMs: 42,
-    },
-  );
-  assert.deepEqual(
-    {
-      issueLagMs: rec2.issueLagMs,
-      workerQueueWaitMs: rec2.workerQueueWaitMs,
-      executionElapsedMs: rec2.executionElapsedMs,
-      queueDelayMs: rec2.queueDelayMs,
-      latencyMs: rec2.latencyMs,
-    },
-    {
-      issueLagMs: 25,
-      workerQueueWaitMs: 0,
-      executionElapsedMs: 4,
-      queueDelayMs: 25,
-      latencyMs: 29,
-    },
-  );
+  const pickRec = (r) => ({
+    issueLagMs: r.issueLagMs,
+    workerQueueWaitMs: r.workerQueueWaitMs,
+    executionElapsedMs: r.executionElapsedMs,
+    queueDelayMs: r.queueDelayMs,
+    latencyMs: r.latencyMs,
+  });
+  assert.deepEqual(pickRec(rec0), {
+    issueLagMs: 2,
+    workerQueueWaitMs: 0,
+    executionElapsedMs: 40,
+    queueDelayMs: 2,
+    latencyMs: 42,
+  });
+  assert.deepEqual(pickRec(rec1), {
+    issueLagMs: 1,
+    workerQueueWaitMs: 31,
+    executionElapsedMs: 10,
+    queueDelayMs: 32,
+    latencyMs: 42,
+  });
+  assert.deepEqual(pickRec(rec2), {
+    issueLagMs: 25,
+    workerQueueWaitMs: 0,
+    executionElapsedMs: 4,
+    queueDelayMs: 25,
+    latencyMs: 29,
+  });
 
   // Notice that max(queueDelayMs)=32 and max(issueLagMs)=25, so subtracting
   // percentiles would falsely claim p99(workerQueueWaitMs) = 32 - 25 = 7,
@@ -780,7 +775,6 @@ test('§7 Witness: single result representation reuse, lazy object rows, ' +
   let fastPathMerged;
   try {
     decoded = decodePartitionResponseRows({rowSet: encoded}, {safeIntegers: false});
-    // Before accessing .rows, lazy getter has not materialized object rows
     const rawDescriptor = Object.getOwnPropertyDescriptor(decoded, 'rows');
     assert.equal(typeof rawDescriptor?.get, 'function', 'decodedPayload.rows is lazy');
 
@@ -797,14 +791,8 @@ test('§7 Witness: single result representation reuse, lazy object rows, ' +
       rowSetComplete: true,
       readGeneration: 4,
     });
-    assert.equal(
-      typeof Object.getOwnPropertyDescriptor(builtResult, 'rows')?.get,
-      'function',
-      'partition result preserves lazy .rows before access',
-    );
+    assert.equal(typeof Object.getOwnPropertyDescriptor(builtResult, 'rows')?.get, 'function');
 
-    // Single-partition fast path in DistributedMergeEngine preserves lazy .rows
-    // and reuses rawRows by reference without re-presenting
     const mergeEngine = new DistributedMergeEngine();
     const ast = new SQLParser('SELECT id, label FROM items').parse();
     const singlePartitionPlan = buildSelectFanoutPlan(ast, [], 1);
@@ -816,24 +804,11 @@ test('§7 Witness: single result representation reuse, lazy object rows, ' +
       [],
       {safeIntegers: false},
     );
-    assert.equal(
-      fastPathMerged.rawRows,
-      builtResult.rawRows,
-      'single-partition fast path reuses presented rawRows by reference',
-    );
-    assert.equal(
-      typeof Object.getOwnPropertyDescriptor(fastPathMerged, 'rows')?.get,
-      'function',
-      'single-partition fast path preserves lazy .rows until read',
-    );
+    assert.equal(fastPathMerged.rawRows, builtResult.rawRows);
+    assert.equal(typeof Object.getOwnPropertyDescriptor(fastPathMerged, 'rows')?.get, 'function');
 
-    // Accessing .rows materializes once and shares the cached array
     const materializedRows = fastPathMerged.rows;
-    assert.equal(
-      materializedRows,
-      builtResult.rows,
-      'lazy materializer caches and shares the single object-row array',
-    );
+    assert.equal(materializedRows, builtResult.rows);
     assert.deepEqual(fastPathMerged.columns, ['id', 'label', 'label']);
     assert.deepEqual(fastPathMerged.rawRows, [
       [10, 'first-a', 'first-b'],
@@ -846,7 +821,6 @@ test('§7 Witness: single result representation reuse, lazy object rows, ' +
     assert.equal(materializedRows[PRESENTED_SAFE_INTEGERS_SYMBOL], false);
     assert.ok(Number.isSafeInteger(materializedRows[RESIDENT_RESULT_BYTES_SYMBOL]));
 
-    // Second merge call after .rows is already materialized reuses .rows by reference
     const secondFastPath = await mergeEngine.mergePartitionResults(
       [builtResult],
       ast,
@@ -858,49 +832,28 @@ test('§7 Witness: single result representation reuse, lazy object rows, ' +
     assert.equal(secondFastPath.rows, materializedRows);
     assert.equal(secondFastPath.rawRows, builtResult.rawRows);
 
-    // estimateResultBytes returns precomputed bytes in O(1) with 0 JSON.stringify calls
     estimatedBytes = estimateResultBytes(materializedRows);
-    assert.equal(
-      estimatedBytes,
-      materializedRows[RESIDENT_RESULT_BYTES_SYMBOL],
-    );
+    assert.equal(estimatedBytes, materializedRows[RESIDENT_RESULT_BYTES_SYMBOL]);
 
-    // Also test structural estimator on an unannotated plain array with 0 JSON.stringify calls
     const plainRows = [
       {id: 1, name: 'alpha', active: true, extra: null},
       {id: 2, name: 'beta "quoted"\nline', active: false, extra: null},
     ];
     const structuralBytes = estimateResultBytes(plainRows);
-    assert.equal(
-      structuralBytes,
-      originalStringify(plainRows).length * 2,
-      'structural byte estimator matches exact UTF-16 JSON byte length',
-    );
+    assert.equal(structuralBytes, originalStringify(plainRows).length * 2);
   } finally {
     JSON.stringify = originalStringify;
   }
 
-  assert.equal(
-    stringifyCalls,
-    0,
-    'zero JSON.stringify calls during decode, single-partition merge, and estimateResultBytes',
-  );
-  assert.equal(
-    estimatedBytes,
-    JSON.stringify(fastPathMerged.rows).length * 2,
-    'precomputed resident bytes during decode match exact UTF-16 JSON bytes',
-  );
+  assert.equal(stringifyCalls, 0);
+  assert.equal(estimatedBytes, JSON.stringify(fastPathMerged.rows).length * 2);
 
-  // Integer precision refusal when safeIntegers: false vs preserved BigInt when safeIntegers: true
   const unsafeRowSet = encodeTypedRowSet(['big'], [[9007199254740993n]]);
   assert.throws(
     () => decodePartitionResponseRows({rowSet: unsafeRowSet}, {safeIntegers: false}),
     {code: QUERY_ERROR_CODE.INTEGER_PRECISION_UNREPRESENTABLE},
   );
-  const safeDecoded = decodePartitionResponseRows(
-    {rowSet: unsafeRowSet},
-    {safeIntegers: true},
-  );
+  const safeDecoded = decodePartitionResponseRows({rowSet: unsafeRowSet}, {safeIntegers: true});
   assert.deepEqual(safeDecoded.rawRows, [[9007199254740993n]]);
   assert.deepEqual(safeDecoded.rows, [{big: 9007199254740993n}]);
 });
@@ -974,6 +927,31 @@ test('Structural Prevention Witness: composeDisjointMethodBags rejects ' +
     }
     proto = Object.getPrototypeOf(proto);
   }
+
+  // Verify ParallelQueryCoordinator has one single canonical acceptSpeculativeResult
+  // and parallelQueryCoordinatorHedgingMethods has zero colliding method names
+  assert.equal(
+    typeof ParallelQueryCoordinator.prototype.acceptSpeculativeResult,
+    'function',
+    'canonical acceptSpeculativeResult is defined on ParallelQueryCoordinator.prototype',
+  );
+  assert.equal(
+    Object.hasOwn(
+      parallelQueryCoordinatorHedgingMethods,
+      'acceptSpeculativeResult',
+    ),
+    false,
+    'duplicate acceptSpeculativeResult removed from hedging methods bag',
+  );
+  assert.throws(
+    () => {
+      class CollidingCoordinator {
+        executeWithSpeculativeExecution() {}
+      }
+      installParallelQueryCoordinatorHedgingMethods(CollidingCoordinator);
+    },
+    /Duplicate method "executeWithSpeculativeExecution" in CollidingCoordinator hedging composition/,
+  );
 });
 
 function instrumentLazyRowsGetter(target, onMaterialize) {
@@ -1000,29 +978,25 @@ test('Opportunity 1 End-to-End Witness: decodePartitionResponseRows -> ' +
   // 1. Single-partition end-to-end pipeline through QueryExecutor -> PGwire output
   const singlePartitionEncoded = encodeTypedRowSet(
     ['id', 'amount', 'label', 'label'],
-    [
-      [101n, 5000n, 'old-a', 'win-a'],
-      [102n, 7500n, 'old-b', 'win-b'],
-    ],
+    [[101n, 5000n, 'old-a', 'win-a'], [102n, 7500n, 'old-b', 'win-b']],
   );
   const singleCache = createMockSystemCache(
     [{table_name: TABLE, primaryKey: 'id'}],
     [PARTITION],
   );
-  const singleRouter = {
-    async deliver() {
-      return buildDeliveryEnvelope({acknowledged: true}, {
-        success: true,
-        rowSet: singlePartitionEncoded,
-        rowSetComplete: true,
-        readGeneration: 9,
-      });
-    },
-  };
   const singleExecutor = new QueryExecutor({
     controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     systemCache: singleCache,
-    messageRouter: singleRouter,
+    messageRouter: {
+      async deliver() {
+        return buildDeliveryEnvelope({acknowledged: true}, {
+          success: true,
+          rowSet: singlePartitionEncoded,
+          rowSetComplete: true,
+          readGeneration: 9,
+        });
+      },
+    },
     nodeId: 'lazy-e2e-single',
   });
   const origExecuteOnPartition =
@@ -1045,34 +1019,19 @@ test('Opportunity 1 End-to-End Witness: decodePartitionResponseRows -> ' +
   );
   singleFinalResult.statementType = 'SELECT';
 
-  assert.equal(
-    materializationCount,
-    0,
-    'QueryExecutor.executeSelect (including safeIntegers:false presentation) never accesses .rows',
-  );
-  assert.equal(
-    hasLazyRowsProperty(singleFinalResult),
-    true,
-    'finalResult.rows remains a lazy getter after QueryExecutor.executeSelect',
-  );
+  assert.equal(materializationCount, 0);
+  assert.equal(hasLazyRowsProperty(singleFinalResult), true);
   assert.deepEqual(singleFinalResult.rawRows, [
     [101, 5000, 'old-a', 'win-a'],
     [102, 7500, 'old-b', 'win-b'],
   ]);
   assert.equal(singleFinalResult.count, 2);
 
-  // Derive PGwire command tag and write PGwire frames
   const singleTag = deriveCommandTag(singleFinalResult);
   assert.equal(singleTag, 'SELECT 2');
-  assert.equal(
-    materializationCount,
-    0,
-    'deriveCommandTag computes SELECT count from rawRows without touching .rows',
-  );
+  assert.equal(materializationCount, 0);
 
-  const singleSocket = new BackpressuredMockSocket({
-    backpressureEveryWrites: 100,
-  });
+  const singleSocket = new BackpressuredMockSocket({backpressureEveryWrites: 100});
   const singleWriter = new PgWireOutputWriter({
     getSocket: () => singleSocket,
     isClosed: () => false,
@@ -1085,34 +1044,21 @@ test('Opportunity 1 End-to-End Witness: decodePartitionResponseRows -> ' +
     session: null,
   });
   assert.equal(wroteSingle, true);
-  assert.equal(
-    materializationCount,
-    0,
-    'entire PGwire SELECT execution completed with materializationCount === 0',
-  );
+  assert.equal(materializationCount, 0);
   const singleFrames = singleSocket.decodeFrames();
   assert.equal(singleFrames[0].type, PG_BACKEND_MSG.ROW_DESCRIPTION);
   assert.equal(
     singleFrames.filter((f) => f.type === PG_BACKEND_MSG.DATA_ROW).length,
     2,
   );
-  assert.equal(
-    singleFrames.at(-1).body.toString('utf8'),
-    'SELECT 2\0',
-  );
+  assert.equal(singleFrames.at(-1).body.toString('utf8'), 'SELECT 2\0');
 
-  // Internal caller explicitly accesses finalResult.rows -> materializes once
   const materializedSingleRows = singleFinalResult.rows;
-  assert.equal(
-    materializationCount,
-    1,
-    'explicit finalResult.rows access triggers lazy materialization exactly once',
-  );
+  assert.equal(materializationCount, 1);
   assert.deepEqual(materializedSingleRows, [
     {id: 101, amount: 5000, label: 'win-a'},
     {id: 102, amount: 7500, label: 'win-b'},
   ]);
-  // Second access uses cached property without re-materializing
   assert.equal(singleFinalResult.rows, materializedSingleRows);
   assert.equal(materializationCount, 1);
 
@@ -1130,15 +1076,17 @@ test('Opportunity 1 End-to-End Witness: decodePartitionResponseRows -> ' +
       partitionId,
       sql: `SELECT id, score FROM ${TABLE} ORDER BY id`,
     });
-    const built = builders.buildSuccessResult({
-      success: true,
-      rowSet,
-      rowSetComplete: true,
-      readGeneration: 1,
-    });
-    return instrumentLazyRowsGetter(built, () => {
-      hedgedMaterializationCount += 1;
-    });
+    return instrumentLazyRowsGetter(
+      builders.buildSuccessResult({
+        success: true,
+        rowSet,
+        rowSetComplete: true,
+        readGeneration: 1,
+      }),
+      () => {
+        hedgedMaterializationCount += 1;
+      },
+    );
   };
 
   let releaseSlowPrimary;
@@ -1147,16 +1095,11 @@ test('Opportunity 1 End-to-End Witness: decodePartitionResponseRows -> ' +
   });
 
   const hedgedCache = createMockSystemCache(
-    [
-      {
-        table_name: TABLE,
-        primaryKey: 'id',
-        columns: [
-          {name: 'id', type: 'INTEGER'},
-          {name: 'score', type: 'INTEGER'},
-        ],
-      },
-    ],
+    [{
+      table_name: TABLE,
+      primaryKey: 'id',
+      columns: [{name: 'id', type: 'INTEGER'}, {name: 'score', type: 'INTEGER'}],
+    }],
     [
       {
         partition_id: 'p1',
@@ -1173,22 +1116,15 @@ test('Opportunity 1 End-to-End Witness: decodePartitionResponseRows -> ' +
       },
     ],
   );
-  const replicaRegistry = new Map([
-    [
-      'p2',
-      [
-        {
-          replicaId: 'p2-hedge-replica',
-          status: 'active',
-          executeQuery: async () => decodeAndInstrument('p2', p2Encoded),
-        },
-      ],
-    ],
-  ]);
-
   const hedgedCoordinator = new ParallelQueryCoordinator({
     systemCache: hedgedCache,
-    replicaRegistry,
+    replicaRegistry: new Map([
+      ['p2', [{
+        replicaId: 'p2-hedge-replica',
+        status: 'active',
+        executeQuery: async () => decodeAndInstrument('p2', p2Encoded),
+      }]],
+    ]),
     nodeId: 'lazy-e2e-hedged-coord',
   });
   hedgedCoordinator.speculativeExecutionEnabled = true;
@@ -1217,27 +1153,16 @@ test('Opportunity 1 End-to-End Witness: decodePartitionResponseRows -> ' +
   assert.ok(
     hedgedCoordinator.queryCounter >= 1 &&
       hedgedExecutor.getLastCoordinatorMetrics()?.speculativeExecutions >= 1,
-    'speculative hedged execution ran and won for straggler partition p2',
   );
-  assert.equal(
-    hedgedMaterializationCount,
-    0,
-    'hedged ParallelQueryCoordinator + DistributedMergeEngine + QueryExecutor never touched partition .rows',
-  );
-  assert.equal(
-    hasLazyRowsProperty(hedgedFinalResult),
-    true,
-    'hedged multi-partition finalResult.rows is a lazy getter',
-  );
+  assert.equal(hedgedMaterializationCount, 0);
+  assert.equal(hasLazyRowsProperty(hedgedFinalResult), true);
   instrumentLazyRowsGetter(hedgedFinalResult, () => {
     hedgedMaterializationCount += 1;
   });
 
   const hedgedTag = deriveCommandTag(hedgedFinalResult);
   assert.equal(hedgedTag, 'SELECT 2');
-  const hedgedSocket = new BackpressuredMockSocket({
-    backpressureEveryWrites: 100,
-  });
+  const hedgedSocket = new BackpressuredMockSocket({backpressureEveryWrites: 100});
   const hedgedWriter = new PgWireOutputWriter({
     getSocket: () => hedgedSocket,
     isClosed: () => false,
@@ -1250,24 +1175,317 @@ test('Opportunity 1 End-to-End Witness: decodePartitionResponseRows -> ' +
     session: null,
   });
 
-  assert.equal(
-    hedgedMaterializationCount,
-    0,
-    'full hedged PGwire SELECT completed with hedgedMaterializationCount === 0',
-  );
-  assert.deepEqual(hedgedFinalResult.rawRows, [
-    [1, 100],
-    [2, 200],
-  ]);
-
-  // Explicit access to hedgedFinalResult.rows materializes accurate object rows
+  assert.equal(hedgedMaterializationCount, 0);
+  assert.deepEqual(hedgedFinalResult.rawRows, [[1, 100], [2, 200]]);
   assert.deepEqual(hedgedFinalResult.rows, [
     {id: 1, score: 100},
     {id: 2, score: 200},
   ]);
-  assert.equal(
-    hedgedMaterializationCount,
-    1,
-    'explicit hedgedFinalResult.rows access materialized object rows once',
+  assert.equal(hedgedMaterializationCount, 1);
+});
+
+test('Unit 4 Public Path Witness: PostgresWireAdapter -> SQLCore / ' +
+  'SQLQueryEngine -> QueryExecutor -> ParallelQueryCoordinator -> ' +
+  'DistributedMergeEngine -> PgWireOutputWriter executes with 0 object-row ' +
+  'materializations across single-partition, multi-partition, empty, ' +
+  'hedged speculative, and failed SELECT queries, and reuses ' +
+  'already-materialized object rows without a second rebuild pass', async (t) => {
+  resetEnvironment();
+  const tableSchema = {
+    table_name: TABLE,
+    primaryKey: 'id',
+    partition_key: 'id',
+    columns: [
+      {name: 'id', type: 'INTEGER', primaryKey: true},
+      {name: 'amount', type: 'INTEGER'},
+      {name: 'label', type: 'TEXT'},
+    ],
+  };
+
+  async function createPublicSelectHarness({
+    partitions = [PARTITION],
+    deliver,
+    parallelQueryCoordinator = null,
+    sessionId,
+  }) {
+    const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      systemCache: createMockSystemCache([tableSchema], partitions),
+      ...(deliver ? {messageRouter: {deliver}} : {}),
+      autoStartDistributedTransactionRecovery: false,
+      unrefRetryDelayTimers: true,
+    });
+    if (parallelQueryCoordinator) {
+      engine.queryExecutor.parallelQueryCoordinator = parallelQueryCoordinator;
+    }
+    t.after(async () => engine.shutdown());
+    const state = {getterEvaluations: 0};
+    const origExec = engine.queryExecutor.executeOnPartition.bind(
+      engine.queryExecutor,
+    );
+    engine.queryExecutor.executeOnPartition = async (...args) => {
+      const partRes = await origExec(...args);
+      return partRes?.success && hasLazyRowsProperty(partRes) ?
+        instrumentLazyRowsGetter(partRes, () => {
+          state.getterEvaluations += 1;
+        }) :
+        partRes;
+    };
+    const adapter = new PostgresWireAdapter({
+      sqlCore: engine,
+      authHandler: {
+        authenticate: async ({user, database}) => ({
+          authenticated: true,
+          context: {tenantId: database, principal: user, roles: ['admin']},
+        }),
+        authorizeQuery: () => ({authorized: true}),
+      },
+    });
+    await adapter.authenticate(sessionId, {tenantId: 'default', user: 'tester'});
+    return {engine, adapter, state};
+  }
+
+  async function writeResultToPgWire(result) {
+    const tag = deriveCommandTag(result);
+    const socket = new BackpressuredMockSocket({backpressureEveryWrites: 100});
+    const writer = new PgWireOutputWriter({
+      getSocket: () => socket,
+      isClosed: () => false,
+    });
+    const wrote = await writer.writeExecutionSuccess({
+      result,
+      executionMeta: {extended: false},
+      tag,
+      statementType: 'SELECT',
+      session: null,
+    });
+    assert.equal(wrote, true);
+    return {tag, frames: socket.decodeFrames()};
+  }
+
+  const countDataRows = (frames) =>
+    frames.filter((f) => f.type === PG_BACKEND_MSG.DATA_ROW).length;
+
+  // 1. Single-partition public SELECT (0 object-row materializations)
+  resetObjectRowMaterializationCount();
+  const singleEncoded = encodeTypedRowSet(
+    ['id', 'amount', 'label'],
+    [[101n, 5000n, 'alpha'], [102n, 7500n, 'beta']],
   );
+  const singleHarness = await createPublicSelectHarness({
+    sessionId: 'pub-single-sess',
+    deliver: async () => buildDeliveryEnvelope({acknowledged: true}, {
+      success: true,
+      rowSet: singleEncoded,
+      rowSetComplete: true,
+      readGeneration: 4,
+    }),
+  });
+  const singleResult = await singleHarness.adapter.execute(
+    'pub-single-sess',
+    `SELECT id, amount, label FROM ${TABLE}`,
+  );
+  assert.equal(singleResult.success, true);
+  assert.equal(hasLazyRowsProperty(singleResult), true);
+  const singleWire = await writeResultToPgWire(singleResult);
+  assert.equal(singleWire.tag, 'SELECT 2');
+  assert.equal(singleWire.frames[0].type, PG_BACKEND_MSG.ROW_DESCRIPTION);
+  assert.equal(countDataRows(singleWire.frames), 2);
+  assert.equal(getObjectRowMaterializationCount(), 0);
+  assert.equal(singleHarness.state.getterEvaluations, 0);
+
+  // 2. Multi-partition public SELECT (0 object-row materializations)
+  resetObjectRowMaterializationCount();
+  const multiP1Encoded = encodeTypedRowSet(
+    ['id', 'amount', 'label'],
+    [[10n, 100n, 'p1-first'], [30n, 300n, 'p1-second']],
+  );
+  const multiP2Encoded = encodeTypedRowSet(
+    ['id', 'amount', 'label'],
+    [[20n, 200n, 'p2-first']],
+  );
+  const multiPartitions = [
+    {partition_id: 'p1', table_name: TABLE, partition_key_start: null, partition_key_end: null},
+    {partition_id: 'p2', table_name: TABLE, partition_key_start: null, partition_key_end: null},
+  ];
+  const multiHarness = await createPublicSelectHarness({
+    partitions: multiPartitions,
+    sessionId: 'pub-multi-sess',
+    deliver: async (address) => buildDeliveryEnvelope({acknowledged: true}, {
+      success: true,
+      rowSet: address.split('/')[2] === 'p1' ? multiP1Encoded : multiP2Encoded,
+      rowSetComplete: true,
+      readGeneration: 5,
+    }),
+  });
+  const multiResult = await multiHarness.adapter.execute(
+    'pub-multi-sess',
+    `SELECT id, amount, label FROM ${TABLE} ORDER BY id ASC`,
+  );
+  assert.equal(multiResult.success, true);
+  assert.equal(hasLazyRowsProperty(multiResult), true);
+  assert.deepEqual(multiResult.rawRows, [
+    [10, 100, 'p1-first'],
+    [20, 200, 'p2-first'],
+    [30, 300, 'p1-second'],
+  ]);
+  const multiWire = await writeResultToPgWire(multiResult);
+  assert.equal(multiWire.tag, 'SELECT 3');
+  assert.equal(countDataRows(multiWire.frames), 3);
+  assert.equal(getObjectRowMaterializationCount(), 0);
+  assert.equal(multiHarness.state.getterEvaluations, 0);
+
+  // 3. Empty public SELECT result (0 object-row materializations)
+  resetObjectRowMaterializationCount();
+  const emptyEncoded = encodeTypedRowSet(['id', 'amount', 'label'], []);
+  const emptyHarness = await createPublicSelectHarness({
+    sessionId: 'pub-empty-sess',
+    deliver: async () => buildDeliveryEnvelope({acknowledged: true}, {
+      success: true,
+      rowSet: emptyEncoded,
+      rowSetComplete: true,
+      readGeneration: 6,
+    }),
+  });
+  const emptyResult = await emptyHarness.adapter.execute(
+    'pub-empty-sess',
+    `SELECT id, amount, label FROM ${TABLE}`,
+  );
+  assert.equal(emptyResult.success, true);
+  assert.deepEqual(emptyResult.rawRows, []);
+  const emptyWire = await writeResultToPgWire(emptyResult);
+  assert.equal(emptyWire.tag, 'SELECT 0');
+  assert.equal(countDataRows(emptyWire.frames), 0);
+  assert.equal(getObjectRowMaterializationCount(), 0);
+  assert.equal(emptyHarness.state.getterEvaluations, 0);
+
+  // 4. Hedged speculative public SELECT result (0 object-row materializations)
+  resetObjectRowMaterializationCount();
+  let hedgedGetterEvaluations = 0;
+  let releaseHedgedSlowPrimary;
+  const hedgedSlowPrimaryBarrier = new Promise((resolve) => {
+    releaseHedgedSlowPrimary = resolve;
+  });
+  t.after(() => releaseHedgedSlowPrimary?.());
+  const decodeHedgedPartition = (partitionId, rowSet) =>
+    instrumentLazyRowsGetter(
+      resolvePartitionExecutionBuilders({
+        executionOptions: {safeIntegers: true},
+        forRead: true,
+        params: [],
+        partitionId,
+        sql: `SELECT id, amount, label FROM ${TABLE} ORDER BY id ASC`,
+      }).buildSuccessResult({
+        success: true,
+        rowSet,
+        rowSetComplete: true,
+        readGeneration: 7,
+      }),
+      () => {
+        hedgedGetterEvaluations += 1;
+      },
+    );
+  const hedgedPartitions = [
+    {
+      partition_id: 'p1',
+      table_name: TABLE,
+      executeQuery: async () => decodeHedgedPartition('p1', multiP1Encoded),
+    },
+    {
+      partition_id: 'p2',
+      table_name: TABLE,
+      executeQuery: async () => {
+        await hedgedSlowPrimaryBarrier;
+        return decodeHedgedPartition('p2', multiP2Encoded);
+      },
+    },
+  ];
+  const hedgedCoordinator = new ParallelQueryCoordinator({
+    systemCache: createMockSystemCache([tableSchema], hedgedPartitions),
+    replicaRegistry: new Map([
+      ['p2', [{
+        replicaId: 'p2-public-hedge-replica',
+        status: 'active',
+        executeQuery: async () => decodeHedgedPartition('p2', multiP2Encoded),
+      }]],
+    ]),
+    nodeId: 'pub-hedged-coord',
+  });
+  hedgedCoordinator.speculativeExecutionEnabled = true;
+  hedgedCoordinator.speculativeExecutionDelayMs = 5;
+  hedgedCoordinator.stragglerThresholdMultiplier = 1;
+  const hedgedHarness = await createPublicSelectHarness({
+    partitions: hedgedPartitions,
+    parallelQueryCoordinator: hedgedCoordinator,
+    sessionId: 'pub-hedged-sess',
+  });
+  const hedgedPublicResult = await hedgedHarness.adapter.execute(
+    'pub-hedged-sess',
+    `SELECT id, amount, label FROM ${TABLE} ORDER BY id ASC`,
+  );
+  releaseHedgedSlowPrimary();
+  assert.equal(hedgedPublicResult.success, true);
+  assert.ok(
+    hedgedHarness.engine.queryExecutor.getLastCoordinatorMetrics()
+      ?.speculativeExecutions >= 1,
+  );
+  assert.equal(hasLazyRowsProperty(hedgedPublicResult), true);
+  const hedgedPublicWire = await writeResultToPgWire(hedgedPublicResult);
+  assert.equal(hedgedPublicWire.tag, 'SELECT 3');
+  assert.equal(getObjectRowMaterializationCount(), 0);
+  assert.equal(hedgedGetterEvaluations, 0);
+
+  // 5. Failed public SELECT query (0 object-row materializations)
+  resetObjectRowMaterializationCount();
+  const failedHarness = await createPublicSelectHarness({
+    sessionId: 'pub-failed-sess',
+    deliver: async () => buildDeliveryEnvelope({acknowledged: true}, {
+      success: false,
+      error: 'Partition replica unavailable',
+      errorCode: QUERY_ERROR_CODE.QUERY_ROUTING_FAILED,
+    }),
+  });
+  const failedResult = await failedHarness.adapter.execute(
+    'pub-failed-sess',
+    `SELECT id, amount, label FROM ${TABLE}`,
+  );
+  assert.equal(failedResult.success, false);
+  assert.equal(
+    failedResult.errorCode,
+    QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
+  );
+  assert.equal(getObjectRowMaterializationCount(), 0);
+
+  // 6. Reuse of already-materialized object rows without a second rebuild pass
+  resetObjectRowMaterializationCount();
+  const firstAccessRows = multiResult.rows;
+  assert.equal(getObjectRowMaterializationCount(), 1);
+  assert.deepEqual(firstAccessRows, [
+    {id: 10, amount: 100, label: 'p1-first'},
+    {id: 20, amount: 200, label: 'p2-first'},
+    {id: 30, amount: 300, label: 'p1-second'},
+  ]);
+  const secondAccessRows = multiResult.rows;
+  assert.equal(secondAccessRows, firstAccessRows);
+  assert.equal(getObjectRowMaterializationCount(), 1);
+
+  const partMetrics = new PartitionQueryMetrics('p1');
+  partMetrics.start();
+  partMetrics.complete(firstAccessRows.length, 64);
+  assert.equal(
+    buildPartitionExecutionSuccessOutcome('p1', partMetrics, multiResult).rows,
+    firstAccessRows,
+  );
+  assert.equal(
+    attachAggregatedSelectRows({success: true}, multiResult, {
+      safeIntegers: false,
+    }).rows,
+    firstAccessRows,
+  );
+  const clonedFromMaterialized = cloneResultWithMetadata(multiResult, {
+    extraMeta: 'preserved',
+  });
+  assert.equal(clonedFromMaterialized.rows, firstAccessRows);
+  assert.equal(clonedFromMaterialized.extraMeta, 'preserved');
+  assert.equal(getObjectRowMaterializationCount(), 1);
 });

@@ -6,6 +6,7 @@ import {META_SERVICE_ID} from '../constants/wasm-meta.js';
 import {isSystemTableName} from
   '../bootstrap/system-table-schema-shared-constants.js';
 import {readExecutedStatementType} from './application-database-result.js';
+import {cloneResultWithMetadata} from './sql-value-presentation.js';
 import {PARSER_DIALECT} from './pg/pg-compat-constants.js';
 import {describePostgresSqlStatement} from './pg/postgres-wire-description.js';
 import {QUERY_OPERATION} from './query-constants.js';
@@ -481,7 +482,9 @@ class SQLQueryEngineRequestDispatch extends
       resolveTableSchema: (tableName) =>
         this.queryExecutor.resolveTableInfo(tableName),
     });
-    return {...result, columnDescriptors: description.columns};
+    return cloneResultWithMetadata(result, {
+      columnDescriptors: description.columns,
+    });
   }
 
   async dispatchSqlRequest(sqlRequest, executionOptions = {}) {
