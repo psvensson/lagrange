@@ -15,10 +15,12 @@ import {
   encodeTypedParams,
   typedRowSetByteLength,
 } from './sql-value-codec.js';
+import {presentSqlValue} from './sql-value-presentation.js';
 import {
-  materializeAndPresentRowObjects,
-  presentRawSqlRows,
-} from './sql-value-presentation.js';
+  estimateJsonStringChars,
+  estimateJsonValueChars,
+  stampPresentedRowCollection,
+} from './distributed/parallel-query-execution-metrics.js';
 import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
 import {LEADER_READ_REQUEST_FIELD, leaderReadRequestOf} from
@@ -181,20 +183,131 @@ function createDefaultPartitionRequestBuilder({
   };
 }
 
+const LAZY_ROWS_GETTER_SYMBOL_KEY = 'lagrange.query.lazyRowsGetter';
+const LAZY_ROWS_GETTER_SYMBOL = Symbol.for(LAZY_ROWS_GETTER_SYMBOL_KEY);
+const PROP_ROWS = 'rows';
+const UTF16_BYTES_PER_CHAR = 2;
+
+function presentDecodedRowsInPlaceAndMeasureBytes(columns, rawRows, safeIntegers) {
+  const colCount = Array.isArray(columns) ? columns.length : 0;
+  const lastIndexByCol = new Map();
+  for (let c = 0; c < colCount; c += 1) {
+    lastIndexByCol.set(String(columns[c]), c);
+  }
+  const isWinningCol = new Array(colCount);
+  let baseRowChars = 2 + Math.max(0, lastIndexByCol.size - 1);
+  for (let c = 0; c < colCount; c += 1) {
+    const colName = String(columns[c]);
+    const wins = lastIndexByCol.get(colName) === c;
+    isWinningCol[c] = wins;
+    if (wins) {
+      baseRowChars += estimateJsonStringChars(colName) + 1;
+    }
+  }
+  const presentationOptions = {safeIntegers};
+  let totalChars = rawRows.length > 0 ? 2 + (rawRows.length - 1) : 0;
+  for (let r = 0; r < rawRows.length; r += 1) {
+    const row = rawRows[r];
+    let rowChars = baseRowChars;
+    for (let c = 0; c < colCount; c += 1) {
+      const cell = row[c] === undefined ? null : row[c];
+      const presented = safeIntegers ?
+        cell :
+        presentSqlValue(cell, presentationOptions);
+      row[c] = presented;
+      if (isWinningCol[c]) {
+        rowChars += estimateJsonValueChars(presented);
+      }
+    }
+    totalChars += rowChars;
+  }
+  const residentBytes = rawRows.length === 0 ?
+    0 :
+    totalChars * UTF16_BYTES_PER_CHAR;
+  stampPresentedRowCollection(rawRows, safeIntegers, residentBytes);
+  return residentBytes;
+}
+
+function materializePresentedRowObjects(
+  columns,
+  rawRows,
+  safeIntegers,
+  residentBytes,
+) {
+  const colCount = Array.isArray(columns) ? columns.length : 0;
+  const rows = new Array(rawRows.length);
+  for (let r = 0; r < rawRows.length; r += 1) {
+    const rawRow = rawRows[r];
+    const obj = {};
+    for (let c = 0; c < colCount; c += 1) {
+      obj[columns[c]] = rawRow[c] === undefined ? null : rawRow[c];
+    }
+    rows[r] = obj;
+  }
+  return stampPresentedRowCollection(rows, safeIntegers, residentBytes);
+}
+
+function attachLazyRowsProperty(target, getRows) {
+  Object.defineProperty(target, LAZY_ROWS_GETTER_SYMBOL, {
+    value: getRows,
+    writable: true,
+    enumerable: false,
+    configurable: true,
+  });
+  Object.defineProperty(target, PROP_ROWS, {
+    enumerable: true,
+    configurable: true,
+    get() {
+      const materialized = getRows();
+      Object.defineProperty(target, PROP_ROWS, {
+        value: materialized,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      return materialized;
+    },
+    set(nextRows) {
+      Object.defineProperty(target, PROP_ROWS, {
+        value: nextRows,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+    },
+  });
+  return target;
+}
+
 function decodePartitionResponseRows(response, executionOptions) {
   const safeIntegers = executionOptions?.safeIntegers === true;
   if (response.rowSet !== undefined && response.rowSet !== null) {
     const decoded = decodeTypedRowSet(response.rowSet);
     const byteLength = typedRowSetByteLength(response.rowSet);
-    return {
-      rows: materializeAndPresentRowObjects(decoded.columns, decoded.rows, {
-        safeIntegers,
-      }),
-      rawRows: presentRawSqlRows(decoded.rows, {safeIntegers}),
+    const residentBytes = presentDecodedRowsInPlaceAndMeasureBytes(
+      decoded.columns,
+      decoded.rows,
+      safeIntegers,
+    );
+    let cachedRows = null;
+    const getRows = () => {
+      if (cachedRows === null) {
+        cachedRows = materializePresentedRowObjects(
+          decoded.columns,
+          decoded.rows,
+          safeIntegers,
+          residentBytes,
+        );
+      }
+      return cachedRows;
+    };
+    return attachLazyRowsProperty({
+      rawRows: decoded.rows,
       columns: decoded.columns,
       rowSet: response.rowSet,
       byteLength,
-    };
+      residentBytes,
+    }, getRows);
   }
   return {
     rows: response.rows || [],
@@ -205,39 +318,50 @@ function decodePartitionResponseRows(response, executionOptions) {
   };
 }
 
+function copyOptionalDecodedFields(target, decodedPayload) {
+  if (decodedPayload.rawRows) target.rawRows = decodedPayload.rawRows;
+  if (decodedPayload.columns) target.columns = decodedPayload.columns;
+  if (decodedPayload.rowSet) target.rowSet = decodedPayload.rowSet;
+  if (decodedPayload.byteLength > 0) target.byteLength = decodedPayload.byteLength;
+}
+
+function copyOptionalResponseFields(target, response) {
+  if (response.executionEnvelope) {
+    target.executionEnvelope = response.executionEnvelope;
+  }
+  if (typeof response.rowSetComplete === 'boolean') {
+    target.rowSetComplete = response.rowSetComplete;
+  }
+  if (response.partial === true) target.partial = true;
+  if (response.settledReplay !== undefined) {
+    target.settledReplay = response.settledReplay;
+  }
+  if (response.authoritativeObservation) {
+    target.authoritativeObservation = response.authoritativeObservation;
+  }
+  if (Number.isSafeInteger(response.readGeneration)) {
+    target.readGeneration = response.readGeneration;
+  }
+}
+
 function buildDecodedPartitionSuccessResult(partitionId, response, decodedPayload) {
-  return {
+  const lazyGetRows = decodedPayload?.[LAZY_ROWS_GETTER_SYMBOL];
+  const hasLazyRows =
+    typeof lazyGetRows === QUERY_EXECUTOR_LITERAL.STRING_FUNCTION;
+  const result = {
     partitionId,
     success: true,
-    rows: decodedPayload.rows,
-    ...(decodedPayload.rawRows ? {rawRows: decodedPayload.rawRows} : {}),
-    ...(decodedPayload.columns ? {columns: decodedPayload.columns} : {}),
-    ...(decodedPayload.rowSet ? {rowSet: decodedPayload.rowSet} : {}),
-    ...(decodedPayload.byteLength > 0 ?
-      {byteLength: decodedPayload.byteLength} :
-      {}),
-    ...(response.executionEnvelope ?
-      {executionEnvelope: response.executionEnvelope} :
-      {}),
+    ...(hasLazyRows ? {} : {rows: decodedPayload.rows}),
     changes: response.changes,
-    ...(typeof response.rowSetComplete === 'boolean' ?
-      {rowSetComplete: response.rowSetComplete} :
-      {}),
-    ...(response.partial === true ? {partial: true} : {}),
-    ...(response.settledReplay === undefined ? {} :
-      {settledReplay: response.settledReplay}),
     durableCommitWitness: response.durableCommitWitness,
     originHlc: response.originHlc,
     acceptingNodeId: response.acceptingNodeId,
     acknowledgedAtMs: response.acknowledgedAtMs,
     readAuthorityWitness: response.readAuthorityWitness,
-    ...(response.authoritativeObservation ?
-      {authoritativeObservation: response.authoritativeObservation} :
-      {}),
-    ...(Number.isSafeInteger(response.readGeneration) ?
-      {readGeneration: response.readGeneration} :
-      {}),
   };
+  copyOptionalDecodedFields(result, decodedPayload);
+  copyOptionalResponseFields(result, response);
+  return hasLazyRows ? attachLazyRowsProperty(result, lazyGetRows) : result;
 }
 
 function resolvePartitionExecutionBuilders({

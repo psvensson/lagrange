@@ -155,7 +155,7 @@ test('a valid recovered transaction is decided by recovery, never by the ' +
   assert.equal(replay.resumed, 1);
   assert.equal(replay.results[0].replayPath, 'COMMIT');
   assert.deepEqual(mutations.filter((entry) => !entry.startsWith('participant:')),
-    ['decision:COMMIT', 'transaction:COMMITTING', 'COMMIT', 'transaction:COMMITTED']);
+    ['decision:COMMIT', 'COMMIT', 'transaction:COMMITTED']);
   assert.equal(coordinator.getTransaction(SESSION_ID), null);
 });
 

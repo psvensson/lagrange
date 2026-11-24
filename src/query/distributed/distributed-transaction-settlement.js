@@ -42,7 +42,7 @@ const ROW_WHERE = 'transaction_id = ? AND session_id = ? AND transaction_epoch =
 const FREEZE_SQL = 'UPDATE sql_transactions SET participant_set_state = ?, commit_mode = ?, ' +
   'frozen_participant_count = ? WHERE ' + ROW_WHERE;
 const DECIDE_SQL = 'UPDATE sql_transactions SET decision = ?, decision_text = ?, ' +
-  'decision_digest = ? WHERE ' + ROW_WHERE;
+  'decision_digest = ?, status = ? WHERE ' + ROW_WHERE;
 const PROGRESS_SQL = 'UPDATE sql_transactions SET status = ? WHERE ' + ROW_WHERE;
 
 function outcome(value, reason = null, record = null) {
@@ -213,8 +213,11 @@ function applyTransactionSettlement(database, input) {
       COMMIT_MODE.TWO_PHASE_COMMIT, readParticipantSet(command.transactionId,
         command.participantSetText).length, ...where);
   } else if (command.kind === KIND.DECIDE) {
+    const progressStatus = command.decision === DECISION.COMMIT ?
+      TRANSACTION_STATUS.COMMITTING :
+      TRANSACTION_STATUS.ROLLING_BACK;
     changed = database.prepare(DECIDE_SQL).run(command.decision, command.decisionText,
-      command.decisionDigest, ...where);
+      command.decisionDigest, progressStatus, ...where);
   } else {
     changed = database.prepare(PROGRESS_SQL).run(command.status, ...where);
   }

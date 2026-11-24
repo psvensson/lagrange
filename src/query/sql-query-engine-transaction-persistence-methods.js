@@ -28,8 +28,18 @@ import {
   CONTROL_PLANE_MUTATION_OUTCOME,
 } from
   '../control-plane/control-plane-system-table-gateway-constants.js';
-import {TRANSACTION_ID_COLLISION_CODE} from
-  './distributed/distributed-transaction-coordinator-constants.js';
+import {
+  TRANSACTION_ID_COLLISION_CODE,
+  TRANSACTION_STATUS,
+} from './distributed/distributed-transaction-coordinator-constants.js';
+import {
+  TRANSACTION_METADATA_PERSIST_PURPOSE,
+  resolveNowMs,
+} from './distributed/distributed-transaction-telemetry.js';
+import {
+  incompleteParticipantSet,
+  readParticipantSet,
+} from './distributed/distributed-transaction-participant-set.js';
 import {PARTICIPANT_SET_STATE} from '../constants/index.js';
 import {sqlQueryEngineTransactionSetMethods} from './sql-query-engine-transaction-set-methods.js';
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
@@ -44,6 +54,7 @@ const {
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_FUNCTION = 'function';
+const DECISION_COMMIT = 'COMMIT';
 const SQL_TRANSACTION_COALESCING_PREFIX = 'sql-transaction:';
 const SQL_TRANSACTION_PARTICIPANT_COALESCING_PREFIX =
   'sql-transaction-participant:';
@@ -119,6 +130,167 @@ function sqlTransactionRowFieldsOf(record) {
   };
 }
 
+function hasSingleAffectedCount(value) {
+  return Number.isSafeInteger(value) && value === 1;
+}
+
+function isCertifiedSingleRowUpdate(mutation) {
+  if (mutation?.success !== true) return false;
+  return (
+    hasSingleAffectedCount(mutation.partitionResult?.affectedRows) ||
+    hasSingleAffectedCount(mutation.affectedRows) ||
+    hasSingleAffectedCount(mutation.changes)
+  );
+}
+
+function matchesParticipantSetReadback(row, data) {
+  return (
+    row.participant_set_text === data.participant_set_text &&
+    row.participant_set_state === data.participant_set_state &&
+    row.commit_mode === data.commit_mode &&
+    row.frozen_participant_count === data.frozen_participant_count &&
+    (data.status === undefined || row.status === data.status || row.decision !== null)
+  );
+}
+
+function resolveTransactionRowPersistPurpose(record, options) {
+  if (options?.insertOnce === true) {
+    return TRANSACTION_METADATA_PERSIST_PURPOSE.REGISTRATION;
+  }
+  const status = record?.status;
+  if (
+    status === TRANSACTION_STATUS.PREPARING ||
+    status === TRANSACTION_STATUS.PREPARED
+  ) {
+    return TRANSACTION_METADATA_PERSIST_PURPOSE.PREPARING;
+  }
+  if (
+    status === TRANSACTION_STATUS.COMMITTING ||
+    status === TRANSACTION_STATUS.ROLLING_BACK
+  ) {
+    return TRANSACTION_METADATA_PERSIST_PURPOSE.DECISION_AND_COMMITTING;
+  }
+  if (
+    status === TRANSACTION_STATUS.COMMITTED ||
+    status === TRANSACTION_STATUS.ROLLED_BACK
+  ) {
+    return TRANSACTION_METADATA_PERSIST_PURPOSE.SETTLEMENT;
+  }
+  return TRANSACTION_METADATA_PERSIST_PURPOSE.REGISTRATION;
+}
+
+function resolveParticipantRowPersistPurpose(record) {
+  const status = record?.status;
+  if (status === TRANSACTION_STATUS.ACTIVE) {
+    return TRANSACTION_METADATA_PERSIST_PURPOSE.PARTICIPANT_ADMISSION;
+  }
+  if (status === TRANSACTION_STATUS.PREPARED || status === TRANSACTION_STATUS.PREPARING) {
+    return TRANSACTION_METADATA_PERSIST_PURPOSE.PREPARING;
+  }
+  if (
+    status === TRANSACTION_STATUS.COMMITTED ||
+    status === TRANSACTION_STATUS.ROLLED_BACK
+  ) {
+    return TRANSACTION_METADATA_PERSIST_PURPOSE.SETTLEMENT;
+  }
+  return TRANSACTION_METADATA_PERSIST_PURPOSE.STATEMENT_OUTCOME;
+}
+
+function resolveDecisionProgressStatus(record) {
+  return record?.decision === DECISION_COMMIT ?
+    TRANSACTION_STATUS.COMMITTING :
+    TRANSACTION_STATUS.ROLLING_BACK;
+}
+
+function shouldIncludePreparingStatusInFreeze(record) {
+  return (
+    record.participantSetState === PARTICIPANT_SET_STATE.FROZEN &&
+    record.status === TRANSACTION_STATUS.PREPARING &&
+    record.recoveryDiscovered !== true
+  );
+}
+
+function buildParticipantSetUpdateData(record) {
+  const data = {
+    participant_set_text: record.participantSetText,
+    participant_set_state: record.participantSetState,
+    commit_mode: record.commitMode,
+    frozen_participant_count: record.frozenParticipantCount,
+  };
+  if (shouldIncludePreparingStatusInFreeze(record)) {
+    data.status = TRANSACTION_STATUS.PREPARING;
+    if (Number.isFinite(record.updatedAt)) {
+      data.updated_at = record.updatedAt;
+    }
+  }
+  return data;
+}
+
+function isValidParticipantSetReadbackRow(row, record, data) {
+  if (!row || row.session_id !== record.sessionId ||
+      row.transaction_epoch !== record.transactionEpoch) {
+    return false;
+  }
+  if (!matchesParticipantSetReadback(row, data)) {
+    return false;
+  }
+  return !(
+    record.participantSetState === PARTICIPANT_SET_STATE.OPEN &&
+    row.decision !== null
+  );
+}
+
+function shouldElideTransientParticipantStatus(record) {
+  return (
+    TRANSIENT_PARTICIPANT_STATUSES.has(record?.status) &&
+    !record?.lastError
+  );
+}
+
+function participantCoalescingKeyOf(participantId) {
+  return participantId.length > 0 ?
+    `${SQL_TRANSACTION_PARTICIPANT_COALESCING_PREFIX}${participantId}` :
+    null;
+}
+
+function buildParticipantRowPayload(participantId, transactionId, record) {
+  return {
+    participant_id: participantId,
+    transaction_id: transactionId,
+    partition_id: record.partitionId,
+    status: record.status,
+    last_error: record.lastError,
+    prepared_digest: record.preparedDigest ?? null,
+    prepare_index: record.prepareIndex ?? null,
+    prepare_term: record.prepareTerm ?? null,
+    created_at: record.createdAt,
+    updated_at: record.updatedAt,
+  };
+}
+
+function resolveWriteOperationWorkClass(record) {
+  return typeof record?.workClass === LOCAL_STR_STRING &&
+    record.workClass.length > 0 ?
+    record.workClass :
+    PRESSURE_WORK_CLASS.INTERACTIVE;
+}
+
+function buildWriteOperationRowPayload(operationId, transactionId, record) {
+  return {
+    operation_id: operationId,
+    transaction_id: transactionId || null,
+    statement_type: record.statementType,
+    status: record.status,
+    idempotency_key: record.idempotencyKey,
+    payload_hash: record.payloadHash,
+    retry_count: record.retryCount || 0,
+    last_error: record.lastError || null,
+    partition_ids: JSON.stringify(record.partitionIds || []),
+    created_at: record.createdAt,
+    updated_at: record.updatedAt,
+  };
+}
+
 const sqlQueryEngineTransactionPersistenceMethods = {
   assertDistributedTransactionMutationSucceeded(result, tableName) {
     if (result?.success === true) {
@@ -146,30 +318,40 @@ const sqlQueryEngineTransactionPersistenceMethods = {
       throw persistenceUnavailableError();
     }
     const transactionId = trimmedString(record?.transactionId);
-    if (options.insertOnce === true) {
-      await this.insertDistributedTransactionRowOnce(transactionId, record);
-      return;
+    const purpose = resolveTransactionRowPersistPurpose(record, options);
+    const startedAtMs = resolveNowMs();
+    try {
+      if (options.insertOnce === true) {
+        await this.insertDistributedTransactionRowOnce(transactionId, record);
+        return;
+      }
+      const result = await this.getControlPlaneSystemTableGateway().submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+        tableName: TABLES.SQL_TRANSACTIONS,
+        whereClause: {transaction_id: transactionId},
+        // Progress never reopens admission or overwrites immutable identity.
+        data: {status: record.status, updated_at: record.updatedAt},
+      }, this.buildDistributedTransactionMutationOptions(
+        TABLES.SQL_TRANSACTIONS,
+        {
+          // Durable transaction state must bypass interactive admission
+          // pressure and retain critical delivery priority so recovery metadata
+          // does not stall behind background control-plane backlog.
+          workClass: PRESSURE_WORK_CLASS.CRITICAL,
+          coalescingKey: `${SQL_TRANSACTION_COALESCING_PREFIX}${transactionId}`,
+        },
+      ));
+      this.assertDistributedTransactionMutationSucceeded(
+        result,
+        TABLES.SQL_TRANSACTIONS,
+      );
+    } finally {
+      this.transactionCoordinator?.noteMetadataPersistElapsed?.(
+        transactionId,
+        purpose,
+        Math.max(0, resolveNowMs() - startedAtMs),
+      );
     }
-    const result = await this.getControlPlaneSystemTableGateway().submitMutation({
-      operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-      tableName: TABLES.SQL_TRANSACTIONS,
-      whereClause: {transaction_id: transactionId},
-      // Progress never reopens admission or overwrites immutable identity.
-      data: {status: record.status, updated_at: record.updatedAt},
-    }, this.buildDistributedTransactionMutationOptions(
-      TABLES.SQL_TRANSACTIONS,
-      {
-        // Durable transaction state must bypass interactive admission
-        // pressure and retain critical delivery priority so recovery metadata
-        // does not stall behind background control-plane backlog.
-        workClass: PRESSURE_WORK_CLASS.CRITICAL,
-        coalescingKey: `${SQL_TRANSACTION_COALESCING_PREFIX}${transactionId}`,
-      },
-    ));
-    this.assertDistributedTransactionMutationSucceeded(
-      result,
-      TABLES.SQL_TRANSACTIONS,
-    );
   },
 
   /**
@@ -260,9 +442,11 @@ const sqlQueryEngineTransactionPersistenceMethods = {
   },
 
   /**
-   * Record a transaction's decision once: the UPDATE is guarded on
-   * `decision IS NULL`; a guarded write that changes no row found a decision
-   * already recorded (typed TRANSACTION_DECISION_RECORDED).
+   * Record a transaction's decision once and advance its progress status
+   * (`COMMITTING` for `COMMIT`, `ROLLING_BACK` for `ROLLBACK`) atomically:
+   * the UPDATE is guarded on `decision IS NULL`; a guarded write that changes
+   * no row found a decision already recorded (typed
+   * TRANSACTION_DECISION_RECORDED).
    * @param {Object} record - {transactionId, decision, decisionText,
    *   decisionDigest}.
    * @return {Promise<void>}
@@ -271,6 +455,14 @@ const sqlQueryEngineTransactionPersistenceMethods = {
     if (!this.canPersistDistributedTransactionState()) {
       throw persistenceUnavailableError();
     }
+    const progressStatus = resolveDecisionProgressStatus(record);
+    const data = {
+      decision: record.decision,
+      decision_text: record.decisionText,
+      decision_digest: record.decisionDigest,
+      status: progressStatus,
+      ...(Number.isFinite(record?.updatedAt) ? {updated_at: record.updatedAt} : {}),
+    };
     const result = await this.getControlPlaneSystemTableGateway().submitMutation({
       operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
       tableName: TABLES.SQL_TRANSACTIONS,
@@ -282,11 +474,7 @@ const sqlQueryEngineTransactionPersistenceMethods = {
         participant_set_text: record.participantSetText,
         decision: null,
       },
-      data: {
-        decision: record.decision,
-        decision_text: record.decisionText,
-        decision_digest: record.decisionDigest,
-      },
+      data,
     }, this.buildDistributedTransactionMutationOptions(
       TABLES.SQL_TRANSACTIONS,
       {workClass: PRESSURE_WORK_CLASS.CRITICAL},
@@ -301,6 +489,51 @@ const sqlQueryEngineTransactionPersistenceMethods = {
         QUERY_ERROR_CODE.TRANSACTION_DECISION_RECORDED,
         QUERY_ERROR_MSG.TRANSACTION_DECISION_RECORDED,
       );
+    }
+  },
+
+  /**
+   * Persist admitted participant set or atomic manifest freeze (+ PREPARING
+   * transition when transitioning an ACTIVE transaction into prepare).
+   * @param {Object} record - Transaction state with intended participant set / freeze fields.
+   * @param {string} previousText - Prior participant_set_text CAS guard.
+   * @return {Promise<void>}
+   */
+  async persistDistributedTransactionParticipantSet(record, previousText) {
+    const pairs = readParticipantSet(record.transactionId, record.participantSetText);
+    if (!pairs || !readParticipantSet(record.transactionId, previousText)) {
+      throw incompleteParticipantSet();
+    }
+    const expected = {
+      transaction_id: record.transactionId,
+      session_id: record.sessionId,
+      transaction_epoch: record.transactionEpoch,
+      participant_set_state: PARTICIPANT_SET_STATE.OPEN,
+      participant_set_text: previousText,
+      decision: null,
+    };
+    const data = buildParticipantSetUpdateData(record);
+    let mutation;
+    try {
+      mutation = await this.getControlPlaneSystemTableGateway().submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+        tableName: TABLES.SQL_TRANSACTIONS,
+        whereClause: expected,
+        data,
+      }, this.buildDistributedTransactionMutationOptions(
+        TABLES.SQL_TRANSACTIONS,
+        {workClass: PRESSURE_WORK_CLASS.CRITICAL},
+      ));
+    } catch (error) {
+      mutation = {success: false, error: error?.message};
+    }
+    if (isCertifiedSingleRowUpdate(mutation)) {
+      return;
+    }
+    const row = await this.readDistributedTransactionRow(record.transactionId);
+    if (!isValidParticipantSetReadbackRow(row, record, data)) {
+      this.assertDistributedTransactionMutationSucceeded(mutation, TABLES.SQL_TRANSACTIONS);
+      throw incompleteParticipantSet();
     }
   },
 
@@ -343,40 +576,35 @@ const sqlQueryEngineTransactionPersistenceMethods = {
     if (!this.canPersistDistributedTransactionState()) {
       throw persistenceUnavailableError();
     }
-    if (TRANSIENT_PARTICIPANT_STATUSES.has(record?.status) &&
-        !record?.lastError) {
+    const transactionId = trimmedString(record?.transactionId);
+    if (shouldElideTransientParticipantStatus(record)) {
+      this.transactionCoordinator?.noteElidedMetadataMutation?.(transactionId);
       return;
     }
     const participantId = trimmedString(record?.participantId);
-    const transactionId = trimmedString(record?.transactionId);
-    const result = await this.getControlPlaneSystemTableGateway().submitMutation({
-      operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
-      tableName: TABLES.SQL_TRANSACTION_PARTICIPANTS,
-      row: {
-        participant_id: participantId,
-        transaction_id: transactionId,
-        partition_id: record.partitionId,
-        status: record.status,
-        last_error: record.lastError,
-        prepared_digest: record.preparedDigest ?? null,
-        prepare_index: record.prepareIndex ?? null,
-        prepare_term: record.prepareTerm ?? null,
-        created_at: record.createdAt,
-        updated_at: record.updatedAt,
-      },
-    }, this.buildDistributedTransactionMutationOptions(
-      TABLES.SQL_TRANSACTION_PARTICIPANTS,
-      {
-        workClass: PRESSURE_WORK_CLASS.CRITICAL,
-        coalescingKey: participantId.length > 0 ?
-          `${SQL_TRANSACTION_PARTICIPANT_COALESCING_PREFIX}${participantId}` :
-          null,
-      },
-    ));
-    this.assertDistributedTransactionMutationSucceeded(
-      result,
-      TABLES.SQL_TRANSACTION_PARTICIPANTS,
-    );
+    const purpose = resolveParticipantRowPersistPurpose(record);
+    const coalescingKey = participantCoalescingKeyOf(participantId);
+    const startedAtMs = resolveNowMs();
+    try {
+      const result = await this.getControlPlaneSystemTableGateway().submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
+        tableName: TABLES.SQL_TRANSACTION_PARTICIPANTS,
+        row: buildParticipantRowPayload(participantId, transactionId, record),
+      }, this.buildDistributedTransactionMutationOptions(
+        TABLES.SQL_TRANSACTION_PARTICIPANTS,
+        {workClass: PRESSURE_WORK_CLASS.CRITICAL, coalescingKey},
+      ));
+      this.assertDistributedTransactionMutationSucceeded(
+        result,
+        TABLES.SQL_TRANSACTION_PARTICIPANTS,
+      );
+    } finally {
+      this.transactionCoordinator?.noteMetadataPersistElapsed?.(
+        transactionId,
+        purpose,
+        Math.max(0, resolveNowMs() - startedAtMs),
+      );
+    }
   },
 
   /**
@@ -392,47 +620,38 @@ const sqlQueryEngineTransactionPersistenceMethods = {
     }
     const operationId = trimmedString(record?.operationId);
     const transactionId = trimmedString(record?.transactionId);
-    const workClass =
-      typeof record?.workClass === LOCAL_STR_STRING &&
-        record.workClass.length > 0 ?
-        record.workClass :
-        PRESSURE_WORK_CLASS.INTERACTIVE;
-    const result = await this.getControlPlaneSystemTableGateway().submitMutation({
-      operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
-      tableName: TABLES.SQL_WRITE_OPERATIONS,
-      row: {
-        operation_id: operationId,
-        transaction_id: transactionId || null,
-        statement_type: record.statementType,
-        status: record.status,
-        idempotency_key: record.idempotencyKey,
-        payload_hash: record.payloadHash,
-        retry_count: record.retryCount || 0,
-        last_error: record.lastError || null,
-        partition_ids: JSON.stringify(record.partitionIds || []),
-        created_at: record.createdAt,
-        updated_at: record.updatedAt,
-      },
-    }, this.buildDistributedTransactionMutationOptions(
-      TABLES.SQL_WRITE_OPERATIONS,
-      {
-        workClass,
-        coalescingKey: operationId.length > 0 ?
-          `${SQL_WRITE_OPERATION_COALESCING_PREFIX}${operationId}` :
-          null,
-      },
-    ));
-    this.assertDistributedTransactionMutationSucceeded(
-      result,
-      TABLES.SQL_WRITE_OPERATIONS,
-    );
+    const workClass = resolveWriteOperationWorkClass(record);
+    const coalescingKey = operationId.length > 0 ?
+      `${SQL_WRITE_OPERATION_COALESCING_PREFIX}${operationId}` :
+      null;
+    const startedAtMs = resolveNowMs();
+    try {
+      const result = await this.getControlPlaneSystemTableGateway().submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
+        tableName: TABLES.SQL_WRITE_OPERATIONS,
+        row: buildWriteOperationRowPayload(operationId, transactionId, record),
+      }, this.buildDistributedTransactionMutationOptions(
+        TABLES.SQL_WRITE_OPERATIONS,
+        {workClass, coalescingKey},
+      ));
+      this.assertDistributedTransactionMutationSucceeded(
+        result,
+        TABLES.SQL_WRITE_OPERATIONS,
+      );
+    } finally {
+      this.transactionCoordinator?.noteMetadataPersistElapsed?.(
+        transactionId,
+        TRANSACTION_METADATA_PERSIST_PURPOSE.STATEMENT_OUTCOME,
+        Math.max(0, resolveNowMs() - startedAtMs),
+      );
+    }
   },
 };
 
 function createSQLQueryEngineTransactionPersistenceMethods() {
   return Object.fromEntries(Object.entries(
-    {...sqlQueryEngineTransactionPersistenceMethods,
-      ...sqlQueryEngineTransactionSetMethods}).map(([name, method]) => [
+    {...sqlQueryEngineTransactionSetMethods,
+      ...sqlQueryEngineTransactionPersistenceMethods}).map(([name, method]) => [
     name,
     {value: method, writable: true, configurable: true, enumerable: false},
   ]));

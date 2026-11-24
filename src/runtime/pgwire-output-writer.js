@@ -1,0 +1,286 @@
+/**
+ * Connection-owned PostgreSQL wire output batching and backpressure helper.
+ *
+ * Encodes DataRow frames in byte-bounded batches, respects socket.write()
+ * backpressure by awaiting 'drain' (or 'close'/'error'/abort), yields between
+ * multi-batch results so concurrent short queries get event-loop turns, and
+ * stops cleanly on disconnect while preserving frame and command-tag ordering.
+ *
+ * @module runtime/pgwire-output-writer
+ */
+
+import {
+  buildCommandComplete,
+  buildDataRow,
+  buildNoticeResponse,
+  buildRowDescription,
+} from './pgwire-message-builders.js';
+import {
+  PG_ERROR_CODE,
+  PG_SEVERITY,
+} from './pgwire-protocol-constants.js';
+import {
+  extractColumns,
+  extractRowValues,
+} from './pgwire-result-mapper.js';
+import {takeTransactionEndNotice} from './pgwire-transaction-outcome.js';
+import {OWNER_CONTRACT_STATE} from '../control-plane/owner-contract-outcome.js';
+
+const DEFAULT_PGWIRE_OUTPUT_BATCH_BYTES = 64 * 1024;
+const EVENT_DRAIN = 'drain';
+const EVENT_CLOSE = 'close';
+const EVENT_ERROR = 'error';
+const EVENT_ABORT = 'abort';
+const LOCAL_STR_STRING = 'string';
+
+function yieldEventLoopTurn() {
+  return new Promise((resolve) => {
+    setImmediate(resolve);
+  });
+}
+
+function columnNameOf(column) {
+  return typeof column === LOCAL_STR_STRING ? column : column?.name;
+}
+
+function areRawRowsAlignedWithColumns(result, columns) {
+  if (!Array.isArray(result?.rawRows) || !Array.isArray(result?.columns)) {
+    return false;
+  }
+  if (result.columns.length !== columns.length) {
+    return false;
+  }
+  for (let index = 0; index < columns.length; index += 1) {
+    if (columnNameOf(result.columns[index]) !== columnNameOf(columns[index])) {
+      return false;
+    }
+  }
+  if (result.rawRows.length > 0) {
+    return true;
+  }
+  return !Array.isArray(result?.rows) || result.rows.length === 0;
+}
+
+function selectExecutionRowSource(result, columns) {
+  if (areRawRowsAlignedWithColumns(result, columns)) {
+    return result.rawRows;
+  }
+  return Array.isArray(result?.rows) ? result.rows : null;
+}
+
+function buildUnderReplicatedNotice(result) {
+  if (result?.contractState !== OWNER_CONTRACT_STATE.UNDER_REPLICATED) {
+    return null;
+  }
+  const ep = result.epoch?.publicationEpoch != null ?
+    ` at epoch ${result.epoch.publicationEpoch}` :
+    '';
+  const msg =
+    `Table created under_replicated: ${result.missingReplicaCount ?? 1} replica(s) missing${ep}`;
+  return buildNoticeResponse(
+    PG_SEVERITY.NOTICE,
+    PG_ERROR_CODE.SUCCESSFUL_COMPLETION,
+    msg,
+  );
+}
+
+class PgWireOutputWriter {
+  /**
+   * @param {Object} options
+   * @param {Function} options.getSocket - Returns current connection socket.
+   * @param {Function} options.isClosed - Returns true when handler is closed.
+   * @param {AbortSignal} [options.abortSignal] - Connection disconnect signal.
+   * @param {number} [options.batchMaxBytes] - Max bytes per DataRow batch.
+   */
+  constructor(options) {
+    this._getSocket = options.getSocket;
+    this._isClosed = options.isClosed;
+    this._abortSignal = options.abortSignal || null;
+    this._batchMaxBytes =
+      Number.isSafeInteger(options?.batchMaxBytes) && options.batchMaxBytes > 0 ?
+        options.batchMaxBytes :
+        DEFAULT_PGWIRE_OUTPUT_BATCH_BYTES;
+  }
+
+  /**
+   * Whether the connection is closed or the socket is no longer writable.
+   * @return {boolean}
+   */
+  isDisconnected() {
+    if (this._isClosed?.() === true || this._abortSignal?.aborted === true) {
+      return true;
+    }
+    const socket = this._getSocket?.();
+    if (!socket) {
+      return true;
+    }
+    return (
+      socket.destroyed === true ||
+      socket.writableEnded === true ||
+      socket.writable === false
+    );
+  }
+
+  /**
+   * Write a buffer to the connection socket and await drain if backpressured.
+   * @param {Buffer} buffer - Encoded frame or batch buffer.
+   * @return {Promise<boolean>} True if connection remains open after write.
+   */
+  async writeBuffer(buffer) {
+    if (!buffer || buffer.length === 0 || this.isDisconnected()) {
+      return false;
+    }
+    const socket = this._getSocket();
+    const canContinue = socket.write(buffer);
+    if (canContinue === false && !this.isDisconnected()) {
+      await this._waitForDrain(socket);
+    }
+    return !this.isDisconnected();
+  }
+
+  /**
+   * Encode and write RowDescription + DataRow frames in byte-bounded batches.
+   * @param {Object} result - Execution result.
+   * @param {Object} [executionMeta] - Extended query metadata.
+   * @return {Promise<void>}
+   */
+  async writeExecutionRows(result, executionMeta = {}) {
+    const isExtended = executionMeta?.extended === true;
+    const columns = isExtended ?
+      executionMeta.portalDescription.columns :
+      extractColumns(result);
+    const rows = selectExecutionRowSource(result, columns);
+    if (columns.length === 0 || !rows || this.isDisconnected()) {
+      return;
+    }
+    if (!isExtended) {
+      const wroteDesc = await this.writeBuffer(buildRowDescription(columns));
+      if (!wroteDesc) {
+        return;
+      }
+    }
+    await this._writeBatchedDataRows(rows, columns);
+  }
+
+  /**
+   * Write a tag-validated execution result (RowDescription, DataRow*, notices,
+   * CommandComplete). The caller supplies the already-derived command tag so
+   * untaggable results fail before any frame is emitted.
+   * @param {Object} params
+   * @param {Object} params.result - Execution result.
+   * @param {Object} params.executionMeta - Execution metadata.
+   * @param {string} params.tag - Validated CommandComplete tag.
+   * @param {?string} params.statementType - Executed statement type.
+   * @param {Object} params.session - PgWireSession instance.
+   * @return {Promise<boolean>} True if CommandComplete was written before disconnect.
+   */
+  async writeExecutionSuccess({
+    result,
+    executionMeta,
+    tag,
+    statementType,
+    session,
+  }) {
+    await this.writeExecutionRows(result, executionMeta);
+    if (this.isDisconnected()) {
+      return false;
+    }
+    const underReplicatedNotice = buildUnderReplicatedNotice(result);
+    if (underReplicatedNotice) {
+      if (!(await this.writeBuffer(underReplicatedNotice))) {
+        return false;
+      }
+    }
+    const txNotice = takeTransactionEndNotice(session, statementType);
+    if (txNotice) {
+      if (!(await this.writeBuffer(txNotice))) {
+        return false;
+      }
+    }
+    return this.writeBuffer(buildCommandComplete(tag));
+  }
+
+  async _writeBatchedDataRows(rows, columns) {
+    let batchChunks = [];
+    let batchBytes = 0;
+    for (let index = 0; index < rows.length; index += 1) {
+      if (this.isDisconnected()) {
+        return;
+      }
+      const frame = buildDataRow(extractRowValues(rows[index], columns), columns);
+      if (batchBytes > 0 && batchBytes + frame.length > this._batchMaxBytes) {
+        const ok = await this._flushBatchAndYield(batchChunks, batchBytes, true);
+        batchChunks = [];
+        batchBytes = 0;
+        if (!ok) {
+          return;
+        }
+      }
+      batchChunks.push(frame);
+      batchBytes += frame.length;
+      if (batchBytes >= this._batchMaxBytes) {
+        const hasMoreRows = index + 1 < rows.length;
+        const ok = await this._flushBatchAndYield(
+          batchChunks,
+          batchBytes,
+          hasMoreRows,
+        );
+        batchChunks = [];
+        batchBytes = 0;
+        if (!ok) {
+          return;
+        }
+      }
+    }
+    if (batchBytes > 0 && !this.isDisconnected()) {
+      await this._flushBatch(batchChunks, batchBytes);
+    }
+  }
+
+  async _flushBatch(batchChunks, batchBytes) {
+    const buffer = batchChunks.length === 1 ?
+      batchChunks[0] :
+      Buffer.concat(batchChunks, batchBytes);
+    return this.writeBuffer(buffer);
+  }
+
+  async _flushBatchAndYield(batchChunks, batchBytes, shouldYield) {
+    const flushed = await this._flushBatch(batchChunks, batchBytes);
+    if (!flushed || this.isDisconnected()) {
+      return false;
+    }
+    if (shouldYield) {
+      await yieldEventLoopTurn();
+    }
+    return !this.isDisconnected();
+  }
+
+  _waitForDrain(socket) {
+    if (this.isDisconnected() || !socket) {
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      let settled = false;
+      const onWake = () => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        socket.removeListener?.(EVENT_DRAIN, onWake);
+        socket.removeListener?.(EVENT_CLOSE, onWake);
+        socket.removeListener?.(EVENT_ERROR, onWake);
+        this._abortSignal?.removeEventListener?.(EVENT_ABORT, onWake);
+        resolve();
+      };
+      socket.on?.(EVENT_DRAIN, onWake);
+      socket.on?.(EVENT_CLOSE, onWake);
+      socket.on?.(EVENT_ERROR, onWake);
+      this._abortSignal?.addEventListener?.(EVENT_ABORT, onWake, {once: true});
+      if (this.isDisconnected()) {
+        onWake();
+      }
+    });
+  }
+}
+
+export {PgWireOutputWriter};
