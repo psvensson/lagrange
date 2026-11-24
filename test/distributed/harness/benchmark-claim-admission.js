@@ -13,6 +13,7 @@ import {OLTP_PAIRED_RETRY_POLICIES} from './oltp-paired-retry-owner.js';
 import {isImageId} from './real-product-deployment-contract.js';
 import {
   OLTP_SCENARIO_A_PROOF_FAILURE_KIND,
+  OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS,
   OLTP_SCENARIO_A_SEMANTIC_GATE_STATUS as GATE_STATUS,
 } from './oltp-scenario-a-semantic-gate.js';
 import {
@@ -42,11 +43,19 @@ import {
   BENCHMARK_SCENARIO,
   CLOSURE_STATUS,
   DEPLOYMENT_EVENT_KIND,
+  EXECUTION_TARGET,
   READINESS_STATE,
+  TARGET_DURABILITY_CONTRACT,
+  buildCanonicalSemanticGateCaseRecord,
+  computeRawObservationRunDigest,
   computeRunObservationsDigest,
-  validateCampaignHeader,
-  validateRunRecord,
+  hasDurabilityRestartEvidence,
   isContentIdentity,
+  isDurabilityProofCase,
+  validateCampaignHeader,
+  validateCanonicalDurabilityCaseRecord,
+  validateCanonicalSemanticGateCaseRecord,
+  validateRunRecord,
 } from './raw-observation-record.js';
 import {deriveRunMetrics} from './raw-observation-metrics.js';
 import {serializeJsonData} from '../../../src/utils/canonical-json-data.js';
@@ -306,6 +315,113 @@ function hasContentIdentity(subject) {
   return isContentIdentity(subject?.contentIdentity);
 }
 
+function nonEmptyTextOrNull(value) {
+  return typeof value === 'string' && value !== '' ? value : null;
+}
+
+function bootedSrcFingerprintOf(subject) {
+  if (!subject || typeof subject !== 'object') return null;
+  const boot = subject.bootProvenance;
+  const raw = boot && typeof boot === 'object' ?
+    boot.bootedSrcFingerprint : subject.bootedSrcFingerprint;
+  return nonEmptyTextOrNull(raw);
+}
+
+function hasBootFingerprintMismatch(product, pin) {
+  const pinFp = bootedSrcFingerprintOf(pin);
+  const prodFp = bootedSrcFingerprintOf(product);
+  if ((pinFp !== null || prodFp !== null) && pinFp !== prodFp) return true;
+  const boot = product.bootProvenance;
+  if (!boot || typeof boot !== 'object') return false;
+  const expectedFp = nonEmptyTextOrNull(boot.expectedSrcFingerprint);
+  if (expectedFp !== null && prodFp !== expectedFp) return true;
+  return boot.srcFingerprintMatches === false;
+}
+
+function hasBootGitCommitMismatch(product, run) {
+  const boot = product.bootProvenance;
+  if (!boot || typeof boot !== 'object') return false;
+  const bootCommit = nonEmptyTextOrNull(boot.gitCommit);
+  return bootCommit !== null && bootCommit !== run.identity.harness.gitCommit;
+}
+
+function checkBootProvenanceAgainstPin(product, pin, run) {
+  const reasons = [];
+  if (hasBootFingerprintMismatch(product, pin)) {
+    reasons.push(ADMISSION_REASON.PRODUCT_IDENTITY_MISMATCH);
+  }
+  if (hasBootGitCommitMismatch(product, run)) {
+    reasons.push(ADMISSION_REASON.HARNESS_MISMATCH);
+  }
+  return reasons;
+}
+
+function isFixtureImageRef(imageRef) {
+  return /^example\/.*:fixture$/u.test(String(imageRef || ''));
+}
+
+function isFixtureReportedVersion(version) {
+  return /^0\.0\.0-fixture-/u.test(String(version || ''));
+}
+
+function isSyntheticProvenanceKind(kind) {
+  return kind === 'fixture' || kind === 'emulated';
+}
+
+function hasEmulatedBooleanFlag(subject) {
+  return Boolean(subject && (subject.emulated === true || subject.fixture === true));
+}
+
+function isEmulatedOrFixtureFlagged(product, run) {
+  if (hasEmulatedBooleanFlag(product) || hasEmulatedBooleanFlag(run)) return true;
+  if (/^(?:fixture|emulated|mock|synthetic):/iu.test(String(product.provenance || ''))) {
+    return true;
+  }
+  return isSyntheticProvenanceKind(run.provenance?.kind) ||
+    isSyntheticProvenanceKind(run.deployment?.provenance?.kind);
+}
+
+function isLocalOracleEvidence(product, run) {
+  return run.evidenceSource?.kind === 'local-oracle-plus-network-model' ||
+    /^local-oracle:/iu.test(String(product.provenance || ''));
+}
+
+function hasMismatchedProductProvenanceText(product) {
+  const prov = nonEmptyTextOrNull(product.provenance);
+  if (prov === null) return false;
+  const expectedProv = product.repoDigest === null ?
+    `loaded:${product.imageId}` : `registry:${product.repoDigest}`;
+  return prov !== expectedProv;
+}
+
+function isClaimedPhysicalRun(run) {
+  return run.executionTarget === EXECUTION_TARGET.GCP ||
+    run.provenance?.executionClass === 'physical' ||
+    run.deployment?.provenance?.executionClass === 'physical';
+}
+
+function hasInconsistentFixtureIdentity(product, run) {
+  const hasVer = nonEmptyTextOrNull(product.reportedVersion) !== null;
+  const fixtureImg = isFixtureImageRef(product.imageRef);
+  const fixtureVer = isFixtureReportedVersion(product.reportedVersion);
+  if (!fixtureImg && !fixtureVer) return false;
+  return (hasVer && fixtureImg !== fixtureVer) || isClaimedPhysicalRun(run);
+}
+
+function checkProductProvenanceConsistency(product, run) {
+  const reasons = [];
+  if (isEmulatedOrFixtureFlagged(product, run) || hasInconsistentFixtureIdentity(product, run)) {
+    reasons.push(ADMISSION_REASON.EMULATED_PRODUCT);
+  }
+  if (isLocalOracleEvidence(product, run)) {
+    reasons.push(ADMISSION_REASON.LOCAL_ORACLE_NOT_COMPARISON_TARGET);
+  }
+  if (hasMismatchedProductProvenanceText(product)) {
+    reasons.push(ADMISSION_REASON.PRODUCT_IDENTITY_MISMATCH);
+  }
+  return reasons;
+}
+
 // Every product the run inspected must run the content the campaign pinned for
 // its target and role, and report the pinned version (null only where the pin
 // recorded the product's unanswered version). Image id, repo digest, image
@@ -324,11 +440,28 @@ function checkPinnedProducts(run, pins) {
         pin.reportedVersion !== product.reportedVersion) {
       reasons.push(ADMISSION_REASON.PRODUCT_IDENTITY_MISMATCH);
     }
+    reasons.push(...checkBootProvenanceAgainstPin(product, pin, run));
     if (shared.has(product.contentIdentity)) {
       reasons.push(ADMISSION_REASON.CANDIDATE_IMAGE_IS_COMPARATOR_IMAGE);
     }
   }
   return reasons;
+}
+
+function loadGeneratorCheckoutCommit(run) {
+  const checkout = run.deployment?.loadGenerator?.checkout;
+  if (!checkout || typeof checkout !== 'object') return null;
+  return nonEmptyTextOrNull(checkout.gitCommit) || nonEmptyTextOrNull(checkout.commit);
+}
+
+function matchesHeaderHarnessIdentity(run, header) {
+  const harness = run.identity.harness;
+  const lgCommit = loadGeneratorCheckoutCommit(run);
+  return harness.gitCommit === header.harness.gitCommit &&
+    (lgCommit === null || lgCommit === harness.gitCommit) &&
+    harness.driverSourceSha256 === header.harness.driverSourceSha256 &&
+    harness.adapterIds.length > 0 &&
+    !arraySome(harness.adapterIds, (id) => !arrayIncludes(header.harness.adapterIds, id));
 }
 
 // Same harness: same commit and executed-driver digest as the campaign header,
@@ -342,16 +475,13 @@ function checkIdentityAgainstHeader(run, header) {
   } catch (err) {
     return [`${REASON_PREFIX.RECORD_REJECTED}${err.code}`];
   }
-  const harness = run.identity.harness;
   const reasons = [];
-  if (harness.checkoutDirty !== false || header.harness.checkoutDirty !== false) {
+  if (run.identity.harness.checkoutDirty !== false || header.harness.checkoutDirty !== false) {
     reasons.push(ADMISSION_REASON.CHECKOUT_DIRTY);
   }
-  const sameHarness = harness.gitCommit === header.harness.gitCommit &&
-    harness.driverSourceSha256 === header.harness.driverSourceSha256 &&
-    harness.adapterIds.length > 0 &&
-    !arraySome(harness.adapterIds, (id) => !arrayIncludes(header.harness.adapterIds, id));
-  if (!sameHarness) reasons.push(ADMISSION_REASON.HARNESS_MISMATCH);
+  if (!matchesHeaderHarnessIdentity(run, header)) {
+    reasons.push(ADMISSION_REASON.HARNESS_MISMATCH);
+  }
   if (run.plan.manifestDigest !== header.manifestDigest ||
       run.executionTarget !== header.executionTarget) {
     reasons.push(ADMISSION_REASON.IDENTITY_MISMATCH);
@@ -360,7 +490,8 @@ function checkIdentityAgainstHeader(run, header) {
 }
 
 function productKey(product) {
-  return `${product.host}|${product.containerId}|${product.imageId}|${product.startedAt}`;
+  const fp = bootedSrcFingerprintOf(product) ?? '';
+  return `${product.host}|${product.containerId}|${product.imageId}|${product.startedAt}|${fp}`;
 }
 
 function checkProducts(run) {
@@ -377,6 +508,7 @@ function checkProducts(run) {
     if (!after.has(productKey(product))) {
       reasons.push(ADMISSION_REASON.IDENTITY_CHANGED_DURING_WINDOW);
     }
+    reasons.push(...checkProductProvenanceConsistency(product, run));
   }
   if (run.identity.productsAfterWindow.length !== run.identity.products.length) {
     reasons.push(ADMISSION_REASON.IDENTITY_CHANGED_DURING_WINDOW);
@@ -528,34 +660,18 @@ function gateBindingHolds(run, binding, gate = null) {
   return gateCaseBindingsHold(checkedGate.cases, matches);
 }
 
-function isDurabilityProofCase(proofCase) {
-  return proofCase.caseId === 'durability' ||
-    proofCase.caseId === 'scenario-a-durable-commit-v1';
+function isAdmissibleAwardedCase(proofCase, run = null) {
+  return validateCanonicalSemanticGateCaseRecord(proofCase, run).valid;
 }
 
-function hasDurabilityRestartEvidence(proofCase) {
-  return Boolean(
-    proofCase.faultEvidence ||
-    proofCase.observation?.faultEvidence ||
-    proofCase.proofRecord?.actual?.faultEvidence ||
-    proofCase.restartedAt ||
-    proofCase.restartEvidence,
-  );
-}
-
-function isAdmissibleAwardedCase(proofCase) {
-  if (proofCase.status !== 'passed' && proofCase.status !== 'executed') return false;
-  return !isDurabilityProofCase(proofCase) || hasDurabilityRestartEvidence(proofCase);
-}
-
-function awardedProofIds(gate) {
+function awardedProofIds(gate, run = null) {
   if (!gate) return [];
   if (!Array.isArray(gate.cases)) {
     return Array.isArray(gate.passed) ? [...gate.passed].sort() : [];
   }
   const passedIds = new Set();
   for (const c of gate.cases) {
-    if (!isAdmissibleAwardedCase(c)) continue;
+    if (!isAdmissibleAwardedCase(c, run)) continue;
     for (const id of c.proofIds || []) passedIds.add(id);
   }
   return [...passedIds].sort();
@@ -586,12 +702,66 @@ function missingSemanticGateReasons(run) {
     ADMISSION_REASON.SEMANTIC_GATE_MISSING];
 }
 
-function gateCasesRequireBlockingReason(gate) {
+function gateCasesRequireBlockingReason(gate, run = null) {
   if (!Array.isArray(gate.cases)) return false;
   return arraySome(gate.cases, (c) =>
     c.status === 'not-executed' ||
     c.status === 'skipped' ||
-    (isDurabilityProofCase(c) && !hasDurabilityRestartEvidence(c)));
+    (isDurabilityProofCase(c) && !hasDurabilityRestartEvidence(c, run)));
+}
+
+function gateCasesHaveUnboundTarget(gate, run) {
+  const expectedSystem = TARGET_DURABILITY_CONTRACT[run?.targetId]?.system ?? null;
+  if (expectedSystem !== null && typeof gate.system === 'string' &&
+      gate.system !== expectedSystem) {
+    return true;
+  }
+  if (!Array.isArray(gate.cases)) return false;
+  return arraySome(gate.cases, (c) => {
+    const verdict = validateCanonicalSemanticGateCaseRecord(c, run);
+    return arrayIncludes(verdict.reasons, 'durability_fault_target_unbound') ||
+      arrayIncludes(verdict.reasons, 'case_proof_system_mismatch');
+  });
+}
+
+function isClaimedPassedStatus(status) {
+  return status === 'passed' || status === 'executed';
+}
+
+function isPassedAndValidCase(c, run) {
+  return isClaimedPassedStatus(c.status) && validateCanonicalSemanticGateCaseRecord(c, run).valid;
+}
+
+function hasNonEmptyArray(value) {
+  return Array.isArray(value) && value.length > 0;
+}
+
+function gateCasesHaveInconsistentSummary(gate, run) {
+  if (!hasNonEmptyArray(gate.cases)) return false;
+  if (arraySome(gate.cases, (c) =>
+    isClaimedPassedStatus(c.status) && !isPassedAndValidCase(c, run))) {
+    return true;
+  }
+  const awarded = awardedProofIds(gate, run);
+  const awardedSet = new Set(awarded);
+  if (Array.isArray(gate.passed) && arraySome(gate.passed, (id) => !awardedSet.has(id))) {
+    return true;
+  }
+  if (gate.status !== GATE_STATUS.PASSED) return false;
+  const allCasesPassed = arraySome(gate.cases, isDurabilityProofCase) &&
+    arrayEvery(gate.cases, (c) => isPassedAndValidCase(c, run));
+  return !allCasesPassed || hasNonEmptyArray(gate.failed) || hasNonEmptyArray(gate.missing) ||
+    awarded.length < OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS.length;
+}
+
+function checkGateProfileMatch(gate, run) {
+  const plan = run?.plan;
+  if (!plan) return [];
+  const idMismatch = typeof gate.semanticProfileId === 'string' &&
+    gate.semanticProfileId !== plan.semanticProfileId;
+  const shaMismatch = typeof gate.semanticProfileSha256 === 'string' &&
+    gate.semanticProfileSha256 !== plan.semanticProfileDigest;
+  return idMismatch || shaMismatch ? [ADMISSION_REASON.SEMANTIC_PROFILE_MISMATCH] : [];
 }
 
 function nonPassedSemanticGateReason(gate, profileClass) {
@@ -605,18 +775,40 @@ function nonPassedSemanticGateReason(gate, profileClass) {
 function checkSemanticGate(run) {
   const gate = run.correctness.semanticGate;
   if (!gate) return missingSemanticGateReasons(run);
-  if (!gateBindingHolds(run, gate.binding, gate)) return [ADMISSION_REASON.SEMANTIC_GATE_UNBOUND];
-  if (gateCasesRequireBlockingReason(gate)) {
-    return [run.plan?.profileClass === BENCHMARK_PROFILE_CLASS.SMOKE ?
-      ADMISSION_REASON.SEMANTIC_GATE_INCOMPLETE :
-      ADMISSION_REASON.SEMANTIC_GATE_NOT_PASSED];
+  const profileReasons = checkGateProfileMatch(gate, run);
+  if (!gateBindingHolds(run, gate.binding, gate)) {
+    return [...profileReasons, ADMISSION_REASON.SEMANTIC_GATE_UNBOUND];
   }
-  if (gate.status === GATE_STATUS.PASSED) return [];
   const details = gateCaseReasons(gate);
-  if (gate.status === GATE_STATUS.FAILED) {
-    return [ADMISSION_REASON.SEMANTIC_GATE_FAILED, ...details];
+  const unbound = gateCasesHaveUnboundTarget(gate, run);
+  const inconsistent = gateCasesHaveInconsistentSummary(gate, run);
+  if (unbound || inconsistent) {
+    return [
+      ...profileReasons,
+      ...(unbound ? [ADMISSION_REASON.SEMANTIC_GATE_UNBOUND] : []),
+      ADMISSION_REASON.SEMANTIC_GATE_NOT_PASSED,
+      ADMISSION_REASON.SEMANTIC_GATE_INCOMPLETE,
+      ...details,
+    ];
   }
-  return [nonPassedSemanticGateReason(gate, run.plan.profileClass), ...details];
+  if (gateCasesRequireBlockingReason(gate, run)) {
+    return [
+      ...profileReasons,
+      run.plan?.profileClass === BENCHMARK_PROFILE_CLASS.SMOKE ?
+        ADMISSION_REASON.SEMANTIC_GATE_INCOMPLETE :
+        ADMISSION_REASON.SEMANTIC_GATE_NOT_PASSED,
+      ...details,
+    ];
+  }
+  if (gate.status === GATE_STATUS.PASSED) return profileReasons;
+  if (gate.status === GATE_STATUS.FAILED) {
+    return [...profileReasons, ADMISSION_REASON.SEMANTIC_GATE_FAILED, ...details];
+  }
+  return [
+    ...profileReasons,
+    nonPassedSemanticGateReason(gate, run.plan.profileClass),
+    ...details,
+  ];
 }
 
 // A detail reason explains its base reason and blocks exactly when it does.
@@ -972,7 +1164,7 @@ function admitClaim({claim, runs, campaignHeaders, retainedReferences, invalidat
   const {live, invalidated} = partitionByLedger(entries, campaignHeaders, invalidations);
   if (live.length === 0) return cellWithoutLiveRuns(claim, forensic, invalidated);
   const semanticProofIds = unique(arrayMap(live,
-    (e) => awardedProofIds(e.run?.correctness?.semanticGate)).flat());
+    (e) => awardedProofIds(e.run?.correctness?.semanticGate, e.run)).flat());
   const evidence = {
     runIds: arrayMap(live, (e) => e.run.runId),
     rawObservationsDigests: arrayMap(live, (e) => e.run.rawObservationsDigest),
@@ -1032,7 +1224,12 @@ export {
   SUFFICIENCY_RULE,
   admitClaim,
   awardedProofIds,
+  buildCanonicalSemanticGateCaseRecord,
   campaignOutcomeOfCells,
   checkSemanticGate,
+  computeRawObservationRunDigest,
   gateBindingHolds,
+  hasDurabilityRestartEvidence,
+  validateCanonicalDurabilityCaseRecord,
+  validateCanonicalSemanticGateCaseRecord,
 };

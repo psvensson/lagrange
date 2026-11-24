@@ -2440,6 +2440,63 @@
         "test/live-query/live-query-remote-cdc-lifecycle.test.js",
         "test/live-query/live-query-startup-wiring.test.js"
       ]
+    },
+    "sql-footprint-durable-read-scope-isolation": {
+      "description": "SQL statement read/write footprint extraction and bounded session read-dependency accumulation encode explicit read scope ('none', 'keys', or 'partition') into the participant validation record bound by preparedDigestOf, and participant PREPARE, replicated apply, and recovery reconstruction enforce reciprocal read/write conflict isolation across historical commits and retained prepared reservations.",
+      "owners": [
+        "src/partition/partition-participant-transaction-staging.js",
+        "src/partition/partition-participant-transaction-session.js",
+        "src/partition/partition-participant-transaction-constants.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-participant-transaction-apply.js",
+        "src/partition/partition-row-key-waiters.js"
+      ],
+      "tests": [
+        "test/partition/partition-participant-transaction-apply.test.js",
+        "test/partition/partition-participant-transaction-staging.test.js",
+        "test/partition/partition-row-key-conflict-reevaluation.test.js",
+        "test/transaction/session-transaction-isolation.test.js"
+      ]
+    },
+    "storage-replacement-durable-term-observation-and-floor-custody": {
+      "description": "Durable Raft store term persistence and partition storage replacement/retirement custody govern how self-leader read delivery observes the persisted partition term floor and completes reads under a single authority boundary without raw file-descriptor races or post-validation async gaps.",
+      "owners": [
+        "src/raft/raft-rs-durable-store.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/raft/raft-rs-status-observation.js",
+        "src/storage/retained-read-view-custody.js",
+        "src/partition/partition-service-lifecycle-methods.js",
+        "src/query/query-executor-self-leader-term-floor.js",
+        "src/query/query-executor-partition-delivery.js",
+        "src/query/query-executor-partition-service-resolution.js"
+      ],
+      "tests": [
+        "test/query/self-published-leader-term-fenced-peer-probing.test.js",
+        "test/service/retained-read-view-generation-custody.test.js",
+        "test/raft/raft-rs-backend/durable-store-connection-custody.test.js",
+        "test/raft/raft-rs-backend/durable-store-committed-entries.test.js"
+      ]
+    },
+    "semantic-gate-evidence-projection-and-claim-admission": {
+      "description": "Local and remote Scenario A semantic-gate recorders construct compact case records through one canonical builder and durability fault-evidence contract, and raw-observation validation plus final benchmark claim admission verify structured replica restart incarnations, deployed target host binding, and product provenance before awarding durability proof IDs or admitting a claim.",
+      "owners": [
+        "test/distributed/harness/comparative-benchmark-semantic-gate.js",
+        "test/distributed/scenarios/scenario-a-semantic-proof-journey.js",
+        "test/distributed/harness/oltp-scenario-a-durability-case.js",
+        "test/distributed/harness/oltp-scenario-a-semantic-gate.js",
+        "test/distributed/harness/raw-observation-record.js",
+        "test/distributed/harness/benchmark-claim-admission.js",
+        "test/distributed/harness/comparative-benchmark-campaign-runner.js",
+        "test/distributed/harness/real-product-deployer-postgres.js"
+      ],
+      "tests": [
+        "test/distributed/harness/__tests__/semantic-gate-durability-evidence-admission.test.js",
+        "test/distributed/harness/__tests__/benchmark-claim-admission.test.js",
+        "test/distributed/harness/__tests__/comparative-benchmark-runner-semantic-gate.test.js",
+        "test/distributed/harness/__tests__/tidb-canonical-semantic-case-completion.test.js",
+        "test/distributed/harness/__tests__/real-product-postgres-sync-ha-standby.test.js",
+        "test/distributed/harness/__tests__/scenario-a-semantic-proof-journey.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -5284,6 +5341,96 @@
         "test/live-query/queryable-core-j6-live-query-journey.test.js",
         "test/live-query/live-query-remote-cdc-lifecycle.test.js",
         "test/live-query/live-query-startup-wiring.test.js"
+      ]
+    },
+    "sql-footprint-durable-read-scope-isolation": {
+      "description": "SQL statement footprint extraction and session read-dependency staging change together with the participant PREPARE validation record decoder, replicated apply conflict predicate, and row-key wait reevaluation.",
+      "endpoints": [
+        {
+          "id": "sql-footprint-and-staging-read-scope-producer",
+          "owners": [
+            "src/partition/partition-participant-transaction-staging.js",
+            "src/partition/partition-participant-transaction-session.js",
+            "src/partition/partition-participant-transaction-constants.js"
+          ]
+        },
+        {
+          "id": "durable-validation-and-replicated-apply-isolation",
+          "owners": [
+            "src/partition/partition-participant-transaction-request.js",
+            "src/partition/partition-participant-transaction-apply.js",
+            "src/partition/partition-row-key-waiters.js"
+          ]
+        }
+      ],
+      "contract": "sql-footprint-durable-read-scope-isolation",
+      "witnessTests": [
+        "test/partition/partition-participant-transaction-apply.test.js",
+        "test/partition/partition-participant-transaction-staging.test.js",
+        "test/partition/partition-row-key-conflict-reevaluation.test.js",
+        "test/transaction/session-transaction-isolation.test.js"
+      ]
+    },
+    "storage-replacement-durable-term-observation-and-floor-custody": {
+      "description": "Durable Raft hard-state persistence and partition storage replacement/retirement custody change together with self-leader persisted term-floor observation and partition read delivery completion.",
+      "endpoints": [
+        {
+          "id": "storage-replacement-and-durable-term-producer",
+          "owners": [
+            "src/raft/raft-rs-durable-store.js",
+            "src/raft/raft-rs-runtime-owner.js",
+            "src/raft/raft-rs-status-observation.js",
+            "src/storage/retained-read-view-custody.js",
+            "src/partition/partition-service-lifecycle-methods.js"
+          ]
+        },
+        {
+          "id": "self-leader-term-reader-custody-and-read-completion",
+          "owners": [
+            "src/query/query-executor-self-leader-term-floor.js",
+            "src/query/query-executor-partition-delivery.js",
+            "src/query/query-executor-partition-service-resolution.js"
+          ]
+        }
+      ],
+      "contract": "storage-replacement-durable-term-observation-and-floor-custody",
+      "witnessTests": [
+        "test/query/self-published-leader-term-fenced-peer-probing.test.js",
+        "test/service/retained-read-view-generation-custody.test.js",
+        "test/raft/raft-rs-backend/durable-store-connection-custody.test.js",
+        "test/raft/raft-rs-backend/durable-store-committed-entries.test.js"
+      ]
+    },
+    "semantic-gate-evidence-projection-and-claim-admission": {
+      "description": "Local and remote Scenario A semantic-gate case recorders change together with raw-observation durability evidence validation and final benchmark claim admission.",
+      "endpoints": [
+        {
+          "id": "semantic-gate-case-record-producers",
+          "owners": [
+            "test/distributed/harness/comparative-benchmark-semantic-gate.js",
+            "test/distributed/scenarios/scenario-a-semantic-proof-journey.js",
+            "test/distributed/harness/oltp-scenario-a-durability-case.js",
+            "test/distributed/harness/oltp-scenario-a-semantic-gate.js"
+          ]
+        },
+        {
+          "id": "canonical-observation-validator-and-claim-admission",
+          "owners": [
+            "test/distributed/harness/raw-observation-record.js",
+            "test/distributed/harness/benchmark-claim-admission.js",
+            "test/distributed/harness/comparative-benchmark-campaign-runner.js",
+            "test/distributed/harness/real-product-deployer-postgres.js"
+          ]
+        }
+      ],
+      "contract": "semantic-gate-evidence-projection-and-claim-admission",
+      "witnessTests": [
+        "test/distributed/harness/__tests__/semantic-gate-durability-evidence-admission.test.js",
+        "test/distributed/harness/__tests__/benchmark-claim-admission.test.js",
+        "test/distributed/harness/__tests__/comparative-benchmark-runner-semantic-gate.test.js",
+        "test/distributed/harness/__tests__/tidb-canonical-semantic-case-completion.test.js",
+        "test/distributed/harness/__tests__/real-product-postgres-sync-ha-standby.test.js",
+        "test/distributed/harness/__tests__/scenario-a-semantic-proof-journey.test.js"
       ]
     }
   }

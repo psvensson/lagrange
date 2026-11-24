@@ -7,6 +7,7 @@
 // for both `smoke` and `main` (capacity) profiles, plus fail-closed negative
 // controls.
 import {Buffer} from 'node:buffer';
+import {readFileSync} from 'node:fs';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
@@ -16,6 +17,9 @@ import {
   admitClaim,
   awardedProofIds,
   checkSemanticGate,
+  computeRawObservationRunDigest,
+  validateCanonicalDurabilityCaseRecord,
+  validateCanonicalSemanticGateCaseRecord,
 } from '../benchmark-claim-admission.js';
 import {
   buildFixtureHeader,
@@ -99,9 +103,7 @@ function handlePgTableDdlSql(db, indexes, normalized) {
   }
   const truncateTbl = /^TRUNCATE TABLE ([a-z_]+)$/iu.exec(normalized);
   if (truncateTbl) {
-    if (!db.tables.has(truncateTbl[1])) {
-      throw createMissingTableError(truncateTbl[1]);
-    }
+    if (!db.tables.has(truncateTbl[1])) throw createMissingTableError(truncateTbl[1]);
     db.tables.set(truncateTbl[1], []);
     return {rows: [], rowCount: 0};
   }
@@ -110,22 +112,16 @@ function handlePgTableDdlSql(db, indexes, normalized) {
 
 function handlePgIndexSql(indexes, normalized) {
   const createIdx =
-    /^CREATE INDEX(?: IF NOT EXISTS)? ([a-z0-9_]+) ON ([a-z0-9_]+) \(([^)]+)\)$/iu
-      .exec(normalized);
+    /^CREATE INDEX(?: IF NOT EXISTS)? ([a-z0-9_]+) ON ([a-z0-9_]+) \(([^)]+)\)$/iu.exec(normalized);
   if (createIdx) {
     const cols = arrayMap(stringSplit(createIdx[3], ','), (col) => stringTrim(col));
-    indexes.set(createIdx[1], {
-      index_name: createIdx[1],
-      table_name: createIdx[2],
-      column_names: jsonStringify(cols),
-      state: 'READY',
-      indexdef: `CREATE INDEX ${createIdx[1]} ON public.${createIdx[2]} (${cols.join(', ')})`,
-    });
+    indexes.set(createIdx[1], {index_name: createIdx[1], table_name: createIdx[2],
+      column_names: jsonStringify(cols), state: 'READY',
+      indexdef: `CREATE INDEX ${createIdx[1]} ON public.${createIdx[2]} (${cols.join(', ')})`});
     return {rows: [], rowCount: 0};
   }
   const lagrangeIdx =
-    /^SELECT index_name, .+ FROM indices WHERE table_name = '([a-z0-9_]+)'$/iu
-      .exec(normalized);
+    /^SELECT index_name, .+ FROM indices WHERE table_name = '([a-z0-9_]+)'$/iu.exec(normalized);
   if (lagrangeIdx) {
     const matching = arrayFilter([...indexes.values()], (e) => e.table_name === lagrangeIdx[1]);
     return {rows: matching, rowCount: matching.length};
@@ -145,9 +141,7 @@ function handlePgIndexSql(indexes, normalized) {
 function handlePgTableProbeSql(db, normalized) {
   const schemaProbe = /^SELECT ([a-z_, ]+) FROM ([a-z_]+) LIMIT 1$/iu.exec(normalized);
   if (schemaProbe) {
-    if (!db.tables.has(schemaProbe[2])) {
-      throw createMissingTableError(schemaProbe[2]);
-    }
+    if (!db.tables.has(schemaProbe[2])) throw createMissingTableError(schemaProbe[2]);
     const rows = db.tables.get(schemaProbe[2]).slice(0, 1);
     return {rows, rowCount: rows.length};
   }
@@ -263,26 +257,14 @@ function createPgDeploymentArm(ledger, {system, persistent = true}) {
   return {
     roles: [{role, host: '10.0.0.1', containerId: id}],
     endpoint: {protocol: 'postgresql', host: '10.0.0.1', port, containerId: id},
-    storage: [{
-      role,
-      host: '10.0.0.1',
-      containerId: id,
-      mount,
+    storage: [{role, host: '10.0.0.1', containerId: id, mount,
       kind: persistent ? STORAGE_KIND.HOST_VOLUME : STORAGE_KIND.CONTAINER_LAYER,
-      source: persistent ? source : null,
-    }],
+      source: persistent ? source : null}],
     access: {connection: {user: 'bench', password: 'pw', database: 'bench'}},
-    identity: {
-      products: [{
-        role,
-        host: '10.0.0.1',
-        containerId: id,
-        imageId: `sha256:${(isLagrange ? 'a' : 'c').repeat(64)}`,
-        startedAt,
-        mounts: persistent ? [{type: 'bind', source, destination: mount}] : [],
-        reportedVersion: isLagrange ? '0.4.0' : 'PostgreSQL 17.6',
-      }],
-    },
+    identity: {products: [{role, host: '10.0.0.1', containerId: id,
+      imageId: `sha256:${(isLagrange ? 'a' : 'c').repeat(64)}`, startedAt,
+      mounts: persistent ? [{type: 'bind', source, destination: mount}] : [],
+      reportedVersion: isLagrange ? '0.4.0' : 'PostgreSQL 17.6'}]},
     operations: {awaitReady: async () => ({ready: true})},
   };
 }
@@ -640,4 +622,180 @@ test('negative controls: missing faultEvidence, lost committed state, and unchan
     ADMISSION_REASON.SEMANTIC_GATE_NOT_PASSED), true);
   assert.equal(arrayIncludes(sameIncAdmitted.main.cell.reasons,
     `${ADMISSION_REASON.SEMANTIC_GATE_INCOMPLETE}:durability:evidence_insufficient`), true);
+});
+
+function resealSerializedRuns(runs) {
+  return arrayMap(runs, (entry) => {
+    const run = jsonParse(jsonStringify(entry.run));
+    run.rawObservationsDigest = computeRawObservationRunDigest(run);
+    return {file: entry.file, run};
+  });
+}
+
+function admitMutatedSubmission({header, runs, campaignId, targetId = 'lagrange',
+  subkind = 'smoke', mutate}) {
+  const validHeader = jsonParse(jsonStringify(header));
+  const validCell = admitClaim({
+    claim: claimFor(targetId, subkind),
+    runs: resealSerializedRuns(runs),
+    campaignHeaders: new Map([[campaignId, validHeader]]),
+    retainedReferences: [],
+    invalidations: [],
+  });
+  assert.equal(validCell.status, CLAIM_CELL_STATUS.VALID_OBSERVED);
+  assert.equal(validCell.evidence.semanticProofIds.length, EXPECTED_PROOF_COUNT);
+  const mutatedHeader = jsonParse(jsonStringify(header));
+  const clonedRuns = arrayMap(runs, (e) => ({file: e.file, run: jsonParse(jsonStringify(e.run))}));
+  for (const entry of clonedRuns) mutate(entry.run, mutatedHeader);
+  const mutatedCell = admitClaim({
+    claim: claimFor(targetId, subkind),
+    runs: resealSerializedRuns(clonedRuns),
+    campaignHeaders: new Map([[campaignId, mutatedHeader]]),
+    retainedReferences: [],
+    invalidations: [],
+  });
+  assert.equal(arrayIncludes(mutatedCell.reasons, ADMISSION_REASON.RAW_DIGEST_MISMATCH), false);
+  assert.equal(mutatedCell.status, CLAIM_CELL_STATUS.INVALID_MEASUREMENT);
+  return mutatedCell;
+}
+
+test('semantic mutations with recomputed rawObservationsDigest fail closed alongside valid ' +
+  'companions across the full serialized producer-to-admission boundary', async () => {
+  const ledger = createContainerLedger();
+  const {sshRun} = createScriptedSsh([...dockerRules(ledger), restartRuleForLedger(ledger)]);
+  const deployment = createPgDeploymentArm(ledger, {system: 'lagrange', persistent: true});
+  const engine = createPgWireMockStore();
+  const stage = createSemanticGateStage({
+    journey: (args) => runScenarioASemanticProofJourney({
+      ...args, createClient: engine.createPgClient,
+    }),
+    sshRun, opts: {}, evidenceDirOf: () => null, now: () => 0,
+  });
+  const produced = await stage({
+    run: {runId: 'r-mut-lagrange', system: 'lagrange'},
+    manifest: {campaignId: 'camp-dur-admit'},
+    deployment,
+  });
+  const base = buildBoundRunsWithGate({
+    targetId: 'lagrange', subkind: 'smoke', gate: produced.gate,
+    endpointContainerId: deployment.endpoint.containerId,
+  });
+
+  // 1. Remove faultEvidence or replace with {}, bare timestamp string, or {restartedAt}.
+  for (const bogus of [
+    undefined, {}, '2026-11-24T06:51:20.378Z', {restartedAt: '2026-11-24T06:51:20.378Z'},
+  ]) {
+    const cell = admitMutatedSubmission({...base, mutate: (run) => {
+      const dur = arrayFind(run.correctness.semanticGate.cases, (c) => c.caseId === 'durability');
+      if (bogus === undefined) delete dur.faultEvidence;
+      else dur.faultEvidence = bogus;
+      if (bogus && typeof bogus === 'object' && bogus.restartedAt) {
+        dur.restartedAt = bogus.restartedAt;
+      }
+    }});
+    assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.SEMANTIC_GATE_INCOMPLETE), true);
+    assert.equal(cell.evidence.semanticProofIds.length,
+      EXPECTED_PROOF_COUNT - OLTP_SCENARIO_A_DURABILITY_PROOF_IDS.length);
+  }
+
+  // 2. Identical before/after incarnation timestamps.
+  const sameIncCell = admitMutatedSubmission({...base, mutate: (run) => {
+    const dur = arrayFind(run.correctness.semanticGate.cases, (c) => c.caseId === 'durability');
+    const ts = dur.faultEvidence.beforeIncarnation.startedAt;
+    dur.faultEvidence.startedAtBefore = ts;
+    dur.faultEvidence.startedAtAfter = ts;
+    dur.faultEvidence.afterIncarnation = {...dur.faultEvidence.beforeIncarnation};
+  }});
+  assert.equal(arrayIncludes(sameIncCell.reasons, ADMISSION_REASON.SEMANTIC_GATE_INCOMPLETE), true);
+
+  // 3. Substitute wrong fault target host not in deployed target hosts or wrong system role.
+  for (const mutateTarget of [
+    (dur, run) => {
+      dur.faultEvidence.host = run.deployment.loadGenerator.host;
+      dur.faultEvidence.faultTarget.host = run.deployment.loadGenerator.host;
+    },
+    (dur) => {
+      dur.faultEvidence.host = '10.99.99.99';
+      dur.faultEvidence.faultTarget.host = '10.99.99.99';
+    },
+    (dur) => {
+      dur.faultEvidence.faultTarget.role = 'tikv';
+    },
+  ]) {
+    const unboundCell = admitMutatedSubmission({...base, mutate: (run) => {
+      const dur = arrayFind(run.correctness.semanticGate.cases, (c) => c.caseId === 'durability');
+      mutateTarget(dur, run);
+    }});
+    assert.equal(arrayIncludes(unboundCell.reasons, ADMISSION_REASON.SEMANTIC_GATE_UNBOUND), true);
+    assert.equal(
+      arrayIncludes(unboundCell.reasons, ADMISSION_REASON.SEMANTIC_GATE_INCOMPLETE), true);
+  }
+
+  // 4. Flip a failed case summary status to passed without valid faultEvidence / proof IDs.
+  const flippedCell = admitMutatedSubmission({...base, mutate: (run) => {
+    const firstCase = run.correctness.semanticGate.cases[0];
+    firstCase.status = 'passed';
+    firstCase.proofIds = [];
+    firstCase.failureKind = 'product_anomaly';
+  }});
+  assert.equal(arrayIncludes(flippedCell.reasons, ADMISSION_REASON.SEMANTIC_GATE_INCOMPLETE), true);
+  assert.equal(arrayIncludes(flippedCell.reasons, ADMISSION_REASON.SEMANTIC_GATE_NOT_PASSED), true);
+
+  // 5. Transplant an older candidate's artifact / mismatched harness.gitCommit or fingerprint.
+  const commitCell = admitMutatedSubmission({...base, mutate: (run) => {
+    run.identity.harness.gitCommit = '9'.repeat(40);
+  }});
+  assert.equal(arrayIncludes(commitCell.reasons, ADMISSION_REASON.HARNESS_MISMATCH), true);
+  const fpCell = admitMutatedSubmission({...base, mutate: (run, hdr) => {
+    hdr.products[0].bootProvenance = {version: '0.4.0', bootedSrcFingerprint: '1c8c3a8090c64654'};
+    run.identity.products[0].bootProvenance =
+      {version: '0.4.0', bootedSrcFingerprint: 'deadbeef00000000'};
+    run.identity.productsAfterWindow[0].bootProvenance =
+      {version: '0.4.0', bootedSrcFingerprint: 'deadbeef00000000'};
+  }});
+  assert.equal(arrayIncludes(fpCell.reasons, ADMISSION_REASON.PRODUCT_IDENTITY_MISMATCH), true);
+
+  // 6. Change fixture provenance to a claimed physical execution.
+  const fixturePhysicalCell = admitMutatedSubmission({...base, mutate: (run, hdr) => {
+    hdr.executionTarget = 'gcp';
+    run.executionTarget = 'gcp';
+  }});
+  assert.equal(arrayIncludes(fixturePhysicalCell.reasons, ADMISSION_REASON.EMULATED_PRODUCT), true);
+});
+
+test('persisted v2 raw-observations.ndjson live passing gates satisfy canonical case and ' +
+  'durability validators while pre-887007107 and historical v1 lines are rejected/forensic', () => {
+  const lines = arrayFilter(
+    stringSplit(readFileSync('data/tidb-comparison/raw-observations.ndjson', 'utf8'), '\n'),
+    (l) => stringTrim(l) !== '',
+  );
+  let livePassedGates = 0;
+  let withdrawnMissingFaultGates = 0;
+  let v1ForensicCount = 0;
+  for (const line of lines) {
+    const rec = jsonParse(line);
+    if (rec.schemaVersion !== 'lagrange-raw-observation-v2') {
+      v1ForensicCount += 1;
+      continue;
+    }
+    const gate = rec.correctness?.semanticGate;
+    if (rec.recordType !== 'run' || gate?.status !== 'passed' || !Array.isArray(gate.cases)) {
+      continue;
+    }
+    const dur = arrayFind(gate.cases, (c) => c.caseId === 'durability');
+    if (!dur?.faultEvidence) {
+      withdrawnMissingFaultGates += 1;
+      assert.equal(validateCanonicalDurabilityCaseRecord(dur, rec).valid, false, rec.runId);
+      continue;
+    }
+    livePassedGates += 1;
+    for (const c of gate.cases) {
+      assert.equal(validateCanonicalSemanticGateCaseRecord(c, rec).valid, true,
+        `${rec.runId}:${c.caseId}`);
+    }
+    assert.equal(validateCanonicalDurabilityCaseRecord(dur, rec).valid, true, rec.runId);
+  }
+  assert.ok(livePassedGates >= 3);
+  assert.ok(withdrawnMissingFaultGates >= 1);
+  assert.ok(v1ForensicCount > 0);
 });
