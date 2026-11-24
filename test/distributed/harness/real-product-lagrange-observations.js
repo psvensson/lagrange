@@ -283,6 +283,16 @@ async function assertWatchedRolesRunning(ctx, component, pollContext) {
   );
 }
 
+function markDeadlineCappedProbeTimeout(ctx, pollContext, error) {
+  const deadlineAtMs = resolveProbeDeadlineAtMs(ctx, pollContext);
+  const clock = typeof ctx?.now === 'function' ? ctx.now : dateNow;
+  if (error && typeof error === 'object' && error.timedOut === true &&
+      numberIsFinite(deadlineAtMs) && clock() >= deadlineAtMs) {
+    error.deadlineExpired = true;
+    error.observerInfrastructure = false;
+  }
+}
+
 function readinessOf(ctx, component, probe, stablePolls = 1) {
   return pollReadiness({
     component,
@@ -290,6 +300,9 @@ function readinessOf(ctx, component, probe, stablePolls = 1) {
       try {
         await assertWatchedRolesRunning(ctx, component, pollContext);
         return await probe(pollContext);
+      } catch (error) {
+        markDeadlineCappedProbeTimeout(ctx, pollContext, error);
+        throw error;
       } finally {
         if (ctx.settleInFlight) await ctx.settleInFlight();
       }

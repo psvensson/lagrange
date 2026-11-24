@@ -130,6 +130,7 @@ function standbyScript({primaryHost, name, password}) {
     `chown postgres ${DATA_ROOT} ${PGDATA}`,
     `chmod 0700 ${PGDATA}`,
     `if [ ! -s "${PGDATA}/PG_VERSION" ]; then`,
+    `  find ${PGDATA} -mindepth 1 -delete`,
     `  "$SU_BIN" postgres pg_basebackup -d ${shellQuote(conninfo)} ` +
       `-D ${PGDATA} -Fp -Xs -R -c fast`,
     'fi',

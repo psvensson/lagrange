@@ -44,13 +44,19 @@ import {BENCHMARK_PROFILE_CLASS} from './benchmark-workload-dispatch.js';
 // The storage vocabulary is the deployment contract's (one declaration).
 import {STORAGE_KIND} from './real-product-deployment-contract.js';
 
+const arrayEvery = Function.call.bind(Array.prototype.every);
+const arrayFind = Function.call.bind(Array.prototype.find);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayMap = Function.call.bind(Array.prototype.map);
+const arraySome = Function.call.bind(Array.prototype.some);
 const stringSplit = Function.call.bind(String.prototype.split);
 const stringTrim = Function.call.bind(String.prototype.trim);
 const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 const numberIsFinite = Number.isFinite;
 const numberIsSafeInteger = Number.isSafeInteger;
+const objectFreeze = Object.freeze;
+const objectGetPrototypeOf = Object.getPrototypeOf;
+const objectHasOwn = Object.hasOwn;
 const objectValues = Object.values;
 const jsonParse = JSON.parse;
 const jsonStringify = JSON.stringify;
@@ -687,6 +693,456 @@ function computeRunObservationsDigest(run) {
   return digest(digestedRunContent(run));
 }
 
+const computeRawObservationRunDigest = computeRunObservationsDigest;
+
+const SEMANTIC_GATE_CASE_STATUS = objectFreeze({
+  PASSED: 'passed',
+  FAILED: 'failed',
+  ERRORED: 'errored',
+  NOT_EXECUTED: 'not-executed',
+  REFUSED: 'refused',
+});
+
+const SEMANTIC_GATE_FAILURE_KIND = objectFreeze({
+  PRODUCT_ANOMALY: 'product_anomaly',
+  EVIDENCE_INSUFFICIENT: 'evidence_insufficient',
+  PROBE_INAPPLICABLE: 'probe_inapplicable',
+});
+
+const DURABILITY_CASE_IDS = objectFreeze([
+  'durability',
+  'scenario-a-durable-commit-v1',
+]);
+
+const DURABILITY_REQUIRED_PROOF_IDS = objectFreeze([
+  'isolation:atomicCommitRequired',
+  'isolation:successfulCommitDurable',
+]);
+
+const DURABILITY_FAULT_EVIDENCE_CODES = objectFreeze([
+  'pg_host_only_fault_insufficient',
+  'fault_incarnation_unchanged',
+  'storage_continuity_invalid',
+  'fault_evidence_missing',
+]);
+
+const DURABILITY_DATA_REPLICA_ROLES = objectFreeze([
+  'lagrange-node',
+  'postgres-primary',
+  'postgres-standby',
+  'tikv',
+  'data-replica',
+]);
+
+const DURABILITY_ENDPOINT_ONLY_ROLES = objectFreeze([
+  'tidb',
+  'pg-host-only',
+  'sys-postgres-wire',
+]);
+
+const DURABILITY_RETAINED_OBLIGATIONS = objectFreeze([
+  'committed_payment_rows',
+  'full_oltp_state_sha256',
+]);
+
+const TARGET_DURABILITY_CONTRACT = objectFreeze({
+  'lagrange': objectFreeze({
+    system: 'lagrange',
+    allowedRoles: objectFreeze(['lagrange-node']),
+  }),
+  'pg-single-primary': objectFreeze({
+    system: 'postgresql',
+    allowedRoles: objectFreeze(['postgres-primary']),
+  }),
+  'pg-patroni-sync-ha-rf3': objectFreeze({
+    system: 'postgresql',
+    allowedRoles: objectFreeze(['postgres-primary', 'postgres-standby']),
+  }),
+  'tidb-tikv': objectFreeze({
+    system: 'tidb-tikv',
+    allowedRoles: objectFreeze(['tikv']),
+  }),
+});
+
+const ARTIFACT_SHA256_PATTERN = /^[0-9a-f]{64}$/u;
+
+function isPlainRecord(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const proto = objectGetPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+function ownProp(record, key) {
+  return isPlainRecord(record) && objectHasOwn(record, key) ? record[key] : undefined;
+}
+
+function isNonEmptyString(value) {
+  return typeof value === 'string' && stringTrim(value) !== '';
+}
+
+function isDurabilityProofCase(proofCase) {
+  const caseId = ownProp(proofCase, 'caseId') ?? ownProp(proofCase, 'id');
+  return arrayIncludes(DURABILITY_CASE_IDS, caseId);
+}
+
+function classifyCanonicalCaseFailure(caseId, failures) {
+  const codes = Array.isArray(failures) ? failures : [];
+  if (arrayIncludes(DURABILITY_CASE_IDS, caseId) && codes.length > 0 &&
+      arrayEvery(codes, (code) => arrayIncludes(DURABILITY_FAULT_EVIDENCE_CODES, code))) {
+    return SEMANTIC_GATE_FAILURE_KIND.EVIDENCE_INSUFFICIENT;
+  }
+  return SEMANTIC_GATE_FAILURE_KIND.PRODUCT_ANOMALY;
+}
+
+function hasAllRequiredStrings(items, required) {
+  if (!Array.isArray(items)) return false;
+  return arrayEvery(required, (req) => arrayIncludes(items, req));
+}
+
+function validatePassedProofRecord(proofRecord, expectedProofIds) {
+  if (!isPlainRecord(proofRecord)) return false;
+  if (ownProp(proofRecord, 'status') !== SEMANTIC_GATE_CASE_STATUS.PASSED) return false;
+  if (!isNonEmptyString(ownProp(proofRecord, 'evidenceId')) ||
+      !isNonEmptyString(ownProp(proofRecord, 'system'))) {
+    return false;
+  }
+  const sha = ownProp(proofRecord, 'artifactSha256');
+  if (typeof sha !== 'string' || !ARTIFACT_SHA256_PATTERN.test(sha)) return false;
+  const recordProofIds = ownProp(proofRecord, 'proofIds');
+  return Array.isArray(recordProofIds) && recordProofIds.length > 0 &&
+    hasAllRequiredStrings(recordProofIds, expectedProofIds);
+}
+
+function validateFaultTargetShape(faultTarget, faultEvidence, reasons) {
+  if (!isPlainRecord(faultTarget)) {
+    reasons.push('pg_host_only_fault_insufficient');
+    return null;
+  }
+  const nodeId = isNonEmptyString(ownProp(faultTarget, 'nodeId')) ?
+    stringTrim(ownProp(faultTarget, 'nodeId')) : '';
+  const role = isNonEmptyString(ownProp(faultTarget, 'role')) ?
+    stringTrim(ownProp(faultTarget, 'role')) : '';
+  const containerId = isNonEmptyString(ownProp(faultEvidence, 'containerId')) ?
+    stringTrim(ownProp(faultEvidence, 'containerId')) : nodeId;
+  const isDataReplica = ownProp(faultTarget, 'isDataReplica') === true &&
+    arrayIncludes(DURABILITY_DATA_REPLICA_ROLES, role) &&
+    !arrayIncludes(DURABILITY_ENDPOINT_ONLY_ROLES, role);
+  const pgHostOnly = ownProp(faultTarget, 'pgHostOnly') === true;
+  if (!nodeId || !role || !isDataReplica || pgHostOnly || containerId !== nodeId) {
+    reasons.push('pg_host_only_fault_insufficient');
+  }
+  return {nodeId, role, containerId};
+}
+
+function validateTimestampOrder(startedAtBefore, startedAtAfter) {
+  if (!isNonEmptyString(startedAtBefore) || !isNonEmptyString(startedAtAfter)) return false;
+  const beforeText = stringTrim(startedAtBefore);
+  const afterText = stringTrim(startedAtAfter);
+  if (beforeText === afterText) return false;
+  const beforeMs = dateParse(beforeText);
+  const afterMs = dateParse(afterText);
+  return numberIsFinite(beforeMs) && numberIsFinite(afterMs) && afterMs > beforeMs;
+}
+
+function validateFaultIncarnationFields(faultEvidence, nodeId, reasons) {
+  const beforeInc = ownProp(faultEvidence, 'beforeIncarnation');
+  const afterInc = ownProp(faultEvidence, 'afterIncarnation');
+  if (!isNonEmptyString(beforeInc) || !isNonEmptyString(afterInc) ||
+      stringTrim(beforeInc) === stringTrim(afterInc)) {
+    reasons.push('fault_incarnation_unchanged');
+    return;
+  }
+  const startedAtBefore = ownProp(faultEvidence, 'startedAtBefore');
+  const startedAtAfter = ownProp(faultEvidence, 'startedAtAfter');
+  const hasTimestamps = startedAtBefore !== undefined || startedAtAfter !== undefined;
+  if (!hasTimestamps) return;
+  if (!validateTimestampOrder(startedAtBefore, startedAtAfter)) {
+    reasons.push('fault_incarnation_unchanged');
+    return;
+  }
+  if (nodeId && (stringTrim(beforeInc) !== `${nodeId}:${stringTrim(startedAtBefore)}` ||
+      stringTrim(afterInc) !== `${nodeId}:${stringTrim(startedAtAfter)}`)) {
+    reasons.push('fault_incarnation_unchanged');
+  }
+}
+
+function validateFaultContinuityAndHost(faultEvidence, reasons) {
+  const host = ownProp(faultEvidence, 'host') ?? ownProp(ownProp(faultEvidence, 'faultTarget'), 'host');
+  if (!isNonEmptyString(host)) {
+    reasons.push('fault_evidence_missing');
+  }
+  const continuity = ownProp(faultEvidence, 'storageContinuity');
+  const obligations = ownProp(faultEvidence, 'retainedObligations');
+  if (continuity !== 'preserved' ||
+      !hasAllRequiredStrings(obligations, DURABILITY_RETAINED_OBLIGATIONS)) {
+    reasons.push('storage_continuity_invalid');
+  }
+  return isNonEmptyString(host) ? stringTrim(host) : '';
+}
+
+function listOrEmpty(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function listContainsKeyValue(items, key, expected) {
+  return items.length === 0 || arraySome(items, (entry) => ownProp(entry, key) === expected);
+}
+
+function checkRunHostMembership(host, run) {
+  const deployment = ownProp(run, 'deployment');
+  const identity = ownProp(run, 'identity');
+  const loadGenHost = ownProp(ownProp(deployment, 'loadGenerator'), 'host');
+  if (!host || host === loadGenHost) return false;
+  const inRoles = listContainsKeyValue(listOrEmpty(ownProp(deployment, 'roles')), 'host', host);
+  const inProducts = listContainsKeyValue(listOrEmpty(ownProp(identity, 'products')), 'host', host);
+  const inHosts = listContainsKeyValue(listOrEmpty(ownProp(deployment, 'hosts')), 'ip', host);
+  return inRoles && inProducts && inHosts;
+}
+
+function isKnownReplicaOrEndpointRole(roleName) {
+  return arrayIncludes(DURABILITY_DATA_REPLICA_ROLES, roleName) ||
+    arrayIncludes(DURABILITY_ENDPOINT_ONLY_ROLES, roleName);
+}
+
+function checkMatchedRoleBinding(matchedRole, role, host) {
+  if (!matchedRole) return true;
+  if (matchedRole.host !== host) return false;
+  return !isKnownReplicaOrEndpointRole(matchedRole.role) || matchedRole.role === role;
+}
+
+function checkContainerBindingsInRun(nodeId, role, host, run) {
+  const deployment = ownProp(run, 'deployment');
+  const identity = ownProp(run, 'identity');
+  const roles = listOrEmpty(ownProp(deployment, 'roles'));
+  const products = listOrEmpty(ownProp(identity, 'products'));
+  const storage = listOrEmpty(ownProp(deployment, 'storage'));
+  const matchedRole = arrayFind(roles, (r) => ownProp(r, 'containerId') === nodeId);
+  if (!checkMatchedRoleBinding(matchedRole, role, host)) return false;
+  const matchedProduct = arrayFind(products, (p) => ownProp(p, 'containerId') === nodeId);
+  if (matchedProduct && matchedProduct.host !== host) return false;
+  const matchedStorage = arrayFind(storage, (s) => ownProp(s, 'containerId') === nodeId);
+  return !matchedStorage || matchedStorage.kind === STORAGE_KIND.HOST_VOLUME;
+}
+
+function matchesTargetDurabilityContract(contract, targetInfo, proofSystem, gateSystem) {
+  if (!contract) return true;
+  if (!targetInfo || !arrayIncludes(contract.allowedRoles, targetInfo.role)) return false;
+  if (proofSystem !== contract.system) return false;
+  return !isNonEmptyString(gateSystem) || gateSystem === contract.system;
+}
+
+function validateDurabilityRunBinding({proofCase, targetInfo, host, run, reasons}) {
+  if (!isPlainRecord(run)) return;
+  const contract = ownProp(TARGET_DURABILITY_CONTRACT, run.targetId);
+  const proofSystem = ownProp(ownProp(proofCase, 'proofRecord'), 'system');
+  const gateSystem = ownProp(ownProp(ownProp(run, 'correctness'), 'semanticGate'), 'system');
+  const nodeId = ownProp(targetInfo, 'nodeId');
+  const role = ownProp(targetInfo, 'role');
+  if (!matchesTargetDurabilityContract(contract, targetInfo, proofSystem, gateSystem) ||
+      !checkRunHostMembership(host, run) ||
+      !checkContainerBindingsInRun(nodeId, role, host, run)) {
+    reasons.push('durability_fault_target_unbound');
+  }
+}
+
+function hasCaseFailureMetadata(proofCase) {
+  const failureKind = ownProp(proofCase, 'failureKind');
+  const failureReasons = ownProp(proofCase, 'failureReasons');
+  const err = ownProp(proofCase, 'error');
+  const reason = ownProp(proofCase, 'reason');
+  return Boolean(failureKind || err || reason ||
+    (Array.isArray(failureReasons) && failureReasons.length > 0));
+}
+
+function validateDurabilityFaultEvidence(proofCase, run = null, reasons = []) {
+  const faultEvidence = ownProp(proofCase, 'faultEvidence');
+  if (!isPlainRecord(faultEvidence)) {
+    reasons.push('fault_evidence_missing');
+    return objectFreeze({valid: false, reasons: objectFreeze(reasons)});
+  }
+  const targetInfo = validateFaultTargetShape(
+    ownProp(faultEvidence, 'faultTarget'), faultEvidence, reasons,
+  );
+  const nodeId = ownProp(targetInfo, 'nodeId') || '';
+  validateFaultIncarnationFields(faultEvidence, nodeId, reasons);
+  const host = validateFaultContinuityAndHost(faultEvidence, reasons);
+  validateDurabilityRunBinding({proofCase, targetInfo, host, run, reasons});
+  return objectFreeze({
+    valid: reasons.length === 0,
+    reasons: objectFreeze(reasons),
+  });
+}
+
+function validateCanonicalDurabilityCaseRecord(proofCase, run = null) {
+  const reasons = [];
+  if (!isPlainRecord(proofCase) || !isDurabilityProofCase(proofCase)) {
+    return objectFreeze({valid: false, reasons: objectFreeze(['not_a_durability_case'])});
+  }
+  if (ownProp(proofCase, 'status') !== SEMANTIC_GATE_CASE_STATUS.PASSED ||
+      hasCaseFailureMetadata(proofCase)) {
+    reasons.push('durability_case_not_passed');
+  }
+  if (!hasAllRequiredStrings(ownProp(proofCase, 'proofIds'), DURABILITY_REQUIRED_PROOF_IDS) ||
+      !validatePassedProofRecord(ownProp(proofCase, 'proofRecord'), DURABILITY_REQUIRED_PROOF_IDS)) {
+    reasons.push('durability_proof_record_invalid');
+  }
+  return validateDurabilityFaultEvidence(proofCase, run, reasons);
+}
+
+function hasDurabilityRestartEvidence(proofCase, run = null) {
+  if (!isPlainRecord(proofCase) || !isDurabilityProofCase(proofCase)) return false;
+  return validateDurabilityFaultEvidence(proofCase, run, []).valid;
+}
+
+function hasValidNonDurabilityProofStatus(proofCase, proofIds) {
+  return ownProp(proofCase, 'status') === SEMANTIC_GATE_CASE_STATUS.PASSED &&
+    !hasCaseFailureMetadata(proofCase) &&
+    validatePassedProofRecord(ownProp(proofCase, 'proofRecord'), listOrEmpty(proofIds));
+}
+
+function checkNonDurabilitySystemMatch(proofCase, run, reasons) {
+  const contract = isPlainRecord(run) ? ownProp(TARGET_DURABILITY_CONTRACT, run.targetId) : null;
+  const proofSystem = ownProp(ownProp(proofCase, 'proofRecord'), 'system');
+  if (contract && proofSystem !== contract.system) {
+    reasons.push('case_proof_system_mismatch');
+  }
+}
+
+function validateCanonicalSemanticGateCaseRecord(proofCase, run = null) {
+  if (!isPlainRecord(proofCase)) {
+    return objectFreeze({valid: false, reasons: objectFreeze(['case_not_an_object'])});
+  }
+  if (isDurabilityProofCase(proofCase)) {
+    return validateCanonicalDurabilityCaseRecord(proofCase, run);
+  }
+  const reasons = [];
+  const caseId = ownProp(proofCase, 'caseId');
+  const proofIds = ownProp(proofCase, 'proofIds');
+  if (!isNonEmptyString(caseId) || !Array.isArray(proofIds) || proofIds.length === 0) {
+    reasons.push('case_identity_missing');
+  }
+  if (!hasValidNonDurabilityProofStatus(proofCase, proofIds)) {
+    reasons.push('case_proof_record_not_passed');
+  }
+  checkNonDurabilitySystemMatch(proofCase, run, reasons);
+  return objectFreeze({
+    valid: reasons.length === 0,
+    reasons: objectFreeze(reasons),
+  });
+}
+
+function assignOptionalCaseFields(result, input) {
+  if (ownProp(input, 'deploymentObservation') !== undefined) {
+    result.deploymentObservation = input.deploymentObservation;
+  }
+  if (ownProp(input, 'observedEndpoint') !== undefined) {
+    result.observedEndpoint = input.observedEndpoint;
+  }
+  if (ownProp(input, 'evidencePath') !== undefined) {
+    result.evidencePath = input.evidencePath;
+  }
+  if (ownProp(input, 'cleanupError') !== undefined) {
+    result.cleanupError = input.cleanupError;
+  }
+}
+
+function extractExecutedCaseArtifacts(input) {
+  const outcome = ownProp(input, 'outcome');
+  const evaluation = ownProp(input, 'evaluation') ?? ownProp(outcome, 'evaluation');
+  const evidence = ownProp(input, 'evidence') ?? ownProp(outcome, 'evidence');
+  const proofRecord = ownProp(input, 'proofRecord') ?? ownProp(outcome, 'proofRecord') ??
+    ownProp(evidence, 'proofRecord');
+  const faultEvidence = ownProp(input, 'faultEvidence') !== undefined ?
+    input.faultEvidence : ownProp(evidence, 'faultEvidence');
+  return {evaluation, proofRecord, faultEvidence};
+}
+
+function resolveExecutedCaseFailureReasons(evaluation, durReasons) {
+  const evalFailures = listOrEmpty(ownProp(evaluation, 'failures'));
+  if (evalFailures.length > 0) return [...evalFailures];
+  return durReasons.length > 0 ? [...durReasons] : ['proof_validation_failed'];
+}
+
+function attachExecutedProofAndFault(result, caseId, proofRecord, faultEvidence) {
+  if (isPlainRecord(proofRecord)) {
+    result.proofRecord = proofRecord;
+  }
+  if (arrayIncludes(DURABILITY_CASE_IDS, caseId) && isPlainRecord(faultEvidence)) {
+    result.faultEvidence = faultEvidence;
+  }
+}
+
+function applyExecutedCaseOutcome(result, caseId, input) {
+  const {evaluation, proofRecord, faultEvidence} = extractExecutedCaseArtifacts(input);
+  const classify = typeof input.classifyFailure === 'function' ?
+    input.classifyFailure : classifyCanonicalCaseFailure;
+  const evalPassed = Boolean(ownProp(evaluation, 'passed'));
+  const candidate = {...result, status: SEMANTIC_GATE_CASE_STATUS.PASSED};
+  attachExecutedProofAndFault(candidate, caseId, proofRecord, faultEvidence);
+  const isDur = arrayIncludes(DURABILITY_CASE_IDS, caseId);
+  const durValidation = isDur && evalPassed ?
+    validateCanonicalDurabilityCaseRecord(candidate) : {valid: true, reasons: []};
+  const passed = evalPassed && durValidation.valid &&
+    validatePassedProofRecord(proofRecord, result.proofIds);
+  result.status = passed ? SEMANTIC_GATE_CASE_STATUS.PASSED : SEMANTIC_GATE_CASE_STATUS.FAILED;
+  if (!passed) {
+    const rawFailures = resolveExecutedCaseFailureReasons(evaluation, durValidation.reasons);
+    result.failureReasons = rawFailures;
+    result.failureKind = classify(caseId, rawFailures);
+  }
+  attachExecutedProofAndFault(result, caseId, proofRecord, faultEvidence);
+}
+
+function formatCaseErrorText(rawError) {
+  if (typeof rawError === 'string') return rawError;
+  return String(ownProp(rawError, 'message') || rawError);
+}
+
+function resolveFailureReasonsOrDefault(input, fallback) {
+  const raw = ownProp(input, 'failureReasons');
+  return Array.isArray(raw) ? [...raw] : fallback;
+}
+
+function applyNonExecutedCaseOutcome(result, explicitStatus, input) {
+  if (explicitStatus === SEMANTIC_GATE_CASE_STATUS.NOT_EXECUTED ||
+      explicitStatus === SEMANTIC_GATE_CASE_STATUS.REFUSED) {
+    result.status = explicitStatus;
+    result.reason = ownProp(input, 'reason');
+    return;
+  }
+  const failureKind = ownProp(input, 'failureKind') ??
+    SEMANTIC_GATE_FAILURE_KIND.EVIDENCE_INSUFFICIENT;
+  if (explicitStatus === SEMANTIC_GATE_CASE_STATUS.ERRORED ||
+      ownProp(input, 'error') !== undefined) {
+    result.status = SEMANTIC_GATE_CASE_STATUS.ERRORED;
+    result.error = formatCaseErrorText(ownProp(input, 'error'));
+    result.failureKind = failureKind;
+    result.failureReasons = resolveFailureReasonsOrDefault(input, ['case_errored']);
+    return;
+  }
+  result.status = SEMANTIC_GATE_CASE_STATUS.FAILED;
+  result.failureKind = failureKind;
+  result.failureReasons = resolveFailureReasonsOrDefault(input, []);
+}
+
+function buildCanonicalSemanticGateCaseRecord(input = {}) {
+  const proofCase = ownProp(input, 'proofCase');
+  const caseId = ownProp(proofCase, 'id') ?? ownProp(input, 'caseId');
+  const rawProofIds = ownProp(proofCase, 'proofIds') ?? ownProp(input, 'proofIds');
+  const result = {
+    caseId,
+    proofIds: [...listOrEmpty(rawProofIds)],
+    binding: ownProp(input, 'binding') ?? null,
+  };
+  if (ownProp(input, 'outcome') !== undefined || ownProp(input, 'evaluation') !== undefined) {
+    applyExecutedCaseOutcome(result, caseId, input);
+  } else {
+    applyNonExecutedCaseOutcome(result, ownProp(input, 'status'), input);
+  }
+  assignOptionalCaseFields(result, input);
+  return objectFreeze(result);
+}
+
 function buildClaimKey({targetId, scenario, subkind, offeredRatePerSec, repetition}) {
   return `${targetId}/${scenario}/${subkind}/${offeredRatePerSec}/${repetition}`;
 }
@@ -823,10 +1279,17 @@ export {
   READINESS_STATE,
   RECORD_REJECTION,
   STORAGE_KIND,
+  TARGET_DURABILITY_CONTRACT,
   WINDOW_FIELD,
+  buildCanonicalSemanticGateCaseRecord,
   buildClaimKey,
+  computeRawObservationRunDigest,
   computeRunObservationsDigest,
+  hasDurabilityRestartEvidence,
+  isDurabilityProofCase,
   parseRawObservationText,
   validateCampaignHeader,
+  validateCanonicalDurabilityCaseRecord,
+  validateCanonicalSemanticGateCaseRecord,
   validateRunRecord,
 };

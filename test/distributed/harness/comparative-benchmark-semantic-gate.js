@@ -34,6 +34,12 @@ import {
   OLTP_SCENARIO_A_PROOF_FAILURE_KIND, buildScenarioASemanticGateEvidence,
 } from './oltp-scenario-a-semantic-gate.js';
 import {
+  buildCanonicalSemanticGateCaseRecord,
+  hasDurabilityRestartEvidence,
+  validateCanonicalDurabilityCaseRecord,
+  validateCanonicalSemanticGateCaseRecord,
+} from './raw-observation-record.js';
+import {
   DateConstructor, MapConstructor, arrayEvery, arrayFilter, arrayFind, arrayIncludes,
   arrayIsArray, arrayJoin, arrayMap, arrayPush, arraySome, dateNow, dateParse, dateToISOString,
   jsonParse, jsonStringify, mapGet, mapSet, numberIsFinite, numberIsInteger, objectFreeze,
@@ -334,6 +340,10 @@ function buildObservedFaultEvidence({deployment, target, beforeProduct, afterPro
   const rawTargetContainerId = ownField(target, 'containerId');
   const nodeId = typeof rawTargetContainerId === 'string' ?
     stringTrim(rawTargetContainerId) : '';
+  const rawHost = ownField(target, 'host') ?? ownField(beforeProduct, 'host');
+  const host = typeof rawHost === 'string' ? stringTrim(rawHost) : '';
+  const startedAtBefore = ownField(beforeProduct, 'startedAt') ?? null;
+  const startedAtAfter = ownField(afterProduct, 'startedAt') ?? null;
   const isDataReplica = arrayIncludes(DATA_REPLICA_ROLES, observedRole);
   const pgHostOnly = arrayIncludes(ENDPOINT_ONLY_ROLES, observedRole);
   const {beforeIncarnation, afterIncarnation} = resolveIncarnationPair(beforeProduct, afterProduct);
@@ -342,6 +352,10 @@ function buildObservedFaultEvidence({deployment, target, beforeProduct, afterPro
   const retainedObligations = storageContinuity === STORAGE_CONTINUITY_PRESERVED &&
     isReadinessSatisfied(readiness) ? RETAINED_OBLIGATIONS : objectFreeze([]);
   return objectFreeze({
+    ...(nodeId ? {containerId: nodeId} : {}),
+    ...(host ? {host} : {}),
+    ...(startedAtBefore !== null ? {startedAtBefore} : {}),
+    ...(startedAtAfter !== null ? {startedAtAfter} : {}),
     faultTarget: objectFreeze({
       nodeId,
       role: observedRole,
@@ -846,18 +860,19 @@ async function executeRemoteGateAction(req, overrides = {}) {
 
 function durabilityPreconditionResult(proofCase, persistentStorage, restartProduct, binding) {
   if (proofCase.id !== DURABILITY_CASE_ID) return null;
-  const base = {caseId: proofCase.id, proofIds: proofCase.proofIds, binding};
   if (persistentStorage === false) {
-    return objectFreeze({
-      ...base,
+    return buildCanonicalSemanticGateCaseRecord({
+      proofCase,
+      binding,
       status: 'failed',
       failureKind: OLTP_SCENARIO_A_PROOF_FAILURE_KIND.PROBE_INAPPLICABLE,
       failureReasons: ['durability_requires_persistent_storage'],
     });
   }
   if (!restartProduct) {
-    return objectFreeze({
-      ...base,
+    return buildCanonicalSemanticGateCaseRecord({
+      proofCase,
+      binding,
       status: 'not-executed',
       reason: 'caller-supplied-no-restart-capability',
     });
@@ -866,37 +881,42 @@ function durabilityPreconditionResult(proofCase, persistentStorage, restartProdu
 }
 
 async function recordCaseOutcome({result, proofCase, system, outcome, evidenceDir}) {
-  result.status = outcome.evaluation.passed ? 'passed' : 'failed';
-  if (!outcome.evaluation.passed) {
-    result.failureReasons = copyArray(outcome.evaluation.failures);
-    result.failureKind = classifyCaseFailure(proofCase.id, result.failureReasons);
-  }
-  result.proofRecord = outcome.proofRecord;
-  const faultEvidence = proofCase.id === DURABILITY_CASE_ID ?
-    ownField(outcome.evidence, 'faultEvidence') : undefined;
-  if (isRecordObject(faultEvidence)) {
-    result.faultEvidence = faultEvidence;
-  }
-  result.evidencePath = await persistGateArtifact(
+  const evidencePath = await persistGateArtifact(
     evidenceDir,
     `scenario-a-${proofCase.id}-${system}.json`,
     outcome.evidence,
   );
+  return buildCanonicalSemanticGateCaseRecord({
+    proofCase,
+    binding: result.binding,
+    outcome,
+    evidencePath,
+    classifyFailure: classifyCaseFailure,
+    ...(result.cleanupError !== undefined ? {cleanupError: result.cleanupError} : {}),
+  });
 }
 
 async function recordCaseError({result, proofCase, system, error, evidenceDir}) {
-  result.status = 'errored';
-  result.error = errorText(error);
-  result.failureKind = OLTP_SCENARIO_A_PROOF_FAILURE_KIND.EVIDENCE_INSUFFICIENT;
-  result.failureReasons = ['case_errored'];
+  const baseErrored = buildCanonicalSemanticGateCaseRecord({
+    proofCase,
+    binding: result.binding,
+    status: 'errored',
+    error: errorText(error),
+    failureKind: OLTP_SCENARIO_A_PROOF_FAILURE_KIND.EVIDENCE_INSUFFICIENT,
+    failureReasons: ['case_errored'],
+    ...(result.cleanupError !== undefined ? {cleanupError: result.cleanupError} : {}),
+  });
   const evidencePath = await persistGateArtifact(
     evidenceDir,
     `scenario-a-${proofCase.id}-${system}.json`,
-    result,
+    baseErrored,
   );
-  if (evidencePath !== null) {
-    result.evidencePath = evidencePath;
-  }
+  if (evidencePath === null) return baseErrored;
+  return buildCanonicalSemanticGateCaseRecord({
+    ...baseErrored,
+    proofCase,
+    evidencePath,
+  });
 }
 
 function notifyCaseDatasetPrepared(onCaseDatasetPrepared, caseId, outcome) {
@@ -941,6 +961,7 @@ async function runRemotePgWireCase({proofCase, system, connection, binding, pers
     proofCase, persistentStorage, restartProduct, binding);
   if (precondition) return precondition;
   const result = {caseId: proofCase.id, proofIds: proofCase.proofIds, binding};
+  let recorded;
   try {
     let outcome;
     if (proofCase.id === DURABILITY_CASE_ID) {
@@ -956,17 +977,17 @@ async function runRemotePgWireCase({proofCase, system, connection, binding, pers
       notifyCaseDatasetPrepared(onCaseDatasetPrepared, proofCase.id, outcome);
     }
     assertSemanticGateActive({...caseControl, stage: 'after-case'});
-    await recordCaseOutcome({result, proofCase, system, outcome, evidenceDir});
+    recorded = await recordCaseOutcome({result, proofCase, system, outcome, evidenceDir});
   } catch (error) {
     if (isGateAbortError(error, caseControl.signal)) {
       assertSemanticGateActive(caseControl);
       throw error;
     }
     assertSemanticGateActive(caseControl);
-    await recordCaseError({result, proofCase, system, error, evidenceDir});
+    recorded = await recordCaseError({result, proofCase, system, error, evidenceDir});
   }
   assertSemanticGateActive({...caseControl, stage: 'after-case'});
-  return objectFreeze(result);
+  return recorded;
 }
 
 function summarizeCasesToGate(system, cases) {
@@ -1070,13 +1091,16 @@ async function runTiDbExecutedCase({proofCase, connection, binding, persistentSt
       createMysqlConnection, rawCreateMysqlConnection, result, gateControl, onCaseDatasetPrepared,
     });
     assertSemanticGateActive({...baseControl, stage: 'case-complete', caseId: proofCase.id});
-    await recordCaseOutcome({result, proofCase, system: SYSTEM.TIDB_TIKV, outcome, evidenceDir});
+    return await recordCaseOutcome({
+      result, proofCase, system: SYSTEM.TIDB_TIKV, outcome, evidenceDir,
+    });
   } catch (error) {
     assertSemanticGateActive({...baseControl, stage: 'case-error', caseId: proofCase.id});
     if (isGateAbortError(error, gateControl?.signal)) throw error;
-    await recordCaseError({result, proofCase, system: SYSTEM.TIDB_TIKV, error, evidenceDir});
+    return await recordCaseError({
+      result, proofCase, system: SYSTEM.TIDB_TIKV, error, evidenceDir,
+    });
   }
-  return objectFreeze(result);
 }
 
 async function advanceCaseTarget(beforeCase, caseId, current, gateControl = null) {
@@ -1142,9 +1166,11 @@ async function runTiDbSemanticGate(input) {
       const proofCase = OLTP_SCENARIO_A_PROOF_CASES[index];
       assertSemanticGateActive({...gateControl, stage: 'before-case', caseId: proofCase.id});
       if (!arrayIncludes(executedCaseIds, proofCase.id)) {
-        arrayPush(cases, objectFreeze({
-          caseId: proofCase.id, proofIds: proofCase.proofIds, binding: target.binding,
-          status: 'not-executed', reason: 'not-executed-in-tidb-gate-probe',
+        arrayPush(cases, buildCanonicalSemanticGateCaseRecord({
+          proofCase,
+          binding: target.binding,
+          status: 'not-executed',
+          reason: 'not-executed-in-tidb-gate-probe',
         }));
         continue;
       }
@@ -1424,8 +1450,12 @@ export {
   TIDB_CASE_EXECUTORS,
   TIDB_DATABASE_BY_CASE,
   TIDB_EXECUTED_CASE_IDS,
+  buildCanonicalSemanticGateCaseRecord,
   buildObservedFaultEvidence,
   createSemanticGateStage,
   executeRemoteGateAction,
+  hasDurabilityRestartEvidence,
   runTiDbSemanticGate,
+  validateCanonicalDurabilityCaseRecord,
+  validateCanonicalSemanticGateCaseRecord,
 };

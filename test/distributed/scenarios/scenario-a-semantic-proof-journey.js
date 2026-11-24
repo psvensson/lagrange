@@ -22,6 +22,9 @@ import {
   buildScenarioASemanticGateEvidence,
 } from '../harness/oltp-scenario-a-semantic-gate.js';
 import {
+  buildCanonicalSemanticGateCaseRecord,
+} from '../harness/raw-observation-record.js';
+import {
   PGWIRE_OLTP_EXECUTION_PATH,
   PGWIRE_OLTP_NATIVE_LOCKING_READ_MODE,
   PGWIRE_OLTP_PROTOCOL,
@@ -350,30 +353,36 @@ async function observedDeployment(journey, proofCase, context) {
   return Object.freeze({containerId: observed.containerId, endpoint: observed.endpoint});
 }
 
-function refusal(result, extra) {
-  return Object.freeze({...result, status: CASE_STATUS.REFUSED,
-    reason: REFUSAL_REASON.BINDING_CHANGED_WITHOUT_REBIND, ...extra});
+function refusal(proofCase, binding, extra) {
+  return buildCanonicalSemanticGateCaseRecord({
+    proofCase,
+    binding,
+    status: CASE_STATUS.REFUSED,
+    reason: REFUSAL_REASON.BINDING_CHANGED_WITHOUT_REBIND,
+    ...extra,
+  });
 }
 
 // A durability case that cannot run here: on container-layer storage it does
 // not apply (by the contract: recorded as such, never run, never passed);
 // without a restart capability it is not executed.
-function durabilityPrecondition(proofCase, options, result) {
+function durabilityPrecondition(proofCase, options, binding) {
   if (proofCase.id !== DURABILITY_CASE_ID) return null;
   if (options.persistentStorage === false) {
-    return {...result, status: CASE_STATUS.FAILED,
+    return buildCanonicalSemanticGateCaseRecord({
+      proofCase,
+      binding,
+      status: CASE_STATUS.FAILED,
       failureKind: FAILURE_KIND.PROBE_INAPPLICABLE,
-      failureReasons: [FAILURE_REASON.DURABILITY_REQUIRES_PERSISTENT_STORAGE]};
+      failureReasons: [FAILURE_REASON.DURABILITY_REQUIRES_PERSISTENT_STORAGE],
+    });
   }
-  return options.restartCluster ? null : {...result, status: CASE_STATUS.NOT_EXECUTED,
-    reason: NOT_EXECUTED_REASON.NO_RESTART_CAPABILITY};
-}
-
-function recordEvaluation(result, proofCase, evaluation) {
-  result.status = evaluation.passed ? CASE_STATUS.PASSED : CASE_STATUS.FAILED;
-  if (evaluation.passed) return;
-  result.failureReasons = [...(evaluation.failures || [])];
-  result.failureKind = classifyProofCaseFailure(proofCase.id, result.failureReasons);
+  return options.restartCluster ? null : buildCanonicalSemanticGateCaseRecord({
+    proofCase,
+    binding,
+    status: CASE_STATUS.NOT_EXECUTED,
+    reason: NOT_EXECUTED_REASON.NO_RESTART_CAPABILITY,
+  });
 }
 
 function isJourneyAbortError(error, signal) {
@@ -465,44 +474,42 @@ function awaitWithJourneySignal(promiseOrFn, request, stage, caseId = null) {
   });
 }
 
-function attachDurabilityFaultEvidence(result, proofCase, evidence) {
-  if (proofCase.id !== DURABILITY_CASE_ID || !Object.hasOwn(evidence, 'faultEvidence')) {
-    return;
-  }
-  const {faultEvidence} = evidence;
-  if (faultEvidence !== null && typeof faultEvidence === 'object' &&
-      !Array.isArray(faultEvidence)) {
-    result.faultEvidence = faultEvidence;
-  }
-}
-
-async function recordErroredCase(result, proofCase, context, journey, error) {
+async function recordErroredCase(proofCase, context, journey, error, extra = {}) {
   assertJourneyActive(journey, 'run-case', proofCase.id);
-  result.status = CASE_STATUS.ERRORED;
-  result.error = String(error?.message || error);
-  result.failureKind = FAILURE_KIND.EVIDENCE_INSUFFICIENT;
-  result.failureReasons = [FAILURE_REASON.CASE_ERRORED];
+  const baseRecord = buildCanonicalSemanticGateCaseRecord({
+    proofCase,
+    binding: context.binding,
+    status: CASE_STATUS.ERRORED,
+    error: String(error?.message || error),
+    failureKind: FAILURE_KIND.EVIDENCE_INSUFFICIENT,
+    failureReasons: [FAILURE_REASON.CASE_ERRORED],
+    ...extra,
+  });
   const evidencePath = await persistEvidence(
     journey.evidenceDir,
     context.system,
     proofCase.id,
-    result,
+    baseRecord,
   );
-  if (evidencePath !== null) {
-    result.evidencePath = evidencePath;
-  }
+  if (evidencePath === null) return baseRecord;
+  return buildCanonicalSemanticGateCaseRecord({
+    ...baseRecord,
+    proofCase,
+    evidencePath,
+  });
 }
 
 async function runCase(proofCase, context, options, journey) {
   assertJourneyActive(journey, 'run-case', proofCase.id);
-  const result = {caseId: proofCase.id, proofIds: proofCase.proofIds,
-    binding: context.binding};
-  const precondition = durabilityPrecondition(proofCase, options, result);
+  const precondition = durabilityPrecondition(proofCase, options, context.binding);
   if (precondition) return precondition;
   if (endpointLabel(context.endpoint) !== context.binding.endpoint) {
-    return refusal(result, {observedEndpoint: endpointLabel(context.endpoint)});
+    return refusal(proofCase, context.binding,
+      {observedEndpoint: endpointLabel(context.endpoint)});
   }
+  const cleanupState = {};
   let adapter = null;
+  let caseRecord = null;
   try {
     const outcome = await awaitWithJourneySignal(
       () => CASE_EXECUTORS[proofCase.id]({context, options, cluster: null}),
@@ -517,28 +524,42 @@ async function runCase(proofCase, context, options, journey) {
     assertJourneyActive(journey, 'after-case', proofCase.id);
     const evidence = buildProofEvidence(outcome);
     const deployment = await observedDeployment(journey, proofCase, context);
-    result.deploymentObservation = deployment;
     if (deployment !== DEPLOYMENT_OBSERVATION.NOT_OBSERVED &&
         !bindingMatches(context.binding, deployment)) {
-      await closeQuietly(adapter, result, journey);
-      return refusal(result, {});
+      await closeQuietly(adapter, cleanupState, journey);
+      return refusal(proofCase, context.binding, {
+        deploymentObservation: deployment,
+        ...cleanupState,
+      });
     }
-    recordEvaluation(result, proofCase, outcome.evaluation);
-    result.proofRecord = evidence.proofRecord;
-    attachDurabilityFaultEvidence(result, proofCase, evidence);
-    result.evidencePath = await persistEvidence(journey.evidenceDir, context.system,
-      proofCase.id, evidence);
+    const evidencePath = await persistEvidence(
+      journey.evidenceDir, context.system, proofCase.id, evidence,
+    );
+    await closeQuietly(adapter, cleanupState, journey);
+    adapter = null;
+    caseRecord = buildCanonicalSemanticGateCaseRecord({
+      proofCase,
+      binding: context.binding,
+      deploymentObservation: deployment,
+      evaluation: outcome.evaluation,
+      proofRecord: evidence.proofRecord,
+      evidence,
+      evidencePath,
+      classifyFailure: classifyProofCaseFailure,
+      ...cleanupState,
+    });
   } catch (error) {
     if (isJourneyAbortError(error, journey.signal)) {
-      await closeQuietly(adapter, result, journey);
+      await closeQuietly(adapter, cleanupState, journey);
       assertJourneyActive(journey, 'run-case', proofCase.id);
       throw error;
     }
-    await recordErroredCase(result, proofCase, context, journey, error);
+    await closeQuietly(adapter, cleanupState, journey);
+    adapter = null;
+    caseRecord = await recordErroredCase(proofCase, context, journey, error, cleanupState);
   }
-  await closeQuietly(adapter, result, journey);
   assertJourneyActive(journey, 'after-case', proofCase.id);
-  return Object.freeze(result);
+  return caseRecord;
 }
 
 function gateStatusOf(summary) {
@@ -628,25 +649,26 @@ async function recordBeforeCaseError(context, proofCase, journeyRequest, error) 
     throw error;
   }
   assertJourneyActive(journeyRequest, 'before-case', proofCase.id);
-  const erroredCase = {
-    caseId: proofCase.id,
-    proofIds: proofCase.proofIds,
+  const erroredCase = buildCanonicalSemanticGateCaseRecord({
+    proofCase,
     binding: context.binding,
     status: CASE_STATUS.ERRORED,
     error: String(error?.message || error),
     failureKind: FAILURE_KIND.EVIDENCE_INSUFFICIENT,
     failureReasons: [FAILURE_REASON.CASE_ERRORED],
-  };
+  });
   const evidencePath = await persistEvidence(
     journeyRequest.evidenceDir,
     context.system,
     proofCase.id,
     erroredCase,
   );
-  if (evidencePath !== null) {
-    erroredCase.evidencePath = evidencePath;
-  }
-  return Object.freeze(erroredCase);
+  if (evidencePath === null) return erroredCase;
+  return buildCanonicalSemanticGateCaseRecord({
+    ...erroredCase,
+    proofCase,
+    evidencePath,
+  });
 }
 
 function buildCaseRunOptions(

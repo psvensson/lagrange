@@ -91,7 +91,13 @@ function isInterruptedFailure(error, signal) {
     signal?.aborted === true);
 }
 
+function isDeadlineExpiredReadinessExhaustion(error) {
+  return error?.code === DEPLOYMENT_FAILURE.READINESS_EXHAUSTED &&
+    (error?.deadlineExpired === true || error?.diagnostic?.deadlineExpired === true);
+}
+
 function isObserverInfrastructureFailure(error) {
+  if (isDeadlineExpiredReadinessExhaustion(error)) return false;
   return Boolean(
     error?.observerInfrastructure === true ||
     error?.diagnostic?.observerInfrastructure === true,

@@ -137,7 +137,18 @@ async function createBenchmarkFixtureRepo(t) {
     path.join(repo, 'test/distributed/scenarios'),
     'dir',
   );
-  writeFile(repo, 'scripts/check-file-size-thresholds.js', 'process.exit(0);\n');
+  writeFile(repo, 'eslint.config.js', 'export default [];\n');
+  for (const stub of [
+    'scripts/check-file-size-thresholds.js',
+    'scripts/check-staged-constant-names.js',
+    'scripts/check-guideline-literals.js',
+    'scripts/check-guideline-decision-boundaries.js',
+    'scripts/check-guideline-ambient-intrinsics.js',
+    'scripts/check-guideline-silent-catch.js',
+    'scripts/check-guideline-navigability.js',
+  ]) {
+    writeFile(repo, stub, 'process.exit(0);\n');
+  }
   writeFile(repo, 'package.json', `${JSON.stringify({
     name: 'benchmark-hooks-fixture',
     type: 'module',
@@ -347,3 +358,84 @@ test('run-comparative-benchmarks.mjs wires canonical auto-regeneration and keeps
     assert.equal(helpRun.status, 0, helpRun.stderr);
     assert.match(helpRun.stdout, /Usage: node docs\/benchmarks\/cloud\/run-comparative-benchmarks\.mjs/u);
   });
+
+test('Gap 1, 2 & 3: generator-only edits trigger pre-commit/pre-push freshness, unstaged ' +
+  'generator edits fail pre-commit, and working-tree or committed raw-observations deletion ' +
+  'never bypasses pre-push', async (t) => {
+  const {repo, baseSha} = await createBenchmarkFixtureRepo(t);
+  const generatorRelPath = 'test/distributed/harness/comparative-coverage-manifest.js';
+  const origGenerator = fs.readFileSync(path.join(repo, generatorRelPath), UTF8);
+
+  // Gap 3: Staged data change + unstaged edit in generator code is refused by pre-commit.
+  fs.appendFileSync(path.join(repo, HISTORY_PATH), REAL_HISTORY_LINES[SEEDED_LINE_COUNT], UTF8);
+  git(repo, ['add', HISTORY_PATH]);
+  writeFile(repo, generatorRelPath, `${origGenerator}\n// unstaged generator drift\n`);
+
+  const unstagedGenRun = runBashHook(repo, PRE_COMMIT_HOOK);
+  assert.equal(unstagedGenRun.status, 1, unstagedGenRun.output);
+  assert.match(unstagedGenRun.output,
+    /needs data\/tidb-comparison and docs\/benchmarks to match the staged index/u);
+  assert.match(unstagedGenRun.output, /comparative-coverage-manifest\.js/u);
+
+  // Gap 1A: Generator-only staged change in pre-commit triggers benchmark artifact regeneration.
+  git(repo, ['reset', '--hard', '--quiet', baseSha]);
+  const mutatedGenerator = origGenerator.replace(
+    'comparative-coverage-manifest-v1',
+    'comparative-coverage-manifest-v1-mutated',
+  );
+  assert.notEqual(mutatedGenerator, origGenerator);
+  writeFile(repo, generatorRelPath, mutatedGenerator);
+  git(repo, ['add', generatorRelPath]);
+
+  const genPreCommit = runBashHook(repo, PRE_COMMIT_HOOK);
+  assert.equal(genPreCommit.status, 0, genPreCommit.output);
+  assert.match(genPreCommit.output, /regenerating comparative benchmark artifacts/u);
+  assert.match(genPreCommit.output, /comparative-benchmark-recompute: PASS/u);
+  const stagedAfterGen = git(repo, ['diff', '--cached', '--name-only']).split('\n').filter(Boolean);
+  assert.ok(stagedAfterGen.includes('data/tidb-comparison/admitted-lab-measurements.json'),
+    `generator-only pre-commit must stage regenerated admitted-lab-measurements.json: ${stagedAfterGen}`);
+  assert.ok(stagedAfterGen.includes('data/tidb-comparison/multi-system-matrix.json'),
+    `generator-only pre-commit must stage regenerated multi-system-matrix.json: ${stagedAfterGen}`);
+
+  // Gap 1B: Generator-only commit without regeneration is refused by pre-push, then admitted
+  //         once regenerated artifacts are committed.
+  git(repo, ['reset', '--hard', '--quiet', baseSha]);
+  git(repo, ['checkout', '--quiet', '-b', 'feature/generator-only', baseSha]);
+  writeFile(repo, generatorRelPath, mutatedGenerator);
+  git(repo, ['add', generatorRelPath]);
+  git(repo, ['commit', '--quiet', '--no-verify', '-m', 'generator-only edit without regen']);
+  const staleGenSha = git(repo, ['rev-parse', 'HEAD']);
+
+  const staleGenPush = runBashHook(repo, PRE_PUSH_HOOK, {
+    input: `refs/heads/feature/generator-only ${staleGenSha} ` +
+      `refs/heads/feature/generator-only ${ZERO_SHA}\n`,
+  });
+  assert.equal(staleGenPush.status, 1, staleGenPush.output);
+  assert.match(staleGenPush.output, /verifying benchmark freshness on pushed commit/u);
+  assert.match(staleGenPush.output, /comparative-benchmark-recompute: FAIL/u);
+
+  // Gap 2A: Deleting raw-observations.ndjson in the WORKING TREE (uncommitted) does NOT bypass
+  //         pre-push on staleGenSha.
+  fs.rmSync(path.join(repo, RAW_OBSERVATIONS_PATH));
+  const missingWorkingTreePush = runBashHook(repo, PRE_PUSH_HOOK, {
+    input: `refs/heads/feature/generator-only ${staleGenSha} ` +
+      `refs/heads/feature/generator-only ${ZERO_SHA}\n`,
+  });
+  assert.equal(missingWorkingTreePush.status, 1, missingWorkingTreePush.output);
+  assert.match(missingWorkingTreePush.output, /comparative-benchmark-recompute: FAIL/u);
+
+  // Gap 2B: Committing the deletion of raw-observations.ndjson while docs/benchmarks exists
+  //         in the pushed commit fails closed in pre-push.
+  git(repo, ['add', '-A']);
+  git(repo, ['commit', '--quiet', '--no-verify', '-m', 'delete raw-observations in commit']);
+  const deletedRawSha = git(repo, ['rev-parse', 'HEAD']);
+  const deletedRawPush = runBashHook(repo, PRE_PUSH_HOOK, {
+    input: `refs/heads/feature/generator-only ${deletedRawSha} ` +
+      `refs/heads/feature/generator-only ${ZERO_SHA}\n`,
+  });
+  assert.equal(deletedRawPush.status, 1, deletedRawPush.output);
+  assert.match(
+    deletedRawPush.output,
+    /without required input data\/tidb-comparison\/raw-observations\.ndjson; refusing push/u,
+  );
+});

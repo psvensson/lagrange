@@ -77,7 +77,17 @@ for f in "${STAGED_METADATA[@]}"; do
     test/*|scripts/*) REGEN_TEST_METADATA=1 ;;
   esac
   case "$f" in
-    data/tidb-comparison/*|docs/benchmarks/*) REGEN_BENCHMARK_ARTIFACTS=1 ;;
+    data/tidb-comparison/*|docs/benchmarks/*|\
+    test/distributed/harness/comparative-*.js|\
+    test/distributed/harness/raw-observation-*.js|\
+    test/distributed/harness/oltp-comparison-*.js|\
+    test/distributed/harness/*-static-web.js|\
+    test/distributed/harness/benchmark-claim-admission.js|\
+    test/distributed/harness/benchmark-invalidation-ledger.js|\
+    test/distributed/harness/scaleout-*.js|\
+    scripts/checks/comparative-benchmark-recompute.js|\
+    scripts/checks/check-benchmark-history-append-only.js)
+      REGEN_BENCHMARK_ARTIFACTS=1 ;;
   esac
 done
 
@@ -147,6 +157,8 @@ fi
 # unstaged or untracked test/helper/source file could leak into a committed
 # manifest/seal that does not describe the commit being made.
 if { [ "$REGEN_INVENTORIES" = "1" ] || [ "$REGEN_TEST_METADATA" = "1" ]; } \
+  && { [ -f "solve/changes/global-owner-debt-inventory/inventory.json" ] \
+    || [ -f "test/shards/primary-classes.json" ]; } \
   && [ "$SOLVER_AUTHORIZED" = "0" ] \
   && [ -z "${LAGRANGE_SKIP_INVENTORY_REGEN:-}" ]; then
   mapfile -t UNSTAGED_DERIVED_INPUTS < <(
@@ -164,6 +176,7 @@ if { [ "$REGEN_INVENTORIES" = "1" ] || [ "$REGEN_TEST_METADATA" = "1" ]; } \
 fi
 
 if [ "$REGEN_INVENTORIES" = "1" ] \
+  && [ -f "solve/changes/global-owner-debt-inventory/inventory.json" ] \
   && [ "$SOLVER_AUTHORIZED" = "0" ] \
   && [ -z "${LAGRANGE_SKIP_INVENTORY_REGEN:-}" ]; then
   if ! node scripts/generate-global-owner-debt-inventory.js \
@@ -182,6 +195,7 @@ if [ "$REGEN_INVENTORIES" = "1" ] \
 fi
 
 if [ "$REGEN_TEST_METADATA" = "1" ] \
+  && [ -f "test/shards/primary-classes.json" ] \
   && [ "$SOLVER_AUTHORIZED" = "0" ] \
   && [ -z "${LAGRANGE_SKIP_INVENTORY_REGEN:-}" ]; then
   echo "pre-commit: refreshing generated test metadata"
@@ -197,6 +211,7 @@ fi
 # refresh, so they regenerate after them and ship in the same commit. The
 # pathspec stages a removed directory's index deletion too.
 if { [ "$REGEN_INVENTORIES" = "1" ] || [ "$REGEN_TEST_METADATA" = "1" ]; } \
+  && [ -f "test/shards/impact-graph-seal.json" ] \
   && [ "$SOLVER_AUTHORIZED" = "0" ] \
   && [ -z "${LAGRANGE_SKIP_INVENTORY_REGEN:-}" ]; then
   node scripts/generate-source-owner-index.js --write > /dev/null
@@ -206,14 +221,27 @@ fi
 if [ "$REGEN_BENCHMARK_ARTIFACTS" = "1" ] \
   && [ "$SOLVER_AUTHORIZED" = "0" ] \
   && [ -z "${LAGRANGE_SKIP_INVENTORY_REGEN:-}" ]; then
+  BENCHMARK_PRODUCER_INPUT_PATHS=(
+    data/tidb-comparison
+    docs/benchmarks
+    ':(glob)test/distributed/harness/comparative-*.js'
+    ':(glob)test/distributed/harness/raw-observation-*.js'
+    ':(glob)test/distributed/harness/oltp-comparison-*.js'
+    ':(glob)test/distributed/harness/*-static-web.js'
+    test/distributed/harness/benchmark-claim-admission.js
+    test/distributed/harness/benchmark-invalidation-ledger.js
+    ':(glob)test/distributed/harness/scaleout-*.js'
+    scripts/checks/comparative-benchmark-recompute.js
+    scripts/checks/check-benchmark-history-append-only.js
+  )
   mapfile -t UNSTAGED_BENCHMARK_INPUTS < <(
     {
-      git diff --name-only -- data/tidb-comparison docs/benchmarks
-      git ls-files --others --exclude-standard -- data/tidb-comparison docs/benchmarks
+      git diff --name-only -- "${BENCHMARK_PRODUCER_INPUT_PATHS[@]}"
+      git ls-files --others --exclude-standard -- "${BENCHMARK_PRODUCER_INPUT_PATHS[@]}"
     } | sort -u
   )
   if [ "${#UNSTAGED_BENCHMARK_INPUTS[@]}" -gt 0 ]; then
-    echo "pre-commit: benchmark artifact regeneration needs data/tidb-comparison and docs/benchmarks to match the staged index"
+    echo "pre-commit: benchmark artifact regeneration needs data/tidb-comparison and docs/benchmarks to match the staged index (including benchmark generator inputs)"
     printf 'pre-commit: stage/stash or remove: %s\n' "${UNSTAGED_BENCHMARK_INPUTS[@]}"
     echo "pre-commit: WIP bypass: LAGRANGE_SKIP_INVENTORY_REGEN=1 git commit"
     exit 1

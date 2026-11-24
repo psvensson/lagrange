@@ -35,10 +35,23 @@ const ARGV_REF_LINES_INDEX = 2;
 const REF_LINE_MIN_FIELDS = 4;
 const REMOTE_SHA_INDEX = 3;
 
-const BENCHMARK_PATHS = Object.freeze([
+const BENCHMARK_CORPUS_PATHS = Object.freeze([
   'data/tidb-comparison',
   'docs/benchmarks',
 ]);
+const BENCHMARK_PRODUCER_PATHSPECS = Object.freeze([
+  ...BENCHMARK_CORPUS_PATHS,
+  ':(glob)test/distributed/harness/comparative-*.js',
+  ':(glob)test/distributed/harness/raw-observation-*.js',
+  ':(glob)test/distributed/harness/oltp-comparison-*.js',
+  ':(glob)test/distributed/harness/*-static-web.js',
+  'test/distributed/harness/benchmark-claim-admission.js',
+  'test/distributed/harness/benchmark-invalidation-ledger.js',
+  ':(glob)test/distributed/harness/scaleout-*.js',
+  'scripts/checks/comparative-benchmark-recompute.js',
+  'scripts/checks/check-benchmark-history-append-only.js',
+]);
+const RAW_OBSERVATIONS_PATH = 'data/tidb-comparison/raw-observations.ndjson';
 const ORIGIN_MAIN_REF = 'refs/remotes/origin/main';
 const COMMIT_PEEL_SUFFIX = '^{commit}';
 const GIT_C_FLAG = '-C';
@@ -75,6 +88,9 @@ const TEXT = Object.freeze({
   CHECK_FAILED: '[pre-push] benchmark freshness failed on pushed commit ',
   CHECK_FAILED_MID: ' during ',
   CHECK_FAILED_SUFFIX: '; regenerate docs/benchmarks and data/tidb-comparison and commit\n',
+  MISSING_RAW_OBSERVATIONS: '[pre-push] benchmark corpus present in pushed commit ',
+  MISSING_RAW_OBSERVATIONS_SUFFIX:
+    ' without required input data/tidb-comparison/raw-observations.ndjson; refusing push\n',
   ERROR_PREFIX: '[pre-push] benchmark freshness error: ',
 });
 
@@ -151,25 +167,37 @@ function rangeTouchedBenchmarkPaths(root, baseSha, headSha) {
   const env = gitEnv();
   const diffOut = execGit(
     [GIT_C_FLAG, root, ...GIT_DIFF_NAME_ONLY_ARGUMENTS, baseSha, headSha,
-      GIT_DOUBLE_DASH, ...BENCHMARK_PATHS],
+      GIT_DOUBLE_DASH, ...BENCHMARK_PRODUCER_PATHSPECS],
     {encoding: UTF8, env},
   );
   if (nonEmptyLines(diffOut).length > 0) return true;
   const logOut = execGit(
     [GIT_C_FLAG, root, ...GIT_LOG_NAME_ONLY_ARGUMENTS,
-      `${baseSha}${GIT_RANGE_SEPARATOR}${headSha}`, GIT_DOUBLE_DASH, ...BENCHMARK_PATHS],
+      `${baseSha}${GIT_RANGE_SEPARATOR}${headSha}`,
+      GIT_DOUBLE_DASH, ...BENCHMARK_PRODUCER_PATHSPECS],
     {encoding: UTF8, env},
   );
   return nonEmptyLines(logOut).length > 0;
 }
 
-function treeContainsBenchmarkPaths(root, commitSha) {
+function treeContainsPaths(root, commitSha, pathspecs) {
   const treeOut = execGit(
     [GIT_C_FLAG, root, ...GIT_LS_TREE_ARGUMENTS, commitSha,
-      GIT_DOUBLE_DASH, ...BENCHMARK_PATHS],
+      GIT_DOUBLE_DASH, ...pathspecs],
     {encoding: UTF8, env: gitEnv()},
   );
   return nonEmptyLines(treeOut).length > 0;
+}
+
+function assertCompleteBenchmarkCorpusInTree(root, commitSha) {
+  const hasCorpus = treeContainsPaths(root, commitSha, BENCHMARK_CORPUS_PATHS);
+  const hasRawObservations = treeContainsPaths(root, commitSha, [RAW_OBSERVATIONS_PATH]);
+  if (hasCorpus && !hasRawObservations) {
+    throw new Error(
+      `${TEXT.MISSING_RAW_OBSERVATIONS}${commitSha}${TEXT.MISSING_RAW_OBSERVATIONS_SUFFIX}`,
+    );
+  }
+  return hasCorpus;
 }
 
 function resolveHistoryBase(root, originMainBase, remoteBase) {
@@ -181,13 +209,22 @@ function resolveHistoryBase(root, originMainBase, remoteBase) {
 
 function resolveCheckTarget(root, entry) {
   const commitSha = peelToCommit(root, entry.localSha);
+  const hasCorpus = assertCompleteBenchmarkCorpusInTree(root, commitSha);
   const remoteBase = commitExists(root, entry.remoteSha) ? entry.remoteSha : null;
   const originMainBase = mergeBaseCommit(root, ORIGIN_MAIN_REF, commitSha);
   const diffBase = remoteBase || originMainBase;
+  const baseHadCorpus = diffBase ?
+    treeContainsPaths(root, diffBase, BENCHMARK_CORPUS_PATHS) : false;
+  if (!hasCorpus && !baseHadCorpus) return null;
   const touched = diffBase ?
     rangeTouchedBenchmarkPaths(root, diffBase, commitSha) :
-    treeContainsBenchmarkPaths(root, commitSha);
+    treeContainsPaths(root, commitSha, BENCHMARK_PRODUCER_PATHSPECS);
   if (!touched) return null;
+  if (!hasCorpus) {
+    throw new Error(
+      `${TEXT.MISSING_RAW_OBSERVATIONS}${commitSha}${TEXT.MISSING_RAW_OBSERVATIONS_SUFFIX}`,
+    );
+  }
   return {
     localRef: entry.localRef,
     commitSha,
