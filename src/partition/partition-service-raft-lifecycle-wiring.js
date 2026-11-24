@@ -1,5 +1,10 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {RAFT_EVENT} from '../raft/raft-operation-port-constants.js';
+import {
+  isPortScheduling,
+  readPortClockObligation,
+  reconcilePortClockObligation,
+} from '../raft/raft-rs-operation-port.js';
 import {deriveRaftRsPeerId} from '../raft/raft-rs-peer-identity.js';
 import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
 import {createConsensusHoldLog} from './partition-consensus-hold-log.js';
@@ -23,48 +28,30 @@ const {
 } = PARTITION_SERVICE_SHARED;
 
 const LOCAL_STR_VOTER = 'voter';
-const INITIAL_FOUNDER_TERM = 1;
-const SINGLE_REPLICA_COUNT = 1;
 
-function hasMultiMemberConfState(confState) {
-  if (!confState) {
-    return false;
+function attachPartitionClockObligationBridge(service) {
+  if (!service || typeof service !== 'object') {
+    return;
   }
-  const voterCount = Array.isArray(confState.voters) ?
-    confState.voters.length :
-    0;
-  const learnerCount = Array.isArray(confState.learners) ?
-    confState.learners.length :
-    0;
-  return voterCount + learnerCount > SINGLE_REPLICA_COUNT;
+  service.isScheduling = () => isPortScheduling(service.raft);
+  service.readClockObligation = () => readPortClockObligation(service.raft);
 }
 
-function shouldDeferInitialSoloFounderScheduling(service) {
-  if (!service?.raft || service.replicaIds?.length !== SINGLE_REPLICA_COUNT) {
-    return false;
-  }
-  const status = service.raft.readStatus();
-  return (
-    service.isSoloReplicaGroup() &&
-    !hasMultiMemberConfState(status?.confState) &&
-    status?.gateOpen !== false &&
-    service.role === RaftRole.LEADER &&
-    Number(status?.term) <= INITIAL_FOUNDER_TERM
-  );
-}
-
-function startPartitionRaftSchedulingTimer(service) {
-  if (!service?.raft) {
-    return false;
-  }
-  service.deferredFounderSchedulingPending = false;
+function logStartingPartitionElectionTimer(service) {
   service.logger.info(PARTITION_SERVICE_LOG_MSG.STARTING_ELECTION_TIMER, {
     replicaId: service.replicaId,
     partitionId: service.partitionId,
     peerCount: service.raft.readStatus().peerCount,
   });
-  service.raft.startScheduling();
-  return true;
+}
+
+function syncPartitionDeferredSchedulingFlag(service) {
+  const obligation = readPortClockObligation(service?.raft);
+  if (obligation !== null) {
+    service.deferredFounderSchedulingPending =
+      obligation.deferredSoloFounder === true;
+  }
+  return obligation;
 }
 
 function startPartitionElectionScheduling(service) {
@@ -75,66 +62,50 @@ function startPartitionElectionScheduling(service) {
   if (!service.raft) {
     return;
   }
-  if (shouldDeferInitialSoloFounderScheduling(service)) {
-    service.deferredFounderSchedulingPending = true;
+  attachPartitionClockObligationBridge(service);
+  if (readPortClockObligation(service.raft) === null) {
+    service.deferredFounderSchedulingPending = false;
+    logStartingPartitionElectionTimer(service);
+    service.raft.startScheduling();
     return;
   }
-  startPartitionRaftSchedulingTimer(service);
+  let logged = false;
+  service.raft.startScheduling({
+    onClockArmed: () => {
+      if (logged || service.isShutdown) {
+        return;
+      }
+      logged = true;
+      service.deferredFounderSchedulingPending = false;
+      logStartingPartitionElectionTimer(service);
+    },
+  });
+  syncPartitionDeferredSchedulingFlag(service);
 }
 
-function resolveObservedTerm(service, observedTerm) {
-  if (observedTerm !== null && observedTerm !== undefined) {
-    const numeric = Number(observedTerm);
-    if (Number.isFinite(numeric)) {
-      return numeric;
-    }
-  }
-  return Number(service.raft.readStatus()?.term);
-}
-
-function hasLeftInitialSoloFounderState(
-  service,
-  observedTerm = null,
-  observation = null,
-) {
-  if (service.isSoloReplicaGroup?.() === false) {
-    return true;
-  }
+function activateDeferredFounderSchedulingIfNeeded(service) {
   if (
-    hasMultiMemberConfState(observation?.confState) ||
-    hasMultiMemberConfState(service.raft.readStatus?.()?.confState)
-  ) {
-    return true;
-  }
-  return (
-    service.role !== RaftRole.LEADER ||
-    resolveObservedTerm(service, observedTerm) > INITIAL_FOUNDER_TERM
-  );
-}
-
-function activateDeferredFounderSchedulingIfNeeded(
-  service,
-  observedTerm = null,
-  observation = null,
-) {
-  if (
-    !service?.deferredFounderSchedulingPending ||
+    !service?.raft ||
     !service.electionStarted ||
-    service.isShutdown ||
-    !service.raft
+    service.isShutdown
   ) {
     return false;
   }
-  if (!hasLeftInitialSoloFounderState(service, observedTerm, observation)) {
-    return false;
+  attachPartitionClockObligationBridge(service);
+  const before = readPortClockObligation(service.raft);
+  const after = reconcilePortClockObligation(service.raft);
+  if (after !== null) {
+    service.deferredFounderSchedulingPending =
+      after.deferredSoloFounder === true;
   }
-  return startPartitionRaftSchedulingTimer(service);
+  return Boolean(!before?.clockArmed && after?.clockArmed);
 }
 
 function wirePartitionRaftLifecycleEvents(
   service,
   shouldIgnoreDemotionEvent,
 ) {
+  attachPartitionClockObligationBridge(service);
   const recordTransition = (fields) => {
     service.logger.info(PARTITION_SERVICE_LOG_MSG.RAFT_TRANSITION_EVIDENCE, {
       partitionId: service.partitionId,
@@ -179,7 +150,7 @@ function wirePartitionRaftLifecycleEvents(
       service.normalizeLeaderReplicaId(candidate),
     shouldIgnoreDemotionEvent,
     onLeader: ({term}) => {
-      activateDeferredFounderSchedulingIfNeeded(service, term);
+      syncPartitionDeferredSchedulingFlag(service);
       recordTransition({
         eventType: PARTITION_SERVICE_RAFT_EVIDENCE.EVENT_ROLE_TRANSITION,
         role: PARTITION_SERVICE_ROLE.LEADER,
@@ -193,7 +164,7 @@ function wirePartitionRaftLifecycleEvents(
       observeConsensusHold();
     },
     onFollower: ({term, demotedByLeaderChange}) => {
-      activateDeferredFounderSchedulingIfNeeded(service, term);
+      syncPartitionDeferredSchedulingFlag(service);
       recordTransition({
         eventType: PARTITION_SERVICE_RAFT_EVIDENCE.EVENT_ROLE_TRANSITION,
         role: PARTITION_SERVICE_ROLE.FOLLOWER,
@@ -208,7 +179,7 @@ function wirePartitionRaftLifecycleEvents(
       observeConsensusHold();
     },
     onCandidate: ({term}) => {
-      activateDeferredFounderSchedulingIfNeeded(service, term);
+      syncPartitionDeferredSchedulingFlag(service);
       recordTransition({
         eventType: PARTITION_SERVICE_RAFT_EVIDENCE.EVENT_ROLE_TRANSITION,
         role: PARTITION_SERVICE_ROLE.CANDIDATE,
@@ -221,7 +192,7 @@ function wirePartitionRaftLifecycleEvents(
       observeConsensusHold();
     },
     onLeaderChange: ({leaderId, previousLeaderId, term, demoted}) => {
-      activateDeferredFounderSchedulingIfNeeded(service, term);
+      syncPartitionDeferredSchedulingFlag(service);
       recordTransition({
         eventType: PARTITION_SERVICE_RAFT_EVIDENCE.EVENT_LEADER_OBSERVATION,
         role: service.role,
@@ -239,8 +210,8 @@ function wirePartitionRaftLifecycleEvents(
       });
       observeConsensusHold();
     },
-    onTermChange: ({term}) => {
-      activateDeferredFounderSchedulingIfNeeded(service, term);
+    onTermChange: () => {
+      syncPartitionDeferredSchedulingFlag(service);
     },
   });
 }
@@ -262,12 +233,28 @@ function isJointConfStateObservation(observation) {
   return Array.isArray(outgoing) && outgoing.length > 0;
 }
 
-function isPromotedLearnerVoterObservation(service, observation) {
-  const growthPromoteOwned =
+function isGrowthPromoteOwnedService(service) {
+  return (
     service?.learnerFirstAdmission === true ||
-    service?.rebalanceCoordinator?.placementAdmissionEnabled === true;
+    service?.rebalanceCoordinator?.placementAdmissionEnabled === true
+  );
+}
+
+function voterSetContainsServiceReplica(voterSet, service) {
+  const replicaId = String(service?.replicaId || '');
   if (
-    !growthPromoteOwned ||
+    replicaId.length > 0 &&
+    (voterSet.has(replicaId) || voterSet.has(String(deriveRaftRsPeerId(replicaId))))
+  ) {
+    return true;
+  }
+  const statusId = service?.raft?.readStatus?.()?.id;
+  return statusId !== undefined && statusId !== null && voterSet.has(String(statusId));
+}
+
+function isPromotedLearnerVoterObservation(service, observation) {
+  if (
+    !isGrowthPromoteOwnedService(service) ||
     !isCatchupLearnerRaftRole(service?.role) ||
     isJointConfStateObservation(observation)
   ) {
@@ -281,25 +268,18 @@ function isPromotedLearnerVoterObservation(service, observation) {
     return false;
   }
   const voterSet = new Set(voters.map((v) => String(v)));
-  const replicaId = String(service?.replicaId || '');
-  if (
-    replicaId.length > 0 &&
-    (voterSet.has(replicaId) ||
-      voterSet.has(String(deriveRaftRsPeerId(replicaId))))
-  ) {
-    return true;
-  }
-  const statusId = service?.raft?.readStatus?.()?.id;
-  return statusId !== undefined && statusId !== null && voterSet.has(String(statusId));
+  return voterSetContainsServiceReplica(voterSet, service);
 }
 
 function relayPartitionConsensusObservations(service) {
+  attachPartitionClockObligationBridge(service);
   const emit = (fields) => service.emit(
     PARTITION_SERVICE_EVENT.CONSENSUS_OBSERVED,
     {partitionId: service.partitionId, replicaId: service.replicaId,
       ...fields},
   );
   service.raft.subscribe(RAFT_EVENT.MEMBERSHIP_CHANGED, (observation) => {
+    syncPartitionDeferredSchedulingFlag(service);
     if (isPromotedLearnerVoterObservation(service, observation)) {
       service.role = RaftRole.FOLLOWER;
       service.isJoiningExistingGroup = false;
@@ -310,13 +290,12 @@ function relayPartitionConsensusObservations(service) {
         service.updateRebalancerLeadership?.();
       }
     }
-    activateDeferredFounderSchedulingIfNeeded(service, null, observation);
     emit({confState: observation?.confState ?? null,
       commitIndex: observation?.commitIndex ?? null,
       appliedIndex: observation?.appliedIndex ?? null});
   });
   service.raft.subscribe(RAFT_EVENT.CONF_CHANGE_APPLIED, (settlement) => {
-    activateDeferredFounderSchedulingIfNeeded(service);
+    syncPartitionDeferredSchedulingFlag(service);
     if ((settlement?.confChangeEntries ?? 0) > 0) {
       emit({appliedIndex: settlement?.appliedIndex ?? null,
         confChangeEntries: settlement.confChangeEntries});
