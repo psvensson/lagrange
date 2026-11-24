@@ -6,35 +6,41 @@ import Database from 'better-sqlite3';
 
 import {test} from '../../src/test-helpers/tap.js';
 
-import {SQLiteLogAdapter} from '../../src/raft/sqlite-log-adapter.js';
-import {SQLITE_RAFT_STATE_KEY} from '../../src/raft/sqlite-raft-state-constants.js';
-import {PartitionRaftStorage} from '../../src/partition/partition-raft-storage.js';
+import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {
-  createSqliteStateMachineCheckpoint,
-} from '../../src/raft/snapshot-checkpoint-store.js';
+  RAFT_CHECKPOINT_DESCRIPTOR_FILE,
+  RAFT_CHECKPOINT_ENVELOPE_VERSION,
+  RAFT_CHECKPOINT_PAYLOAD_FILE,
+  RAFT_CHECKPOINT_PAYLOAD_KIND,
+  RAFT_CHECKPOINT_PAYLOAD_VERSION,
+  RAFT_CHECKPOINT_VALIDATION_OUTCOME,
+} from '../../src/raft/snapshot-checkpoint-constants.js';
+import {requestSnapshotInstall} from '../../src/raft/snapshot-install.js';
 import {
-  requestSnapshotInstall,
-  resolveDurableElectionRule,
-} from '../../src/raft/snapshot-install.js';
-import {
-  RAFT_SNAPSHOT_BOUNDARY_STATE_KEY,
   RAFT_SNAPSHOT_INSTALL_OUTCOME,
   RAFT_SNAPSHOT_INSTALL_REJECTION,
 } from '../../src/raft/snapshot-install-constants.js';
 import {
-  RAFT_CHECKPOINT_APPLIED_STATE_KEY,
-} from '../../src/raft/snapshot-checkpoint-constants.js';
+  sha256Digest,
+  writeAtomicDurable,
+} from '../../src/runtime/oci-host-agent-durable-files.js';
+import {
+  createSealedSourceGeneration,
+  defaultFollowerReplicaId,
+  seedEstablishedFollowerReceiver,
+} from './snapshot-catchup-fixture.js';
 
-// raft-snapshot-atomic-install (R3) transition attacks: a full install round
-// trip, the durable term/votedFor rule (higher local term preserved; prior
-// vote retained iff term unchanged; sender rows never imported), foreign
-// identity and stale epoch rejected at install, worker-path typed refusal,
-// and no commit watermark observable ahead of installed state.
+// raft-snapshot-atomic-install (R3) transition attacks on the canonical
+// raft-rs replica-image pipeline: full follower-catchup install round trip,
+// durable hard-state term/vote preservation rule, foreign identity and stale
+// epoch rejections, worker-path refusal, and explicit rejection of obsolete
+// non-raft-rs SQLITE_STATE_MACHINE_IMAGE checkpoints.
 
 const PARTITION_ID = 'sql_transactions-p1';
 const STATE_TABLE = 'sql_transactions';
+const FOLLOWER_REPLICA = defaultFollowerReplicaId(PARTITION_ID);
 const SOURCE_TERM = 4;
-const SEALED_EPOCH = 7;
+const SEALED_EPOCH = 3;
 const ENTRY_COUNT = 3;
 const IDENTITY = Object.freeze({
   clusterId: 'cluster-incarnation-1234',
@@ -43,72 +49,51 @@ const IDENTITY = Object.freeze({
   membershipEpoch: SEALED_EPOCH,
 });
 
-// Build a SOURCE replica with committed+applied entries, checkpoint it, and
-// return the sealed generation plus a pristine TARGET replica db path.
-async function createInstallFixture() {
+async function createInstallFixture(localHardState = {}) {
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'raft-install-'));
-  const sourceDb = new Database(path.join(workDir, 'source.db'));
-  const adapter = new SQLiteLogAdapter(
-    sourceDb, {address: PARTITION_ID, term: SOURCE_TERM});
-  const storage = new PartitionRaftStorage(sourceDb, PARTITION_ID, adapter);
-  sourceDb.exec(`CREATE TABLE IF NOT EXISTS ${STATE_TABLE} ` +
-    '(id TEXT PRIMARY KEY, payload TEXT)');
-  let lastEntry = null;
-  for (let ordinal = 1; ordinal <= ENTRY_COUNT; ordinal += 1) {
-    lastEntry = adapter.saveCommand({sql: `row-${ordinal}`}, SOURCE_TERM);
-    adapter.commit(lastEntry.index);
-    sourceDb.prepare(
-      `INSERT INTO ${STATE_TABLE} (id, payload) VALUES (?, ?)`,
-    ).run(`row-${ordinal}`, `payload-${ordinal}`);
-    storage.recordAppliedAdvance();
-  }
   const checkpointsRoot = path.join(workDir, 'checkpoints');
-  const created = await createSqliteStateMachineCheckpoint({
-    db: sourceDb,
-    identity: IDENTITY,
+  const generation = await createSealedSourceGeneration({
+    workDir,
     checkpointsRoot,
+    partitionId: PARTITION_ID,
+    stateTable: STATE_TABLE,
+    term: SOURCE_TERM,
+    identity: IDENTITY,
+    entryCount: ENTRY_COUNT,
+    followerReplicaId: FOLLOWER_REPLICA,
   });
-  sourceDb.close();
+  const targetDbPath = path.join(workDir, 'target.db');
+  if (localHardState.seedTarget !== false) {
+    seedEstablishedFollowerReceiver({
+      replicaDbPath: targetDbPath,
+      partitionId: PARTITION_ID,
+      replicaId: FOLLOWER_REPLICA,
+      term: localHardState.term ?? 1,
+      vote: localHardState.vote ?? 0,
+    });
+  }
   return {
     workDir,
     checkpointsRoot,
-    created,
-    lastIndex: lastEntry.index,
-    targetDbPath: path.join(workDir, 'target.db'),
+    created: generation.created,
+    lastIndex: generation.boundaryIndex,
+    targetDbPath,
     close() {
       fs.rmSync(workDir, {recursive: true, force: true});
     },
   };
 }
 
-function readTargetState(dbPath, key) {
+function readTargetRecord(dbPath) {
   const db = new Database(dbPath, {readonly: true});
   try {
-    const row = db.prepare(
-      'SELECT value FROM _raft_state WHERE key = ?').get(key);
-    return row ? row.value : null;
+    return RaftRsDurableStore.readDurableRecordIn(db, PARTITION_ID);
   } finally {
     db.close();
   }
 }
 
-function seedTargetElectionState(dbPath, currentTerm, votedFor) {
-  const db = new Database(dbPath);
-  try {
-    db.exec('CREATE TABLE IF NOT EXISTS _raft_state ' +
-      '(key TEXT PRIMARY KEY, value TEXT)');
-    const upsert = db.prepare(
-      'INSERT OR REPLACE INTO _raft_state (key, value) VALUES (?, ?)');
-    upsert.run(SQLITE_RAFT_STATE_KEY.CURRENT_TERM, String(currentTerm));
-    if (votedFor) {
-      upsert.run(SQLITE_RAFT_STATE_KEY.VOTED_FOR, votedFor);
-    }
-  } finally {
-    db.close();
-  }
-}
-
-test('a fresh install reconstructs every follower-local row at the boundary',
+test('a follower-catchup install reconstructs canonical raft-rs durable state',
   async (t) => {
     const fixture = await createInstallFixture();
     try {
@@ -117,38 +102,25 @@ test('a fresh install reconstructs every follower-local row at the boundary',
         checkpointsRoot: fixture.checkpointsRoot,
         generationIndex: fixture.lastIndex,
         expectedIdentity: IDENTITY,
+        expectedReplicaIdentity: FOLLOWER_REPLICA,
       });
       t.equal(installed.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED,
         'install completes');
+      const record = readTargetRecord(fixture.targetDbPath);
+      t.equal(record.appliedIndex, String(fixture.lastIndex),
+        'appliedIndex reconstructs at the sealed generation');
+      t.equal(record.hardState.commit, String(fixture.lastIndex),
+        'hardState.commit reconstructs at the boundary');
+      t.equal(record.hardState.term, String(SOURCE_TERM),
+        'hardState.term rises to the sealed term');
+      t.equal(record.entries.length, 0,
+        'the raft-rs log is compacted-empty — sender log rows never imported');
       const db = new Database(fixture.targetDbPath, {readonly: true});
       try {
-        const boundaryIndex = Number(readTargetState(
-          fixture.targetDbPath,
-          RAFT_SNAPSHOT_BOUNDARY_STATE_KEY.LAST_INCLUDED_INDEX));
-        t.equal(boundaryIndex, fixture.lastIndex,
-          'boundary index equals the sealed generation');
-        t.equal(
-          Number(readTargetState(fixture.targetDbPath,
-            SQLITE_RAFT_STATE_KEY.COMMITTED_INDEX)),
-          fixture.lastIndex,
-          'committedIndex reconstructs at the boundary');
-        t.equal(
-          Number(readTargetState(fixture.targetDbPath,
-            RAFT_CHECKPOINT_APPLIED_STATE_KEY.LAST_APPLIED_INDEX)),
-          fixture.lastIndex,
-          'lastAppliedIndex aligns with committedIndex (no gap marker trap)');
-        t.equal(
-          readTargetState(fixture.targetDbPath,
-            RAFT_CHECKPOINT_APPLIED_STATE_KEY.APPLIED_GAP_MARKER),
-          null,
-          'no applied gap marker is written by install');
         t.equal(
           db.prepare(`SELECT COUNT(*) AS n FROM ${STATE_TABLE}`).get().n,
           ENTRY_COUNT,
           'state-machine rows arrive intact');
-        t.equal(
-          db.prepare('SELECT COUNT(*) AS n FROM _raft_log').get().n, 0,
-          'the raft log is compacted-empty — sender log rows never imported');
       } finally {
         db.close();
       }
@@ -157,75 +129,53 @@ test('a fresh install reconstructs every follower-local row at the boundary',
     }
   });
 
-test('the durable term/votedFor rule holds under attack', async (t) => {
-  await t.test('higher local term and its vote are preserved', async (t) => {
-    const fixture = await createInstallFixture();
-    try {
+test('the durable term/vote rule holds under follower-catchup install',
+  async (t) => {
+    await t.test('higher local term and its vote are preserved', async (t) => {
       const higherTerm = SOURCE_TERM + 5;
-      seedTargetElectionState(fixture.targetDbPath, higherTerm, 'node-x');
-      const installed = await requestSnapshotInstall({
-        replicaDbPath: fixture.targetDbPath,
-        checkpointsRoot: fixture.checkpointsRoot,
-        generationIndex: fixture.lastIndex,
-        expectedIdentity: IDENTITY,
-      });
-      t.equal(installed.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED,
-        'install completes over a higher-term local db');
-      t.equal(
-        Number(readTargetState(fixture.targetDbPath,
-          SQLITE_RAFT_STATE_KEY.CURRENT_TERM)),
-        higherTerm,
-        'a higher local durable term is preserved, never regressed');
-      t.equal(
-        readTargetState(fixture.targetDbPath,
-          SQLITE_RAFT_STATE_KEY.VOTED_FOR),
-        'node-x',
-        'the prior vote is retained because the term was unchanged');
-    } finally {
-      fixture.close();
-    }
-  });
-
-  await t.test('a raised term clears the prior vote', async (t) => {
-    const fixture = await createInstallFixture();
-    try {
-      seedTargetElectionState(fixture.targetDbPath, 1, 'node-y');
-      const installed = await requestSnapshotInstall({
-        replicaDbPath: fixture.targetDbPath,
-        checkpointsRoot: fixture.checkpointsRoot,
-        generationIndex: fixture.lastIndex,
-        expectedIdentity: IDENTITY,
-      });
-      t.equal(installed.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED,
-        'install completes over a lower-term local db');
-      t.equal(
-        Number(readTargetState(fixture.targetDbPath,
-          SQLITE_RAFT_STATE_KEY.CURRENT_TERM)),
-        SOURCE_TERM,
-        'the durable term rises to the snapshot included term');
-      t.equal(
-        readTargetState(fixture.targetDbPath,
-          SQLITE_RAFT_STATE_KEY.VOTED_FOR),
-        null,
-        'a raised term has no vote yet — votedFor is cleared');
-    } finally {
-      fixture.close();
-    }
-  });
-
-  await t.test('the pure rule function matches the durable behavior',
-    async (t) => {
-      t.same(
-        resolveDurableElectionRule(
-          {currentTerm: 9, votedFor: 'node-z'}, 4),
-        {currentTerm: 9, votedFor: 'node-z'},
-        'higher local term retains term and vote');
-      t.same(
-        resolveDurableElectionRule({currentTerm: 2, votedFor: 'node-z'}, 4),
-        {currentTerm: 4, votedFor: null},
-        'raised term clears the vote');
+      const fixture = await createInstallFixture({term: higherTerm, vote: 2});
+      try {
+        const installed = await requestSnapshotInstall({
+          replicaDbPath: fixture.targetDbPath,
+          checkpointsRoot: fixture.checkpointsRoot,
+          generationIndex: fixture.lastIndex,
+          expectedIdentity: IDENTITY,
+          expectedReplicaIdentity: FOLLOWER_REPLICA,
+        });
+        t.equal(installed.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED,
+          'install completes over a higher-term local db');
+        const record = readTargetRecord(fixture.targetDbPath);
+        t.equal(record.hardState.term, String(higherTerm),
+          'a higher local durable term is preserved, never regressed');
+        t.equal(record.hardState.vote, '2',
+          'the prior vote is retained because the term was unchanged');
+      } finally {
+        fixture.close();
+      }
     });
-});
+
+    await t.test('a raised term clears the prior vote', async (t) => {
+      const fixture = await createInstallFixture({term: 1, vote: 2});
+      try {
+        const installed = await requestSnapshotInstall({
+          replicaDbPath: fixture.targetDbPath,
+          checkpointsRoot: fixture.checkpointsRoot,
+          generationIndex: fixture.lastIndex,
+          expectedIdentity: IDENTITY,
+          expectedReplicaIdentity: FOLLOWER_REPLICA,
+        });
+        t.equal(installed.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED,
+          'install completes over a lower-term local db');
+        const record = readTargetRecord(fixture.targetDbPath);
+        t.equal(record.hardState.term, String(SOURCE_TERM),
+          'the durable term rises to the snapshot included term');
+        t.equal(record.hardState.vote, '0',
+          'a raised term clears any prior vote');
+      } finally {
+        fixture.close();
+      }
+    });
+  });
 
 test('foreign identity and stale epoch are rejected at install time',
   async (t) => {
@@ -251,13 +201,14 @@ test('foreign identity and stale epoch are rejected at install time',
       },
     ];
     for (const {label, identity} of cases) {
-      const fixture = await createInstallFixture();
+      const fixture = await createInstallFixture({seedTarget: false});
       try {
         const refused = await requestSnapshotInstall({
           replicaDbPath: fixture.targetDbPath,
           checkpointsRoot: fixture.checkpointsRoot,
           generationIndex: fixture.lastIndex,
           expectedIdentity: identity,
+          expectedReplicaIdentity: FOLLOWER_REPLICA,
         });
         t.equal(refused.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.REJECTED,
           `${label} is rejected`);
@@ -272,15 +223,68 @@ test('foreign identity and stale epoch are rejected at install time',
     }
   });
 
+test('obsolete non-raft-rs sqlite_state_machine_image checkpoints are rejected',
+  async (t) => {
+    const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'raft-legacy-cp-'));
+    try {
+      const checkpointsRoot = path.join(workDir, 'checkpoints');
+      const generationDir = path.join(checkpointsRoot, String(ENTRY_COUNT));
+      fs.mkdirSync(generationDir, {recursive: true});
+      const payloadPath = path.join(generationDir, RAFT_CHECKPOINT_PAYLOAD_FILE);
+      const payloadDb = new Database(payloadPath);
+      payloadDb.exec(`CREATE TABLE ${STATE_TABLE} (id TEXT PRIMARY KEY)`);
+      payloadDb.close();
+      const payloadBytes = fs.readFileSync(payloadPath);
+      writeAtomicDurable(
+        path.join(generationDir, RAFT_CHECKPOINT_DESCRIPTOR_FILE),
+        {
+          envelopeVersion: RAFT_CHECKPOINT_ENVELOPE_VERSION,
+          clusterId: IDENTITY.clusterId,
+          raftGroupId: IDENTITY.raftGroupId,
+          entity: IDENTITY.entity,
+          membershipEpoch: IDENTITY.membershipEpoch,
+          lastIncludedIndex: ENTRY_COUNT,
+          lastIncludedTerm: SOURCE_TERM,
+          maxCommittedHlc: '0',
+          payloadKind: RAFT_CHECKPOINT_PAYLOAD_KIND.SQLITE_STATE_MACHINE_IMAGE,
+          payloadVersion: RAFT_CHECKPOINT_PAYLOAD_VERSION[
+            RAFT_CHECKPOINT_PAYLOAD_KIND.SQLITE_STATE_MACHINE_IMAGE],
+          payloadByteLength: payloadBytes.length,
+          payloadDigest: sha256Digest(payloadBytes),
+        },
+      );
+      const targetDbPath = path.join(workDir, 'target.db');
+      const refused = await requestSnapshotInstall({
+        replicaDbPath: targetDbPath,
+        checkpointsRoot,
+        generationIndex: ENTRY_COUNT,
+        expectedIdentity: IDENTITY,
+        expectedReplicaIdentity: FOLLOWER_REPLICA,
+      });
+      t.equal(refused.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.REJECTED,
+        'legacy non-raft-rs checkpoint is rejected');
+      t.equal(refused.reason, RAFT_SNAPSHOT_INSTALL_REJECTION.CHECKPOINT_INVALID,
+        'refusal carries checkpoint_invalid');
+      t.equal(refused.validationOutcome,
+        RAFT_CHECKPOINT_VALIDATION_OUTCOME.UNSUPPORTED_PAYLOAD_KIND,
+        'refusal names unsupported_payload_kind');
+      t.notOk(fs.existsSync(targetDbPath),
+        'rejected legacy checkpoint never creates a target db');
+    } finally {
+      fs.rmSync(workDir, {recursive: true, force: true});
+    }
+  });
+
 test('worker-path (memory-backed) install requests are a typed refusal',
   async (t) => {
-    const fixture = await createInstallFixture();
+    const fixture = await createInstallFixture({seedTarget: false});
     try {
       const refused = await requestSnapshotInstall({
         replicaDbPath: ':memory:',
         checkpointsRoot: fixture.checkpointsRoot,
         generationIndex: fixture.lastIndex,
         expectedIdentity: IDENTITY,
+        expectedReplicaIdentity: FOLLOWER_REPLICA,
       });
       t.equal(refused.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.REJECTED,
         'a memory-backed replica path cannot install');

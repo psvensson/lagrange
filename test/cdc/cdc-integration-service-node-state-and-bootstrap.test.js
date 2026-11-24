@@ -924,7 +924,8 @@ test('CDCIntegrationService - canWriteSystemTableLocally detects local leader ow
         ['services-p1-r1', {
           partitionId: 'services-p1',
           initialized: true,
-          isLeader: true,
+          getRole: () => 'leader',
+          executeLocalQuery: async () => ({success: true, rows: []}),
           executeQuery: async () => ({success: true, affectedRows: 1}),
         }],
       ]),

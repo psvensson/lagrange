@@ -2,12 +2,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import Database from 'better-sqlite3';
-
 import {test} from '../../src/test-helpers/tap.js';
 
-import {SQLiteLogAdapter} from '../../src/raft/sqlite-log-adapter.js';
-import {PartitionRaftStorage} from '../../src/partition/partition-raft-storage.js';
 import {writeAtomicDurable} from '../../src/runtime/oci-host-agent-durable-files.js';
 import {
   RAFT_CHECKPOINT_CREATION_OUTCOME,
@@ -16,9 +12,9 @@ import {
   RAFT_CHECKPOINT_VALIDATION_OUTCOME,
 } from '../../src/raft/snapshot-checkpoint-constants.js';
 import {
-  createSqliteStateMachineCheckpoint,
   readCheckpoint,
 } from '../../src/raft/snapshot-checkpoint-store.js';
+import {createSealedSourceGeneration} from './snapshot-catchup-fixture.js';
 
 // raft-snapshot-checkpoint-format S1 (R1): a sealed checkpoint must be
 // restart-readable purely from disk, and every corruption/truncation/partial
@@ -29,7 +25,7 @@ import {
 const PARTITION_ID = 'replica_operations-p1';
 const STATE_TABLE = 'replica_operations';
 const TERM = 3;
-const SEALED_EPOCH = 9;
+const SEALED_EPOCH = 1;
 const FLIP_XOR_MASK = 0xff;
 const IDENTITY = Object.freeze({
   clusterId: 'cluster-incarnation-5678',
@@ -41,24 +37,16 @@ const IDENTITY = Object.freeze({
 async function createSealedFixture() {
   const workDir = fs.mkdtempSync(
     path.join(os.tmpdir(), 'raft-checkpoint-restart-'));
-  const db = new Database(path.join(workDir, 'replica.db'));
-  const adapter = new SQLiteLogAdapter(db, {address: PARTITION_ID, term: TERM});
-  const storage = new PartitionRaftStorage(db, PARTITION_ID, adapter);
-  db.exec(`CREATE TABLE IF NOT EXISTS ${STATE_TABLE} ` +
-    '(id TEXT PRIMARY KEY, payload TEXT)');
-  const entry = adapter.saveCommand({sql: 'row-restart'}, TERM);
-  adapter.commit(entry.index);
-  db.prepare(
-    `INSERT INTO ${STATE_TABLE} (id, payload) VALUES (?, ?)`,
-  ).run('row-restart', 'payload-restart');
-  storage.recordAppliedAdvance();
   const checkpointsRoot = path.join(workDir, 'checkpoints');
-  const created = await createSqliteStateMachineCheckpoint({
-    db,
-    identity: IDENTITY,
+  const {created} = await createSealedSourceGeneration({
+    workDir,
     checkpointsRoot,
+    partitionId: PARTITION_ID,
+    stateTable: STATE_TABLE,
+    term: TERM,
+    identity: IDENTITY,
+    entryCount: 1,
   });
-  db.close();
   return {
     workDir,
     created,

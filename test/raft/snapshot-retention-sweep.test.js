@@ -16,6 +16,7 @@ import {
 import {
   RAFT_SNAPSHOT_INSTALL_DIRNAME,
   RAFT_SNAPSHOT_INSTALL_MARKER_FILE,
+  RAFT_SNAPSHOT_INSTALL_MARKER_KIND,
   RAFT_SNAPSHOT_INSTALL_NO_REJECTION,
   RAFT_SNAPSHOT_INSTALL_STATE,
 } from '../../src/raft/snapshot-install-constants.js';
@@ -47,7 +48,7 @@ const IDENTITY = Object.freeze({
   clusterId: 'cluster-incarnation-sweep',
   raftGroupId: PARTITION_ID,
   entity: Object.freeze({kind: 'partition', id: STATE_TABLE}),
-  membershipEpoch: 2,
+  membershipEpoch: 1,
 });
 const GENERATION_COUNT = 4;
 const NO_PINS = Object.freeze([]);
@@ -91,6 +92,9 @@ function writeInstallMarker(checkpointsRoot, state, generationIndex) {
       installId: 'sweep-install-id',
       generationIndex,
       rejectionReason: RAFT_SNAPSHOT_INSTALL_NO_REJECTION,
+      kind: RAFT_SNAPSHOT_INSTALL_MARKER_KIND.RAFT_RS_FOLLOWER_CATCHUP,
+      createAuthority: {},
+      preInstallDigest: 'absent',
     }));
 }
 

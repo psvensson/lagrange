@@ -7,8 +7,10 @@ import {
 } from '../control-plane/control-plane-error-classification.js';
 import {OwnerKeyReconcileQueue} from
   '../workflow/owner-key-reconcile-queue.js';
-import {projectRuntimeReplicaServicesRow} from
-  './runtime-replica-state-projection.js';
+import {
+  isValidServicesOwner,
+  projectRuntimeReplicaServicesRow,
+} from './runtime-replica-state-projection.js';
 import {RUNTIME_REPLICA_STATE_PROJECTION_STATE} from
   '../runtime/service-runtime-state-projection-handoff.js';
 
@@ -59,7 +61,7 @@ function buildProjectionFailureEvent(serviceId, context, error) {
 class RuntimeReplicaStateProjectionOwner extends EventEmitter {
   constructor(options = {}) {
     super();
-    if (!options.servicesOwner) {
+    if (!isValidServicesOwner(options.servicesOwner)) {
       throw new Error(PROJECTION_OWNER_REQUIRED_ERROR);
     }
     this.hostNodeId = options.hostNodeId || null;

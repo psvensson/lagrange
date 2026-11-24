@@ -19,7 +19,6 @@ import fc from 'fast-check';
 import Database from 'better-sqlite3';
 import {EventEmitter} from 'events';
 import {PartitionCDCGenerator} from '../../src/partition/partition-cdc-generator.js';
-import {PartitionRaftStorage} from '../../src/partition/partition-raft-storage.js';
 import {
   PARTITION_SERVICE_OPERATION,
 } from '../../src/partition/partition-service-constants.js';
@@ -79,15 +78,6 @@ const cdcEntryArb = fc.record({
     id: fc.string({minLength: 1, maxLength: 10}).filter((s) => /^[a-z0-9]+$/i.test(s)),
   })),
   timestamp: fc.integer({min: 1000000000000, max: 2000000000000}),
-});
-
-/**
- * Generator for Raft log entry data.
- */
-const raftEntryDataArb = fc.record({
-  type: fc.constantFrom('WRITE', 'INSERT', 'UPDATE', 'DELETE'),
-  sql: fc.string({minLength: 1, maxLength: 50}),
-  params: fc.array(fc.oneof(fc.string(), fc.integer()), {maxLength: 5}),
 });
 
 test('Property 9: Extracted Module API Equivalence', async (t) => {
@@ -172,129 +162,6 @@ test('Property 9: Extracted Module API Equivalence', async (t) => {
     );
 
     t.pass('CDC generator produces consistent events');
-  });
-
-  /**
-   * Property: Raft storage SHALL maintain consistent log state
-   * after append operations, with correct indices and terms.
-   *
-   * Validates: Requirement 6.6 - Extracted modules maintain API compatibility.
-   */
-  t.test('Raft storage maintains consistent log state', async (t) => {
-    await fc.assert(
-      fc.asyncProperty(
-        partitionIdArb,
-        fc.array(raftEntryDataArb, {minLength: 1, maxLength: 5}),
-        async (partitionId, entries) => {
-          const db = new Database(':memory:');
-
-          try {
-            const storage = new PartitionRaftStorage(db, partitionId);
-
-            // Append entries
-            for (let i = 0; i < entries.length; i++) {
-              const entry = storage.appendEntry(entries[i]);
-
-              // Verify entry has correct index (1-based)
-              if (entry.index !== i + 1) return false;
-
-              // Verify entry has correct term
-              if (entry.term !== storage.currentTerm) return false;
-
-              // Verify entry has timestamp
-              if (typeof entry.timestamp !== 'number') return false;
-            }
-
-            // Verify log length
-            if (storage.getLogLength() !== entries.length) return false;
-
-            // Verify last index
-            if (storage.getLastIndex() !== entries.length) return false;
-
-            // Verify getEntry returns correct entries
-            for (let i = 0; i < entries.length; i++) {
-              const retrieved = storage.getEntry(i + 1);
-              if (!retrieved) return false;
-              if (retrieved.index !== i + 1) return false;
-              if (JSON.stringify(retrieved.data) !== JSON.stringify(entries[i])) {
-                return false;
-              }
-            }
-
-            // Verify getEntriesFrom returns correct subset
-            const fromIndex = Math.min(2, entries.length);
-            const subset = storage.getEntriesFrom(fromIndex);
-            if (subset.length !== entries.length - fromIndex + 1) return false;
-
-            return true;
-          } finally {
-            db.close();
-          }
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('Raft storage maintains consistent log state');
-  });
-
-  /**
-   * Property: Raft storage truncateFrom SHALL remove entries from
-   * the specified index onwards while preserving earlier entries.
-   *
-   * Validates: Requirement 6.6 - Extracted modules maintain API compatibility.
-   */
-  t.test('Raft storage truncation maintains consistency', async (t) => {
-    await fc.assert(
-      fc.asyncProperty(
-        partitionIdArb,
-        fc.array(raftEntryDataArb, {minLength: 3, maxLength: 5}),
-        fc.integer({min: 1, max: 3}),
-        async (partitionId, entries, truncateAt) => {
-          const db = new Database(':memory:');
-
-          try {
-            const storage = new PartitionRaftStorage(db, partitionId);
-
-            // Append all entries
-            for (const entryData of entries) {
-              storage.appendEntry(entryData);
-            }
-
-            // Truncate from specified index
-            const truncateIndex = Math.min(truncateAt, entries.length);
-            storage.truncateFrom(truncateIndex);
-
-            // Verify log length after truncation
-            const expectedLength = truncateIndex - 1;
-            if (storage.getLogLength() !== expectedLength) return false;
-
-            // Verify last index
-            if (storage.getLastIndex() !== expectedLength) return false;
-
-            // Verify entries before truncation point are preserved
-            for (let i = 1; i < truncateIndex; i++) {
-              const entry = storage.getEntry(i);
-              if (!entry) return false;
-              if (entry.index !== i) return false;
-            }
-
-            // Verify entries at and after truncation point are removed
-            for (let i = truncateIndex; i <= entries.length; i++) {
-              const entry = storage.getEntry(i);
-              if (entry !== null) return false;
-            }
-
-            return true;
-          } finally {
-            db.close();
-          }
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('Raft storage truncation maintains consistency');
   });
 
   /**

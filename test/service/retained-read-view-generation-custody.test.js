@@ -15,12 +15,13 @@ import Database from 'better-sqlite3';
 import {
   removeReplicaStorageArtifacts,
 } from '../../src/node/replica-storage-artifacts.js';
-import {PartitionRaftStorage} from '../../src/partition/partition-raft-storage.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
-import {SQLiteLogAdapter} from '../../src/raft/sqlite-log-adapter.js';
 import {requestSnapshotInstall} from '../../src/raft/snapshot-install.js';
-import {createSqliteStateMachineCheckpoint} from
-  '../../src/raft/snapshot-checkpoint-store.js';
+import {
+  createSealedSourceGeneration,
+  defaultFollowerReplicaId,
+  seedEstablishedFollowerReceiver,
+} from '../raft/snapshot-catchup-fixture.js';
 import {
   PAGED_CONSISTENCY_SCOPE,
   PAGED_EXECUTION_ERROR_CODE,
@@ -361,7 +362,19 @@ describe(`Retained read-view generation custody (${QUEST_ID})`, () => {
 
   it('snapshot-replacement-reader-closure: pauses reader across shutdown, same-path reopen, and blocks sidecar/snapshot replacement while live', async () => {
     const dbPath = path.join(tempDir, 'replacement-incarnation.sqlite');
+    const followerReplica = defaultFollowerReplicaId(PARTITION_ID);
     const mainDb = seedWalPartitionDb(dbPath, INITIAL_ROW_COUNT);
+    // Seed canonical raft-rs established follower receiver state and truncate
+    // WAL to 0 bytes before opening the retained reader, so snapshot install
+    // passes receiver lifecycle inspection and reaches the custody unlink gate.
+    seedEstablishedFollowerReceiver({
+      partitionId: PARTITION_ID,
+      replicaDbPath: dbPath,
+      replicaId: followerReplica,
+      term: 1,
+      vote: 0,
+    });
+    mainDb.pragma(WAL_TRUNCATE_PRAGMA);
     const manager = createShardReadViewManager();
     const storeV1 = {
       checkpointGeneration: 1,
@@ -403,29 +416,32 @@ describe(`Retained read-view generation custody (${QUEST_ID})`, () => {
       assert.equal(fs.existsSync(`${dbPath}${WAL_SUFFIX}`), true);
 
       const checkpointsRoot = path.join(tempDir, 'checkpoints-replace');
-      const cpDb = seedWalPartitionDb(path.join(tempDir, 'cp-seed.sqlite'), INITIAL_ROW_COUNT);
-      const adapter = new SQLiteLogAdapter(cpDb, {address: PARTITION_ID, term: 1});
-      const raftStorage = new PartitionRaftStorage(cpDb, PARTITION_ID, adapter);
-      const cpEntry = adapter.saveCommand({sql: 'seed'}, 1);
-      adapter.commit(cpEntry.index);
-      raftStorage.recordAppliedAdvance();
-      const cp = await createSqliteStateMachineCheckpoint({
+      const cpWorkDir = path.join(tempDir, 'cp-seed-work');
+      fs.mkdirSync(cpWorkDir, {recursive: true});
+      const cpIdentity = {
+        clusterId: 'cluster-test',
+        entity: {id: TABLE_NAME, kind: 'partition'},
+        membershipEpoch: 1,
+        raftGroupId: PARTITION_ID,
+      };
+      const {created: cp} = await createSealedSourceGeneration({
         checkpointsRoot,
-        db: cpDb,
-        identity: {
-          clusterId: 'cluster-test',
-          entity: {id: TABLE_NAME, kind: 'partition'},
-          membershipEpoch: 1,
-          raftGroupId: PARTITION_ID,
-        },
+        entryCount: 1,
+        followerReplicaId: followerReplica,
+        identity: cpIdentity,
+        partitionId: PARTITION_ID,
+        stateTable: TABLE_NAME,
+        term: 1,
+        workDir: cpWorkDir,
       });
-      cpDb.close();
       assert.equal(cp.outcome, 'created');
 
       await assert.rejects(
         () =>
           requestSnapshotInstall({
             checkpointsRoot,
+            expectedIdentity: cpIdentity,
+            expectedReplicaIdentity: followerReplica,
             generationIndex: cp.descriptor.lastIncludedIndex,
             replicaDbPath: dbPath,
           }),

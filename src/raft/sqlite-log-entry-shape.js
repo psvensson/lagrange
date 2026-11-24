@@ -1,15 +1,18 @@
 /**
- * Helpers for converting SQLite-stored raft log payloads into the canonical
- * entry shape consumed by the consensus log owners.
+ * Helpers for validating and normalizing canonical SQLite-stored raft log
+ * entries consumed by the consensus log owners.
  */
-
 
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_COMMAND = 'command';
 const LOCAL_STR_COMMITTED = 'committed';
+const UNSUPPORTED_LOG_ENTRY_SHAPE_ERROR_CODE =
+  'RAFT_LOG_ENTRY_SHAPE_UNSUPPORTED';
+const UNSUPPORTED_LOG_ENTRY_SHAPE_ERROR_MSG =
+  'Non-canonical raft log entry shape is unsupported';
 
 /**
- * Check whether a persisted payload already uses the canonical entry shape.
+ * Check whether a persisted payload uses the canonical entry shape.
  * @param {*} entry
  * @return {boolean}
  */
@@ -23,39 +26,33 @@ function isCanonicalLogEntryShape(entry) {
 }
 
 /**
- * Normalize any stored or incoming entry to the canonical raft entry shape.
- * Legacy rows that stored only the command payload are wrapped without
- * rewriting metadata outside the adapter owner path.
+ * Validate and normalize a stored or incoming canonical raft entry.
+ * Bare-command rows without the canonical entry shape are rejected fail-closed.
  * @param {*} entry
  * @param {Object} [fallback]
  * @param {number} [fallback.index]
  * @param {number} [fallback.term]
- * @param {number} [fallback.committedIndex]
  * @return {Object}
  */
 function normalizeLogEntry(entry, fallback = {}) {
-  const hasCanonicalShape = isCanonicalLogEntryShape(entry);
-  const committedIndex = Number.isFinite(fallback.committedIndex) ?
-    fallback.committedIndex :
-    0;
-  const index = hasCanonicalShape && Number.isFinite(entry?.index) ?
-    entry.index :
-    fallback.index;
-  const term = hasCanonicalShape && Number.isFinite(entry?.term) ?
-    entry.term :
-    fallback.term;
+  if (!isCanonicalLogEntryShape(entry)) {
+    const error = new Error(UNSUPPORTED_LOG_ENTRY_SHAPE_ERROR_MSG);
+    error.code = UNSUPPORTED_LOG_ENTRY_SHAPE_ERROR_CODE;
+    throw error;
+  }
+  const index = Number.isFinite(entry.index) ? entry.index : fallback.index;
+  const term = Number.isFinite(entry.term) ? entry.term : fallback.term;
 
   return {
     index,
     term,
-    committed: hasCanonicalShape ?
-      entry.committed === true :
-      Number.isFinite(index) && index <= committedIndex,
-    command: hasCanonicalShape ? entry.command : entry,
+    committed: entry.committed === true,
+    command: entry.command,
   };
 }
 
 export {
+  UNSUPPORTED_LOG_ENTRY_SHAPE_ERROR_CODE,
   isCanonicalLogEntryShape,
   normalizeLogEntry,
 };

@@ -174,80 +174,23 @@ export function buildLocalAuthoritativeObservation(
 }
 
 const NORMAL_PARTITION_STATE = 'NORMAL';
-const CACHED_ROW_FIELD = Object.freeze({
-  TABLE_NAME: 'table_name',
-  TABLE_NAME_CAMEL: 'tableName',
-  TABLE_ID: 'table_id',
-  TABLE_ID_CAMEL: 'tableId',
-  ACTIVE_PARTITION_VERSION: 'active_partition_version',
-  ACTIVE_PARTITION_VERSION_CAMEL: 'activePartitionVersion',
-  PARTITION_ID: 'partition_id',
-  PARTITION_ID_CAMEL: 'partitionId',
-  PARTITION_VERSION: 'partition_version',
-  PARTITION_VERSION_CAMEL: 'partitionVersion',
-});
-
-function readCachedRowField(row, primaryKey, secondaryKey) {
-  if (!row || typeof row !== 'object') {
-    return null;
-  }
-  if (row[primaryKey] !== undefined && row[primaryKey] !== null) {
-    return row[primaryKey];
-  }
-  if (row[secondaryKey] !== undefined && row[secondaryKey] !== null) {
-    return row[secondaryKey];
-  }
-  return null;
-}
+const LEADER_ROLE_UNAVAILABLE = 'UNAVAILABLE';
 
 function decodeCachedTableRow(row) {
   return {
-    tableName: readCachedRowField(
-      row,
-      CACHED_ROW_FIELD.TABLE_NAME,
-      CACHED_ROW_FIELD.TABLE_NAME_CAMEL,
-    ),
-    tableId: readCachedRowField(
-      row,
-      CACHED_ROW_FIELD.TABLE_ID,
-      CACHED_ROW_FIELD.TABLE_ID_CAMEL,
-    ),
-    activePartitionVersion: Number(
-      readCachedRowField(
-        row,
-        CACHED_ROW_FIELD.ACTIVE_PARTITION_VERSION,
-        CACHED_ROW_FIELD.ACTIVE_PARTITION_VERSION_CAMEL,
-      ),
-    ),
+    tableName: typeof row?.table_name === 'string' ? row.table_name : null,
+    tableId: typeof row?.table_id === 'string' ? row.table_id : null,
+    activePartitionVersion: row?.active_partition_version ?? null,
   };
 }
 
 function decodeCachedPartitionRow(row) {
-  const explicitId = readCachedRowField(
-    row,
-    CACHED_ROW_FIELD.PARTITION_ID,
-    CACHED_ROW_FIELD.PARTITION_ID_CAMEL,
-  );
   return {
-    partitionId: explicitId ?? (row?.id ?? null),
-    tableName: readCachedRowField(
-      row,
-      CACHED_ROW_FIELD.TABLE_NAME,
-      CACHED_ROW_FIELD.TABLE_NAME_CAMEL,
-    ),
-    tableId: readCachedRowField(
-      row,
-      CACHED_ROW_FIELD.TABLE_ID,
-      CACHED_ROW_FIELD.TABLE_ID_CAMEL,
-    ),
-    state: row?.state ?? null,
-    partitionVersion: Number(
-      readCachedRowField(
-        row,
-        CACHED_ROW_FIELD.PARTITION_VERSION,
-        CACHED_ROW_FIELD.PARTITION_VERSION_CAMEL,
-      ),
-    ),
+    partitionId: typeof row?.partition_id === 'string' ? row.partition_id : null,
+    tableName: typeof row?.table_name === 'string' ? row.table_name : null,
+    tableId: typeof row?.table_id === 'string' ? row.table_id : null,
+    state: typeof row?.state === 'string' ? row.state : null,
+    partitionVersion: row?.partition_version ?? null,
   };
 }
 
@@ -279,15 +222,15 @@ function resolveActiveTableVersionFromCache(cache, tableName) {
 
 function isMatchingNormalPartitionVersion(decoded, activeVersion) {
   if (
-    decoded.state !== null &&
-    String(decoded.state).toUpperCase() !== NORMAL_PARTITION_STATE
+    typeof decoded.state !== 'string' ||
+    decoded.state.toUpperCase() !== NORMAL_PARTITION_STATE
   ) {
     return false;
   }
   if (
-    activeVersion !== null &&
-    Number.isInteger(decoded.partitionVersion) &&
-    decoded.partitionVersion > 0 &&
+    activeVersion === null ||
+    !Number.isInteger(decoded.partitionVersion) ||
+    decoded.partitionVersion <= 0 ||
     decoded.partitionVersion !== activeVersion
   ) {
     return false;
@@ -297,6 +240,9 @@ function isMatchingNormalPartitionVersion(decoded, activeVersion) {
 
 function resolvePartitionRowsFromCache(cache, tableName) {
   const activeVersion = resolveActiveTableVersionFromCache(cache, tableName);
+  if (activeVersion === null) {
+    return [];
+  }
   const partitionPredicate = (row) => {
     const decoded = decodeCachedPartitionRow(row);
     if (decoded.tableName !== tableName && decoded.tableId !== tableName) {
@@ -353,53 +299,23 @@ function isUsablePartitionService(partitionService) {
   );
 }
 
-function hasMatchingLeaderReplicaIdentity(partitionService) {
-  const leaderId = partitionService.getLeaderId ?
-    partitionService.getLeaderId() :
-    partitionService.leaderId;
-  const replicaId =
-    partitionService.replicaId !== undefined ?
-      partitionService.replicaId :
-      partitionService.replica_id;
-  return (
-    typeof leaderId === 'string' &&
-    typeof replicaId === 'string' &&
-    leaderId.length > 0 &&
-    leaderId === replicaId
-  );
+function resolveLeaderRole(partitionService) {
+  if (
+    !isUsablePartitionService(partitionService) ||
+    typeof partitionService.getRole !== 'function'
+  ) {
+    return LEADER_ROLE_UNAVAILABLE;
+  }
+  const liveRole = partitionService.getRole();
+  if (typeof liveRole !== 'string' || liveRole.trim().length === 0) {
+    return LEADER_ROLE_UNAVAILABLE;
+  }
+  return liveRole.trim().toLowerCase();
 }
 
-function resolveLeaderRole(partitionService) {
-  if (!isUsablePartitionService(partitionService)) {
-    return false;
-  }
-  // CL-017(a): the LIVE raft role accessor decides when it exists. The
-  // static flags (isLeader, leaderId===replicaId) can go stale across
-  // leadership churn, and a stale claim here routes local system-table
-  // writes at a replica whose database may have diverged from the group
-  // (the witnessed post-churn 'No row found for CDC update' on rows the
-  // real group committed). Flags remain only as fallback for services
-  // exposing no live accessor.
-  if (typeof partitionService.getRole === 'function') {
-    const liveRole = String(partitionService.getRole() || '').toLowerCase();
-    return liveRole === CDC_INTEGRATION_SERVICE_LITERAL.LEADER;
-  }
-  if (partitionService.isLeader === true) {
-    return true;
-  }
-  if (
-    typeof partitionService.isLeaderReplica === 'function' &&
-    partitionService.isLeaderReplica() === true
-  ) {
-    return true;
-  }
-  // PartitionService constructs its role (FOLLOWER) and keeps it current; no
-  // live service exposes a separate raftRole spelling.
-  const role = String(partitionService.role).toLowerCase();
-  if (role === CDC_INTEGRATION_SERVICE_LITERAL.LEADER) {
-    return true;
-  }
-  return hasMatchingLeaderReplicaIdentity(partitionService);
+function isLeaderRole(partitionService) {
+  return resolveLeaderRole(partitionService) ===
+    CDC_INTEGRATION_SERVICE_LITERAL.LEADER;
 }
 
 function resolvePartitionServicesForSegment(service) {
@@ -464,7 +380,7 @@ function resolvePartitionServicesForTable(service, tableName, options = {}) {
       }
       if (
         consistency === LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER &&
-        !resolveLeaderRole(partitionService)
+        !isLeaderRole(partitionService)
       ) {
         continue;
       }
@@ -475,8 +391,8 @@ function resolvePartitionServicesForTable(service, tableName, options = {}) {
 
   matches.sort((left, right) => {
     return (
-      Number(resolveLeaderRole(right)) -
-      Number(resolveLeaderRole(left))
+      Number(isLeaderRole(right)) -
+      Number(isLeaderRole(left))
     );
   });
 
@@ -490,9 +406,6 @@ function executeSystemTableRead(partitionService, sql, params = []) {
   if (typeof partitionService?.db?.prepare === 'function') {
     // Only a read the statement-admission owner admits is prepared here.
     return readAdmittedPartitionRows(partitionService, sql, params);
-  }
-  if (typeof partitionService?.executeQuery === 'function') {
-    return partitionService.executeQuery(sql, params);
   }
   return {
     success: false,
@@ -528,7 +441,7 @@ export function isLocalPartitionServiceUsable(partitionService) {
 }
 
 export function isLocalPartitionServiceLeader(partitionService) {
-  return resolveLeaderRole(partitionService);
+  return isLeaderRole(partitionService);
 }
 
 export function resolveLocalSystemTableServices(service, tableName, options = {}) {

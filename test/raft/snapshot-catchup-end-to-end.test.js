@@ -15,32 +15,32 @@ import {
 } from '../../src/partition/partition-legacy-consensus-state-constants.js';
 import {RAFT_RS_SQL} from '../../src/raft/raft-rs-durable-store-constants.js';
 import {
+  RAFT_CHECKPOINT_DESCRIPTOR_FILE,
+  RAFT_CHECKPOINT_ENVELOPE_VERSION,
+  RAFT_CHECKPOINT_PAYLOAD_FILE,
+  RAFT_CHECKPOINT_PAYLOAD_KIND,
+  RAFT_CHECKPOINT_PAYLOAD_VERSION,
+  RAFT_CHECKPOINT_VALIDATION_OUTCOME,
+} from '../../src/raft/snapshot-checkpoint-constants.js';
+import {
   requestSnapshotInstall,
   resolveReplicaCheckpointsRoot,
 } from '../../src/raft/snapshot-install.js';
 import {
-  createSealedSourceGeneration,
-} from './snapshot-catchup-fixture.js';
-import {
   RAFT_SNAPSHOT_INSTALL_OUTCOME,
+  RAFT_SNAPSHOT_INSTALL_REJECTION,
 } from '../../src/raft/snapshot-install-constants.js';
+import {
+  sha256Digest,
+  writeAtomicDurable,
+} from '../../src/runtime/oci-host-agent-durable-files.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 
-// Snapshot catch-up end to end on the rs-raft partition path (quest
-// raft-rs-single-path-partition-cutover, design S26/S27 and Q5/Q6).
-//
-// The former end-to-end scenarios (a fresh follower recovered behind an
-// installed leader through dispatch -> transfer -> install -> recreate, and
-// an installed follower resuming against a full-log leader) drove the retired
-// backend's log adapter and its SNAPSHOT_CATCHUP_NEEDED decision, which the
-// rs-raft operation port never emits. Snapshot/catch-up is unowned on the
-// rs-raft store (epic raft-rs-full-cutover finding F5) and is its own quest.
-//
-// Until that quest re-owns install, the boot-time install still reconstructs
-// the retired backend's consensus rows (a durable currentTerm and committed
-// index) and writes no rs-raft record. Such a replica must not start on those
-// rows: this witness pins that an installed replica database fails closed with
-// the typed legacy-state outcome and brings up no consensus port.
+// Snapshot catch-up end to end rejection witnesses on the canonical raft-rs
+// path: obsolete non-raft-rs checkpoints are refused at install time, and a
+// replica database holding legacy consensus rows without an rs-raft record
+// fails closed at PartitionService.initialize() without creating an rs-raft
+// record.
 
 const TABLE = 'catchup_rows';
 const PARTITION_ID = 'catchup_rows-p1';
@@ -60,7 +60,6 @@ const SCHEMA = Object.freeze({
   ],
 });
 const CREATE_TABLE_NAME = /CREATE TABLE IF NOT EXISTS\s+(\w+)/u;
-// The rs-raft record's tables, read off the store owner's own DDL.
 const RS_RAFT_RECORD_TABLES = Object.freeze(Object.entries(RAFT_RS_SQL)
   .filter(([key]) => key.startsWith('CREATE_'))
   .map(([, sql]) => sql.match(CREATE_TABLE_NAME)[1]));
@@ -92,31 +91,66 @@ function presentTables(dbPath, names) {
   }
 }
 
-test('a snapshot-installed replica without an rs-raft record fails closed ' +
-  'with the typed legacy-state outcome', async (t) => {
+test('legacy non-raft-rs checkpoint install is rejected and legacy consensus DB ' +
+  'fails closed at PartitionService boot', async (t) => {
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'catchup-e2e-'));
   const dbPath = path.join(workDir, 'partition', 'replica.db');
   fs.mkdirSync(path.dirname(dbPath), {recursive: true});
   const checkpointsRoot = resolveReplicaCheckpointsRoot(dbPath);
   let service = null;
   try {
-    const generation = await createSealedSourceGeneration({
-      workDir,
-      checkpointsRoot,
-      partitionId: PARTITION_ID,
-      stateTable: TABLE,
-      term: TERM,
-      identity: IDENTITY,
-      entryCount: BOUNDARY_ENTRY_COUNT,
-    });
-    const installed = await requestSnapshotInstall({
+    const generationDir = path.join(checkpointsRoot, String(BOUNDARY_ENTRY_COUNT));
+    fs.mkdirSync(generationDir, {recursive: true});
+    const payloadPath = path.join(generationDir, RAFT_CHECKPOINT_PAYLOAD_FILE);
+    const payloadDb = new Database(payloadPath);
+    payloadDb.exec(`CREATE TABLE ${TABLE} (id TEXT PRIMARY KEY, payload TEXT)`);
+    payloadDb.close();
+    const payloadBytes = fs.readFileSync(payloadPath);
+    writeAtomicDurable(
+      path.join(generationDir, RAFT_CHECKPOINT_DESCRIPTOR_FILE),
+      {
+        envelopeVersion: RAFT_CHECKPOINT_ENVELOPE_VERSION,
+        clusterId: IDENTITY.clusterId,
+        raftGroupId: IDENTITY.raftGroupId,
+        entity: IDENTITY.entity,
+        membershipEpoch: IDENTITY.membershipEpoch,
+        lastIncludedIndex: BOUNDARY_ENTRY_COUNT,
+        lastIncludedTerm: TERM,
+        maxCommittedHlc: '0',
+        payloadKind: RAFT_CHECKPOINT_PAYLOAD_KIND.SQLITE_STATE_MACHINE_IMAGE,
+        payloadVersion: RAFT_CHECKPOINT_PAYLOAD_VERSION[
+          RAFT_CHECKPOINT_PAYLOAD_KIND.SQLITE_STATE_MACHINE_IMAGE],
+        payloadByteLength: payloadBytes.length,
+        payloadDigest: sha256Digest(payloadBytes),
+      },
+    );
+    const installRefusal = await requestSnapshotInstall({
       replicaDbPath: dbPath,
       checkpointsRoot,
-      generationIndex: generation.boundaryIndex,
+      generationIndex: BOUNDARY_ENTRY_COUNT,
       expectedIdentity: IDENTITY,
+      expectedReplicaIdentity: `${PARTITION_ID}-r1`,
     });
-    t.equal(installed.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED,
-      'fixture: the replica is snapshot-installed');
+    t.equal(installRefusal.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.REJECTED,
+      'legacy non-raft-rs checkpoint is refused at install');
+    t.equal(installRefusal.reason,
+      RAFT_SNAPSHOT_INSTALL_REJECTION.CHECKPOINT_INVALID,
+      'refusal names checkpoint_invalid');
+    t.equal(installRefusal.validationOutcome,
+      RAFT_CHECKPOINT_VALIDATION_OUTCOME.UNSUPPORTED_PAYLOAD_KIND,
+      'refusal names unsupported_payload_kind');
+    t.notOk(fs.existsSync(dbPath),
+      'refused legacy checkpoint never materializes a replica database');
+
+    // Seed explicit legacy _raft_state consensus rows without an rs-raft record
+    // and prove PartitionService.initialize() still fails closed.
+    const legacyDb = new Database(dbPath);
+    legacyDb.exec(
+      'CREATE TABLE _raft_state (key TEXT PRIMARY KEY, value TEXT); ' +
+      'INSERT INTO _raft_state (key, value) VALUES (\'currentTerm\', \'4\'); ' +
+      'INSERT INTO _raft_state (key, value) VALUES (\'committedIndex\', \'3\');',
+    );
+    legacyDb.close();
 
     const replicaId = `${PARTITION_ID}-r1`;
     service = new PartitionService(withFoundingStamp({
@@ -137,14 +171,14 @@ test('a snapshot-installed replica without an rs-raft record fails closed ' +
       outcome = error;
     }
     t.ok(outcome instanceof Error,
-      'the installed replica does not start on its legacy consensus rows');
+      'the replica does not start on legacy consensus rows');
     t.equal(outcome?.code, LEGACY_PARTITION_CONSENSUS_OUTCOME.DETECTED,
       `the refusal is the typed legacy-state outcome: ${outcome?.message}`);
     t.ok(Array.isArray(outcome?.reasons) && outcome.reasons.length > 0,
       'the refusal carries its reasons');
     t.equal(service.raft ?? null, null, 'no consensus port came up');
     t.same(presentTables(dbPath, RS_RAFT_RECORD_TABLES), [],
-      'the refusal created no rs-raft record over the installed image');
+      'the refusal created no rs-raft record over the legacy image');
   } finally {
     if (service && !service.isShutdown) {
       await service.shutdown().catch(() => {});

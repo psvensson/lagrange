@@ -2,8 +2,6 @@ import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import {PartitionRaftStorage} from
-  '../../src/partition/partition-raft-storage.js';
 import {SQLiteLogAdapter} from '../../src/raft/sqlite-log-adapter.js';
 import {test} from '../../src/test-helpers/tap.js';
 
@@ -38,55 +36,31 @@ test('SQLiteLogAdapter is the only _raft_log SQL mutation owner', async (t) => {
     'no partition or service facade can introduce a second SQL writer');
 });
 
-test('PartitionRaftStorage delegates append and truncate to the shared owner',
-  async (t) => {
-    const db = new Database(':memory:');
-    const adapter = new SQLiteLogAdapter(db, {address: 'owner-node'});
-    const storage = new PartitionRaftStorage(db, 'owner-partition', adapter);
-    try {
-      for (let index = 1; index <= 5; index += 1) {
-        adapter.saveCommand({type: 'committed', value: index}, 7, index);
-      }
-      adapter.commit(5);
-      const before = adapter.get(1);
-
-      const appended = storage.appendEntry({type: 'delegated-write'});
-      t.equal(storage.logAdapter, adapter, 'partition facade shares the canonical owner');
-      t.equal(appended.index, 6, 'delegated append derives index from durable owner state');
-      t.equal(adapter.get(1).term, before.term, 'committed term is preserved');
-      t.same(adapter.get(1).command, before.command, 'committed command is preserved');
-
-      storage.truncateFrom(1);
-      t.equal(adapter.committedIndex, 5, 'delegated truncation keeps commit monotonic');
-      t.ok(adapter.get(5), 'delegated truncation preserves committed boundary');
-      t.equal(adapter.get(6), null, 'delegated truncation removes only uncommitted tail');
-    } finally {
-      db.close();
-    }
-  });
-
 test('independent adapter facades refresh durable commit state before mutation',
   async (t) => {
     const db = new Database(':memory:');
-    const storage = new PartitionRaftStorage(db, 'stale-facade-partition');
-    const adapter = new SQLiteLogAdapter(db, {address: 'external-owner-node'});
+    const staleAdapter = new SQLiteLogAdapter(db, {address: 'stale-facade-node'});
+    const externalAdapter = new SQLiteLogAdapter(db, {address: 'external-owner-node'});
     try {
-      t.equal(storage.commitIndex, 0, 'partition facade initially observes empty state');
+      t.equal(staleAdapter.getCommittedIndex(), 0,
+        'stale facade initially observes empty state');
       for (let index = 1; index <= 5; index += 1) {
-        adapter.saveCommand({type: 'external-commit', value: index}, 7, index);
+        externalAdapter.saveCommand({type: 'external-commit', value: index}, 7, index);
       }
-      adapter.commit(5);
-      const before = adapter.get(1);
+      externalAdapter.commit(5);
+      const before = externalAdapter.get(1);
 
-      const appended = storage.appendEntry({type: 'fresh-durable-index'});
+      const appended = staleAdapter.saveCommand({type: 'fresh-durable-index'}, 7);
       t.equal(appended.index, 6, 'stale facade derives the next durable index');
-      t.same(adapter.get(1).command, before.command,
+      t.same(externalAdapter.get(1).command, before.command,
         'stale facade cannot overwrite committed identity');
 
-      storage.truncateFrom(1);
-      t.equal(adapter.committedIndex, 5, 'stale facade cannot regress durable commit');
-      t.ok(adapter.get(5), 'stale facade cannot truncate committed boundary');
-      t.equal(adapter.get(6), null, 'stale facade can truncate uncommitted tail');
+      staleAdapter.removeFrom(1);
+      t.equal(externalAdapter.committedIndex, 5,
+        'stale facade cannot regress durable commit');
+      t.ok(externalAdapter.get(5), 'stale facade cannot truncate committed boundary');
+      t.equal(externalAdapter.get(6), null,
+        'stale facade can truncate uncommitted tail');
     } finally {
       db.close();
     }

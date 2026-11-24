@@ -70,3 +70,19 @@ test('SQLiteLogAdapter.saveCommand/get preserves canonical full entry shape', as
 
   db.close();
 });
+
+test('SQLiteLogAdapter rejects legacy bare-command rows fail-closed', async (t) => {
+  const {adapter, db} = createAdapter({term: 5, address: 'node-1'});
+  try {
+    db.prepare(
+      'INSERT INTO _raft_log (log_index, term, command, timestamp) VALUES (?, ?, ?, ?)',
+    ).run(1, 5, JSON.stringify({sql: 'INSERT INTO t VALUES (1)'}), Date.now());
+    t.throws(
+      () => adapter.get(1),
+      {code: 'RAFT_LOG_ENTRY_SHAPE_UNSUPPORTED'},
+      'bare-command row without canonical shape fails closed',
+    );
+  } finally {
+    db.close();
+  }
+});

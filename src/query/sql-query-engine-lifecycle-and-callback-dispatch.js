@@ -1,8 +1,5 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {
-  projectRuntimeReplicaServicesRow,
-} from './runtime-replica-state-projection.js';
-import {
   attachAuthoritativeRoutingOverlayCacheApplyListener,
   detachAuthoritativeRoutingOverlayCacheApplyListener,
   initializeSqlQueryEngineInstance,
@@ -11,6 +8,8 @@ import {clearTransactionMemoryReservations} from
   '../partition/partition-locking-read-reservation.js';
 
 const LOCAL_STR_FUNCTION = 'function';
+const PROJECTION_OWNER_SUBMIT_REQUIRED_ERROR =
+  'SQLQueryEngine requires RuntimeReplicaStateProjectionOwner with submit()';
 const RUNTIME_ACCESS_POLICY_DENIED_STATUS = 'denied';
 const RUNTIME_ACCESS_POLICY_OWNER_UNAVAILABLE =
   'policy_owner_unavailable';
@@ -260,39 +259,13 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
     resetRoutingOverlaysOnShutdown(this);
     // Abort in-flight query retry loops so they stop re-arming backoff timers
     // (otherwise a query retrying a torn-down cluster keeps the loop alive).
-    if (
-      this.queryExecutor &&
-      typeof this.queryExecutor.markShuttingDown === LOCAL_STR_FUNCTION
-    ) {
-      this.queryExecutor.markShuttingDown();
-    }
-    if (
-      this.servicePartitionAccessPublisher &&
-      typeof this.servicePartitionAccessPublisher.stop === LOCAL_STR_FUNCTION
-    ) {
-      this.servicePartitionAccessPublisher.stop();
-    }
-    if (
-      this.transactionCoordinator &&
-      typeof this.transactionCoordinator.stopRecoverySweep === LOCAL_STR_FUNCTION
-    ) {
-      this.transactionCoordinator.stopRecoverySweep();
-    }
+    this.queryExecutor?.markShuttingDown?.();
+    this.servicePartitionAccessPublisher?.stop?.();
+    this.transactionCoordinator?.stopRecoverySweep?.();
     this.releasePendingReservations();
-    if (
-      this.tableCreationService &&
-      typeof this.tableCreationService.shutdown === LOCAL_STR_FUNCTION
-    ) {
-      await this.tableCreationService.shutdown();
-    }
+    await this.tableCreationService?.shutdown?.();
     await this.indexService?.shutdown?.();
-    if (
-      this.runtimeReplicaStateProjectionOwner &&
-      typeof this.runtimeReplicaStateProjectionOwner.shutdown ===
-        LOCAL_STR_FUNCTION
-    ) {
-      this.runtimeReplicaStateProjectionOwner.shutdown();
-    }
+    this.runtimeReplicaStateProjectionOwner?.shutdown?.();
   }
 
   /**
@@ -334,29 +307,15 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
     }
     const retainedProjectionOwner =
       this.runtimeReplicaStateProjectionOwner;
+    if (
+      !retainedProjectionOwner ||
+      typeof retainedProjectionOwner.submit !== LOCAL_STR_FUNCTION
+    ) {
+      throw new Error(PROJECTION_OWNER_SUBMIT_REQUIRED_ERROR);
+    }
     lifecycle.setStateProjectionWriter(
-      retainedProjectionOwner &&
-      typeof retainedProjectionOwner.submit === LOCAL_STR_FUNCTION ?
-        (serviceId, stateRow, context) =>
-          retainedProjectionOwner.submit(serviceId, stateRow, context) :
-        async (serviceId, stateRow) =>
-          this.projectRuntimeReplicaServicesRow(serviceId, stateRow),
-    );
-  }
-
-  /**
-   * Persist one runtime replica lifecycle state into the services
-   * table.
-   * @param {string} serviceId - Replica service id (row primary key).
-   * @param {Object} stateRow - Column values from the lifecycle.
-   * @return {Promise<void>}
-   */
-  async projectRuntimeReplicaServicesRow(serviceId, stateRow) {
-    await projectRuntimeReplicaServicesRow(
-      this.controlPlaneSystemTableGateway,
-      this.nodeId,
-      serviceId,
-      stateRow,
+      (serviceId, stateRow, context) =>
+        retainedProjectionOwner.submit(serviceId, stateRow, context),
     );
   }
 

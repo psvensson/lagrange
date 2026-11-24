@@ -47,7 +47,7 @@ import {
 const PARTITION_ID = 'sql_transactions-p1';
 const STATE_TABLE = 'sql_transactions';
 const TERM = 4;
-const SEALED_EPOCH = 7;
+const SEALED_EPOCH = 1;
 const ENTRY_COUNT = 3;
 const FOLLOWER_ADDRESS = 'node-f/partition/sql_transactions-p1-r2';
 const IDENTITY = Object.freeze({

@@ -88,8 +88,6 @@ const EXTERNAL_TYPE = Object.freeze({
 const INSERT_MODE = Object.freeze({
   REPLACE: 'replace',
   IGNORE: 'ignore',
-  OR_REPLACE: 'or replace',
-  OR_IGNORE: 'or ignore',
 });
 
 const SQL_SCHEMA_KEYWORD = Object.freeze({
@@ -674,7 +672,7 @@ class SQLParser {
 
   /**
    * Detect INSERT modifier mode from parser AST.
-   * Supports node-sql-parser's `ast.or` shape and legacy `ast.prefix`.
+   * Uses pinned node-sql-parser's canonical `ast.or` shape.
    * @param {Object} ast - Raw insert AST.
    * @return {string|null} One of 'replace', 'ignore', or null.
    * @private
@@ -685,14 +683,6 @@ class SQLParser {
       if (mode === INSERT_MODE.REPLACE || mode === INSERT_MODE.IGNORE) {
         return mode;
       }
-    }
-
-    const prefix = String(ast.prefix || '').toLowerCase();
-    if (prefix === INSERT_MODE.OR_REPLACE) {
-      return INSERT_MODE.REPLACE;
-    }
-    if (prefix === INSERT_MODE.OR_IGNORE) {
-      return INSERT_MODE.IGNORE;
     }
     return null;
   }

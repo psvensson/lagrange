@@ -1,8 +1,6 @@
 import Database from 'better-sqlite3';
 
 import {RAFT_COMPACTION_OUTCOME} from '../../src/raft/compaction-policy.js';
-import {PartitionRaftStorage} from
-  '../../src/partition/partition-raft-storage.js';
 import {SQLiteLogAdapter} from '../../src/raft/sqlite-log-adapter.js';
 import {test} from '../../src/test-helpers/tap.js';
 
@@ -72,10 +70,9 @@ function registerCompactionContract(name, createFixture) {
   });
 }
 
-test('SQLite inclusive and partition truncation reject non-index inputs', async (t) => {
+test('SQLite inclusive truncation rejects non-index inputs', async (t) => {
   const db = new Database(':memory:');
   const adapter = new SQLiteLogAdapter(db, {address: 'inclusive-truncation'});
-  const storage = new PartitionRaftStorage(db, 'invalid-truncation', adapter);
   try {
     for (let index = 1; index <= 4; index += 1) {
       adapter.saveCommand({type: 'inclusive-truncation', index}, TERM, index);
@@ -83,11 +80,10 @@ test('SQLite inclusive and partition truncation reject non-index inputs', async 
     adapter.commit(3);
     for (const invalidIndex of INVALID_TRUNCATION_INDEXES) {
       adapter.removeFrom(invalidIndex);
-      storage.truncateFrom(invalidIndex);
       t.equal(adapter.getEntriesAfter(0).length, 4,
-        `all inclusive APIs preserve log for ${String(invalidIndex)}`);
+        `inclusive API preserves log for ${String(invalidIndex)}`);
       t.equal(adapter.committedIndex, 3,
-        `all inclusive APIs preserve commit for ${String(invalidIndex)}`);
+        `inclusive API preserves commit for ${String(invalidIndex)}`);
     }
   } finally {
     db.close();

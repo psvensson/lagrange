@@ -7,9 +7,14 @@ import Database from 'better-sqlite3';
 import {test} from '../../src/test-helpers/tap.js';
 
 import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
-import {PartitionRaftStorage} from
-  '../../src/partition/partition-raft-storage.js';
 import {RAFT_COMPACTION_OUTCOME} from '../../src/raft/compaction-policy.js';
+import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
+import {
+  RaftRsPeerIdentityRegistry,
+} from '../../src/raft/raft-rs-peer-identity.js';
+import {
+  compactRaftRsCommittedEntries,
+} from '../../src/raft/snapshot-compaction.js';
 import {
   buildSnapshotCatchupDecision,
   RAFT_SNAPSHOT_CATCHUP_DECISION_OUTCOME,
@@ -33,7 +38,10 @@ import {SQLiteLogAdapter} from '../../src/raft/sqlite-log-adapter.js';
 import {
   createInProcWebSocketPair,
 } from '../../src/transport/inproc-transport.js';
-import {installSealedGeneration} from './snapshot-catchup-fixture.js';
+import {
+  createSealedSourceGeneration,
+  installSealedGeneration,
+} from './snapshot-catchup-fixture.js';
 
 // S5 integration (quest raft-snapshot-retention-compaction): a replica that
 // PHYSICALLY compacted its committed prefix at K (with proof) still serves a
@@ -76,11 +84,10 @@ function commitApplyCommand(context, ordinal, command) {
   context.db.prepare(
     `INSERT INTO ${STATE_TABLE} (id, payload) VALUES (?, ?)`,
   ).run(`row-${ordinal}`, `payload-${ordinal}`);
-  context.storage.recordAppliedAdvance();
   return entry;
 }
 
-// Leader replica: `boundaryCommands` committed+applied, a sealed proof
+// Leader replica: `boundaryCommands` committed+applied, a sealed raft-rs proof
 // generation at the boundary, `headCommands` more above it, then a
 // proof-gated physical compaction at the boundary.
 async function createCompactedLeaderContext(options = {}) {
@@ -92,14 +99,23 @@ async function createCompactedLeaderContext(options = {}) {
   const dbPath = path.join(workDir, 'leader.db');
   const db = new Database(dbPath);
   const adapter = new SQLiteLogAdapter(db, {address: PARTITION_ID, term: TERM});
-  const storage = new PartitionRaftStorage(db, PARTITION_ID, adapter);
   db.exec(`CREATE TABLE IF NOT EXISTS ${STATE_TABLE} ` +
     '(id TEXT PRIMARY KEY, payload TEXT)');
-  const context = {db, adapter, storage};
+  const context = {db, adapter};
   boundaryCommands.forEach((command, position) =>
     commitApplyCommand(context, position + 1, command));
-  const created = await createSqliteStateMachineCheckpoint(
-    {db, identity: IDENTITY, checkpointsRoot});
+  const proofWorkDir = path.join(workDir, 'proof-source');
+  fs.mkdirSync(proofWorkDir, {recursive: true});
+  const {created} = await createSealedSourceGeneration({
+    workDir: proofWorkDir,
+    checkpointsRoot,
+    partitionId: PARTITION_ID,
+    stateTable: STATE_TABLE,
+    term: TERM,
+    identity: IDENTITY,
+    entryCount: BOUNDARY_ENTRY_COUNT,
+    entryTimestamp: (ordinal) => rowHlc(ordinal).toString(),
+  });
   for (let ordinal = BOUNDARY_ENTRY_COUNT + 1;
     ordinal <= HEAD_ENTRY_COUNT; ordinal += 1) {
     commitApplyCommand(context, ordinal, plainCommand(ordinal));
@@ -114,7 +130,6 @@ async function createCompactedLeaderContext(options = {}) {
     dbPath,
     db,
     adapter,
-    storage,
     created,
     compacted,
     close() {
@@ -182,15 +197,13 @@ test('a compacted leader serves and installs its sealed boundary snapshot',
         generationIndex: BOUNDARY_ENTRY_COUNT,
         identity: IDENTITY,
       });
-      followerDb = new Database(followerDbPath);
-      const followerAdapter = new SQLiteLogAdapter(
-        followerDb, {address: PARTITION_ID, term: TERM});
-      t.same(followerAdapter.getSnapshotBoundary(), {
-        lastIncludedIndex: BOUNDARY_ENTRY_COUNT,
-        lastIncludedTerm: TERM,
-      }, 'the installed follower boots at the compacted boundary');
-      t.equal(followerAdapter.getLastInfo().index, BOUNDARY_ENTRY_COUNT,
-        'the installed adapter resumes from the sealed boundary');
+      followerDb = new Database(followerDbPath, {readonly: true});
+      const followerRecord = RaftRsDurableStore.readDurableRecordIn(
+        followerDb, PARTITION_ID);
+      t.equal(Number(followerRecord.appliedIndex), BOUNDARY_ENTRY_COUNT,
+        'the installed follower boots at the compacted raft-rs boundary');
+      t.equal(Number(followerRecord.hardState.term), TERM,
+        'the installed follower carries the sealed boundary term');
 
       // Leader-side raft-rs catch-up dispatch/batching after this boundary is
       // deliberately NOT certified here. That remains the explicit R5
@@ -222,10 +235,17 @@ test('a second stale facade answers correctly after compaction (refresh-on-miss)
 
       // Second compaction on the FIRST facade: seal a proof at the head,
       // then compact everything — the log goes compacted-empty.
-      const headProof = await createSqliteStateMachineCheckpoint({
-        db: leader.db,
-        identity: IDENTITY,
+      const headProofWorkDir = path.join(leader.workDir, 'head-proof');
+      fs.mkdirSync(headProofWorkDir, {recursive: true});
+      const {created: headProof} = await createSealedSourceGeneration({
+        workDir: headProofWorkDir,
         checkpointsRoot: leader.checkpointsRoot,
+        partitionId: PARTITION_ID,
+        stateTable: STATE_TABLE,
+        term: TERM,
+        identity: IDENTITY,
+        entryCount: HEAD_ENTRY_COUNT,
+        entryTimestamp: (ordinal) => rowHlc(ordinal).toString(),
       });
       t.equal(headProof.outcome, RAFT_CHECKPOINT_CREATION_OUTCOME.CREATED,
         'a head proof generation seals');
@@ -324,16 +344,84 @@ test('the single-flight registry exposes the served generation as a pin',
 
 test('post-compaction checkpoint creation cannot regress the sealed clock',
   async (t) => {
-    const leader = await createCompactedLeaderContext();
+    const workDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'raft-compaction-hlc-'));
+    const checkpointsRoot = path.join(workDir, 'checkpoints');
+    const db = new Database(path.join(workDir, 'leader.db'));
     try {
-      // The DELETED rows carried the largest HLCs; without the compaction
-      // fold a later checkpoint would seal max(rows above K) — a REGRESSED
-      // clock. The fold makes creation transitively exact.
+      const registry = new RaftRsPeerIdentityRegistry(db);
+      const leaderPeer = registry.registerReplica(`${PARTITION_ID}-r1`);
+      const followerPeer = registry.registerReplica(`${PARTITION_ID}-r2`);
+      const confState = {
+        voters: [leaderPeer, followerPeer],
+        learners: [],
+        votersOutgoing: [],
+        learnersNext: [],
+        autoLeave: false,
+      };
+      const store = new RaftRsDurableStore(db);
+      db.exec(`CREATE TABLE IF NOT EXISTS ${STATE_TABLE} ` +
+        '(id TEXT PRIMARY KEY, payload TEXT)');
+      const entries = [];
+      for (let ordinal = 1; ordinal <= HEAD_ENTRY_COUNT; ordinal += 1) {
+        db.prepare(
+          `INSERT INTO ${STATE_TABLE} (id, payload) VALUES (?, ?)`,
+        ).run(`row-${ordinal}`, `payload-${ordinal}`);
+        entries.push({
+          index: String(ordinal),
+          term: String(TERM),
+          entryType: 0,
+          data: Buffer.from(JSON.stringify(plainCommand(ordinal)))
+            .toString('base64'),
+        });
+      }
+      store.transaction(() => {
+        store.putBootstrapAppliedState(PARTITION_ID, confState, {
+          bootstrapIndex: '0',
+          admissionIndex: '0',
+          membershipGenerationIndex: '0',
+        });
+        store.appendEntries(PARTITION_ID, entries);
+        store.putAppliedState(
+          PARTITION_ID,
+          String(BOUNDARY_ENTRY_COUNT),
+          confState,
+          undefined,
+          String(IDENTITY.membershipEpoch),
+        );
+        store.putHardState(PARTITION_ID, {
+          term: String(TERM),
+          vote: '0',
+          commit: String(HEAD_ENTRY_COUNT),
+        });
+      });
+      const proof = await createSqliteStateMachineCheckpoint({
+        db,
+        identity: IDENTITY,
+        checkpointsRoot,
+        raftRsGroupId: PARTITION_ID,
+      });
+      t.equal(proof.outcome, RAFT_CHECKPOINT_CREATION_OUTCOME.CREATED,
+        'boundary proof seals');
+      store.putAppliedState(
+        PARTITION_ID,
+        String(HEAD_ENTRY_COUNT),
+        confState,
+        undefined,
+        String(IDENTITY.membershipEpoch),
+      );
+      const compacted = compactRaftRsCommittedEntries(db, PARTITION_ID, {
+        toIndex: BOUNDARY_ENTRY_COUNT,
+        proof: {checkpointDir: proof.checkpointDir},
+      });
+      t.equal(compacted.outcome, RAFT_COMPACTION_OUTCOME.COMPACTED,
+        'raft-rs prefix compacts');
       const preCompactionMax = rowHlc(1).toString();
       const created = await createSqliteStateMachineCheckpoint({
-        db: leader.db,
+        db,
         identity: IDENTITY,
-        checkpointsRoot: leader.checkpointsRoot,
+        checkpointsRoot,
+        raftRsGroupId: PARTITION_ID,
       });
       t.equal(created.outcome, RAFT_CHECKPOINT_CREATION_OUTCOME.CREATED,
         'post-compaction creation seals');
@@ -343,6 +431,7 @@ test('post-compaction checkpoint creation cannot regress the sealed clock',
         'the sealed maxCommittedHlc equals the pre-compaction maximum ' +
         '(non-regression through the deleted rows)');
     } finally {
-      leader.close();
+      db.close();
+      fs.rmSync(workDir, {recursive: true, force: true});
     }
   });

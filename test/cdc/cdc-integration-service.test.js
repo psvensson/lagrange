@@ -916,11 +916,13 @@ test('CDCIntegrationService - local system table routing ignores un-cut-over chi
       partitionId: 'logs_p_7cd6bb21_left',
       replicaId: 'logs_p_7cd6bb21_left-r1',
       nodeId: 'test-node',
-      role: 'leader',
-      leaderId: 'logs_p_7cd6bb21_left-r1',
       status: 'READY',
       keyRange: {start: null, end: '7e530709'},
-      isLeaderReplica: () => true,
+      getRole: () => 'leader',
+      async executeLocalQuery(sql, params) {
+        childWrites.push({sql, params});
+        return {success: true, rows: []};
+      },
       async executeQuery(sql, params) {
         childWrites.push({sql, params});
         return {success: true, changes: 1};

@@ -35,8 +35,6 @@ import {
   TABLES,
 } from '../../../src/constants/index.js';
 import {LoggingService} from '../../../src/logging/logging-service.js';
-import {PartitionRaftStorage} from
-  '../../../src/partition/partition-raft-storage.js';
 import {PartitionService} from
   '../../../src/partition/partition-service.js';
 import {PARTITION_SERVICE_OPERATION} from
@@ -497,14 +495,14 @@ test('legacy durable consensus state fails closed',
     // legacy log and a persisted legacy term, and no rs-raft record.
     const seeded = new Database(dbPath);
     const adapter = new SQLiteLogAdapter(seeded);
-    const storage = new PartitionRaftStorage(seeded, partitionId, adapter);
     for (const row of WRITES) {
       adapter.saveCommand({type: PARTITION_SERVICE_OPERATION.INSERT,
         sql: INSERT_SQL, params: [row.id, row.value]}, LEGACY_TERM);
     }
     adapter.commit(WRITES.length);
-    storage.currentTerm = LEGACY_TERM;
-    storage.persistTerm();
+    seeded.prepare(
+      'INSERT OR REPLACE INTO _raft_state (key, value) VALUES (?, ?)',
+    ).run('currentTerm', String(LEGACY_TERM));
     const legacyState = {
       committedIndex: adapter.getCommittedIndex(),
       lastInfo: adapter.getLastInfo(),

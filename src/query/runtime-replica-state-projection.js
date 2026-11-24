@@ -1,8 +1,7 @@
 /**
  * Runtime replica services-table projection (quest
  * runtime-replica-state-projection): persists ServiceRuntimeLifecycle
- * state transitions as authoritative services rows through the
- * control-plane system-table gateway.
+ * state transitions as authoritative services rows through ServicesOwner.
  *
  * Create-once-then-update discipline (TEST-0001 / ARCH-0009): the
  * first projection INSERTs the row with its identity columns; every
@@ -15,7 +14,6 @@
  */
 
 import {
-  TABLES,
   isPartitionCleanupServiceRow,
 } from '../constants/index.js';
 import {RUNTIME_REPLICA_STATUS} from '../constants/runtime.js';
@@ -24,7 +22,6 @@ import {classifyControlPlaneMutationResult} from
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   CONTROL_PLANE_READ_LEADER_MODE,
-  readAuthoritativeControlPlaneRows,
 } from '../control-plane/control-plane-system-table-gateway.js';
 import {ADAPTER_ERROR_MSG} from './sql-adapter-constants.js';
 
@@ -35,18 +32,24 @@ const SERVICES_OWNER_METHODS = Object.freeze([
   'updateService',
 ]);
 const RUNTIME_PROJECTION_CRITICAL_WORK = 'critical';
-const SERVICES_ROW_POINT_READ_SQL =
-  'SELECT * FROM services WHERE service_id = ?';
 const RUNTIME_PROJECTION_ERROR_CODE = Object.freeze({
   CLEANUP_IN_PROGRESS: 'CLEANUP_IN_PROGRESS',
   CREATE_OWNER_DEFERRED: 'CREATE_OWNER_DEFERRED',
   IDENTITY_CONFLICT: 'SERVICE_IDENTITY_CONFLICT',
 });
 
-function isServicesOwner(target) {
-  return SERVICES_OWNER_METHODS.every(
-    (methodName) => typeof target?.[methodName] === 'function',
+function isValidServicesOwner(servicesOwner) {
+  return Boolean(servicesOwner) && SERVICES_OWNER_METHODS.every(
+    (methodName) => typeof servicesOwner?.[methodName] === 'function',
   );
+}
+
+function assertServicesOwner(servicesOwner) {
+  if (!isValidServicesOwner(servicesOwner)) {
+    throw new Error(
+      ADAPTER_ERROR_MSG.STATE_PROJECTION_GATEWAY_REQUIRED,
+    );
+  }
 }
 
 function assertProjectionMutationSucceeded(result) {
@@ -61,65 +64,41 @@ function assertProjectionMutationSucceeded(result) {
 }
 
 async function updateRuntimeReplicaServicesRow(
-  target,
+  servicesOwner,
   serviceId,
   expectedIdentity,
   updateData,
 ) {
-  const result = isServicesOwner(target) ?
-    await target.updateService(
-      serviceId,
-      expectedIdentity,
-      updateData,
-      PROJECTION_WRITE_OPTIONS,
-    ) :
-    await target.updateSystemTableRow(
-      TABLES.SERVICES,
-      {service_id: serviceId, ...expectedIdentity},
-      updateData,
-      PROJECTION_WRITE_OPTIONS,
-    );
+  const result = await servicesOwner.updateService(
+    serviceId,
+    expectedIdentity,
+    updateData,
+    PROJECTION_WRITE_OPTIONS,
+  );
   return assertProjectionMutationSucceeded(result);
 }
 
-async function submitRuntimeReplicaInsert(target, row) {
+async function submitRuntimeReplicaInsert(servicesOwner, row) {
   try {
-    const result = isServicesOwner(target) ?
-      await target.insertService(row, PROJECTION_WRITE_OPTIONS) :
-      await target.insertSystemTableRow(
-        TABLES.SERVICES,
-        row,
-        PROJECTION_WRITE_OPTIONS,
-      );
+    const result = await servicesOwner.insertService(
+      row,
+      PROJECTION_WRITE_OPTIONS,
+    );
     return {result, mutationError: null};
   } catch (mutationError) {
     return {result: null, mutationError};
   }
 }
 
-async function observeRuntimeReplicaService(target, serviceId) {
+async function observeRuntimeReplicaService(servicesOwner, serviceId) {
   try {
-    const observation = isServicesOwner(target) ?
-      await target.getService(serviceId, {
-        authoritativeReadMode:
-          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
-        leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
-        deliveryPriority: RUNTIME_PROJECTION_CRITICAL_WORK,
-        workClass: RUNTIME_PROJECTION_CRITICAL_WORK,
-      }) :
-      await readAuthoritativeControlPlaneRows(
-        target,
-        TABLES.SERVICES,
-        SERVICES_ROW_POINT_READ_SQL,
-        [serviceId],
-        {
-          authoritativeReadMode:
-            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
-          leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
-          deliveryPriority: RUNTIME_PROJECTION_CRITICAL_WORK,
-          workClass: RUNTIME_PROJECTION_CRITICAL_WORK,
-        },
-      );
+    const observation = await servicesOwner.getService?.(serviceId, {
+      authoritativeReadMode:
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+      leaderMode: CONTROL_PLANE_READ_LEADER_MODE.REQUIRED,
+      deliveryPriority: RUNTIME_PROJECTION_CRITICAL_WORK,
+      workClass: RUNTIME_PROJECTION_CRITICAL_WORK,
+    });
     return observation?.success === true && observation.rows?.length === 1 ?
       observation.rows[0] : null;
   } catch (_error) {
@@ -153,36 +132,36 @@ function runtimeReplicaCreationError(row, observed, cause) {
   return error;
 }
 
-async function insertRuntimeReplicaServicesRow(target, row) {
-  const {result, mutationError} = await submitRuntimeReplicaInsert(target, row);
+async function insertRuntimeReplicaServicesRow(servicesOwner, row) {
+  const {result, mutationError} = await submitRuntimeReplicaInsert(
+    servicesOwner,
+    row,
+  );
   if (classifyControlPlaneMutationResult(result).applied) return;
-  const observed = await observeRuntimeReplicaService(target, row.service_id);
+  const observed = await observeRuntimeReplicaService(
+    servicesOwner,
+    row.service_id,
+  );
   if (rowsMatchRuntimeReplicaCreation(observed, row)) return;
   throw runtimeReplicaCreationError(row, observed, mutationError);
 }
 
 async function deleteRuntimeReplicaServicesRow(
-  target,
+  servicesOwner,
   serviceId,
   expectedIdentity,
 ) {
-  const result = isServicesOwner(target) ?
-    await target.removeService(
-      serviceId,
-      expectedIdentity,
-      PROJECTION_WRITE_OPTIONS,
-    ) :
-    await target.deleteSystemTableRow(
-      TABLES.SERVICES,
-      {service_id: serviceId, ...expectedIdentity},
-      PROJECTION_WRITE_OPTIONS,
-    );
+  const result = await servicesOwner.removeService(
+    serviceId,
+    expectedIdentity,
+    PROJECTION_WRITE_OPTIONS,
+  );
   assertProjectionMutationSucceeded(result);
 }
 
-async function writeRuntimeReplicaServicesRow(target, serviceId, write) {
+async function writeRuntimeReplicaServicesRow(servicesOwner, serviceId, write) {
   const updateResult = await updateRuntimeReplicaServicesRow(
-    target,
+    servicesOwner,
     serviceId,
     write.expectedIdentity,
     write.updateData,
@@ -194,7 +173,7 @@ async function writeRuntimeReplicaServicesRow(target, serviceId, write) {
   if (affectedRows > 0) {
     return;
   }
-  await insertRuntimeReplicaServicesRow(target, {
+  await insertRuntimeReplicaServicesRow(servicesOwner, {
     service_id: serviceId,
     ...write.updateData,
     created_at: write.createdAt ??
@@ -209,8 +188,7 @@ async function writeRuntimeReplicaServicesRow(target, serviceId, write) {
  * the state row resolves to the hosting engine's own nodeId (the
  * column is NOT NULL).
  *
- * @param {?Object} projectionTarget - ServicesOwner in production, or a
- *   control-plane system-table gateway for compatibility callers.
+ * @param {Object} servicesOwner - Canonical ServicesOwner instance.
  * @param {string} hostNodeId - The projecting engine's node id.
  * @param {string} serviceId - Replica service id (row primary key).
  * @param {Object} stateRow - Column values from the lifecycle
@@ -219,13 +197,9 @@ async function writeRuntimeReplicaServicesRow(target, serviceId, write) {
  * @return {Promise<void>}
  */
 async function projectRuntimeReplicaServicesRow(
-  projectionTarget, hostNodeId, serviceId, stateRow,
+  servicesOwner, hostNodeId, serviceId, stateRow,
 ) {
-  if (!projectionTarget) {
-    throw new Error(
-      ADAPTER_ERROR_MSG.STATE_PROJECTION_GATEWAY_REQUIRED,
-    );
-  }
+  assertServicesOwner(servicesOwner);
   const {created_at: createdAt, ...transitionColumns} = stateRow || {};
   const expectedIdentity = {
     service_type: transitionColumns.service_type,
@@ -233,13 +207,13 @@ async function projectRuntimeReplicaServicesRow(
   };
   if (transitionColumns.status === RUNTIME_REPLICA_STATUS.STOPPED) {
     await deleteRuntimeReplicaServicesRow(
-      projectionTarget,
+      servicesOwner,
       serviceId,
       expectedIdentity,
     );
     return;
   }
-  await writeRuntimeReplicaServicesRow(projectionTarget, serviceId, {
+  await writeRuntimeReplicaServicesRow(servicesOwner, serviceId, {
     createdAt,
     expectedIdentity,
     updateData: {
@@ -249,4 +223,4 @@ async function projectRuntimeReplicaServicesRow(
   });
 }
 
-export {projectRuntimeReplicaServicesRow};
+export {isValidServicesOwner, projectRuntimeReplicaServicesRow};
