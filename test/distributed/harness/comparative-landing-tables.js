@@ -46,9 +46,27 @@ function formatCapacity(metrics) {
   return `${arrayJoin(rates, '; ')}; ${arrayJoin(p99, '; ')}`;
 }
 
-// The product's own last readiness answer of an exhausted arm.
+function formatPostReadyReadinessDenial(denial) {
+  const probeNote = denial.lastProbeError ? ` (lastProbeError: ${denial.lastProbeError})` : '';
+  const terminalText = denial.terminalReason ||
+    (denial.reasons.length > 0 ? arrayJoin(denial.reasons, ', ') : 'readiness_exhausted');
+  const completedSummary = denial.lastCompletedObservation?.summary || 'ready';
+  const negative = denial.lastDeniedObservation || denial.lastNegativeObservation || null;
+  const negativeNote = negative ?
+    `; last negative observation: ${negative.phase} (${negative.state}), reasons ` +
+    `${negative.reasons?.length > 0 ? arrayJoin(negative.reasons, ', ') : 'none'}` :
+    '';
+  return `; readiness terminal reason of ${denial.component}: ${terminalText}${probeNote}, ` +
+    `after ${denial.attempts} attempts; last completed observation: ${completedSummary}` +
+    negativeNote;
+}
+
+// The product's own readiness summary of an exhausted arm.
 function formatReadinessDenial(denial) {
   if (!denial) return '';
+  if (denial.lastCompletedObservation?.ready === true) {
+    return formatPostReadyReadinessDenial(denial);
+  }
   const reasons = denial.reasons.length > 0 ? arrayJoin(denial.reasons, ', ') : 'none';
   const probeNote = denial.lastProbeError ? ` (lastProbeError: ${denial.lastProbeError})` : '';
   return `; last readiness answer of ${denial.component}: ${denial.phase} ` +
@@ -237,6 +255,8 @@ export {
   buildExperimentSection,
   buildTargetSection,
   column,
+  formatCell,
+  formatReadinessDenial,
   renderClaimPage,
   writeClaimPageArtifacts,
 };

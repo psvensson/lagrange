@@ -19,6 +19,7 @@ import {
   objectHasOwn,
   stringIndexOf,
   stringSlice,
+  stringStartsWith,
   toStringValue as stringOf,
 } from './real-product-captured-intrinsics.js';
 import {
@@ -293,29 +294,138 @@ function markDeadlineCappedProbeTimeout(ctx, pollContext, error) {
   }
 }
 
-function readinessOf(ctx, component, probe, stablePolls = 1) {
-  return pollReadiness({
-    component,
-    probe: async (pollContext) => {
-      try {
-        await assertWatchedRolesRunning(ctx, component, pollContext);
-        return await probe(pollContext);
-      } catch (error) {
-        markDeadlineCappedProbeTimeout(ctx, pollContext, error);
-        throw error;
-      } finally {
-        if (ctx.settleInFlight) await ctx.settleInFlight();
-      }
-    },
-    attempts: ctx.budget.attempts,
-    intervalMs: ctx.budget.intervalMs,
-    sleep: ctx.sleep,
-    now: ctx.now,
-    stablePolls,
-    deadlineAtMs: ctx.deadlineAtMs ?? null,
-    deadlineMs: ctx.deadlineMs ?? null,
-    signal: ctx.signal ?? null,
-  });
+const STAGE_COMPONENT = Object.freeze({
+  MEMBERSHIP: 'lagrange-membership',
+  PUBLIC_PG_WIRE: 'lagrange-public-pg-wire',
+  PARTITION_LEADERS: 'lagrange-partition-leaders',
+  SYSTEM_TABLES: 'lagrange-system-tables',
+  CANONICAL_ROUTABLE: 'lagrange-canonical-tables-routable',
+  PROBE_WRITE_READBACK: 'lagrange-probe-write-readback',
+});
+
+function resolveInitialStageNodes(seed, ctx) {
+  if (arrayIsArray(seed.nodes)) return [...seed.nodes];
+  if (arrayIsArray(ctx.nodes)) return [...ctx.nodes];
+  return [];
+}
+
+function resolveInitialSystemTables(seed, ctx) {
+  return seed.systemTables ?? seed.cluster ?? ctx.systemTables ?? ctx.cluster ?? null;
+}
+
+function createInitialCompletedStageStore(ctx) {
+  const seed = ctx.completedStages && typeof ctx.completedStages === 'object' ?
+    ctx.completedStages : {};
+  return {
+    nodes: resolveInitialStageNodes(seed, ctx),
+    membership: seed.membership ?? ctx.membership ?? null,
+    publicPgWire: seed.publicPgWire ?? ctx.publicPgWire ?? null,
+    leaders: seed.leaders ?? ctx.leaders ?? null,
+    systemTables: resolveInitialSystemTables(seed, ctx),
+    canonicalTablesRoutable: seed.canonicalTablesRoutable ?? null,
+    probe: seed.probe ?? null,
+  };
+}
+
+function ensureCompletedStageStore(ctx) {
+  if (!ctx || typeof ctx !== 'object') return null;
+  if (!ctx.completedReadinessStages) {
+    ctx.completedReadinessStages = createInitialCompletedStageStore(ctx);
+  }
+  return ctx.completedReadinessStages;
+}
+
+function buildCompletedStageSnapshot(store) {
+  if (!store) return null;
+  const hasAny = store.nodes.length > 0 || Boolean(
+    store.membership || store.publicPgWire || store.leaders ||
+    store.systemTables || store.canonicalTablesRoutable,
+  );
+  if (!hasAny) return null;
+  return {
+    nodes: [...store.nodes],
+    membership: store.membership,
+    ...(store.publicPgWire ? {publicPgWire: store.publicPgWire} : {}),
+    ...(store.leaders ? {leaders: store.leaders} : {}),
+    systemTables: store.systemTables,
+    ...(store.systemTables ? {cluster: store.systemTables} : {}),
+    ...(store.canonicalTablesRoutable ?
+      {canonicalTablesRoutable: store.canonicalTablesRoutable} : {}),
+  };
+}
+
+function recordCompletedReadinessStage(ctx, component, ready) {
+  const store = ensureCompletedStageStore(ctx);
+  if (!store) return ready;
+  if (stringStartsWith(String(component || ''), `${NODE_ROLE}@`)) {
+    store.nodes.push(ready);
+  } else if (component === STAGE_COMPONENT.MEMBERSHIP) {
+    store.membership = ready;
+  } else if (component === STAGE_COMPONENT.PUBLIC_PG_WIRE) {
+    store.publicPgWire = ready;
+  } else if (component === STAGE_COMPONENT.PARTITION_LEADERS) {
+    store.leaders = ready;
+  } else if (component === STAGE_COMPONENT.SYSTEM_TABLES) {
+    store.systemTables = ready;
+  } else if (component === STAGE_COMPONENT.CANONICAL_ROUTABLE) {
+    store.canonicalTablesRoutable = ready;
+  } else if (component === STAGE_COMPONENT.PROBE_WRITE_READBACK) {
+    store.probe = ready;
+  }
+  ctx.completedStages = buildCompletedStageSnapshot(store);
+  return ready;
+}
+
+function applyCompletedStagesToTarget(target, snapshot) {
+  if (!target || typeof target !== 'object') return;
+  target.completedStages = snapshot;
+  if (snapshot.nodes.length > 0) target.nodes = snapshot.nodes;
+  if (snapshot.membership) target.membership = snapshot.membership;
+  if (snapshot.publicPgWire) target.publicPgWire = snapshot.publicPgWire;
+  if (snapshot.leaders) target.leaders = snapshot.leaders;
+  if (snapshot.systemTables) {
+    target.systemTables = snapshot.systemTables;
+    target.cluster = snapshot.systemTables;
+  }
+}
+
+function attachCompletedReadinessStagesToError(ctx, error) {
+  const snapshot = buildCompletedStageSnapshot(ensureCompletedStageStore(ctx));
+  if (!snapshot || !error || typeof error !== 'object') return error;
+  applyCompletedStagesToTarget(error, snapshot);
+  applyCompletedStagesToTarget(error.diagnostic, snapshot);
+  return error;
+}
+
+async function readinessOf(ctx, component, probe, stablePolls = 1) {
+  ensureCompletedStageStore(ctx);
+  try {
+    const ready = await pollReadiness({
+      component,
+      probe: async (pollContext) => {
+        try {
+          await assertWatchedRolesRunning(ctx, component, pollContext);
+          return await probe(pollContext);
+        } catch (error) {
+          markDeadlineCappedProbeTimeout(ctx, pollContext, error);
+          throw error;
+        } finally {
+          if (ctx.settleInFlight) await ctx.settleInFlight();
+        }
+      },
+      attempts: ctx.budget.attempts,
+      intervalMs: ctx.budget.intervalMs,
+      sleep: ctx.sleep,
+      now: ctx.now,
+      stablePolls,
+      deadlineAtMs: ctx.deadlineAtMs ?? null,
+      deadlineMs: ctx.deadlineMs ?? null,
+      signal: ctx.signal ?? null,
+    });
+    return recordCompletedReadinessStage(ctx, component, ready);
+  } catch (error) {
+    throw attachCompletedReadinessStagesToError(ctx, error);
+  }
 }
 
 function compactReadyzDiagnostic(answer) {
@@ -704,7 +814,10 @@ async function clusterReady(ctx, component, query, nodeRoles, requiredTables = n
       },
     };
   }, ctx.budget.stablePolls);
-  return requiredTables ? {...readiness, tableTimeToRoutableMs: {...tableReadyAt}} : readiness;
+  const enriched = requiredTables ?
+    {...readiness, tableTimeToRoutableMs: {...tableReadyAt}} :
+    readiness;
+  return recordCompletedReadinessStage(ctx, component, enriched);
 }
 
 function probeVisibility(listenerNodeId, nodeRoles) {
