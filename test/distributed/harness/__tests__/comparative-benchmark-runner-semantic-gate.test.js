@@ -586,11 +586,23 @@ function claimFor(targetId, subkind) {
     (c) => c.targetId === targetId && c.scenario === 'scenarioA' && c.subkind === subkind);
 }
 
+function canonicalRoleForTarget(targetId) {
+  if (targetId === 'lagrange') return 'lagrange-node';
+  return targetId === 'tidb-tikv' ? 'tikv' : 'postgres-primary';
+}
+
 function admitRunPairWithGate({targetId, subkind, gate, endpointContainerId = null}) {
   const campaignId = 'camp-bind';
+  const role = canonicalRoleForTarget(targetId);
   const header = buildFixtureHeader({campaignId, targetIds: [targetId]});
+  header.products[0] = {...header.products[0], role};
   const runs = arrayMap([1, 2], (repetition) => {
     const run = buildFixtureRun({campaignId, targetId, subkind, repetition});
+    run.deployment.roles = arrayMap(run.deployment.roles, (r) => ({...r, role}));
+    run.deployment.storage = arrayMap(run.deployment.storage, (s) => ({...s, role}));
+    for (const key of ['products', 'productsAfterWindow']) {
+      run.identity[key] = arrayMap(run.identity[key], (p) => ({...p, role}));
+    }
     if (endpointContainerId) {
       run.deployment.endpoint.containerId = endpointContainerId;
       run.deployment.roles[0].containerId = endpointContainerId;
@@ -604,36 +616,26 @@ function admitRunPairWithGate({targetId, subkind, gate, endpointContainerId = nu
     return {file: 'raw-observations.ndjson', run};
   });
   return admitClaim({
-    claim: claimFor(targetId, subkind),
-    runs,
-    campaignHeaders: new Map([[campaignId, header]]),
-    retainedReferences: [],
-    invalidations: [],
+    claim: claimFor(targetId, subkind), runs,
+    campaignHeaders: new Map([[campaignId, header]]), retainedReferences: [], invalidations: [],
   });
 }
 
 test('Lagrange: cohort preserved per case and before measurement, restart of the endpoint container only, ' +
   'single binding preserved across the journey', async () => {
   const ledger = createContainerLedger();
-  const {sshRun, calls} = createScriptedSsh([
-    ...dockerRules(ledger),
-    restartRuleForLedger(ledger),
-  ]);
+  const {sshRun, calls} = createScriptedSsh([...dockerRules(ledger), restartRuleForLedger(ledger)]);
   let generation = 0;
   const first = armOf(ledger, generation, {persistent: true});
   const log = [];
   const stage = createSemanticGateStage({
-    journey: journey(log),
-    sshRun,
-    opts: {},
-    evidenceDirOf: (run) => `/tmp/ev/${run.runId}`,
-    now: () => 0,
+    journey: journey(log), sshRun, opts: {},
+    evidenceDirOf: (run) => `/tmp/ev/${run.runId}`, now: () => 0,
     redeploy: async () => armOf(ledger, generation += 1, {persistent: true}),
   });
   const result = await stage({
     run: {runId: 'r1', system: 'lagrange', resetDataset: async () => {}},
-    manifest: {campaignId: 'camp'},
-    deployment: first,
+    manifest: {campaignId: 'camp'}, deployment: first,
   });
   assert.deepEqual(log.slice(0, 3), [
     ['binding', '10.0.0.1:5433', 'camp'],
@@ -644,10 +646,7 @@ test('Lagrange: cohort preserved per case and before measurement, restart of the
   assert.equal(restarts.length, 1);
   assert.match(restarts[0].command, new RegExp(`docker restart -t 1 ${log[3][1]}$`, 'u'));
   assert.deepEqual(arrayMap(result.events, (event) => event.kind), [
-    'dataset-reset',
-    'dataset-reset',
-    'product-restart',
-    'dataset-reset',
+    'dataset-reset', 'dataset-reset', 'product-restart', 'dataset-reset',
   ]);
   assert.equal(result.events[3].caseId, 'before-measurement');
   assert.equal(result.deployment.endpoint.port, 5433);

@@ -18,6 +18,8 @@ const stringToLowerCase = Function.call.bind(String.prototype.toLowerCase);
 const stringSplit = Function.call.bind(String.prototype.split);
 const stringPadStart = Function.call.bind(String.prototype.padStart);
 const stringReplace = Function.call.bind(String.prototype.replace);
+const arrayFind = Function.call.bind(Array.prototype.find);
+const arrayEvery = Function.call.bind(Array.prototype.every);
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
@@ -29,6 +31,7 @@ const numberIsFinite = Number.isFinite;
 const numberIsInteger = Number.isInteger;
 const numberToFixed = Function.call.bind(Number.prototype.toFixed);
 const objectHasOwn = Object.hasOwn;
+const objectKeys = Object.keys;
 const objectValues = Object.values;
 
 const OLTP_COMPARISON_HISTORY_SCHEMA_VERSION = 1;
@@ -161,57 +164,14 @@ function buildEmptyCanonicalTransactions(offeredCount) {
   });
 }
 
-function intOrDefault(value, fallback, name) {
-  return requireNonNegativeInt(value ?? fallback, name);
-}
-
-function resolveCommittedCount(accounting) {
-  const val = accounting.committed ?? accounting.succeeded ?? accounting.measuredSucceeded ?? 0;
-  return requireNonNegativeInt(val, 'committed');
-}
-
-function buildCanonicalHistoryTransactionsFromWorkload(workloadOrAccounting, options = {}) {
-  const accounting = extractWorkloadAccountingObject(workloadOrAccounting);
-  if (!accounting) {
-    return buildEmptyCanonicalTransactions(options.offered);
-  }
-  const offered = intOrDefault(accounting.offered, options.offered ?? 0, 'offered');
-  const issued = intOrDefault(accounting.issued, 0, 'issued');
-  const unissued = intOrDefault(accounting.unissued, offered - issued, 'unissued');
-  const attempts = intOrDefault(accounting.attempts, issued, 'attempts');
-  const committed = resolveCommittedCount(accounting);
-  const conflicts = intOrDefault(accounting.conflicts, 0, 'conflicts');
-  const conflictExhausted = intOrDefault(accounting.conflictExhausted, 0, 'conflictExhausted');
-  const terminalFailures = sumTerminalFailures(accounting.terminalFailures);
-  const unresolved = intOrDefault(accounting.unresolved, 0, 'unresolved');
-  const failed = conflictExhausted + terminalFailures + unresolved;
-  const retries = Math.max(0, attempts - issued);
-  assertCanonicalAccountingInvariants({
-    offered,
-    issued,
-    unissued,
-    succeeded: committed,
-    failed,
-    attempts,
-    retries,
-  });
-  return Object.freeze({
-    offered,
-    issued,
-    unissued,
-    attempted: issued,
-    measuredAttempted: issued,
-    succeeded: committed,
-    measuredSucceeded: committed,
-    failed,
-    retries,
-    attempts,
-    conflicts,
-    conflictExhausted,
-    terminalFailures,
-    unresolved,
-  });
-}
+const SUMMARY_TRANSACTION_KEYS = Object.freeze([
+  'attempted',
+  'measuredAttempted',
+  'succeeded',
+  'measuredSucceeded',
+  'failed',
+  'retries',
+]);
 
 function hasBreakdownTransactionFields(rawTx) {
   return arraySome(BREAKDOWN_TRANSACTION_KEYS, (key) => objectHasOwn(rawTx, key));
@@ -235,8 +195,13 @@ function resolveIssuedFromRaw(rawTx) {
   return issued;
 }
 
-function resolveSucceededFromRaw(rawTx) {
-  const candidate = rawTx.succeeded ?? rawTx.measuredSucceeded ?? rawTx.committed ?? 0;
+function resolveSucceededFromRaw(rawTx, requireExplicit = false) {
+  const hasExplicit = rawTx.succeeded !== undefined ||
+    rawTx.measuredSucceeded !== undefined ||
+    rawTx.committed !== undefined;
+  const candidate = hasExplicit ?
+    (rawTx.succeeded ?? rawTx.measuredSucceeded ?? rawTx.committed) :
+    (requireExplicit ? undefined : 0);
   const succeeded = requireNonNegativeInt(candidate, 'succeeded');
   if (rawTx.committed !== undefined && rawTx.committed !== succeeded) {
     throw new Error(
@@ -277,34 +242,48 @@ function resolveFailedFromRaw(rawTx, issued, succeeded) {
   return {failed, conflictExhausted, terminalFailures, unresolved};
 }
 
-function normalizeTransactions(rawTx) {
-  if (!rawTx || typeof rawTx !== 'object') return null;
-  if (!hasBreakdownTransactionFields(rawTx)) {
-    return Object.freeze({...rawTx});
-  }
-  const issued = resolveIssuedFromRaw(rawTx);
-  const unissued = rawTx.unissued !== undefined ?
-    requireNonNegativeInt(rawTx.unissued, 'unissued') :
-    (rawTx.offered !== undefined ?
-      Math.max(0, requireNonNegativeInt(rawTx.offered, 'offered') - issued) : 0);
-  const offered = rawTx.offered !== undefined ?
-    requireNonNegativeInt(rawTx.offered, 'offered') :
+function resolveOfferedAndUnissuedFromRaw(accounting, issued, options) {
+  const rawOffered = accounting.offered ?? options.offered;
+  const unissued = accounting.unissued !== undefined ?
+    requireNonNegativeInt(accounting.unissued, 'unissued') :
+    (rawOffered !== undefined ? requireNonNegativeInt(rawOffered, 'offered') - issued : 0);
+  requireNonNegativeInt(unissued, 'unissued');
+  const offered = rawOffered !== undefined ?
+    requireNonNegativeInt(rawOffered, 'offered') :
     (issued + unissued);
-  const succeeded = resolveSucceededFromRaw(rawTx);
-  const {failed, conflictExhausted, terminalFailures, unresolved} =
-    resolveFailedFromRaw(rawTx, issued, succeeded);
-  const attempts = rawTx.attempts !== undefined ?
-    requireNonNegativeInt(rawTx.attempts, 'attempts') :
-    (issued + requireNonNegativeInt(rawTx.retries ?? 0, 'retries'));
-  const retries = rawTx.retries !== undefined ?
-    requireNonNegativeInt(rawTx.retries, 'retries') :
+  return {offered, unissued};
+}
+
+function resolveAttemptsAndRetriesFromRaw(accounting, issued) {
+  const attempts = accounting.attempts !== undefined ?
+    requireNonNegativeInt(accounting.attempts, 'attempts') :
+    (issued + requireNonNegativeInt(accounting.retries ?? 0, 'retries'));
+  const retries = accounting.retries !== undefined ?
+    requireNonNegativeInt(accounting.retries, 'retries') :
     Math.max(0, attempts - issued);
-  const conflicts = requireNonNegativeInt(rawTx.conflicts ?? retries, 'conflicts');
+  const conflicts = requireNonNegativeInt(accounting.conflicts ?? retries, 'conflicts');
+  return {attempts, retries, conflicts};
+}
+
+function buildCanonicalHistoryTransactionsFromWorkload(workloadOrAccounting, options = {}) {
+  const accounting = extractWorkloadAccountingObject(workloadOrAccounting);
+  if (!accounting) {
+    return buildEmptyCanonicalTransactions(options.offered);
+  }
+  const hasIssued = accounting.issued !== undefined ||
+    accounting.attempted !== undefined ||
+    accounting.measuredAttempted !== undefined;
+  const issued = hasIssued ? resolveIssuedFromRaw(accounting) : 0;
+  const {offered, unissued} = resolveOfferedAndUnissuedFromRaw(accounting, issued, options);
+  const committed = resolveSucceededFromRaw(accounting, false);
+  const {failed, conflictExhausted, terminalFailures, unresolved} =
+    resolveFailedFromRaw(accounting, issued, committed);
+  const {attempts, retries, conflicts} = resolveAttemptsAndRetriesFromRaw(accounting, issued);
   assertCanonicalAccountingInvariants({
     offered,
     issued,
     unissued,
-    succeeded,
+    succeeded: committed,
     failed,
     attempts,
     retries,
@@ -315,8 +294,8 @@ function normalizeTransactions(rawTx) {
     unissued,
     attempted: issued,
     measuredAttempted: issued,
-    succeeded,
-    measuredSucceeded: succeeded,
+    succeeded: committed,
+    measuredSucceeded: committed,
     failed,
     retries,
     attempts,
@@ -325,6 +304,43 @@ function normalizeTransactions(rawTx) {
     terminalFailures,
     unresolved,
   });
+}
+
+function validateSummaryOnlyTransactions(rawTx) {
+  for (const key of objectKeys(rawTx)) {
+    if (!arrayIncludes(SUMMARY_TRANSACTION_KEYS, key)) {
+      throw new Error(`Unexpected transaction field ${key}`);
+    }
+    requireNonNegativeInt(rawTx[key], key);
+  }
+  const attempted = resolveIssuedFromRaw(rawTx);
+  const succeeded = resolveSucceededFromRaw(rawTx, true);
+  const failed = requireNonNegativeInt(rawTx.failed, 'failed');
+  const retries = requireNonNegativeInt(rawTx.retries ?? 0, 'retries');
+  if (succeeded + failed !== attempted) {
+    throw new Error(
+      `Transaction accounting invariant violated: succeeded (${succeeded}) + ` +
+      `failed (${failed}) !== attempted (${attempted})`,
+    );
+  }
+  assertCanonicalAccountingInvariants({
+    offered: attempted,
+    issued: attempted,
+    unissued: 0,
+    succeeded,
+    failed,
+    attempts: attempted + retries,
+    retries,
+  });
+  return Object.freeze({...rawTx});
+}
+
+function normalizeTransactions(rawTx) {
+  if (!rawTx || typeof rawTx !== 'object' || Array.isArray(rawTx)) return null;
+  if (!hasBreakdownTransactionFields(rawTx)) {
+    return validateSummaryOnlyTransactions(rawTx);
+  }
+  return buildCanonicalHistoryTransactionsFromWorkload(rawTx);
 }
 
 function normalizeOptionalSha256(value, name) {
@@ -509,19 +525,34 @@ function computeComparisonSummary(lagrange, tidbTikv) {
   });
 }
 
-function createComparisonHistoryRecord(input = {}) {
+function normalizeRetainedSystemMetrics(m) {
+  if (!m || typeof m !== 'object') return null;
+  const opsPerSec = typeof m.opsPerSec === 'number' ? m.opsPerSec : null;
+  const latencyMs = normalizeLatencyMetrics(m.latencyMs);
+  const transactions = m.transactions && typeof m.transactions === 'object' ?
+    Object.freeze({...m.transactions}) : null;
+  const semanticProofs = normalizeSemanticProofMetrics(m.semanticProofs);
+  const base = {opsPerSec, latencyMs, transactions, semanticProofs};
+  if (m.scenarioBScorecard && typeof m.scenarioBScorecard === 'object') {
+    return Object.freeze({
+      ...base,
+      scenarioBScorecard: Object.freeze({...m.scenarioBScorecard}),
+    });
+  }
+  return Object.freeze(base);
+}
+
+function buildRecordPayload(input, normalizeMetricsFn) {
   const combination = buildComparisonCombinationKey(input);
   const recordedAt = optStr(input.recordedAt, '');
   if (!recordedAt || Number.isNaN(Date.parse(recordedAt))) {
     throw new Error('recordedAt must be a valid non-empty ISO timestamp string');
   }
-
   const evidenceSource = normalizeEvidenceSource(input.evidenceSource);
-  const lagrange = normalizeSystemMetrics(input.metrics?.lagrange);
-  const tidbTikv = normalizeSystemMetrics(input.metrics?.tidbTikv);
+  const lagrange = normalizeMetricsFn(input.metrics?.lagrange);
+  const tidbTikv = normalizeMetricsFn(input.metrics?.tidbTikv);
   const metrics = Object.freeze({lagrange, tidbTikv});
   const comparison = computeComparisonSummary(lagrange, tidbTikv);
-
   const payload = {
     schemaVersion: OLTP_COMPARISON_HISTORY_SCHEMA_VERSION,
     combinationKey: combination.combinationKey,
@@ -537,9 +568,15 @@ function createComparisonHistoryRecord(input = {}) {
   return Object.freeze({...payload, recordSha256});
 }
 
+function createComparisonHistoryRecord(input = {}) {
+  return buildRecordPayload(input, normalizeSystemMetrics);
+}
+
 function validateComparisonHistoryRecord(record) {
   if (!record || typeof record !== 'object') throw new Error('record must be an object');
-  const exp = createComparisonHistoryRecord(record);
+  const exp = isSealedWithdrawnPreCanonicalSha(record.recordSha256) ?
+    buildRecordPayload(record, normalizeRetainedSystemMetrics) :
+    createComparisonHistoryRecord(record);
   if (record.combinationKey !== exp.combinationKey ||
       record.combinationSha256 !== exp.combinationSha256 ||
       record.recordSha256 !== exp.recordSha256) {
@@ -940,6 +977,23 @@ const NOV_2026_HISTORY_RECONCILIATION_SPECS = Object.freeze({
   }),
 });
 
+const NOV_2026_HISTORY_INVALIDATION_ID = 'inv-0026';
+const NOV_2026_BASELINE_LINE_COUNT = 43;
+const WITHDRAWN_PRE_CANONICAL_HISTORY_RECORD_SHAS = new Set([
+  '87b6a4711010fa19d594bfcc1fc305bfb8fc05e151a336ac8a67aa4fcf20deb7',
+  'e07746af4c34b79705c725459be3eb01600dc0e2289e72f747e4b5e7b850a638',
+  'e2b828ec15deb8786a82ea9f0a8051db18e4f2c0f6e30670c0b41897b045157f',
+  '4ae39281b8b5717d774c6998d27bc5a5b71e489b1bd518f2597c31a1c4d723bd',
+  ...arrayMap(
+    objectValues(NOV_2026_HISTORY_RECONCILIATION_SPECS),
+    (s) => s.withdrawnRecordSha256,
+  ),
+]);
+
+function isSealedWithdrawnPreCanonicalSha(sha) {
+  return typeof sha === 'string' && WITHDRAWN_PRE_CANONICAL_HISTORY_RECORD_SHAS.has(sha);
+}
+
 function nextInvalidationId(existingInvalidations) {
   let maxNum = 0;
   for (const inv of existingInvalidations) {
@@ -956,9 +1010,9 @@ function buildReconciledHistoryRecord(oldRecord, spec) {
   } : null;
   const tidbMetrics = oldRecord.metrics?.tidbTikv ? {
     ...oldRecord.metrics.tidbTikv,
-    transactions: spec.tidbAccounting ?
-      buildCanonicalHistoryTransactionsFromWorkload(spec.tidbAccounting) :
-      oldRecord.metrics.tidbTikv.transactions,
+    transactions: buildCanonicalHistoryTransactionsFromWorkload(
+      spec.tidbAccounting ?? oldRecord.metrics.tidbTikv.transactions,
+    ),
   } : null;
   return createComparisonHistoryRecord({
     framework: oldRecord.framework,
@@ -975,6 +1029,60 @@ function buildReconciledHistoryRecord(oldRecord, spec) {
       tidbTikv: tidbMetrics,
     },
   });
+}
+
+function assertMatchingInv0026Entry(existingEntry, withdrawnRecordIds) {
+  const scope = existingEntry.scope;
+  const receipts = scope?.receiptIds;
+  const matchesTarget = scope?.file === DEFAULT_COMPARISON_HISTORY_NDJSON_PATH &&
+    Array.isArray(receipts) &&
+    receipts.length === withdrawnRecordIds.length &&
+    arrayEvery(withdrawnRecordIds, (id, idx) => receipts[idx] === id);
+  if (!matchesTarget) {
+    throw new Error(
+      `Existing ${NOV_2026_HISTORY_INVALIDATION_ID} scope does not match Nov 2026 target lines`,
+    );
+  }
+}
+
+function resolveNov2026InvalidationEntry({
+  existingInvalidations,
+  withdrawnRecordIds,
+  recordedAt,
+  recordedBy,
+}) {
+  const existingEntry = arrayFind(
+    existingInvalidations,
+    (inv) => inv.id === NOV_2026_HISTORY_INVALIDATION_ID,
+  );
+  if (existingEntry) {
+    assertMatchingInv0026Entry(existingEntry, withdrawnRecordIds);
+    return {invalidationEntry: existingEntry, needsInvalidationAppend: false};
+  }
+  const nextId = nextInvalidationId(existingInvalidations);
+  const id = nextId === NOV_2026_HISTORY_INVALIDATION_ID ?
+    nextId : NOV_2026_HISTORY_INVALIDATION_ID;
+  const invalidationEntry = Object.freeze({
+    id,
+    recordedAt,
+    scope: Object.freeze({
+      file: DEFAULT_COMPARISON_HISTORY_NDJSON_PATH,
+      campaignGitCommit: null,
+      receiptIds: Object.freeze(withdrawnRecordIds),
+    }),
+    reasons: Object.freeze([
+      ADMISSION_REASON.PLANNED_COUNTS_MISMATCH,
+      ADMISSION_REASON.IDENTITY_MISMATCH,
+    ]),
+    defectIds: Object.freeze([]),
+    note: 'Withdraw 2026-11-23..24 history records (lines 21-43) whose transaction summary ' +
+      'conflated offered with attempted/issued, dropped terminal product_error from failed on ' +
+      '613b120ac, recorded raw conflicts as retries, or omitted/reused local tv-dator ' +
+      'receipt.json artifactSha256 digests; superseded by canonically accounted and ' +
+      'per-receipt-bound history records.',
+    recordedBy,
+  });
+  return {invalidationEntry, needsInvalidationAppend: true};
 }
 
 function buildNov2026ComparisonHistoryReconciliation({
@@ -996,37 +1104,85 @@ function buildNov2026ComparisonHistoryReconciliation({
     if (!spec || spec.withdrawnRecordSha256 !== oldRecord.recordSha256) {
       throw new Error(`Missing reconciliation spec for history record ${oldRecord.recordSha256}`);
     }
-    return buildReconciledHistoryRecord(oldRecord, spec);
+    return validateComparisonHistoryRecord(buildReconciledHistoryRecord(oldRecord, spec));
   });
-  const validatedExtras = arrayMap(extraRecords, createComparisonHistoryRecord);
-  const invalidationEntry = Object.freeze({
-    id: nextInvalidationId(existingInvalidations),
+  const validatedExtras = arrayMap(
+    extraRecords,
+    (rec) => validateComparisonHistoryRecord(createComparisonHistoryRecord(rec)),
+  );
+  const {invalidationEntry, needsInvalidationAppend} = resolveNov2026InvalidationEntry({
+    existingInvalidations,
+    withdrawnRecordIds,
     recordedAt,
-    scope: Object.freeze({
-      file: DEFAULT_COMPARISON_HISTORY_NDJSON_PATH,
-      campaignGitCommit: null,
-      receiptIds: Object.freeze(withdrawnRecordIds),
-    }),
-    reasons: Object.freeze([
-      ADMISSION_REASON.PLANNED_COUNTS_MISMATCH,
-      ADMISSION_REASON.IDENTITY_MISMATCH,
-    ]),
-    defectIds: Object.freeze([]),
-    note: 'Withdraw 2026-11-23..24 history records (lines 21-43) whose transaction summary ' +
-      'conflated offered with attempted/issued, dropped terminal product_error from failed on ' +
-      '613b120ac, recorded raw conflicts as retries, or omitted/reused local tv-dator ' +
-      'receipt.json artifactSha256 digests; superseded by canonically accounted and ' +
-      'per-receipt-bound history records.',
     recordedBy,
   });
   return Object.freeze({
     invalidationEntry,
+    needsInvalidationAppend,
     withdrawnRecordIds: Object.freeze(withdrawnRecordIds),
     correctedRecords: Object.freeze([...correctedRecords, ...validatedExtras]),
   });
 }
 
-async function reconcileNov2026ComparisonHistoryToDisk(options = {}) {
+function runIdentityKeyOfRecord(record) {
+  const runId = record?.evidenceSource?.runId;
+  if (!runId) return null;
+  const artifactSha = record.evidenceSource?.artifactSha256 || '';
+  return `${runId}|${artifactSha}|${record.combinationSha256}`;
+}
+
+function partitionPlannedHistoryRecords(existingRecords, withdrawnRecordIds, plannedRecords) {
+  const withdrawnSet = new Set(withdrawnRecordIds);
+  const existingShaSet = new Set(arrayMap(existingRecords, (r) => r.recordSha256));
+  const postBaseline = arraySlice(existingRecords, NOV_2026_BASELINE_LINE_COUNT);
+  const postBaselineRunKeys = new Set();
+  for (const rec of postBaseline) {
+    if (withdrawnSet.has(rec.recordSha256)) continue;
+    const key = runIdentityKeyOfRecord(rec);
+    if (key) postBaselineRunKeys.add(key);
+  }
+  const missingRecords = [];
+  let alreadyPresentCount = 0;
+  for (const rec of plannedRecords) {
+    const key = runIdentityKeyOfRecord(rec);
+    if (existingShaSet.has(rec.recordSha256) || (key && postBaselineRunKeys.has(key))) {
+      alreadyPresentCount += 1;
+    } else {
+      missingRecords.push(rec);
+    }
+  }
+  return {missingRecords, alreadyPresentCount};
+}
+
+function assertTrailingNewline(text, filePath) {
+  if (text !== '' && !stringEndsWith(text, '\n')) {
+    throw new Error(`${filePath} lacks a final newline; refusing to append`);
+  }
+}
+
+function prevalidateSimulatedReconciliation({
+  existingRecords,
+  existingInvalidations,
+  existingLedgerText,
+  plan,
+  missingRecords,
+}) {
+  const simulatedInvalidations = plan.needsInvalidationAppend ?
+    parseInvalidationLedger(`${existingLedgerText}${JSON.stringify(plan.invalidationEntry)}\n`) :
+    existingInvalidations;
+  let simulatedRecords = existingRecords;
+  let toAppend = '';
+  for (const rec of missingRecords) {
+    simulatedRecords = appendComparisonHistoryRecord(simulatedRecords, rec);
+    toAppend += `${JSON.stringify(rec)}\n`;
+  }
+  const summary = buildComparisonProgressSummary(simulatedRecords, {
+    invalidations: simulatedInvalidations,
+  });
+  return {simulatedRecords, toAppend, summary};
+}
+
+function resolveReconciliationPaths(options) {
   const rootDir = options.rootDir || process.cwd();
   const ndjsonPath = options.ndjsonPath ||
     path.resolve(rootDir, DEFAULT_COMPARISON_HISTORY_NDJSON_PATH);
@@ -1034,9 +1190,35 @@ async function reconcileNov2026ComparisonHistoryToDisk(options = {}) {
     path.resolve(rootDir, DEFAULT_COMPARISON_PROGRESS_SUMMARY_PATH);
   const ledgerPath = options.ledgerPath ||
     path.join(path.dirname(path.resolve(ndjsonPath)), INVALIDATIONS_FILE_NAME);
+  return {ndjsonPath, summaryPath, ledgerPath};
+}
+
+async function applyPrevalidatedReconciliationWrites({
+  ndjsonPath,
+  ledgerPath,
+  summaryPath,
+  toAppend,
+  plan,
+  summary,
+}) {
+  if (toAppend.length > 0) {
+    await fs.mkdir(path.dirname(path.resolve(ndjsonPath)), {recursive: true});
+    await fs.appendFile(ndjsonPath, toAppend, 'utf8');
+  }
+  if (plan.needsInvalidationAppend) {
+    appendInvalidationEntries(ledgerPath, [plan.invalidationEntry]);
+  }
+  await writeSummary(summaryPath, summary);
+}
+
+async function reconcileNov2026ComparisonHistoryToDisk(options = {}) {
+  const {ndjsonPath, summaryPath, ledgerPath} = resolveReconciliationPaths(options);
   const existingText = await readExistingText(ndjsonPath);
+  const existingLedgerText = await readExistingText(ledgerPath);
+  assertTrailingNewline(existingText, ndjsonPath);
+  assertTrailingNewline(existingLedgerText, ledgerPath);
   const existingRecords = parseComparisonHistoryNdjson(existingText);
-  const existingInvalidations = parseInvalidationLedger(await readExistingText(ledgerPath));
+  const existingInvalidations = parseInvalidationLedger(existingLedgerText);
   const plan = buildNov2026ComparisonHistoryReconciliation({
     existingRecords,
     existingInvalidations,
@@ -1044,24 +1226,38 @@ async function reconcileNov2026ComparisonHistoryToDisk(options = {}) {
     recordedBy: options.recordedBy || 'evidence-report-owner',
     extraRecords: options.extraRecords || [],
   });
-  appendInvalidationEntries(ledgerPath, [plan.invalidationEntry]);
-  let records = existingRecords;
-  let toAppend = '';
-  for (const rec of plan.correctedRecords) {
-    records = appendComparisonHistoryRecord(records, rec);
-    toAppend += `${JSON.stringify(rec)}\n`;
+  const {missingRecords, alreadyPresentCount} = partitionPlannedHistoryRecords(
+    existingRecords, plan.withdrawnRecordIds, plan.correctedRecords,
+  );
+  const {simulatedRecords, toAppend, summary} = prevalidateSimulatedReconciliation({
+    existingRecords, existingInvalidations, existingLedgerText, plan, missingRecords,
+  });
+  if (!plan.needsInvalidationAppend && missingRecords.length === 0) {
+    return Object.freeze({
+      applied: false,
+      alreadyReconciled: true,
+      resumed: false,
+      appendedInvalidationCount: 0,
+      appendedHistoryCount: 0,
+      invalidationEntry: plan.invalidationEntry,
+      appendedRecords: Object.freeze([]),
+      records: existingRecords,
+      summary,
+    });
   }
-  if (existingText !== '' && !stringEndsWith(existingText, '\n')) {
-    throw new Error(`${ndjsonPath} lacks a final newline; refusing to append`);
-  }
-  await fs.appendFile(ndjsonPath, toAppend, 'utf8');
-  const updatedInvalidations = parseInvalidationLedger(await readExistingText(ledgerPath));
-  const summary = buildComparisonProgressSummary(records, {invalidations: updatedInvalidations});
-  await writeSummary(summaryPath, summary);
+  const resumed = !plan.needsInvalidationAppend || alreadyPresentCount > 0;
+  await applyPrevalidatedReconciliationWrites({
+    ndjsonPath, ledgerPath, summaryPath, toAppend, plan, summary,
+  });
   return Object.freeze({
+    applied: true,
+    alreadyReconciled: false,
+    resumed,
+    appendedInvalidationCount: plan.needsInvalidationAppend ? 1 : 0,
+    appendedHistoryCount: missingRecords.length,
     invalidationEntry: plan.invalidationEntry,
-    appendedRecords: plan.correctedRecords,
-    records,
+    appendedRecords: Object.freeze(missingRecords),
+    records: simulatedRecords,
     summary,
   });
 }
