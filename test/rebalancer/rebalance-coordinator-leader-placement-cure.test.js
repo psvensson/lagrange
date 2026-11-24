@@ -347,3 +347,140 @@ test('dispatchLeaderHandoff checks isCancelled before target-side step-down leg'
     t.end();
   },
 );
+
+test('new nonterminal replica operation appearing during awaited source demotion skips target leg',
+  async (t) => {
+    const state = buildSystemCohortState();
+    const candidateIds = selectNonSeedNonPriorityIds(state, 2);
+    const coordinator = buildCoordinatorFixture(state, candidateIds);
+
+    await reconcileCoordinatorPartitionLeaderPlacementCure(coordinator);
+
+    coordinator.messageRouter.deliver = async (target, request, deliveryOptions) => {
+      coordinator.deliveries.push({options: deliveryOptions, request, target});
+      if (
+        request[ReplicaOperationField.REASON] ===
+          ReplicaOperationReason.REPLACE_SOURCE_LEADER_HANDOFF &&
+        request[ReplicaOperationField.PARTITION_ID] === candidateIds[0]
+      ) {
+        state.operationRows.push({
+          entity_id: candidateIds[0],
+          operation_id: `op-mid-demote-${candidateIds[0]}`,
+          partition_id: candidateIds[0],
+          status: 'syncing',
+          type: 'GROWTH_PROMOTE',
+          workflow_step: 'SYNCING',
+        });
+      }
+      return {status: 'completed'};
+    };
+
+    const pass2 = await reconcileCoordinatorPartitionLeaderPlacementCure(coordinator);
+    t.equal(pass2.dispatchedCount, 2);
+    t.same(
+      targetHandoffPartitionIds(coordinator.deliveries),
+      [candidateIds[1]],
+      'candidate 0 target election leg is skipped when a nonterminal op arrives during demotion',
+    );
+    const candidate0Deliveries = coordinator.deliveries.filter(
+      (entry) => entry.request[ReplicaOperationField.PARTITION_ID] === candidateIds[0],
+    );
+    t.equal(candidate0Deliveries.length, 1);
+    t.equal(
+      candidate0Deliveries[0].request[ReplicaOperationField.REASON],
+      ReplicaOperationReason.REPLACE_SOURCE_LEADER_HANDOFF,
+    );
+    t.end();
+  },
+);
+
+test('target follower demotion to learner during awaited source demotion skips target leg',
+  async (t) => {
+    const state = buildSystemCohortState();
+    const candidateIds = selectNonSeedNonPriorityIds(state, 1);
+    const coordinator = buildCoordinatorFixture(state, candidateIds);
+
+    await reconcileCoordinatorPartitionLeaderPlacementCure(coordinator);
+
+    coordinator.messageRouter.deliver = async (target, request, deliveryOptions) => {
+      coordinator.deliveries.push({options: deliveryOptions, request, target});
+      if (
+        request[ReplicaOperationField.REASON] ===
+          ReplicaOperationReason.REPLACE_SOURCE_LEADER_HANDOFF
+      ) {
+        for (const row of state.serviceRows) {
+          if (row.partition_id === candidateIds[0] && row.node_id !== NODE_1) {
+            row.raft_role = RAFT_ROLE.LEARNER;
+            row.status = 'syncing';
+          }
+        }
+      }
+      return {status: 'completed'};
+    };
+
+    await reconcileCoordinatorPartitionLeaderPlacementCure(coordinator);
+    t.same(
+      targetHandoffPartitionIds(coordinator.deliveries),
+      [],
+      'target election leg is skipped when target node is no longer an active voter follower',
+    );
+    t.end();
+  },
+);
+
+test('sibling partition transitioning to splitting during first handoff rebuilds pass census ' +
+  'and suppresses second candidate as census_unstable',
+async (t) => {
+  const state = buildSystemCohortState();
+  const candidateIds = selectNonSeedNonPriorityIds(state, 4);
+  const coordinator = buildCoordinatorFixture(state, candidateIds);
+
+  // Pass 1 establishes stable cohort fingerprint for all candidates.
+  const pass1 = await reconcileCoordinatorPartitionLeaderPlacementCure(coordinator);
+  t.equal(pass1.dispatchedCount, 0);
+
+  // Pick a sibling settled non-priority partition outside the candidate slice.
+  const candidateSet = new Set(candidateIds);
+  const siblingRow = state.partitionRows.find(
+    (row) =>
+      row.partition_id !== '_meta-p1' &&
+      !isPriorityOrFormationSystemPartition(row.partition_id) &&
+      !candidateSet.has(row.partition_id),
+  );
+  t.ok(siblingRow, 'found settled sibling partition in cohort');
+
+  coordinator.messageRouter.deliver = async (target, request, deliveryOptions) => {
+    coordinator.deliveries.push({options: deliveryOptions, request, target});
+    if (
+      request[ReplicaOperationField.REASON] ===
+        ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION &&
+      request[ReplicaOperationField.PARTITION_ID] === candidateIds[0]
+    ) {
+      // Another partition in the settled cohort transitions to splitting mid-pass.
+      siblingRow.state = 'splitting';
+    }
+    return {status: 'completed'};
+  };
+
+  const pass2 = await reconcileCoordinatorPartitionLeaderPlacementCure(coordinator);
+  t.equal(
+    pass2.dispatchedCount,
+    1,
+    'only the first candidate dispatches before the rebuilt census sees the splitting sibling',
+  );
+  t.same(
+    targetHandoffPartitionIds(coordinator.deliveries),
+    [candidateIds[0]],
+    'subsequent candidates see census_unstable from rebuilt pass census and do not dispatch',
+  );
+  t.equal(
+    coordinator.servicesMap
+      .get(candidateIds[1])
+      .userTableLeaderPlacementCureContext
+      .userTableLeaderPlacementCureState
+      .lastLoggedState,
+    'census_unstable',
+    'candidate 2 recorded census_unstable against the rebuilt pass census',
+  );
+  t.end();
+});

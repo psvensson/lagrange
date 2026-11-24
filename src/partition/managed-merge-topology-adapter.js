@@ -12,18 +12,36 @@ import {
 } from './partition-service-constants.js';
 import {deliverProcessedSourceReplicationStart} from
   './managed-source-replication-start-delivery.js';
+import {
+  validateSqlQueryEngineTopologyAdapter,
+} from './managed-workflow-topology-binding-contract.js';
 
 const LOCAL_STR_PARTITION_ID = 'partition_id';
-const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_PARTITION_ID_CAMEL = 'partitionId';
 const LOCAL_STR_TABLE_ID = 'table_id';
 const LOCAL_STR_TABLE_ID_CAMEL = 'tableId';
 const LOCAL_STR_REPLICA_HANDLER_ADDRESS_SUFFIX = '/service/replica-handler';
 const MERGE_REPLICATION_START_FAILED =
   'Failed to start merge replication on source partition';
+const ADAPTER_NAME = 'ManagedMergeTopologyAdapter';
+
+const REQUIRED_MERGE_ENGINE_METHODS = Object.freeze([
+  'getPartitionInfo',
+  'getTableInfo',
+  'parsePartitionTransition',
+  'isLocalManagedSplitLeader',
+  'resolveActivePartitionVersion',
+  'resolveProvisionTargetNodeIds',
+  'getRoutablePartitionServiceNodeIds',
+  'calculateQuorumReplicaCount',
+  'createControlPlaneTimeoutBudget',
+  'waitForTablePartitionMetadata',
+  'probeInitialTablePartitionProvisioning',
+  'provisionInitialTablePartition',
+]);
 
 function getRuntimeView(runtime) {
-  return runtime?.systemCache;
+  return runtime.systemCache;
 }
 
 /**
@@ -35,19 +53,23 @@ function getRuntimeView(runtime) {
  */
 class ManagedMergeTopologyAdapter {
   constructor(options = {}) {
-    this.sqlQueryEngine = options.sqlQueryEngine || null;
+    this.sqlQueryEngine = validateSqlQueryEngineTopologyAdapter(
+      ADAPTER_NAME,
+      options,
+      REQUIRED_MERGE_ENGINE_METHODS,
+    );
   }
 
   getCDCIntegrationService() {
-    return this.sqlQueryEngine?.cdcIntegrationService || null;
+    return this.sqlQueryEngine.cdcIntegrationService || null;
   }
 
   getPartitionInfo(partitionId) {
-    return this.sqlQueryEngine?.getPartitionInfo(partitionId) || null;
+    return this.sqlQueryEngine.getPartitionInfo(partitionId) || null;
   }
 
   getTableInfo(tableNameOrId) {
-    return this.sqlQueryEngine?.getTableInfo(tableNameOrId) || null;
+    return this.sqlQueryEngine.getTableInfo(tableNameOrId) || null;
   }
 
   listTableInfos() {
@@ -55,57 +77,56 @@ class ManagedMergeTopologyAdapter {
   }
 
   parsePartitionTransition(tableInfo) {
-    return this.sqlQueryEngine?.parsePartitionTransition(tableInfo) || null;
+    return this.sqlQueryEngine.parsePartitionTransition(tableInfo) || null;
   }
 
   isLocalManagedMergeLeader(partitionInfo) {
-    return this.sqlQueryEngine?.isLocalManagedSplitLeader(partitionInfo) ===
+    return this.sqlQueryEngine.isLocalManagedSplitLeader(partitionInfo) ===
       true;
   }
 
   resolveActivePartitionVersion(tableInfo) {
-    return this.sqlQueryEngine?.resolveActivePartitionVersion(tableInfo) || 1;
+    return this.sqlQueryEngine.resolveActivePartitionVersion(tableInfo) || 1;
   }
 
   resolveProvisionTargetNodeIds(replicaCount) {
-    return this.sqlQueryEngine?.resolveProvisionTargetNodeIds(replicaCount) ||
+    return this.sqlQueryEngine.resolveProvisionTargetNodeIds(replicaCount) ||
       [];
   }
 
   getRoutablePartitionServiceNodeIds(partitionId) {
-    return this.sqlQueryEngine?.getRoutablePartitionServiceNodeIds(
+    return this.sqlQueryEngine.getRoutablePartitionServiceNodeIds(
       partitionId,
       CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
     ) || [];
   }
 
   isSystemTablePartitionId(partitionId) {
-    return typeof this.sqlQueryEngine?.rebalanceCoordinator
-      ?.isCriticalSystemPartition === LOCAL_STR_FUNCTION &&
+    return Boolean(this.sqlQueryEngine.rebalanceCoordinator) &&
       classifySystemPartition({partitionId}).systemTable;
   }
 
   calculateQuorumReplicaCount(replicaCount) {
-    return this.sqlQueryEngine?.calculateQuorumReplicaCount(replicaCount);
+    return this.sqlQueryEngine.calculateQuorumReplicaCount(replicaCount);
   }
 
   get storageAdmissionService() {
-    return this.sqlQueryEngine?.rebalanceCoordinator
+    return this.sqlQueryEngine.rebalanceCoordinator
       ?.storageAdmissionService || null;
   }
 
   get messageRouter() {
-    return this.sqlQueryEngine?.messageRouter || null;
+    return this.sqlQueryEngine.messageRouter || null;
   }
 
   createExecutionTimeoutBudget() {
-    return this.sqlQueryEngine?.createControlPlaneTimeoutBudget(
-      this.sqlQueryEngine?.tablePartitionProvisioningTimeoutMs,
+    return this.sqlQueryEngine.createControlPlaneTimeoutBudget(
+      this.sqlQueryEngine.tablePartitionProvisioningTimeoutMs,
     );
   }
 
   waitForTablePartitionMetadata(tableId, partitionId, timeoutBudget) {
-    return this.sqlQueryEngine?.waitForTablePartitionMetadata(
+    return this.sqlQueryEngine.waitForTablePartitionMetadata(
       tableId,
       partitionId,
       timeoutBudget,
@@ -113,11 +134,11 @@ class ManagedMergeTopologyAdapter {
   }
 
   probeInitialTablePartitionProvisioning(context) {
-    return this.sqlQueryEngine?.probeInitialTablePartitionProvisioning(context);
+    return this.sqlQueryEngine.probeInitialTablePartitionProvisioning(context);
   }
 
   provisionInitialTablePartition(context) {
-    return this.sqlQueryEngine?.provisionInitialTablePartition(context);
+    return this.sqlQueryEngine.provisionInitialTablePartition(context);
   }
 
   /**
@@ -138,7 +159,7 @@ class ManagedMergeTopologyAdapter {
     transitionMetadata,
   ) {
     const serviceInfo =
-      this.sqlQueryEngine?.queryExecutor?.findPartitionService(partitionId);
+      this.sqlQueryEngine.queryExecutor?.findPartitionService(partitionId);
     if (!serviceInfo || !this.messageRouter) {
       throw new Error(MERGE_REPLICATION_START_FAILED);
     }
@@ -196,7 +217,7 @@ class ManagedMergeTopologyAdapter {
    */
   readCommittedGroupMembers(partitionId) {
     return readCommittedGroupMemberIds(
-      this.sqlQueryEngine?.rebalanceCoordinator || null, partitionId);
+      this.sqlQueryEngine.rebalanceCoordinator || null, partitionId);
   }
 
   /**
@@ -230,11 +251,11 @@ class ManagedMergeTopologyAdapter {
   }
 
   get logger() {
-    return this.sqlQueryEngine?.logger || console;
+    return this.sqlQueryEngine.logger || console;
   }
 
   get transactionCoordinator() {
-    return this.sqlQueryEngine?.transactionCoordinator || null;
+    return this.sqlQueryEngine.transactionCoordinator || null;
   }
 }
 

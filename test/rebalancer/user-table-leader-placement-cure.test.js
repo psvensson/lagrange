@@ -756,11 +756,16 @@ test('coordinator pass bounds active handoffs per pass and uses ' +
   );
   t.equal(targetHandoffsPass2.length, MAX_COORDINATOR_CURE_HANDOFFS_PER_PASS);
   t.equal(coordinator.filterCounts.services, 0);
-  t.equal(coordinator.filterCounts.partitions, 2);
+  t.equal(
+    coordinator.filterCounts.partitions,
+    5,
+    'one scan per pass, one post-demotion revalidation per handoff, and one full census rebuild ' +
+      'between sequential handoffs',
+  );
   t.equal(
     coordinator.filterCounts.replica_operations,
-    3,
-    'one scan per pass plus one post-handoff freshness revalidation before candidate 2',
+    5,
+    'every full census rebuild refreshes both partition cohort state and in-flight operations',
   );
   t.end();
 });

@@ -290,3 +290,4 @@ documentClass: generated
 - [unified-rebalancer-topology-drain-methods.js](unified-rebalancer-topology-drain-methods.js) - Return the latest retained drain watermark for coordinator-owned topology-shaping work. (importers: one)
 - [unified-rebalancer.js](unified-rebalancer.js) - Owner contract: Owner: UnifiedRebalancer owns rebalance planning and execution orchestration. (importers: hub)
 - [user-table-leader-placement-cure.js](user-table-leader-placement-cure.js) - No leading comment; first export: LEADER_HANDOFF_RETRY_AFTER_MS. (importers: few)
+- [user-table-leader-placement-revalidation.js](user-table-leader-placement-revalidation.js) - Revalidate from current systemTableCache after awaiting source leader demotion that the target election leg is still... (importers: one)

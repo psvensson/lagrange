@@ -10,6 +10,8 @@ import {ManagedMergeTopologyAdapter} from
   '../../src/partition/managed-merge-topology-adapter.js';
 import {ManagedMergeWorkflow} from
   '../../src/partition/managed-merge-workflow.js';
+import {SQLQueryEngine} from
+  '../../src/query/sql-query-engine.js';
 import {SQLQueryEnginePartitionRoutingReadiness} from
   '../../src/query/sql-query-engine-partition-routing-readiness.js';
 import {createContractMessageRouterStub} from
@@ -248,12 +250,16 @@ test('split and merge START senders distinguish a router ACK from handler ' +
       }],
     ['merge', PARTITION_SERVICE_MESSAGE_TYPE.START_MERGE_REPLICATION,
       (router, addressOf) => {
-        const adapter = new ManagedMergeTopologyAdapter({sqlQueryEngine: {
-          queryExecutor: {
-            findPartitionService: () => ({address: addressOf()}),
+        const sqlQueryEngine = Object.assign(
+          Object.create(SQLQueryEngine.prototype),
+          {
+            queryExecutor: {
+              findPartitionService: () => ({address: addressOf()}),
+            },
+            messageRouter: router,
           },
-          messageRouter: router,
-        }});
+        );
+        const adapter = new ManagedMergeTopologyAdapter({sqlQueryEngine});
         return (metadata) => adapter.startMergeReplicationOnSourcePartition(
           SOURCE, 'tbl-users', 'users', metadata);
       }],

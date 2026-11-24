@@ -17,6 +17,7 @@ import {
 } from './replica-operation-constants.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {REBALANCE_PLANNING_GATE} from './rebalancer-planning-gate-constants.js';
+import {isTargetEligibleAfterDemotion} from './user-table-leader-placement-revalidation.js';
 
 const {
   EntityType,
@@ -42,7 +43,7 @@ const LEADER_HANDOFF_RETRY_AFTER_MS =
 const CURE_OPERATION_ID_PREFIX = 'user-table-leader-spread';
 const CURE_DEMOTION_OPERATION_SUFFIX = 'demote';
 const REPLICA_HANDLER_TARGET_SUFFIX = '/service/replica-handler';
-const SPLIT_OR_MERGE_PARTITION_STATES = Object.freeze(new Set(['splitting', 'merging']));
+const NORMAL_PARTITION_STATE = 'normal';
 
 const USER_TABLE_LEADER_PLACEMENT_CURE_STATE = Object.freeze({
   NOT_APPLICABLE: 'not_applicable',
@@ -78,16 +79,19 @@ const CURE_LOG_MSG = Object.freeze({
   DEMOTION_SKIPPED: 'User-table leader placement cure skipped local demotion',
   DISPATCHED: 'User-table leader placement cure dispatched leader handoff',
   DISPATCH_FAILED: 'User-table leader placement cure handoff dispatch failed',
+  TARGET_DISPATCH_SKIPPED:
+    'User-table leader placement cure skipped target election after post-demotion revalidation',
 });
 
 function readText(value) {
   return typeof value === 'string' && value.length > CURE_LITERAL.ZERO ? value : null;
 }
 
-function isSplitOrMergePartitionState(state) {
-  return SPLIT_OR_MERGE_PARTITION_STATES.has(
-    String(state || CURE_LITERAL.EMPTY).toLowerCase(),
-  );
+function isSettledPartitionState(state) {
+  if (state === undefined || state === null || state === CURE_LITERAL.EMPTY) {
+    return true;
+  }
+  return String(state).toLowerCase() === NORMAL_PARTITION_STATE;
 }
 
 function censusFingerprint(settledPartitions) {
@@ -308,7 +312,7 @@ function collectSettledPartitionsWhere(rebalancer, predicate) {
   );
   const byPartitionId = new Map();
   for (const row of rows) {
-    if (isSplitOrMergePartitionState(row?.state)) {
+    if (!isSettledPartitionState(row?.state)) {
       continue;
     }
     const partitionId = readPartitionIdFromRow(row);
@@ -390,7 +394,7 @@ function indexPartitionRowForPassCensus(row, indexState) {
   ) {
     return;
   }
-  if (!isSplitOrMergePartitionState(row?.state)) {
+  if (isSettledPartitionState(row?.state)) {
     indexState.settledSystemPartitionsById.set(partitionId, {
       leaderNodeId: readText(row?.leader_node_id) || readText(row?.leaderNodeId),
       partitionId,
@@ -399,37 +403,6 @@ function indexPartitionRowForPassCensus(row, indexState) {
 }
 
 const HANDOFF_NOT_CANCELLED = () => false;
-
-function readReplicaOperationsMutationVersion(systemTableCache) {
-  const version = systemTableCache?.getTableMutationVersion?.(
-    SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-  );
-  return Number.isSafeInteger(version) ? version : null;
-}
-
-function refreshSharedPassInFlightReplicaOperations(
-  systemTableCache,
-  passCensus,
-  nowMs = Date.now(),
-) {
-  if (!systemTableCache || !passCensus) {
-    return passCensus?.inFlightReplicaOperationPartitionIds || new Set();
-  }
-  const currentVersion = readReplicaOperationsMutationVersion(systemTableCache);
-  if (
-    currentVersion !== null &&
-    currentVersion === passCensus.replicaOperationsMutationVersion
-  ) {
-    return passCensus.inFlightReplicaOperationPartitionIds;
-  }
-  const refreshed = collectInFlightReplicaOperationPartitionIds(
-    systemTableCache,
-    nowMs,
-  );
-  passCensus.inFlightReplicaOperationPartitionIds = refreshed;
-  passCensus.replicaOperationsMutationVersion = currentVersion;
-  return refreshed;
-}
 
 function buildSharedLeaderPlacementPassCensus(owner, nowMs = Date.now()) {
   const systemTableCache = owner?.systemTableCache;
@@ -455,8 +428,6 @@ function buildSharedLeaderPlacementPassCensus(owner, nowMs = Date.now()) {
   return {
     inFlightReplicaOperationPartitionIds,
     partitionRowsById: indexState.partitionRowsById,
-    replicaOperationsMutationVersion:
-      readReplicaOperationsMutationVersion(systemTableCache),
     settledSystemPartitionsById: indexState.settledSystemPartitionsById,
     systemEligibleVoterHosts,
   };
@@ -589,8 +560,26 @@ async function demoteLocalSourceLeader(rebalancer) {
   );
 }
 
+const POST_DEMOTION_REVALIDATION_DEPS = Object.freeze({
+  buildSharedLeaderPlacementPassCensus,
+  buildSystemCohortCensus,
+  censusFingerprint,
+  collectEligibleVoterHosts,
+  collectOwnVoterFollowers,
+  collectSettledTablePartitions,
+  isOrdinaryUserTablePartition,
+  isSettledPartitionState,
+  isSystemPartitionTargetIneligible,
+  isSystemTableCohortCurePartition,
+  resolveCachedPartitionRow,
+  resolveSettledSystemPartitionsFromCensus,
+});
+
 async function dispatchLeaderHandoff(rebalancer, decision, nowMs, options = {}) {
-  const {isCancelled = HANDOFF_NOT_CANCELLED} = options || {};
+  const {
+    isCancelled = HANDOFF_NOT_CANCELLED,
+    nowFn = () => (Number.isFinite(nowMs) ? nowMs : Date.now()),
+  } = options || {};
   if (rebalancer.isShuttingDown || isCancelled()) {
     return;
   }
@@ -598,6 +587,23 @@ async function dispatchLeaderHandoff(rebalancer, decision, nowMs, options = {}) 
   cureState.lastDispatchAtMs = nowMs;
   await demoteLocalSourceLeader(rebalancer);
   if (rebalancer.isShuttingDown || isCancelled()) {
+    return;
+  }
+  const postDemotionNowMs = nowFn();
+  if (
+    !isTargetEligibleAfterDemotion(
+      rebalancer,
+      decision,
+      postDemotionNowMs,
+      options,
+      POST_DEMOTION_REVALIDATION_DEPS,
+    )
+  ) {
+    rebalancer.logger.info(CURE_LOG_MSG.TARGET_DISPATCH_SKIPPED, {
+      entityId: rebalancer.entityId,
+      targetNodeId: decision?.target?.nodeId || null,
+      targetReplicaId: decision?.target?.replicaId || null,
+    });
     return;
   }
   await deliverStepDownLeg(
@@ -766,5 +772,4 @@ export {
   evaluateUserTableLeaderPlacementCure,
   isUserTableLeaderCureGapActionable,
   readPartitionServiceRows,
-  refreshSharedPassInFlightReplicaOperations,
 };

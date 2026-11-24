@@ -7,29 +7,58 @@ import {
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../control-plane/control-plane-readiness-constants.js';
+import {
+  validateSqlQueryEngineTopologyAdapter,
+} from './managed-workflow-topology-binding-contract.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_REPLICA_HANDLER_ADDRESS_SUFFIX = '/service/replica-handler';
+const ADAPTER_NAME = 'ManagedSplitTopologyAdapter';
+
+const REQUIRED_SPLIT_ENGINE_METHODS = Object.freeze([
+  'getPartitionInfo',
+  'getTableInfo',
+  'parsePartitionTransition',
+  'isLocalManagedSplitLeader',
+  'resolveActivePartitionVersion',
+  'buildManagedSplitPlan',
+  'resolveProvisionTargetNodeIds',
+  'getRoutablePartitionServiceNodeIds',
+  'captureManagedSplitTopologySnapshot',
+  'calculateQuorumReplicaCount',
+  'createControlPlaneTimeoutBudget',
+  'estimateSplitAdmissionBytes',
+  'waitForTablePartitionMetadata',
+  'probeInitialTablePartitionProvisioning',
+  'provisionInitialTablePartition',
+  'startSplitReplicationOnSourcePartition',
+  'maybeAwaitPartitionRoutingRepair',
+  'sleep',
+]);
 
 function getRuntimeView(runtime) {
-  return runtime?.systemCache;
+  return runtime.systemCache;
 }
 
 class ManagedSplitTopologyAdapter {
   constructor(options = {}) {
-    this.sqlQueryEngine = options.sqlQueryEngine || null;
+    this.sqlQueryEngine = validateSqlQueryEngineTopologyAdapter(
+      ADAPTER_NAME,
+      options,
+      REQUIRED_SPLIT_ENGINE_METHODS,
+    );
   }
 
   getCDCIntegrationService() {
-    return this.sqlQueryEngine?.cdcIntegrationService || null;
+    return this.sqlQueryEngine.cdcIntegrationService || null;
   }
 
   getPartitionInfo(partitionId) {
-    return this.sqlQueryEngine?.getPartitionInfo(partitionId) || null;
+    return this.sqlQueryEngine.getPartitionInfo(partitionId) || null;
   }
 
   getTableInfo(tableNameOrId) {
-    return this.sqlQueryEngine?.getTableInfo(tableNameOrId) || null;
+    return this.sqlQueryEngine.getTableInfo(tableNameOrId) || null;
   }
 
   listTableInfos() {
@@ -37,70 +66,70 @@ class ManagedSplitTopologyAdapter {
   }
 
   parsePartitionTransition(tableInfo) {
-    return this.sqlQueryEngine?.parsePartitionTransition(tableInfo) || null;
+    return this.sqlQueryEngine.parsePartitionTransition(tableInfo) || null;
   }
 
   isLocalManagedSplitLeader(partitionInfo) {
-    return this.sqlQueryEngine?.isLocalManagedSplitLeader(partitionInfo) ===
+    return this.sqlQueryEngine.isLocalManagedSplitLeader(partitionInfo) ===
       true;
   }
 
   resolveActivePartitionVersion(tableInfo) {
-    return this.sqlQueryEngine?.resolveActivePartitionVersion(tableInfo) || 1;
+    return this.sqlQueryEngine.resolveActivePartitionVersion(tableInfo) || 1;
   }
 
   buildManagedSplitPlan(...args) {
-    return this.sqlQueryEngine?.buildManagedSplitPlan(...args);
+    return this.sqlQueryEngine.buildManagedSplitPlan(...args);
   }
 
   resolveProvisionTargetNodeIds(replicaCount) {
-    return this.sqlQueryEngine?.resolveProvisionTargetNodeIds(replicaCount) ||
+    return this.sqlQueryEngine.resolveProvisionTargetNodeIds(replicaCount) ||
       [];
   }
 
   getRoutablePartitionServiceNodeIds(partitionId) {
-    return this.sqlQueryEngine?.getRoutablePartitionServiceNodeIds(
+    return this.sqlQueryEngine.getRoutablePartitionServiceNodeIds(
       partitionId,
       CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
     ) || [];
   }
 
   isSystemTablePartitionId(partitionId) {
-    return Boolean(this.sqlQueryEngine?.rebalanceCoordinator) &&
+    return Boolean(this.sqlQueryEngine.rebalanceCoordinator) &&
       classifySystemPartition({partitionId}).systemTable;
   }
 
   captureTopologySnapshot(context) {
     return this.sqlQueryEngine
-      ?.captureManagedSplitTopologySnapshot(context) || null;
+      .captureManagedSplitTopologySnapshot(context) || null;
   }
 
   calculateQuorumReplicaCount(replicaCount) {
-    return this.sqlQueryEngine?.calculateQuorumReplicaCount(replicaCount);
+    return this.sqlQueryEngine.calculateQuorumReplicaCount(replicaCount);
   }
 
   get storageAdmissionService() {
-    return this.sqlQueryEngine?.rebalanceCoordinator
+    return this.sqlQueryEngine.rebalanceCoordinator
       ?.storageAdmissionService || null;
   }
 
   get messageRouter() {
-    return this.sqlQueryEngine?.messageRouter || null;
+    return this.sqlQueryEngine.messageRouter || null;
   }
 
   createExecutionTimeoutBudget() {
-    return this.sqlQueryEngine?.createControlPlaneTimeoutBudget(
-      this.sqlQueryEngine?.tablePartitionProvisioningTimeoutMs,
+    return this.sqlQueryEngine.createControlPlaneTimeoutBudget(
+      this.sqlQueryEngine.tablePartitionProvisioningTimeoutMs,
     );
   }
 
   estimateSplitAdmissionBytes(partitionInfo, tableInfo) {
     return this.sqlQueryEngine
-      ?.estimateSplitAdmissionBytes(partitionInfo, tableInfo);
+      .estimateSplitAdmissionBytes(partitionInfo, tableInfo);
   }
 
   waitForTablePartitionMetadata(tableId, partitionId, timeoutBudget) {
-    return this.sqlQueryEngine?.waitForTablePartitionMetadata(
+    return this.sqlQueryEngine.waitForTablePartitionMetadata(
       tableId,
       partitionId,
       timeoutBudget,
@@ -108,11 +137,11 @@ class ManagedSplitTopologyAdapter {
   }
 
   probeInitialTablePartitionProvisioning(context) {
-    return this.sqlQueryEngine?.probeInitialTablePartitionProvisioning(context);
+    return this.sqlQueryEngine.probeInitialTablePartitionProvisioning(context);
   }
 
   provisionInitialTablePartition(context) {
-    return this.sqlQueryEngine?.provisionInitialTablePartition(context);
+    return this.sqlQueryEngine.provisionInitialTablePartition(context);
   }
 
   startSplitReplicationOnSourcePartition(
@@ -121,7 +150,7 @@ class ManagedSplitTopologyAdapter {
     tableName,
     transitionMetadata,
   ) {
-    return this.sqlQueryEngine?.startSplitReplicationOnSourcePartition(
+    return this.sqlQueryEngine.startSplitReplicationOnSourcePartition(
       partitionId,
       tableId,
       tableName,
@@ -171,7 +200,7 @@ class ManagedSplitTopologyAdapter {
    */
   readCommittedGroupMembers(partitionId) {
     return readCommittedGroupMemberIds(
-      this.sqlQueryEngine?.rebalanceCoordinator || null, partitionId);
+      this.sqlQueryEngine.rebalanceCoordinator || null, partitionId);
   }
 
   /**
@@ -214,7 +243,7 @@ class ManagedSplitTopologyAdapter {
    * @return {{leaderNodeId: string, routableNodeIds: string[]}}
    */
   resolveSplitChildLeaderRoutingEvidence(partitionId) {
-    const queryExecutor = this.sqlQueryEngine?.queryExecutor;
+    const queryExecutor = this.sqlQueryEngine.queryExecutor;
     if (typeof queryExecutor?.getPartitionRoutingSnapshot !==
         LOCAL_STR_FUNCTION) {
       return {leaderNodeId: '', routableNodeIds: []};
@@ -239,9 +268,6 @@ class ManagedSplitTopologyAdapter {
    * @return {Promise<boolean>}
    */
   repairSplitChildLeaderRoutingEvidence(partitionId, options = {}) {
-    if (!this.sqlQueryEngine?.maybeAwaitPartitionRoutingRepair) {
-      return Promise.resolve(false);
-    }
     return this.sqlQueryEngine.maybeAwaitPartitionRoutingRepair(
       partitionId,
       CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
@@ -255,7 +281,7 @@ class ManagedSplitTopologyAdapter {
    * @return {number}
    */
   resolveRoutingWaitPollIntervalMs() {
-    return this.sqlQueryEngine?.tablePartitionProvisioningPollIntervalMs;
+    return this.sqlQueryEngine.tablePartitionProvisioningPollIntervalMs;
   }
 
   /**
@@ -264,15 +290,15 @@ class ManagedSplitTopologyAdapter {
    * @return {Promise<void>}
    */
   delay(ms) {
-    return this.sqlQueryEngine?.sleep(ms);
+    return this.sqlQueryEngine.sleep(ms);
   }
 
   get logger() {
-    return this.sqlQueryEngine?.logger || console;
+    return this.sqlQueryEngine.logger || console;
   }
 
   get transactionCoordinator() {
-    return this.sqlQueryEngine?.transactionCoordinator || null;
+    return this.sqlQueryEngine.transactionCoordinator || null;
   }
 }
 

@@ -35,8 +35,7 @@ import {
   resolveDesiredReplicationFactor,
 } from '../bootstrap/replication-target-authority.js';
 import {
-  TOPOLOGY_BOUND_METHOD_SPECS,
-  bindTopologyMethod,
+  applyManagedMergeTopologyBindings,
 } from './managed-merge-workflow-topology-bindings.js';
 import {markTargetProvisioningDispatched} from './target-provisioning-mark.js';
 import {registerWorkflowWithClaim} from './managed-workflow-ownership-core.js';
@@ -45,7 +44,6 @@ const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const LOCAL_STR_MANAGED_MERGE = 'managed_merge';
 const LOCAL_STR_MANAGED_MERGE_WORKFLOW = 'managed-merge-workflow';
-const LOCAL_STR_GETCDCINTEGRATIONSERVICE = 'getCDCIntegrationService';
 const ACTIVE_PARTITION_STATE = 'NORMAL';
 const DEFAULT_RETRY_BASE_DELAY_MS = 5000;
 const LOCAL_STR_MERGE_KEY_TYPE_MISSING =
@@ -135,18 +133,7 @@ class ManagedMergeWorkflow {
   constructor(options = {}) {
     this.nodeId = options.nodeId || null;
     this.topologyAdapter = options.topologyAdapter || null;
-    this.getCDCIntegrationService =
-      bindTopologyMethod(
-        this.topologyAdapter, LOCAL_STR_GETCDCINTEGRATIONSERVICE,
-      ) ||
-      options.getCDCIntegrationService ||
-      (() => options.cdcIntegrationService || null);
-    for (const methodSpec of TOPOLOGY_BOUND_METHOD_SPECS) {
-      this[methodSpec.property] =
-        bindTopologyMethod(this.topologyAdapter, methodSpec.property) ||
-        options[methodSpec.property] ||
-        methodSpec.fallback;
-    }
+    applyManagedMergeTopologyBindings(this, options);
     for (const [property, resolveField] of OPTION_FIELD_RESOLVERS) {
       this[property] = resolveField(options, this);
     }
