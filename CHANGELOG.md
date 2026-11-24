@@ -16,98 +16,35 @@ releases without a compatibility guarantee.
 - **Zero-legacy single-owner consolidation and coordinator-SQLite merge (`src/raft/`, `src/query/`, `src/rebalancer/`, `src/bootstrap/`, `src/control-plane/`, `src/live-query/`, `src/partition/`, `src/service/`):**
   removes retired consensus storage (`SQLiteLogAdapter`, `PartitionRaftStorage`, and legacy schema migrations) in favor of `RaftRsDurableStore`; consolidates SQLite write-key extraction, batch uniqueness, live-query predicate evaluation, and lazy-row projection onto single canonical owners; requires authoritative row readback on `AuthoritativeRowMutationHelper`; enforces strict construction contracts across `ReadinessPlanningSnapshotOwner`, `LeaderReadinessGate`, `BootIncarnationOwner`, and managed split/merge topology adapters; unifies distributed transaction recovery and sweep eligibility on `isFullyTerminalTransactionRow`; and parallelizes seed system-table registration, partition size updates, dynamic configuration seeding, settled learner promotion parking, incremental placement operation signatures, and single-pass boot source provenance.
 - **One query budget shape; the budget classes are no longer exported (`query-budget-constants.js`, `src/query/index.js`, `src/public-api.js`):**
-  a query budget has exactly one shape, the UPPER_SNAKE limit names of `DEFAULT_QUERY_BUDGET`
-  (for example `RESULT_MAX_ROWS`, `WALL_TIME_LIMIT_MS`). `normalizeQueryBudget` is its only
-  producer and the only place a default is applied; `runtime.run` and `createSqlRequest` (and
-  through it the internal and PostgreSQL wire adapters) are the boundaries that call it. An
-  unknown field and any limit that is not a non-negative safe integer are refused, never
-  defaulted. The camelCase aliases (`lookupMaxKeys`, `wallTimeLimitMs`, `resultMaxRows`, ...)
-  are removed and are now refused as unknown fields, and `RUNTIME_ERROR_MSG.INVALID_BUDGETS` is
-  removed. A limit of 0 means zero (a `WALL_TIME_LIMIT_MS` of 0 is a statement deadline already
-  spent), never "use the default". `BudgetEnforcer` and `ExecutionContext` are no longer exported
-  from the package: they now require a normalized budget, no caller outside `src/` constructs
-  them, and `runtime.run` and `createSqlRequest` build them.
+  a query budget has one shape: the `UPPER_SNAKE` limit names of `DEFAULT_QUERY_BUDGET` (e.g., `RESULT_MAX_ROWS`, `WALL_TIME_LIMIT_MS`). `normalizeQueryBudget` is its only producer and default source, called at `runtime.run` and `createSqlRequest`. Unknown fields, camelCase aliases (`lookupMaxKeys`, `wallTimeLimitMs`, `resultMaxRows`, ...), and non-negative-integer violations are refused (`RUNTIME_ERROR_MSG.INVALID_BUDGETS` is removed), and a limit of `0` means zero rather than the default. `BudgetEnforcer` and `ExecutionContext` are no longer exported from the package.
 - **An autocommit write whose outcome is unknown answers SQLSTATE 08007 (`pgwire-transaction-outcome.js`, `application-database.js`, `query-execution-budget.js`):**
-  a statement sent outside a transaction block whose write may have been applied (the write
-  kernel's typed unknown outcome, `failureCode` `partition_write_outcome_unknown`, on the
-  statement or one of its participants, for example after a lost answer) now answers
-  `08007` transaction_resolution_unknown with "some changes may have been committed", as a
-  COMMIT past its commit point already did, instead of `XX000`. The embedded application
-  database rejects such a `db.query` with `TRANSACTION_OUTCOME_UNKNOWN` instead of
-  `DISTRIBUTED_PARTICIPANT_FAILURE`. Inside a transaction block the statement still only fails
-  the block: nothing it staged commits, and the ROLLBACK that ends the block discards it.
+  a statement outside a transaction block with `failureCode` `partition_write_outcome_unknown` on the statement or a participant now answers `08007` (`transaction_resolution_unknown`, "some changes may have been committed") instead of `XX000`, and `ApplicationDatabase.query` rejects with `TRANSACTION_OUTCOME_UNKNOWN` instead of `DISTRIBUTED_PARTICIPANT_FAILURE`. Inside a transaction block the statement still fails the block so `ROLLBACK` discards it.
 
 ### Fixed
 - **Owner-interaction closure across control-snapshot observation, SQL metadata refresh, serving eligibility, participant release cutover, WASI derivation cancellation, and proof authority (`admin-control-snapshot-local-build-base.js`, `cdc-propagation-delivery-profile.js`, `sql-query-engine-metadata-authority-refresh.js`, `serve-eligibility-owner.js`, `participant-release-authorization-owner.js`, `wasi-component-cell-runtime.js`, `proof-authority.js`, `publish-head.js`):**
-  restores `buildLocalControlSnapshot` to a non-mutating observation path over `SystemTableCache` while routing `control_plane_publications`, `replica_operations`, and `tables` CDC propagation on the `CRITICAL_VISIBILITY` lane; replans the complete `distributedPlan` and `active_partition_version` on cold-metadata `SELECT`/join/write paths with typed `FOUND`/`ABSENT`/`UNAVAILABLE` outcomes; prevents `ServeEligibilityOwner` from spinning on expired leases or adopting regressed `publication_epoch`/`NO_RECORD` reads and removes rebalancer `systemTableCache` node and 7-dimension readiness fallbacks; authorizes origin-group (`hasWriteOrigin: true`) `FRESH_CREATE` participant release from the committed `replica_operations` row and breaks the `replica_operations-p1` self-release read cycle via local committed leader read; releases WASI derivation holders and aborts in-flight `waitForReady` workers on `stop(serviceId)` before serialized `_stop`; and fails closed in `proof-authority` and `publish-head` on unreadable subject corpus or rejected proof receipts while enforcing symmetric PID namespace lock custody.
-- **WASI component Cell startup no longer redoes the transpile on every start
-  (`wasi-component-derivation.js`, `wasi-component-cell-runtime.js`, `wasi-component-cell-worker.js`, `wasm-component-driver.js`):**
-  the jco transpile, which was 97% of a Cell start (3.4-3.6 s for the 12.9 MB h1 Hono
-  component), is now derived once per (component sha256, toolchain, world,
-  instantiation mode) per node. The derivation is single-flight on one derivation lane,
-  triggered at driver prepare, and reused across starts, restarts and replicas. It is
-  bounded by the 256 MiB size cap, the single lane, a CPU-time ceiling (2 s/MiB plus
-  5 s, measured with `worker.cpuUsage()`) and owner cancellation. Refusals are typed and
-  permanent for that digest: `request_cell_component_derivation_failed` and
-  `request_cell_component_derivation_exhausted`. A Cell start is now instantiate-only
-  under the unchanged 10 s liveness bound and, on expiry, fails as `request_cell_start_failed`
-  with `phase`, `budgetMs` and `elapsedMs` after its worker is terminated. Before this
-  change, concurrent starts on slow or shared hosts (the 2-core hosted runner and the lab
-  hosts) were killed and redone indefinitely. h1, h2, h3 and q4 at four jobs pinned to two cores now
-  pass 4/4; on the base commit 3/4 failed. Quest `wasi-component-startup-budget`.
+  restores `buildLocalControlSnapshot` to a non-mutating observation path over `SystemTableCache` while routing `control_plane_publications`, `replica_operations`, and `tables` CDC propagation on `CRITICAL_VISIBILITY`; replans `distributedPlan` and `active_partition_version` on cold-metadata `SELECT`/join/write paths with typed `FOUND`/`ABSENT`/`UNAVAILABLE` outcomes; prevents `ServeEligibilityOwner` from spinning on expired leases or adopting regressed `publication_epoch`/`NO_RECORD` reads and removes rebalancer `systemTableCache` node and 7-dimension readiness fallbacks; authorizes origin-group (`hasWriteOrigin: true`) `FRESH_CREATE` participant release from committed `replica_operations` and breaks the `replica_operations-p1` self-release read cycle via local committed leader read; releases WASI derivation holders and aborts in-flight `waitForReady` workers on `stop(serviceId)` before serialized `_stop`; and fails closed in `proof-authority` and `publish-head` on unreadable subject corpus or rejected proof receipts while enforcing symmetric PID namespace lock custody.
+- **WASI component Cell startup no longer redoes the transpile on every start (`wasi-component-derivation.js`, `wasi-component-cell-runtime.js`, `wasi-component-cell-worker.js`, `wasm-component-driver.js`):**
+  the `jco` transpile is derived once per `(component sha256, toolchain, world, instantiation mode)` per node on a single-flight derivation lane at driver prepare, reused across starts, restarts, and replicas, and bounded by the 256 MiB size cap, CPU-time ceiling (`2 s/MiB + 5 s` via `worker.cpuUsage()`), and owner cancellation with typed permanent refusals (`request_cell_component_derivation_failed`, `request_cell_component_derivation_exhausted`). Cell start is now instantiate-only under the 10 s liveness bound (`request_cell_start_failed` with `phase`, `budgetMs`, `elapsedMs`). Quest `wasi-component-startup-budget`.
 - **PostgreSQL compatibility matrix certifies the SQL surface, not the host's client build (`postgres-compatibility-matrix.js`, `postgres-compatibility-catalog.js`, `docs/postgres-compatibility-matrix.json`):**
-  the generating host's driver versions are now environment recorded beside the matrix, outside its digest and its cell receipt digests, so a host with psql 16.15 and one with psql 14.24 certify the same committed matrix (schema `lagrange-postgres-compatibility-matrix/2`). The matrix declares the client majors it certifies (psql 14 and 16, node-pg 8, pg-pool 3) and refuses any other build with `DRIVER_VERSION_UNSUPPORTED`; the generated content must still equal the committed matrix exactly.
+  records the generating host's driver versions outside the matrix and cell receipt digests (schema `lagrange-postgres-compatibility-matrix/2`), certifies `psql` 14 and 16, `node-pg` 8, and `pg-pool` 3, and refuses unsupported client builds with `DRIVER_VERSION_UNSUPPORTED`.
 - **Startup dynamic configuration owns its late work (`dynamic-config-startup-wiring.js`, `raft-adaptive-timing-controller.js`):**
-  when a 300 ms startup bound is spent under load the node still starts on the defaults, but the work is no longer abandoned: a late config read is applied by the wiring when it arrives (dropped as stale if a CDC apply for its key came first), so a restarting node no longer stays on default raft timing; the adaptive timing controller is adopted when its late initialize completes, or cancelled by shutdown, and never left running un-owned. Each spent bound is reported as `wait_bound_spent` under its constant's name: `DYNAMIC_CONFIG_STARTUP_INITIAL_READ_TIMEOUT_MS` and `DYNAMIC_CONFIG_STARTUP_CONTROLLER_INIT_TIMEOUT_MS` emit again and are census known findings owned by this change, so a run that spends one fails certification as a known finding, not as unexpected. A value the wiring cannot apply is now a typed `refused` outcome, never recorded as applied; a throw while applying is `failed`. A refused or waiting raft value is held beside the working timing set, so it blocks no later CDC, and applies when a later key makes the set valid; a failed read is not retried, and a CDC for a failed or refused key is adopted even when it equals the cached value (`healed_by_cdc`). Supersedes the 2026-10-04 designed-fallback classification of these bounds.
-- **Config reads no longer overwrite newer CDC (`dynamic-config-service.js`):** `get()` kept the result of a read that started before a later CDC apply for its key, so the cache could hold the older value and a following CDC of that same value changed nothing on the replicas. `DynamicConfigService` now counts CDC applies per key; a read overtaken by an apply answers from the cache, and the startup wiring uses the same count.
+  when a 300 ms startup bound is spent under load (`wait_bound_spent` for `DYNAMIC_CONFIG_STARTUP_INITIAL_READ_TIMEOUT_MS` / `DYNAMIC_CONFIG_STARTUP_CONTROLLER_INIT_TIMEOUT_MS`), late config reads and adaptive timing controller initialization are adopted on arrival (or dropped if overtaken by CDC / cancelled on shutdown) rather than abandoned, with typed `refused`, `failed`, and `healed_by_cdc` outcomes.
+- **Config reads no longer overwrite newer CDC (`dynamic-config-service.js`):**
+  `DynamicConfigService` counts CDC applies per key so a `get()` read overtaken by a newer CDC apply answers from the cache instead of overwriting it.
 - **0.5 WASI service tests run in the serial toolchain lane (`test/shards/resource-external-toolchain.txt`):**
-  `test/service/h1`-`h5` and `q2`-`q5` compile real Hono/service components and start real
-  component Cells, so they now have resource class `external-toolchain` (jobs=1), like
-  `service-cell-worker-modes` and `service-cell-bridge-roundtrip`. Measured at jobs=1 on the
-  20-core controller: 14.9-40.2 s real and 2.2-2.8x cores each. At jobs=4 pinned to two cores,
-  3 of 4 failed with `STARTUP_TIMEOUT_MS`. The hosted runner (run 41431327759) failed h1-h5 and
-  q2-q4, and q5 passed at 113 s. This corrects the classification under the existing rule. It
-  does not change any bound or assertion, and it does **not** close the underlying product
-  defect (every Cell start re-transpiles, and under load the start is killed and redone),
-  which quest `wasi-component-startup-budget` owns. Quest `service-test-toolchain-classification`.
+  classifies `test/service/h1`-`h5` and `q2`-`q5` under `external-toolchain` (`jobs=1`) alongside `service-cell-worker-modes` and `service-cell-bridge-roundtrip`. Quest `service-test-toolchain-classification`.
 - **CI gate proof time (`.github/workflows/ci.yml`, `test/manifests/ci-resource-plan.json`):**
-  the required `gate` job's `timeout-minutes` is raised from 120 to GitHub's 360-minute
-  maximum for every event. Measured cause: PR #184's gate run 41431327759 (a 1892-file
-  widened proof on the hosted runner) was killed by the 120-minute job limit at
-  2026-11-02T12:47Z, reported as `cancelled`, with its serial exclusive lane at 73 of
-  103 files, so pull-request gates could not reach a verdict on product changes. Quest
-  `ci-gate-proof-time-and-lab-runner-routing`, attempt 1.
+  raises the required `gate` job's `timeout-minutes` from 120 to GitHub's 360-minute maximum for every event. Quest `ci-gate-proof-time-and-lab-runner-routing`, attempt 1.
 - **0.4.1 bounded correctness & claim repairs (`call-cell-reduce-coordinator.js`, `runtime-service-call-cell-handler.js`, `management-v1-owner.js`, `bootstrap-api-server-methods.js`):**
-  Fails closed with `REDUCE_INCOMPLETE` (`partial_unbounded`) instead of silently truncating merged partial sets at `limit` across slots or exceeding `maxPartialBytes`, enforces `resultMaxBytes` (`batchByteBound`) during local shard SQL reads before full batch materialization, reports unconfigured `management-v1` capabilities (`rollingUpgrade`, `backupRestore`, `decommissionNode`) as `UNSUPPORTED` by default while enforcing `verifyControlPlaneAuth` on `/management/v1/*` routes, and reconciles comparative benchmark documentation and CI guards against withdrawn modeled claims.
+  fails closed with `REDUCE_INCOMPLETE` (`partial_unbounded`) instead of silently truncating merged partial sets at `limit` across slots or exceeding `maxPartialBytes`, enforces `resultMaxBytes` (`batchByteBound`) during local shard SQL reads before full batch materialization, reports unconfigured `management-v1` capabilities (`rollingUpgrade`, `backupRestore`, `decommissionNode`) as `UNSUPPORTED` by default while enforcing `verifyControlPlaneAuth` on `/management/v1/*` routes, and reconciles comparative benchmark documentation and CI guards against withdrawn modeled claims.
 - **Comparative benchmark results withdrawn (correction to 0.4.0 and earlier entries):**
-  every comparative performance figure published under `docs/benchmarks/` and
-  `data/tidb-comparison/` before 2026-11-01, including the throughput, latency,
-  freshness, backfill, scale-out, partition, movement and phase figures quoted in the
-  0.4.0 entries below, is withdrawn. The evidence audit found timeouts counted as
-  successful operations, `/health` responses and error envelopes counted as success,
-  per-arm smoke statements instead of the canonical Scenario A workload, constant
-  phase and byte values, quantiles synthesised from other quantiles, constant
-  semantic-proof counts and label-hash identities. The original records are retained
-  as forensic evidence. Each withdrawal is recorded either by an entry (`inv-NNNN`) in
-  the append-only `data/tidb-comparison/invalidations.ndjson`, which names the
-  withdrawn records by id or by file and campaign commit, the admission reason codes
-  and, where a defect applies, its defect ids; or by the admission rule
-  `forensic-record-not-admissible`, under which no history record is admissible as a
-  current claim. The benchmark evidence chain
-  is repaired: drivers count only verified responses, the deployer starts the real
-  products, the comparison history is append-only again and its overwritten records
-  are restored. Publication now consumes
-  claim-specific admission cells only (`valid-observed`, `product-failure`,
-  `invalid-measurement`, `blocked`, `unsupported`, `not-measured`), and
-  `npm run audit:comparative-recompute` recomputes every published artifact from the
-  raw records.
-
+  withdraws every comparative performance figure published under `docs/benchmarks/` and `data/tidb-comparison/` before 2026-11-01 (retained only as forensic records under `data/tidb-comparison/invalidations.ndjson` and `forensic-record-not-admissible`). Drivers now count only verified responses against the real products, comparison history is append-only, publication consumes claim-specific admission cells (`valid-observed`, `product-failure`, `invalid-measurement`, `blocked`, `unsupported`, `not-measured`), and `npm run audit:comparative-recompute` recomputes all published artifacts from raw records.
 - **Local proof checkouts get the generated material CI has (`proof-checkout-preparation.js`, `push-gate-corpus-worktree.js`, `lab/probe.js`):**
-  every exact checkout the push-gate materializer proves a command in (the pre-push gate, the publisher's local and post-merge corpus, the local release proof) now generates the sealed import graph for that commit before the command starts, from the one list the lab placement shares; a producer that fails, or that rewrites tracked metadata (a commit whose committed seal is stale), refuses the checkout before the command, locally and on lab machines alike. The post-merge corpus for b3b366573 had run `push-gate-change-proof.test.js` red in an unprepared checkout.
+  every exact proof checkout generates the sealed import graph for that commit before running commands and refuses checkouts whose producer fails or rewrites tracked metadata.
 - **Harness image rebuilds no longer leave the previous build behind (`docker-image-retirement.js`, `docker-provider.js`):**
-  after a successful build of the harness test image the provider removes the image its tag named before, only when that image is now untagged and no container uses it, never forced and never anything else (no prune; tagged product and base images are kept), and records the previous id and the outcome as typed `image.retire-previous` events. Untagged leftovers of every lab scenario and cone run had filled a lab host's root partition.
+  retires the previous untagged, unused harness test image after a successful rebuild and records typed `image.retire-previous` events without touching tagged product or base images.
 - **Proof receipts bound to a validated execution report (`proof-authority.js`, `test-execution-report.js`, `run-test-files.js`, `run-release-proof.js`, `publish-head.js`, `push-gate-change-proof.js`, `full-gate.yml`):**
-  `recordProof` no longer takes a caller's word for a pass. Every durable receipt is minted only from the runner's execution report of the exact candidate (sha, tree, release proof identity, commands with exit statuses, planned versus executed files, per-file assertion counts and every retry attempt), and is refused with a typed problem for an absent, malformed (`execution-report-malformed`), partial or mismatched report, a failed command or run, a failed, unexecuted or zero-assertion file, a truncated run, an unresolvable reused proof or one its contract's seal does not let it cite (`execution-report-reused-proof-not-citable`), and a file green only on its retry (no contract admits qualified results). A file run in more than one run keeps its worst verdict whatever the run order. A test file never inherits the report its run writes, and a local corpus that lost its gate's cone report is no whole-corpus evidence. Receipts recorded before reports existed resolve unchanged. Lab-placed shard reporting and solve-land proof reuse mint no receipt yet.
+  mints durable receipts only from validated execution reports of the exact candidate (sha, tree, release proof identity, command exit statuses, planned vs. executed files, assertion counts, and zero retries) and refuses absent, malformed, partial, retried, or uncitable reports with typed problems.
 
 ## [0.4.0] — 2026-10-31
 
