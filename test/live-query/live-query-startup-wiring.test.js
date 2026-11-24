@@ -242,6 +242,184 @@ describe('live query startup wiring', () => {
     await wiring.shutdown();
   });
 
+  it('automatically completes pending local subscription via continuation without PARTITIONS mutation',
+    async () => {
+      const partitions = new Map();
+      const cache = createMockSystemCache([
+        {
+          partition_id: 'partition-orders',
+          table_name: 'orders',
+          partition_key_start: null,
+          partition_key_end: null,
+        },
+      ]);
+      const wiring = createLiveQueryStartupWiring({
+        nodeId: 'node-auto-local',
+        systemTableCache: cache,
+        sqlQueryEngine: null,
+        partitionServicesProvider: () => partitions,
+      });
+
+      const client = createMockClient('client-auto-local');
+      const reg = await wiring.liveQueryManager.registerLiveQuery({
+        from: {name: 'orders'},
+        where: {
+          type: 'binary',
+          operator: '=',
+          left: {type: 'column_ref', column: 'id'},
+          right: {type: 'literal', value: 7},
+        },
+      }, client);
+
+      const group = wiring.liveQueryManager.findGroupByQueryId(reg.queryId);
+      assert.equal(group.subscribedPartitions.has('partition-orders'), false);
+      assert.equal(group.pendingSubscriptions.has('partition-orders'), true);
+
+      // Make the local partition service available WITHOUT emitting any PARTITIONS change.
+      let partitionSubscriber = null;
+      partitions.set('partition-orders', {
+        partitionId: 'partition-orders',
+        isLeader: true,
+        async subscribeToCDCWithHandshake(subscriber, options) {
+          partitionSubscriber = subscriber;
+          return {
+            status: 'ok',
+            subscriberId: options.subscriberId,
+            versionContext: {streamVersion: 1},
+          };
+        },
+        unsubscribeFromCDC() {},
+      });
+
+      const deadline = Date.now() + 2000;
+      while (!group.subscribedPartitions.has('partition-orders') && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 15));
+      }
+
+      assert.equal(group.subscribedPartitions.has('partition-orders'), true);
+      assert.equal(group.pendingSubscriptions.has('partition-orders'), false);
+      assert.equal(typeof partitionSubscriber, 'function');
+
+      await partitionSubscriber(Object.freeze([
+        {
+          tableName: 'orders',
+          operation: 'INSERT',
+          data: {id: 7, status: 'auto-ready'},
+          sequenceNumber: 2,
+        },
+      ]), null);
+
+      assert.equal(client.messages.length, 1);
+      assert.equal(client.messages[0].type, 'insert');
+      assert.equal(client.messages[0].row.status, 'auto-ready');
+
+      await wiring.shutdown();
+    });
+
+  it('automatically completes pending remote subscription when SERVICES/replicas appear without PARTITIONS mutation',
+    async () => {
+      const replicas = [];
+      const services = [];
+      const baseCache = createMockSystemCache([
+        {
+          partition_id: 'partition-orders',
+          table_name: 'orders',
+          partition_key_start: null,
+          partition_key_end: null,
+        },
+      ]);
+      const cache = {
+        ...baseCache,
+        filter(tableName, predicate) {
+          if (tableName === TABLES.PARTITION_REPLICAS) return replicas.filter(predicate);
+          if (tableName === TABLES.SERVICES) return services.filter(predicate);
+          return baseCache.filter(tableName, predicate);
+        },
+      };
+      const delivered = [];
+      let registeredInbound = null;
+      const router = {
+        register(_addr, handler) {
+          registeredInbound = handler;
+        },
+        unregisterExact() {},
+        async deliver(targetAddress, message) {
+          delivered.push({targetAddress, message});
+          if (message.type === 'LIVE_QUERY_CDC_SUBSCRIBE') {
+            return {acknowledged: true, success: true, appliedIndex: 3};
+          }
+          return {acknowledged: true, success: true, unsubscribed: true};
+        },
+      };
+
+      const wiring = createLiveQueryStartupWiring({
+        nodeId: 'node-a',
+        systemTableCache: cache,
+        sqlQueryEngine: null,
+        partitionServicesProvider: () => new Map(),
+        messageRouter: router,
+      });
+
+      const client = createMockClient('client-auto-remote');
+      const reg = await wiring.liveQueryManager.registerLiveQuery({
+        from: {name: 'orders'},
+        where: {
+          type: 'binary',
+          operator: '=',
+          left: {type: 'column_ref', column: 'id'},
+          right: {type: 'literal', value: 9},
+        },
+      }, client);
+
+      const group = wiring.liveQueryManager.findGroupByQueryId(reg.queryId);
+      assert.equal(group.subscribedPartitions.has('partition-orders'), false);
+      assert.equal(group.pendingSubscriptions.has('partition-orders'), true);
+      assert.equal(delivered.length, 0);
+
+      // Remote replica and service appear WITHOUT any PARTITIONS table mutation.
+      replicas.push({partition_id: 'partition-orders', node_id: 'node-b'});
+      services.push({
+        partition_id: 'partition-orders',
+        node_id: 'node-b',
+        service_type: 'partition',
+        status: 'active',
+        address: 'node-b/partition/partition-orders',
+      });
+      cache.emitCacheChange(TABLES.SERVICES, 'INSERT', services[0]);
+
+      const deadline = Date.now() + 2000;
+      while (!group.subscribedPartitions.has('partition-orders') && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 15));
+      }
+
+      assert.equal(group.subscribedPartitions.has('partition-orders'), true);
+      assert.equal(group.pendingSubscriptions.has('partition-orders'), false);
+      assert.equal(delivered.length, 1);
+      assert.equal(delivered[0].targetAddress, 'node-b/partition/partition-orders');
+
+      const subMsg = delivered[0].message;
+      await registeredInbound({
+        payload: {
+          type: 'LIVE_QUERY_CDC_EVENT',
+          subscriberId: subMsg.subscriberId,
+          queryId: reg.queryId,
+          partitionId: 'partition-orders',
+          events: [{
+            tableName: 'orders',
+            operation: 'INSERT',
+            data: {id: 9, status: 'remote-ready'},
+            sequenceNumber: 4,
+          }],
+        },
+      });
+
+      assert.equal(client.messages.length, 1);
+      assert.equal(client.messages[0].row.id, 9);
+      assert.equal(client.messages[0].row.status, 'remote-ready');
+
+      await wiring.shutdown();
+    });
+
   it('removes cache listener on shutdown', () => {
     const cache = createMockSystemCache();
     const wiring = createLiveQueryStartupWiring({

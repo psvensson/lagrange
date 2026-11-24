@@ -425,18 +425,33 @@ function createCallCellReduceCoordinator(options) {
 
   // Seed per-invocation coordination rows (one expired-lease slot row per
   // expected slot plus the result row the final snapshot atomically fills).
+  // Reconciles unowned, uncomputed slot rows left behind by an interrupted seed.
   async function seedInvocation(invocationId, expectedSlotIds, admissionMeta) {
     if (!isNonEmptyString(invocationId)) {
-      throw new TypeError(
-        CALL_CELL_REDUCE_ARGUMENT_MESSAGE.SEED_REQUIRES_INVOCATION,
-      );
+      throw new TypeError(CALL_CELL_REDUCE_ARGUMENT_MESSAGE.SEED_REQUIRES_INVOCATION);
     }
     const slotIds = normalizeExpectedSlotIds(expectedSlotIds, config);
     const seededAt = nowMs();
+    const existingBySlot = new Map(
+      (await readSlotRows(invocationId)).map((row) => [Number(row.slot_id), row]),
+    );
     for (const slotId of slotIds) {
+      const existing = existingBySlot.get(slotId);
+      if (existing && existing.replica_id === SEED_SLOT_EMPTY_REPLICA &&
+          Number(existing.computed_at) === 0) {
+        assertQuerySuccess(await config.executeInternal(
+          `UPDATE ${config.coordinationTable} SET ` +
+          `replica_id = ${sqlLiteral(SEED_SLOT_EMPTY_REPLICA)}, ` +
+          `lease_expires_at = ${seededAt}, ` +
+          `partial_json = ${sqlLiteral(EMPTY_PARTIAL_JSON)}, computed_at = 0 ` +
+          `WHERE invocation_id = ${sqlLiteral(invocationId)} AND ` +
+          `slot_id = ${slotId} AND replica_id = ${sqlLiteral(SEED_SLOT_EMPTY_REPLICA)}`,
+          [],
+        ));
+        continue;
+      }
       assertQuerySuccess(await config.executeInternal(
-        `INSERT INTO ${config.coordinationTable} ` +
-        SEED_SLOT_INSERT_COLUMNS +
+        `INSERT INTO ${config.coordinationTable} ${SEED_SLOT_INSERT_COLUMNS}` +
         `(${sqlLiteral(invocationId)}, ${slotId}, ` +
         `${sqlLiteral(SEED_SLOT_EMPTY_REPLICA)}, ${seededAt}, ` +
         `${sqlLiteral(EMPTY_PARTIAL_JSON)}, 0)`,
@@ -445,9 +460,10 @@ function createCallCellReduceCoordinator(options) {
     }
     const initialWitness = admissionMeta ? JSON.stringify({admissionMeta}) : SEED_EMPTY_JSON;
     assertQuerySuccess(await config.executeInternal(
-      `INSERT INTO ${config.resultTable} ` + SEED_RESULT_INSERT_COLUMNS +
+      `INSERT INTO ${config.resultTable} ${SEED_RESULT_INSERT_COLUMNS}` +
       `(${sqlLiteral(invocationId)}, ${sqlLiteral(SEED_EMPTY_JSON)}, ` +
-      `${nowMs()}, ${sqlLiteral(initialWitness)})`, [],
+      `${nowMs()}, ${sqlLiteral(initialWitness)})`,
+      [],
     ));
     return {slotIds};
   }
@@ -474,48 +490,32 @@ function createCallCellReduceCoordinator(options) {
   // result rows older than the retention window. Published snapshots stay.
   async function reclaimExpiredCoordination(retentionMs) {
     if (!Number.isFinite(retentionMs) || retentionMs <= 0) {
-      throw new TypeError(
-        CALL_CELL_REDUCE_ARGUMENT_MESSAGE.RECLAIM_REQUIRES_RETENTION,
-      );
+      throw new TypeError(CALL_CELL_REDUCE_ARGUMENT_MESSAGE.RECLAIM_REQUIRES_RETENTION);
     }
     const reclaimBefore = nowMs() - retentionMs;
     assertQuerySuccess(await config.executeInternal(
-      `DELETE FROM ${config.coordinationTable} ` +
-      `WHERE lease_expires_at <= ${reclaimBefore}`,
-      [],
+      `DELETE FROM ${config.coordinationTable} WHERE lease_expires_at <= ${reclaimBefore}`, [],
     ));
     assertQuerySuccess(await config.executeInternal(
-      `DELETE FROM ${config.resultTable} ` +
-      `WHERE result_json = ${sqlLiteral(SEED_EMPTY_JSON)} AND ` +
-      `computed_at <= ${reclaimBefore}`,
-      [],
+      `DELETE FROM ${config.resultTable} WHERE result_json = ${sqlLiteral(SEED_EMPTY_JSON)} ` +
+      `AND computed_at <= ${reclaimBefore}`, [],
     ));
     return {reclaimBefore};
   }
 
   async function acquireReduceLease(invocationId, replicaId, slotId) {
     if (!isNonEmptyString(invocationId) || !isValidReplicaId(replicaId)) {
-      throw new TypeError(
-        CALL_CELL_REDUCE_ARGUMENT_MESSAGE.ACQUIRE_REQUIRES_IDS,
-      );
+      throw new TypeError(CALL_CELL_REDUCE_ARGUMENT_MESSAGE.ACQUIRE_REQUIRES_IDS);
     }
     const requestedSlotId = normalizeSlotId(slotId);
     if (requestedSlotId === null) {
       throw new TypeError(CALL_CELL_REDUCE_ARGUMENT_MESSAGE.ACQUIRE_REQUIRES_SLOT);
     }
     const atMs = nowMs();
-    const renewed = await renewOwnedSlot(
-      invocationId, replicaId, requestedSlotId, atMs,
-    );
-    if (renewed && Number(renewed.slot_id) === requestedSlotId) {
-      return renewed;
-    }
-    const claimed = await claimExpiredSlot(
-      invocationId, replicaId, requestedSlotId, atMs,
-    );
-    if (claimed && Number(claimed.slot_id) === requestedSlotId) {
-      return claimed;
-    }
+    const renewed = await renewOwnedSlot(invocationId, replicaId, requestedSlotId, atMs);
+    if (renewed && Number(renewed.slot_id) === requestedSlotId) return renewed;
+    const claimed = await claimExpiredSlot(invocationId, replicaId, requestedSlotId, atMs);
+    if (claimed && Number(claimed.slot_id) === requestedSlotId) return claimed;
     throw createReduceIncompleteFailure(
       CALL_CELL_REDUCE_INCOMPLETE_REASON.SLOT_UNAVAILABLE, invocationId,
     );

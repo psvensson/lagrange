@@ -334,6 +334,11 @@ class DirectCallReplayCoordinator {
   }
 
   async recordFailure(scopedInvocationId, meta, error, executionStarted) {
+    const coordinator = this._requireReduceCoordinator();
+    const existingRow = await coordinator.readResultRow(scopedInvocationId);
+    if (!existingRow && !executionStarted) {
+      return;
+    }
     const status = classifyFailureRecordStatus(error, executionStarted);
     const updatedMeta = Object.freeze({
       ...meta,
