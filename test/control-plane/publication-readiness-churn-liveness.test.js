@@ -126,6 +126,7 @@ test('readiness planning inputs reject hostile data and ignore mutated ' +
   const connectedNodes = new Set(['node-0', 'node-1']);
   const service = {
     nodeId: 'node-0',
+    nodeLivenessSemanticProjectionOwner: {subscribe: () => () => {}},
     systemTableCache: {getAll: () => rows},
     messageRouter: {
       getConnectedNodes: () => connectedNodes,

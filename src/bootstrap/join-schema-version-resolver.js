@@ -8,67 +8,33 @@
  */
 
 import {
-  NUM,
   TABLES,
 } from '../constants/index.js';
+import {
+  compareSchemaVersions,
+  tryParseHLCTimestamp,
+} from '../cache/system-table-cache-row-merge.js';
 import {
   JOIN_READINESS_SCHEMA_FIELDS,
 } from './node-joining-constants.js';
 
-const HLC_DELIMITER = ':';
-
 /**
- * Parse HLC-like schema version.
- * @param {string} value
- * @return {{physical: number, logical: number, nodeId: string}|null}
+ * Parse canonical HLC schema version (`<physical>-<logical>-<nodeId>`).
+ * @param {*} value
+ * @return {import('../hlc/hlc-timestamp.js').HLCTimestamp|null}
  */
 export function tryParseJoinSchemaHlc(value) {
-  const parts = String(value || '').split(HLC_DELIMITER);
-  if (parts.length < NUM.THREE) {
-    return null;
-  }
-  const physical = Number.parseInt(parts[0], 10);
-  const logical = Number.parseInt(parts[1], 10);
-  if (!Number.isFinite(physical) || !Number.isFinite(logical)) {
-    return null;
-  }
-  return {
-    physical,
-    logical,
-    nodeId: parts.slice(2).join(HLC_DELIMITER),
-  };
+  return tryParseHLCTimestamp(value);
 }
 
 /**
- * Compare schema versions supporting HLC and numeric fallback.
- * @param {string} left
- * @param {string} right
+ * Compare schema versions via the canonical HLC/numeric/string comparator.
+ * @param {string|number} left
+ * @param {string|number} right
  * @return {number}
  */
 export function compareJoinSchemaVersions(left, right) {
-  if (left === right) {
-    return 0;
-  }
-
-  const leftHlc = tryParseJoinSchemaHlc(left);
-  const rightHlc = tryParseJoinSchemaHlc(right);
-  if (leftHlc && rightHlc) {
-    if (leftHlc.physical !== rightHlc.physical) {
-      return leftHlc.physical - rightHlc.physical;
-    }
-    if (leftHlc.logical !== rightHlc.logical) {
-      return leftHlc.logical - rightHlc.logical;
-    }
-    return leftHlc.nodeId.localeCompare(rightHlc.nodeId);
-  }
-
-  const leftNumber = Number(left);
-  const rightNumber = Number(right);
-  if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) {
-    return leftNumber - rightNumber;
-  }
-
-  return String(left).localeCompare(String(right));
+  return compareSchemaVersions(left, right);
 }
 
 /**

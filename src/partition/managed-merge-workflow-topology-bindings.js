@@ -1,13 +1,25 @@
 const LOCAL_STR_FUNCTION = 'function';
+const SPEC_DEFAULT_KEY = 'fallback';
+const MISSING_TOPOLOGY_BINDING_PREFIX =
+  'ManagedMergeWorkflow requires topology binding: ';
 
-const DEFAULT_QUORUM_REPLICA_COUNT = 1;
+function requiredTopologyBinding(property) {
+  const spec = {property};
+  Object.defineProperty(spec, SPEC_DEFAULT_KEY, {
+    enumerable: true,
+    get() {
+      throw new TypeError(`${MISSING_TOPOLOGY_BINDING_PREFIX}${property}`);
+    },
+  });
+  return Object.freeze(spec);
+}
 
 /**
  * Topology-adapter method bindings resolved in constructor order:
- * bound adapter method, then explicit option, then the listed fallback.
- * Mirrors the split workflow's dedicated bindings module so the two
- * workflow owners keep the same shape.
- * @type {ReadonlyArray<{property: string, fallback: Function}>}
+ * bound adapter method, then explicit option, then the listed default for
+ * optional read/hook collaborators. Required effect, quorum, and membership
+ * collaborators fail closed at binding time when omitted.
+ * @type {ReadonlyArray<{property: string, fallback: Function|null}>}
  */
 const TOPOLOGY_BOUND_METHOD_SPECS = Object.freeze([
   {property: 'getPartitionInfo', fallback: () => null},
@@ -16,24 +28,19 @@ const TOPOLOGY_BOUND_METHOD_SPECS = Object.freeze([
   {property: 'parsePartitionTransition', fallback: () => null},
   {property: 'isLocalManagedMergeLeader', fallback: () => false},
   {property: 'resolveActivePartitionVersion', fallback: () => 1},
-  {property: 'resolveProvisionTargetNodeIds', fallback: () => []},
-  {property: 'getRoutablePartitionServiceNodeIds', fallback: () => []},
+  requiredTopologyBinding('resolveProvisionTargetNodeIds'),
+  requiredTopologyBinding('getRoutablePartitionServiceNodeIds'),
   {property: 'isSystemTablePartitionId', fallback: () => false},
-  {
-    property: 'calculateQuorumReplicaCount',
-    fallback: () => DEFAULT_QUORUM_REPLICA_COUNT,
-  },
+  requiredTopologyBinding('calculateQuorumReplicaCount'),
   {property: 'createExecutionTimeoutBudget', fallback: null},
-  {property: 'waitForTablePartitionMetadata', fallback: async () => {}},
+  requiredTopologyBinding('waitForTablePartitionMetadata'),
   {property: 'probeInitialTablePartitionProvisioning', fallback: null},
-  {property: 'provisionInitialTablePartition', fallback: async () => {}},
-  {property: 'startMergeReplicationOnSourcePartition',
-    fallback: async () => {}},
-  {property: 'listTablePartitionRows', fallback: () => []},
-  {property: 'listPartitionServiceRows', fallback: () => []},
-  {property: 'deliverReplicaRemoval', fallback: async () => null},
-  // No reader: membership unavailable, never "no members".
-  {property: 'readCommittedGroupMembers', fallback: async () => []},
+  requiredTopologyBinding('provisionInitialTablePartition'),
+  requiredTopologyBinding('startMergeReplicationOnSourcePartition'),
+  requiredTopologyBinding('listTablePartitionRows'),
+  requiredTopologyBinding('listPartitionServiceRows'),
+  requiredTopologyBinding('deliverReplicaRemoval'),
+  requiredTopologyBinding('readCommittedGroupMembers'),
   {property: 'observeSystemRows', fallback: () => null},
 ]);
 

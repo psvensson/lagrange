@@ -204,7 +204,7 @@ test('ConfigurationManager environment variables', async (t) => {
   ConfigurationManager.resetInstance();
 });
 
-test('legacy environment aliases resolve with canonical precedence', async (t) => {
+test('deprecated legacy environment aliases are ignored without fallback', async (t) => {
   ConfigurationManager.resetInstance();
   clearListenerPortEnvironment();
   const warnings = [];
@@ -218,24 +218,14 @@ test('legacy environment aliases resolve with canonical precedence', async (t) =
     const config = ConfigurationManager.getInstance();
     config.initialize();
 
-    t.equal(config.get('admin.websocketPort'), TEST_ADMIN_WS_PORT,
-      'legacy ADMIN_WEBSOCKET_PORT is honored when ADMIN_WS_PORT is unset');
-    t.equal(config.get('node.wsPort'), TEST_TRANSPORT_WEBSOCKET_PORT,
-      'legacy NODE_WS_PORT is honored when TRANSPORT_WS_PORT is unset');
-    t.equal(config.get('admin.websocketHost'), '10.0.0.9',
-      'legacy ADMIN_WEBSOCKET_HOST is honored when ADMIN_WS_HOST is unset');
-    t.equal(warnings.filter((m) => String(m).includes('Deprecated')).length, 3,
-      'each legacy variable in use logs one deprecation warning');
-
-    ConfigurationManager.resetInstance();
-    warnings.length = 0;
-    process.env.ADMIN_WS_PORT = String(TEST_ADMIN_WS_PORT + 1);
-
-    const canonicalWins = ConfigurationManager.getInstance();
-    canonicalWins.initialize();
-
-    t.equal(canonicalWins.get('admin.websocketPort'), TEST_ADMIN_WS_PORT + 1,
-      'canonical ADMIN_WS_PORT wins over the legacy alias when both are set');
+    t.equal(config.get('admin.websocketPort'), config.get('node.restApiPort') + 1,
+      'legacy ADMIN_WEBSOCKET_PORT is ignored; default port derivation applies');
+    t.equal(config.get('node.wsPort'), config.get('node.restApiPort') + 2,
+      'legacy NODE_WS_PORT is ignored; default port derivation applies');
+    t.equal(config.get('admin.websocketHost'), DEFAULT_CONFIG.admin.websocketHost,
+      'legacy ADMIN_WEBSOCKET_HOST is ignored; default host applies');
+    t.equal(warnings.length, 0,
+      'no deprecation warning is logged once legacy alias fallback is removed');
   } finally {
     console.warn = originalWarn;
     delete process.env.ADMIN_WEBSOCKET_PORT;

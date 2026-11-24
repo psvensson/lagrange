@@ -62,7 +62,9 @@ function readGateBuildCount() {
 test('a deferred planning snapshot keeps one identity per owner and token ' +
   'generation', async (t) => {
   const owner = new ReadinessPlanningSnapshotOwner({
-    service: {},
+    service: {
+      nodeLivenessSemanticProjectionOwner: {subscribe: () => () => {}},
+    },
     now: () => 1000,
     scheduleDrainFn: () => {},
   });
@@ -414,16 +416,21 @@ test('the sync planning derivation keeps one memo slot per publisher under ' +
 });
 
 test('the readiness planning owner reuses a completed snapshot within one ' +
-  'floored generation under write churn', async (t) => {
+  'semantic planning identity and stops reusing once the identity advances', async (t) => {
   const cache = createVersionedTableCache();
   let clock = 1000;
   let builds = 0;
-  const {readMembershipPlanningDerivationVersionKey} =
-    await import('../../src/control-plane/membership-planning-version-key.js');
+  let livenessListener = null;
   const owner = new ReadinessPlanningSnapshotOwner({
     service: {
-      readPlanningProjectionSourceGeneration: (observedAt) =>
-        readMembershipPlanningDerivationVersionKey(cache, observedAt),
+      nodeLivenessSemanticProjectionOwner: {
+        subscribe: (listener) => {
+          livenessListener = listener;
+          return () => {
+            livenessListener = null;
+          };
+        },
+      },
     },
     now: () => clock,
     scheduleDrainFn: () => {},
@@ -435,21 +442,22 @@ test('the readiness planning owner reuses a completed snapshot within one ' +
   };
   const first = owner.readSync(OWNER_NODE_ID, {}, build);
   t.equal(builds, 1, 'the first read builds');
-  owner.recordTableChange('nodes');
+  // Unrelated node-row change on a different node does not advance OWNER_NODE_ID's semantic identity
+  owner.recordTableChange('nodes', 'UPDATE', {node_id: 'node-other', last_heartbeat: 1100});
   cache.bump('nodes');
   clock = 1100;
   const second = owner.readSync(OWNER_NODE_ID, {}, build);
   t.equal(second, first,
-    'a write within the floor window keeps serving the completed snapshot');
+    'non-semantic churn on another node keeps serving the completed snapshot');
+  // Semantic liveness transition on OWNER_NODE_ID rotates its planning identity
+  livenessListener({nodeId: OWNER_NODE_ID, semanticChanged: true});
   clock = 1400;
-  owner.readSync(OWNER_NODE_ID, {}, build);
-  const diagnostics = owner.getDiagnostics();
-  t.ok(builds > 1 || diagnostics,
-    'the next floored generation stops reusing the stale completion');
+  const afterTransition = owner.readSync(OWNER_NODE_ID, {}, build);
   t.not(
-    owner.readSync(OWNER_NODE_ID, {}, build),
+    afterTransition,
     first,
-    'reads beyond the floor window never serve the pre-write completion');
+    'reads after a semantic planning identity advance never serve the stale completion',
+  );
   t.end();
 });
 

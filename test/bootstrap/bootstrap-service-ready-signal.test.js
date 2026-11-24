@@ -292,7 +292,7 @@ test('BootstrapService keeps seed JOINING during control-plane registration and 
         });
         service.phase = 'complete';
       };
-      service.hasActiveControlPlaneBackgroundWriters = () => true;
+      service.runtimeHandoffOwner.hasActiveControlPlaneBackgroundWriters = () => true;
 
       const steps = service.buildSeedCheckpointSteps(
         {run: async () => {}},

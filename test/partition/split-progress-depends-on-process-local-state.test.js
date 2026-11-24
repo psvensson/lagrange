@@ -182,6 +182,10 @@ function buildRecoverableWorkflow(options = {}) {
     },
     waitForTablePartitionMetadata: async () => {},
     provisionInitialTablePartition: async () => {},
+    listTablePartitionRows: () => [],
+    listPartitionServiceRows: () => [],
+    deliverReplicaRemoval: async () => ({status: 'completed'}),
+    readCommittedGroupMembers: async () => [],
     startSplitReplicationOnSourcePartition: async (
       _partitionId, _tableId, _tableName, transitionMetadata,
     ) => {

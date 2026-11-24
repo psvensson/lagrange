@@ -125,7 +125,30 @@ function createMockSystemTableCache() {
  */
 function createMockCdcIntegrationService() {
   const calls = [];
+  const durableRows = new Map([
+    [
+      SYSTEM_TABLE_NAME.PARTITIONS,
+      [{
+        [COLUMN.PARTITION_ID]: CHILD_PARTITION_ID,
+        [COLUMN.TABLE_ID]: CHILD_TABLE_ID,
+        [COLUMN.LEADER_NODE_ID]: null,
+        [COLUMN.UPDATED_AT]: 1,
+      }],
+    ],
+    [
+      SYSTEM_TABLE_NAME.SERVICES,
+      [{
+        [COLUMN.SERVICE_ID]: CHILD_REPLICA_ID,
+        [COLUMN.RAFT_ROLE]: 'follower',
+        [COLUMN.UPDATED_AT]: 1,
+      }],
+    ],
+  ]);
   const service = {
+    executeAuthoritativeSystemTableRead: async (tableName) => ({
+      success: true,
+      rows: durableRows.get(tableName) || [],
+    }),
     updateSystemTableRow:
       async (tableName, whereClause, data, options) => {
         calls.push({tableName, whereClause, data, options});
@@ -338,6 +361,19 @@ test('flushLeaderNodeUpdate awaits an in-flight queued leader_node_id write ' +
   'before returning', async (t) => {
   const calls = [];
   const cdcService = {
+    executeAuthoritativeSystemTableRead: async (tableName) => ({
+      success: true,
+      rows: tableName === SYSTEM_TABLE_NAME.PARTITIONS ? [{
+        [COLUMN.PARTITION_ID]: CHILD_PARTITION_ID,
+        [COLUMN.TABLE_ID]: CHILD_TABLE_ID,
+        [COLUMN.LEADER_NODE_ID]: null,
+        [COLUMN.UPDATED_AT]: 1,
+      }] : [{
+        [COLUMN.SERVICE_ID]: CHILD_REPLICA_ID,
+        [COLUMN.RAFT_ROLE]: 'follower',
+        [COLUMN.UPDATED_AT]: 1,
+      }],
+    }),
     updateSystemTableRow: async (tableName, whereClause, data, options) => {
       await new Promise((resolve) => setImmediate(resolve));
       calls.push({tableName, whereClause, data, options});

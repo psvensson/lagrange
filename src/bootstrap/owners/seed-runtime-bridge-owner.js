@@ -24,8 +24,6 @@ import {SQLQueryEngine} from '../../query/sql-query-engine.js';
 import {CONTROL_PLANE_READINESS_DIMENSION} from
   '../../control-plane/control-plane-readiness-constants.js';
 
-const LOCAL_STR_FUNCTION = 'function';
-
 const LOG_CDC_INITIALIZED = 'CDC integration initialized by owner';
 const CDC_INTEGRATION_OWNER = 'CDCIntegrationSetup';
 const CDC_INTEGRATION_MODE_BOOTSTRAP = 'bootstrap';
@@ -34,7 +32,6 @@ const LATENCY_TOPOLOGY_OWNER = 'LatencyTopologySetup';
 class SeedRuntimeBridgeOwner {
   constructor(options = {}) {
     this.delegates = options.delegates || {};
-    this.compatibilityPhase = options.compatibilityPhase || null;
     this.sqlQueryEngine = null;
     this.bootstrapTopologySnapshotOwner = null;
   }
@@ -72,24 +69,7 @@ class SeedRuntimeBridgeOwner {
     if (this.sqlQueryEngine === engine) this.sqlQueryEngine = null;
   }
 
-  getCompatibilityOverride(methodName) {
-    if (!this.compatibilityPhase ||
-        !Object.prototype.hasOwnProperty.call(this.compatibilityPhase, methodName)) {
-      return null;
-    }
-
-    const override = this.compatibilityPhase[methodName];
-    return typeof override === LOCAL_STR_FUNCTION ?
-      override.bind(this.compatibilityPhase) :
-      null;
-  }
-
   applyCurrentEpochFromCache() {
-    const override = this.getCompatibilityOverride('applyCurrentEpochFromCache');
-    if (override) {
-      return override();
-    }
-
     const d = this.delegates;
     const cdcIntegrationService = d.getCdcIntegrationService();
     const epochManager = d.getEpochManager();
@@ -115,13 +95,6 @@ class SeedRuntimeBridgeOwner {
   }
 
   ensureBootstrapCdcIntegrationService() {
-    const override = this.getCompatibilityOverride(
-      'ensureBootstrapCdcIntegrationService',
-    );
-    if (override) {
-      return override();
-    }
-
     const d = this.delegates;
     const logger = d.getLogger();
     let cdcIntegrationService = d.getCdcIntegrationService();
@@ -146,11 +119,6 @@ class SeedRuntimeBridgeOwner {
   }
 
   ensureLatencyTopologyOwners() {
-    const override = this.getCompatibilityOverride('ensureLatencyTopologyOwners');
-    if (override) {
-      return override();
-    }
-
     const d = this.delegates;
     const logger = d.getLogger();
 
@@ -180,11 +148,6 @@ class SeedRuntimeBridgeOwner {
   }
 
   startLatencyTopologyLifecycle() {
-    const override = this.getCompatibilityOverride('startLatencyTopologyLifecycle');
-    if (override) {
-      return override();
-    }
-
     const d = this.delegates;
     const logger = d.getLogger();
     const topologyOwners = assertCritical(
@@ -200,11 +163,6 @@ class SeedRuntimeBridgeOwner {
 
   // One propagation request carries the partition lane's vector as `events`.
   async propagatePartitionCDCEvent(messageGroupService, events, deliveryContext = null) {
-    const override = this.getCompatibilityOverride('propagatePartitionCDCEvent');
-    if (override) {
-      return override(messageGroupService, events, deliveryContext);
-    }
-
     const d = this.delegates;
     const topologyOwners = assertCritical(
       d.getLatencyTopology(),
@@ -218,11 +176,6 @@ class SeedRuntimeBridgeOwner {
   }
 
   createCdcPipelineReadinessGate(systemTableCache) {
-    const override = this.getCompatibilityOverride('createCdcPipelineReadinessGate');
-    if (override) {
-      return override(systemTableCache);
-    }
-
     const d = this.delegates;
     return new CDCPipelineReadinessGate({
       systemTableCache,

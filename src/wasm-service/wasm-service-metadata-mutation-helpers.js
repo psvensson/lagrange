@@ -7,10 +7,14 @@ import {AuthoritativeRowMutationHelper} from
   '../raft/authoritative-row-mutation-helper.js';
 import {COLUMN, TABLES} from '../constants/index.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
+  '../control-plane/control-plane-system-table-gateway-constants.js';
 
 const LOCAL_STR_STRING = 'string';
 
 const METADATA_FLUSH_RETRY_DELAY_MS = 250;
+const SERVICES_ROW_POINT_READ_SQL =
+  'SELECT * FROM services WHERE service_id = ?';
 
 const FLUSH_REASON_NOT_OWNER = 'not-owner';
 const FLUSH_REASON_READY = 'ready';
@@ -19,6 +23,35 @@ const METADATA_FLUSH_LOG_MSG = Object.freeze({
   ROLE_RETRY_FAILED: 'WASM role update retry failed',
   LEADER_RETRY_FAILED: 'WASM leader-node update retry failed',
 });
+
+/**
+ * Authoritative point read of the replica's services row through the
+ * control-plane gateway.
+ * @param {Object} replica - The WASM service replica.
+ * @return {Promise<{available: boolean, row: Object|null}>}
+ */
+async function readAuthoritativeWasmServiceRow(replica) {
+  const gateway = replica.controlPlaneSystemTableGateway;
+  if (!gateway?.readAuthoritativeRows) {
+    return {available: false, row: null};
+  }
+  const readResult = await gateway.readAuthoritativeRows(
+    SYSTEM_TABLE_NAME.SERVICES,
+    SERVICES_ROW_POINT_READ_SQL,
+    [replica.replicaId],
+    {
+      authoritativeReadMode:
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+    },
+  );
+  if (readResult?.success !== true) {
+    return {available: false, row: null};
+  }
+  const row = Array.isArray(readResult.rows) ?
+    readResult.rows[0] || null :
+    null;
+  return {available: true, row};
+}
 
 /**
  * The replica's services row as cached.
@@ -59,7 +92,11 @@ function createWasmServiceRoleMutationHelper(replica) {
   return new AuthoritativeRowMutationHelper({
     tableName: SYSTEM_TABLE_NAME.SERVICES,
     buildWhereClause: (_role, context = {}) =>
-      serviceRowWhereClause(replica, COLUMN.RAFT_ROLE, context.cachedRow),
+      serviceRowWhereClause(
+        replica,
+        COLUMN.RAFT_ROLE,
+        context.authoritativeRow || context.cachedRow,
+      ),
     buildUpdateData: (role, updatedAt) => ({
       [COLUMN.RAFT_ROLE]: role,
       [COLUMN.UPDATED_AT]: updatedAt,
@@ -69,6 +106,7 @@ function createWasmServiceRoleMutationHelper(replica) {
       cachedServiceRow(replica, systemTableCache),
     readValueFromCache: (systemTableCache) =>
       readStateField(cachedServiceRow(replica, systemTableCache)?.[COLUMN.RAFT_ROLE]),
+    readAuthoritativeRow: () => readAuthoritativeWasmServiceRow(replica),
     isWriteReady: () => replica.isServicesLeaderAvailable(),
     retryDelayMs: METADATA_FLUSH_RETRY_DELAY_MS,
     systemTableCache: replica.systemTableCache,
@@ -97,7 +135,11 @@ function createWasmServiceLeaderNodeMutationHelper(replica) {
   return new AuthoritativeRowMutationHelper({
     tableName: SYSTEM_TABLE_NAME.SERVICES,
     buildWhereClause: (_leaderNodeId, context = {}) =>
-      serviceRowWhereClause(replica, COLUMN.NODE_ID, context.cachedRow),
+      serviceRowWhereClause(
+        replica,
+        COLUMN.NODE_ID,
+        context.authoritativeRow || context.cachedRow,
+      ),
     buildUpdateData: (leaderNodeId, updatedAt) => ({
       [COLUMN.NODE_ID]: leaderNodeId,
       [COLUMN.RAFT_ROLE]: replica.role,
@@ -111,6 +153,7 @@ function createWasmServiceLeaderNodeMutationHelper(replica) {
       cachedServiceRow(replica, systemTableCache),
     readValueFromCache: (systemTableCache) =>
       cachedServiceRow(replica, systemTableCache)?.[COLUMN.NODE_ID] || null,
+    readAuthoritativeRow: () => readAuthoritativeWasmServiceRow(replica),
     prepareFlush: () => ({
       skip: !replica.isLeader,
       clearPending: !replica.isLeader,

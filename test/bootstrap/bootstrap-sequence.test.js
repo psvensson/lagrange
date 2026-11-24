@@ -135,9 +135,10 @@ function disablePostPartitionBootstrapWork(bootstrap) {
   bootstrap.initializeRuntimeServiceHandler = () => {
     bootstrap.runtimeServiceHandler = EMPTY_SERVICE_HANDLE;
   };
-  bootstrap.activateControlPlaneBackgroundWriters = NOOP_SYNC;
-  bootstrap.activateDistributedTransactionRecovery = NOOP_ASYNC;
-  bootstrap.startLatencyTopologyLifecycle = NOOP_SYNC;
+  bootstrap.runtimeHandoffOwner.activateControlPlaneBackgroundWriters = NOOP_SYNC;
+  bootstrap.runtimeHandoffOwner.activateDistributedTransactionRecovery = NOOP_ASYNC;
+  bootstrap.runtimeHandoffOwner.startLatencyTopologyLifecycle = NOOP_SYNC;
+  bootstrap.seedRuntimeBridgeOwner.startLatencyTopologyLifecycle = NOOP_SYNC;
   bootstrap.assertOriginalSeedPublicAdmission = NOOP_SYNC;
   bootstrap.openExternalTransportAdmission = NOOP_SYNC;
 }
@@ -240,7 +241,7 @@ test('BootstrapService - seed checkpoint snapshot resolves explicit readiness st
     bootstrap.localAdminRuntimeReadyNotified = true;
     bootstrap.runtimeServiceHandler = EMPTY_SERVICE_HANDLE;
     bootstrap.phase = BOOTSTRAP_PHASE.COMPLETE;
-    bootstrap.hasActiveControlPlaneBackgroundWriters = () => true;
+    bootstrap.runtimeHandoffOwner.hasActiveControlPlaneBackgroundWriters = () => true;
 
     const checkpointSnapshot = bootstrap.buildSeedStartupCheckpointSnapshot();
 
@@ -346,7 +347,7 @@ test('BootstrapService - seed checkpoint rerun guards consume the checkpoint sna
     );
 
     bootstrap.phase = BOOTSTRAP_PHASE.COMPLETE;
-    bootstrap.hasActiveControlPlaneBackgroundWriters = () => true;
+    bootstrap.runtimeHandoffOwner.hasActiveControlPlaneBackgroundWriters = () => true;
     t.equal(
       stepByCheckpoint.get(SEED_STARTUP_CHECKPOINT.FINALIZED)
         .shouldRerun(),
@@ -493,14 +494,14 @@ test('BootstrapService - activates message-group rows after seed registration',
     bootstrap.initializeRuntimeServiceHandler = () => {
       order.push('runtime-handler');
     };
-    bootstrap.seedCacheHydrationPhase
+    bootstrap.seedRuntimeBridgeOwner
       .startLatencyTopologyLifecycle = () => {
         order.push('latency-topology');
       };
-    bootstrap.activateControlPlaneBackgroundWriters = () => {
+    bootstrap.runtimeHandoffOwner.activateControlPlaneBackgroundWriters = () => {
       order.push('background-writers');
     };
-    bootstrap.activateDistributedTransactionRecovery = async () => {};
+    bootstrap.runtimeHandoffOwner.activateDistributedTransactionRecovery = async () => {};
     bootstrap.openExternalTransportAdmission = () => {};
     bootstrap.logger = {
       info() {},
@@ -574,9 +575,9 @@ test('BootstrapService - notifies local admin runtime before seed self-publicati
     };
     bootstrap.activateMessageGroupServiceRows = async () => {};
     bootstrap.initializeRuntimeServiceHandler = () => {};
-    bootstrap.seedCacheHydrationPhase.startLatencyTopologyLifecycle = () => {};
-    bootstrap.activateControlPlaneBackgroundWriters = () => {};
-    bootstrap.activateDistributedTransactionRecovery = async () => {};
+    bootstrap.seedRuntimeBridgeOwner.startLatencyTopologyLifecycle = () => {};
+    bootstrap.runtimeHandoffOwner.activateControlPlaneBackgroundWriters = () => {};
+    bootstrap.runtimeHandoffOwner.activateDistributedTransactionRecovery = async () => {};
     bootstrap.openExternalTransportAdmission = () => {};
     bootstrap.logger = {
       info() {},

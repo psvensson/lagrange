@@ -34,6 +34,9 @@ import {
   ManagedSplitTopologyAdapter,
 } from '../../src/partition/managed-split-topology-adapter.js';
 import {
+  applyManagedSplitTopologyBindings,
+} from '../../src/partition/managed-split-workflow-topology-bindings.js';
+import {
   ManagedMergeTopologyAdapter,
 } from '../../src/partition/managed-merge-topology-adapter.js';
 
@@ -1372,4 +1375,25 @@ test('ManagedSplitWorkflow reuses persisted split plan and child metadata ' +
     ['users-p-left', 'users-p-right'],
     'retry should provision the persisted split child IDs',
   );
+});
+
+test('ManagedSplitWorkflow fails closed at binding time when required ' +
+    'topology bindings are absent', (t) => {
+  t.throws(
+    () => applyManagedSplitTopologyBindings({}, {}, {}),
+    /resolveProvisionTargetNodeIds/,
+    'missing required split topology binding throws at binding time',
+  );
+  t.throws(
+    () => applyManagedSplitTopologyBindings({}, {
+      resolveProvisionTargetNodeIds: () => [],
+      getRoutablePartitionServiceNodeIds: () => [],
+      calculateQuorumReplicaCount: () => 2,
+      waitForTablePartitionMetadata: async () => {},
+      provisionInitialTablePartition: async () => {},
+    }, {}),
+    /startSplitReplicationOnSourcePartition/,
+    'missing required split effect binding throws at binding time',
+  );
+  t.end();
 });

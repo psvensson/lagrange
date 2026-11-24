@@ -13,6 +13,8 @@ import {
 } from '../bootstrap/traffic-readiness-utils.js';
 import {AuthoritativeRowMutationHelper} from '../raft/authoritative-row-mutation-helper.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
+  '../control-plane/control-plane-system-table-gateway-constants.js';
 import {
   FLUSH_SKIP_DISABLED,
   FLUSH_SKIP_NOT_OWNER,
@@ -63,6 +65,68 @@ function isStaleRoleFlushForLiveRole(role, liveRole) {
   return Boolean(
     (isCatchupLearnerRaftRole(role) && isVoterRaftRole(liveRole)) ||
     isMismatchedLiveRole(role, liveRole),
+  );
+}
+
+const SERVICES_ROW_POINT_READ_SQL =
+  'SELECT * FROM services WHERE service_id = ?';
+const MESSAGE_GROUPS_ROW_POINT_READ_SQL =
+  'SELECT * FROM message_groups WHERE group_id = ?';
+
+async function readAuthoritativeMessageGroupRow(
+  owner,
+  tableName,
+  sql,
+  params,
+  deliveryOptions = {},
+) {
+  const gateway = owner.controlPlaneSystemTableGateway;
+  if (!gateway?.readAuthoritativeRows) {
+    return {available: false, row: null};
+  }
+  const readResult = await gateway.readAuthoritativeRows(
+    tableName,
+    sql,
+    params,
+    {
+      ...deliveryOptions,
+      authoritativeReadMode:
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+      routingReadinessDimension:
+        owner.getMetadataPublicationReadinessDimension(),
+    },
+  );
+  if (readResult?.success !== true) {
+    return {available: false, row: null};
+  }
+  const row = Array.isArray(readResult.rows) ?
+    readResult.rows[0] || null :
+    null;
+  return {available: true, row};
+}
+
+function readAuthoritativeRoleRow(owner) {
+  return readAuthoritativeMessageGroupRow(
+    owner,
+    SYSTEM_TABLE_NAME.SERVICES,
+    SERVICES_ROW_POINT_READ_SQL,
+    [owner.replicaId],
+    {
+      deliveryPriority: MESSAGE_GROUP_SERVICE_LITERAL.BACKGROUND,
+      workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+    },
+  );
+}
+
+function readAuthoritativeLeaderRow(owner) {
+  return readAuthoritativeMessageGroupRow(
+    owner,
+    SYSTEM_TABLE_NAME.MESSAGE_GROUPS,
+    MESSAGE_GROUPS_ROW_POINT_READ_SQL,
+    [owner.groupId],
+    {
+      deliveryPriority: owner.getMetadataPublicationDeliveryPriority(),
+    },
   );
 }
 
@@ -175,15 +239,15 @@ function assignMetadataPublication(serviceClass) {
             [COLUMN.REPLICA_ID]: this.replicaId,
             [COLUMN.NODE_ID]: this.nodeId,
           };
-          const cachedRow = context.cachedRow;
+          const guardRow = context.authoritativeRow || context.cachedRow;
           if (
-            typeof cachedRow?.raft_role === 'string' &&
-            cachedRow.raft_role.length > 0
+            typeof guardRow?.raft_role === 'string' &&
+            guardRow.raft_role.length > 0
           ) {
-            whereClause.raft_role = cachedRow.raft_role;
+            whereClause.raft_role = guardRow.raft_role;
           }
-          if (Number.isFinite(cachedRow?.updated_at)) {
-            whereClause.updated_at = cachedRow.updated_at;
+          if (Number.isFinite(guardRow?.updated_at)) {
+            whereClause.updated_at = guardRow.updated_at;
           }
           return whereClause;
         },
@@ -237,6 +301,8 @@ function assignMetadataPublication(serviceClass) {
         isWriteReady: () => this.isServicesLeaderAvailable(),
         systemTableCache: this.systemTableCache,
         cdcIntegrationService: this.cdcIntegrationService,
+        controlPlaneSystemTableGateway: this.controlPlaneSystemTableGateway,
+        readAuthoritativeRow: () => readAuthoritativeRoleRow(this),
         onAsyncError: (error, context = {}) => {
           this.logger.warn(ROLE_PERSIST_ERROR_MSG, {
             groupId: this.groupId,
@@ -256,16 +322,16 @@ function assignMetadataPublication(serviceClass) {
         tableName: SYSTEM_TABLE_NAME.MESSAGE_GROUPS,
         buildWhereClause: (_leaderNodeId, context = {}) => {
           const whereClause = {[COLUMN.GROUP_ID]: this.groupId};
-          const cachedRow = context.cachedRow;
+          const guardRow = context.authoritativeRow || context.cachedRow;
           if (
-            typeof cachedRow?.[COLUMN.LEADER_NODE_ID] === 'string' &&
-            cachedRow[COLUMN.LEADER_NODE_ID].length > 0
+            typeof guardRow?.[COLUMN.LEADER_NODE_ID] === 'string' &&
+            guardRow[COLUMN.LEADER_NODE_ID].length > 0
           ) {
             whereClause[COLUMN.LEADER_NODE_ID] =
-              cachedRow[COLUMN.LEADER_NODE_ID];
+              guardRow[COLUMN.LEADER_NODE_ID];
           }
-          if (Number.isFinite(cachedRow?.[COLUMN.UPDATED_AT])) {
-            whereClause[COLUMN.UPDATED_AT] = cachedRow[COLUMN.UPDATED_AT];
+          if (Number.isFinite(guardRow?.[COLUMN.UPDATED_AT])) {
+            whereClause[COLUMN.UPDATED_AT] = guardRow[COLUMN.UPDATED_AT];
           }
           return whereClause;
         },
@@ -302,6 +368,8 @@ function assignMetadataPublication(serviceClass) {
         isWriteReady: () => this.isMessageGroupsLeaderAvailable(),
         systemTableCache: this.systemTableCache,
         cdcIntegrationService: this.cdcIntegrationService,
+        controlPlaneSystemTableGateway: this.controlPlaneSystemTableGateway,
+        readAuthoritativeRow: () => readAuthoritativeLeaderRow(this),
         onAsyncError: (error, context = {}) => {
           this.logger.warn(LEADER_NODE_PERSIST_ERROR_MSG, {
             groupId: this.groupId,

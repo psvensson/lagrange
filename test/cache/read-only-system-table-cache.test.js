@@ -152,14 +152,14 @@ test('ReadOnlySystemTableCache - forwards freshness/version accessors', async (t
     'should forward getShared to underlying cache',
   );
   t.equal(
-    readOnly.getAllShared('nodes').length,
+    readOnly.getAll('nodes').length,
     2,
-    'should forward getAllShared to underlying cache',
+    'should forward getAll frozen shared scan to underlying cache',
   );
   t.equal(
-    readOnly.filterShared('nodes', (r) => r.status === 'active').length,
+    readOnly.filter('nodes', (r) => r.status === 'active').length,
     1,
-    'should forward filterShared to underlying cache',
+    'should forward filter frozen shared scan to underlying cache',
   );
   t.same(
     readOnly.getAppliedSchemaVersions(),
@@ -178,14 +178,14 @@ test('ReadOnlySystemTableCache - forwards freshness/version accessors', async (t
     'proxy should forward getShared',
   );
   t.equal(
-    proxiedReadOnly.getAllShared('nodes').length,
+    proxiedReadOnly.getAll('nodes').length,
     2,
-    'proxy should forward getAllShared',
+    'proxy should forward getAll',
   );
   t.equal(
-    proxiedReadOnly.filterShared('nodes', (r) => r.status === 'active').length,
+    proxiedReadOnly.filter('nodes', (r) => r.status === 'active').length,
     1,
-    'proxy should forward filterShared',
+    'proxy should forward filter',
   );
   t.same(
     proxiedReadOnly.getAppliedSchemaVersions(),

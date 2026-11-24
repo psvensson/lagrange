@@ -208,7 +208,11 @@ test('R09: deferred reason classes do not grant floor credit; committed node sem
 // substantive denial into "no verdict".
 test('the memoized deferral serves each read its own dimension\'s cell when ' +
   'two dimensions of one completed verdict disagree', async (t) => {
-  const owner = new ReadinessPlanningSnapshotOwner({service: {}});
+  const owner = new ReadinessPlanningSnapshotOwner({
+    service: {
+      nodeLivenessSemanticProjectionOwner: {subscribe: () => () => {}},
+    },
+  });
   t.teardown(() => owner.shutdown());
   for (const [eligibleDimension, deniedDimension] of [
     [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,

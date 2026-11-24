@@ -29,6 +29,7 @@ import {
 } from '../rebalancer/replica-operation-liveness.js';
 import {getSystemCachePrimaryKeyField} from '../cache/system-cache-key-descriptor.js';
 import {isTableCdcReadinessRelevant} from '../cache/cdc-table-policy.js';
+import {compareSchemaVersions} from '../cache/system-table-cache-row-merge.js';
 import {
   CANONICAL_LEADER_ROUTING_GAP_STATE,
   resolveCanonicalLeaderRoutingGapState,
@@ -216,23 +217,6 @@ const SERVICE_DISCOVERY_SQL_WITH_TABLE_AND_ID_PATTERN =
 
 // ── single-use helper functions ─────────────────────────────────────────────
 /**
- * Compare two schema version values numerically or lexicographically.
- * @param {string} left
- * @param {string} right
- * @return {number}
- */
-function compareSchemaVersionValues(left, right) {
-  if (left === right) {
-    return 0;
-  }
-  const leftNumber = Number(left);
-  const rightNumber = Number(right);
-  if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) {
-    return leftNumber - rightNumber;
-  }
-  return String(left).localeCompare(String(right));
-}
-/**
  * Determine whether a service row represents an active voter-ready replica.
  * @param {Object} serviceRow
  * @return {boolean}
@@ -282,7 +266,7 @@ function selectNewestSchemaVersion(current, candidate) {
   if (!current) {
     return candidate;
   }
-  return compareSchemaVersionValues(candidate, current) >= 0 ?
+  return compareSchemaVersions(candidate, current) >= 0 ?
     candidate :
     current;
 } /**

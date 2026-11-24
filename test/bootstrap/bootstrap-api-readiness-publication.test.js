@@ -23,7 +23,7 @@ import {
   createEmptySystemTableCache,
   initializeTestEnvironment,
 } from './bootstrap-api-test-fixtures.js';
-import {BootstrapReadinessState} from '../../src/bootstrap/bootstrap-readiness-state.js';
+import {LifecycleController} from '../../src/bootstrap/lifecycle-controller.js';
 import {BOOTSTRAP_READINESS_STAGE} from '../../src/bootstrap/bootstrap-readiness-ladder.js';
 import {LIFECYCLE_REASON} from '../../src/bootstrap/lifecycle-controller-constants.js';
 import {
@@ -125,7 +125,7 @@ function createPriorityRecoveryAuthorityControlPlaneReadinessService() {
 test('BootstrapAPI - readyz still blocks missing partition leader metadata', async (t) => {
   initializeTestEnvironment();
 
-  const readinessState = new BootstrapReadinessState({
+  const readinessState = new LifecycleController({
     readyStableWindowMs: 0,
   });
   const api = new BootstrapAPI({
@@ -204,7 +204,7 @@ test('BootstrapAPI - readyz blocks non-traffic control-plane lag while recovery 
         return [];
       },
     };
-    const readinessState = new BootstrapReadinessState({
+    const readinessState = new LifecycleController({
       readyStableWindowMs: 0,
     });
     const api = new BootstrapAPI({
@@ -375,7 +375,7 @@ test('BootstrapAPI - readyz blocks priority control-plane recovery while bootstr
   async (t) => {
     initializeTestEnvironment();
 
-    const readinessState = new BootstrapReadinessState({
+    const readinessState = new LifecycleController({
       readyStableWindowMs: 0,
       demotionFailureThreshold: 1,
     });
@@ -731,7 +731,7 @@ test('BootstrapAPI - readyz fails closed when published membership excludes the 
   async (t) => {
     initializeTestEnvironment();
 
-    const readinessState = new BootstrapReadinessState({
+    const readinessState = new LifecycleController({
       readyStableWindowMs: 0,
       demotionFailureThreshold: 1,
     });
@@ -804,7 +804,7 @@ test('BootstrapAPI - readiness fails closed when control-plane diagnostics are u
   async (t) => {
     initializeTestEnvironment();
 
-    const readinessState = new BootstrapReadinessState({
+    const readinessState = new LifecycleController({
       readyStableWindowMs: 0,
       demotionFailureThreshold: 1,
     });
@@ -886,7 +886,7 @@ test('BootstrapAPI - readiness fails closed when membership publication diagnost
   async (t) => {
     initializeTestEnvironment();
 
-    const readinessState = new BootstrapReadinessState({
+    const readinessState = new LifecycleController({
       readyStableWindowMs: 0,
       demotionFailureThreshold: 1,
     });
@@ -963,7 +963,7 @@ test('BootstrapAPI - readiness response publication fields use synchronous diagn
   async (t) => {
     initializeTestEnvironment();
 
-    const readinessState = new BootstrapReadinessState({
+    const readinessState = new LifecycleController({
       readyStableWindowMs: 0,
       demotionFailureThreshold: 1,
     });
@@ -1033,7 +1033,7 @@ test('BootstrapAPI - readiness probes bound async diagnostics and fall back to s
   async (t) => {
     initializeTestEnvironment();
 
-    const readinessState = new BootstrapReadinessState({
+    const readinessState = new LifecycleController({
       readyStableWindowMs: 0,
       demotionFailureThreshold: 1,
     });
@@ -1121,7 +1121,7 @@ test('BootstrapAPI - readiness uses the canonical control-plane publication stor
   async (t) => {
     initializeTestEnvironment();
 
-    const readinessState = new BootstrapReadinessState({
+    const readinessState = new LifecycleController({
       readyStableWindowMs: 0,
       demotionFailureThreshold: 1,
     });
@@ -1200,7 +1200,7 @@ test('BootstrapAPI - readiness fails closed when control-plane readiness service
   async (t) => {
     initializeTestEnvironment();
 
-    const readinessState = new BootstrapReadinessState({
+    const readinessState = new LifecycleController({
       readyStableWindowMs: 0,
       demotionFailureThreshold: 1,
     });

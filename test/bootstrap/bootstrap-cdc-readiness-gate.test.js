@@ -118,7 +118,7 @@ const applyCommonStubs = (service, systemTableCache, hydrationResult) => {
   service.messageGroupServices = createMessageGroupServicesWithLeader();
   service.seedCacheHydrationPhase.hydrateFromLocalPartitions =
     async () => hydrationResult;
-  service.seedCacheHydrationPhase.ensureLatencyTopologyOwners = () => {};
+  service.seedRuntimeBridgeOwner.ensureLatencyTopologyOwners = () => {};
   service.seedCacheHydrationPhase.waitForSystemServiceLeadersInCache =
     async () => {};
   service.seedRegistrationPhase.swapSystemTableWriter = () => {};

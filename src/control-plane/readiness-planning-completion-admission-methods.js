@@ -2,10 +2,10 @@
  * ReadinessPlanningSnapshotOwner completed-record admission and completion
  * publication: the barrier-blocked build registry, the live veto and
  * publication guard, completed-snapshot reuse admission (planning identity
- * plus live veto; legacy token/floored fallback), memoized deferred
- * snapshots, and the completion currency check that publishes a build only
- * when its captured source is still current. Installed on the owner
- * prototype; the owner keeps queue, read, reconcile, and lifecycle.
+ * plus live veto), memoized deferred snapshots, and the completion currency
+ * check that publishes a build only when its captured source is still
+ * current. Installed on the owner prototype; the owner keeps queue, read,
+ * reconcile, and lifecycle.
  */
 
 import {isStoredNodeLivenessCurrent} from
@@ -378,19 +378,13 @@ const readinessPlanningCompletionAdmissionMethods = {
     return nodeRow !== null && nodeRow !== undefined;
   },
 
-  // Semantic compositions require equal typed planning identity plus the live
-  // veto. The exact token remains diagnostic/stronger evidence. Unversioned
-  // legacy compositions retain their prior exact-or-floored fallback.
-  isCompletedFreshnessCurrent(completed, token, currentPlanningIdentity) {
-    if (this.semanticPlanningEnabled) {
-      return planningIdentitiesEqual(
-        completed.planningIdentity,
-        currentPlanningIdentity,
-      );
-    }
-    return (completed.tokenStatus === TOKEN_STATUS.CURRENT &&
-      this.tokensEqual(completed.capturedToken, token)) ||
-      this.matchesCompletedSourceGeneration(completed);
+  // Semantic planning admission requires equal typed planning identity plus
+  // the live veto.
+  isCompletedFreshnessCurrent(completed, _token, currentPlanningIdentity) {
+    return planningIdentitiesEqual(
+      completed.planningIdentity,
+      currentPlanningIdentity,
+    );
   },
 
   // The same decision as before, and still the method the read path calls and
@@ -561,21 +555,17 @@ const readinessPlanningCompletionAdmissionMethods = {
   buildCompletedRecord(
     ownerKey,
     snapshot,
-    capturedToken,
-    capturedPlanningIdentity,
+    _capturedToken,
+    _capturedPlanningIdentity,
     buildOptionsKey,
     currency,
   ) {
     const completedAtMs = this.now();
-    const completionToken = this.semanticPlanningEnabled ?
-      currency.currentToken : capturedToken;
-    const completionPlanningIdentity = this.semanticPlanningEnabled ?
-      currency.currentSource.identity : capturedPlanningIdentity;
     return objectFreeze({
       snapshot,
-      capturedToken: completionToken,
+      capturedToken: currency.currentToken,
       buildOptionsKey,
-      planningIdentity: completionPlanningIdentity,
+      planningIdentity: currency.currentSource.identity,
       sourceGeneration: this.readCompletedSourceGeneration(),
       tokenStatus: currency.current ? TOKEN_STATUS.CURRENT : TOKEN_STATUS.STALE,
       completedAtMs,
@@ -590,9 +580,7 @@ const readinessPlanningCompletionAdmissionMethods = {
   handleStaleCompletion(
     ownerKey,
     snapshot,
-    completed,
     buildOptions,
-    buildOptionsKey,
     currency,
   ) {
     this.enqueueBuild(
@@ -603,14 +591,7 @@ const readinessPlanningCompletionAdmissionMethods = {
       buildOptions,
       currency.currentToken,
     );
-    const legacyReusable = !this.semanticPlanningEnabled &&
-      this.canReuseCompletedSnapshot(
-        ownerKey,
-        completed,
-        currency.currentToken,
-        buildOptionsKey,
-      );
-    return legacyReusable ? snapshot : this.buildMemoizedDeferredSnapshot(
+    return this.buildMemoizedDeferredSnapshot(
       snapshot,
       currency.currentToken,
       ownerKey,
@@ -649,18 +630,16 @@ const readinessPlanningCompletionAdmissionMethods = {
       buildOptionsKey,
       currency,
     );
-    if (currency.current || !this.semanticPlanningEnabled) {
+    if (currency.current) {
       this.rememberCompleted(ownerKey, buildOptionsKey, completed);
     }
     if (!currency.current) {
-      // The pre-change result is never stored by semantic compositions; a
-      // replacement build is queued through the existing macrotask owner.
+      // A pre-change result is never stored or reused; a replacement build is
+      // queued through the existing macrotask owner.
       return this.handleStaleCompletion(
         ownerKey,
         snapshot,
-        completed,
         buildOptions,
-        buildOptionsKey,
         currency,
       );
     }

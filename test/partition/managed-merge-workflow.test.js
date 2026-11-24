@@ -332,3 +332,24 @@ test('managed merge - non-retryable post-admission failure still persists ' +
   t.equal(failure.message, NON_RETRYABLE_EXECUTION_ERROR);
   t.equal(failure.retryable, undefined);
 });
+
+test('managed merge - fails closed at binding time when required topology ' +
+    'bindings are absent', (t) => {
+  const {ManagedMergeWorkflow} = t.context || {};
+  void ManagedMergeWorkflow;
+  t.throws(
+    () => buildMergeWorkflow({
+      resolveProvisionTargetNodeIds: null,
+    }),
+    /resolveProvisionTargetNodeIds/,
+    'missing required merge topology binding throws at construction',
+  );
+  t.throws(
+    () => buildMergeWorkflow({
+      startMergeReplicationOnSourcePartition: null,
+    }),
+    /startMergeReplicationOnSourcePartition/,
+    'missing required merge effect binding throws at construction',
+  );
+  t.end();
+});

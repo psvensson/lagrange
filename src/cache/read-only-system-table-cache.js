@@ -139,29 +139,6 @@ class ReadOnlySystemTableCache {
   }
 
   /**
-   * Filter records matching a predicate using shared read-only rows.
-   * @param {string} tableName - Name of the system table.
-   * @param {Function} predicate - Function that returns true for matching records.
-   * @return {Array<Object>} Array of matching records.
-   */
-  filterShared(tableName, predicate) {
-    return typeof this._cache.filterShared === 'function' ?
-      this._cache.filterShared(tableName, predicate) :
-      this._cache.filter(tableName, predicate);
-  }
-
-  /**
-   * Get all records from a table as shared read-only rows.
-   * @param {string} tableName - Name of the system table.
-   * @return {Array<Object>} Array of all records in the table.
-   */
-  getAllShared(tableName) {
-    return typeof this._cache.getAllShared === 'function' ?
-      this._cache.getAllShared(tableName) :
-      this._cache.getAll(tableName);
-  }
-
-  /**
    * Get the last local wall-clock apply time for one table.
    * @param {string} tableName - Name of the system table.
    * @return {number|null}

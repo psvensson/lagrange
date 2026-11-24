@@ -43,12 +43,8 @@ const OWNER_ERROR_MSG = Object.freeze({
 
 /**
  * Create direct phase-owner invoker.
- * Routes through the extracted phase owner module rather than
+ * Routes directly through the extracted phase owner module rather than
  * back through wrapper methods on NodeJoiningService.
- *
- * Compatibility: if one test or local caller explicitly monkey-patches the
- * instance wrapper method, honor that override. The default runtime path still
- * routes directly to the extracted phase owner.
  * @param {Object} service - NodeJoiningService instance.
  * @param {string} ownerField - Phase owner field name on service.
  * @param {string} methodName - Phase method name on the owner.
@@ -57,15 +53,6 @@ const OWNER_ERROR_MSG = Object.freeze({
  */
 function createPhaseInvoker(service, ownerField, methodName) {
   return async (...args) => {
-    const patchedWrapper = Object.prototype.hasOwnProperty.call(
-      service,
-      methodName,
-    ) &&
-      service[methodName] !== Object.getPrototypeOf(service)?.[methodName];
-    if (patchedWrapper) {
-      return service[methodName](...args);
-    }
-
     const owner = service[ownerField];
     assertCritical(
       owner,

@@ -103,19 +103,36 @@ test('filterSharedRows respects the predicate and returns frozen rows',
     t.end();
   });
 
-test('shared-row helpers fall back gracefully on a mock cache', async (t) => {
-  const mockCache = {
-    getAll: () => [{operation_id: 'mock'}],
-    filter: (_table, predicate) =>
-      [{operation_id: 'mock'}].filter(predicate),
-  };
-  const rows = readAllSharedRows(mockCache, TABLE);
-  t.equal(rows[0].operation_id, 'mock', 'getAll fallback used');
-  t.notOk(
-    Object.isFrozen(rows[0]),
-    'a mock without getAllShared is not frozen by the helper',
-  );
-  const filtered = filterSharedRows(mockCache, TABLE, () => true);
-  t.equal(filtered.length, 1, 'filter fallback used');
-  t.end();
-});
+test('shared-row helpers work on a mock cache implementing getAll/filter and fail closed when missing',
+  async (t) => {
+    const mockCache = {
+      getAll: () => [{operation_id: 'mock'}],
+      filter: (_table, predicate) =>
+        [{operation_id: 'mock'}].filter(predicate),
+    };
+    const rows = readAllSharedRows(mockCache, TABLE);
+    t.equal(rows[0].operation_id, 'mock', 'getAll reader used');
+    const filtered = filterSharedRows(mockCache, TABLE, () => true);
+    t.equal(filtered.length, 1, 'filter reader used');
+    t.throws(
+      () => readAllSharedRows(null, TABLE),
+      TypeError,
+      'missing cache fails closed in readAllSharedRows',
+    );
+    t.throws(
+      () => readAllSharedRows({}, TABLE),
+      TypeError,
+      'cache missing getAll fails closed in readAllSharedRows',
+    );
+    t.throws(
+      () => filterSharedRows(null, TABLE, () => true),
+      TypeError,
+      'missing cache fails closed in filterSharedRows',
+    );
+    t.throws(
+      () => filterSharedRows({}, TABLE, () => true),
+      TypeError,
+      'cache missing filter fails closed in filterSharedRows',
+    );
+    t.end();
+  });

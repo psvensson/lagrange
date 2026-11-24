@@ -123,8 +123,8 @@ function stubJoinServiceForSubPhaseTests(service) {
   service.initializeJoinInfrastructure = async () => {};
   service.completeSuccessfulJoin = () => {
     service.lifecycleStateMachine.transition(NodeState.READY);
-    service.activateControlPlaneBackgroundWriters = () => {};
-    service.startLatencyTopologyLifecycle = () => {};
+    service.runtimeHandoffOwner.activateControlPlaneBackgroundWriters = () => {};
+    service.runtimeHandoffOwner.startLatencyTopologyLifecycle = () => {};
     service.phase = JOINING_PHASE.COMPLETE;
 
     const duration = service.now() - service.startTime;
@@ -178,8 +178,8 @@ test('Bootstrap executePhase updates lifecycle sub-phases during phase execution
     bootstrap.registerSeedNodeWithControlPlane = async () => {};
     bootstrap.activateMessageGroupServiceRows = async () => {};
     bootstrap.initializeRuntimeServiceHandler = () => {};
-    bootstrap.startLatencyTopologyLifecycle = () => {};
-    bootstrap.activateControlPlaneBackgroundWriters = () => {};
+    bootstrap.runtimeHandoffOwner.startLatencyTopologyLifecycle = () => {};
+    bootstrap.runtimeHandoffOwner.activateControlPlaneBackgroundWriters = () => {};
     bootstrap.logger = SILENT_LOGGER;
 
     const subPhaseChanges = [];
@@ -249,8 +249,8 @@ test('Bootstrap terminal sub-phase CACHE_HYDRATION auto-advances to CONNECTING',
     bootstrap.registerSeedNodeWithControlPlane = async () => {};
     bootstrap.activateMessageGroupServiceRows = async () => {};
     bootstrap.initializeRuntimeServiceHandler = () => {};
-    bootstrap.startLatencyTopologyLifecycle = () => {};
-    bootstrap.activateControlPlaneBackgroundWriters = () => {};
+    bootstrap.runtimeHandoffOwner.startLatencyTopologyLifecycle = () => {};
+    bootstrap.runtimeHandoffOwner.activateControlPlaneBackgroundWriters = () => {};
     bootstrap.logger = SILENT_LOGGER;
 
     const stateChanges = [];
@@ -422,8 +422,8 @@ test('Join completeSuccessfulJoin keeps same-state READY idempotent through life
     };
 
     service.messageGroupServices = new Map();
-    service.activateControlPlaneBackgroundWriters = () => {};
-    service.startLatencyTopologyLifecycle = () => {};
+    service.runtimeHandoffOwner.activateControlPlaneBackgroundWriters = () => {};
+    service.runtimeHandoffOwner.startLatencyTopologyLifecycle = () => {};
     service.logger = SILENT_LOGGER;
     service.startTime = 0;
     service.now = () => 100;

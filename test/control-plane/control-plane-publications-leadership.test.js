@@ -39,7 +39,7 @@ t.test('tier 0: live in-memory role via canWriteSystemTableLocally (never lags)'
   );
 });
 
-t.test('tier 1: partitions row leader_node_id', async (t) => {
+t.test('cached partitions row does not grant leadership without live Tier-0 authority', async (t) => {
   const cache = {
     get: (table, key) =>
       table === 'partitions' && key === CONTROL_PLANE_PUBLICATIONS_PARTITION_ID ?
@@ -47,7 +47,12 @@ t.test('tier 1: partitions row leader_node_id', async (t) => {
         null,
     find: () => null,
   };
-  t.equal(isControlPlanePublicationsWriteLeader(cache, 'seed'), true, 'leader');
+  t.strictSame(
+    resolveControlPlanePublicationsLeadership(cache, 'seed'),
+    {isLeader: false, tier: LEADERSHIP_TIER.NONE},
+    'absent live probe fails closed even when cached partitions row names this node',
+  );
+  t.equal(isControlPlanePublicationsWriteLeader(cache, 'seed'), false, 'no cached fallback');
   t.equal(isControlPlanePublicationsWriteLeader(cache, 'rejoiner'), false, 'non-leader');
 });
 
@@ -82,7 +87,7 @@ t.test('tier 0: live non-leader verdict wins over stale partition row', async (t
   );
 });
 
-t.test('tier 0: unavailable live probe falls back to partition row', async (t) => {
+t.test('tier 0: throwing live probe fails closed instead of falling back to cache', async (t) => {
   const leaderCache = {
     get: (table, key) =>
       table === 'partitions' && key === CONTROL_PLANE_PUBLICATIONS_PARTITION_ID ?
@@ -101,8 +106,8 @@ t.test('tier 0: unavailable live probe falls back to partition row', async (t) =
       'seed',
       throwingProbe,
     ),
-    {isLeader: true, tier: LEADERSHIP_TIER.PARTITION_ROW},
-    'a failed live probe is unavailable, not a live non-leader verdict',
+    {isLeader: false, tier: LEADERSHIP_TIER.NONE},
+    'a failed live probe returns NONE rather than granting leadership from cache',
   );
   t.equal(
     isControlPlanePublicationsWriteLeader(
@@ -110,12 +115,12 @@ t.test('tier 0: unavailable live probe falls back to partition row', async (t) =
       'seed',
       throwingProbe,
     ),
-    true,
-    'predicate preserves the cache fallback when live probing fails',
+    false,
+    'predicate fails closed when live probing fails',
   );
 });
 
-t.test('tier 2: live services raft_role witness (case-insensitive)', async (t) => {
+t.test('cached services witness does not grant leadership without live Tier-0 authority', async (t) => {
   const cache = {
     get: () => null,
     find: (table, predicate) =>
@@ -128,7 +133,11 @@ t.test('tier 2: live services raft_role witness (case-insensitive)', async (t) =
         {} :
         null,
   };
-  t.equal(isControlPlanePublicationsWriteLeader(cache, 'seed'), true);
+  t.strictSame(
+    resolveControlPlanePublicationsLeadership(cache, 'seed'),
+    {isLeader: false, tier: LEADERSHIP_TIER.NONE},
+  );
+  t.equal(isControlPlanePublicationsWriteLeader(cache, 'seed'), false);
   t.equal(isControlPlanePublicationsWriteLeader(cache, 'other'), false);
 });
 
@@ -148,7 +157,7 @@ t.test('fail-safe: null cache / nodeId / throwing cache -> false', async (t) => 
   );
 });
 
-t.test('resolveLeadership reports the deciding tier', async (t) => {
+t.test('resolveLeadership reports RAFT_LIVE or NONE only', async (t) => {
   const emptyCache = {get: () => null, find: () => null};
   t.strictSame(
     resolveControlPlanePublicationsLeadership(emptyCache, 'seed', {
@@ -167,14 +176,14 @@ t.test('resolveLeadership reports the deciding tier', async (t) => {
       {get: () => ({leader_node_id: 'seed'}), find: () => null},
       'seed',
     ),
-    {isLeader: true, tier: LEADERSHIP_TIER.PARTITION_ROW},
+    {isLeader: false, tier: LEADERSHIP_TIER.NONE},
   );
   t.strictSame(
     resolveControlPlanePublicationsLeadership(
       {get: () => null, find: () => ({})},
       'seed',
     ),
-    {isLeader: true, tier: LEADERSHIP_TIER.SERVICES_WITNESS},
+    {isLeader: false, tier: LEADERSHIP_TIER.NONE},
   );
   t.strictSame(
     resolveControlPlanePublicationsLeadership(emptyCache, 'seed'),

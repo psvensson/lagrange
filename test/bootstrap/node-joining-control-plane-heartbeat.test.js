@@ -254,7 +254,7 @@ test('NodeJoiningService fails closed before writers when READY transition is in
       seedNodeAddress: 'http://ddb-test-reuse-3-1:3000',
     });
     let writerActivations = 0;
-    service.activateControlPlaneBackgroundWriters = () => {
+    service.runtimeHandoffOwner.activateControlPlaneBackgroundWriters = () => {
       writerActivations += 1;
     };
 

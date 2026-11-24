@@ -164,26 +164,6 @@ class AuthoritativeRowMutationHelper {
     return this.pendingValue !== null && this.pendingValue !== value;
   }
 
-  syncFromCache() {
-    const cachedValue = this.readValueFromCache(this.systemTableCache);
-    if (!cachedValue) {
-      return false;
-    }
-    const liveValue = this.readLiveValue ?
-      this.readLiveValue(cachedValue) :
-      null;
-    if (liveValue && liveValue !== cachedValue) {
-      return false;
-    }
-
-    this.persistedValue = cachedValue;
-    if (this.pendingValue === cachedValue) {
-      this.pendingValue = null;
-      return true;
-    }
-    return false;
-  }
-
   async flush() {
     let settled = null;
     while (this.inFlightPromise) {
@@ -214,25 +194,14 @@ class AuthoritativeRowMutationHelper {
       });
     }
 
-    // Cache-equality dedup (syncFromCache) treats a merged-cache row equal to
-    // the pending value as proof of durable persistence. That proof is FALSE
-    // when the row was locally seeded (CL-035 voter-ready seed): the durable
-    // write silently drops and the actual never lands (affinity-demo run-27,
-    // quest formation-ledger-post-spread-voter-visibility-latency). Helpers
-    // that supply readAuthoritativeRow therefore skip the cache dedup here
-    // and confirm against the authoritative row inside the flush instead;
-    // helpers without the capability (e.g. wasm transport shims) keep the
-    // legacy dedup unchanged.
-    const recoveredFromCacheGap =
-      this.readAuthoritativeRow ? false : this.syncFromCache();
-    const preparedResult = this.resolvePreparedFlush(recoveredFromCacheGap);
+    const preparedResult = this.resolvePreparedFlush();
     if (preparedResult) {
       return preparedResult;
     }
-    return this.resolveFlushReadiness(recoveredFromCacheGap);
+    return this.resolveFlushReadiness();
   }
 
-  resolvePreparedFlush(recoveredFromCacheGap) {
+  resolvePreparedFlush() {
     const prepareResult = this.prepareFlush({
       pendingValue: this.pendingValue,
       persistedValue: this.persistedValue,
@@ -254,13 +223,12 @@ class AuthoritativeRowMutationHelper {
     }
     return this.buildResult({
       cacheVisible: this.pendingValue === null,
-      recoveredFromCacheGap,
       reason:
         prepareResult.reason || AUTHORITATIVE_ROW_MUTATION_REASON.SKIPPED,
     });
   }
 
-  resolveFlushReadiness(recoveredFromCacheGap) {
+  resolveFlushReadiness() {
     const noMutationAvailable =
       !this.cdcIntegrationService ||
       !this.pendingValue ||
@@ -272,10 +240,7 @@ class AuthoritativeRowMutationHelper {
       }
       return this.buildResult({
         cacheVisible: this.pendingValue === null,
-        recoveredFromCacheGap,
-        reason: recoveredFromCacheGap ?
-          AUTHORITATIVE_ROW_MUTATION_REASON.CACHE_VISIBILITY_GAP_RECOVERED :
-          AUTHORITATIVE_ROW_MUTATION_REASON.NOOP,
+        reason: AUTHORITATIVE_ROW_MUTATION_REASON.NOOP,
       });
     }
 
@@ -284,7 +249,6 @@ class AuthoritativeRowMutationHelper {
     }
     this.scheduleRetry();
     return this.buildResult({
-      recoveredFromCacheGap,
       reason: AUTHORITATIVE_ROW_MUTATION_REASON.OWNER_NOT_READY,
     });
   }
@@ -486,23 +450,17 @@ class AuthoritativeRowMutationHelper {
   }
 
   /**
-   * Capability-gated authoritative dedup + CAS-guard acquisition. The
-   * readAuthoritativeRow callback contract:
-   * `async (pendingValue) => {supported?: boolean, available: boolean,
+   * Authoritative dedup + CAS-guard acquisition. The readAuthoritativeRow
+   * callback contract: `async (pendingValue) => {available: boolean,
    * row: Object|null}` — a READ-ONLY point read of the authoritative row
    * (never a cache refresh: the merged cache can hold a locally seeded row
    * that out-versions the durable one).
    *
    * Outcomes:
-   * - capability explicitly absent at runtime (supported === false): fall
-   *   back to the legacy cache dedup for this flush;
-   * - the authoritative read throws or returns no usable observation: defer
-   *   with a scheduled retry. A read failure is not evidence that the
-   *   capability is absent, and falling back to a locally seeded merged-cache
-   *   row can otherwise mistake visibility for durable persistence;
-   * - authority unreadable or the durable row does not exist yet: defer with
-   *   a scheduled retry (a cache row equal to pending is NOT durability
-   *   evidence, and an UPDATE cannot apply to a missing row);
+   * - the authoritative read throws, reports unavailable, or returns no
+   *   durable row: defer with a scheduled retry (a cache row equal to pending
+   *   is NEVER durability evidence, and an UPDATE cannot apply to a missing
+   *   row);
    * - durable row already carries the pending value: dedup honestly;
    * - otherwise: proceed to the CAS write guarded by the authoritative row.
    * @param {*} value - The pending value being flushed.
@@ -529,13 +487,12 @@ class AuthoritativeRowMutationHelper {
         }),
       };
     }
-    if (probe?.supported === false) {
-      const legacyResult = this.resolveLegacyCacheDedupResult();
-      return legacyResult ?
-        {settled: true, result: legacyResult} :
-        {settled: false, row: null};
-    }
-    if (!probe || probe.available === false || !probe.row) {
+    if (
+      !probe ||
+      probe.supported === false ||
+      probe.available === false ||
+      !probe.row
+    ) {
       this.reportProbeDeferred(
         value,
         AUTHORITATIVE_PROBE_DEFER_CAUSE.ROW_UNAVAILABLE,
@@ -576,31 +533,6 @@ class AuthoritativeRowMutationHelper {
       };
     }
     return {settled: false, row: probe.row};
-  }
-
-  /**
-   * Legacy cache dedup for flushes whose authoritative-read capability is
-   * absent at runtime: sync from the merged cache and settle when the pending
-   * value drained or already matches the persisted one.
-   * @return {Object|null} A settled flush result, or null to proceed.
-   * @private
-   */
-  resolveLegacyCacheDedupResult() {
-    const recoveredFromCacheGap = this.syncFromCache();
-    if (
-      this.pendingValue !== null &&
-      this.pendingValue !== this.persistedValue
-    ) {
-      return null;
-    }
-    this.retryAttemptCount = 0;
-    return this.buildResult({
-      cacheVisible: this.pendingValue === null,
-      recoveredFromCacheGap,
-      reason: recoveredFromCacheGap ?
-        AUTHORITATIVE_ROW_MUTATION_REASON.CACHE_VISIBILITY_GAP_RECOVERED :
-        AUTHORITATIVE_ROW_MUTATION_REASON.NOOP,
-    });
   }
 
   /**

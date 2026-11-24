@@ -159,7 +159,7 @@ function stubJoinServiceForCheckpointTests(service) {
     tracking.joinCompleted = true;
     service.lifecycleStateMachine.transition('ready');
     service.phase = JOINING_PHASE.COMPLETE;
-    service.hasActiveControlPlaneBackgroundWriters = () => true;
+    service.runtimeHandoffOwner.hasActiveControlPlaneBackgroundWriters = () => true;
     service.emit(BOOTSTRAP_EVENT.COMPLETE, {
       nodeId: service.nodeId,
       duration: service.now() - service.startTime,
@@ -592,7 +592,7 @@ async (t) => {
   service.lifecycleStateMachine.transition('discovering');
   service.lifecycleStateMachine.transition('joining');
   service.lifecycleStateMachine.transition('ready');
-  service.hasActiveControlPlaneBackgroundWriters = () => true;
+  service.runtimeHandoffOwner.hasActiveControlPlaneBackgroundWriters = () => true;
   t.equal(
     finalizedStep.shouldRerun(),
     false,

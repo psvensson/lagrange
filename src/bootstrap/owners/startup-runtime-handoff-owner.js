@@ -31,28 +31,7 @@ class StartupRuntimeHandoffOwner {
     this.transactionRecoveryOutcome = null;
   }
 
-  getCompatibilityService() {
-    return this.delegates.getCompatibilityService?.() || null;
-  }
-
-  getCompatibilityOverride(methodName) {
-    const service = this.getCompatibilityService();
-    if (!service || !Object.prototype.hasOwnProperty.call(service, methodName)) {
-      return null;
-    }
-
-    const override = service[methodName];
-    return typeof override === LOCAL_STR_FUNCTION ? override.bind(service) : null;
-  }
-
   hasActiveControlPlaneBackgroundWriters() {
-    const override = this.getCompatibilityOverride(
-      'hasActiveControlPlaneBackgroundWriters',
-    );
-    if (override) {
-      return override();
-    }
-
     const leaseService = this.delegates.getLeaseService?.() || null;
     const heartbeatService = this.delegates.getHeartbeatService?.() || null;
     const runningLeaseState = this.delegates.getLeaseRunningState?.();
@@ -114,13 +93,6 @@ class StartupRuntimeHandoffOwner {
   }
 
   async activateControlPlaneBackgroundWriters() {
-    const override = this.getCompatibilityOverride(
-      'activateControlPlaneBackgroundWriters',
-    );
-    if (override) {
-      return override();
-    }
-
     if (this.delegates.isShuttingDown?.() === true) {
       return;
     }
@@ -298,11 +270,7 @@ class StartupRuntimeHandoffOwner {
     ) {
       return DORMANT_TRANSACTION_RECOVERY;
     }
-    const override = this.getCompatibilityOverride(
-      'activateDistributedTransactionRecovery',
-    );
-    const activate = override ||
-      this.delegates.activateDistributedTransactionRecovery;
+    const activate = this.delegates.activateDistributedTransactionRecovery;
     if (typeof activate !== LOCAL_STR_FUNCTION) {
       return DORMANT_TRANSACTION_RECOVERY;
     }
@@ -323,22 +291,10 @@ class StartupRuntimeHandoffOwner {
   }
 
   flushDeferredCreateSelfHostedMetadata() {
-    const override = this.getCompatibilityOverride(
-      'flushDeferredCreateSelfHostedMetadata',
-    );
-    if (override) {
-      return override();
-    }
     return this.delegates.flushDeferredCreateSelfHostedMetadata?.();
   }
 
   startLatencyTopologyLifecycle() {
-    const override = this.getCompatibilityOverride(
-      'startLatencyTopologyLifecycle',
-    );
-    if (override) {
-      return override();
-    }
     return this.delegates.startLatencyTopologyLifecycle?.();
   }
 }
