@@ -64,6 +64,9 @@ test('a deferred planning snapshot keeps one identity per owner and token ' +
   const owner = new ReadinessPlanningSnapshotOwner({
     service: {
       nodeLivenessSemanticProjectionOwner: {subscribe: () => () => {}},
+      getNodeLivenessSemanticIdentity: () => null,
+      getNodeRow: (nodeId) => ({node_id: nodeId}),
+      buildNodeReadinessSyncCurrent: (nodeId) => ({nodeId}),
     },
     now: () => 1000,
     scheduleDrainFn: () => {},
@@ -431,6 +434,9 @@ test('the readiness planning owner reuses a completed snapshot within one ' +
           };
         },
       },
+      getNodeLivenessSemanticIdentity: () => null,
+      getNodeRow: (nodeId) => ({node_id: nodeId}),
+      buildNodeReadinessSyncCurrent: (nodeId) => ({nodeId}),
     },
     now: () => clock,
     scheduleDrainFn: () => {},
@@ -506,3 +512,34 @@ test('the untracked priority planning projection builds its recovery gate ' +
     'a new snapshot identity rebuilds the gate');
   t.end();
 });
+
+test('ReadinessPlanningSnapshotOwner rejects partial service contracts at construction',
+  async (t) => {
+    const completeService = {
+      nodeLivenessSemanticProjectionOwner: {subscribe: () => () => {}},
+      getNodeLivenessSemanticIdentity: () => null,
+      getNodeRow: () => null,
+      buildNodeReadinessSyncCurrent: () => ({}),
+    };
+    for (const omittedField of [
+      'nodeLivenessSemanticProjectionOwner',
+      'getNodeLivenessSemanticIdentity',
+      'getNodeRow',
+      'buildNodeReadinessSyncCurrent',
+    ]) {
+      const partialService = {...completeService};
+      delete partialService[omittedField];
+      t.throws(
+        () => new ReadinessPlanningSnapshotOwner({service: partialService}),
+        TypeError,
+        `omitting ${omittedField} must fail closed at construction`,
+      );
+    }
+    const owner = new ReadinessPlanningSnapshotOwner({service: completeService});
+    t.equal(typeof owner.readCompletedSourceGeneration, 'undefined',
+      'legacy readCompletedSourceGeneration method is removed');
+    t.equal(typeof owner.matchesCompletedSourceGeneration, 'undefined',
+      'legacy matchesCompletedSourceGeneration method is removed');
+    owner.shutdown();
+    t.end();
+  });

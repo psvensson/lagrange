@@ -21,6 +21,8 @@ async (t) => {
   const service = {
     nodeId: 'node-0',
     nodeLivenessSemanticProjectionOwner: {subscribe: () => () => {}},
+    getNodeLivenessSemanticIdentity: () => null,
+    getNodeRow: (nodeId) => ({node_id: nodeId}),
     buildNodeReadinessSyncCurrent: () => snapshot,
   };
   const owner = new ReadinessPlanningSnapshotOwner({

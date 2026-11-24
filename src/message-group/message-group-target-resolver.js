@@ -2,14 +2,9 @@ import {
   COLUMN,
   SERVICE_STATUS,
   SERVICE_TYPE,
-  STATE,
   TABLES,
 } from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
-
-const EMPTY_STRING = '';
-const BOOLEAN_TYPE = 'boolean';
-const MIN_LEASE_TIMESTAMP_MS = 0;
 
 function filterRows(cache, tableName, predicate) {
   if (typeof cache?.filter !== 'function') {
@@ -20,28 +15,6 @@ function filterRows(cache, tableName, predicate) {
 
 function findRow(cache, tableName, predicate) {
   return filterRows(cache, tableName, predicate)[0] || null;
-}
-
-function isReadyNodeRow(nodeRow, nowMs = Date.now()) {
-  if (!nodeRow || nodeRow[COLUMN.CONNECTION_STATE] !== STATE.READY) {
-    return false;
-  }
-  const rawLeaseExpiry = nodeRow[COLUMN.READY_LEASE_EXPIRES_AT];
-  if (
-    rawLeaseExpiry === null ||
-    rawLeaseExpiry === undefined ||
-    rawLeaseExpiry === EMPTY_STRING ||
-    typeof rawLeaseExpiry === BOOLEAN_TYPE
-  ) {
-    return false;
-  }
-  const readyLeaseExpiresAt = Number(rawLeaseExpiry);
-  const now = Number.isFinite(nowMs) ? nowMs : Date.now();
-  return (
-    Number.isFinite(readyLeaseExpiresAt) &&
-    readyLeaseExpiresAt > MIN_LEASE_TIMESTAMP_MS &&
-    readyLeaseExpiresAt > now
-  );
 }
 
 function isReadyNode(cache, nodeId) {
@@ -307,7 +280,6 @@ function resolveMessageGroupTargetAddressFromCache(cache, groupId, options = {})
 }
 
 export {
-  isReadyNodeRow,
   resolveMessageGroupForwardServiceCandidatesFromCache,
   resolveMessageGroupForwardServiceFromCache,
   resolveMessageGroupLeaderServiceFromCache,

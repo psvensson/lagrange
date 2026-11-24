@@ -163,6 +163,7 @@ function createOwner({onBuild = () => {}} = {}) {
   const service = {
     clusterMemberStaleHeartbeatMaxAgeMs: 60_000,
     nodeLivenessSemanticProjectionOwner: {subscribe: () => () => {}},
+    getNodeLivenessSemanticIdentity: () => null,
     getNodeRow: () => ({node_id: 'owner-a'}),
     getNodeTransportState: () => ({
       connected,

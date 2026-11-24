@@ -7,6 +7,7 @@ import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {
   getMissingSystemServiceLeaders,
   isSystemTableWriteReady,
+  resolveCanonicalLeaderService,
 } from '../../src/cache/leader-readiness-gate.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -683,3 +684,36 @@ test('isSystemTableWriteReady - services table uses relaxed check without addres
   t.equal(result, true,
     'Services table should use relaxed check (no address required)');
 });
+
+test('resolveCanonicalLeaderService never falls back to observable services when owner leader_node_id is absent',
+  async (t) => {
+    const cache = createMockCache({
+      partitions: [
+        createPartitionRecord('p1', {leaderNodeId: null}),
+      ],
+      services: [
+        createPartitionLeaderService('p1', {
+          nodeId: 'node-1',
+          address: 'ws://node1:8080',
+        }),
+      ],
+    });
+
+    const resolved = resolveCanonicalLeaderService(
+      cache,
+      SERVICE_TYPE.PARTITION,
+      'p1',
+      {allowLeaderServiceFallback: true},
+    );
+
+    t.equal(resolved.leaderNodeId, null,
+      'absent owner leader_node_id must remain null without service fallback');
+    t.equal(resolved.leaderService, null,
+      'observable service must never substitute for missing canonical leader_node_id');
+
+    const missing = getMissingSystemServiceLeaders(cache, {
+      allowLeaderServiceFallback: true,
+    });
+    t.same(missing.missingPartitionLeaders, ['p1'],
+      'getMissingSystemServiceLeaders ignores allowLeaderServiceFallback and reports p1 missing');
+  });

@@ -45,6 +45,9 @@ const BOOT_INCARNATION_ERROR_CODE = Object.freeze({
   STATE_UNREADABLE: 'BOOT_INCARNATION_STATE_UNREADABLE',
 });
 const FILE_NOT_FOUND_ERROR = 'ENOENT';
+const DATA_DIRECTORY_OWNER_DB_PREFIX = '.lagrange-data-directory-owner.sqlite';
+const TRANSIENT_FILE_SUFFIXES = Object.freeze(['.tmp', '.lock']);
+const TRANSIENT_EXACT_NAMES = Object.freeze(new Set(['.write-test']));
 // "This data directory has issued nothing yet": a count, never an
 // incarnation handed to a lifecycle.
 const NOTHING_ISSUED = 0;
@@ -136,6 +139,32 @@ function readOwnedReservation(file) {
   return state.reserved;
 }
 
+function isTransientDataDirEntry(entryName) {
+  if (entryName === DATA_DIRECTORY_OWNER_DB_PREFIX ||
+      entryName.startsWith(`${DATA_DIRECTORY_OWNER_DB_PREFIX}-`)) {
+    return true;
+  }
+  if (TRANSIENT_EXACT_NAMES.has(entryName)) {
+    return true;
+  }
+  return TRANSIENT_FILE_SUFFIXES.some((suffix) => entryName.endsWith(suffix));
+}
+
+function hasPriorDurableEvidence(dataDir) {
+  const directory = path.resolve(dataDir.trim());
+  let entries;
+  try {
+    entries = fs.readdirSync(directory);
+  } catch (error) {
+    if (error?.code === FILE_NOT_FOUND_ERROR) return false;
+    throw bootIncarnationError(
+      BOOT_INCARNATION_ERROR_CODE.STATE_UNREADABLE, error);
+  }
+  return entries.some(
+    (entry) => entry !== BOOT_INCARNATION_FILENAME && !isTransientDataDirEntry(entry),
+  );
+}
+
 /**
  * The highest boot incarnation this data directory has ever issued (0 when
  * it never issued one).
@@ -144,11 +173,16 @@ function readOwnedReservation(file) {
  */
 async function readIssuedBootIncarnation(dataDir) {
   const file = resolveBootIncarnationPath(dataDir);
-  // The owner's reservation file is the sole authority: absent means nothing
-  // issued yet (0); present but damaged fails closed.
-  return stateFileExists(file) ?
-    readOwnedReservation(file) :
-    NOTHING_ISSUED;
+  // The owner's reservation file is the sole authority: absent in a virgin
+  // directory means nothing issued yet (0); absent in a directory that already
+  // holds prior durable state, or present but damaged, fails closed.
+  if (stateFileExists(file)) {
+    return readOwnedReservation(file);
+  }
+  if (hasPriorDurableEvidence(dataDir)) {
+    throw bootIncarnationError(BOOT_INCARNATION_ERROR_CODE.STATE_UNREADABLE);
+  }
+  return NOTHING_ISSUED;
 }
 
 /**

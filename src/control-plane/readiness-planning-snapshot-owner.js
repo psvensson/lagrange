@@ -71,9 +71,16 @@ const READINESS_PLANNING_MAX_RETRY_ATTEMPTS = 3;
 const READINESS_PLANNING_MAX_OPTION_VARIANTS_PER_OWNER = 16;
 const NO_ADMISSION_TERMS = 0;
 const TYPE_FUNCTION = 'function';
+const REQUIRED_SEMANTIC_SERVICE_METHODS = Object.freeze([
+  'getNodeLivenessSemanticIdentity',
+  'getNodeRow',
+  'buildNodeReadinessSyncCurrent',
+]);
 const MISSING_NODE_LIVENESS_OWNER_ERROR =
   'ReadinessPlanningSnapshotOwner requires ' +
   'service.nodeLivenessSemanticProjectionOwner.subscribe';
+const MISSING_SEMANTIC_SERVICE_METHOD_PREFIX =
+  'ReadinessPlanningSnapshotOwner requires service.';
 
 function initializeBuildVariantState(owner) {
   owner.completedSnapshotsByOwnerAndBuildKey = new MapConstructor();
@@ -111,11 +118,24 @@ function supportsCapacitySemanticPlanning(service) {
       ?.getCapacitySemanticIdentity === 'function';
 }
 
-function initializeSemanticPlanningState(owner) {
-  if (typeof owner.service?.nodeLivenessSemanticProjectionOwner?.subscribe !==
+function assertSemanticPlanningServiceContract(service) {
+  if (typeof service?.nodeLivenessSemanticProjectionOwner?.subscribe !==
       TYPE_FUNCTION) {
     throw new TypeError(MISSING_NODE_LIVENESS_OWNER_ERROR);
   }
+  for (let index = 0; index < REQUIRED_SEMANTIC_SERVICE_METHODS.length;
+    index += 1) {
+    const methodName = REQUIRED_SEMANTIC_SERVICE_METHODS[index];
+    if (typeof service?.[methodName] !== TYPE_FUNCTION) {
+      throw new TypeError(
+        `${MISSING_SEMANTIC_SERVICE_METHOD_PREFIX}${methodName}`,
+      );
+    }
+  }
+}
+
+function initializeSemanticPlanningState(owner) {
+  assertSemanticPlanningServiceContract(owner.service);
   owner.transportTopologyProjection = readConnectedNodeFingerprint(
     owner.service?.messageRouter,
   );

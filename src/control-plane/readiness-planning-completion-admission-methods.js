@@ -213,21 +213,6 @@ const readinessPlanningCompletionAdmissionMethods = {
     return !formationOwnerKey || formationOwnerKey === ownerKey;
   },
 
-  // Retained only for unversioned legacy compositions. Semantic planning
-  // admission uses the node-typed PlanningIdentity instead.
-  readCompletedSourceGeneration() {
-    return typeof this.service?.readPlanningProjectionSourceGeneration ===
-      'function' ?
-      this.service.readPlanningProjectionSourceGeneration(this.now()) :
-      null;
-  },
-
-  matchesCompletedSourceGeneration(completed) {
-    return completed.sourceGeneration !== null &&
-      completed.sourceGeneration !== undefined &&
-      completed.sourceGeneration === this.readCompletedSourceGeneration();
-  },
-
   // The sealed CL-012 cache-lag bridge, applied by the planning owner at
   // read time for QUERY-ROUTING reads only (participationKind ROUTED_READ):
   // planning reads keep Quest 2's fail-closed, current-evidence semantics,
@@ -371,9 +356,6 @@ const readinessPlanningCompletionAdmissionMethods = {
   },
 
   isNodeRowStillPresent(ownerKey) {
-    if (typeof this.service?.getNodeRow !== 'function') {
-      return true;
-    }
     const nodeRow = this.service.getNodeRow(ownerKey);
     return nodeRow !== null && nodeRow !== undefined;
   },
@@ -397,9 +379,7 @@ const readinessPlanningCompletionAdmissionMethods = {
   //
   // `build_options_key_changed` is stated but unreachable from a read:
   // `readCompleted` is keyed by `buildOptionsKey`, so a record it returns
-  // always carries that same key, and the one other caller
-  // (`handleStaleCompletion`, unversioned legacy compositions) passes the
-  // record it has just built. It is kept because the decision still states
+  // always carries that same key. It is kept because the decision still states
   // it; no input reaches it, so no test drives it.
   canReuseCompletedSnapshot(ownerKey, completed, token, buildOptionsKey) {
     const currentPlanningIdentity =
@@ -566,7 +546,6 @@ const readinessPlanningCompletionAdmissionMethods = {
       capturedToken: currency.currentToken,
       buildOptionsKey,
       planningIdentity: currency.currentSource.identity,
-      sourceGeneration: this.readCompletedSourceGeneration(),
       tokenStatus: currency.current ? TOKEN_STATUS.CURRENT : TOKEN_STATUS.STALE,
       completedAtMs,
       positiveDecisionLiveVeto: this.capturePositiveDecisionLiveVeto(

@@ -13,11 +13,9 @@ model:
 | Admin WebSocket | `admin.websocketPort` | `ADMIN_WS_PORT` | REST + 1 |
 | Transport WebSocket | `node.wsPort` | `TRANSPORT_WS_PORT` | REST + 2 |
 
-Deprecated names remain accepted while their canonical replacement is unset,
-with a startup deprecation warning: `ADMIN_WEBSOCKET_PORT` (now
-`ADMIN_WS_PORT`), `ADMIN_WEBSOCKET_HOST` (now `ADMIN_WS_HOST`), and
-`NODE_WS_PORT` (now `TRANSPORT_WS_PORT`). The canonical name wins when both
-are set.
+Only the canonical environment variables (`REST_API_PORT`, `ADMIN_WS_PORT`,
+`ADMIN_WS_HOST`, and `TRANSPORT_WS_PORT`) are accepted; legacy environment
+variable names are not supported.
 
 Changing only the REST port moves both WebSocket defaults. Either WebSocket
 port can be overridden independently; an explicit override is validated

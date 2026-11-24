@@ -12,13 +12,22 @@
  * (d) node-readiness-policy.js null-safe timestamp parsing and
  *     isNodeReadyLeaseExplicitlyCleared({ status: 'STOPPING',
  *     ready_lease_expires_at: null }) === true;
- * (e) message-group-target-resolver.js isReadyNodeRow rejecting
- *     ready_lease_expires_at: null.
+ * (e) message-group-target-resolver.js rejecting ready_lease_expires_at: null
+ *     through SystemTableCache.getReadyNodes().
  */
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {SERVICE_STATUS, STATE} from '../../src/constants/index.js';
+import {
+  CDC_OPERATION,
+  COLUMN,
+  SERVICE_STATUS,
+  SERVICE_TYPE,
+  STATE,
+  TABLES,
+} from '../../src/constants/index.js';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {HEARTBEAT_DEFAULT} from
   '../../src/control-plane/heartbeat-service-constants.js';
 import {assembleHeartbeatService} from
@@ -46,8 +55,10 @@ import {
   isNodeReadyLeaseExplicitlyCleared,
   wasNodeRecordReadyWhenWritten,
 } from '../../src/node/node-readiness-policy.js';
-import {isReadyNodeRow} from
-  '../../src/message-group/message-group-target-resolver.js';
+import {
+  resolveMessageGroupLeaderServiceFromCache,
+  resolveMessageGroupTargetAddressFromCache,
+} from '../../src/message-group/message-group-target-resolver.js';
 import {
   createMockCache,
   createMockCdc,
@@ -76,9 +87,6 @@ const readinessPolicyModule = {
   getNodeReadyLeaseExpiresAt,
   isNodeReadyLeaseExplicitlyCleared,
   wasNodeRecordReadyWhenWritten,
-};
-const targetResolverModule = {
-  isReadyNodeRow,
 };
 
 test(
@@ -492,52 +500,68 @@ test(
 );
 
 test(
-  'R5 message-group-target-resolver isReadyNodeRow rejects ' +
-    'ready_lease_expires_at: null',
+  'R5 message-group-target-resolver rejects ready_lease_expires_at: null ' +
+    'through SystemTableCache.getReadyNodes()',
   (t) => {
-    t.equal(
-      typeof targetResolverModule.isReadyNodeRow,
-      'function',
-      'message-group-target-resolver exports isReadyNodeRow',
+    const now = Date.now();
+    const cache = new SystemTableCache();
+    cache.applySystemTableChange(TABLES.MESSAGE_GROUPS, CDC_OPERATION.UPSERT, {
+      [COLUMN.GROUP_ID]: 'mg-1',
+      [COLUMN.LEADER_NODE_ID]: 'node-1',
+    });
+    cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
+      [COLUMN.SERVICE_ID]: 'mg-1-r1',
+      [COLUMN.GROUP_ID]: 'mg-1',
+      [COLUMN.NODE_ID]: 'node-1',
+      [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.ADDRESS]: 'node-1/message-group/mg-1-r1',
+      [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
+    });
+    cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+      [COLUMN.NODE_ID]: 'node-1',
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.CONNECTION_STATE]: STATE.READY,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: null,
+    });
+
+    t.same(
+      cache.getReadyNodes(),
+      [],
+      'SystemTableCache.getReadyNodes rejects ready_lease_expires_at: null',
     );
     t.equal(
-      targetResolverModule.isReadyNodeRow?.(
-        {
-          node_id: 'node-1',
-          status: SERVICE_STATUS.ACTIVE,
-          connection_state: STATE.READY,
-          ready_lease_expires_at: null,
-        },
-        1000,
-      ),
-      false,
-      'isReadyNodeRow rejects ready_lease_expires_at: null at positive nowMs',
+      resolveMessageGroupLeaderServiceFromCache(cache, 'mg-1'),
+      null,
+      'resolver rejects READY row with ready_lease_expires_at: null',
     );
     t.equal(
-      targetResolverModule.isReadyNodeRow?.(
-        {
-          node_id: 'node-1',
-          status: SERVICE_STATUS.ACTIVE,
-          connection_state: STATE.READY,
-          ready_lease_expires_at: null,
-        },
-        -10,
-      ),
-      false,
-      'isReadyNodeRow rejects ready_lease_expires_at: null even when nowMs < 0',
+      resolveMessageGroupTargetAddressFromCache(cache, 'mg-1'),
+      null,
+      'target address resolver rejects READY row with ready_lease_expires_at: null',
+    );
+
+    cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+      [COLUMN.NODE_ID]: 'node-1',
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.CONNECTION_STATE]: STATE.READY,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60_000,
+    });
+
+    t.same(
+      cache.getReadyNodes(),
+      ['node-1'],
+      'SystemTableCache.getReadyNodes accepts READY row with live positive lease',
     );
     t.equal(
-      targetResolverModule.isReadyNodeRow?.(
-        {
-          node_id: 'node-1',
-          status: SERVICE_STATUS.ACTIVE,
-          connection_state: STATE.READY,
-          ready_lease_expires_at: 2000,
-        },
-        1000,
-      ),
-      true,
-      'isReadyNodeRow accepts READY row with live positive lease',
+      resolveMessageGroupLeaderServiceFromCache(cache, 'mg-1')?.[COLUMN.SERVICE_ID],
+      'mg-1-r1',
+      'resolver accepts READY row with live positive lease',
+    );
+    t.equal(
+      resolveMessageGroupTargetAddressFromCache(cache, 'mg-1'),
+      'node-1/message-group/mg-1-r1',
+      'target address resolver accepts READY row with live positive lease',
     );
     t.end();
   },

@@ -128,13 +128,6 @@ class CDCEvent {
         undefined :
         value;
     }
-    if (typeof this.primaryKeyField === 'string' &&
-        this.primaryKeyField.trim().length > 0) {
-      const value = this.data?.[this.primaryKeyField.trim()];
-      return value === undefined || value === null || value === '' ?
-        undefined :
-        value;
-    }
     return undefined;
   }
 

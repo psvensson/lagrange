@@ -1367,6 +1367,29 @@ async (t) => {
     false,
     'missing getRole() is unavailable and never treated as leader',
   );
+  const rawDbOnlyService = {
+    partitionId,
+    replicaId: `${partitionId}-r2`,
+    initialized: true,
+    getRole: () => 'leader',
+    db: {
+      prepare: () => ({all: () => [{node_id: 'should-not-read-raw-db'}]}),
+    },
+  };
+  t.equal(
+    service.isLocalPartitionServiceUsable(rawDbOnlyService),
+    false,
+    'raw db.prepare service without executeLocalQuery is not usable',
+  );
+  const rawDbReadResult = await service.executeLocalSystemTableRead(
+    rawDbOnlyService,
+    'SELECT * FROM nodes',
+    [],
+  );
+  t.equal(rawDbReadResult.success, false,
+    'raw db.prepare service cannot satisfy local system-table reads');
+  t.equal(rawDbReadResult.error, 'local_partition_query_unavailable',
+    'missing executeLocalQuery returns typed unavailable without raw db fallback');
   const readResult = await service.executeLocalSystemTableRead(
     staleFlagOnlyService,
     'SELECT * FROM nodes',
@@ -1375,7 +1398,7 @@ async (t) => {
   t.equal(readResult.success, false,
     'executeQuery-only service cannot satisfy local system-table reads');
   t.equal(readResult.error, 'local_partition_query_unavailable',
-    'missing executeLocalQuery/admitted db returns typed unavailable');
+    'missing executeLocalQuery returns typed unavailable');
   t.same(
     service.resolveSystemTablePartitionIds(SYSTEM_TABLE_NAME.NODES),
     [partitionId],

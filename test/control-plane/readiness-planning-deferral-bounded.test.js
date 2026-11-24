@@ -31,8 +31,6 @@ import {ReadinessPlanningSnapshotOwner} from
   '../../src/control-plane/readiness-planning-snapshot-owner.js';
 import {TOKEN_STATUS} from
   '../../src/control-plane/readiness-planning-version-contract.js';
-import {readMembershipPlanningDerivationVersionKey} from
-  '../../src/control-plane/membership-planning-version-key.js';
 import {
   NODE_COUNT,
   T0,
@@ -156,8 +154,6 @@ function createSemanticChurnDrive(options = {}) {
     getNodeLivenessSemanticIdentity: (nodeId, nowMs) =>
       livenessOwner.getNodeLivenessSemanticIdentity(nodeId, nowMs),
     getNodeRow: (nodeId) => cache.get(TABLES.NODES, nodeId),
-    readPlanningProjectionSourceGeneration: (nowMs) =>
-      readMembershipPlanningDerivationVersionKey(cache, nowMs),
     buildNodeReadinessSyncCurrent(nodeId) {
       buildRecords.push({nodeId, atMs: state.clock});
       const dimensions = {};
@@ -240,8 +236,6 @@ function createSemanticChurnDrive(options = {}) {
       servedCompletions.push({
         ownerKey,
         tokenStatus: completed.tokenStatus,
-        sourceGenerationMatches:
-          this.matchesCompletedSourceGeneration(completed),
         live: this.isCompletedSnapshotLive(ownerKey, completed),
         tokenEqual: this.tokensEqual(completed.capturedToken, token),
         vector: readinessDecisionVector(completed.snapshot),
