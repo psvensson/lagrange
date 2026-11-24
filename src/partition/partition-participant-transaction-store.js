@@ -41,7 +41,6 @@ import {
   PARTICIPANT_TRANSACTION_BYTES as BYTES,
   PARTICIPANT_TRANSACTION_COMMAND as COMMAND,
   PARTICIPANT_TRANSACTION_DECISION as DECISION,
-  PARTICIPANT_TRANSACTION_GENERATION_ORIGIN_COLUMNS as ORIGIN_COLUMNS,
   PARTICIPANT_TRANSACTION_SQL as SQL,
   PARTICIPANT_TRANSACTION_STATE as STATE,
   PARTICIPANT_TRANSACTION_STORE_ERROR as STORE_ERROR,
@@ -103,8 +102,8 @@ const OUTCOME_OF_STATE = Object.freeze({
 
 /**
  * The participant store's open hook, run by the lifecycle owner on every
- * connection it opens: the transaction table, the generation row (its
- * origin columns added to an older table), and the connection's stamp.
+ * connection it opens: the transaction table, the generation row, and the
+ * connection's stamp.
  * @param {Object} db - The partition's newly opened connection.
  */
 function openParticipantTransactionStore(db) {
@@ -113,13 +112,6 @@ function openParticipantTransactionStore(db) {
   db.exec(SQL.CREATE_STATE_INDEX);
   db.exec(SQL.CREATE_GENERATION_TABLE);
   db.exec(SQL.CREATE_GENERATION_HISTORY_TABLE);
-  const present = new Set(db.prepare(SQL.GENERATION_TABLE_COLUMNS).all()
-    .map((column) => column.name));
-  for (const [column, addColumn] of Object.entries(ORIGIN_COLUMNS)) {
-    if (!present.has(column)) {
-      db.exec(addColumn);
-    }
-  }
   db.prepare(SQL.INSERT_INITIAL_GENERATION).run();
   ensureLockingReadTableInitialized(db, {readOnly: false});
   recordPreparedObservation(

@@ -398,3 +398,151 @@ test('R2 sweep discovery: live undecided waits for deadline while decided rows s
       'once decided rows reach terminal status, sweep discovery is empty until live deadline',
     );
   });
+
+test('restart cache recovery filters already-terminal rows and authoritative recovery never downgrades terminal status',
+  async (t) => {
+    const now = 5000;
+    const gateway = createTransactionPersistenceGateway();
+    t.after(() => gateway.db.close());
+    const commitRow = {
+      ...durableRow('6'.repeat(32), 'COMMIT'),
+      status: 'COMMITTED',
+      timeout_deadline: now - 10,
+    };
+    const rollbackRow = {
+      ...durableRow('7'.repeat(32), 'ROLLBACK'),
+      status: 'ROLLED_BACK',
+      timeout_deadline: now - 10,
+    };
+    gateway.seed('sql_transactions', commitRow);
+    gateway.seed('sql_transactions', rollbackRow);
+    gateway.seed('sql_transaction_participants', {
+      participant_id: `${commitRow.transaction_id}:p1`,
+      transaction_id: commitRow.transaction_id,
+      partition_id: 'p1',
+      status: 'COMMITTED',
+      created_at: 1,
+      updated_at: 1,
+    });
+    gateway.seed('sql_transaction_participants', {
+      participant_id: `${rollbackRow.transaction_id}:p1`,
+      transaction_id: rollbackRow.transaction_id,
+      partition_id: 'p1',
+      status: 'ROLLED_BACK',
+      created_at: 1,
+      updated_at: 1,
+    });
+
+    const cacheTables = new Set([
+      'sql_transactions',
+      'sql_transaction_participants',
+      'sql_write_operations',
+    ]);
+    const cache = {
+      getAll: (tableName) => cacheTables.has(tableName) ? gateway.rows(tableName) : [],
+    };
+    const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      controlPlaneSystemTableGateway: gateway,
+      systemCache: cache,
+      logger,
+      now: () => now,
+      autoStartDistributedTransactionRecovery: false,
+    });
+    t.after(() => engine.shutdown());
+
+    // 1. Cache recovery filters by isSweepEligibleTransactionRow: terminal rows are never enrolled.
+    engine.recoverDistributedTransactionStateFromCache();
+    assert.equal(engine.transactionStateRecovered, true);
+    assert.equal(engine.transactionCoordinator.recoveredTransactionIds.size, 0,
+      'already-terminal rows in cache must never be enrolled as active recovery obligations');
+
+    // 2. Direct recoverFromSystemTables also skips fully terminal rows when all participants match.
+    engine.transactionCoordinator.recoverFromSystemTables({
+      transactions: [commitRow, rollbackRow],
+      participants: gateway.rows('sql_transaction_participants'),
+      writeOperations: [],
+    });
+    assert.equal(engine.transactionCoordinator.recoveredTransactionIds.size, 0,
+      'fully terminal rows with all participants terminal must not be enrolled');
+
+    // 3. Even if an already-terminal obligation was discovered before participants became terminal,
+    // authoritative recovery preserves terminal status and never downgrades to COMMITTING/ROLLING_BACK.
+    const persistedStatuses = [];
+    const originalPersist = engine.transactionCoordinator.persistTransaction;
+    engine.transactionCoordinator.persistTransaction = async (record) => {
+      persistedStatuses.push(`${record.transactionId}:${record.status}`);
+      return originalPersist(record);
+    };
+    const rpcCalls = [];
+    engine.transactionCoordinator.commitParticipant = async (_s, p) => rpcCalls.push(`COMMIT:${p}`);
+    engine.transactionCoordinator.rollbackParticipant = async (_s, p) => rpcCalls.push(`ROLLBACK:${p}`);
+
+    discover(engine.transactionCoordinator, commitRow, 'ACTIVE');
+    discover(engine.transactionCoordinator, rollbackRow, 'ACTIVE');
+    const replay = await engine.transactionCoordinator.resumeRecoveredTransactions();
+    assert.equal(replay.resumed, 2);
+    assert.deepEqual(persistedStatuses, [],
+      'terminal durable rows must never be downgraded to COMMITTING/ROLLING_BACK or rewritten');
+    assert.deepEqual(rpcCalls, [],
+      'already-terminal participants must not receive redundant commit/rollback RPCs');
+    const byTx = new Map(
+      gateway.rows('sql_transactions').map((row) => [row.transaction_id, row]),
+    );
+    assert.equal(byTx.get(commitRow.transaction_id).status, 'COMMITTED');
+    assert.equal(byTx.get(rollbackRow.transaction_id).status, 'ROLLED_BACK');
+  });
+
+test('abortTimedOutTransaction freezes and records ROLLBACK before status transitions to ROLLING_BACK',
+  async (t) => {
+    const gateway = createTransactionPersistenceGateway();
+    t.after(() => gateway.db.close());
+    const observedWrites = [];
+    const baseSubmit = gateway.submitMutation;
+    gateway.submitMutation = async (mutation, options) => {
+      if (mutation.tableName === 'sql_transactions') {
+        observedWrites.push({
+          type: mutation.type,
+          status: mutation.data?.status ?? null,
+          participantSetState: mutation.data?.participant_set_state ?? null,
+          decision: mutation.data?.decision ?? null,
+        });
+      }
+      return baseSubmit(mutation, options);
+    };
+    const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      controlPlaneSystemTableGateway: gateway,
+      logger,
+      autoStartDistributedTransactionRecovery: false,
+    });
+    t.after(() => engine.shutdown());
+    const coordinator = engine.transactionCoordinator;
+    coordinator.beginParticipant = async () => {};
+    coordinator.rollbackParticipant = async () => ({
+      success: true, durable: true, state: 'ROLLED_BACK', outcome: 'NOT_COMMITTED',
+    });
+
+    await coordinator.begin('timeout-session');
+    await coordinator.enlistParticipants('timeout-session', ['p1']);
+    const tx = coordinator.workflowCoordinator.getWorkflowByOwnerKey('timeout-session');
+    observedWrites.length = 0;
+
+    const aborted = await coordinator.abortTimedOutTransaction(tx, 'PREPARE');
+    assert.equal(aborted.success, false);
+    assert.equal(aborted.errorCode, 'TIMEOUT');
+    const rollingBackIdx = observedWrites.findIndex((w) => w.status === 'ROLLING_BACK');
+    const freezeIdx = observedWrites.findIndex((w) => w.participantSetState === 'FROZEN');
+    const decisionIdx = observedWrites.findIndex((w) => w.decision === 'ROLLBACK');
+    assert.ok(freezeIdx >= 0, 'abort must freeze participant_set_state');
+    assert.ok(decisionIdx >= freezeIdx, 'abort must record ROLLBACK decision after freeze');
+    assert.equal(
+      rollingBackIdx !== -1 && rollingBackIdx < decisionIdx,
+      false,
+      'abort must never persist ROLLING_BACK while participant_set_state is OPEN and decision is null',
+    );
+    const finalRow = gateway.rows('sql_transactions')[0];
+    assert.equal(finalRow.participant_set_state, 'FROZEN');
+    assert.equal(finalRow.decision, 'ROLLBACK');
+    assert.equal(finalRow.status, 'ROLLED_BACK');
+  });

@@ -411,11 +411,16 @@ const distributedTransactionDecisionProtocolMethods = {
     if (tx.participants.size === 0) {
       tx[COMMIT_POINT_REACHED_FIELD] = false;
       await this.releaseReadOnlyParticipants(tx);
-      await this.setTransactionStatus(tx, TRANSACTION_STATUS.COMMITTED);
+      if (tx.status !== TRANSACTION_STATUS.COMMITTED) {
+        await this.setTransactionStatus(tx, TRANSACTION_STATUS.COMMITTED);
+      }
       endTransaction(this, tx);
       return commitSuccessResult(this, tx);
     }
-    if (tx.status !== TRANSACTION_STATUS.COMMITTING) {
+    if (
+      tx.status !== TRANSACTION_STATUS.COMMITTING &&
+      tx.status !== TRANSACTION_STATUS.COMMITTED
+    ) {
       await this.setTransactionStatus(tx, TRANSACTION_STATUS.COMMITTING);
     }
     const participantKeys = this.getCommitParticipantKeys(tx);
@@ -453,7 +458,9 @@ const distributedTransactionDecisionProtocolMethods = {
       };
     }
     await this.releaseReadOnlyParticipants(tx);
-    await this.setTransactionStatus(tx, TRANSACTION_STATUS.COMMITTED);
+    if (tx.status !== TRANSACTION_STATUS.COMMITTED) {
+      await this.setTransactionStatus(tx, TRANSACTION_STATUS.COMMITTED);
+    }
     endTransaction(this, tx);
     return commitSuccessResult(this, tx);
   },
@@ -500,7 +507,9 @@ const distributedTransactionDecisionProtocolMethods = {
   async runRollbackStage(tx, requestOf) {
     if (tx.participants.size === 0) {
       await this.releaseReadOnlyParticipants(tx);
-      await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLED_BACK);
+      if (tx.status !== TRANSACTION_STATUS.ROLLED_BACK) {
+        await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLED_BACK);
+      }
       endTransaction(this, tx);
       return {
         success: true,
@@ -512,28 +521,39 @@ const distributedTransactionDecisionProtocolMethods = {
         firstFailedParticipant: null,
       };
     }
-    if (tx.status !== TRANSACTION_STATUS.ROLLING_BACK) {
+    if (
+      tx.status !== TRANSACTION_STATUS.ROLLING_BACK &&
+      tx.status !== TRANSACTION_STATUS.ROLLED_BACK
+    ) {
       await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLING_BACK);
     }
+    const rollbackParticipantKeys = this.getRollbackParticipantKeys(tx);
     const startedAtMs = resolveNowMs();
-    const rollbackFailures = await this.executeParticipantStage(
-      tx,
-      PARTICIPANT_STATUS.ROLLING_BACK,
-      PARTICIPANT_STATUS.ROLLED_BACK,
-      (partitionId) => this.rollbackParticipant(tx.sessionId, partitionId,
-        requestOf(partitionId)),
-      {participantKeys: this.getRollbackParticipantKeys(tx)},
-    );
+    const rollbackFailures =
+      rollbackParticipantKeys.length === 0 && tx.participants.size > 0 ? [] :
+        await this.executeParticipantStage(
+          tx,
+          PARTICIPANT_STATUS.ROLLING_BACK,
+          PARTICIPANT_STATUS.ROLLED_BACK,
+          (partitionId) => this.rollbackParticipant(tx.sessionId, partitionId,
+            requestOf(partitionId)),
+          {participantKeys: rollbackParticipantKeys},
+        );
     await this.releaseReadOnlyParticipants(tx);
     if (tx?.telemetry) {
       tx.telemetry.rollbackPhaseMs += Math.max(0, resolveNowMs() - startedAtMs);
     }
     if (rollbackFailures.length > 0) {
-      if (tx.status !== TRANSACTION_STATUS.ROLLING_BACK) {
+      if (
+        tx.status !== TRANSACTION_STATUS.ROLLING_BACK &&
+        tx.status !== TRANSACTION_STATUS.ROLLED_BACK
+      ) {
         await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLING_BACK);
       }
     } else {
-      await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLED_BACK);
+      if (tx.status !== TRANSACTION_STATUS.ROLLED_BACK) {
+        await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLED_BACK);
+      }
       endTransaction(this, tx);
     }
     return {

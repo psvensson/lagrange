@@ -20,7 +20,6 @@ import {
   QUERY_ERROR_MSG,
 } from '../query-constants.js';
 import {
-  TERMINAL_TRANSACTION_STATUS,
   TRANSACTION_STATUS,
 } from './distributed-transaction-coordinator-constants.js';
 
@@ -47,51 +46,30 @@ function readTransactionDecisionField(row, snakeKey, camelKey) {
     row[camelKey];
 }
 
-function readTransactionDecisionFieldWithActiveLegacyDefault(
-  row,
-  snakeKey,
-  camelKey,
-  status,
-  legacyDefault,
-) {
-  const value = readTransactionDecisionField(row, snakeKey, camelKey);
-  return value === undefined && status === TRANSACTION_STATUS.ACTIVE ?
-    legacyDefault :
-    value;
-}
-
-function buildRecoveredTransactionDecisionState(row, status) {
+function buildRecoveredTransactionDecisionState(row) {
   return {
-    transactionMode: readTransactionDecisionFieldWithActiveLegacyDefault(
+    transactionMode: readTransactionDecisionField(
       row,
       LOCAL_STR_TRANSACTION_MODE,
       LOCAL_STR_TRANSACTIONMODE,
-      status,
-      TRANSACTION_MODE.EXPLICIT,
     ),
-    participantSetState:
-      readTransactionDecisionFieldWithActiveLegacyDefault(
-        row,
-        LOCAL_STR_PARTICIPANT_SET_STATE,
-        LOCAL_STR_PARTICIPANTSETSTATE,
-        status,
-        PARTICIPANT_SET_STATE.OPEN,
-      ),
-    commitMode: readTransactionDecisionFieldWithActiveLegacyDefault(
+    participantSetState: readTransactionDecisionField(
+      row,
+      LOCAL_STR_PARTICIPANT_SET_STATE,
+      LOCAL_STR_PARTICIPANTSETSTATE,
+    ),
+    commitMode: readTransactionDecisionField(
       row,
       LOCAL_STR_COMMIT_MODE,
       LOCAL_STR_COMMITMODE,
-      status,
-      COMMIT_MODE.NOT_SELECTED,
     ),
     frozenParticipantCount: Number(
-      readTransactionDecisionFieldWithActiveLegacyDefault(
+      readTransactionDecisionField(
         row,
         LOCAL_STR_FROZEN_PARTICIPANT_COUNT,
         LOCAL_STR_FROZENPARTICIPANTCOUNT,
-        status,
-        0,
-      )),
+      ),
+    ),
   };
 }
 
@@ -188,62 +166,6 @@ function validateRecoveredTransactionDecision(tx, row = null) {
   });
 }
 
-function buildRecoveredParticipantKeysByTransaction(participantRows) {
-  const participantKeysByTransaction = new Map();
-  for (const row of participantRows) {
-    const transactionId = row.transaction_id || row.transactionId;
-    const partitionId = row.partition_id || row.partitionId;
-    if (!transactionId || !partitionId) {
-      continue;
-    }
-    const keys = participantKeysByTransaction.get(transactionId) || new Set();
-    keys.add(partitionId);
-    participantKeysByTransaction.set(transactionId, keys);
-  }
-  return participantKeysByTransaction;
-}
-
-function validateRecoveryRowsBeforeMutation(
-  coordinator,
-  transactionRows,
-  participantRows,
-  decisionsByTransaction = new Map(),
-) {
-  const participantKeysByTransaction =
-    buildRecoveredParticipantKeysByTransaction(participantRows);
-  for (const row of transactionRows) {
-    const status = readRecoveredRowStatus(row);
-    if (TERMINAL_TRANSACTION_STATUS.has(status)) {
-      continue;
-    }
-    const sessionId = row.session_id || row.sessionId;
-    const transactionId = row.transaction_id || row.transactionId;
-    if (!sessionId || !transactionId) {
-      throw buildTransactionRecoveryIncompleteError({
-        decisionDimension: null,
-        row,
-      });
-    }
-    if (coordinator.workflowCoordinator.getWorkflowById(transactionId)) {
-      continue;
-    }
-    const participantKeys =
-      participantKeysByTransaction.get(transactionId) || new Set();
-    validateRecoveredTransactionDecision(
-      {
-        ...buildRecoveredTransactionDecisionState(row, status),
-        transactionId,
-        decision: decisionsByTransaction.get(transactionId),
-        status,
-        participants: new Map(
-          Array.from(participantKeys, (partitionId) => [partitionId, true]),
-        ),
-      },
-      row,
-    );
-  }
-}
-
 export {
   TRANSACTION_RECOVERY_DIMENSION,
   hasExactDecisionParticipants,
@@ -251,5 +173,4 @@ export {
   readRecoveredRowStatus,
   buildRecoveredTransactionDecisionState,
   validateRecoveredTransactionDecision,
-  validateRecoveryRowsBeforeMutation,
 };

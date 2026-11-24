@@ -932,45 +932,39 @@ test('the generation owner rejects a second persisted singleton under unchanged 
     assert.deepEqual(expect(f, STATE.ACCEPTED), accepted);
   });
 
-test('actual old-owner ALTER upgrades retain schema compatibility for the read-only observer',
+test('incomplete generation schema is never ALTER-upgraded by store open and stays unavailable',
   async (t) => {
-    // The statement outcome table has one format and no upgrade: a table of
-    // another format is refused at store open (placement-outcome-format.test.js).
-    const upgrades = [
-      [GENERATION, /,\s*origin_index INTEGER,\s*origin_term INTEGER/u,
-        openParticipantTransactionStore, ['origin_index', 'origin_term']],
-    ];
-    for (const [tableName, addedColumns, upgrade, columns] of upgrades) {
-      await t.test(tableName, (t) => {
-        const f = fixture(t);
-        retain(f, [undefined]);
-        const accepted = expect(f, STATE.ACCEPTED);
-        const image = tableImage(f.db, tableName);
-        const oldSchema = image.schema.replace(addedColumns, '');
-        assert.notEqual(oldSchema, image.schema, 'old owner lacks the actual later-added columns');
-        f.db.exec(`DROP TABLE ${tableName}`);
-        f.db.exec(oldSchema);
-        const oldColumns = f.db.prepare(`PRAGMA table_info(${tableName})`).all();
-        assert.ok(columns.every((column) => !oldColumns.some(({name}) => name === column)));
-        expect(f, STATE.UNAVAILABLE, REASON.OBSERVATION);
-        const executed = [];
-        const exec = f.db.exec;
-        const trackedExec = t.mock.method(f.db, 'exec', function(sql) {
-          executed.push(sql);
-          return Reflect.apply(exec, this, [sql]);
-        });
-        try {
-          upgrade(f.db);
-        } finally {
-          trackedExec.mock.restore();
-        }
-        for (const column of columns) {
-          assert.ok(executed.some((sql) => sql.includes(`ADD COLUMN ${column} `)),
-            `actual owner must perform the ${column} ALTER, not fixture schema reconstruction`);
-        }
-        assert.deepEqual(expect(f, STATE.ACCEPTED), accepted);
-      });
+    // The statement outcome and generation tables each have one canonical format
+    // and no internal ALTER TABLE upgrade.
+    const f = fixture(t);
+    retain(f, [undefined]);
+    expect(f, STATE.ACCEPTED);
+    const image = tableImage(f.db, GENERATION);
+    const oldSchema = image.schema.replace(/,\s*origin_index INTEGER,\s*origin_term INTEGER/u, '');
+    assert.notEqual(oldSchema, image.schema, 'stripped schema lacks origin columns');
+    f.db.exec(`DROP TABLE ${GENERATION}`);
+    f.db.exec(oldSchema);
+    const oldColumns = f.db.prepare(`PRAGMA table_info(${GENERATION})`).all();
+    assert.ok(['origin_index', 'origin_term'].every((column) =>
+      !oldColumns.some(({name}) => name === column)));
+    expect(f, STATE.UNAVAILABLE, REASON.OBSERVATION);
+    const executed = [];
+    const exec = f.db.exec;
+    const trackedExec = t.mock.method(f.db, 'exec', function(sql) {
+      executed.push(sql);
+      return Reflect.apply(exec, this, [sql]);
+    });
+    try {
+      openParticipantTransactionStore(f.db);
+    } finally {
+      trackedExec.mock.restore();
     }
+    assert.equal(
+      executed.some((sql) => sql.toUpperCase().includes('ALTER TABLE')),
+      false,
+      'store open must never run internal ALTER TABLE schema upgrades',
+    );
+    expect(f, STATE.UNAVAILABLE, REASON.OBSERVATION);
   });
 
 test('outcome and CDC censuses reject malformed raw SQLite types before coercion', async (t) => {

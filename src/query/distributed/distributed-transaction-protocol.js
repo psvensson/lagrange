@@ -14,7 +14,6 @@ import {
   PARTICIPANT_RETRY_LOG_MSG,
   PARTICIPANT_STATUS,
   TIMEOUT_ERROR_MESSAGES,
-  TRANSACTION_STATUS,
 } from './distributed-transaction-coordinator-constants.js';
 import {PARTICIPANT_TRANSACTION_DECISION} from
   '../../partition/partition-participant-transaction-constants.js';
@@ -329,9 +328,6 @@ const distributedTransactionProtocolMethods = {
     reportTransactionBudgetSpent(this, tx, stage);
     if (tx.decision?.decision === PARTICIPANT_TRANSACTION_DECISION.COMMIT) {
       return this.driveTransactionDecision(tx, null);
-    }
-    if (tx.status !== TRANSACTION_STATUS.ROLLING_BACK) {
-      await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLING_BACK);
     }
     const rollbackResult = await this.runRollbackProtocol(tx);
     return {

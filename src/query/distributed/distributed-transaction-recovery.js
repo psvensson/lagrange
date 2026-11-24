@@ -11,8 +11,11 @@ import {
   buildRecoveredTransactionDecisionState,
   readRecoveredRowStatus,
 } from './distributed-transaction-recovery-validation.js';
-import {redriveAuthoritativeRecovery, TRANSACTION_AUTHORITY_STATE} from
-  './distributed-transaction-recovery-authority.js';
+import {
+  isFullyTerminalTransactionRow,
+  redriveAuthoritativeRecovery,
+  TRANSACTION_AUTHORITY_STATE,
+} from './distributed-transaction-recovery-authority.js';
 import {PARTICIPANT_TRANSACTION_DECISION} from
   '../../partition/partition-participant-transaction-constants.js';
 import {RECOVERED_WORKFLOW_BINDING} from '../../workflow/workflow-constants.js';
@@ -291,6 +294,7 @@ const distributedTransactionRecoveryMethods = {
         success: protocolResult?.success === true,
         error: protocolResult?.error || null,
         decisionReadState: protocolResult?.decisionReadState ?? null,
+        decisionDimension: tx.decisionReadDimension ?? null,
         failedParticipants: protocolResult?.failedParticipants || [],
       });
       if (protocolResult?.success === true || skipped) {
@@ -607,14 +611,34 @@ const distributedTransactionRecoveryMethods = {
       rows.forEach(readRecoveredRowStatus);
     }
 
+    const participantsByTx = new Map();
+    for (const row of participantRows) {
+      const txId = row.transaction_id;
+      if (!txId) continue;
+      let list = participantsByTx.get(txId);
+      if (!list) {
+        list = [];
+        participantsByTx.set(txId, list);
+      }
+      list.push(row);
+    }
+    const recoverableTransactionRows = transactionRows.filter((row) => {
+      const txId = row.transaction_id;
+      return !txId || !isFullyTerminalTransactionRow(row, participantsByTx.get(txId) || []);
+    });
+    const recoverableIds = new Set(
+      recoverableTransactionRows.map((row) => row.transaction_id),
+    );
+
     // A discovered obligation is owned by recovery under its own key and
     // retained by transaction ID only: it never occupies the session map, so
     // a session that did not begin it (the default session after a restart,
     // a new client reusing an old row's session id) holds no transaction.
     const recoveryOutcome = this.workflowCoordinator.recover({
       binding: RECOVERED_WORKFLOW_BINDING.WORKFLOW_ID_ONLY,
-      workflows: transactionRows,
+      workflows: recoverableTransactionRows,
       participants: participantRows.filter((row) =>
+        (!row.transaction_id || recoverableIds.has(row.transaction_id)) &&
         !knownIds.has(row.transaction_id || row.transactionId)),
       loadWorkflow: (row) => {
         const sessionId = row.session_id || row.sessionId;
@@ -628,7 +652,7 @@ const distributedTransactionRecoveryMethods = {
           participantSetState,
           commitMode,
           frozenParticipantCount,
-        } = buildRecoveredTransactionDecisionState(row, status);
+        } = buildRecoveredTransactionDecisionState(row);
         const updatedAt = row.updated_at || row.updatedAt || this.now();
         return {
           sessionId,

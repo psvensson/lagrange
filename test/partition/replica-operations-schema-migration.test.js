@@ -18,27 +18,6 @@ import {PartitionService} from
   '../../src/partition/partition-service.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
 
-const PREVIOUS_REPLICA_OPERATIONS_SCHEMA = Object.freeze({
-  tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-  columns: REPLICA_OPERATIONS_SCHEMA.columns.filter((column) =>
-    ![
-      'membership_publication_epoch',
-      'target_claim_key',
-      'create_admission_state',
-      'create_admission_token',
-      'create_admission_replica_created_at',
-      'create_admission_attempt_token',
-      'create_admission_previous_attempt_token',
-      'create_admission_attempt_seq',
-      'create_admission_workflow_updated_at',
-      'create_admission_owner_incarnation',
-      ...REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMNS.map(
-        (column) => column.name,
-      ),
-    ].includes(column.name),
-  ),
-});
-
 function initializeEnvironment() {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
@@ -60,114 +39,81 @@ function buildPartitionOptions(dbPath, schema) {
   };
 }
 
-test('replica_operations restart migrates every current durable owner column',
+test('replica_operations bootstrap creates every current durable owner column and index from canonical schema',
   async (t) => {
     initializeEnvironment();
     const tempDir = fs.mkdtempSync(
-      path.join(os.tmpdir(), 'replica-operation-schema-migration-'),
+      path.join(os.tmpdir(), 'replica-operation-schema-bootstrap-'),
     );
     const dbPath = path.join(tempDir, 'replica-operations.db');
-    const previousPartition = new PartitionService(
-      withFoundingStamp(buildPartitionOptions(dbPath, PREVIOUS_REPLICA_OPERATIONS_SCHEMA)),
+    const currentPartition = new PartitionService(
+      withFoundingStamp(buildPartitionOptions(dbPath, REPLICA_OPERATIONS_SCHEMA)),
     );
-
     try {
-      await previousPartition.initialize();
-      previousPartition.db.prepare(
-        `INSERT INTO ${SYSTEM_TABLE_NAME.REPLICA_OPERATIONS} (` +
-        'operation_id, type, partition_id, entity_type, entity_id, ' +
-        'replica_id, source_node_id, target_node_id, status, workflow_step, ' +
-        'created_at, updated_at, steps_history) VALUES (?, ?, ?, ?, ?, ?, ?, ' +
-        '?, ?, ?, ?, ?, ?)',
-      ).run(
-        'legacy-operation', 'ADD', 'p1', 'partition', 'p1', 'r1',
-        'source', 'target', 'pending', 'PENDING', 1, 1, '[]',
-      );
-      await previousPartition.shutdown();
+      await currentPartition.initialize();
+      const columns = currentPartition.db
+        .prepare(
+          `PRAGMA table_info(${SYSTEM_TABLE_NAME.REPLICA_OPERATIONS})`,
+        )
+        .all()
+        .map((column) => column.name);
+      const targetClaimIndex = currentPartition.db
+        .prepare(
+          `PRAGMA index_list(${SYSTEM_TABLE_NAME.REPLICA_OPERATIONS})`,
+        )
+        .all()
+        .find((index) =>
+          index.name === 'idx_replica_ops_target_claim_key');
+      const membershipLaneIndex = currentPartition.db
+        .prepare(
+          `PRAGMA index_list(${SYSTEM_TABLE_NAME.REPLICA_OPERATIONS})`,
+        )
+        .all()
+        .find((index) => index.name ===
+          REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_LANE_INDEX.name);
 
-      const currentPartition = new PartitionService(
-        withFoundingStamp(buildPartitionOptions(dbPath, REPLICA_OPERATIONS_SCHEMA)),
+      t.ok(
+        columns.includes('target_claim_key'),
+        'canonical schema creates the durable target-claim owner column',
       );
-      try {
-        await currentPartition.initialize();
-        const columns = currentPartition.db
-          .prepare(
-            `PRAGMA table_info(${SYSTEM_TABLE_NAME.REPLICA_OPERATIONS})`,
-          )
-          .all()
-          .map((column) => column.name);
-        const targetClaimIndex = currentPartition.db
-          .prepare(
-            `PRAGMA index_list(${SYSTEM_TABLE_NAME.REPLICA_OPERATIONS})`,
-          )
-          .all()
-          .find((index) =>
-            index.name === 'idx_replica_ops_target_claim_key');
-        const membershipLaneIndex = currentPartition.db
-          .prepare(
-            `PRAGMA index_list(${SYSTEM_TABLE_NAME.REPLICA_OPERATIONS})`,
-          )
-          .all()
-          .find((index) => index.name ===
-            REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_LANE_INDEX.name);
-
-        t.ok(
-          columns.includes('target_claim_key'),
-          'restart adds the durable target-claim owner column',
+      t.ok(
+        columns.includes('membership_publication_epoch'),
+        'canonical schema creates the sole durable planning-epoch owner column',
+      );
+      const admissionColumns = [
+        'create_admission_state',
+        'create_admission_token',
+        'create_admission_replica_created_at',
+        'create_admission_attempt_token',
+        'create_admission_previous_attempt_token',
+        'create_admission_attempt_seq',
+        'create_admission_workflow_updated_at',
+        'create_admission_owner_incarnation',
+      ];
+      t.ok(
+        admissionColumns.every((column) => columns.includes(column)),
+        'canonical schema creates every handler-owned CREATE admission column',
+      );
+      const membershipColumns =
+        REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMNS.map(
+          (column) => column.name,
         );
-        t.ok(
-          columns.includes('membership_publication_epoch'),
-          'restart adds the sole durable planning-epoch owner column',
-        );
-        const admissionColumns = [
-          'create_admission_state',
-          'create_admission_token',
-          'create_admission_replica_created_at',
-          'create_admission_attempt_token',
-          'create_admission_previous_attempt_token',
-          'create_admission_attempt_seq',
-          'create_admission_workflow_updated_at',
-          'create_admission_owner_incarnation',
-        ];
-        t.ok(
-          admissionColumns.every((column) => columns.includes(column)),
-          'restart adds every handler-owned CREATE admission column',
-        );
-        const membershipColumns =
-          REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMNS.map(
-            (column) => column.name,
-          );
-        t.ok(
-          membershipColumns.every((column) => columns.includes(column)),
-          'restart adds every message-group membership owner column',
-        );
-        const legacy = currentPartition.db.prepare(
-          `SELECT * FROM ${SYSTEM_TABLE_NAME.REPLICA_OPERATIONS} ` +
-          'WHERE operation_id = ?',
-        ).get('legacy-operation');
-        t.equal(legacy.status, 'pending', 'legacy operation facts survive reopen');
-        t.ok(
-          admissionColumns.every((column) => legacy[column] === null),
-          'legacy row gains nullable columns without synthetic admission',
-        );
-        t.ok(
-          membershipColumns.every((column) => legacy[column] === null),
-          'legacy row gains nullable membership fields without synthetic debt',
-        );
-        t.equal(
-          targetClaimIndex?.unique,
-          1,
-          'the target-claim column retains its single-winner constraint',
-        );
-        t.equal(
-          membershipLaneIndex?.unique,
-          1,
-          'restart creates the authoritative single-winner membership lane',
-        );
-      } finally {
-        await currentPartition.shutdown();
-      }
+      t.ok(
+        membershipColumns.every((column) => columns.includes(column)),
+        'canonical schema creates every message-group membership owner column',
+      );
+      t.equal(
+        targetClaimIndex?.unique,
+        1,
+        'the target-claim column retains its single-winner constraint',
+      );
+      t.equal(
+        membershipLaneIndex?.unique,
+        1,
+        'canonical schema creates the authoritative single-winner membership lane',
+      );
     } finally {
+      await currentPartition.shutdown();
       fs.rmSync(tempDir, {recursive: true, force: true});
       ConfigurationManager.resetInstance();
       LoggingService.resetInstance();

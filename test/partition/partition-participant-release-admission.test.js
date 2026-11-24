@@ -37,6 +37,8 @@ import {
   CONTROL_PARTITION,
   withParticipantReleaseProtocol,
 } from '../test-helpers/participant-release-protocol-fixture.js';
+import {buildDecisionRecord} from
+  '../../src/partition/partition-participant-transaction-bytes.js';
 
 beforeEach(resetFixtureSingletons);
 afterEach(clearFixtureSingletons);
@@ -219,3 +221,53 @@ test('Deadlock B: proveCurrentControlCohort fast-tracks paused OBSERVED control 
     transport.deliver = originalDeliver;
   }
 }, undefined, {remoteControl: true}));
+
+test('current-origin control revalidation accepts valid terminal rows without ENABLE and rejects malformed rows',
+  () => withParticipantReleaseProtocol(async ({controlService, transport, release}) => {
+    const now = Date.now();
+    const txId = 'e'.repeat(32);
+    const manifest = JSON.stringify([[`${txId}:p1`, 'p1']]);
+    const decision = buildDecisionRecord(txId, 'COMMIT', [[`${txId}:p1`, 'prepared']]);
+    controlService.db.prepare(
+      'INSERT INTO sql_transactions (transaction_id,session_id,status,transaction_epoch,' +
+      'timeout_deadline,transaction_mode,participant_set_state,participant_set_text,' +
+      'commit_mode,frozen_participant_count,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+    ).run(txId, 'valid-terminal', 'ACTIVE', 1, now + 60000, 'EXPLICIT',
+      'OPEN', '[]', 'NOT_SELECTED', 0, now, now);
+    controlService.db.prepare(
+      'UPDATE sql_transactions SET status = ?, participant_set_state = ?, participant_set_text = ?, ' +
+      'commit_mode = ?, frozen_participant_count = ?, decision = ?, decision_text = ?, decision_digest = ? ' +
+      'WHERE transaction_id = ?',
+    ).run('COMMITTED', 'FROZEN', manifest, 'TWO_PHASE_COMMIT', 1,
+      decision.decision, decision.decisionText, decision.decisionDigest, txId);
+
+    const actions = [];
+    const originalDeliver = transport.deliver;
+    transport.deliver = async (address, payload, options) => {
+      if (payload?.type === PARTICIPANT_RELEASE_TYPE &&
+          payload.partitionId === CONTROL_PARTITION) {
+        actions.push(payload.action);
+      }
+      return Reflect.apply(originalDeliver, transport, [address, payload, options]);
+    };
+    try {
+      const validAnswer = await release();
+      assert.equal(validAnswer.outcome, OUTCOME.CUT_OVER, JSON.stringify(validAnswer));
+      assert.equal(actions.includes(RELEASE_ACTION.ENABLE), false,
+        'valid post-origin terminal row revalidates without second ENABLE');
+      assert.equal(participantCutoverPauseOf(controlService), null);
+
+      // Corrupt frozen_participant_count so the row is no longer a valid current-schema row.
+      controlService.db.prepare(
+        'UPDATE sql_transactions SET frozen_participant_count = ? WHERE transaction_id = ?',
+      ).run(99, txId);
+      actions.length = 0;
+      const malformedAnswer = await release();
+      assert.notEqual(malformedAnswer.outcome, OUTCOME.CUT_OVER,
+        'malformed frozen_participant_count must never pass current-origin revalidation');
+      assert.equal(actions.includes(RELEASE_ACTION.RESUME), false,
+        'malformed control cohort must never reach RESUME without settlement');
+    } finally {
+      transport.deliver = originalDeliver;
+    }
+  }, undefined, {remoteControl: true}));

@@ -67,6 +67,7 @@ test('durable PREPARE replay and recorded coordinator ROLLBACK settle while admi
     assert.equal(authority.transaction.decision_digest, decision.message.decisionDigest);
     assert.deepEqual(authority.participants, [], 'actual native progress table is empty');
     assert.equal(readTransactionReleaseCensus(control.db).state, 'held');
+    assert.equal(readTransactionReleaseCensus(control.db).currentSchemaValid, true);
     const {deliveries, proofs} = f.queryRelease;
     const releaseStartedAt = performance.now();
     let reopened = null;
@@ -77,9 +78,22 @@ test('durable PREPARE replay and recorded coordinator ROLLBACK settle while admi
         routing: f.queryRelease.routing, releaseElapsedMs: performance.now() - releaseStartedAt});
     }
     trace(t, 'reauthorized-participant-rows', f.views(identity));
+    assert.equal(reopened.outcome, 'cut_over', JSON.stringify(reopened));
     assert.ok(f.views(identity).every((v) => v.admission.state === 'open'));
     assert.deepEqual(f.views(identity).map((v) => v.participant),
       after.map((v) => v.participant), 'reauthorization cannot erase a terminal outcome');
+    assert.equal(deliveries.length, 0,
+      'already compatible current-origin control revalidates without re-driving settled rows');
+    assert.equal(proofs.length, 0,
+      'already compatible current-origin control revalidates without settlement proof');
+    assert.equal(readTransactionReleaseCensus(control.db).state, 'held');
+    assert.equal(control.db.prepare('SELECT count(*) AS n FROM sql_transactions').get().n, 1);
+
+    // When the enforcer trigger is removed, current-origin revalidation refuses
+    // and full settlement + QueryEngine discharge proof is required to repair and resume.
+    control.db.exec('DROP TRIGGER sql_transactions_initial_lineage_v1');
+    const repaired = await f.owners.release(f.leader.partitionId);
+    assert.equal(repaired.outcome, 'cut_over', JSON.stringify(repaired));
     assert.ok(deliveries.some(({payload, answer}) => {
       const resolved = answer?.answer ?? answer;
       return payload.operation === OP.ROLLBACK &&
@@ -88,7 +102,7 @@ test('durable PREPARE replay and recorded coordinator ROLLBACK settle while admi
         resolved?.state === 'ROLLED_BACK' &&
         resolved?.decisionIndex === settled.decisionIndex;
     }));
-    assert.ok(proofs.length > 0, 'release actually carried a QueryEngine discharge proof');
+    assert.ok(proofs.length > 0, 'non-enforced release requires a QueryEngine discharge proof');
     for (const {payload} of proofs) {
       const census = payload.census.find((facts) =>
         facts.generation.replicaId === control.replicaId).queryCensus;
