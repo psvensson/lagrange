@@ -2,16 +2,13 @@
  * Sequential progress reads never establish an OPEN participant census: the
  * retained manifest and its exact phase/text CAS do. */
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
-import {PARTICIPANT_SET_STATE} from '../constants/index.js';
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
 } from '../control-plane/control-plane-system-table-gateway-constants.js';
-import {incompleteParticipantSet, readParticipantSet} from
-  './distributed/distributed-transaction-participant-set.js';
 import {TRANSACTION_AUTHORITY_STATE as AUTHORITY} from
   './distributed/distributed-transaction-recovery-authority.js';
 
-const {TABLES, CONTROL_PLANE_MUTATION_OPERATION, PRESSURE_WORK_CLASS} =
+const {TABLES, PRESSURE_WORK_CLASS} =
   SQL_QUERY_ENGINE_SHARED;
 const TRANSACTION_AUTHORITY_READ_OPTIONS = Object.freeze({
   authoritativeReadMode:
@@ -26,13 +23,6 @@ const RECOVERY_ROW_FENCE = Object.freeze(['transaction_id', 'session_id',
 
 function unavailableRecoveryAuthority() {
   return {state: AUTHORITY.UNAVAILABLE};
-}
-
-function isCertifiedSingleRowUpdate(mutation) {
-  if (mutation?.success !== true) return false;
-  const count = mutation?.partitionResult?.affectedRows ??
-    mutation?.affectedRows ?? mutation?.changes;
-  return Number.isSafeInteger(count) && count === 1;
 }
 
 async function readAuthorityRow(engine, transactionId) {
@@ -50,42 +40,6 @@ async function readAuthorityRow(engine, transactionId) {
 }
 
 const sqlQueryEngineTransactionSetMethods = {
-  async persistDistributedTransactionParticipantSet(record, previousText) {
-    const pairs = readParticipantSet(record.transactionId, record.participantSetText);
-    if (!pairs || !readParticipantSet(record.transactionId, previousText)) {
-      throw incompleteParticipantSet();
-    }
-    const expected = {transaction_id: record.transactionId, session_id: record.sessionId,
-      transaction_epoch: record.transactionEpoch, participant_set_state: PARTICIPANT_SET_STATE.OPEN,
-      participant_set_text: previousText, decision: null};
-    const data = {participant_set_text: record.participantSetText,
-      participant_set_state: record.participantSetState,
-      commit_mode: record.commitMode, frozen_participant_count: record.frozenParticipantCount};
-    // No coalescing: each old-text fence identifies a distinct admission.
-    let mutation;
-    try {
-      mutation = await this.getControlPlaneSystemTableGateway().submitMutation({
-        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-        tableName: TABLES.SQL_TRANSACTIONS, whereClause: expected, data,
-      }, this.buildDistributedTransactionMutationOptions(TABLES.SQL_TRANSACTIONS,
-        {workClass: PRESSURE_WORK_CLASS.CRITICAL}));
-    } catch (error) {
-      // A lost answer is resolved by exact authoritative readback below.
-      mutation = {success: false, error: error?.message};
-    }
-    if (isCertifiedSingleRowUpdate(mutation)) {
-      return;
-    }
-    const row = await this.readDistributedTransactionRow(record.transactionId);
-    if (!row || row.session_id !== record.sessionId ||
-        row.transaction_epoch !== record.transactionEpoch ||
-        Object.entries(data).some(([key, value]) => row[key] !== value) ||
-        (record.participantSetState === PARTICIPANT_SET_STATE.OPEN && row.decision !== null)) {
-      this.assertDistributedTransactionMutationSucceeded(mutation, TABLES.SQL_TRANSACTIONS);
-      throw incompleteParticipantSet();
-    }
-  },
-
   async readDistributedTransactionRecoveryState(transactionId) {
     const before = await readAuthorityRow(this, transactionId);
     if (before.state !== AUTHORITY.AVAILABLE) return before;
