@@ -13,9 +13,21 @@ import {
 import {PARTICIPANT_TRANSACTION_FAILURE_CODE as PARTICIPANT_CODE} from
   './partition-participant-transaction-constants.js';
 import {
+  findParticipantSession,
   notifyRowKeySettlementWaiters,
   waitForConflictingRowKeyHolderToSettle,
 } from './partition-participant-transaction-session.js';
+import {
+  bindRowKeyWaitServiceNotifier,
+  classifyRowKeyReevaluationAnswer,
+  completeRowKeyWaitReevaluation,
+  decorateParticipantRowKeyWaitFailure,
+  ensureRowKeyReevaluationReceipt,
+  finishAttemptsExhaustedRowKeyWaitReevaluation,
+  finishRebaseRefusedRowKeyWaitReevaluation,
+  finishTerminalRowKeyWaitReevaluation,
+  prepareSessionRowKeyWaitBudget,
+} from './partition-row-key-waiters.js';
 import {prepareWaitingRowKeySessionForReevaluation} from
   './partition-participant-transaction-staging.js';
 import {coordinatorTableSchemaRefusal} from
@@ -67,48 +79,87 @@ function resolveParticipantConflictWaitBudgetMs(service) {
   return DEFAULT_PARTICIPANT_CONFLICT_WAIT_MS;
 }
 
-function reevaluateWaitingRowKeyQuery(service, payload, participantAnswer) {
+function decorateSessionAnswer(service, payload, answer) {
+  return decorateParticipantRowKeyWaitFailure(
+    service, findParticipantSession(service, payload), answer);
+}
+
+function reevaluateWaitingRowKeyQuery(service, payload, participantAnswer, receipt) {
   if (!prepareWaitingRowKeySessionForReevaluation(service, payload)) {
-    notifyRowKeySettlementWaiters(service);
-    return {done: true, answer: participantAnswer};
+    const session = findParticipantSession(service, payload);
+    return {
+      done: true,
+      answer: finishRebaseRefusedRowKeyWaitReevaluation(
+        service, session, receipt, participantAnswer),
+    };
   }
-  const awaitedKey = participantAnswer.detail;
   const reevaluated = answerParticipantSessionQuery(service, payload);
-  if (reevaluated === null) {
-    notifyRowKeySettlementWaiters(service);
-    return {done: true, answer: null};
+  const classified = classifyRowKeyReevaluationAnswer(reevaluated);
+  completeRowKeyWaitReevaluation(service, receipt, classified.outcome);
+  return {
+    done: classified.done,
+    answer: classified.done ? decorateSessionAnswer(service, payload, reevaluated) : reevaluated,
+  };
+}
+
+function isWaitableRowKeyConflictAnswer(answer) {
+  return answer?.failureCode === PARTICIPANT_CODE.ALREADY_ACTIVE &&
+    typeof answer.detail === 'string';
+}
+
+async function runOneConflictWaitStep(service, payload, participantAnswer, originalDeadlineMs) {
+  const session = findParticipantSession(service, payload);
+  const remainingMs = prepareSessionRowKeyWaitBudget(service, session, originalDeadlineMs);
+  if (remainingMs <= 0) {
+    return {
+      done: true,
+      answer: finishTerminalRowKeyWaitReevaluation(
+        service,
+        session,
+        session?.lastWaitReceipt ?? null,
+        null,
+        participantAnswer,
+        participantAnswer.detail,
+        originalDeadlineMs,
+      ),
+    };
   }
-  if (reevaluated.failureCode !== PARTICIPANT_CODE.ALREADY_ACTIVE) {
-    if (reevaluated.success !== true) notifyRowKeySettlementWaiters(service);
-    return {done: true, answer: reevaluated};
+  const waitOutcome = await waitForConflictingRowKeyHolderToSettle(
+    service, payload, participantAnswer.detail, remainingMs);
+  const activeReceipt = ensureRowKeyReevaluationReceipt(
+    service, session, participantAnswer.detail, originalDeadlineMs, waitOutcome?.receipt);
+  if (!waitOutcome.settled) {
+    return {
+      done: true,
+      answer: finishTerminalRowKeyWaitReevaluation(
+        service, session, activeReceipt, null, participantAnswer),
+    };
   }
-  if (reevaluated.detail !== awaitedKey) notifyRowKeySettlementWaiters(service);
-  return {done: false, answer: reevaluated};
+  return reevaluateWaitingRowKeyQuery(
+    service, payload, participantAnswer, activeReceipt);
 }
 
 async function resolveParticipantRemoteQueryAnswer(service, payload) {
+  bindRowKeyWaitServiceNotifier(service, notifyRowKeySettlementWaiters);
   let participantAnswer = answerParticipantSessionQuery(service, payload);
   if (participantAnswer === null) return null;
-  let deadlineMs = null;
+  let originalDeadlineMs = null;
   for (let attempt = 0; attempt < MAX_PARTICIPANT_CONFLICT_REEVAL_ATTEMPTS; attempt += 1) {
-    if (participantAnswer.failureCode !== PARTICIPANT_CODE.ALREADY_ACTIVE ||
-        typeof participantAnswer.detail !== 'string') {
-      return participantAnswer;
+    if (!isWaitableRowKeyConflictAnswer(participantAnswer)) {
+      return decorateSessionAnswer(service, payload, participantAnswer);
     }
-    if (deadlineMs === null) {
-      deadlineMs = service.timeSource.now() + resolveParticipantConflictWaitBudgetMs(service);
+    if (originalDeadlineMs === null) {
+      originalDeadlineMs =
+        service.timeSource.now() + resolveParticipantConflictWaitBudgetMs(service);
     }
-    const remainingMs = deadlineMs - service.timeSource.now();
-    if (remainingMs <= 0) return participantAnswer;
-    const waitOutcome = await waitForConflictingRowKeyHolderToSettle(
-      service, payload, participantAnswer.detail, remainingMs);
-    if (!waitOutcome.settled) return participantAnswer;
-    const step = reevaluateWaitingRowKeyQuery(service, payload, participantAnswer);
+    const step = await runOneConflictWaitStep(
+      service, payload, participantAnswer, originalDeadlineMs);
     if (step.done) return step.answer;
     participantAnswer = step.answer;
   }
-  notifyRowKeySettlementWaiters(service);
-  return participantAnswer;
+  const session = findParticipantSession(service, payload);
+  return finishAttemptsExhaustedRowKeyWaitReevaluation(
+    service, session, session?.lastWaitReceipt ?? null, participantAnswer, originalDeadlineMs);
 }
 
 const {

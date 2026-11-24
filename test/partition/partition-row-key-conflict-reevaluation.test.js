@@ -16,11 +16,37 @@ import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
 import {
   PARTICIPANT_TRANSACTION_FAILURE_CODE as CODE,
+  PARTICIPANT_TRANSACTION_SESSION_PHASE as PHASE,
 } from '../../src/partition/partition-participant-transaction-constants.js';
+import {
+  findParticipantSession,
+} from '../../src/partition/partition-participant-transaction-session.js';
+import {
+  canDoomSessionOnLocalWaitCycle,
+  enqueueBoundedRowKeyWaiter,
+  hasRowKeyWaitForCycle,
+  notifyFifoRowKeyWaiters,
+  releaseRowKeySessionClaims,
+} from '../../src/partition/partition-row-key-waiters.js';
+
+const ROW_KEY_WAIT_CYCLE_FAILURE_REASON = 'ROW_KEY_WAIT_CYCLE_DETECTED';
+const ROW_KEY_WAIT_CYCLE_SQLSTATE = '40001';
+const ROW_KEY_WAIT_RECEIPT_STATE = Object.freeze({
+  WAITING_ON_KEY: 'WAITING_ON_KEY',
+  REEVALUATING: 'REEVALUATING',
+  REPARKED: 'REPARKED',
+  ACQUIRED: 'ACQUIRED',
+  TERMINAL: 'TERMINAL',
+});
 import {PARTITION_SERVICE_OPERATION} from '../../src/partition/partition-service-constants.js';
+import {
+  DistributedTransactionCoordinator,
+  TRANSACTION_STATUS,
+} from '../../src/query/distributed/distributed-transaction-coordinator.js';
 import {
   INSERT_SQL,
   TABLE,
+  applyCommitted,
   applyProposal,
   beginMessage,
   clearFixtureSingletons,
@@ -406,10 +432,49 @@ test('Finding 7: per-row-key readRowKeys allow disjoint concurrency while blocki
   });
 });
 
-test('Finding 7: in-partition wait-for deadlock cycle breaks immediately without burning conflictSettleWaitMs', async () => {
+function createCoordinatorForLeader(leader, proposed, rollbackEvents = [], rollbackGate = null) {
+  leader.controllablePort.setProposeHandler(async (entry) => {
+    proposed.push({...entry});
+    applyCommitted(leader, entry);
+  });
+  return new DistributedTransactionCoordinator({
+    beginParticipant: async (sessionId, _partitionId, identity) =>
+      send(leader, beginMessage({...identity, sessionId})),
+    prepareParticipant: async (sessionId, _partitionId, identity) =>
+      send(leader, prepareMessage({...identity, sessionId})),
+    commitParticipant: async (sessionId, _partitionId, req) =>
+      send(leader, txMessage(PARTITION_SERVICE_OPERATION.COMMIT, {...req, sessionId}, req)),
+    rollbackParticipant: async (sessionId, partitionId, req) => {
+      if (rollbackGate) {
+        rollbackGate.onReached();
+        await rollbackGate.promise;
+      }
+      rollbackEvents.push({sessionId, partitionId, transactionId: req.transactionId});
+      const msg = txMessage(PARTITION_SERVICE_OPERATION.ROLLBACK, {...req, sessionId}, req);
+      return send(leader, msg);
+    },
+  });
+}
+
+const rollbackParticipantTx = (leader, tx) =>
+  send(leader, txMessage(PARTITION_SERVICE_OPERATION.ROLLBACK, tx));
+
+function coordinatorQueryMessage(sessionId, identity, sql, params) {
+  return queryMessage(identityOf(identity.transactionId, {...identity, sessionId}), sql, params);
+}
+
+async function runCoordinatorWrite(coordinator, leader, sessionId, opId, sql, params) {
+  return coordinator.executeWriteStatement(
+    sessionId,
+    {operationId: opId, partitionIds: [leader.partitionId]},
+    (identity) =>
+      leader.handleRemoteQuery(coordinatorQueryMessage(sessionId, identity, sql, params)),
+  );
+}
+
+test('Finding 7 & Review §5: AB-BA wait-for cycle dooms ACTIVE victim and releases claims so survivor commits BEFORE any rollback on victim', async () => {
   await onLeader(async (leader, proposed) => {
     setupRowKeyLeader(leader, 15000);
-
     const seedTx = identityOf('f0'.repeat(16), {sessionId: 'sess-dl-seed'});
     assert.equal((await send(leader, beginMessage(seedTx))).success, true);
     assert.equal((await leader.handleRemoteQuery(queryMessage(seedTx, INSERT_SQL, ['k-1', 'v1']))).success, true);
@@ -420,7 +485,6 @@ test('Finding 7: in-partition wait-for deadlock cycle breaks immediately without
     const tx2 = identityOf('f2'.repeat(16), {sessionId: 'sess-dl-2'});
     assert.equal((await send(leader, beginMessage(tx1))).success, true);
     assert.equal((await send(leader, beginMessage(tx2))).success, true);
-
     assert.equal((await leader.handleRemoteQuery(queryMessage(tx1, UPDATE_SQL, ['tx1-1', 'k-1']))).success, true);
     assert.equal((await leader.handleRemoteQuery(queryMessage(tx2, UPDATE_SQL, ['tx2-2', 'k-2']))).success, true);
 
@@ -433,18 +497,309 @@ test('Finding 7: in-partition wait-for deadlock cycle breaks immediately without
 
     assert.equal(tx2Second.success, false);
     assert.equal(tx2Second.failureCode, CODE.ALREADY_ACTIVE);
-    assert.equal(
-      elapsedMs < 50,
-      true,
-      `deadlock cycle must break immediately (<50ms vs 15000ms bound, got ${elapsedMs}ms)`,
-    );
+    assert.equal(tx2Second.failureReason, ROW_KEY_WAIT_CYCLE_FAILURE_REASON);
+    assert.equal(tx2Second.deadlockDetected, true);
+    assert.equal(tx2Second.sqlState, ROW_KEY_WAIT_CYCLE_SQLSTATE);
+    assert.equal(tx2Second.conflict, true);
+    assert.equal(tx2Second.retryable, true);
+    assert.equal(elapsedMs < 50, true, `cycle must break in <50ms (got ${elapsedMs}ms)`);
 
-    const rbTx2 = await send(leader, txMessage(PARTITION_SERVICE_OPERATION.ROLLBACK, tx2));
-    assert.equal(rbTx2.success, true);
+    const doomedVictim = findParticipantSession(leader, tx2);
+    assert.equal(doomedVictim?.phase, PHASE.DOOMED);
+    assert.equal(doomedVictim?.touchedRowKeys?.size, 0);
+    assert.equal(doomedVictim?.lastWaitReceipt?.state, ROW_KEY_WAIT_RECEIPT_STATE.TERMINAL);
+    assert.equal(doomedVictim?.lastWaitReceipt?.terminalReason, ROW_KEY_WAIT_CYCLE_FAILURE_REASON);
+
+    // Crucial invariant: T1 acquires k-2 and commits BEFORE any rollback is called on T2!
     const tx1Res = await tx1Second;
-    assert.equal(tx1Res.success, true, `tx1 must wake immediately after tx2 rollback: ${JSON.stringify(tx1Res)}`);
+    assert.equal(tx1Res.success, true);
     await commitParticipantTx(leader, proposed, tx1);
     assert.equal(readRowValue(leader, 'k-1'), 'tx1-1');
     assert.equal(readRowValue(leader, 'k-2'), 'tx1-2');
+    assert.equal((await rollbackParticipantTx(leader, tx2)).success, true);
+  });
+});
+
+test('Review §5: coordinator drives canonical rollbackTransaction on cycle victim while preserving transaction identity and participant manifest', async () => {
+  await onLeader(async (leader, proposed) => {
+    setupRowKeyLeader(leader, 15000);
+    const rollbackEvents = [];
+    const rollbackReached = Promise.withResolvers();
+    const rollbackRelease = Promise.withResolvers();
+    const coordinator = createCoordinatorForLeader(leader, proposed, rollbackEvents, {
+      onReached: () => rollbackReached.resolve(),
+      promise: rollbackRelease.promise,
+    });
+
+    assert.equal((await coordinator.begin('sess-coord-seed')).success, true);
+    for (const [id, val] of [['k-a', 'init-a'], ['k-b', 'init-b']]) {
+      const ins = await runCoordinatorWrite(
+        coordinator, leader, 'sess-coord-seed', `op-seed-${id}`, INSERT_SQL, [id, val]);
+      assert.equal(ins.success, true);
+    }
+    assert.equal((await coordinator.commit('sess-coord-seed')).success, true);
+
+    const t1Begin = await coordinator.begin('sess-coord-1');
+    const t2Begin = await coordinator.begin('sess-coord-2');
+    assert.equal(t1Begin.success, true);
+    assert.equal(t2Begin.success, true);
+    assert.equal((await runCoordinatorWrite(
+      coordinator, leader, 'sess-coord-1', 'op-t1-a', UPDATE_SQL, ['t1-a', 'k-a'])).success, true);
+    assert.equal((await runCoordinatorWrite(
+      coordinator, leader, 'sess-coord-2', 'op-t2-b', UPDATE_SQL, ['t2-b', 'k-b'])).success, true);
+
+    const t1WriteBPromise = runCoordinatorWrite(
+      coordinator, leader, 'sess-coord-1', 'op-t1-b', UPDATE_SQL, ['t1-b', 'k-b']);
+    await settleTicks(4);
+
+    // Hold T2's coordinator ROLLBACK RPC in flight until AFTER T1 acquires k-b and commits!
+    const t2WriteAPromise = runCoordinatorWrite(
+      coordinator, leader, 'sess-coord-2', 'op-t2-a', UPDATE_SQL, ['t2-a', 'k-a']);
+    await rollbackReached.promise;
+    assert.equal(rollbackEvents.length, 0);
+
+    // T1 acquires k-b and commits BEFORE T2's rollback RPC reaches the participant:
+    assert.equal((await t1WriteBPromise).success, true);
+    assert.equal((await coordinator.commit('sess-coord-1')).success, true);
+    assert.equal(readRowValue(leader, 'k-a'), 't1-a');
+    assert.equal(readRowValue(leader, 'k-b'), 't1-b');
+    assert.equal(rollbackEvents.length, 0);
+
+    // Release T2's in-flight coordinator rollback RPC and verify clean settlement:
+    rollbackRelease.resolve();
+    const t2WriteA = await t2WriteAPromise;
+    assert.equal(t2WriteA.success, false);
+    assert.equal(t2WriteA.failureCode, CODE.ALREADY_ACTIVE);
+    assert.equal(t2WriteA.failureReason, ROW_KEY_WAIT_CYCLE_FAILURE_REASON);
+    assert.equal(t2WriteA.deadlockDetected, true);
+    assert.equal(t2WriteA.transactionId, t2Begin.transactionId);
+    assert.equal(t2WriteA.transactionEpoch, t2Begin.transactionEpoch);
+    assert.deepEqual(t2WriteA.participants, [leader.partitionId]);
+    assert.equal(t2WriteA.rollback?.success, true);
+    assert.equal(t2WriteA.rollback?.transactionId, t2Begin.transactionId);
+    assert.deepEqual(t2WriteA.rollback?.participants, [leader.partitionId]);
+    assert.equal(rollbackEvents.length, 1);
+    assert.equal(rollbackEvents[0].transactionId, t2Begin.transactionId);
+
+    const settledRollback = await coordinator.rollbackTransaction('sess-coord-2', {
+      expectedTransactionId: t2Begin.transactionId,
+    });
+    assert.equal(settledRollback.success, true);
+    assert.equal(settledRollback.transactionId, t2Begin.transactionId);
+    assert.deepEqual(settledRollback.participants, [leader.partitionId]);
+    assert.equal(coordinator.getTransaction('sess-coord-2'), null);
+    assert.equal(t2WriteA.participantDetails?.[0]?.status, TRANSACTION_STATUS.ACTIVE);
+
+    // Witness (d): failed victim rollback is NOT cached in settledCycleRollbacksBySession;
+    // subsequent rollbackTransaction re-drives runRollbackProtocol on the live tx and succeeds.
+    let failNextRollback = true;
+    const retryCoordinator = new DistributedTransactionCoordinator({
+      participantRetryMaxRetries: 0,
+      beginParticipant: async (sId, _pId, id) =>
+        send(leader, beginMessage({...id, sessionId: sId})),
+      rollbackParticipant: async (sId, _pId, req) => {
+        if (failNextRollback) {
+          failNextRollback = false;
+          throw new Error('simulated transient rollback delivery failure');
+        }
+        const msg = txMessage(PARTITION_SERVICE_OPERATION.ROLLBACK, {...req, sessionId: sId}, req);
+        return send(leader, msg);
+      },
+    });
+    const t3Begin = await retryCoordinator.begin('sess-coord-retry');
+    assert.equal(t3Begin.success, true);
+    const failedCycleWrite = await retryCoordinator.executeWriteStatement(
+      'sess-coord-retry',
+      {operationId: 'op-t3-cycle', partitionIds: [leader.partitionId]},
+      async () => ({
+        success: false,
+        failureCode: CODE.ALREADY_ACTIVE,
+        failureReason: ROW_KEY_WAIT_CYCLE_FAILURE_REASON,
+        deadlockDetected: true,
+      }),
+    );
+    assert.equal(failedCycleWrite.rollback?.success, false);
+    assert.notEqual(retryCoordinator.getTransaction('sess-coord-retry'), null);
+    const redrivenRollback = await retryCoordinator.rollbackTransaction('sess-coord-retry', {
+      expectedTransactionId: t3Begin.transactionId,
+    });
+    assert.equal(redrivenRollback.success, true);
+    assert.equal(retryCoordinator.getTransaction('sess-coord-retry'), null);
+  });
+});
+
+test('Review §5: wait-receipt budget and epoch binding preserves originalDeadlineMs across A -> B re-park, ignores stale epoch timer, and hands off A to W2', async () => {
+  await onLeader(async (leader, proposed) => {
+    setupRowKeyLeader(leader, 120);
+    const seedTx = identityOf('d5'.repeat(16), {sessionId: 'sess-receipt-seed'});
+    assert.equal((await send(leader, beginMessage(seedTx))).success, true);
+    assert.equal((await leader.handleRemoteQuery(queryMessage(seedTx, INSERT_SQL, ['k-a', 'init-a']))).success, true);
+    assert.equal((await leader.handleRemoteQuery(queryMessage(seedTx, INSERT_SQL, ['k-b', 'init-b']))).success, true);
+    await commitParticipantTx(leader, proposed, seedTx);
+
+    const h1 = identityOf('d6'.repeat(16), {sessionId: 'sess-receipt-h1'});
+    const h2 = identityOf('d7'.repeat(16), {sessionId: 'sess-receipt-h2'});
+    const w1 = identityOf('d8'.repeat(16), {sessionId: 'sess-receipt-w1', transactionEpoch: 10});
+    const w2 = identityOf('d9'.repeat(16), {sessionId: 'sess-receipt-w2', transactionEpoch: 11});
+    for (const tx of [h1, h2, w1, w2]) {
+      assert.equal((await send(leader, beginMessage(tx))).success, true);
+    }
+
+    assert.equal((await leader.handleRemoteQuery(queryMessage(h1, UPDATE_SQL, ['h1-a', 'k-a']))).success, true);
+    assert.equal((await leader.handleRemoteQuery(queryMessage(h2, UPDATE_SQL, ['h2-b', 'k-b']))).success, true);
+
+    const multiUpdateSql = `UPDATE ${TABLE} SET value = ? WHERE id IN (?, ?)`;
+    const w1StartMs = Date.now();
+    const w1Promise = leader.handleRemoteQuery(
+      queryMessage(w1, multiUpdateSql, ['w1-ab', 'k-a', 'k-b']),
+    );
+    await settleTicks(4);
+
+    const w1Session = findParticipantSession(leader, w1);
+    const receiptOnA = w1Session.lastWaitReceipt;
+    assert.equal(receiptOnA.state, ROW_KEY_WAIT_RECEIPT_STATE.WAITING_ON_KEY);
+    assert.equal(receiptOnA.sessionId, 'sess-receipt-w1');
+    assert.equal(receiptOnA.sessionEpoch, 10);
+
+    const w2Promise = leader.handleRemoteQuery(queryMessage(w2, UPDATE_SQL, ['w2-a', 'k-a']));
+    await settleTicks(4);
+
+    // Burn ~65ms of W1's 120ms budget on k-a, raise conflictSettleWaitMs to 5000ms, settle H1:
+    await new Promise((resolve) => setTimeout(resolve, 65));
+    leader.conflictSettleWaitMs = 5000;
+    await commitParticipantTx(leader, proposed, h1);
+
+    // W2 on k-a wakes via completeRowKeyWaitReevaluation handoff and finishes BEFORE H2 settles:
+    assert.equal((await w2Promise).success, true);
+    await commitParticipantTx(leader, proposed, w2);
+    assert.equal(readRowValue(leader, 'k-a'), 'w2-a');
+
+    const receiptOnB = w1Session.lastWaitReceipt;
+    assert.equal(receiptOnA.state, ROW_KEY_WAIT_RECEIPT_STATE.REPARKED);
+    assert.equal(receiptOnB.originalDeadlineMs, receiptOnA.originalDeadlineMs);
+
+    // While H2 holds k-b, W1 expires at its original ~120ms deadline (never renewed to 5000ms!):
+    const w1Res = await w1Promise;
+    const w1ElapsedMs = Date.now() - w1StartMs;
+    assert.equal(w1Res.success, false);
+    assert.equal(w1Res.failureCode, CODE.ALREADY_ACTIVE);
+    assert.equal(receiptOnA.state, ROW_KEY_WAIT_RECEIPT_STATE.REPARKED);
+    assert.equal(receiptOnB.state, ROW_KEY_WAIT_RECEIPT_STATE.TERMINAL);
+    assert.equal(receiptOnB.terminalReason, 'expired');
+    assert.equal(w1ElapsedMs < 400, true, `W1 must honor original 120ms deadline (got ${w1ElapsedMs}ms)`);
+    assert.equal((await rollbackParticipantTx(leader, w1)).success, true);
+
+    // Witness (a): live stale-epoch timeout on an UNSETTLED WAITING_ON_KEY receipt:
+    leader.conflictSettleWaitMs = 3000;
+    const oldEpochTx = identityOf('da'.repeat(16), {sessionId: 'sess-epoch-bind', transactionEpoch: 21});
+    assert.equal((await send(leader, beginMessage(oldEpochTx))).success, true);
+    const oldWaitPromise = leader.handleRemoteQuery(queryMessage(oldEpochTx, UPDATE_SQL, ['old-b', 'k-b']));
+    await settleTicks(4);
+    const oldSession = findParticipantSession(leader, oldEpochTx);
+    const oldReceipt = oldSession.lastWaitReceipt;
+    assert.equal(oldReceipt.state, ROW_KEY_WAIT_RECEIPT_STATE.WAITING_ON_KEY);
+
+    const newEpochTx = identityOf('db'.repeat(16), {sessionId: 'sess-epoch-bind', transactionEpoch: 22});
+    assert.equal((await send(leader, beginMessage(newEpochTx))).success, true);
+    const newWaitPromise = leader.handleRemoteQuery(queryMessage(newEpochTx, UPDATE_SQL, ['new-b', 'k-b']));
+    await settleTicks(4);
+    const newSession = findParticipantSession(leader, newEpochTx);
+    const newReceipt = newSession.lastWaitReceipt;
+    assert.equal(newReceipt.state, ROW_KEY_WAIT_RECEIPT_STATE.WAITING_ON_KEY);
+
+    // Advance oldSession's epoch while oldReceipt is STILL WAITING_ON_KEY, then fire oldReceipt's timeout:
+    oldSession.identity = Object.freeze({...oldSession.identity, transactionEpoch: 99});
+    assert.equal(oldReceipt.triggerTimeout(), true);
+    assert.equal(oldReceipt.state, ROW_KEY_WAIT_RECEIPT_STATE.TERMINAL);
+    assert.equal(oldReceipt.terminalReason, 'stale_epoch_timeout');
+    assert.equal((await oldWaitPromise).success, false);
+    assert.equal(oldReceipt.terminalReason, 'stale_epoch_timeout');
+    assert.equal(newSession.phase, PHASE.ACTIVE);
+    assert.equal(newReceipt.state, ROW_KEY_WAIT_RECEIPT_STATE.WAITING_ON_KEY);
+    oldSession.identity = Object.freeze({...oldSession.identity, transactionEpoch: 21});
+    assert.equal((await rollbackParticipantTx(leader, oldEpochTx)).success, true);
+
+    // Witness (b) & (c): releaseRowKeySessionClaims and notifyFifoRowKeyWaiters settle
+    // WAITING_ON_KEY waiters promptly with settled: false and state: TERMINAL.
+    const claimSession = {identity: {sessionId: 's-claim', transactionEpoch: 1}, phase: PHASE.ACTIVE};
+    const claimWaitPromise = enqueueBoundedRowKeyWaiter(leader, claimSession, 'k-b', 3000);
+    releaseRowKeySessionClaims(leader, claimSession);
+    const claimWaitOut = await claimWaitPromise;
+    assert.equal(claimWaitOut.settled, false);
+    assert.equal(claimWaitOut.receipt.state, ROW_KEY_WAIT_RECEIPT_STATE.TERMINAL);
+    assert.equal(claimWaitOut.receipt.terminalReason, 'claims_released');
+
+    const closedSession = {identity: {sessionId: 's-closed', transactionEpoch: 1}, phase: PHASE.ACTIVE};
+    const closedWaitPromise = enqueueBoundedRowKeyWaiter(leader, closedSession, 'k-b', 3000);
+    closedSession.phase = PHASE.DOOMED;
+    notifyFifoRowKeyWaiters(leader, leader.rowKeyWaiterPolicy);
+    const closedWaitOut = await closedWaitPromise;
+    assert.equal(closedWaitOut.settled, false);
+    assert.equal(closedWaitOut.receipt.state, ROW_KEY_WAIT_RECEIPT_STATE.TERMINAL);
+    assert.equal(closedWaitOut.receipt.terminalReason, 'session_closed');
+
+    await commitParticipantTx(leader, proposed, h2);
+    assert.equal((await newWaitPromise).success, true);
+    assert.equal(newReceipt.state, ROW_KEY_WAIT_RECEIPT_STATE.ACQUIRED);
+    await commitParticipantTx(leader, proposed, newEpochTx);
+    assert.equal(readRowValue(leader, 'k-b'), 'new-b');
+  });
+});
+
+test('Review §5: safety guard prevents PREPARING, PREPARED, or COMMITTED sessions from ever being doomed by local cycle detection', async () => {
+  await onLeader(async (leader, proposed) => {
+    setupRowKeyLeader(leader, 3000);
+    const seedTx = identityOf('f5'.repeat(16), {sessionId: 'sess-guard-seed'});
+    assert.equal((await send(leader, beginMessage(seedTx))).success, true);
+    assert.equal((await leader.handleRemoteQuery(queryMessage(seedTx, INSERT_SQL, ['k-1', 'g1']))).success, true);
+    assert.equal((await leader.handleRemoteQuery(queryMessage(seedTx, INSERT_SQL, ['k-2', 'g2']))).success, true);
+    await commitParticipantTx(leader, proposed, seedTx);
+
+    const tx1 = identityOf('f6'.repeat(16), {sessionId: 'sess-guard-1'});
+    const tx2 = identityOf('f7'.repeat(16), {sessionId: 'sess-guard-2'});
+    assert.equal((await send(leader, beginMessage(tx1))).success, true);
+    assert.equal((await send(leader, beginMessage(tx2))).success, true);
+    assert.equal((await leader.handleRemoteQuery(queryMessage(tx1, UPDATE_SQL, ['g1-tx1', 'k-1']))).success, true);
+    assert.equal((await leader.handleRemoteQuery(queryMessage(tx2, UPDATE_SQL, ['g2-tx2', 'k-2']))).success, true);
+
+    const tx1WaitPromise = leader.handleRemoteQuery(
+      queryMessage(tx1, UPDATE_SQL, ['g2-tx1', 'k-2']),
+    );
+    await settleTicks(4);
+
+    const session1 = findParticipantSession(leader, tx1);
+    const session2 = findParticipantSession(leader, tx2);
+    const awaitedRowKeyK1 = session1.touchedRowKeys.values().next().value;
+    const cyclePolicy = {
+      isSessionClosed: (candidate) => candidate.phase === PHASE.DOOMED,
+      listHolderSessions: (_svc, candidate, rk) =>
+        candidate !== session1 && session1.touchedRowKeys.has(rk) ? [session1] :
+          (candidate !== session2 && session2.touchedRowKeys.has(rk) ? [session2] : []),
+    };
+
+    for (const protectedState of ['PREPARING', 'PREPARED', 'COMMITTED']) {
+      session2.phase = protectedState;
+      session2.status = protectedState;
+      assert.equal(canDoomSessionOnLocalWaitCycle(session2), false);
+      assert.equal(hasRowKeyWaitForCycle(leader, session2, awaitedRowKeyK1, cyclePolicy), true);
+      assert.equal(session2.phase, protectedState);
+      assert.equal(session2.deadlockDetected, undefined);
+      assert.equal(session2.touchedRowKeys.size, 1);
+    }
+
+    session2.phase = PHASE.ACTIVE;
+    delete session2.status;
+    session2.sealed = {type: 'PARTICIPANT_PREPARE'};
+    assert.equal(canDoomSessionOnLocalWaitCycle(session2), false);
+    assert.equal(hasRowKeyWaitForCycle(leader, session2, awaitedRowKeyK1, cyclePolicy), true);
+    assert.equal(session2.phase, PHASE.ACTIVE);
+    assert.equal(session2.touchedRowKeys.size, 1);
+    session2.sealed = null;
+
+    await commitParticipantTx(leader, proposed, tx2);
+    assert.equal((await tx1WaitPromise).success, true);
+    await commitParticipantTx(leader, proposed, tx1);
+    assert.equal(readRowValue(leader, 'k-1'), 'g1-tx1');
+    assert.equal(readRowValue(leader, 'k-2'), 'g2-tx1');
   });
 });

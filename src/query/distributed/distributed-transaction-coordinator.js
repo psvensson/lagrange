@@ -246,6 +246,7 @@ class DistributedTransactionCoordinator {
   }
 
   async beginOwned(sessionId, options) {
+    this.clearSettledCycleRollback?.(sessionId);
     const admission = admitExpectedTransaction(this, sessionId,
       options.expectedTransactionId);
     if (admission.state === STATEMENT_ADMISSION.REFUSED) return admission.failure;
@@ -532,6 +533,9 @@ class DistributedTransactionCoordinator {
   async rollbackOwned(sessionId, expectedTransactionId) {
     const tx = this.transactionsBySession.get(sessionId);
     if (!tx || tx.transactionId !== expectedTransactionId) {
+      const settledCycleRollback = this.consumeSettledCycleRollback?.(
+        sessionId, expectedTransactionId);
+      if (settledCycleRollback) return settledCycleRollback;
       return this.recoveryObligationAnswer(expectedTransactionId,
         QUERY_OPERATION.ROLLBACK) ?? {
         success: false,

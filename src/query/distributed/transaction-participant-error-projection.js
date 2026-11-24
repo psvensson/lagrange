@@ -45,16 +45,47 @@ function isPrepareWriteConflictFailure(entry) {
   );
 }
 
+function extractCycleConflictOverlay(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  if (entry.deadlockDetected !== true &&
+      typeof entry.failureReason !== 'string') {
+    return null;
+  }
+  return {
+    ...(typeof entry.failureReason === 'string' ?
+      {failureReason: entry.failureReason} : {}),
+    ...(entry.deadlockDetected === true ? {deadlockDetected: true} : {}),
+    ...(typeof entry.sqlState === 'string' ? {sqlState: entry.sqlState} : {}),
+    ...(entry.conflict === true ? {conflict: true} : {}),
+    ...(typeof entry.retryable === 'boolean' ? {retryable: entry.retryable} : {}),
+  };
+}
+
+function resolveParticipantCycleOverlay(result) {
+  const direct = extractCycleConflictOverlay(result) ??
+    extractCycleConflictOverlay(result?.firstFailedParticipant);
+  if (direct !== null) return direct;
+  if (Array.isArray(result?.participantFailures)) {
+    for (const entry of result.participantFailures) {
+      const matched = extractCycleConflictOverlay(entry);
+      if (matched !== null) return matched;
+    }
+  }
+  return {};
+}
+
 function projectTransactionParticipantFailure(result) {
   if (!result || result.success !== false) {
     return result;
   }
+  const cycleOverlay = resolveParticipantCycleOverlay(result);
   if (result.errorCode === QUERY_ERROR_CODE.WRITE_CONFLICT) {
-    return result;
+    return {...result, ...cycleOverlay};
   }
   if (isPrepareWriteConflictFailure(result)) {
     return {
       ...result,
+      ...cycleOverlay,
       errorCode: QUERY_ERROR_CODE.WRITE_CONFLICT,
       error: QUERY_ERROR_MSG.WRITE_CONFLICT,
     };
@@ -67,6 +98,7 @@ function projectTransactionParticipantFailure(result) {
   if (hasParticipantFailure) {
     return {
       ...result,
+      ...cycleOverlay,
       errorCode: QUERY_ERROR_CODE.WRITE_CONFLICT,
       error: QUERY_ERROR_MSG.WRITE_CONFLICT,
     };
