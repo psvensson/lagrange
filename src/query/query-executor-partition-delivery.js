@@ -15,6 +15,7 @@ import {
 } from './query-executor-partition-candidate-state.js';
 import {
   createRecoveryReadDelivery,
+  deliverLeaderRedirect,
   RECOVERY_REDIRECT_REFUSED,
   ROUTING_PROBE_ELAPSED,
 } from './query-executor-recovery-read-delivery.js';
@@ -37,7 +38,9 @@ import {
 import {deliveryAnswerOf, deliveryTransportOf, TRANSPORT_DELIVERY_OUTCOME_REASON_CODE, classifyThrownDeliveryError} from
   '../transport/transport-semantic-outcome.js';
 import {
-  evaluateTermFloorDeliveryOutcome, mergeSelfLeaderTermFloor, shouldRetainTermFloorFailure,
+  createInvocationTermFloorTracker,
+  evaluateTermFloorDeliveryOutcome,
+  shouldRetainTermFloorFailure,
 } from './query-executor-self-leader-term-floor.js';
 
 const {
@@ -206,20 +209,28 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
       };
       const candidateEligibility = createPartitionCandidateEligibility(
         this, partitionId, executionOptions);
-      const resolveAttemptCandidates = () => candidateEligibility.resolve(
-        this.resolvePartitionServiceCandidates(
-          partitionId, forRead, preferLeader, preferSameLatencyGroup, routingReadinessDimension,
-          {
-            allowReadinessAuthoritativeRefresh,
-            requireLeader: executionOptions?.requireLeader === true,
-            [QUERY_EXECUTOR_ROUTING_OPTION_FIELD.POST_ADMISSION_SETTLEMENT]:
-              executionOptions?.postAdmissionSettlement === true,
-            [QUERY_EXECUTOR_ROUTING_OPTION_FIELD.READ_AUTHORITY]:
-              executionOptions?.readAuthority || null,
-            recoveryCandidateSelectionKey: executionOptions.recoveryCandidateSelectionKey,
-            transactionIdentity: executionOptions?.transactionIdentity || null,
-          },
-        ), Boolean(readDelivery), requireCanonicalLeader);
+      const termFloorTracker = createInvocationTermFloorTracker(this, partitionId);
+      const resolveAttemptCandidates = () => {
+        const resolved = candidateEligibility.resolve(
+          this.resolvePartitionServiceCandidates(
+            partitionId, forRead, preferLeader, preferSameLatencyGroup, routingReadinessDimension,
+            {
+              allowReadinessAuthoritativeRefresh,
+              requireLeader: executionOptions?.requireLeader === true,
+              [QUERY_EXECUTOR_ROUTING_OPTION_FIELD.POST_ADMISSION_SETTLEMENT]:
+                executionOptions?.postAdmissionSettlement === true,
+              [QUERY_EXECUTOR_ROUTING_OPTION_FIELD.READ_AUTHORITY]:
+                executionOptions?.readAuthority || null,
+              recoveryCandidateSelectionKey: executionOptions.recoveryCandidateSelectionKey,
+              transactionIdentity: executionOptions?.transactionIdentity || null,
+            },
+          ), Boolean(readDelivery), requireCanonicalLeader);
+        termFloorTracker.observe(resolved);
+        return resolved;
+      };
+      const refreshDirectTermFloor = () => {
+        if (forRead && requireCanonicalLeader) resolveAttemptCandidates();
+      };
       let shouldRecheckRoutes = false;
       for (let attempt = 1;
         attempt <= currentMaxAttempts || shouldRecheckRoutes || readDelivery?.hasPending();
@@ -233,8 +244,8 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           attemptBudget.reportDeadlineSpentBeforeAttempt();
           return buildDeadlineSpentFailureResult();
         }
-        let {candidates: serviceCandidates, routingSnapshot, ownerHadCandidates,
-          selfPublishedLeaderTermFloor} = resolveAttemptCandidates();
+        let {candidates: serviceCandidates, routingSnapshot, ownerHadCandidates} =
+          resolveAttemptCandidates();
         readDelivery?.reconcile(serviceCandidates);
         if (
           serviceCandidates.length === 0 && !ownerHadCandidates &&
@@ -249,8 +260,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         ) {
           awaitedRoutingRepair = true;
           this.throwIfCancelled(cancellationToken);
-          ({candidates: serviceCandidates, routingSnapshot, selfPublishedLeaderTermFloor} =
-            resolveAttemptCandidates());
+          ({candidates: serviceCandidates, routingSnapshot} = resolveAttemptCandidates());
           readDelivery?.reconcile(serviceCandidates);
         }
         if (!readDelivery) {
@@ -409,8 +419,6 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               // A reply remains scoped to its route and peer incarnation
               // even if the old replica had already executed the read.
               const latestRoutes = resolveAttemptCandidates();
-              selfPublishedLeaderTermFloor = mergeSelfLeaderTermFloor(
-                selfPublishedLeaderTermFloor, latestRoutes.selfPublishedLeaderTermFloor);
               if (!readDelivery.currentIn(readTicket, latestRoutes.candidates)) {
                 shouldRecheckRoutes = true;
                 continue;
@@ -421,12 +429,13 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               deliverySubmitted = true;
               unknownOutcome.recordDelivery();
               delivery = await this.messageRouter.deliver(address, request, routerOptions);
+              refreshDirectTermFloor();
             }
             unknownOutcome.observeTransport(deliveryTransportOf(delivery));
             deliverySubmitted = false;
             this.throwIfCancelled(cancellationToken);
             const {accepted, response} = evaluateTermFloorDeliveryOutcome(
-              delivery, isSuccessfulResponse, selfPublishedLeaderTermFloor);
+              delivery, isSuccessfulResponse, termFloorTracker.current());
             if (accepted) {
               applySuccessfulCandidateAffinity(
                 this,
@@ -473,13 +482,14 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               });
               address = redirectAddress;
               serviceInfo = {nodeId: redirectParticipantNodeId, address: redirectAddress};
-              const redirectDelivery = readDelivery ? await readDelivery.redirect({
-                origin: readTicket, address: redirectAddress, request: redirectRequest,
+              const redirectDelivery = await deliverLeaderRedirect({
+                readDelivery, messageRouter: this.messageRouter, origin: readTicket,
+                address: redirectAddress, request: redirectRequest,
                 routerOptions: redirectRouterDeliveryOptions, submit: markRecoverySubmission,
                 resolveRoutes: resolveAttemptCandidates,
                 redirectCandidate: candidateEligibility.redirectCandidate,
-              }) : await this.messageRouter.deliver(
-                redirectAddress, redirectRequest, redirectRouterDeliveryOptions);
+                refreshDirectTermFloor, termFloorTracker,
+              });
               if (redirectDelivery === RECOVERY_REDIRECT_REFUSED) {
                 shouldRecheckRoutes = true;
                 continue;
@@ -488,7 +498,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               deliverySubmitted = false;
               const {accepted: redirectAccepted, response: redirectResponse} =
                 evaluateTermFloorDeliveryOutcome(
-                  redirectDelivery, isSuccessfulResponse, selfPublishedLeaderTermFloor);
+                  redirectDelivery, isSuccessfulResponse, termFloorTracker.current());
               if (redirectAccepted) {
                 applySuccessfulCandidateAffinity(
                   this, executionOptions, partitionId, redirectAddress, forRead);

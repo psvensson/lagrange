@@ -1,4 +1,5 @@
 import {RealTimeSource} from '../time/time-source.js';
+import {mergeSelfLeaderTermFloor} from './query-executor-self-leader-term-floor.js';
 
 const RECOVERY_REDIRECT_REFUSED = Symbol('recovery redirect route is ineligible');
 const ROUTING_PROBE_ELAPSED = Symbol('routing probe elapsed');
@@ -145,7 +146,13 @@ function createRecoveryReadDelivery(executor, options) {
           (!currentIn(result.ticket, latest.candidates) && !currentIn(origin, latest.candidates))) {
         return RECOVERY_REDIRECT_REFUSED;
       }
-      return result.delivery;
+      return {
+        delivery: result.delivery,
+        selfPublishedLeaderTermFloor: mergeSelfLeaderTermFloor(
+          initial.selfPublishedLeaderTermFloor,
+          latest.selfPublishedLeaderTermFloor,
+        ),
+      };
     },
     dispose() {
       close.abort(new Error(READ_DELIVERY_CLOSED));
@@ -156,7 +163,25 @@ function createRecoveryReadDelivery(executor, options) {
   };
 }
 
+async function deliverLeaderRedirect({
+  readDelivery, messageRouter, origin, address, request, routerOptions,
+  submit, resolveRoutes, redirectCandidate, refreshDirectTermFloor, termFloorTracker,
+}) {
+  if (readDelivery) {
+    const outcome = await readDelivery.redirect({
+      origin, address, request, routerOptions, submit, resolveRoutes, redirectCandidate,
+    });
+    if (outcome === RECOVERY_REDIRECT_REFUSED) return RECOVERY_REDIRECT_REFUSED;
+    termFloorTracker.merge(outcome.selfPublishedLeaderTermFloor);
+    return outcome.delivery;
+  }
+  refreshDirectTermFloor();
+  const delivery = await messageRouter.deliver(address, request, routerOptions);
+  refreshDirectTermFloor();
+  return delivery;
+}
+
 export {
-  createRecoveryReadDelivery, executorShutdownError,
+  createRecoveryReadDelivery, deliverLeaderRedirect, executorShutdownError,
   RECOVERY_REDIRECT_REFUSED, ROUTING_PROBE_ELAPSED,
 };
