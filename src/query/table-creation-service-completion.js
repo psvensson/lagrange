@@ -4,6 +4,10 @@ import {
   OWNER_CONTRACT_STATE,
   buildOwnerContractOutcome,
 } from '../control-plane/owner-contract-outcome.js';
+import {
+  buildProvisioningCompletionSummary,
+  isProvisioningWritableMinimumSatisfied,
+} from './provisioning-completion-summary.js';
 import {QUERY_OPERATION} from './query-constants.js';
 
 
@@ -49,93 +53,7 @@ const TABLE_CREATION_CONTRACT_PRIORITY = Object.freeze({
 });
 
 function normalizeProvisioningSummary(provisioningResult = null, context = {}) {
-  const requestedReplicaCount =
-    Number.isInteger(context?.replicaCount) && context.replicaCount > 0 ?
-      context.replicaCount :
-      null;
-  const minimumRoutableReplicaCount =
-    Number.isInteger(context?.minimumRoutableReplicaCount) &&
-    context.minimumRoutableReplicaCount > 0 ?
-      context.minimumRoutableReplicaCount :
-      null;
-  const normalized =
-    provisioningResult && typeof provisioningResult === 'object' ?
-      provisioningResult :
-      {};
-  const resolvedReplicaCount =
-    Number.isInteger(normalized?.resolvedReplicaCount) &&
-    normalized.resolvedReplicaCount > 0 ?
-      normalized.resolvedReplicaCount :
-      requestedReplicaCount;
-  const fallbackRoutableReplicaCount = 0;
-  const routableReplicaCount =
-    Number.isInteger(normalized?.routableReplicaCount) &&
-    normalized.routableReplicaCount >= 0 ?
-      normalized.routableReplicaCount :
-      fallbackRoutableReplicaCount;
-  const fullReplicaCountConverged =
-    typeof normalized?.fullReplicaCountConverged ===
-    TABLE_CREATION_SERVICE_LITERAL.BOOLEAN ?
-      normalized.fullReplicaCountConverged :
-      !Number.isInteger(requestedReplicaCount) ||
-        requestedReplicaCount <= 0 ||
-        routableReplicaCount >= requestedReplicaCount;
-  const defaultProvisioningContractOutcome = buildOwnerContractOutcome({
-    contractState: fullReplicaCountConverged ?
-      OWNER_CONTRACT_STATE.READY :
-      OWNER_CONTRACT_STATE.UNDER_REPLICATED,
-    nextAction: OWNER_CONTRACT_NEXT_ACTION.PROCEED,
-  });
-  const requestedProvisioningContractOutcome = buildOwnerContractOutcome({
-    contractState:
-      normalized?.contractState ||
-      defaultProvisioningContractOutcome.contractState,
-    nextAction:
-      normalized?.nextAction || defaultProvisioningContractOutcome.nextAction,
-  });
-  const provisioningContractOutcome =
-    fullReplicaCountConverged === false &&
-    requestedProvisioningContractOutcome.contractState ===
-      OWNER_CONTRACT_STATE.READY &&
-    requestedProvisioningContractOutcome.nextAction ===
-      OWNER_CONTRACT_NEXT_ACTION.PROCEED ?
-      defaultProvisioningContractOutcome :
-      requestedProvisioningContractOutcome;
-  const committedReplicaCount =
-    Number.isInteger(normalized?.committedReplicaCount) &&
-    normalized.committedReplicaCount >= 0 ?
-      normalized.committedReplicaCount :
-      routableReplicaCount;
-  const missingReplicaCount =
-    Number.isInteger(normalized?.missingReplicaCount) ?
-      normalized.missingReplicaCount :
-      Number.isInteger(requestedReplicaCount) ?
-        Math.max(0, requestedReplicaCount - committedReplicaCount) :
-        0;
-  return {
-    requestedReplicaCount,
-    resolvedReplicaCount,
-    minimumRoutableReplicaCount:
-      Number.isInteger(normalized?.minimumRoutableReplicaCount) &&
-      normalized.minimumRoutableReplicaCount > 0 ?
-        normalized.minimumRoutableReplicaCount :
-        minimumRoutableReplicaCount,
-    routableReplicaCount,
-    committedReplicaCount,
-    missingReplicaCount,
-    epoch: normalized?.epoch || null,
-    fullReplicaCountConverged,
-    contractState: provisioningContractOutcome.contractState,
-    nextAction: provisioningContractOutcome.nextAction,
-    reasonCodes: Array.isArray(normalized?.reasonCodes) ?
-      [...normalized.reasonCodes] :
-      [],
-    retryAfterMs:
-      Number.isFinite(normalized?.retryAfterMs) &&
-      normalized.retryAfterMs > 0 ?
-        Math.floor(normalized.retryAfterMs) :
-        0,
-  };
+  return buildProvisioningCompletionSummary(provisioningResult, context);
 }
 
 // Metadata committed: the metadata half is ready.
@@ -189,18 +107,40 @@ function resolveTableCreationProvisioningCompletionDecision(
   });
 }
 
+function resolveNonProceedingProvisioningOutcome(provisioningContractOutcome) {
+  if (
+    provisioningContractOutcome &&
+    provisioningContractOutcome.contractState !== OWNER_CONTRACT_STATE.READY &&
+    provisioningContractOutcome.contractState !==
+      OWNER_CONTRACT_STATE.UNDER_REPLICATED &&
+    provisioningContractOutcome.nextAction !==
+      OWNER_CONTRACT_NEXT_ACTION.PROCEED
+  ) {
+    return provisioningContractOutcome;
+  }
+  return buildOwnerContractOutcome({
+    contractState: OWNER_CONTRACT_STATE.PENDING,
+    nextAction: OWNER_CONTRACT_NEXT_ACTION.WAIT,
+  });
+}
+
 function resolveTableCreationCompletionDecision(
   provisioningSummary,
   contractOutcome,
   provisioningContractOutcome,
 ) {
-  if (
-    provisioningSummary &&
-    provisioningSummary.fullReplicaCountConverged === false
-  ) {
+  if (!isProvisioningWritableMinimumSatisfied(provisioningSummary)) {
+    return resolveTableCreationProvisioningCompletionDecision(
+      contractOutcome,
+      resolveNonProceedingProvisioningOutcome(provisioningContractOutcome),
+    );
+  }
+  if (provisioningSummary.fullReplicaCountConverged === false) {
     if (
       provisioningContractOutcome?.contractState ===
-      OWNER_CONTRACT_STATE.UNDER_REPLICATED
+        OWNER_CONTRACT_STATE.UNDER_REPLICATED &&
+      provisioningContractOutcome?.nextAction ===
+        OWNER_CONTRACT_NEXT_ACTION.PROCEED
     ) {
       return buildTableCreationCompletionDecision({
         completionState: TABLE_CREATION_COMPLETION_STATE.ACTIVE,
@@ -208,6 +148,15 @@ function resolveTableCreationCompletionDecision(
         contractOutcome: provisioningContractOutcome,
       });
     }
+    return resolveTableCreationProvisioningCompletionDecision(
+      contractOutcome,
+      provisioningContractOutcome,
+    );
+  }
+  if (
+    provisioningContractOutcome &&
+    provisioningContractOutcome.contractState !== OWNER_CONTRACT_STATE.READY
+  ) {
     return resolveTableCreationProvisioningCompletionDecision(
       contractOutcome,
       provisioningContractOutcome,

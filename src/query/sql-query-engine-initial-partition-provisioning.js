@@ -191,6 +191,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
         resolvedReplicaCount: targetReplicaCount,
         minimumRoutableReplicaCount,
         routableReplicaCount: routableNodeIds.length,
+        committedReplicaCount: routableNodeIds.length,
       });
     }
 
@@ -687,6 +688,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
       resolvedReplicaCount: targetReplicaCount,
       minimumRoutableReplicaCount,
       routableReplicaCount: finalRoutableNodeIds.length,
+      committedReplicaCount: finalRoutableNodeIds.length,
       contractState: provisioningContractState,
       nextAction: provisioningNextAction,
       reasonCodes: provisioningReasonCodes,

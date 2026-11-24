@@ -38,10 +38,13 @@ function createMockSystemCache(tables, partitions) {
     primaryKey: 'id',
     partition_key: 'id',
     partition_key_type: 'TEXT',
+    active_partition_version: 1,
     ...t,
   }));
   const normalizedPartitions = partitions.map((partition) => ({
     partition_key_type: 'TEXT',
+    partition_version: 1,
+    state: 'NORMAL',
     ...partition,
     leader_node_id: partition.leader_node_id || partition.leaderNodeId || 'test-node',
   }));

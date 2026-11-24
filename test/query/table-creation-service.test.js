@@ -406,6 +406,13 @@ test('TableCreationService - re-provisions initial partition on ' +
     },
     partitionProvisioner: async (context) => {
       provisionCalls.push(context);
+      return {
+        requestedReplicaCount: 3,
+        resolvedReplicaCount: 3,
+        minimumRoutableReplicaCount: 2,
+        routableReplicaCount: 2,
+        committedReplicaCount: 2,
+      };
     },
   });
 
@@ -501,6 +508,13 @@ test('TableCreationService - uses authoritative metadata reads to avoid ' +
     },
     partitionProvisioner: async (context) => {
       provisionCalls.push(context);
+      return {
+        requestedReplicaCount: 3,
+        resolvedReplicaCount: 3,
+        minimumRoutableReplicaCount: 2,
+        routableReplicaCount: 2,
+        committedReplicaCount: 2,
+      };
     },
   });
 
@@ -545,6 +559,13 @@ test('TableCreationService - forwards timeout budget through CREATE TABLE IF ' +
     },
     partitionProvisioner: async (context) => {
       provisionCalls.push(context);
+      return {
+        requestedReplicaCount: 3,
+        resolvedReplicaCount: 3,
+        minimumRoutableReplicaCount: 2,
+        routableReplicaCount: 2,
+        committedReplicaCount: 2,
+      };
     },
   });
 
@@ -721,6 +742,13 @@ test('TableCreationService - CREATE TABLE IF NOT EXISTS restores missing ' +
     },
     partitionProvisioner: async (context) => {
       provisionCalls.push(context);
+      return {
+        requestedReplicaCount: 3,
+        resolvedReplicaCount: 3,
+        minimumRoutableReplicaCount: 2,
+        routableReplicaCount: 2,
+        committedReplicaCount: 2,
+      };
     },
   });
 
@@ -806,11 +834,11 @@ async (t) => {
   t.equal('visibilityPending' in result, false,
     'no visibility pending remnant');
   t.equal(result.completionState,
-    TABLE_CREATION_TEST_COMPLETION_STATE.ACTIVE,
-    'quorum minimum proceeds as active under_replicated');
-  t.equal(result.completionReason, null);
-  t.equal(result.contractState, OWNER_CONTRACT_STATE.UNDER_REPLICATED);
-  t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.PROCEED);
+    TABLE_CREATION_TEST_COMPLETION_STATE.PENDING_CREATION,
+    'unobserved provisioning stays pending_creation until minimum writable replicas converge');
+  t.equal(result.completionReason, 'replica_convergence_pending');
+  t.equal(result.contractState, OWNER_CONTRACT_STATE.PENDING);
+  t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.WAIT);
   t.equal(counts.readsAfterFirstWrite, 0,
     'the answer itself reads no projection after the metadata writes');
 });
@@ -924,8 +952,8 @@ test('TableCreationService - CREATE TABLE stays pending when only the minimum ro
     );
   });
 
-test('TableCreationService - CREATE TABLE without provisioning detail reports ' +
-  '0 observed routable replicas while retaining minimumRoutableReplicaCount target',
+test('TableCreationService - CREATE TABLE without provisioning detail stays ' +
+  'pending_creation with 0 observed routable replicas',
 async (t) => {
   const service = new TableCreationService({
     systemCache: {
@@ -945,14 +973,14 @@ async (t) => {
 
   t.equal(
     result.completionState,
-    TABLE_CREATION_TEST_COMPLETION_STATE.ACTIVE,
+    TABLE_CREATION_TEST_COMPLETION_STATE.PENDING_CREATION,
   );
   t.equal(
     result.completionReason,
-    null,
+    'replica_convergence_pending',
   );
-  t.equal(result.contractState, OWNER_CONTRACT_STATE.UNDER_REPLICATED);
-  t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.PROCEED);
+  t.equal(result.contractState, OWNER_CONTRACT_STATE.PENDING);
+  t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.WAIT);
   t.same(
     result.provisioningSummary,
     {
@@ -964,13 +992,120 @@ async (t) => {
       missingReplicaCount: 3,
       epoch: null,
       fullReplicaCountConverged: false,
-      contractState: OWNER_CONTRACT_STATE.UNDER_REPLICATED,
-      nextAction: OWNER_CONTRACT_NEXT_ACTION.PROCEED,
+      contractState: OWNER_CONTRACT_STATE.PENDING,
+      nextAction: OWNER_CONTRACT_NEXT_ACTION.WAIT,
       reasonCodes: [],
       retryAfterMs: 0,
     },
-    'table creation must not fabricate observed routable/committed replica counts from minimumRoutableReplicaCount',
+    'table creation must not report active/proceed when provisioning provides no observed replicas',
   );
+});
+
+test('TableCreationService - CREATE TABLE refuses ACTIVE/PROCEED when observed ' +
+  'replicas are missing, zero, or below minimumRoutableReplicaCount',
+async (t) => {
+  const insufficientCases = [
+    {label: 'empty provisioning result object', payload: {}},
+    {
+      label: 'zero routable and committed replicas',
+      payload: {
+        requestedReplicaCount: 3,
+        resolvedReplicaCount: 3,
+        minimumRoutableReplicaCount: 2,
+        routableReplicaCount: 0,
+        committedReplicaCount: 0,
+      },
+    },
+    {
+      label: 'routableReplicaCount below minimumRoutableReplicaCount',
+      payload: {
+        requestedReplicaCount: 3,
+        resolvedReplicaCount: 3,
+        minimumRoutableReplicaCount: 2,
+        routableReplicaCount: 1,
+        committedReplicaCount: 1,
+      },
+    },
+    {
+      label: 'committedReplicaCount below minimumRoutableReplicaCount',
+      payload: {
+        requestedReplicaCount: 3,
+        resolvedReplicaCount: 3,
+        minimumRoutableReplicaCount: 2,
+        routableReplicaCount: 2,
+        committedReplicaCount: 1,
+      },
+    },
+    {
+      label: 'inconsistent under_replicated/proceed claim with zero observed replicas',
+      payload: {
+        requestedReplicaCount: 3,
+        resolvedReplicaCount: 3,
+        minimumRoutableReplicaCount: 2,
+        routableReplicaCount: 0,
+        committedReplicaCount: 0,
+        fullReplicaCountConverged: false,
+        contractState: OWNER_CONTRACT_STATE.UNDER_REPLICATED,
+        nextAction: OWNER_CONTRACT_NEXT_ACTION.PROCEED,
+      },
+    },
+  ];
+
+  for (const testCase of insufficientCases) {
+    const service = new TableCreationService({
+      systemCache: {
+        find() {
+          return null;
+        },
+      },
+      cdcIntegrationService: {
+        async insertSystemTableRow() {
+          return {success: true};
+        },
+      },
+      partitionProvisioner: async () => testCase.payload,
+    });
+
+    const result = await service.executeCreateTableProvisioning(
+      createCreateTableAst(),
+    );
+
+    t.not(
+      result.completionState,
+      TABLE_CREATION_TEST_COMPLETION_STATE.ACTIVE,
+      `${testCase.label}: must never report completionState active`,
+    );
+    t.not(
+      result.nextAction,
+      OWNER_CONTRACT_NEXT_ACTION.PROCEED,
+      `${testCase.label}: must never report nextAction proceed`,
+    );
+    t.equal(
+      result.completionState,
+      TABLE_CREATION_TEST_COMPLETION_STATE.PENDING_CREATION,
+      `${testCase.label}: must classify as pending_creation`,
+    );
+    t.equal(
+      result.completionReason,
+      'replica_convergence_pending',
+      `${testCase.label}: must explain pending replica convergence`,
+    );
+    t.equal(
+      result.contractState,
+      OWNER_CONTRACT_STATE.PENDING,
+      `${testCase.label}: contractState must be pending`,
+    );
+    t.equal(
+      result.nextAction,
+      OWNER_CONTRACT_NEXT_ACTION.WAIT,
+      `${testCase.label}: nextAction must be wait`,
+    );
+    t.equal(
+      result.provisioningSummary.fullReplicaCountConverged,
+      false,
+      `${testCase.label}: fullReplicaCountConverged must be false`,
+    );
+  }
 });
 
 test('buildSchemaDefinition round-trips string defaults as SQL literals',
@@ -1147,7 +1282,11 @@ test('resolveActivePartitionVersion and isPartitionVisibleForRouting require ' +
   t.equal(resolveActivePartitionVersion({active_partition_version: 1.5}), null);
   t.equal(resolveActivePartitionVersion({active_partition_version: 'abc'}), null);
   t.equal(resolveActivePartitionVersion({active_partition_version: 2}), 2);
-  t.equal(resolveActivePartitionVersion({activePartitionVersion: 3}), 3);
+  t.equal(
+    resolveActivePartitionVersion({activePartitionVersion: 3}),
+    null,
+    'legacy camelCase activePartitionVersion must not be accepted',
+  );
 
   t.equal(
     isPartitionVisibleForRouting({partition_version: 1, state: 'NORMAL'}, 1),

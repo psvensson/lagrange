@@ -4,8 +4,10 @@ import {
   buildControlPlaneWorkloadProfile,
   CONTROL_PLANE_WORKLOAD_CLASS,
 } from '../control-plane/control-plane-workload-profile.js';
-import {isSweepEligibleTransactionRow} from
-  './distributed/distributed-transaction-recovery.js';
+import {
+  groupParticipantRowsByTransactionId,
+  isSweepEligibleTransactionRow,
+} from './distributed/distributed-transaction-recovery.js';
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_FUNCTION = 'function';
@@ -150,9 +152,19 @@ class SQLQueryEngineTransactionRecoveryMethods
    * @private
    */
   filterEligibleRecoveryRows(allTransactions, now) {
-    const transactions = allTransactions.filter((row) =>
-      isSweepEligibleTransactionRow(row, now),
+    const allParticipants = this.loadSystemTableRows(
+      TABLES.SQL_TRANSACTION_PARTICIPANTS,
     );
+    const participantsByTransactionId =
+      groupParticipantRowsByTransactionId(allParticipants);
+    const transactions = allTransactions.filter((row) => {
+      const txId = row?.transaction_id;
+      const participantRowsForTx =
+        typeof txId === LOCAL_STR_STRING && txId.length > 0 ?
+          participantsByTransactionId.get(txId) || [] :
+          [];
+      return isSweepEligibleTransactionRow(row, now, participantRowsForTx);
+    });
     const eligibleIds = new Set(
       transactions
         .map((row) => row?.transaction_id)
@@ -166,9 +178,7 @@ class SQLQueryEngineTransactionRecoveryMethods
     };
     return {
       transactions,
-      participants: this.loadSystemTableRows(
-        TABLES.SQL_TRANSACTION_PARTICIPANTS,
-      ).filter(matchesEligibleTransaction),
+      participants: allParticipants.filter(matchesEligibleTransaction),
       writeOperations: this.loadSystemTableRows(
         TABLES.SQL_WRITE_OPERATIONS,
       ).filter(matchesEligibleTransaction),

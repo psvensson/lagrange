@@ -380,3 +380,113 @@ test('Transaction - getTransactionPartition returns bound partition', async (t) 
 
   mockPartitionData.clear();
 });
+
+test('Transaction recovery settlement predicate requires all participants terminal ' +
+  'in filterEligibleRecoveryRows and recoverDistributedTransactionStateFromCache',
+async (t) => {
+  // Produce a real owner-built COMMITTED coordinator row + participant row via the
+  // canonical coordinator commit path.
+  const producerGateway = createTransactionPersistenceGateway();
+  t.teardown(() => producerGateway.db.close());
+  const producerEngine = new SQLQueryEngine({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    controlPlaneSystemTableGateway: producerGateway,
+    autoStartDistributedTransactionRecovery: false,
+  });
+  t.teardown(() => producerEngine.shutdown());
+  const producerCoordinator = producerEngine.transactionCoordinator;
+  producerCoordinator.beginParticipant = async () => {};
+  producerCoordinator.prepareParticipant = async (_session, partitionId) => ({
+    success: true,
+    durable: true,
+    preparedDigest: `prepared-${partitionId}`,
+    prepareIndex: 1,
+    prepareTerm: 1,
+  });
+  producerCoordinator.commitParticipant = async () => ({
+    success: true,
+    durable: true,
+    state: 'COMMITTED',
+  });
+
+  const begun = await producerCoordinator.begin('owner-committed-session');
+  t.equal(begun.success, true);
+  const enlisted = await producerCoordinator.enlistParticipants(
+    'owner-committed-session',
+    ['p1', 'p2'],
+  );
+  t.equal(enlisted.success, true);
+  const committed = await producerCoordinator.commit('owner-committed-session');
+  t.equal(committed.success, true);
+
+  const [committedTxRow] = producerGateway.rows('sql_transactions');
+  const committedParticipantRows = producerGateway.rows(
+    'sql_transaction_participants',
+  );
+  t.equal(committedTxRow.status, 'COMMITTED');
+  t.equal(committedTxRow.participant_set_state, 'FROZEN');
+  t.equal(committedParticipantRows.length, 2);
+
+  const now = committedTxRow.timeout_deadline + 1000;
+  const scenarios = [
+    {
+      name: 'missing participant rows stay eligible for recovery',
+      participants: [],
+      expectedEligible: true,
+    },
+    {
+      name: 'still-PREPARED participant rows stay eligible for recovery',
+      participants: committedParticipantRows.map((row) => ({
+        ...row,
+        status: 'PREPARED',
+      })),
+      expectedEligible: true,
+    },
+    {
+      name: 'all COMMITTED participant rows mark the transaction settled',
+      participants: committedParticipantRows,
+      expectedEligible: false,
+    },
+  ];
+
+  for (const scenario of scenarios) {
+    const systemCache = {
+      getAll(tableName) {
+        if (tableName === 'sql_transactions') return [committedTxRow];
+        if (tableName === 'sql_transaction_participants') {
+          return scenario.participants;
+        }
+        return [];
+      },
+    };
+    const recoveryGateway = createTransactionPersistenceGateway();
+    t.teardown(() => recoveryGateway.db.close());
+    const recoveryEngine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      controlPlaneSystemTableGateway: recoveryGateway,
+      systemCache,
+      now: () => now,
+      autoStartDistributedTransactionRecovery: false,
+    });
+    t.teardown(() => recoveryEngine.shutdown());
+
+    const filtered = recoveryEngine.filterEligibleRecoveryRows(
+      [committedTxRow],
+      now,
+    );
+    t.equal(
+      filtered.transactions.length > 0,
+      scenario.expectedEligible,
+      `filterEligibleRecoveryRows: ${scenario.name}`,
+    );
+
+    recoveryEngine.recoverDistributedTransactionStateFromCache();
+    t.equal(
+      recoveryEngine.transactionCoordinator.recoveredTransactionIds.has(
+        committedTxRow.transaction_id,
+      ),
+      scenario.expectedEligible,
+      `recoverDistributedTransactionStateFromCache: ${scenario.name}`,
+    );
+  }
+});

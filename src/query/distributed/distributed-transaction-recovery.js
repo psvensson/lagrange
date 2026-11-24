@@ -56,13 +56,24 @@ const POST_DECISION_SWEEP_TRANSACTION_STATUS = Object.freeze(new Set([
   TRANSACTION_STATUS.ROLLED_BACK,
 ]));
 
-function isTerminalSweepTransactionRow(row) {
-  return row?.participant_set_state === PARTICIPANT_SET_STATE.FROZEN && (
-    (row?.status === TRANSACTION_STATUS.COMMITTED &&
-      row?.decision === PARTICIPANT_TRANSACTION_DECISION.COMMIT) ||
-    (row?.status === TRANSACTION_STATUS.ROLLED_BACK &&
-      row?.decision === PARTICIPANT_TRANSACTION_DECISION.ROLLBACK)
-  );
+function groupParticipantRowsByTransactionId(participantRows) {
+  const participantsByTransactionId = new Map();
+  if (!Array.isArray(participantRows)) {
+    return participantsByTransactionId;
+  }
+  for (const row of participantRows) {
+    const txId = row?.transaction_id;
+    if (typeof txId !== 'string' || txId.length === 0) {
+      continue;
+    }
+    let list = participantsByTransactionId.get(txId);
+    if (!list) {
+      list = [];
+      participantsByTransactionId.set(txId, list);
+    }
+    list.push(row);
+  }
+  return participantsByTransactionId;
 }
 
 function hasRecordedDecisionOrPostDecisionStatus(row) {
@@ -72,11 +83,11 @@ function hasRecordedDecisionOrPostDecisionStatus(row) {
     POST_DECISION_SWEEP_TRANSACTION_STATUS.has(row?.status);
 }
 
-function isSweepEligibleTransactionRow(row, now) {
+function isSweepEligibleTransactionRow(row, now, participantRows = []) {
   if (!row || typeof row !== LOCAL_STR_OBJECT) {
     return true;
   }
-  if (isTerminalSweepTransactionRow(row)) {
+  if (isFullyTerminalTransactionRow(row, participantRows)) {
     return false;
   }
   if (hasRecordedDecisionOrPostDecisionStatus(row)) {
@@ -611,17 +622,7 @@ const distributedTransactionRecoveryMethods = {
       rows.forEach(readRecoveredRowStatus);
     }
 
-    const participantsByTx = new Map();
-    for (const row of participantRows) {
-      const txId = row.transaction_id;
-      if (!txId) continue;
-      let list = participantsByTx.get(txId);
-      if (!list) {
-        list = [];
-        participantsByTx.set(txId, list);
-      }
-      list.push(row);
-    }
+    const participantsByTx = groupParticipantRowsByTransactionId(participantRows);
     const recoverableTransactionRows = transactionRows.filter((row) => {
       const txId = row.transaction_id;
       return !txId || !isFullyTerminalTransactionRow(row, participantsByTx.get(txId) || []);
@@ -770,6 +771,6 @@ const distributedTransactionRecoveryMethods = {
 
 export {
   distributedTransactionRecoveryMethods,
+  groupParticipantRowsByTransactionId,
   isSweepEligibleTransactionRow,
-  isTerminalSweepTransactionRow,
 };

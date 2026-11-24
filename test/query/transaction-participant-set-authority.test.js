@@ -7,8 +7,10 @@ import {buildTransactionDecisionRecord} from
   '../../src/query/distributed/distributed-transaction-decision.js';
 import {
   isSweepEligibleTransactionRow,
-  isTerminalSweepTransactionRow,
 } from '../../src/query/distributed/distributed-transaction-recovery.js';
+import {
+  isFullyTerminalTransactionRow,
+} from '../../src/query/distributed/distributed-transaction-recovery-authority.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 const logger = {debug() {}, warn() {}, error() {}};
@@ -335,6 +337,22 @@ test('R2 sweep discovery: live undecided waits for deadline while decided rows s
       status: 'ROLLED_BACK',
       timeout_deadline: now - 10,
     };
+    const terminalCommitParticipant = {
+      participant_id: `${terminalCommit.transaction_id}:p1`,
+      transaction_id: terminalCommit.transaction_id,
+      partition_id: 'p1',
+      status: 'COMMITTED',
+      created_at: 1,
+      updated_at: 1,
+    };
+    const terminalRollbackParticipant = {
+      participant_id: `${terminalRollback.transaction_id}:p1`,
+      transaction_id: terminalRollback.transaction_id,
+      partition_id: 'p1',
+      status: 'ROLLED_BACK',
+      created_at: 1,
+      updated_at: 1,
+    };
     for (const row of [
       liveUndecided,
       decidedCommit,
@@ -344,15 +362,31 @@ test('R2 sweep discovery: live undecided waits for deadline while decided rows s
     ]) {
       gateway.seed('sql_transactions', row);
     }
+    gateway.seed('sql_transaction_participants', terminalCommitParticipant);
+    gateway.seed('sql_transaction_participants', terminalRollbackParticipant);
 
-    assert.equal(isTerminalSweepTransactionRow(terminalCommit), true);
-    assert.equal(isTerminalSweepTransactionRow(terminalRollback), true);
-    assert.equal(isTerminalSweepTransactionRow(decidedCommit), false);
-    assert.equal(isSweepEligibleTransactionRow(liveUndecided, now), false);
-    assert.equal(isSweepEligibleTransactionRow(decidedCommit, now), true);
-    assert.equal(isSweepEligibleTransactionRow(decidedRollback, now), true);
-    assert.equal(isSweepEligibleTransactionRow(terminalCommit, now), false);
-    assert.equal(isSweepEligibleTransactionRow(terminalRollback, now), false);
+    assert.equal(
+      isFullyTerminalTransactionRow(terminalCommit, [terminalCommitParticipant]),
+      true,
+    );
+    assert.equal(
+      isFullyTerminalTransactionRow(terminalRollback, [terminalRollbackParticipant]),
+      true,
+    );
+    assert.equal(isFullyTerminalTransactionRow(terminalCommit, []), false);
+    assert.equal(isFullyTerminalTransactionRow(decidedCommit, []), false);
+    assert.equal(isSweepEligibleTransactionRow(liveUndecided, now, []), false);
+    assert.equal(isSweepEligibleTransactionRow(decidedCommit, now, []), true);
+    assert.equal(isSweepEligibleTransactionRow(decidedRollback, now, []), true);
+    assert.equal(isSweepEligibleTransactionRow(terminalCommit, now, []), true);
+    assert.equal(
+      isSweepEligibleTransactionRow(terminalCommit, now, [terminalCommitParticipant]),
+      false,
+    );
+    assert.equal(
+      isSweepEligibleTransactionRow(terminalRollback, now, [terminalRollbackParticipant]),
+      false,
+    );
 
     const engine = new SQLQueryEngine({
       controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
