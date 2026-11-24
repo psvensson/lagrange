@@ -53,7 +53,7 @@ documentClass: generated
 - [pgwire-message-builders.js](pgwire-message-builders.js) - PgWire backend message builders. (importers: few)
 - [pgwire-message-parsers.js](pgwire-message-parsers.js) - PgWire frontend message parsers. (importers: few)
 - [pgwire-metrics.js](pgwire-metrics.js) - PG wire observability instrumentation. (importers: one)
-- [pgwire-output-writer.js](pgwire-output-writer.js) - Connection-owned PostgreSQL wire output batching and backpressure helper. (importers: one)
+- [pgwire-output-writer.js](pgwire-output-writer.js) - Connection-owned PostgreSQL wire output batching and backpressure helper. (importers: few)
 - [pgwire-port-allocator.js](pgwire-port-allocator.js) - PgwirePortAllocator - port allocation and collision handling for PG wire replicated service replicas. (importers: few)
 - [pgwire-port-constants.js](pgwire-port-constants.js) - Constants for PG wire port allocation and collision handling. (importers: few)
 - [pgwire-protocol-constants.js](pgwire-protocol-constants.js) - PostgreSQL wire protocol constants. (importers: hub)
