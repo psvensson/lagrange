@@ -727,11 +727,37 @@ function claimFor(targetId, subkind) {
     (c) => c.targetId === targetId && c.scenario === 'scenarioA' && c.subkind === subkind);
 }
 
-function admitTiDbRunPairWithGate({targetId = 'tidb-tikv', subkind = 'smoke', gate, endpointContainerId = null}) {
+function bindTiDbFaultTargetInRun(run, gateCopy) {
+  const durCase = Array.isArray(gateCopy?.cases) ?
+    arrayFind(gateCopy.cases, (c) => c.caseId === 'durability') : null;
+  const faultId = durCase?.faultEvidence?.containerId;
+  const faultHost = durCase?.faultEvidence?.host || run.deployment.roles[0].host;
+  if (!faultId || arrayFind(run.deployment.roles, (r) => r.containerId === faultId)) return;
+  const templateProduct = run.identity.products[0];
+  run.deployment.roles.push({role: 'tikv', host: faultHost, containerId: faultId});
+  run.deployment.storage.push({
+    role: 'tikv', host: faultHost, containerId: faultId,
+    mount: '/data', kind: STORAGE_KIND.HOST_VOLUME,
+  });
+  run.identity.products.push({...templateProduct, role: 'tikv', host: faultHost, containerId: faultId});
+  run.identity.productsAfterWindow.push({
+    ...templateProduct, role: 'tikv', host: faultHost, containerId: faultId,
+  });
+}
+
+function admitTiDbRunPairWithGate({
+  targetId = 'tidb-tikv', subkind = 'smoke', gate, endpointContainerId = null,
+}) {
   const campaignId = 'camp-tidb-admit';
   const header = buildFixtureHeader({campaignId, targetIds: [targetId]});
+  header.products[0] = {...header.products[0], role: 'tikv'};
   const runs = arrayMap([1, 2], (repetition) => {
     const run = buildFixtureRun({campaignId, targetId, subkind, repetition});
+    run.deployment.roles = arrayMap(run.deployment.roles, (r) => ({...r, role: 'tikv'}));
+    run.deployment.storage = arrayMap(run.deployment.storage, (s) => ({...s, role: 'tikv'}));
+    for (const key of ['products', 'productsAfterWindow']) {
+      run.identity[key] = arrayMap(run.identity[key], (p) => ({...p, role: 'tikv'}));
+    }
     if (endpointContainerId) {
       run.deployment.endpoint.containerId = endpointContainerId;
       run.deployment.roles[0].containerId = endpointContainerId;
@@ -740,6 +766,7 @@ function admitTiDbRunPairWithGate({targetId = 'tidb-tikv', subkind = 'smoke', ga
       run.identity.productsAfterWindow[0].containerId = endpointContainerId;
     }
     const gateCopy = jsonParse(jsonStringify(gate));
+    bindTiDbFaultTargetInRun(run, gateCopy);
     const targetBinding = {
       campaignId,
       containerId: run.deployment.endpoint.containerId,

@@ -270,17 +270,48 @@ function claimFor(targetId, subkind) {
     (c) => c.targetId === targetId && c.scenario === 'scenarioA' && c.subkind === subkind);
 }
 
+function canonicalReplicaRoleForTarget(targetId) {
+  if (targetId === 'lagrange') return 'lagrange-node';
+  if (targetId === 'tidb-tikv') return 'tikv';
+  return 'postgres-primary';
+}
+
+function attachDurabilityFaultTargetToRun(run, gateCopy, role) {
+  const durCase = Array.isArray(gateCopy?.cases) ?
+    arrayFind(gateCopy.cases, (c) => c.caseId === 'durability') : null;
+  const faultId = durCase?.faultEvidence?.containerId;
+  const faultHost = durCase?.faultEvidence?.host || run.deployment.roles[0].host;
+  if (!faultId || arrayFind(run.deployment.roles, (r) => r.containerId === faultId)) return;
+  const templateProduct = run.identity.products[0];
+  run.deployment.roles.push({role, host: faultHost, containerId: faultId});
+  run.deployment.storage.push({
+    role, host: faultHost, containerId: faultId, mount: '/data', kind: STORAGE_KIND.HOST_VOLUME,
+  });
+  run.identity.products.push({...templateProduct, role, host: faultHost, containerId: faultId});
+  run.identity.productsAfterWindow.push({
+    ...templateProduct, role, host: faultHost, containerId: faultId,
+  });
+}
+
 function buildBoundRunsWithGate({targetId, subkind, gate, endpointContainerId}) {
   const campaignId = 'camp-dur-admit';
+  const role = canonicalReplicaRoleForTarget(targetId);
   const header = buildFixtureHeader({campaignId, targetIds: [targetId]});
+  header.products[0] = {...header.products[0], role};
   const runs = arrayMap([1, 2], (repetition) => {
     const run = buildFixtureRun({campaignId, targetId, subkind, repetition});
+    run.deployment.roles = arrayMap(run.deployment.roles, (r) => ({...r, role}));
+    run.deployment.storage = arrayMap(run.deployment.storage, (s) => ({...s, role}));
+    for (const key of ['products', 'productsAfterWindow']) {
+      run.identity[key] = arrayMap(run.identity[key], (p) => ({...p, role}));
+    }
     run.deployment.endpoint.containerId = endpointContainerId;
     run.deployment.roles[0].containerId = endpointContainerId;
     run.deployment.storage[0].containerId = endpointContainerId;
     run.identity.products[0].containerId = endpointContainerId;
     run.identity.productsAfterWindow[0].containerId = endpointContainerId;
     const gateCopy = jsonParse(jsonStringify(gate));
+    attachDurabilityFaultTargetToRun(run, gateCopy, role);
     const targetBinding = {
       campaignId,
       containerId: endpointContainerId,
