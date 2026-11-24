@@ -391,6 +391,7 @@ function createInvocationTermFloorTracker(executor, partitionId, rawOptions = {}
   const explicitDeadlineMs = resolveExplicitDeadlineMs(executionOptions);
   const issuedTickets = new WeakSet();
   const sealedResults = new WeakSet();
+  const settledWriteResults = new WeakSet();
   let termFloor = null;
   let latestRoutes = null;
 
@@ -514,7 +515,13 @@ function createInvocationTermFloorTracker(executor, partitionId, rawOptions = {}
     return refreshed;
   }
 
-  function buildAcceptedCompletion(ticket, delivery, redirectedFromAddress, routes) {
+  function buildAcceptedCompletion(
+    ticket,
+    delivery,
+    redirectedFromAddress,
+    routes,
+    settledWrite = false,
+  ) {
     const builtResult = buildSuccessResult(deliveryAnswerOf(delivery), {
       address: ticket.address,
       executionOptions,
@@ -531,6 +538,9 @@ function createInvocationTermFloorTracker(executor, partitionId, rawOptions = {}
       });
     }
     const sealed = stampCompletedReadResult(builtResult, sealedResults);
+    if (settledWrite) {
+      settledWriteResults.add(sealed);
+    }
     return Object.freeze({
       accepted: true,
       completedResult: sealed,
@@ -647,13 +657,13 @@ function createInvocationTermFloorTracker(executor, partitionId, rawOptions = {}
     if (error) {
       return handleCompletionError(error, ticket, routes, requireStrictCurrency);
     }
-    throwIfAborted();
     const succeeded = Boolean(isSuccessfulResponse(delivery));
     const reading = deliveryReadingOf(delivery);
     const factKind = classifyCompletionFact(succeeded, reading);
     if (factKind === COMPLETION_FACT_KIND.SETTLED_WRITE_OUTCOME) {
-      return buildAcceptedCompletion(ticket, delivery, redirectedFromAddress, routes);
+      return buildAcceptedCompletion(ticket, delivery, redirectedFromAddress, routes, true);
     }
+    throwIfAborted();
     if (factKind === COMPLETION_FACT_KIND.UNSETTLED_OR_REJECTED_WRITE) {
       return completeUnsettledOrRejectedWrite(reading, routes);
     }
@@ -669,12 +679,20 @@ function createInvocationTermFloorTracker(executor, partitionId, rawOptions = {}
   }
 
   function finalizeAcceptedResult(result) {
-    throwIfAborted();
-    if (forRead && !preserveCommittedWritePastDeadline && isDeadlineExpired()) {
-      throw buildTypedAuthorityError(
-        DEADLINE_EXPIRED_COMPLETION_MSG,
-        DEADLINE_EXPIRED_COMPLETION_CODE,
-      );
+    const isSettledWrite = Boolean(
+      result &&
+      typeof result === 'object' &&
+      (settledWriteResults.has(result) || result.success === true),
+    );
+    const factKind = classifyCompletionFact(isSettledWrite, result);
+    if (factKind !== COMPLETION_FACT_KIND.SETTLED_WRITE_OUTCOME) {
+      throwIfAborted();
+      if (forRead && !preserveCommittedWritePastDeadline && isDeadlineExpired()) {
+        throw buildTypedAuthorityError(
+          DEADLINE_EXPIRED_COMPLETION_MSG,
+          DEADLINE_EXPIRED_COMPLETION_CODE,
+        );
+      }
     }
     if (!result || typeof result !== 'object' || !sealedResults.has(result)) {
       throw buildTypedAuthorityError(

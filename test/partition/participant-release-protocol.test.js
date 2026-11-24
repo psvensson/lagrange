@@ -30,6 +30,8 @@ import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from
   '../../src/raft/raft-committed-membership-constants.js';
 import {RAFT_EVENT, RAFT_OPERATION_OUTCOME} from
   '../../src/raft/raft-operation-port-constants.js';
+import {hasMultiMemberConfState} from
+  '../../src/raft/raft-rs-current-authority.js';
 import {PARTICIPANT_CUTOVER_OUTCOME as OUTCOME} from
   '../../src/partition/partition-participant-transaction-cutover-constants.js';
 import {
@@ -1377,3 +1379,89 @@ test('concurrent membershipGenerationIndex advance right after RESUME invalidate
     }
     if (failure !== null) throw failure;
   }));
+
+test('external control-partition release pausing sql_transactions-p1 on DRAIN_PENDING ' +
+  'wakes local participantReleaseRecovery to reopen autonomously once drain settles, ' +
+  'and hasMultiMemberConfState decides by committed voting membership', async () => {
+  assert.equal(hasMultiMemberConfState({voters: ['1'], learners: [], votersOutgoing: []}), false);
+  assert.equal(hasMultiMemberConfState({voters: ['1'], learners: ['2'], votersOutgoing: []}), false,
+    'single voting founder with a non-voting learner remains single-voter quorum');
+  assert.equal(hasMultiMemberConfState({voters: ['1', '2'], learners: [], votersOutgoing: []}), true);
+  assert.equal(hasMultiMemberConfState({voters: ['1'], learners: [], votersOutgoing: ['1']}), true);
+
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'tx1-release-wake-on-drain-'));
+  const transport = createInProcessMockTransport();
+  const clock = new VirtualTimeSource({startMs: 1000});
+  const {leader, proposed} = await startLeader({
+    tableName: SQL_TRANSACTIONS_SCHEMA.tableName,
+    schema: SQL_TRANSACTIONS_SCHEMA,
+    timeSource: clock,
+  });
+  const handler = new ReplicaHandler({
+    nodeId: leader.nodeId, ownerIncarnation: 1,
+    systemTableCache: leader.systemTableCache, cdcIntegrationService: {},
+    createPartitionService: () => leader, messageRouter: transport,
+    dataDir: directory, timeSource: clock,
+  });
+  handler.registerWithRouter(transport);
+  handler.localServices.set(leader.replicaId, leader);
+  let failure = null;
+  let pendingWrite = null;
+  try {
+    const build = await runtimeBuildProvenance();
+    assert.equal(build.state, 'measured', build.reason);
+    const initial = await handler.participantReleaseRecovery.releaseOperator({
+      partitionId: leader.partitionId,
+      targetBuildDigest: build.digest,
+      deadlineAtMs: clock.now() + 30000,
+    });
+    assert.equal(initial.outcome, OUTCOME.CUT_OVER, JSON.stringify(initial));
+    assert.equal(participantCutoverPauseOf(leader), null);
+
+    // Queue an in-flight proposal on already-open sql_transactions-p1.
+    const absentId = 'e'.repeat(32);
+    pendingWrite = track(leader.executeQuery(PENDING_DELETE_SQL, [absentId]));
+    const proposal = await awaitProposal(proposed,
+      (entry) => entry.sql === PENDING_DELETE_SQL);
+    assert.notEqual(proposal, null);
+    assert.equal(leader.proposalQueue.size, 1);
+
+    // External release request (as from releaseControlOwnerFirst) pauses leader
+    // and exits with DRAIN_PENDING while proposalQueue is non-empty.
+    const authorization = handler.participantReleaseAuthorizationOwner.authorizeOperator({
+      partitionId: leader.partitionId, targetBuildDigest: build.digest,
+    });
+    const drainRefusal = await sendRegisteredRelease(handler, transport,
+      registeredReleaseRequest({
+        partitionId: leader.partitionId,
+        targetBuildDigest: build.digest,
+        trigger: PARTICIPANT_RELEASE_TRIGGER.EXISTING_ORIGIN,
+        deadlineAtMs: clock.now() + 30000,
+        authorization,
+      }));
+    assert.equal(drainRefusal.outcome, OUTCOME.DRAIN_PENDING, JSON.stringify(drainRefusal));
+    assert.notEqual(participantCutoverPauseOf(leader), null,
+      'external cutover attempt raised cutover pause on sql_transactions-p1');
+    assert.equal(participantReleaseAdmissionOf(leader).state, ADMISSION.CLOSED);
+
+    // Settle the in-flight proposal and advance the virtual clock by RECOVERY_RETRY_MS
+    // with ZERO manual releaseOperator calls: the wake scheduled by runParticipantCutover
+    // must autonomously re-open sql_transactions-p1.
+    leader.controllablePort.commit(proposal);
+    const writeAnswer = await pendingWrite.promise;
+    assert.equal(writeAnswer.success, true);
+    assert.equal(leader.proposalQueue.size, 0);
+
+    clock.advance(RELEASE_BOUND.RECOVERY_RETRY_MS);
+    assert.equal(await waitForCondition(() =>
+      participantCutoverPauseOf(leader) === null &&
+      participantReleaseAdmissionOf(leader).state === ADMISSION.OPEN, 5000, 10), true,
+    'woken local participantReleaseRecovery autonomously re-opens sql_transactions-p1');
+  } catch (error) {
+    failure = error;
+  }
+  failure = await cleanupBlockedDrainWitness({
+    handler, leader, directory, pendingWrite, failure,
+  });
+  if (failure !== null) throw failure;
+});

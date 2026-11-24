@@ -89,10 +89,9 @@ function hasMultiMemberConfState(confState) {
     return false;
   }
   const voterCount = arrayLength(confState.voters);
-  const learnerCount = arrayLength(confState.learners);
   const outgoingCount = arrayLength(confState.votersOutgoing);
   return (
-    voterCount + learnerCount > SINGLE_REPLICA_COUNT ||
+    voterCount > SINGLE_REPLICA_COUNT ||
     outgoingCount > ZERO_COUNT
   );
 }
@@ -101,10 +100,11 @@ function isSoloSingleVoterConfState(confState) {
   if (!confState || typeof confState !== 'object') {
     return false;
   }
+  const voterCount = arrayLength(confState.voters);
+  const outgoingCount = arrayLength(confState.votersOutgoing);
   return (
-    arrayLength(confState.voters) === SINGLE_REPLICA_COUNT &&
-    arrayLength(confState.learners) === ZERO_COUNT &&
-    arrayLength(confState.votersOutgoing) === ZERO_COUNT
+    voterCount === SINGLE_REPLICA_COUNT &&
+    outgoingCount === ZERO_COUNT
   );
 }
 

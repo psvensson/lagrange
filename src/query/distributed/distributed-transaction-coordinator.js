@@ -225,9 +225,20 @@ class DistributedTransactionCoordinator {
     // whether that transaction reached its commit point from here.
     this.endedTransactions = createEndedTransactionRecords();
     this.transactionOperationTailBySession = new Map();
+    this.inFlightBeginsBySession = new Map();
     this.recoveredTransactionIds = new Set();
     this.transactionBreakdownsById = new Map();
     this.lastTransactionBreakdown = null;
+  }
+
+  markInFlightBeginsClosed(sessionId) {
+    const activeBegins = this.inFlightBeginsBySession.get(sessionId);
+    if (!activeBegins) {
+      return;
+    }
+    for (const beginState of activeBegins) {
+      beginState.closed = true;
+    }
   }
 
   /**
@@ -241,8 +252,27 @@ class DistributedTransactionCoordinator {
   async begin(sessionId, options = {}) {
     const expectedTransactionId = options.expectedTransactionId ??
       this.getTransaction(sessionId)?.transactionId;
-    return this.runTransactionOperation(sessionId,
-      () => this.beginOwned(sessionId, {...options, expectedTransactionId}));
+    const beginState = {closed: false};
+    let activeBegins = this.inFlightBeginsBySession.get(sessionId);
+    if (!activeBegins) {
+      activeBegins = new Set();
+      this.inFlightBeginsBySession.set(sessionId, activeBegins);
+    }
+    activeBegins.add(beginState);
+    try {
+      return await this.runTransactionOperation(sessionId,
+        () => this.beginOwned(sessionId, {
+          ...options,
+          beginState,
+          expectedTransactionId,
+        }));
+    } finally {
+      activeBegins.delete(beginState);
+      if (activeBegins.size === 0 &&
+          this.inFlightBeginsBySession.get(sessionId) === activeBegins) {
+        this.inFlightBeginsBySession.delete(sessionId);
+      }
+    }
   }
 
   async beginOwned(sessionId, options) {
@@ -288,8 +318,18 @@ class DistributedTransactionCoordinator {
         TRANSACTION_MODE.AUTOCOMMIT :
         TRANSACTION_MODE.EXPLICIT;
     return this.registerUniqueTransaction(sessionId, {
-      transactionEpoch, timeoutBudget, transactionMode,
+      abortSignal: options.abortSignal,
+      beginState: options.beginState,
+      transactionEpoch,
+      timeoutBudget,
+      transactionMode,
     });
+  }
+
+  async disposeClosedSessionBegin(sessionId, transactionId, fields) {
+    if (fields.beginState?.closed === true || fields.abortSignal?.aborted === true) {
+      await this.rollbackOwned(sessionId, transactionId);
+    }
   }
 
   async registerUniqueTransaction(sessionId, fields) {
@@ -328,6 +368,7 @@ class DistributedTransactionCoordinator {
             QUERY_ERROR_CODE.TRANSACTION_STATE_PERSIST_FAILED,
         };
       }
+      await this.disposeClosedSessionBegin(sessionId, transactionId, fields);
       return {
         success: true,
         operation: QUERY_OPERATION.BEGIN_TRANSACTION,
@@ -522,11 +563,16 @@ class DistributedTransactionCoordinator {
    * @return {Promise<Object>} Rollback result.
    */
   async rollback(sessionId, options = {}) {
-    const expectedTransactionId = options.expectedTransactionId ??
+    this.markInFlightBeginsClosed(sessionId);
+    const capturedTransactionId = options.expectedTransactionId ??
       this.getTransaction(sessionId)?.transactionId ?? null;
     return this.runTransactionOperation(
       sessionId,
-      () => this.rollbackOwned(sessionId, expectedTransactionId),
+      () => this.rollbackOwned(
+        sessionId,
+        capturedTransactionId ??
+          this.getTransaction(sessionId)?.transactionId ?? null,
+      ),
     );
   }
 
@@ -615,13 +661,7 @@ class DistributedTransactionCoordinator {
   }
 
   buildParticipantFailureResult(tx, operation, stage, failedParticipants) {
-    return buildParticipantFailureResult.call(
-      this,
-      tx,
-      operation,
-      stage,
-      failedParticipants,
-    );
+    return buildParticipantFailureResult.call(this, tx, operation, stage, failedParticipants);
   }
 
   getPrepareParticipantKeys(tx) {
@@ -636,48 +676,18 @@ class DistributedTransactionCoordinator {
     return getRollbackParticipantKeys.call(this, tx);
   }
 
-  async executeParticipantStage(
-    tx,
-    transientStatus,
-    successStatus,
-    operation,
-    options = {},
-  ) {
+  async executeParticipantStage(tx, transientStatus, successStatus, operation, options = {}) {
     return executeParticipantStage.call(
-      this,
-      tx,
-      transientStatus,
-      successStatus,
-      operation,
-      options,
-    );
+      this, tx, transientStatus, successStatus, operation, options);
   }
 
-  async executeParticipantOperationWithRetry(
-    tx,
-    stage,
-    partitionId,
-    operation,
-    options = {},
-  ) {
+  async executeParticipantOperationWithRetry(tx, stage, partitionId, operation, options = {}) {
     return executeParticipantOperationWithRetry.call(
-      this,
-      tx,
-      stage,
-      partitionId,
-      operation,
-      options,
-    );
+      this, tx, stage, partitionId, operation, options);
   }
 
   async resolveParticipantCommitMiss(tx, stage, partitionId, error) {
-    return resolveParticipantCommitMiss.call(
-      this,
-      tx,
-      stage,
-      partitionId,
-      error,
-    );
+    return resolveParticipantCommitMiss.call(this, tx, stage, partitionId, error);
   }
 
   createTransactionTimeoutError() {

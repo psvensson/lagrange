@@ -317,6 +317,9 @@ function createParticipantReleaseRecovery(handler) {
         targetBuildDigest, deadlineAtMs, authorization,
         trigger: TRIGGER.OPERATOR});
     },
+    wake(partitionId, delay) {
+      enqueue(partitionId, delay ?? BOUND.RECOVERY_RETRY_MS);
+    },
     async shutdown() {
       stopped = true;
       stopServices();

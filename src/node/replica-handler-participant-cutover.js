@@ -6,8 +6,11 @@ import {TABLES} from '../constants/tables.js';
 import {INITIAL_PARTITION_IDS} from
   '../bootstrap/system-table-schemas-constants.js';
 import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from '../raft/raft-committed-membership-constants.js';
-import {raiseParticipantCutoverPause, readParticipantReleaseFacts} from
-  '../partition/partition-participant-transaction-pause.js';
+import {
+  participantCutoverPauseOf,
+  raiseParticipantCutoverPause,
+  readParticipantReleaseFacts,
+} from '../partition/partition-participant-transaction-pause.js';
 import {readPartitionWriteOrigin} from
   '../partition/partition-participant-transaction-store.js';
 import {isReleaseDrained, releaseAnswer, releaseCensusDefect,
@@ -484,6 +487,19 @@ async function joinParticipantCutover(handler, current, request) {
   return releaseAnswer(answer.outcome, answer, {...answer, joinedAttempt});
 }
 
+function wakePausedLeaderAfterCutover(handler, request, answer) {
+  if (answer?.outcome === OUTCOME.CUT_OVER) return;
+  const service = localLeader(handler, request);
+  if (service !== null &&
+      readPartitionWriteOrigin(service.db) !== null &&
+      participantCutoverPauseOf(service) !== null) {
+    handler.participantReleaseRecovery?.wake?.(
+      request.partitionId,
+      BOUND.RECOVERY_RETRY_MS,
+    );
+  }
+}
+
 async function runParticipantCutover(handler, request) {
   const refusal = await freshCreateRequestRefusal(handler, request).catch((error) =>
     attemptRefusal(request, OUTCOME.UNAVAILABLE, {reason: String(error?.message ?? error)}));
@@ -507,7 +523,9 @@ async function runParticipantCutover(handler, request) {
   record.promise = running.then((answer) => settleCutoverWaiters(record, answer));
   runs.set(request.partitionId, record);
   try {
-    return await record.promise;
+    const answer = await record.promise;
+    wakePausedLeaderAfterCutover(handler, request, answer);
+    return answer;
   } finally {
     if (runs.get(request.partitionId) === record) runs.delete(request.partitionId);
   }
