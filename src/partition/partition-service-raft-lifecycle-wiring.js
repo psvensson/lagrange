@@ -26,6 +26,19 @@ const LOCAL_STR_VOTER = 'voter';
 const INITIAL_FOUNDER_TERM = 1;
 const SINGLE_REPLICA_COUNT = 1;
 
+function hasMultiMemberConfState(confState) {
+  if (!confState) {
+    return false;
+  }
+  const voterCount = Array.isArray(confState.voters) ?
+    confState.voters.length :
+    0;
+  const learnerCount = Array.isArray(confState.learners) ?
+    confState.learners.length :
+    0;
+  return voterCount + learnerCount > SINGLE_REPLICA_COUNT;
+}
+
 function shouldDeferInitialSoloFounderScheduling(service) {
   if (!service?.raft || service.replicaIds?.length !== SINGLE_REPLICA_COUNT) {
     return false;
@@ -33,6 +46,7 @@ function shouldDeferInitialSoloFounderScheduling(service) {
   const status = service.raft.readStatus();
   return (
     service.isSoloReplicaGroup() &&
+    !hasMultiMemberConfState(status?.confState) &&
     status?.gateOpen !== false &&
     service.role === RaftRole.LEADER &&
     Number(status?.term) <= INITIAL_FOUNDER_TERM
@@ -78,14 +92,31 @@ function resolveObservedTerm(service, observedTerm) {
   return Number(service.raft.readStatus()?.term);
 }
 
-function hasLeftInitialFounderTenure(service, observedTerm) {
+function hasLeftInitialSoloFounderState(
+  service,
+  observedTerm = null,
+  observation = null,
+) {
+  if (service.isSoloReplicaGroup?.() === false) {
+    return true;
+  }
+  if (
+    hasMultiMemberConfState(observation?.confState) ||
+    hasMultiMemberConfState(service.raft.readStatus?.()?.confState)
+  ) {
+    return true;
+  }
   return (
     service.role !== RaftRole.LEADER ||
     resolveObservedTerm(service, observedTerm) > INITIAL_FOUNDER_TERM
   );
 }
 
-function activateDeferredFounderSchedulingIfNeeded(service, observedTerm = null) {
+function activateDeferredFounderSchedulingIfNeeded(
+  service,
+  observedTerm = null,
+  observation = null,
+) {
   if (
     !service?.deferredFounderSchedulingPending ||
     !service.electionStarted ||
@@ -94,7 +125,7 @@ function activateDeferredFounderSchedulingIfNeeded(service, observedTerm = null)
   ) {
     return false;
   }
-  if (!hasLeftInitialFounderTenure(service, observedTerm)) {
+  if (!hasLeftInitialSoloFounderState(service, observedTerm, observation)) {
     return false;
   }
   return startPartitionRaftSchedulingTimer(service);
@@ -279,11 +310,13 @@ function relayPartitionConsensusObservations(service) {
         service.updateRebalancerLeadership?.();
       }
     }
+    activateDeferredFounderSchedulingIfNeeded(service, null, observation);
     emit({confState: observation?.confState ?? null,
       commitIndex: observation?.commitIndex ?? null,
       appliedIndex: observation?.appliedIndex ?? null});
   });
   service.raft.subscribe(RAFT_EVENT.CONF_CHANGE_APPLIED, (settlement) => {
+    activateDeferredFounderSchedulingIfNeeded(service);
     if ((settlement?.confChangeEntries ?? 0) > 0) {
       emit({appliedIndex: settlement?.appliedIndex ?? null,
         confChangeEntries: settlement.confChangeEntries});
