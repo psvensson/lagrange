@@ -18,7 +18,12 @@ const TABLE_SCHEMA = {
 };
 
 const TABLES_METADATA = [
-  {table_name: 'live_orders', primary_key: 'id', partition_key_type: 'INTEGER'},
+  {
+    table_name: 'live_orders',
+    primary_key: 'id',
+    partition_key_type: 'INTEGER',
+    active_partition_version: 1,
+  },
 ];
 
 const SELECT_OPEN_SQL = 'SELECT id, customer, total FROM live_orders WHERE status = \'OPEN\'';

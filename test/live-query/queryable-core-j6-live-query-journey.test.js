@@ -67,7 +67,12 @@ const TABLE_SCHEMA = {
 };
 
 const TABLES_METADATA = [
-  {table_name: 'live_orders', primary_key: 'id', partition_key_type: 'INTEGER'},
+  {
+    table_name: 'live_orders',
+    primary_key: 'id',
+    partition_key_type: 'INTEGER',
+    active_partition_version: 1,
+  },
 ];
 
 describe('Unit J6: Live query results committed CDC delivery and lifecycle', () => {
@@ -109,6 +114,8 @@ describe('Unit J6: Live query results committed CDC delivery and lifecycle', () 
         partition_key_start: null,
         partition_key_end: null,
         partition_key_type: 'INTEGER',
+        partition_version: 1,
+        state: 'NORMAL',
       },
     ];
     systemCache = createTableCache(TABLES_METADATA, () => currentPartitions);
@@ -336,6 +343,7 @@ describe('Unit J6: Live query results committed CDC delivery and lifecycle', () 
       sqlQueryEngine: sqlEngine,
       subscribeToPartition: async (partitionId) => {
         subscribed.add(partitionId);
+        return {acknowledged: true, success: true, subscribed: true};
       },
       unsubscribeFromPartition: async (partitionId) => {
         unsubscribed.add(partitionId);
@@ -356,6 +364,8 @@ describe('Unit J6: Live query results committed CDC delivery and lifecycle', () 
         partition_key_start: null,
         partition_key_end: 50,
         partition_key_type: 'INTEGER',
+        partition_version: 1,
+        state: 'NORMAL',
       },
       {
         partition_id: 'p1b',
@@ -363,6 +373,8 @@ describe('Unit J6: Live query results committed CDC delivery and lifecycle', () 
         partition_key_start: 50,
         partition_key_end: null,
         partition_key_type: 'INTEGER',
+        partition_version: 1,
+        state: 'NORMAL',
       },
     ];
     currentPartitions = splitPartitions;
@@ -558,6 +570,8 @@ describe('Unit J6: Multi-node remote producer CDC delivery and leader failover',
       partition_key_start: null,
       partition_key_end: null,
       partition_key_type: 'INTEGER',
+      partition_version: 1,
+      state: 'NORMAL',
       leader_node_id: 'node-b',
     }];
     let currentReplicas = [{partition_id: 'p1', node_id: 'node-b'}];
@@ -702,6 +716,8 @@ describe('Unit J6: Multi-node remote producer CDC delivery and leader failover',
       partition_key_start: null,
       partition_key_end: null,
       partition_key_type: 'INTEGER',
+      partition_version: 1,
+      state: 'NORMAL',
       leader_node_id: 'node-b',
     }];
     const systemCache = createRemoteTopologyCache(
@@ -809,6 +825,8 @@ describe('Unit J6: Multi-node remote producer CDC delivery and leader failover',
       partition_key_start: null,
       partition_key_end: null,
       partition_key_type: 'INTEGER',
+      partition_version: 1,
+      state: 'NORMAL',
       leader_node_id: 'node-b',
     }];
     let currentReplicas = [{partition_id: 'p1', node_id: 'node-b'}];
@@ -915,6 +933,8 @@ describe('Unit J6: Multi-node remote producer CDC delivery and leader failover',
       partition_key_start: null,
       partition_key_end: null,
       partition_key_type: 'INTEGER',
+      partition_version: 1,
+      state: 'NORMAL',
       leader_node_id: 'node-b',
     }];
     const systemCache = createRemoteTopologyCache(

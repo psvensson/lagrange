@@ -18,6 +18,9 @@ import {
   createMockMessageRouter,
   createMockSystemCache,
 } from '../query/sql-query-engine-test-support.js';
+import {
+  createPartitionServiceExecutorAdapter,
+} from './global-index-partition-executor-test-helper.js';
 
 import {createCommittedServeEligibilityOwner} from '../control-plane/serve-eligibility-test-support.js';
 beforeEach(() => {
@@ -545,6 +548,9 @@ test('IndexService - creates SQLite index on partitions', async (t) => {
     cdcIntegrationService: cdcService,
     systemTableCache: {},
     sqlQueryEngine: sqlEngine,
+    partitionExecutor: createPartitionServiceExecutorAdapter(
+      new Map([[partition.partitionId, partition]]),
+    ),
   });
 
   await indexService.initialize();
@@ -604,6 +610,9 @@ test('IndexService - creates indices on new partition via CDC', async (t) => {
     cdcIntegrationService: cdcService,
     systemTableCache: {},
     sqlQueryEngine: sqlEngine,
+    partitionExecutor: createPartitionServiceExecutorAdapter(
+      new Map([[newPartition.partitionId, newPartition]]),
+    ),
   });
 
   await indexService.initialize();
@@ -672,6 +681,9 @@ test('IndexService - ensureIndicesOnPartition creates all', async (t) => {
     cdcIntegrationService: cdcService,
     systemTableCache: {},
     sqlQueryEngine: sqlEngine,
+    partitionExecutor: createPartitionServiceExecutorAdapter(
+      new Map([[partition.partitionId, partition]]),
+    ),
   });
 
   await indexService.initialize();
@@ -745,6 +757,9 @@ test('IndexService - rebuildIndex recreates on partitions', async (t) => {
     cdcIntegrationService: cdcService,
     systemTableCache: {},
     sqlQueryEngine: sqlEngine,
+    partitionExecutor: createPartitionServiceExecutorAdapter(
+      new Map([[partition.partitionId, partition]]),
+    ),
   });
 
   await indexService.initialize();
@@ -915,4 +930,42 @@ test('SQLQueryEngine - rejects unsupported CREATE INDEX features fail-closed', a
   );
   t.equal(r4.success, false);
   t.equal(r4.errorCode, QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE);
+});
+
+test('IndexService - local index DDL fails closed without canonical partitionExecutor', async (t) => {
+  let bypassCalled = false;
+  const partitionHandle = {
+    partition_id: 'p1',
+    table_id: 'users-table',
+    table_name: 'users',
+    handleRemoteQuery() {
+      bypassCalled = true;
+      return {success: true};
+    },
+    executeQuery() {
+      bypassCalled = true;
+      return {success: true};
+    },
+  };
+  const indexService = new IndexService({
+    cdcIntegrationService: createMockCDCService(),
+    systemTableCache: {},
+    sqlQueryEngine: createMockSqlEngine([], [partitionHandle]),
+  });
+  await indexService.initialize();
+
+  try {
+    await indexService.createIndex({
+      tableId: 'users-table',
+      tableName: 'users',
+      indexName: 'idx_users_email',
+      columnNames: ['email'],
+    });
+    t.fail('createIndex must fail closed when canonical partitionExecutor is absent');
+  } catch (error) {
+    t.equal(error.code, 'GLOBAL_INDEX_DEPENDENCY_UNAVAILABLE');
+    t.match(error.message, /partitionExecutor/u);
+  }
+  t.equal(bypassCalled, false, 'multi-interface partition bypasses must not be called');
+  await indexService.shutdown();
 });

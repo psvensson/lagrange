@@ -50,8 +50,6 @@ class HLCClockService {
     this.logger = loggingService.isInitialized() ?
       loggingService.forSubsystem(HLC_SUBSYSTEM) : null;
 
-    // Legacy callback for drift warnings (for backwards compatibility)
-    this.onDriftWarning = options.onDriftWarning || null;
     this.lastDriftWarningAtMs = null;
     this.suppressedDriftWarningCount = 0;
   }
@@ -107,11 +105,6 @@ class HLCClockService {
       };
 
       this.emitDriftWarning(driftInfo, physicalNow);
-
-      // Invoke drift warning callback if provided
-      if (this.onDriftWarning) {
-        this.onDriftWarning(driftInfo);
-      }
     }
 
     // Update to max of local, remote, and physical time
@@ -148,8 +141,7 @@ class HLCClockService {
    * Persisting this warning into the distributed logs table stamps another
    * HLC timestamp onto its CDC event, allowing skew warnings to recursively
    * create more skew warnings. The console/file sink is captured by production
-   * harnesses and is rate-limited globally; the programmatic callback remains
-   * unthrottled in update().
+   * harnesses and is rate-limited globally.
    * @param {Object} driftInfo
    * @param {number} observedAtMs
    * @private
@@ -202,14 +194,6 @@ class HLCClockService {
    */
   getMaxDrift() {
     return this.maxDrift;
-  }
-
-  /**
-   * Set the drift warning callback.
-   * @param {Function} callback - Callback function for drift warnings.
-   */
-  setDriftWarningCallback(callback) {
-    this.onDriftWarning = callback;
   }
 }
 

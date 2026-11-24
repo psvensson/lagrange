@@ -7,6 +7,11 @@ import {createLiveQueryStartupWiring} from
 
 function createMockSystemCache(partitions = []) {
   const listeners = new Set();
+  const canonicalPartitions = partitions.map((partition) => ({
+    partition_version: 1,
+    state: 'NORMAL',
+    ...partition,
+  }));
 
   return {
     listeners,
@@ -23,7 +28,7 @@ function createMockSystemCache(partitions = []) {
     },
     get(tableName, key) {
       if (tableName === TABLES.PARTITIONS) {
-        return partitions.find((partition) => {
+        return canonicalPartitions.find((partition) => {
           return partition.partition_id === key;
         }) || null;
       }
@@ -31,6 +36,7 @@ function createMockSystemCache(partitions = []) {
         return {
           table_name: key,
           primary_key: 'id',
+          active_partition_version: 1,
         };
       }
       return null;
@@ -42,6 +48,7 @@ function createMockSystemCache(partitions = []) {
       const row = {
         table_name: 'orders',
         primary_key: 'id',
+        active_partition_version: 1,
       };
       return predicate(row) ? row : null;
     },
@@ -49,7 +56,7 @@ function createMockSystemCache(partitions = []) {
       if (tableName !== TABLES.PARTITIONS) {
         return [];
       }
-      return partitions.filter(predicate);
+      return canonicalPartitions.filter(predicate);
     },
   };
 }
@@ -68,7 +75,7 @@ function createMockClient(clientId = 'client-1') {
 describe('live query startup wiring', () => {
   it('initializes manager and cleanup in one startup-owned path', () => {
     const cache = createMockSystemCache();
-    const sqlQueryEngine = {executeQuery: async () => ({results: []})};
+    const sqlQueryEngine = {executeQuery: async () => ({rows: []})};
 
     const wiring = createLiveQueryStartupWiring({
       nodeId: 'node-1',
@@ -85,7 +92,7 @@ describe('live query startup wiring', () => {
     assert.equal(wiring.liveQueryManager.isInitialized(), false);
   });
 
-  it('routes cache CDC changes into live query subscriptions', async () => {
+  it('keeps unreachable partitions pending instead of falling back to cache data delivery', async () => {
     const cache = createMockSystemCache([
       {
         partition_id: 'partition-orders',
@@ -101,7 +108,7 @@ describe('live query startup wiring', () => {
     });
 
     const client = createMockClient('client-live');
-    await wiring.liveQueryManager.registerLiveQuery({
+    const reg = await wiring.liveQueryManager.registerLiveQuery({
       from: {name: 'orders'},
       where: {
         type: 'binary',
@@ -111,16 +118,128 @@ describe('live query startup wiring', () => {
       },
     }, client);
 
+    const group = wiring.liveQueryManager.findGroupByQueryId(reg.queryId);
+    assert.deepEqual(reg.partitions, []);
+    assert.equal(group.subscribedPartitions.has('partition-orders'), false);
+    assert.equal(group.pendingSubscriptions.has('partition-orders'), true);
+
     cache.emitCacheChange('orders', 'INSERT', {
       id: 7,
       status: 'ready',
     });
 
+    assert.equal(client.messages.length, 0);
+
+    await wiring.shutdown();
+  });
+
+  it('rejects plain subscribeToCDC partitions without subscribeToCDCWithHandshake', async () => {
+    const plainOnlyPartition = {
+      partitionId: 'partition-orders',
+      isLeader: true,
+      subscribeToCDC() {
+        throw new Error('plain subscribeToCDC fallback must not be called');
+      },
+    };
+    const cache = createMockSystemCache([
+      {
+        partition_id: 'partition-orders',
+        table_name: 'orders',
+        partition_key_start: null,
+        partition_key_end: null,
+      },
+    ]);
+    const wiring = createLiveQueryStartupWiring({
+      nodeId: 'node-plain',
+      systemTableCache: cache,
+      sqlQueryEngine: null,
+      partitions: new Map([['partition-orders', plainOnlyPartition]]),
+    });
+
+    const client = createMockClient('client-plain');
+    const reg = await wiring.liveQueryManager.registerLiveQuery({
+      from: {name: 'orders'},
+    }, client);
+
+    const group = wiring.liveQueryManager.findGroupByQueryId(reg.queryId);
+    assert.deepEqual(reg.partitions, []);
+    assert.equal(group.subscribedPartitions.has('partition-orders'), false);
+    assert.equal(group.pendingSubscriptions.has('partition-orders'), true);
+
+    await wiring.shutdown();
+  });
+
+  it('transitions pending partition to subscribed on topology update once reachable', async () => {
+    const partitions = new Map();
+    const cache = createMockSystemCache([
+      {
+        partition_id: 'partition-orders',
+        table_name: 'orders',
+        partition_key_start: null,
+        partition_key_end: null,
+      },
+    ]);
+    const wiring = createLiveQueryStartupWiring({
+      nodeId: 'node-retry',
+      systemTableCache: cache,
+      sqlQueryEngine: null,
+      partitionServicesProvider: () => partitions,
+    });
+
+    const client = createMockClient('client-retry');
+    const reg = await wiring.liveQueryManager.registerLiveQuery({
+      from: {name: 'orders'},
+      where: {
+        type: 'binary',
+        operator: '=',
+        left: {type: 'column_ref', column: 'id'},
+        right: {type: 'literal', value: 7},
+      },
+    }, client);
+
+    const group = wiring.liveQueryManager.findGroupByQueryId(reg.queryId);
+    assert.equal(group.subscribedPartitions.has('partition-orders'), false);
+    assert.equal(group.pendingSubscriptions.has('partition-orders'), true);
+
+    let partitionSubscriber = null;
+    partitions.set('partition-orders', {
+      partitionId: 'partition-orders',
+      isLeader: true,
+      async subscribeToCDCWithHandshake(subscriber, options) {
+        partitionSubscriber = subscriber;
+        return {
+          status: 'ok',
+          subscriberId: options.subscriberId,
+          versionContext: {streamVersion: 1},
+        };
+      },
+      unsubscribeFromCDC() {},
+    });
+
+    cache.emitCacheChange(TABLES.PARTITIONS, 'UPDATE', {
+      partition_id: 'partition-orders',
+      table_name: 'orders',
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.equal(group.subscribedPartitions.has('partition-orders'), true);
+    assert.equal(group.pendingSubscriptions.has('partition-orders'), false);
+    assert.equal(typeof partitionSubscriber, 'function');
+
+    await partitionSubscriber(Object.freeze([
+      {
+        tableName: 'orders',
+        operation: 'INSERT',
+        data: {id: 7, status: 'ready'},
+        sequenceNumber: 2,
+      },
+    ]), null);
+
     assert.equal(client.messages.length, 1);
     assert.equal(client.messages[0].type, 'insert');
     assert.equal(client.messages[0].row.id, 7);
 
-    wiring.shutdown();
+    await wiring.shutdown();
   });
 
   it('removes cache listener on shutdown', () => {

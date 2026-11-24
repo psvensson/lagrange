@@ -111,7 +111,7 @@ function resolveSnapshotExecutionSql(manager, group) {
 }
 
 function populateSnapshotRows(group, result) {
-  const rawRows = result.rows ?? result.results ?? [];
+  const rawRows = result.rows;
   const rows = rawRows.map((r) => (group.projectRow ? group.projectRow(r) : r));
   group.lastResultSet = rows;
   if (group.resultSet) {

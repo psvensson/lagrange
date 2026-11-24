@@ -47,6 +47,9 @@ const DIRECT_CALL_REPLAY_MESSAGE = Object.freeze({
     'intent (operation, arguments, generation, or authority)',
   EXPIRED:
     'Direct call invocation_key has expired beyond the retention window',
+  STORE_UNAVAILABLE:
+    'Direct call replay requires a durable reduceCoordinator with ' +
+    'readResultRow and updateResultWitness',
   UNKEYED_UNCERTAIN_WARNING:
     'invocation_key omitted; outcome is uncertain and cannot be reconciled by replay',
 });
@@ -72,17 +75,26 @@ function computeCanonicalArgumentsDigest(argumentsJson) {
 }
 
 function extractWitnessMeta(resultRow) {
-  if (!resultRow) return {found: false, meta: null};
+  if (!resultRow) {
+    return {found: false, corrupt: false, meta: null};
+  }
   const rawWitness = resultRow.source_snapshot_json;
-  if (!rawWitness) return {found: false, meta: null};
+  if (rawWitness === undefined || rawWitness === null || rawWitness === EMPTY_STRING) {
+    return {found: false, corrupt: true, meta: null};
+  }
   try {
     const parsed = typeof rawWitness === 'string' ?
       JSON.parse(rawWitness) :
       rawWitness;
-    const meta = parsed?.admissionMeta || null;
-    return {found: Boolean(meta), meta};
+    const meta = parsed && typeof parsed === 'object' ?
+      parsed.admissionMeta :
+      null;
+    if (!meta || typeof meta !== 'object') {
+      return {found: false, corrupt: true, meta: null};
+    }
+    return {found: true, corrupt: false, meta};
   } catch {
-    return {found: false, meta: null};
+    return {found: false, corrupt: true, meta: null};
   }
 }
 
@@ -160,15 +172,33 @@ function classifyFailureRecordStatus(error, executionStarted) {
 
 class DirectCallReplayCoordinator {
   constructor(options = {}) {
-    this._reduceCoordinator = options.reduceCoordinator;
+    const candidate = options.reduceCoordinator;
+    const readResultRow = candidate?.readResultRow;
+    const updateResultWitness = candidate?.updateResultWitness;
+    const hasReplayStore = Boolean(
+      candidate &&
+      typeof readResultRow === 'function' &&
+      typeof updateResultWitness === 'function',
+    );
+    this._reduceCoordinator = hasReplayStore ? candidate : null;
     this._nowProvider = options.nowProvider || (() => Date.now());
     this._retentionWindowMs =
       Number.isSafeInteger(options.retentionWindowMs) &&
       options.retentionWindowMs > 0 ?
         options.retentionWindowMs :
         DEFAULT_DIRECT_CALL_RETENTION_WINDOW_MS;
-    this._fallbackRecords = new Map();
     this._inFlight = new Map();
+  }
+
+  _requireReduceCoordinator() {
+    if (!this._reduceCoordinator) {
+      throw createCallRoutingFailure(
+        CALL_CELL_ROUTE_ERROR_CODE.ROUTE_UNAVAILABLE,
+        DIRECT_CALL_REPLAY_MESSAGE.STORE_UNAVAILABLE,
+        {classification: CALL_CELL_ROUTE_CLASSIFICATION.RETRYABLE},
+      );
+    }
+    return this._reduceCoordinator;
   }
 
   clearInFlightOnRestartSimulation() {
@@ -176,31 +206,30 @@ class DirectCallReplayCoordinator {
   }
 
   async _readMeta(scopedInvocationId) {
-    if (typeof this._reduceCoordinator?.readResultRow === 'function') {
-      const row = await this._reduceCoordinator.readResultRow(
-        scopedInvocationId);
-      const fromRow = extractWitnessMeta(row);
-      if (fromRow.found) {
-        return {
-          meta: fromRow.meta,
-          resultJson: row.result_json || EMPTY_STRING,
-        };
-      }
+    const coordinator = this._requireReduceCoordinator();
+    const row = await coordinator.readResultRow(scopedInvocationId);
+    const fromRow = extractWitnessMeta(row);
+    if (fromRow.corrupt) {
+      throw createAmbiguousReplayFailure();
     }
-    return this._fallbackRecords.get(scopedInvocationId) || null;
+    if (!fromRow.found) {
+      return null;
+    }
+    return {
+      meta: fromRow.meta,
+      resultJson: row.result_json || EMPTY_STRING,
+    };
   }
 
-  async _writeMeta(scopedInvocationId, meta, resultJson = EMPTY_STRING, witness = null) {
+  async _writeMeta(scopedInvocationId, meta, witness = null) {
+    const coordinator = this._requireReduceCoordinator();
     const mergedWitness = witness ?
       {...witness, admissionMeta: meta} :
       {admissionMeta: meta};
-    this._fallbackRecords.set(scopedInvocationId, {meta, resultJson});
-    if (typeof this._reduceCoordinator?.updateResultWitness === 'function') {
-      await this._reduceCoordinator.updateResultWitness(
-        scopedInvocationId,
-        mergedWitness,
-      );
-    }
+    await coordinator.updateResultWitness(
+      scopedInvocationId,
+      mergedWitness,
+    );
     return mergedWitness;
   }
 
@@ -230,6 +259,7 @@ class DirectCallReplayCoordinator {
   }
 
   async inspectExisting(intent) {
+    this._requireReduceCoordinator();
     const nowMs = Number(this._nowProvider());
     const inFlightEntry = this._inFlight.get(intent.scopedInvocationId);
     if (inFlightEntry) {
@@ -284,10 +314,6 @@ class DirectCallReplayCoordinator {
   }
 
   registerInFlight(scopedInvocationId, meta, promise) {
-    this._fallbackRecords.set(scopedInvocationId, {
-      meta,
-      resultJson: EMPTY_STRING,
-    });
     this._inFlight.set(scopedInvocationId, {meta, promise});
   }
 
@@ -296,13 +322,10 @@ class DirectCallReplayCoordinator {
   }
 
   async recordCompleted(scopedInvocationId, meta, resultJson, witness) {
+    this._requireReduceCoordinator();
     const completedMeta = Object.freeze({
       ...meta,
       status: DIRECT_CALL_RECORD_STATUS.COMPLETED,
-    });
-    this._fallbackRecords.set(scopedInvocationId, {
-      meta: completedMeta,
-      resultJson,
     });
     return Object.freeze({
       ...(witness || {}),
@@ -323,7 +346,7 @@ class DirectCallReplayCoordinator {
       }),
       status,
     });
-    await this._writeMeta(scopedInvocationId, updatedMeta, EMPTY_STRING, null);
+    await this._writeMeta(scopedInvocationId, updatedMeta, null);
   }
 }
 

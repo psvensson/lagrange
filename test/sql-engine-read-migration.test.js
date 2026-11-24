@@ -8,7 +8,6 @@
 import {test, beforeEach, afterEach} from '../src/test-helpers/tap.js';
 import {TablePolicyService} from '../src/policy/table-policy-service.js';
 import {DynamicConfigService} from '../src/config/dynamic-config-service.js';
-import {FunctionRegistry} from '../src/function/function-registry.js';
 import {ContextManager, ContextType} from '../src/function/context-manager.js';
 import {IndexService} from '../src/index-management/index-service.js';
 import {ConfigurationManager} from '../src/config/configuration-manager.js';
@@ -171,68 +170,6 @@ test('DynamicConfigService uses SQL engine for getAll',
       'Should include value from SQL');
   });
 
-// --- FunctionRegistry ---
-
-test('FunctionRegistry uses SQL engine for getFunction',
-  async (t) => {
-    const engine = createTrackingEngine((sql, params) => {
-      if (sql.includes('FROM code WHERE code_id')) {
-        return {
-          rows: [{
-            code_id: params[0],
-            function_id: params[0],
-            function_name: 'test-fn',
-            executor_type: 'wasm',
-          }],
-        };
-      }
-      return {rows: []};
-    });
-
-    const registry = new FunctionRegistry({
-      sqlQueryEngine: engine,
-    });
-
-    const func = await registry.getFunction('fn-1');
-
-    t.equal(engine.queries.length, 1,
-      'Should make 1 SQL query');
-    t.match(engine.queries[0].sql, /FROM code/,
-      'Should query code table');
-    t.equal(func.function_name, 'test-fn',
-      'Should return function from SQL');
-  });
-
-test('FunctionRegistry uses SQL engine for getFunctionByName',
-  async (t) => {
-    const engine = createTrackingEngine((sql, params) => {
-      if (sql.includes('function_name = ?')) {
-        return {
-          rows: [{
-            code_id: 'fn-1',
-            function_id: 'fn-1',
-            function_name: params[0],
-            executor_type: 'wasm',
-          }],
-        };
-      }
-      return {rows: []};
-    });
-
-    const registry = new FunctionRegistry({
-      sqlQueryEngine: engine,
-    });
-
-    const func = await registry.getFunctionByName('my-func');
-
-    t.equal(engine.queries.length, 1,
-      'Should make 1 SQL query');
-    t.match(engine.queries[0].sql, /function_name/,
-      'Should query by function_name');
-    t.equal(func.function_id, 'fn-1',
-      'Should return correct function');
-  });
-
 // --- ContextManager ---
 
 test('ContextManager uses SQL engine for getContext',
@@ -382,18 +319,6 @@ test('IndexService uses SQL engine for getPartitionsForTable',
 
 test('Services return empty results without SQL engine',
   async (t) => {
-    // FunctionRegistry
-    const registry = new FunctionRegistry();
-    try {
-      await registry.getFunction('fn-1');
-      t.fail('FunctionRegistry should throw typed gateway error without engine');
-    } catch (error) {
-      t.equal(error.code, 'SYSTEM_METADATA_GATEWAY_REQUIRED',
-        'FunctionRegistry should expose typed gateway-required code');
-      t.equal(error.outcome, 'owner_not_ready',
-        'FunctionRegistry should expose owner_not_ready outcome');
-    }
-
     // ContextManager
     const manager = new ContextManager();
     const contexts = await manager.getContextsByOwner('o1');

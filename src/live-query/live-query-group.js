@@ -378,6 +378,9 @@ class QueryGroup extends EventEmitter {
     }
     const tableInfo = this.getTableInfo(tableName);
     const activePartitionVersion = this.resolveActivePartitionVersion(tableInfo);
+    if (activePartitionVersion === null) {
+      return [];
+    }
     return (this.systemCache.filter(TABLES.PARTITIONS, (p) =>
       p.table_name === tableName || p.tableName === tableName,
     ) || []).filter((partition) =>
@@ -432,7 +435,7 @@ class QueryGroup extends EventEmitter {
 
   _fanOutResult(result, change) {
     this.lastActivityAt = Date.now();
-    const hlcTimestamp = change.hlc_timestamp || change.hlcTimestamp;
+    const hlcTimestamp = change.hlc_timestamp ?? null;
     fanOutToClients(this.clients, result, {
       hlcTimestamp,
       logger: this.logger,
@@ -542,7 +545,7 @@ class QueryGroup extends EventEmitter {
     }
     const sql = this._resolveExecutionSQL();
     const result = await executeSnapshotQuery(this.sqlQueryEngine, sql, this.params);
-    const rawRows = result.rows ?? result.results ?? [];
+    const rawRows = result.rows;
     const projectedRows = rawRows.map((r) => this.projectRow(r));
     this.lastResultSet = projectedRows;
 
@@ -687,7 +690,7 @@ class QueryGroup extends EventEmitter {
    */
   evaluateChange(change, options = {}) {
     const {operation, data: newRow, old_data: oldRow} = change;
-    const hlc = change.hlc_timestamp || change.hlcTimestamp;
+    const hlc = change.hlc_timestamp ?? null;
     const useDeltaFormat = options.deltaFormat ?? this.deltaFormat ?? false;
 
     switch (operation?.toUpperCase()) {

@@ -1,21 +1,5 @@
-import {CONFIG_KEY} from '../config/config-constants.js';
-import {NUM, STRING} from '../constants/index.js';
-
 const FUNCTION_SUBSYSTEM = Object.freeze({
-  QUERY_EXECUTOR: 'function-query-executor',
   CONTEXT_MANAGER: 'context-manager',
-  REGISTRY: 'function-registry',
-});
-
-const FUNCTION_CONFIG_KEY = Object.freeze({
-  QUERY_TIMEOUT_MS: CONFIG_KEY.FUNCTION_QUERY_TIMEOUT_MS,
-  QUERY_BATCH_SIZE: CONFIG_KEY.FUNCTION_QUERY_BATCH_SIZE,
-});
-
-const FUNCTION_DEFAULT = Object.freeze({
-  // ends-on: the SQL engine returns the query result (unreachable: FunctionQueryExecutor is never instantiated in src/)
-  QUERY_TIMEOUT_MS: 30000,
-  QUERY_BATCH_SIZE: 100,
 });
 
 const FUNCTION_CONTEXT_TYPE = Object.freeze({
@@ -24,29 +8,7 @@ const FUNCTION_CONTEXT_TYPE = Object.freeze({
   USER: 'user',
 });
 
-const FUNCTION_LOG_LIMIT = Object.freeze({
-  SQL_SNIPPET_LENGTH: NUM.HUNDRED,
-});
-
 const FUNCTION_LOG_MSG = Object.freeze({
-  QUERY_EXECUTOR_INITIALIZED: 'Function query executor initialized',
-  QUERY_EXECUTE_START: 'Executing query via FunctionQueryExecutor',
-  QUERY_EXECUTE_SUCCESS: 'Query executed successfully',
-  QUERY_EXECUTE_FAILURE: 'Query execution failed',
-  STREAMING_EXECUTE_START: 'Executing streaming query',
-  STREAMING_EXECUTE_COMPLETE: 'Streaming query completed',
-  BATCHED_EXECUTE_COMPLETE: 'Batched query completed',
-  QUERY_INVOKE_START: 'Executing query then invoke',
-  QUERY_INVOKE_SUCCESS: 'Query completed, function invoked',
-  QUERY_INVOKE_FAILURE: 'Function invocation failed after query',
-  REGISTRY_INITIALIZED: 'Function registry initialized',
-  EXECUTOR_OVERWRITE: 'Overwriting existing executor',
-  EXECUTOR_REGISTERED: 'Function executor registered',
-  EXECUTOR_UNREGISTERED: 'Function executor unregistered',
-  INVOKING_FUNCTION: 'Invoking function',
-  FUNCTION_COMPLETED: 'Function completed',
-  FUNCTION_LOOKUP_FAILED: 'Failed to get function',
-  FUNCTION_LOOKUP_BY_NAME_FAILED: 'Failed to get function by name',
   CONTEXT_MANAGER_INITIALIZED: 'Context manager initialized',
   CONTEXT_UPDATED: 'Context updated',
   CONTEXT_CREATED: 'Context created',
@@ -58,34 +20,14 @@ const FUNCTION_LOG_MSG = Object.freeze({
 });
 
 const FUNCTION_ERROR_MSG = Object.freeze({
-  SYSTEM_TABLE_CACHE_REQUIRED: 'System table cache not available',
-  SQL_ENGINE_UNAVAILABLE: 'SQL query engine not available',
-  CALLBACK_MUST_BE_FUNCTION: 'Callback must be a function',
-  FUNCTION_REGISTRY_UNAVAILABLE: 'Function registry not available',
-  EXECUTOR_TYPE_REQUIRED: 'Executor type must be a non-empty string',
-  EXECUTOR_METHOD_REQUIRED: 'Executor must have an execute(func, context, args) method',
-  FUNCTION_NOT_FOUND_PREFIX: 'Function not found: ',
-  EXECUTOR_NOT_FOUND_PREFIX: 'No executor registered for type ',
-  EXECUTOR_NOT_FOUND_SUFFIX: '.',
-  EXECUTOR_AVAILABLE_PREFIX: 'Available types: ',
-  EXECUTOR_AVAILABLE_NONE: 'none',
   INVALID_CONTEXT_TYPE_PREFIX: 'Invalid context type: ',
   VALID_CONTEXT_TYPE_PREFIX: 'Valid types are: ',
   CDC_INTEGRATION_REQUIRED: 'CDC integration service not available',
-  CDC_INTEGRATION_REQUIRED_FOR_POLICY: 'CDC integration service not available',
-  QUERY_TIMEOUT_PREFIX: 'Query timeout after ',
-  QUERY_TIMEOUT_SUFFIX: 'ms',
 });
 
-const FUNCTION_DEFAULT_VALUE = Object.freeze({
-  EXECUTOR_NAME_FALLBACK: 'anonymous',
-  EMPTY_CONTEXT: STRING.EMPTY_JSON_OBJECT,
-});
-
-export {FUNCTION_CONFIG_KEY, FUNCTION_DEFAULT, FUNCTION_LOG_MSG, FUNCTION_SUBSYSTEM};
 export {
   FUNCTION_CONTEXT_TYPE,
-  FUNCTION_DEFAULT_VALUE,
   FUNCTION_ERROR_MSG,
-  FUNCTION_LOG_LIMIT,
+  FUNCTION_LOG_MSG,
+  FUNCTION_SUBSYSTEM,
 };

@@ -12,8 +12,6 @@ import {describe, it} from 'node:test';
 
 import {parse} from 'espree';
 
-import {createServiceProject} from
-  '../../src/cli/service-project-scaffold.js';
 import {createServiceLifecycleSqlClient} from
   '../../src/cli/service-lifecycle-sql-client.js';
 import {runEntrypoint} from '../../src/test-helpers/run-entrypoint.js';
@@ -43,7 +41,6 @@ const PIPELINE_OWNER_LOADER = 'loadServicePipelineCommand';
 const PLATFORM = 'linux/amd64';
 const IDEMPOTENCY_KEY = 'install-weather-service';
 const INSTALL_SQL = 'INSTALL SERVICE $1';
-const MANIFEST_TEMPLATE_NAME = 'lagrange-service.template.json';
 const VALID_DIGEST = `sha256:${'a'.repeat(64)}`;
 const OVERSIZED_INPUT_BYTES = (4 * 1024 * 1024) + 1;
 const SUCCESS_EXIT_CODE = 0;
@@ -440,16 +437,19 @@ describe('service lifecycle CLI contract', () => {
     async (t) => {
       const {runServiceLifecycleCommand} = await loadLifecycleCommandOwner();
       const root = await temporaryRoot(t);
-      const projectPath = path.join(root, 'input-service');
-      createServiceProject(projectPath);
-      const template = JSON.parse(await readFile(
-        path.join(projectPath, MANIFEST_TEMPLATE_NAME),
-        'utf8',
-      ));
       const validManifestPath = path.join(root, 'valid-manifest.json');
       await writeFile(validManifestPath, JSON.stringify({
-        ...template,
-        artifact: {...template.artifact, digest: VALID_DIGEST},
+        schema_version: 3,
+        name: 'input-service',
+        version: '0.1.0',
+        artifact: {
+          type: 'oci',
+          ref: 'local/input-service:0.1.0',
+          digest: VALID_DIGEST,
+          media_type: 'application/vnd.oci.image.manifest.v1+json',
+        },
+        runtime: {kind: 'oci_container'},
+        exports: [{name: 'serve', interface: 'request_v1'}],
       }));
       const malformedPath = path.join(root, 'malformed.json');
       const oversizedPath = path.join(root, 'oversized.json');

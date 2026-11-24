@@ -126,6 +126,8 @@ describe('P4 Live-Query Remote CDC Owned Lifecycle and Coverage Witnesses', () =
       partition_key_start: null,
       partition_key_end: null,
       partition_key_type: 'INTEGER',
+      partition_version: 1,
+      state: 'NORMAL',
       leader_node_id: 'node-b',
     }];
     let currentReplicas = [{partition_id: 'p1', node_id: 'node-b'}];
@@ -1026,7 +1028,8 @@ describe('P4 Live-Query Remote CDC Owned Lifecycle and Coverage Witnesses', () =
       const partitions = [{
         partition_id: 'p1', table_name: 'live_orders',
         partition_key_start: null, partition_key_end: null,
-        partition_key_type: 'INTEGER', leader_node_id: 'node-b',
+        partition_key_type: 'INTEGER', partition_version: 1,
+        state: 'NORMAL', leader_node_id: 'node-b',
       }];
       const replicas = [{partition_id: 'p1', node_id: 'node-b'}];
       const parser = new SQLQueryEngine();
@@ -1162,7 +1165,7 @@ describe('P4 Live-Query Remote CDC Owned Lifecycle and Coverage Witnesses', () =
       messageRouter: hangingRouter,
       findGroupById: () => null,
       resolveLocalPartition: () => null,
-      subscribeToPartition: async () => ({}),
+      subscribeToPartition: async () => ({acknowledged: true, success: true, subscribed: true}),
       unsubscribeFromPartition: async () => ({}),
       shutdownDrainTimeoutMs: 120,
       logger: {debug: () => {}, warn: () => {}, info: () => {}},

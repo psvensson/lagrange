@@ -7,10 +7,20 @@ import {
   WASM_SERVICE_DEFAULT,
   WASM_SERVICE_DEFINITION_STATUS,
 } from './wasm-service-constants.js';
-import {
-  applyRuntimeDefaults,
-  applyLegacyDefaults,
-} from './runtime-legacy-mapping.js';
+
+const SERVICE_DEFINITION_ERROR_MSG = Object.freeze({
+  RUNTIME_KIND_REQUIRED:
+    'Service definition requires an explicit non-empty runtimeKind',
+  ROW_RUNTIME_KIND_REQUIRED:
+    'Service definition row requires an explicit non-empty runtime_kind',
+});
+
+function assertExplicitRuntimeKind(runtimeKind, message) {
+  if (typeof runtimeKind !== 'string' || runtimeKind.trim().length === 0) {
+    throw new Error(message);
+  }
+  return runtimeKind;
+}
 
 /**
  * Column name constants for service_definitions table.
@@ -147,73 +157,79 @@ function statedOrBorn(status, birthStatus) {
 
 /**
  * Serialize a ServiceDefinition object to a table row object.
- * The resource_budget field is JSON-encoded.
+ * The resource_budget field is JSON-encoded. Requires explicit runtimeKind.
  * @param {Object} definition - ServiceDefinition object.
  * @return {Object} Table row with snake_case keys.
  */
 function serializeServiceDefinition(definition, nowMs) {
-  const runtimeAware = applyRuntimeDefaults(definition);
-  const compat = applyLegacyDefaults(runtimeAware);
+  const runtimeKind = assertExplicitRuntimeKind(
+    definition?.runtimeKind,
+    SERVICE_DEFINITION_ERROR_MSG.RUNTIME_KIND_REQUIRED,
+  );
   // The row is stamped by the node registering it.
   const now = Number.isFinite(nowMs) ? nowMs : Date.now();
   return {
-    [SD_COL.SERVICE_ID]: compat.serviceId,
-    [SD_COL.SERVICE_NAME]: compat.serviceName,
+    [SD_COL.SERVICE_ID]: definition.serviceId,
+    [SD_COL.SERVICE_NAME]: definition.serviceName,
     [SD_COL.SERVICE_PROFILE]:
-      compat.serviceProfile ??
+      definition.serviceProfile ??
       SERVICE_PROFILE.DEFAULT,
-    [SD_COL.HANDLER_FUNCTION_ID]: compat.handlerFunctionId,
+    [SD_COL.HANDLER_FUNCTION_ID]: definition.handlerFunctionId ?? null,
     [SD_COL.READ_CONSISTENCY]:
-      compat.readConsistency ??
+      definition.readConsistency ??
       WASM_SERVICE_DEFAULT.READ_CONSISTENCY,
     [SD_COL.WRITE_CONSISTENCY]:
-      compat.writeConsistency ??
+      definition.writeConsistency ??
       WASM_SERVICE_DEFAULT.WRITE_CONSISTENCY,
     [SD_COL.READ_LOCALITY]:
-      compat.readLocality ??
+      definition.readLocality ??
       WASM_SERVICE_DEFAULT.READ_LOCALITY,
     [SD_COL.REPLICA_COUNT]:
-      compat.replicaCount ??
+      definition.replicaCount ??
       WASM_SERVICE_DEFAULT.REPLICA_COUNT,
     [SD_COL.PROTOCOL]:
-      compat.protocol ??
+      definition.protocol ??
       WASM_SERVICE_DEFAULT.PROTOCOL,
     [SD_COL.RESOURCE_BUDGET]: serializeResourceBudget(
-      compat.resourceBudget || {},
+      definition.resourceBudget || {},
     ),
     [SD_COL.SAFETY_INTERVAL_MS]:
-      compat.safetyIntervalMs ??
+      definition.safetyIntervalMs ??
       WASM_SERVICE_DEFAULT.SAFETY_INTERVAL_MS,
-    [SD_COL.RUNTIME_KIND]: compat.runtimeKind ?? null,
-    [SD_COL.RUNTIME_REF]: compat.runtimeRef ?? null,
-    [SD_COL.RUNTIME_CONFIG]: compat.runtimeConfig ?? null,
-    [SD_COL.BINDING_VERSION_ID]: compat.bindingVersionId ?? null,
-    [SD_COL.BINDING_DIGEST]: compat.bindingDigest ?? null,
-    [SD_COL.BINDING_PROJECTION]: compat.bindingProjection ?? null,
+    [SD_COL.RUNTIME_KIND]: runtimeKind,
+    [SD_COL.RUNTIME_REF]: definition.runtimeRef ?? null,
+    [SD_COL.RUNTIME_CONFIG]: definition.runtimeConfig ?? null,
+    [SD_COL.BINDING_VERSION_ID]: definition.bindingVersionId ?? null,
+    [SD_COL.BINDING_DIGEST]: definition.bindingDigest ?? null,
+    [SD_COL.BINDING_PROJECTION]: definition.bindingProjection ?? null,
     // A definition that states no status is born ACTIVE, the definition's
     // birth state; service_definitions.status is NOT NULL.
-    [SD_COL.STATUS]: statedOrBorn(compat.status, WASM_SERVICE_DEFINITION_STATUS.ACTIVE),
-    [SD_COL.CREATED_AT]: compat.createdAt ?? now,
-    [SD_COL.UPDATED_AT]: compat.updatedAt ?? now,
+    [SD_COL.STATUS]: statedOrBorn(definition.status, WASM_SERVICE_DEFINITION_STATUS.ACTIVE),
+    [SD_COL.CREATED_AT]: definition.createdAt ?? now,
+    [SD_COL.UPDATED_AT]: definition.updatedAt ?? now,
   };
 }
 
 /**
  * Deserialize a table row to a ServiceDefinition object.
- * The resource_budget field is parsed from JSON.
+ * The resource_budget field is parsed from JSON. Requires explicit runtime_kind.
  * @param {Object} row - Table row with snake_case keys.
  * @return {Object} ServiceDefinition object with camelCase keys.
  */
 function deserializeServiceDefinition(row) {
+  const runtimeKind = assertExplicitRuntimeKind(
+    row?.[SD_COL.RUNTIME_KIND],
+    SERVICE_DEFINITION_ERROR_MSG.ROW_RUNTIME_KIND_REQUIRED,
+  );
   const budgetJson = row[SD_COL.RESOURCE_BUDGET] ||
     STRING.EMPTY_JSON_OBJECT;
-  const raw = {
+  return {
     serviceId: row[SD_COL.SERVICE_ID],
     serviceName: row[SD_COL.SERVICE_NAME],
     serviceProfile:
       row[SD_COL.SERVICE_PROFILE] ??
       SERVICE_PROFILE.DEFAULT,
-    handlerFunctionId: row[SD_COL.HANDLER_FUNCTION_ID],
+    handlerFunctionId: row[SD_COL.HANDLER_FUNCTION_ID] ?? null,
     readConsistency:
       row[SD_COL.READ_CONSISTENCY] ??
       WASM_SERVICE_DEFAULT.READ_CONSISTENCY,
@@ -233,7 +249,7 @@ function deserializeServiceDefinition(row) {
     safetyIntervalMs:
       row[SD_COL.SAFETY_INTERVAL_MS] ??
       WASM_SERVICE_DEFAULT.SAFETY_INTERVAL_MS,
-    runtimeKind: row[SD_COL.RUNTIME_KIND] ?? null,
+    runtimeKind,
     runtimeRef: row[SD_COL.RUNTIME_REF] ?? null,
     runtimeConfig: row[SD_COL.RUNTIME_CONFIG] ?? null,
     bindingVersionId: row[SD_COL.BINDING_VERSION_ID] ?? null,
@@ -244,7 +260,6 @@ function deserializeServiceDefinition(row) {
     createdAt: row[SD_COL.CREATED_AT] ?? 0,
     updatedAt: row[SD_COL.UPDATED_AT] ?? 0,
   };
-  return applyRuntimeDefaults(raw);
 }
 
 /**

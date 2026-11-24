@@ -89,25 +89,6 @@ function hasAggregateColumn(columns) {
   return false;
 }
 
-const ACTIVE_PARTITION_VERSION_KEYS = Object.freeze([
-  'active_partition_version',
-  'activePartitionVersion',
-]);
-const PARTITION_VERSION_KEYS = Object.freeze([
-  'partition_version',
-  'partitionVersion',
-]);
-
-function readFirstDefinedProperty(record, keys) {
-  if (!record || typeof record !== LOCAL_STR_OBJECT) return undefined;
-  for (const key of keys) {
-    if (record[key] !== undefined && record[key] !== null) {
-      return record[key];
-    }
-  }
-  return undefined;
-}
-
 function hasNonEmptyList(list) {
   return Array.isArray(list) && list.length > 0;
 }
@@ -370,51 +351,61 @@ function compareVersions(a, b) {
 }
 
 /**
- * Resolve active partition version from table metadata.
+ * Resolve active partition version from canonical table metadata.
+ * Returns null when `active_partition_version` is absent or invalid.
  * @param {Object|null} tableInfo
- * @return {number}
+ * @return {number|null}
  */
 function resolveActivePartitionVersion(tableInfo) {
-  const value = readFirstDefinedProperty(
-    tableInfo,
-    ACTIVE_PARTITION_VERSION_KEYS,
-  );
+  if (!tableInfo || typeof tableInfo !== LOCAL_STR_OBJECT) {
+    return null;
+  }
+  const value = tableInfo.active_partition_version;
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < 1) {
-    return 1;
+    return null;
   }
   return parsed;
 }
 
 /**
  * Check if partition is visible for routing given active version.
+ * Requires canonical `partition_version` and `state` fields without defaults.
  * @param {Object} partition
- * @param {number} activePartitionVersion
+ * @param {number|null} activePartitionVersion
  * @return {boolean}
  */
 function isPartitionVisibleForRouting(partition, activePartitionVersion) {
-  const partitionVersion = Number(
-    readFirstDefinedProperty(partition, PARTITION_VERSION_KEYS),
-  );
-  const normalizedVersion =
-    Number.isInteger(partitionVersion) && partitionVersion >= 1 ?
-      partitionVersion :
-      1;
-  if (normalizedVersion !== activePartitionVersion) {
+  if (!partition || typeof partition !== LOCAL_STR_OBJECT) {
     return false;
   }
-  const state = String(partition?.state ?? LOCAL_STR_NORMAL).toUpperCase();
-  return state === LOCAL_STR_NORMAL;
+  if (!Number.isInteger(activePartitionVersion) || activePartitionVersion < 1) {
+    return false;
+  }
+  const rawVersion = partition.partition_version;
+  if (rawVersion === null || rawVersion === undefined || rawVersion === '') {
+    return false;
+  }
+  const partitionVersion = Number(rawVersion);
+  if (!Number.isInteger(partitionVersion) || partitionVersion !== activePartitionVersion) {
+    return false;
+  }
+  if (typeof partition.state !== LOCAL_STR_STRING) {
+    return false;
+  }
+  return partition.state.toUpperCase() === LOCAL_STR_NORMAL;
 }
 
 /**
- * Extract version/sequence number from CDC change event.
+ * Extract canonical log/sequence version from a CDC change event.
  * @param {Object} change
  * @return {*|null}
  */
 function extractEventVersion(change) {
-  return change?.logIndex ?? change?.appliedIndex ??
-    change?.version ?? change?.sequenceNumber ?? null;
+  return change?.logIndex ?? change?.sequenceNumber ?? null;
 }
 
 /**
@@ -445,7 +436,7 @@ function checkAndAdvanceFrontier(frontiers, partitionId, eventVersion, compareFn
 }
 
 function extractSubscriptionFrontier(answer, options, partitionId) {
-  return answer?.versionContext?.streamVersion ?? answer?.streamVersion ??
+  return answer?.versionContext?.streamVersion ??
     options?.attachAfterVersion ?? options?.partitionFrontiers?.get?.(partitionId);
 }
 
@@ -514,8 +505,7 @@ function updateStoredRowState(resultSet, pk, newMatched, effectiveNew) {
 
 async function executeSnapshotQuery(sqlQueryEngine, sql, params) {
   const result = await sqlQueryEngine.executeQuery(sql, params);
-  if (!result || result.success === false ||
-      (!Array.isArray(result.rows) && !Array.isArray(result.results))) {
+  if (!result || result.success === false || !Array.isArray(result.rows)) {
     const errorMessage = typeof result?.error === 'string' && result.error.length > 0 ?
       result.error : LIVE_QUERY_LOG_MSG.SNAPSHOT_FAILED;
     const error = new Error(errorMessage);
@@ -679,8 +669,12 @@ function fanOutToClients(clients, payload, options = {}) {
 }
 
 function isSubscriptionAccepted(answer) {
-  return !(answer &&
-    (answer.success === false || answer.acknowledged === false || answer.subscribed === false));
+  return Boolean(
+    answer &&
+    answer.acknowledged === true &&
+    answer.subscribed === true &&
+    answer.success !== false,
+  );
 }
 
 /**
@@ -713,8 +707,8 @@ async function unsubscribeStalePartitions(group, relevantPartitions, unsubscribe
  */
 async function subscribeToSinglePartition(group, partitionId, subscribeToPartition, options) {
   if (group.lifecycleState === LIVE_QUERY_GROUP_STATE.CLOSED) return;
-  let subscribed = true;
-  if (subscribeToPartition) {
+  let subscribed = false;
+  if (typeof subscribeToPartition === 'function') {
     const handler = (change) => group.onCDCEvent(change, partitionId);
     group.cdcHandlers.set(partitionId, handler);
     group.pendingSubscriptions?.add(partitionId);
@@ -726,9 +720,8 @@ async function subscribeToSinglePartition(group, partitionId, subscribeToPartiti
       return;
     }
     if (answer?.cancelled === true) return;
-    if (!isSubscriptionAccepted(answer)) {
-      subscribed = false;
-    } else {
+    if (isSubscriptionAccepted(answer)) {
+      subscribed = true;
       const frontier = extractSubscriptionFrontier(answer, options, partitionId);
       if (frontier !== undefined && !group.partitionFrontiers.has(partitionId)) {
         group.partitionFrontiers.set(partitionId, frontier);

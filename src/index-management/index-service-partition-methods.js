@@ -1,4 +1,18 @@
-import {INDEX_LOG_MSG} from './index-constants.js';
+/**
+ * Partition index DDL execution methods for IndexService via the mandatory
+ * canonical partitionExecutor contract.
+ */
+
+import {GLOBAL_INDEX_ERROR_CODE, INDEX_LOG_MSG} from './index-constants.js';
+import {createUnavailableError} from './global-index-partition-discovery.js';
+
+const PARTITION_EXECUTOR_REQUIRED_MESSAGE =
+  'Canonical partitionExecutor implementing executeOnPartition is required for ' +
+  'local index partition DDL';
+const INVALID_PARTITION_ID_MESSAGE =
+  'Valid partitionId is required for partition index DDL';
+const PARTITION_SQL_EXECUTION_FAILED_MESSAGE =
+  'Partition SQL execution failed';
 
 function isUniqueRequested(options) {
   if (!options || typeof options !== 'object') return false;
@@ -34,75 +48,6 @@ function normalizePartitionIndexArgs(partitionId, indexMetadataOrName, ...rest) 
   };
 }
 
-function executeOnPartitionServiceTarget(target, sql, params) {
-  if (target?.handleRemoteQuery) {
-    return target.handleRemoteQuery({sql, params});
-  }
-  if (target?.db?.prepare && !target?.raft) {
-    return target.db.prepare(sql).run();
-  }
-  if (target?.executeQuery) {
-    return target.executeQuery(sql, params);
-  }
-  return undefined;
-}
-
-function resolvePartitionFromService(service, partitionId) {
-  if (!service) return null;
-  if (service.partitionId === partitionId) return service;
-  if (service.getPartition) {
-    return service.getPartition(partitionId) || null;
-  }
-  return null;
-}
-
-function resolveEnginePartitionTarget(engine, partitionId) {
-  if (!engine) return null;
-  if (engine.partitionServicesProvider) {
-    const provided = engine.partitionServicesProvider(partitionId);
-    return (provided instanceof Map || provided?.get) ?
-      provided.get(partitionId) : provided;
-  }
-  if (engine.getPartitionService) {
-    return engine.getPartitionService(partitionId);
-  }
-  return null;
-}
-
-function hasNonStorageHandleExecutor(partition) {
-  return Boolean(
-    partition?.handleRemoteQuery ||
-    partition?.executeQuery ||
-    (partition?.db?.prepare && !partition?.raft),
-  );
-}
-
-function hasHandleExecutor(partition) {
-  if (hasNonStorageHandleExecutor(partition)) {
-    return true;
-  }
-  return Boolean(!partition?.raft && partition?.storage?.getDatabase);
-}
-
-function hasServiceExecutor(service) {
-  if (!service) return false;
-  return Boolean(
-    service.handleRemoteQuery ||
-    (service.db?.prepare && !service.raft) ||
-    service.getPartition ||
-    service.executeQuery ||
-    service.executePartitionQuery ||
-    service.executeOnPartition,
-  );
-}
-
-function hasEngineExecutor(engine) {
-  if (!engine) return false;
-  if (engine.queryExecutor?.executeOnPartition) return true;
-  if (engine.partitionServicesProvider) return true;
-  return Boolean(engine.getPartitionService);
-}
-
 function extractPartitionId(partition) {
   if (!partition || typeof partition !== 'object') {
     return partition;
@@ -110,12 +55,24 @@ function extractPartitionId(partition) {
   return partition.partition_id || partition.partitionId || partition;
 }
 
+function requireCanonicalPartitionExecutor(service) {
+  const executor = service?.partitionExecutor;
+  const executeOnPartition = executor?.executeOnPartition;
+  if (!executor || typeof executeOnPartition !== 'function') {
+    throw createUnavailableError(
+      GLOBAL_INDEX_ERROR_CODE.DEPENDENCY_UNAVAILABLE,
+      PARTITION_EXECUTOR_REQUIRED_MESSAGE,
+    );
+  }
+  return {executor, executeOnPartition};
+}
+
 function assertPartitionExecutionSuccess(result) {
-  if (result && typeof result === 'object' && result.success === false) {
-    const message = result.error || result.errorMessage || result.message ||
-      'Partition SQL execution failed';
+  if (!result || typeof result !== 'object' || result.success === false) {
+    const message = result?.error || result?.errorMessage || result?.message ||
+      PARTITION_SQL_EXECUTION_FAILED_MESSAGE;
     const error = new Error(message);
-    if (result.errorCode || result.code) {
+    if (result?.errorCode || result?.code) {
       error.code = result.errorCode || result.code;
     }
     throw error;
@@ -138,107 +95,36 @@ function resolveRebuildTarget(service, tableId, indexName) {
   return null;
 }
 
-function executeOnPreparedDb(partition, sql) {
-  if (partition?.db?.prepare && !partition?.raft) {
-    return partition.db.prepare(sql).run();
-  }
-  return undefined;
-}
-
-function executeOnLocalPartitionDb(partition, sql) {
-  const direct = executeOnPreparedDb(partition, sql);
-  if (direct !== undefined) {
-    return direct;
-  }
-  if (!partition?.raft && typeof partition?.storage?.getDatabase === 'function') {
-    const storageDb = partition.storage.getDatabase();
-    if (storageDb?.prepare) {
-      return storageDb.prepare(sql).run();
-    }
-  }
-  return undefined;
-}
-
 const indexServicePartitionMethods = {
-  executeOnPartitionHandle(partition, sql, params) {
-    if (partition?.handleRemoteQuery) {
-      return partition.handleRemoteQuery({sql, params});
-    }
-    const localResult = executeOnLocalPartitionDb(partition, sql);
-    if (localResult !== undefined) {
-      return localResult;
-    }
-    if (partition?.executeQuery) {
-      return partition.executeQuery(sql, params);
-    }
-    return undefined;
-  },
-
-  executeViaPartitionService(partitionId, sql, params) {
-    if (!this.partitionService) return undefined;
-    const target = resolvePartitionFromService(this.partitionService, partitionId);
-    const directResult = executeOnPartitionServiceTarget(target, sql, params);
-    if (directResult !== undefined) {
-      return directResult;
-    }
-    if (this.partitionService.executePartitionQuery) {
-      return this.partitionService.executePartitionQuery(partitionId, sql, params);
-    }
-    if (this.partitionService.executeOnPartition) {
-      return this.partitionService.executeOnPartition(partitionId, sql, params);
-    }
-    return undefined;
-  },
-
-  executeViaSqlQueryEngine(partitionId, sql, params) {
-    if (!this.sqlQueryEngine) return undefined;
-    const executor = this.sqlQueryEngine.queryExecutor;
-    if (executor?.executeOnPartition) {
-      return executor.executeOnPartition(partitionId, sql, params, false, true);
-    }
-    const target = resolveEnginePartitionTarget(this.sqlQueryEngine, partitionId);
-    const directResult = executeOnPartitionServiceTarget(target, sql, params);
-    if (directResult !== undefined) {
-      return directResult;
-    }
-    return undefined;
-  },
-
-  hasPartitionExecutor(partition) {
-    if (hasHandleExecutor(partition)) return true;
-    if (hasServiceExecutor(this.partitionService)) return true;
-    return hasEngineExecutor(this.sqlQueryEngine);
-  },
-
-  async dispatchPartitionSql(partition, sql, params) {
-    const handleResult = this.executeOnPartitionHandle(partition, sql, params);
-    if (handleResult !== undefined) {
-      return handleResult;
-    }
-    const partitionId = extractPartitionId(partition);
-    const serviceResult = this.executeViaPartitionService(partitionId, sql, params);
-    if (serviceResult !== undefined) {
-      return serviceResult;
-    }
-    return this.executeViaSqlQueryEngine(partitionId, sql, params);
+  hasPartitionExecutor() {
+    return Boolean(this.partitionExecutor?.executeOnPartition);
   },
 
   /**
-   * Execute SQL on a partition using any available interface.
-   * @param {Object} partition - Partition handle or record.
+   * Execute index DDL on a partition through the mandatory canonical
+   * partitionExecutor contract (`executeOnPartition`).
+   * @param {Object|string} partition - Partition record or partition ID.
    * @param {string} sql - SQL statement.
    * @param {Array} [params] - Bound parameters.
    * @return {Promise<Object>} Execution outcome.
    */
   async executePartitionSql(partition, sql, params = []) {
-    const rawResult = await this.dispatchPartitionSql(partition, sql, params);
-    if (rawResult === undefined || rawResult === null) {
-      if (this.requirePartitionMaterialization || this.hasPartitionExecutor(partition)) {
-        const id = extractPartitionId(partition);
-        throw new Error(`No executor available for partition '${id}'`);
-      }
-      return null;
+    const {executor, executeOnPartition} = requireCanonicalPartitionExecutor(this);
+    const partitionId = extractPartitionId(partition);
+    if (!partitionId || typeof partitionId !== 'string') {
+      throw new Error(INVALID_PARTITION_ID_MESSAGE);
     }
+    const normalizedParams = Array.isArray(params) ? params : [];
+    const rawResult = await executeOnPartition.call(
+      executor,
+      partitionId,
+      sql,
+      normalizedParams,
+      false,
+      true,
+      false,
+      {requireLeader: true},
+    );
     assertPartitionExecutionSuccess(rawResult);
     return rawResult;
   },

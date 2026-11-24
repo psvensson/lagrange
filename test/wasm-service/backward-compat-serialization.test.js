@@ -8,14 +8,7 @@ import {
   deserializeServiceDefinition,
 } from '../../src/wasm-service/wasm-service-models.js';
 import {
-  inferRuntimeFromLegacy,
-  inferLegacyFromRuntime,
-  applyRuntimeDefaults,
-  applyLegacyDefaults,
-} from '../../src/wasm-service/runtime-legacy-mapping.js';
-import {
   RUNTIME_KIND,
-  ALLOWED_RUNTIME_KINDS,
   RUNTIME_FIELD,
 } from '../../src/constants/runtime.js';
 import {SERVICE_PROFILE} from '../../src/constants/service.js';
@@ -173,44 +166,9 @@ describe('service_definitions schema runtime columns', () => {
 });
 
 
-// --- Cross-mapping consistency tests ---
+// --- Explicit runtime serialization tests ---
 
-describe('cross-mapping consistency', () => {
-  /**
-   * Validates: Requirements 5.3
-   */
-  it('should produce stable results for legacy->runtime->legacy', () => {
-    const legacyRow = {
-      handlerFunctionId: 'func-abc',
-      serviceProfile: SERVICE_PROFILE.DEFAULT,
-    };
-    const runtime = inferRuntimeFromLegacy(legacyRow);
-    const backToLegacy = inferLegacyFromRuntime(runtime);
-    assert.equal(backToLegacy, legacyRow.handlerFunctionId);
-  });
-
-  it('should produce stable results for native_js round-trip', () => {
-    const legacyRow = {
-      handlerFunctionId: null,
-      serviceProfile: SERVICE_PROFILE.DEFAULT,
-    };
-    const runtime = inferRuntimeFromLegacy(legacyRow);
-    const backToLegacy = inferLegacyFromRuntime(runtime);
-    assert.equal(backToLegacy, null);
-    assert.equal(runtime.runtimeKind, RUNTIME_KIND.NATIVE_JS);
-  });
-
-  it('should produce stable results for sql_engine profile', () => {
-    const legacyRow = {
-      handlerFunctionId: 'func-x',
-      serviceProfile: SERVICE_PROFILE.SQL_ENGINE,
-    };
-    const runtime = inferRuntimeFromLegacy(legacyRow);
-    assert.equal(runtime.runtimeKind, RUNTIME_KIND.NATIVE_JS);
-    const backToLegacy = inferLegacyFromRuntime(runtime);
-    assert.equal(backToLegacy, null);
-  });
-
+describe('explicit runtime serialization', () => {
   it('should preserve wasm handler through full serialize cycle', () => {
     const def = {
       serviceId: 'svc-wasm',
@@ -226,15 +184,8 @@ describe('cross-mapping consistency', () => {
     assert.equal(restored.runtimeRef, 'func-handler');
     assert.equal(restored.handlerFunctionId, 'func-handler');
   });
-});
 
-// --- Legacy deserialization with service_profile variations ---
-
-describe('legacy deserialization with service_profile', () => {
-  /**
-   * Validates: Requirements 5.3, 5.5
-   */
-  it('should infer native_js for sql_engine profile legacy row', () => {
+  it('should reject rows missing explicit runtime_kind', () => {
     const row = {
       [SD_COL.SERVICE_ID]: 'svc-sql',
       [SD_COL.SERVICE_NAME]: 'sql-engine-svc',
@@ -250,35 +201,13 @@ describe('legacy deserialization with service_profile', () => {
       [SD_COL.CREATED_AT]: 1000,
       [SD_COL.UPDATED_AT]: 1000,
     };
-    const def = deserializeServiceDefinition(row);
-    assert.equal(def.runtimeKind, RUNTIME_KIND.NATIVE_JS);
-    assert.equal(def.runtimeRef, null);
-    assert.equal(def.serviceProfile, SERVICE_PROFILE.SQL_ENGINE);
+    assert.throws(
+      () => deserializeServiceDefinition(row),
+      /runtime_kind/u,
+    );
   });
 
-  it('should infer wasm_component for default profile with handler',
-    () => {
-      const row = {
-        [SD_COL.SERVICE_ID]: 'svc-wasm-legacy',
-        [SD_COL.SERVICE_NAME]: 'wasm-legacy',
-        [SD_COL.SERVICE_PROFILE]: SERVICE_PROFILE.DEFAULT,
-        [SD_COL.HANDLER_FUNCTION_ID]: 'func-wasm',
-        [SD_COL.READ_CONSISTENCY]: 'strong',
-        [SD_COL.WRITE_CONSISTENCY]: 'strong',
-        [SD_COL.REPLICA_COUNT]: 3,
-        [SD_COL.PROTOCOL]: 'websocket',
-        [SD_COL.RESOURCE_BUDGET]: '{}',
-        [SD_COL.SAFETY_INTERVAL_MS]: 500,
-        [SD_COL.STATUS]: 'active',
-        [SD_COL.CREATED_AT]: 1000,
-        [SD_COL.UPDATED_AT]: 1000,
-      };
-      const def = deserializeServiceDefinition(row);
-      assert.equal(def.runtimeKind, RUNTIME_KIND.WASM_COMPONENT);
-      assert.equal(def.runtimeRef, 'func-wasm');
-    });
-
-  it('should not override explicit runtime fields on new rows', () => {
+  it('should preserve explicit runtime fields on deserialization', () => {
     const row = {
       [SD_COL.SERVICE_ID]: 'svc-explicit',
       [SD_COL.SERVICE_NAME]: 'explicit-rt',
@@ -337,7 +266,10 @@ describe('property: round-trip serialization', () => {
           assert.equal(restored.status, def.status);
           assert.equal(restored.createdAt, def.createdAt);
           assert.equal(restored.updatedAt, def.updatedAt);
+          assert.equal(restored.runtimeKind, def.runtimeKind);
+          assert.equal(restored.runtimeRef, def.runtimeRef);
           assert.equal(restored.runtimeConfig, def.runtimeConfig);
+          assert.equal(restored.handlerFunctionId, def.handlerFunctionId);
         }),
         {numRuns: NUM_RUNS},
       );
@@ -364,132 +296,4 @@ describe('property: round-trip serialization', () => {
         {numRuns: NUM_RUNS},
       );
     });
-});
-
-describe('property: deterministic legacy mapping', () => {
-  /**
-   * Validates: Requirements 5.3, 14.1
-   *
-   * The legacy mapping must be deterministic: calling it twice
-   * on the same input must produce identical output.
-   */
-  it('should produce identical results on repeated calls', () => {
-    fc.assert(
-      fc.property(
-        handlerFunctionIdArb,
-        serviceProfileArb,
-        runtimeConfigArb,
-        (handler, profile, config) => {
-          const row = {
-            handlerFunctionId: handler,
-            serviceProfile: profile,
-            runtimeConfig: config,
-          };
-          const r1 = inferRuntimeFromLegacy(row);
-          const r2 = inferRuntimeFromLegacy(row);
-          assert.deepStrictEqual(r1, r2);
-        },
-      ),
-      {numRuns: NUM_RUNS},
-    );
-  });
-
-  it('should always produce a valid runtime kind', () => {
-    fc.assert(
-      fc.property(
-        handlerFunctionIdArb,
-        serviceProfileArb,
-        (handler, profile) => {
-          const row = {
-            handlerFunctionId: handler,
-            serviceProfile: profile,
-          };
-          const result = inferRuntimeFromLegacy(row);
-          assert.ok(
-            ALLOWED_RUNTIME_KINDS.has(result.runtimeKind),
-            `inferred kind ${result.runtimeKind} must be allowed`,
-          );
-        },
-      ),
-      {numRuns: NUM_RUNS},
-    );
-  });
-
-  it('should map wasm handler back through inferLegacyFromRuntime',
-    () => {
-      fc.assert(
-        fc.property(
-          fc.stringMatching(/^func-[a-z0-9]{1,12}$/),
-          (handler) => {
-            const row = {
-              handlerFunctionId: handler,
-              serviceProfile: SERVICE_PROFILE.DEFAULT,
-            };
-            const runtime = inferRuntimeFromLegacy(row);
-            const legacy = inferLegacyFromRuntime(runtime);
-            assert.equal(legacy, handler);
-          },
-        ),
-        {numRuns: NUM_RUNS},
-      );
-    });
-});
-
-describe('property: applyRuntimeDefaults idempotence', () => {
-  /**
-   * Validates: Requirements 5.3, 14.1
-   *
-   * Applying runtime defaults twice must produce the same result
-   * as applying once (idempotent).
-   */
-  it('should be idempotent', () => {
-    fc.assert(
-      fc.property(
-        handlerFunctionIdArb,
-        serviceProfileArb,
-        runtimeConfigArb,
-        (handler, profile, config) => {
-          const def = {
-            runtimeKind: null,
-            runtimeRef: null,
-            runtimeConfig: config,
-            handlerFunctionId: handler,
-            serviceProfile: profile,
-          };
-          const once = applyRuntimeDefaults(def);
-          const twice = applyRuntimeDefaults(once);
-          assert.deepStrictEqual(once, twice);
-        },
-      ),
-      {numRuns: NUM_RUNS},
-    );
-  });
-});
-
-describe('property: applyLegacyDefaults idempotence', () => {
-  /**
-   * Validates: Requirements 5.3, 14.1
-   *
-   * Applying legacy defaults twice must produce the same result
-   * as applying once (idempotent).
-   */
-  it('should be idempotent', () => {
-    fc.assert(
-      fc.property(
-        runtimeKindArb,
-        runtimeRefArb,
-        (kind, ref) => {
-          const def = {
-            handlerFunctionId: null,
-            runtimeKind: kind,
-            runtimeRef: ref,
-          };
-          const once = applyLegacyDefaults(def);
-          const twice = applyLegacyDefaults(once);
-          assert.deepStrictEqual(once, twice);
-        },
-      ),
-      {numRuns: NUM_RUNS},
-    );
-  });
 });

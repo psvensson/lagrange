@@ -136,7 +136,6 @@ function createRequestCellInvocationOwner(deps) {
         {dialect: INVOCATION_JOURNAL_DIALECT},
       );
     }
-    if (typeof queryExecutor === 'function') return queryExecutor;
     throw new RequestCellRoutingError(
       REQUEST_CELL_ROUTE_ERROR_CODE.ROUTE_UNAVAILABLE,
       REQUEST_CELL_INVOCATION_MESSAGE.JOURNAL_UNAVAILABLE,
@@ -165,7 +164,6 @@ function createRequestCellInvocationOwner(deps) {
 
   function journalRows(result) {
     if (Array.isArray(result?.rows)) return result.rows;
-    if (Array.isArray(result)) return result;
     return EMPTY_INVOCATION_JOURNAL_ROWS;
   }
 
@@ -201,12 +199,22 @@ function createRequestCellInvocationOwner(deps) {
   }
 
   function parseJournalValue(value, fallback = null) {
-    if (value && typeof value === 'object') return value;
     if (typeof value !== 'string' || value.length === 0) return fallback;
     try {
       return JSON.parse(value);
     } catch {
       return fallback;
+    }
+  }
+
+  function parseRequiredCompletedResult(value) {
+    if (typeof value !== 'string' || value.length === 0) {
+      throw buildInvocationAmbiguousError();
+    }
+    try {
+      return JSON.parse(value);
+    } catch {
+      throw buildInvocationAmbiguousError();
     }
   }
 
@@ -357,7 +365,7 @@ function createRequestCellInvocationOwner(deps) {
       journaled: true,
       operationId: operation.operation_id ?? operation.operationId,
       replayed: true,
-      value: parseJournalValue(operation.result),
+      value: parseRequiredCompletedResult(operation.result),
     };
   }
 

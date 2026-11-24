@@ -264,7 +264,12 @@ test('2. single-table query with one alias preserves NOCASE collation on probe t
 
   t.equal(group.isComplex, false, 'single-table aliased query uses Tier 1 incremental evaluation');
   const snapshot = await group.initialize({
-    subscribeToPartition: async () => ({streamVersion: 1}),
+    subscribeToPartition: async () => ({
+      acknowledged: true,
+      success: true,
+      subscribed: true,
+      versionContext: {streamVersion: 1},
+    }),
   });
   t.same(snapshot, [{name: 'Alice'}], 'initial snapshot matches mixed-case Alice');
 
@@ -639,7 +644,12 @@ test('6. QueryGroup Tier 1 vs Tier 2 lifecycle closes Tier 1 SQLite handle on cl
   });
 
   const initialRows = await tier2Group.initialize({
-    subscribeToPartition: async () => ({streamVersion: 1}),
+    subscribeToPartition: async () => ({
+      acknowledged: true,
+      success: true,
+      subscribed: true,
+      versionContext: {streamVersion: 1},
+    }),
   });
   t.same(
     initialRows,
@@ -769,7 +779,12 @@ test('7. lexical CTE scope isolation in derived subqueries vs compound branches 
   const initialUnionRows = await nestedCteGroup.initialize({
     subscribeToPartition: async (partitionId) => {
       subscribedPartitions.push(partitionId);
-      return {streamVersion: 1};
+      return {
+        acknowledged: true,
+        success: true,
+        subscribed: true,
+        versionContext: {streamVersion: 1},
+      };
     },
   });
   t.same(
@@ -837,7 +852,12 @@ test('7. lexical CTE scope isolation in derived subqueries vs compound branches 
   });
 
   const initialCteJoinRows = await cteJoinGroup.initialize({
-    subscribeToPartition: async () => ({streamVersion: 1}),
+    subscribeToPartition: async () => ({
+      acknowledged: true,
+      success: true,
+      subscribed: true,
+      versionContext: {streamVersion: 1},
+    }),
   });
   t.same(
     initialCteJoinRows,

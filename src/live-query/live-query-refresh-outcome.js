@@ -42,7 +42,7 @@ function isRefreshOutcomeSettled(group, outcome) {
 }
 
 function applySuccessfulRefresh(group, result, currentGeneration) {
-  const rawRows = result.rows ?? result.results ?? [];
+  const rawRows = result.rows;
   const newRows = rawRows.map((row) => group.projectRow(row));
   group.lastResultSet = newRows;
   group.resultSet.clear();

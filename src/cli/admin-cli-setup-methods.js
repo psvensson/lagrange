@@ -45,8 +45,6 @@ import {
   LOCAL_NUM_FIFTEEN,
   LOCAL_STR_15RD3,
   LOCAL_STR_ROW_DETAILS,
-  LOCAL_STR_100_2,
-  LOCAL_STR_RESULTS,
   LOCAL_NUM_SIXTY,
   LOCAL_STR_EDIT_CONFIGURATION,
   LOCAL_STR_EMPTY,
@@ -272,24 +270,6 @@ const ADMIN_CLI_SETUP_METHODS = {
     this.sqlResultsData = [];
     this.sqlResultsColumns = [];
     this.sqlSelectedIndex = LOCAL_NUM_ZERO;
-
-    // Legacy results box (hidden, kept for compatibility)
-    this.sqlResults = blessed.box({
-      parent: this.sqlContainer,
-      top: LOCAL_NUM_SIX,
-      left: LOCAL_NUM_ZERO,
-      width: LOCAL_STR_100_2,
-      height: LOCAL_STR_100_8,
-      hidden: true,
-      tags: true,
-      border: {type: LOCAL_STR_LINE},
-      style: {border: {fg: LOCAL_STR_BLUE}},
-      scrollable: true,
-      alwaysScroll: true,
-      keys: true,
-      vi: true,
-      label: LOCAL_STR_RESULTS,
-    });
 
     // Config edit dialog (hidden by default)
     this.configEditDialog = blessed.box({
