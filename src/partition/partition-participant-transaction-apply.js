@@ -57,25 +57,14 @@ import {captureCommittedOperationCdc, recordCommittedOperationCdc} from
   './partition-cdc-obligation.js';
 import {noteExecutionEnvelope} from './partition-transaction-execution-envelope.js';
 import {
-  carriedOriginIndexOf,
-  decisionBindingRefusalOf,
-  decisionMatchesPreparedRow,
-  identityRefusalOf,
-  operationOutcomeKeyOf,
-  operationsOf,
-  preparedDigestOf,
-  validationTextOf,
+  carriedOriginIndexOf, decisionBindingRefusalOf, decisionMatchesPreparedRow,
+  identityRefusalOf, operationOutcomeKeyOf, operationsOf, preparedDigestOf,
 } from './partition-participant-transaction-bytes.js';
 import {
-  advancePartitionWriteGeneration,
-  insertParticipantTransactionRow,
-  isPartitionReserved,
-  participantOutcomeOf,
-  readParticipantTransactionRow,
-  readPartitionWriteGeneration,
-  readPartitionWriteOrigin,
-  recordPartitionWriteOrigin,
-  updateParticipantTransactionDecided,
+  advancePartitionWriteGeneration, insertParticipantTransactionRow,
+  isPartitionReserved, participantOutcomeOf, readParticipantTransactionRow,
+  readPartitionWriteGeneration, readPartitionWriteOrigin,
+  recordPartitionWriteOrigin, updateParticipantTransactionDecided,
 } from './partition-participant-transaction-store.js';
 import {
   PARTICIPANT_TRANSACTION_COMMAND as COMMAND,
@@ -88,15 +77,13 @@ import {
 } from './partition-participant-transaction-constants.js';
 import {recordCommittedWriteTraffic} from './partition-write-traffic.js';
 import {
-  canAdvanceCommittedValidationText,
-  clearPreparedParticipantRowKeys,
-  extractOperationsRowKeyFootprint,
-  inspectRetainedPreparedObligations,
-  isPartitionReservedForPrepare,
-  recordCommittedParticipantRowKeys,
-  resetParticipantRowKeyHistory,
+  canAdvanceCommittedValidationText, clearPreparedParticipantRowKeys,
+  extractOperationsRowKeyFootprint, inspectRetainedPreparedObligations,
+  isPartitionReservedForPrepare, isRowKeyConcurrencyEnabled,
+  recordCommittedParticipantRowKeys, resetParticipantRowKeyHistory,
   stagePreparedParticipantRowKeys,
 } from './partition-participant-transaction-session.js';
+import {decodeParticipantValidationText} from './partition-participant-read-dependencies.js';
 import {clearPartitionTransactionMemoryReservations} from
   './partition-locking-read-reservation.js';
 import {releaseDbPartitionTransactionReservations} from './partition-locking-read-store.js';
@@ -166,16 +153,6 @@ function alarmRefusal(service, committed, failureCode, fields) {
 function rowAnswer(service, identity) {
   return participantOutcomeOf(readParticipantTransactionRow(service.db,
     identity));
-}
-
-// The conflict evidence of this replica now, as a PREPARE carries it (design
-// 3.2, 0.0.13): g counted from the recorded generation origin; null while no
-// origin has applied here.
-function validationTextHereOf(service) {
-  const origin = readPartitionWriteOrigin(service.db);
-  return origin === null ? null : validationTextOf(
-    readPartitionWriteGeneration(service.db), service.partitionId,
-    origin.originIndex);
 }
 
 // --- the dry run and the operations ---
@@ -353,20 +330,26 @@ function applyParticipantPrepare(service, committed) {
       readPartitionWriteOrigin(service.db)?.originIndex) {
     return refuseOriginMismatch(service, committed);
   }
+  const decodedValidation = decodeParticipantValidationText(command.validationText);
+  if (decodedValidation === null) {
+    return refusePrepare(service, committed,
+      {cause: CAUSE.CONFLICT, detail: null});
+  }
   const operations = operationsOf(command.operationsText);
   const footprint = extractOperationsRowKeyFootprint(service, operations);
   if (isPartitionReservedForPrepare(
-    service,
-    command.participantId,
-    footprint.rowKeys,
-    footprint.hasUnscopedWrite,
+    service, command.participantId, footprint.rowKeys,
+    footprint.hasUnscopedWrite, decodedValidation.readDependencies,
   )) {
+    if (isRowKeyConcurrencyEnabled(service)) {
+      return refusePrepare(service, committed,
+        {cause: CAUSE.CONFLICT, detail: null});
+    }
     consumedRefusal(service, committed, CODE.RESERVED,
       {deferRetry: true, ...participantOutcomeOf(null)});
     return OUTCOME.RESERVED_REFUSED;
   }
-  if (command.validationText !== validationTextHereOf(service) &&
-      !canAdvanceCommittedValidationText(service, command.validationText, footprint)) {
+  if (!canAdvanceCommittedValidationText(service, command.validationText, footprint)) {
     return refusePrepare(service, committed,
       {cause: CAUSE.CONFLICT, detail: null});
   }
@@ -381,11 +364,9 @@ function applyParticipantPrepare(service, committed) {
   insertParticipantTransactionRow(service.db,
     preparedRowOf(committed, {state: STATE.PREPARED}));
   stagePreparedParticipantRowKeys(
-    service,
-    command.participantId,
-    footprint.rowKeys,
-    footprint.hasUnscopedWrite,
-    command.validationText,
+    service, command.participantId, footprint.rowKeys,
+    footprint.hasUnscopedWrite, command.validationText,
+    decodedValidation.readDependencies,
   );
   committed.afterRollback(() => resetParticipantRowKeyHistory(service));
   answerProposer(service, committed, {success: true,
@@ -523,8 +504,7 @@ function commitPrepared(service, committed, row) {
       detail: MESSAGE.OPERATIONS_UNREADABLE});
   }
   const footprint = extractOperationsRowKeyFootprint(service, operations);
-  if (row.validationText !== validationTextHereOf(service) &&
-      !canAdvanceCommittedValidationText(service, row.validationText, footprint)) {
+  if (!canAdvanceCommittedValidationText(service, row.validationText, footprint)) {
     return refuseCommit(service, committed,
       {cause: CAUSE.COMMIT_BASE_MOVED, detail: null});
   }

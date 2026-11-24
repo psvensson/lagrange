@@ -4,76 +4,53 @@
 // on the leader (partition-participant-transaction-session.js) with the
 // BEGIN-time write generation, and opens no SQLite transaction; a session
 // statement stages under c' (partition-participant-transaction-staging.js);
-// PREPARE seals the session's staged operations into a PARTICIPANT_PREPARE;
-// COMMIT and a bound ROLLBACK propose the PARTICIPANT_DECISION bound to the
-// coordinator's decision record; an unbound ROLLBACK only discards volatile
-// staging; an outcome read answers from the durable row, on any replica; and
-// a statement for a sealed, prepared or decided transaction is refused,
-// typed, never run as a sessionless write. Transaction admission is enabled
-// on a partition once, by the leader proposing the generation origin (design
-// 0.0.13); until that origin has applied here, BEGIN is refused, typed, so
-// every base a transaction reads counts from a committed origin. A leader
-// whose determinism self-check failed refuses every BEGIN.
-//
-// Each command is proposed under its own deterministic entryId through the
-// write commit owner (startPartitionRaftWriteCommit: the pending commit is
-// registered before the proposal, a retry joins it, and its deadline and the
-// leader-loss release answer a proposed command as an unknown outcome), and
-// the leader stamps PREPARE and decision commands with its execution
-// envelope (partition-transaction-execution-envelope.js).
-//
-// Every TRANSACTION request belongs to this owner. A QUERY is this owner's
-// when it carries any current identity field, or when its routing sessionId
-// collides with current volatile/durable participant custody. Every other
-// QUERY is ordinary routing traffic.
+// PREPARE seals the session's staged operations and read dependencies into a
+// PARTICIPANT_PREPARE; COMMIT and a bound ROLLBACK propose the
+// PARTICIPANT_DECISION bound to the coordinator's decision record; an unbound
+// ROLLBACK only discards volatile staging; an outcome read answers from the
+// durable row, on any replica; and a statement for a sealed, prepared or
+// decided transaction is refused, typed, never run as a sessionless write.
+// Transaction admission is enabled once by the leader proposing the generation
+// origin (design 0.0.13); until applied, BEGIN is refused. Each command is
+// proposed under its deterministic entryId through startPartitionRaftWriteCommit
+// and stamped with the leader's execution envelope. Every TRANSACTION request
+// and any QUERY carrying transaction identity or colliding with participant
+// session custody belongs to this owner.
 
 import {PARTICIPANT_COMMIT_OUTCOME} from '../constants/transactions.js';
 import {TABLES} from '../constants/tables.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {
-  partitionWriteLeadershipRefusalOf,
-  startPartitionRaftWriteCommit,
+  partitionWriteLeadershipRefusalOf, startPartitionRaftWriteCommit,
 } from './partition-service-raft-write-commit.js';
 import {
-  isRetryableWriteFailureCode,
-  isWriteOutcomeUnknown,
+  isRetryableWriteFailureCode, isWriteOutcomeUnknown,
 } from './partition-write-kernel.js';
 import {
-  PARTITION_COMMITTED_COMMAND_ORIGIN,
-  admitCommittedCommand,
+  PARTITION_COMMITTED_COMMAND_ORIGIN, admitCommittedCommand,
   committedCommandRefusalResult,
 } from './partition-committed-command-admission.js';
 import {
-  buildDecisionCommand,
-  buildGenerationOriginCommand,
-  buildPrepareCommand,
-  decisionBindingRefusalOf,
-  decisionEntryIdOf,
-  decisionMatchesPreparedRow,
-  identityRefusalOf,
-  prepareEntryIdOf,
-  validationTextOf,
+  buildDecisionCommand, buildGenerationOriginCommand, buildPrepareCommand,
+  decisionBindingRefusalOf, decisionEntryIdOf, decisionMatchesPreparedRow,
+  identityRefusalOf, prepareEntryIdOf, validationTextOf,
 } from './partition-participant-transaction-bytes.js';
 import {
-  participantOutcomeOf,
-  readParticipantTransactionRow,
-  readPartitionWriteGeneration,
-  readPartitionWriteOrigin,
+  participantOutcomeOf, readParticipantTransactionRow,
+  readPartitionWriteGeneration, readPartitionWriteOrigin,
 } from './partition-participant-transaction-store.js';
 import {operationResultsOf} from './partition-participant-transaction-apply.js';
 import {
-  canAdmitConcurrentParticipantSession,
-  canAdvanceRowKeySessionGeneration,
-  clearPreparedParticipantRowKeys,
-  endParticipantSession,
-  findParticipantSession,
-  isPartitionReservedForPrepare,
-  isRowKeyConcurrencyEnabled,
-  openParticipantSession,
-  participantRoutingSessionCollision,
-  participantTransactionActive,
+  canAdmitConcurrentParticipantSession, canAdvanceRowKeySessionGeneration,
+  clearPreparedParticipantRowKeys, endParticipantSession, findParticipantSession,
+  isPartitionReservedForPrepare, isRowKeyConcurrencyEnabled, openParticipantSession,
+  participantRoutingSessionCollision, participantTransactionActive,
   stagePreparedParticipantRowKeys,
 } from './partition-participant-transaction-session.js';
+import {
+  assembleSessionOperationsText,
+  getSessionReadDependencySnapshot,
+} from './partition-participant-read-dependencies.js';
 import {runParticipantSessionStatement} from './partition-participant-transaction-staging.js';
 import {participantDeterminismSelfCheckOf} from './partition-participant-transaction-self-check.js';
 import {participantConnectionStampOf} from './partition-participant-transaction-connection.js';
@@ -347,6 +324,12 @@ async function proposeSealedPrepare(service, payload, session) {
   return answer;
 }
 
+function isSessionReservedForPrepare(service, session, readDeps) {
+  return isPartitionReservedForPrepare(
+    service, session.identity.participantId,
+    session.touchedRowKeys, session.hasUnscopedWrite, readDeps);
+}
+
 function sealSession(service, payload, session) {
   // Advisory: the apply is the authority over the carried base.
   const currentGeneration = readPartitionWriteGeneration(service.db);
@@ -354,7 +337,10 @@ function sealSession(service, payload, session) {
       canAdvanceRowKeySessionGeneration(service, session, currentGeneration)) {
     session.generationBase = currentGeneration;
   }
-  if (currentGeneration !== session.generationBase) {
+  const readDeps = getSessionReadDependencySnapshot(session);
+  if (currentGeneration !== session.generationBase ||
+      (isRowKeyConcurrencyEnabled(service) &&
+        isSessionReservedForPrepare(service, session, readDeps))) {
     endParticipantSession(service, session);
     return refusalOf(service, payload, CODE.PREPARE_REFUSED,
       {refusalCause: CAUSE.CONFLICT, ...participantOutcomeOf(null)});
@@ -374,13 +360,13 @@ function sealSession(service, payload, session) {
       error: lockConflict.error, ...participantOutcomeOf(null)});
   }
   const command = buildPrepareCommand(identityOf(payload), {
-    operationsText: JSON.stringify(session.operations),
+    operationsText: assembleSessionOperationsText(session),
     validationText: validationTextOf(session.generationBase, service.partitionId,
-      session.originIndex)}, commandStampOf(service));
+      session.originIndex, readDeps)}, commandStampOf(service));
   const refused = admissionRefusalOf(service, payload, command);
   if (refused !== null) return refused;
-  stagePreparedParticipantRowKeys(
-    service, session.identity.participantId, session.touchedRowKeys, session.hasUnscopedWrite);
+  stagePreparedParticipantRowKeys(service, session.identity.participantId,
+    session.touchedRowKeys, session.hasUnscopedWrite, command.validationText, readDeps);
   session.phase = PHASE.PREPARING;
   session.sealed = command;
   return null;
@@ -399,8 +385,13 @@ async function prepareSession(service, payload, session) {
   if (session.sealed !== null && session.sealed.commitMode !== payload.commitMode) {
     return refusalOf(service, payload, CODE.IDENTITY_MISMATCH);
   }
-  if (isPartitionReservedForPrepare(
-    service, session.identity.participantId, session.touchedRowKeys, session.hasUnscopedWrite)) {
+  const readDeps = getSessionReadDependencySnapshot(session);
+  if (isSessionReservedForPrepare(service, session, readDeps)) {
+    if (isRowKeyConcurrencyEnabled(service)) {
+      endParticipantSession(service, session);
+      return refusalOf(service, payload, CODE.PREPARE_REFUSED,
+        {refusalCause: CAUSE.CONFLICT, ...participantOutcomeOf(null)});
+    }
     return refusalOf(service, payload, CODE.RESERVED,
       {deferRetry: true, ...participantOutcomeOf(null, volatileStateOf(session))});
   }

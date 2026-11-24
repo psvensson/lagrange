@@ -22,6 +22,10 @@ import {
   PARTICIPANT_TRANSACTION_DECISION as DECISION,
   PARTICIPANT_TRANSACTION_FAILURE_CODE as CODE,
 } from './partition-participant-transaction-constants.js';
+import {
+  decodeParticipantValidationText,
+  encodeCanonicalReadDependencyRecord,
+} from './partition-participant-read-dependencies.js';
 
 import {isExecutionEnvelope} from './partition-transaction-execution-envelope.js';
 
@@ -45,16 +49,27 @@ function preparedDigestOf(operationsText, validationText) {
 
 /**
  * The conflict evidence a PREPARE carries: the partition, the digest of the
- * write generation the transaction's base was read at, and the log index of
- * the generation origin that g counts from (design 0.0.13).
+ * write generation the transaction's base was read at, the log index of the
+ * generation origin that g counts from (design 0.0.13), and the canonical
+ * read dependency descriptor ({readScope: 'none'|'keys'|'partition',
+ * readKeys?: string[]}).
  * @param {number} generation - The write generation g.
  * @param {string} partitionId - The partition.
  * @param {number} originIndex - The generation origin's log index.
+ * @param {Object} [readDependencies] - Canonical read dependency descriptor.
  * @return {string} The validation text.
  */
-function validationTextOf(generation, partitionId, originIndex) {
+const INVALID_PARTICIPANT_READ_DEPENDENCIES_ERROR =
+  'Invalid participant read dependencies for validationTextOf';
+
+function validationTextOf(generation, partitionId, originIndex, readDependencies) {
+  const readRecord = encodeCanonicalReadDependencyRecord(readDependencies);
+  if (readRecord === null) {
+    throw new TypeError(INVALID_PARTICIPANT_READ_DEPENDENCIES_ERROR);
+  }
   return JSON.stringify([[BYTES.VALIDATION_SCOPE, partitionId,
-    sha256Hex(`${BYTES.GENERATION_DIGEST_PREFIX}${generation}`), originIndex]]);
+    sha256Hex(`${BYTES.GENERATION_DIGEST_PREFIX}${generation}`), originIndex,
+    readRecord]]);
 }
 
 function generationOriginEntryIdOf(partitionId) {
@@ -347,6 +362,7 @@ function isPinnedPrepare(command) {
   return typeof command.operationsText === 'string' &&
     typeof command.validationText === 'string' &&
     operationsOf(command.operationsText) !== null &&
+    decodeParticipantValidationText(command.validationText) !== null &&
     carriedOriginIndexOf(command.validationText) !== null &&
     command.preparedDigest ===
       preparedDigestOf(command.operationsText, command.validationText) &&

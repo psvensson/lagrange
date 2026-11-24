@@ -347,11 +347,25 @@ Implementation summary:
    records ROLLBACK. A missing, NULL, or corrupt manifest remains held.
 9. Session reads synchronously replay the transaction's deterministic staged
    operations inside a rolled-back SQLite transaction over current committed
-   state. They therefore see current committed state plus their own writes.
-   `BEGIN` captures the partition write generation; PREPARE refuses `conflict`
-   if a committed application write advanced that generation, and every
-   replica rechecks the generation at apply. This is partition-granular
-   first-committer-wins rather than epoch visibility or row MVCC.
+   state. They therefore see current committed state plus their own writes,
+   while accumulating their read dependencies in a bounded per-session read
+   accumulator (`'none'`, `'keys'` bounded by distinct key count and cumulative
+   encoded UTF-8 bytes, or `'partition'`). When a read is unscoped or the read
+   accumulator reaches its key or byte ceiling, the session widens irreversibly
+   to whole-partition read scope (`'partition'`) and releases individual read
+   keys. `BEGIN` captures the partition write generation and schema version;
+   `PARTICIPANT_PREPARE` pins the base generation, origin index, and canonical
+   read dependency scope (`'none' | 'keys' | 'partition'`) in `validationText`
+   bound by `preparedDigest`. In `'partition'` concurrency mode, any generation
+   advance or existing `PREPARED` reservation blocks `PREPARE` across the whole
+   partition. In `'row-key'` concurrency mode, `PREPARE` and replicated apply
+   validate both intervening committed generations and retained `PREPARED`
+   reservations (including at equal generation numbers and after disk
+   reconstruction across restart or leader change) against the transaction's
+   read and write dependencies under the serializability conflict predicate
+   $(W_1 \cap W_2) \lor (W_1 \cap R_2) \lor (R_1 \cap W_2)$, where read/read
+   overlap is permitted and a `'partition'` read scope conflicts with every
+   non-empty write ($W \neq \emptyset$).
 
 The transaction-schema cutover has a bounded full-restart compatibility
 envelope. Drain and account for retained legacy work before upgrade. A current

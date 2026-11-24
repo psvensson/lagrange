@@ -163,6 +163,27 @@ const PARTICIPANT_TRANSACTION_REPLAY_BOUND = Object.freeze({
   MAX_BYTES: 1024 * 1024,
 });
 
+// Canonical read dependency scope encoded in a participant's validationText:
+// NONE ('none': zero reads executed), KEYS ('keys': non-empty bounded sorted
+// unique row-key array), or PARTITION ('partition': whole-partition read scope
+// after an unscoped read or key/byte bound overflow).
+const PARTICIPANT_READ_DEPENDENCY_SCOPE = Object.freeze({
+  NONE: 'none',
+  KEYS: 'keys',
+  PARTITION: 'partition',
+});
+
+// Bounded per-session read dependency accumulator and durable validation
+// decoder bounds: exceeding either ceiling widens a live session irreversibly
+// to PARTICIPANT_READ_DEPENDENCY_SCOPE.PARTITION and releases individual keys,
+// while a durable validationText exceeding either bound fails closed.
+const PARTICIPANT_READ_DEPENDENCY_BOUND = Object.freeze({
+  MAX_KEYS: 256,
+  MAX_BYTES: 65536,
+  MAX_SESSION_READ_KEYS: 256,
+  MAX_SESSION_READ_BYTES: 65536,
+});
+
 // The admission owner's refusals of a participant transaction command before
 // it is proposed: one that does not come from the transaction owner, and one
 // whose bytes are not the pinned form (partition-committed-command-
@@ -473,6 +494,8 @@ export {
   PARTICIPANT_COORDINATOR_TABLE_COLUMNS,
   PARTICIPANT_ORIGIN_HISTORY_REASON,
   PARTICIPANT_ORIGIN_HISTORY_STATE,
+  PARTICIPANT_READ_DEPENDENCY_BOUND,
+  PARTICIPANT_READ_DEPENDENCY_SCOPE,
   PARTICIPANT_TRANSACTION_ADMISSION_CODE,
   PARTICIPANT_TRANSACTION_BYTES,
   PARTICIPANT_TRANSACTION_COMMAND,
