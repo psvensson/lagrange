@@ -31,9 +31,6 @@ import {
 
 const ZERO_BIGINT = 0n;
 const MAX_SAFE_TERM_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
-const COMPLETED_READ_RESULT_SEAL = Symbol('completedReadResultSeal');
-const TICKET_AUTHORITY_SEAL = Symbol('readInvocationTicketSeal');
-const READ_INVOCATION_SEAL_DESC = 'readInvocationSeal';
 const REMOVED_SERVICE_STATUS = 'removed';
 const UNSEALED_READ_COMPLETION_CODE = 'UNSEALED_READ_COMPLETION_REJECTED';
 const UNSEALED_READ_COMPLETION_MSG =
@@ -322,14 +319,10 @@ function isRedirectRouteCurrent(router, ticket, routes, redirectCandidate, stric
       currentInCandidates(router, ticket.originTicket, routes?.candidates));
 }
 
-function stampCompletedReadResult(result, invocationSeal, sealedResults) {
-  Object.defineProperty(result, COMPLETED_READ_RESULT_SEAL, {
-    configurable: false,
-    enumerable: false,
-    value: invocationSeal,
-    writable: false,
-  });
-  sealedResults.add(result);
+function stampCompletedReadResult(result, sealedResults) {
+  if (result && typeof result === 'object') {
+    sealedResults.add(result);
+  }
   return result;
 }
 
@@ -373,7 +366,6 @@ function createInvocationTermFloorTracker(executor, partitionId, rawOptions = {}
   const explicitDeadlineMs = resolveExplicitDeadlineMs(executionOptions);
   const strictRouteCurrency = forRead &&
     (Boolean(readDelivery) || requireCanonicalLeader);
-  const invocationSeal = Symbol(READ_INVOCATION_SEAL_DESC);
   const issuedTickets = new WeakSet();
   const sealedResults = new WeakSet();
   let termFloor = null;
@@ -413,8 +405,8 @@ function createInvocationTermFloorTracker(executor, partitionId, rawOptions = {}
 
   function isIssuedTicket(ticket) {
     return Boolean(ticket) &&
-      issuedTickets.has(ticket) &&
-      ticket[TICKET_AUTHORITY_SEAL] === invocationSeal;
+      typeof ticket === 'object' &&
+      issuedTickets.has(ticket);
   }
 
   function issueTicket(draft) {
@@ -431,12 +423,6 @@ function createInvocationTermFloorTracker(executor, partitionId, rawOptions = {}
       draft.peer :
       peerIdentityOf(router, draft.serviceInfo?.nodeId);
     const ticket = {...draft, peer};
-    Object.defineProperty(ticket, TICKET_AUTHORITY_SEAL, {
-      configurable: false,
-      enumerable: false,
-      value: invocationSeal,
-      writable: false,
-    });
     Object.freeze(ticket);
     issuedTickets.add(ticket);
     return ticket;
@@ -501,7 +487,7 @@ function createInvocationTermFloorTracker(executor, partitionId, rawOptions = {}
       ...(redirectedFromAddress ? {redirectedFromAddress} : {}),
       request: ticket.request,
     });
-    if (!builtResult || builtResult.success !== true) {
+    if (!builtResult || typeof builtResult !== 'object') {
       return Object.freeze({
         accepted: false,
         latestRoutes: routes,
@@ -509,7 +495,7 @@ function createInvocationTermFloorTracker(executor, partitionId, rawOptions = {}
         state: READ_COMPLETION_STATE.REJECTED_RESPONSE,
       });
     }
-    const sealed = stampCompletedReadResult(builtResult, invocationSeal, sealedResults);
+    const sealed = stampCompletedReadResult(builtResult, sealedResults);
     return Object.freeze({
       accepted: true,
       completedResult: sealed,
@@ -603,8 +589,7 @@ function createInvocationTermFloorTracker(executor, partitionId, rawOptions = {}
         DEADLINE_EXPIRED_COMPLETION_CODE,
       );
     }
-    if (!result || !sealedResults.has(result) ||
-        result[COMPLETED_READ_RESULT_SEAL] !== invocationSeal) {
+    if (!result || typeof result !== 'object' || !sealedResults.has(result)) {
       throw buildTypedAuthorityError(
         UNSEALED_READ_COMPLETION_MSG,
         UNSEALED_READ_COMPLETION_CODE,

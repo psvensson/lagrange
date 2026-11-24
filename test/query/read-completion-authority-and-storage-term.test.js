@@ -75,6 +75,7 @@ import {
 } from '../../src/storage/retained-read-view-custody.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {copyStrictOwnDataRecord} from '../../src/utils/strict-own-data.js';
 import {createCommittedServeEligibilityOwner} from
   '../control-plane/serve-eligibility-test-support.js';
 
@@ -568,6 +569,8 @@ test('Review §3: all 6 held-response cases across Direct, Redirected, and Retai
         h.releasePeerC.resolve();
         const result = await pending;
         t.equal(result.success, true, 'valid companion completes with sealed receipt');
+        t.equal(Object.getOwnPropertySymbols(result).length, 0, 'result has no own symbols');
+        t.ok(copyStrictOwnDataRecord(result) !== null, 'result passes copyStrictOwnDataRecord');
         t.equal(result.readAuthorityWitness?.term, 6);
         t.equal(result.readAuthorityWitness?.servingNodeId, h.heldNodeId);
         t.same(result.rows, [{operation_id: OPERATION, workflow_step: 'held-term-6'}]);
@@ -652,89 +655,83 @@ test('Review §3 deliberate mutation controls: unsealed envelopes, unissued tick
   const invocationB = makeInvocation(1000);
   invocationA.resolveRoutes();
   invocationB.resolveRoutes();
+  const witness6 = buildLeaderWitness({nodeId: 'node-b', replicaId: candidate.replicaId, term: 6});
 
-  // 1. Attempting to return an unsealed transport envelope or raw buildSuccessResult output is rejected.
+  // 1. Unsealed plain objects and non-objects skipping completeDelivery are rejected.
   const rawUnsealedResult = {
     partitionId: PARTITION,
-    readAuthorityWitness: buildLeaderWitness({
-      nodeId: 'node-b',
-      replicaId: candidate.replicaId,
-      term: 6,
-    }),
+    readAuthorityWitness: witness6,
     rows: [{operation_id: OPERATION, workflow_step: 'unsealed'}],
     success: true,
   };
-  t.throws(
-    () => invocationA.finalizeAcceptedResult(rawUnsealedResult),
-    {code: UNSEALED_READ_COMPLETION_CODE},
-    'raw unsealed result skipping completeDelivery is rejected',
-  );
+  for (const invalid of [rawUnsealedResult, null, 'raw-primitive']) {
+    t.throws(() => invocationA.finalizeAcceptedResult(invalid),
+      {code: UNSEALED_READ_COMPLETION_CODE}, 'unsealed or non-object result is rejected');
+  }
 
-  // 2. Attempting to complete delivery with an unissued plain ticket object is rejected.
+  // 2. Unissued plain ticket and cross-invocation ticket are rejected.
   const validDelivery = buildDeliveryEnvelope({acknowledged: true}, {
-    readAuthorityWitness: buildLeaderWitness({
-      nodeId: 'node-b',
-      replicaId: candidate.replicaId,
-      term: 6,
-    }),
+    readAuthorityWitness: witness6,
     rows: [{operation_id: OPERATION, workflow_step: 'valid'}],
     success: true,
   });
-  t.throws(
-    () => invocationA.completeDelivery({
-      delivery: validDelivery,
-      ticket: {address: candidate.address, request: {}, serviceInfo: candidate},
-    }),
-    {code: UNISSUED_READ_TICKET_CODE},
-    'forged/unissued ticket is rejected by completeDelivery',
-  );
-
-  // 3. Attempting to complete delivery on invocationA with a ticket issued by invocationB is rejected.
-  const ticketFromB = invocationB.issueTicket({
-    address: candidate.address,
-    request: {},
-    serviceInfo: candidate,
-  });
-  t.throws(
-    () => invocationA.completeDelivery({
-      delivery: validDelivery,
-      ticket: ticketFromB,
-    }),
-    {code: UNISSUED_READ_TICKET_CODE},
-    'ticket issued by another invocation is rejected',
-  );
-
-  // 4. Valid completion on invocationA produces a sealed result that invocationA accepts
-  //    but invocationB rejects.
-  const ticketFromA = invocationA.issueTicket({
-    address: candidate.address,
-    request: {},
-    serviceInfo: candidate,
-  });
-  const completionA = invocationA.completeDelivery({
+  t.throws(() => invocationA.completeDelivery({
     delivery: validDelivery,
-    ticket: ticketFromA,
+    ticket: {address: candidate.address, request: {}, serviceInfo: candidate},
+  }), {code: UNISSUED_READ_TICKET_CODE}, 'forged/unissued ticket is rejected by completeDelivery');
+
+  const ticketFromB = invocationB.issueTicket({
+    address: candidate.address, request: {}, serviceInfo: candidate,
   });
+  t.throws(() => invocationA.completeDelivery({delivery: validDelivery, ticket: ticketFromB}),
+    {code: UNISSUED_READ_TICKET_CODE}, 'ticket issued by another invocation is rejected');
+
+  // 3. Valid completion seals via WeakSet with zero own Symbol properties (strict-own-data safe).
+  const ticketFromA = invocationA.issueTicket({
+    address: candidate.address, request: {}, serviceInfo: candidate,
+  });
+  t.equal(Object.getOwnPropertySymbols(ticketFromA).length, 0, 'issued ticket has no own symbols');
+  const completionA = invocationA.completeDelivery({delivery: validDelivery, ticket: ticketFromA});
   t.equal(completionA.state, READ_COMPLETION_STATE.ACCEPTED);
   t.equal(completionA.accepted, true);
-  t.equal(
-    invocationA.finalizeAcceptedResult(completionA.completedResult),
-    completionA.completedResult,
-    'owning invocation accepts its own sealed result',
+  const acceptedResult = invocationA.finalizeAcceptedResult(completionA.completedResult);
+  t.equal(acceptedResult, completionA.completedResult, 'owning invocation accepts sealed result');
+  t.equal(Object.getOwnPropertySymbols(acceptedResult).length, 0,
+    'accepted result carries no own Symbol properties');
+  t.ok(copyStrictOwnDataRecord(acceptedResult) !== null,
+    'copyStrictOwnDataRecord accepts sealed completion result cleanly');
+  t.throws(() => invocationB.finalizeAcceptedResult(acceptedResult),
+    {code: UNSEALED_READ_COMPLETION_CODE}, 'other invocation rejects result sealed by invocationA');
+
+  // 4. Frozen and typed-refusal custom-accepted answers seal cleanly without mutating own keys.
+  const typedRefusalTracker = createInvocationTermFloorTracker(fakeExecutor, PARTITION, {
+    buildSuccessResult: (answer) => Object.freeze({...answer}),
+    executionOptions: {deadlineMs: clock.now() + 1000},
+    forRead: false,
+    isSuccessfulResponse: (env) => env?.answer?.failureCode === 'TRANSACTION_CONFLICT',
+  });
+  const refusalTicket = typedRefusalTracker.issueTicket({
+    address: candidate.address, request: {}, serviceInfo: candidate,
+  });
+  const refusalDelivery = buildDeliveryEnvelope({acknowledged: true}, {
+    failureCode: 'TRANSACTION_CONFLICT', partitionId: PARTITION, success: false,
+  });
+  const refusalCompletion = typedRefusalTracker.completeDelivery({
+    delivery: refusalDelivery, ticket: refusalTicket,
+  });
+  t.equal(refusalCompletion.state, READ_COMPLETION_STATE.ACCEPTED);
+  const acceptedRefusal = typedRefusalTracker.finalizeAcceptedResult(
+    refusalCompletion.completedResult,
   );
-  t.throws(
-    () => invocationB.finalizeAcceptedResult(completionA.completedResult),
-    {code: UNSEALED_READ_COMPLETION_CODE},
-    'another invocation cannot finalize a result sealed by invocationA',
-  );
+  t.equal(Object.getOwnPropertySymbols(acceptedRefusal).length, 0);
+  t.ok(copyStrictOwnDataRecord(acceptedRefusal) !== null);
+  t.throws(() => invocationB.finalizeAcceptedResult(acceptedRefusal),
+    {code: UNSEALED_READ_COMPLETION_CODE});
 
   // 5. Post-validation gap check: if deadline expires before finalizeAcceptedResult, it throws.
   clock.advance(1500);
-  t.throws(
-    () => invocationA.finalizeAcceptedResult(completionA.completedResult),
-    {code: DEADLINE_EXPIRED_COMPLETION_CODE},
-    'finalizeAcceptedResult rejects result if deadline expired after completion',
-  );
+  t.throws(() => invocationA.finalizeAcceptedResult(completionA.completedResult),
+    {code: DEADLINE_EXPIRED_COMPLETION_CODE}, 'expired deadline rejects finalizeAcceptedResult');
   t.equal(READ_ROUTE_SUPERSEDED_CODE, 'READ_ROUTE_SUPERSEDED');
 });
 
