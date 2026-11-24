@@ -1,16 +1,21 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
-import {filterConcurrentAddBudgetOperations} from './rebalance-coordinator-priority-budget-helper.js';
-import {normalizeServiceRow} from '../control-plane/system-row-normalizers.js';
 import {
-  applyUserTableLeaderPlacementCure,
+  USER_TABLE_LEADER_PLACEMENT_CURE_STATE,
+  buildSharedLeaderPlacementPassCensus,
+  dispatchLeaderHandoff,
+  evaluateRebalancerLeaderPlacementCurePass,
+  readPartitionServiceRows,
 } from './user-table-leader-placement-cure.js';
 
 const {
+  REBALANCE_COORDINATOR_EVENT,
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
-  OperationType,
   SERVICE_TYPE,
-  SYSTEM_TABLE_NAME,
 } = REBALANCE_COORDINATOR_SHARED;
+
+const MAX_COORDINATOR_CURE_HANDOFFS_PER_PASS = 2;
+const CURE_COUNT_ZERO = 0;
+const CURE_COUNT_ONE = 1;
 
 function checkTimeouts(coordinator) {
   if (!coordinator.workflowOwner) {
@@ -66,13 +71,9 @@ function resolvePartitionServiceCureContext(coordinator, service) {
       entityId: service.partitionId,
       entityType: SERVICE_TYPE.PARTITION,
       getCurrentReplicas: () =>
-        coordinator.systemTableCache.filter(
-          SYSTEM_TABLE_NAME.SERVICES,
-          (row) => {
-            const norm = normalizeServiceRow(row);
-            return norm.serviceType === SERVICE_TYPE.PARTITION &&
-              norm.partitionId === service.partitionId;
-          },
+        readPartitionServiceRows(
+          coordinator.systemTableCache,
+          service.partitionId,
         ),
       get isLeader() {
         return service.isLeader === true;
@@ -108,45 +109,243 @@ function isReadyLeaderPartitionService(service) {
     service.isMetadataPublicationReady?.() !== false;
 }
 
-async function reconcileSinglePartitionLeaderPlacementCure(
+const NOOP_CANCEL_PASS = () => {};
+const IDLE_CURE_PASS_RESULT = Object.freeze({
+  cancelled: false,
+  dispatchedCount: CURE_COUNT_ZERO,
+  evaluatedCount: CURE_COUNT_ZERO,
+});
+const IDLE_CURE_PASS_PROMISE = Promise.resolve(IDLE_CURE_PASS_RESULT);
+
+function resolveCoordinatorMaxCureHandoffsPerPass(coordinator) {
+  const configured = coordinator?.maxLeaderPlacementHandoffsPerPass;
+  return Number.isSafeInteger(configured) && configured > CURE_COUNT_ZERO ?
+    configured :
+    MAX_COORDINATOR_CURE_HANDOFFS_PER_PASS;
+}
+
+function resolveCoordinatorLeaderPlacementCureCustody(coordinator) {
+  const maxDispatchesPerPass =
+    resolveCoordinatorMaxCureHandoffsPerPass(coordinator);
+  if (!coordinator.leaderPlacementCureState) {
+    coordinator.leaderPlacementCureState = {
+      cancelInFlightPass: NOOP_CANCEL_PASS,
+      inFlight: false,
+      lastPassResult: IDLE_CURE_PASS_RESULT,
+      lastPromise: IDLE_CURE_PASS_PROMISE,
+      maxDispatchesPerPass,
+    };
+  } else {
+    coordinator.leaderPlacementCureState.maxDispatchesPerPass =
+      maxDispatchesPerPass;
+  }
+  return coordinator.leaderPlacementCureState;
+}
+
+function evaluateSinglePartitionCureStep(
   coordinator,
   service,
   nowMs,
+  sharedPassCensus,
 ) {
   if (!isEligibleCoordinatorCurePartitionService(service)) {
-    return;
+    return null;
   }
   if (!isReadyLeaderPartitionService(service)) {
     delete service.userTableLeaderPlacementCureContext;
-    return;
+    return null;
   }
   const context = resolvePartitionServiceCureContext(coordinator, service);
-  await applyUserTableLeaderPlacementCure(context, {nowMs});
+  const decision = evaluateRebalancerLeaderPlacementCurePass(context, {
+    nowMs,
+    sharedPassCensus,
+  });
+  return decision ? {context, decision} : null;
+}
+
+async function continueCoordinatorCurePassWithHandoffs(passState) {
+  const {
+    coordinator,
+    firstStep,
+    maxDispatchesPerPass,
+    nowMs,
+    services,
+    sharedPassCensus,
+    startIndex,
+  } = passState;
+  let {dispatchedCount, evaluatedCount} = passState;
+  dispatchedCount += CURE_COUNT_ONE;
+  await dispatchLeaderHandoff(firstStep.context, firstStep.decision, nowMs);
+  for (let index = startIndex; index < services.length; index += CURE_COUNT_ONE) {
+    if (coordinator.isShuttingDown || dispatchedCount >= maxDispatchesPerPass) {
+      break;
+    }
+    const step = evaluateSinglePartitionCureStep(
+      coordinator,
+      services[index],
+      nowMs,
+      sharedPassCensus,
+    );
+    if (!step) {
+      continue;
+    }
+    evaluatedCount += CURE_COUNT_ONE;
+    if (
+      step.decision.state ===
+        USER_TABLE_LEADER_PLACEMENT_CURE_STATE.DISPATCH_HANDOFF
+    ) {
+      dispatchedCount += CURE_COUNT_ONE;
+      await dispatchLeaderHandoff(step.context, step.decision, nowMs);
+    }
+  }
+  return {
+    cancelled: Boolean(coordinator.isShuttingDown),
+    dispatchedCount,
+    evaluatedCount,
+  };
+}
+
+function startCoordinatorPartitionLeaderPlacementCurePass(
+  coordinator,
+  maxDispatchesPerPass,
+) {
+  const partitionServices =
+    resolveCoordinatorLocalPartitionServices(coordinator);
+  if (
+    !(partitionServices instanceof Map) ||
+    partitionServices.size === CURE_COUNT_ZERO
+  ) {
+    return {
+      inFlightPromise: null,
+      settledResult: IDLE_CURE_PASS_RESULT,
+    };
+  }
+  const nowMs = coordinator.nowFn();
+  const sharedPassCensus = buildSharedLeaderPlacementPassCensus(
+    coordinator,
+    nowMs,
+  );
+  const services = [...partitionServices.values()];
+  let evaluatedCount = CURE_COUNT_ZERO;
+  for (
+    let index = CURE_COUNT_ZERO;
+    index < services.length;
+    index += CURE_COUNT_ONE
+  ) {
+    if (coordinator.isShuttingDown) {
+      break;
+    }
+    const step = evaluateSinglePartitionCureStep(
+      coordinator,
+      services[index],
+      nowMs,
+      sharedPassCensus,
+    );
+    if (!step) {
+      continue;
+    }
+    evaluatedCount += CURE_COUNT_ONE;
+    if (
+      step.decision.state ===
+        USER_TABLE_LEADER_PLACEMENT_CURE_STATE.DISPATCH_HANDOFF
+    ) {
+      return {
+        inFlightPromise: continueCoordinatorCurePassWithHandoffs({
+          coordinator,
+          dispatchedCount: CURE_COUNT_ZERO,
+          evaluatedCount,
+          firstStep: step,
+          maxDispatchesPerPass,
+          nowMs,
+          services,
+          sharedPassCensus,
+          startIndex: index + CURE_COUNT_ONE,
+        }),
+        settledResult: IDLE_CURE_PASS_RESULT,
+      };
+    }
+  }
+  return {
+    inFlightPromise: null,
+    settledResult: {
+      cancelled: Boolean(coordinator.isShuttingDown),
+      dispatchedCount: CURE_COUNT_ZERO,
+      evaluatedCount,
+    },
+  };
+}
+
+function bindInFlightCoordinatorCurePromise(coordinator, custody, rawPromise) {
+  let cancelPass = NOOP_CANCEL_PASS;
+  const cancelPromise = new Promise((resolve) => {
+    cancelPass = () => resolve({
+      cancelled: true,
+      dispatchedCount: CURE_COUNT_ZERO,
+      evaluatedCount: CURE_COUNT_ZERO,
+    });
+  });
+  custody.cancelInFlightPass = cancelPass;
+  custody.inFlight = true;
+  const onShutdown = () => {
+    cancelPass();
+  };
+  coordinator.once?.(REBALANCE_COORDINATOR_EVENT.SHUTDOWN, onShutdown);
+  const passPromise = Promise.race([rawPromise, cancelPromise])
+    .then((passResult) => {
+      custody.lastPassResult = passResult;
+      return passResult;
+    })
+    .finally(() => {
+      coordinator.removeListener?.(
+        REBALANCE_COORDINATOR_EVENT.SHUTDOWN,
+        onShutdown,
+      );
+      if (custody.lastPromise === passPromise) {
+        custody.cancelInFlightPass = NOOP_CANCEL_PASS;
+        custody.inFlight = false;
+        custody.lastPromise = IDLE_CURE_PASS_PROMISE;
+      }
+    });
+  custody.lastPromise = passPromise;
+  coordinator.leaderPlacementCureSweepPromise = passPromise;
+  return passPromise;
+}
+
+function launchCoordinatorPartitionLeaderPlacementCure(coordinator) {
+  if (!coordinator) {
+    return IDLE_CURE_PASS_PROMISE;
+  }
+  const custody = resolveCoordinatorLeaderPlacementCureCustody(coordinator);
+  if (coordinator.isShuttingDown) {
+    custody.cancelInFlightPass();
+    return custody.lastPromise;
+  }
+  if (custody.inFlight === true) {
+    return custody.lastPromise;
+  }
+  const passStart = startCoordinatorPartitionLeaderPlacementCurePass(
+    coordinator,
+    custody.maxDispatchesPerPass,
+  );
+  if (passStart.inFlightPromise !== null) {
+    return bindInFlightCoordinatorCurePromise(
+      coordinator,
+      custody,
+      passStart.inFlightPromise,
+    );
+  }
+  custody.lastPassResult = passStart.settledResult;
+  return Promise.resolve(passStart.settledResult);
 }
 
 async function reconcileCoordinatorPartitionLeaderPlacementCure(coordinator) {
-  if (!coordinator || coordinator.isShuttingDown) {
-    return;
-  }
-  const partitionServices =
-    resolveCoordinatorLocalPartitionServices(coordinator);
-  if (!(partitionServices instanceof Map) || partitionServices.size === 0) {
-    return;
-  }
-  const nowMs = coordinator.nowFn();
-  for (const service of partitionServices.values()) {
-    await reconcileSinglePartitionLeaderPlacementCure(
-      coordinator,
-      service,
-      nowMs,
-    );
-  }
+  return launchCoordinatorPartitionLeaderPlacementCure(coordinator);
 }
 
 async function reconcileMessageGroupMembershipDebt(coordinator) {
   const result =
     await coordinator.workflowOwner.reconcileMessageGroupMembershipDebt();
-  await reconcileCoordinatorPartitionLeaderPlacementCure(coordinator);
+  void launchCoordinatorPartitionLeaderPlacementCure(coordinator);
   return result;
 }
 
@@ -216,19 +415,8 @@ async function getInFlightOperations(coordinator) {
   return coordinator.queryIncompleteOperations();
 }
 
-function getConcurrentAddCount(coordinator, options = {}) {
-  return coordinator.queryIncompleteOperations(options).then((inFlight) =>
-    filterConcurrentAddBudgetOperations(coordinator, inFlight, options),
-  ).then((operations) => operations.length);
-}
-
-function getConcurrentRemoveCount(coordinator, options = {}) {
-  return coordinator.queryIncompleteOperations(options).then((inFlight) =>
-    inFlight.filter((operation) => operation?.type === OperationType.REMOVE).length,
-  );
-}
-
 export {
+  MAX_COORDINATOR_CURE_HANDOFFS_PER_PASS,
   checkTimeouts,
   reconcileOrphanedOperations,
   getTimeoutForStep,
@@ -238,6 +426,8 @@ export {
   reconcileExecutorOutcome,
   isPreSyncStep,
   reconcileRecoveryOperation,
+  launchCoordinatorPartitionLeaderPlacementCure,
+  reconcileCoordinatorPartitionLeaderPlacementCure,
   reconcileMessageGroupMembershipDebt,
   reconcileSyncingOperation,
   getObservedReplicaStatusFromCache,
@@ -248,6 +438,4 @@ export {
   getOperationsByPartition,
   getOperationsByEntity,
   getInFlightOperations,
-  getConcurrentAddCount,
-  getConcurrentRemoveCount,
 };
