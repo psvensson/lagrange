@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {scaleByMachineFactor} from '../../scripts/test-machine-factor.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {CDC_OPERATION, SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
 import {ROUTER_MESSAGE_TYPE} from '../../src/constants/transport.js';
@@ -53,6 +54,7 @@ const GRANT_PROBES = 6;
 const MAX_INSPECTIONS_PER_OBSERVATION = 8;
 const ROUTING_SPIN = 'routing repeatedly inspected unchanged eligibility without waiting';
 const FIXTURE_BUDGET_MS = 10000;
+const FIXTURE_REAL_CLOCK_HEADROOM_MS = 60000;
 const CANCEL_REASON = 'witness caller cancelled';
 const RECOVERY = CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
 const SCHEMA = {columns: [
@@ -185,7 +187,13 @@ async function openPartitions(t, fixture, target, cache, resources, options) {
 async function openFixture(t, options = {}) {
   const {holdAck = true} = options;
   const fixture = createRouterEnvelopeFixture(import.meta.url, SOURCE);
-  const clock = new VirtualTimeSource({startMs: Date.now()});
+  // PartitionService's real-clock collectBoundedTypedRowSet checks
+  // Date.now() >= deadlineMs; starting the virtual sender clock ahead of wall
+  // time prevents real setup duration under host load from expiring virtual
+  // caller grants while keeping every virtual-clock duration identical.
+  const clock = new VirtualTimeSource({
+    startMs: Date.now() + scaleByMachineFactor(FIXTURE_REAL_CLOCK_HEADROOM_MS),
+  });
   await fixture.setup();
   const resources = {};
   t.teardown(async () => {
