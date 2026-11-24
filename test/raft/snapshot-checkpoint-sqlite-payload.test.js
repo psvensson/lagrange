@@ -6,31 +6,40 @@ import Database from 'better-sqlite3';
 
 import {test} from '../../src/test-helpers/tap.js';
 
-import {SQLiteLogAdapter} from '../../src/raft/sqlite-log-adapter.js';
-import {PartitionRaftStorage} from '../../src/partition/partition-raft-storage.js';
+import {
+  insertParticipantTransactionRow,
+  openParticipantTransactionStore,
+} from '../../src/partition/partition-participant-transaction-store.js';
+import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
+import {
+  RaftRsPeerIdentityRegistry,
+} from '../../src/raft/raft-rs-peer-identity.js';
 import {
   RAFT_CHECKPOINT_CREATION_OUTCOME,
-  RAFT_CHECKPOINT_EXCLUDED_TABLES,
   RAFT_CHECKPOINT_PAYLOAD_FILE,
   RAFT_CHECKPOINT_PAYLOAD_KIND,
+  RAFT_RS_CHECKPOINT_REASON,
 } from '../../src/raft/snapshot-checkpoint-constants.js';
 import {
   createSqliteStateMachineCheckpoint,
   listCheckpointGenerations,
 } from '../../src/raft/snapshot-checkpoint-store.js';
 
-// raft-snapshot-checkpoint-format S1 (R1) SQLite evidence bar: SEED the
-// follower-local consensus tables and state-machine tables FIRST
-// (anti-vacuous-assertion), create a checkpoint from a real file-backed DB
-// through the REAL adapter commit path, then inspect the sealed payload and
-// prove _raft_log/_raft_state are absent while state-machine rows survive
-// with the exact committed image.
+// raft-snapshot-checkpoint-format S1 (R1) SQLite evidence bar on the canonical
+// raft-rs replica-image path: seed consensus tables and state-machine rows,
+// create a RAFT_RS_REPLICA_IMAGE checkpoint, prove all _raft_rs_* consensus
+// tables are scrubbed while state-machine rows and peer reservations survive,
+// and prove divergent watermarks / pending prepared transactions / memory DBs
+// fail closed.
 
 const PARTITION_ID = 'sql_transactions-p1';
 const STATE_TABLE = 'sql_transactions';
+const LEADER_REPLICA = `${PARTITION_ID}-r1`;
+const FOLLOWER_REPLICA = `${PARTITION_ID}-r2`;
 const ENTRY_COUNT = 3;
-const SEALED_EPOCH = 5;
+const SEALED_EPOCH = 3;
 const TERM = 2;
+const MEMBERSHIP_GENERATION = String(SEALED_EPOCH);
 const IDENTITY = Object.freeze({
   clusterId: 'cluster-incarnation-1234',
   raftGroupId: PARTITION_ID,
@@ -44,15 +53,24 @@ function createFixture() {
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'raft-checkpoint-'));
   const dbPath = path.join(workDir, 'replica.db');
   const db = new Database(dbPath);
-  const adapter = new SQLiteLogAdapter(db, {address: PARTITION_ID, term: TERM});
-  const storage = new PartitionRaftStorage(db, PARTITION_ID, adapter);
+  const registry = new RaftRsPeerIdentityRegistry(db);
+  const leaderPeerId = registry.registerReplica(LEADER_REPLICA);
+  const followerPeerId = registry.registerReplica(FOLLOWER_REPLICA);
+  const confState = {
+    voters: [leaderPeerId, followerPeerId],
+    learners: [],
+    votersOutgoing: [],
+    learnersNext: [],
+    autoLeave: false,
+  };
+  const store = new RaftRsDurableStore(db);
   db.exec(`CREATE TABLE IF NOT EXISTS ${STATE_TABLE} ` +
     '(id TEXT PRIMARY KEY, payload TEXT)');
   return {
     workDir,
     db,
-    adapter,
-    storage,
+    store,
+    confState,
     checkpointsRoot: path.join(workDir, 'checkpoints'),
     close() {
       db.close();
@@ -61,43 +79,54 @@ function createFixture() {
   };
 }
 
-// Drive the REAL commit + applied-watermark sequence for one entry: adapter
-// commit advances the durable committed watermark, the state-machine row is
-// applied, and the applied watermark advances densely by one — the
-// production ordering from partition-service-raft-lifecycle-wiring.js.
-function commitAndApplyEntry(fixture, ordinal) {
-  const entry = fixture.adapter.saveCommand(
-    {sql: `row-${ordinal}`}, TERM);
-  fixture.adapter.commit(entry.index);
-  fixture.db.prepare(
-    `INSERT INTO ${STATE_TABLE} (id, payload) VALUES (?, ?)`,
-  ).run(`row-${ordinal}`, `payload-${ordinal}`);
-  fixture.storage.recordAppliedAdvance();
-  return entry;
-}
-
 function seedCommittedFixture(fixture) {
-  let lastEntry = null;
+  const entries = [];
   for (let ordinal = 1; ordinal <= ENTRY_COUNT; ordinal += 1) {
-    lastEntry = commitAndApplyEntry(fixture, ordinal);
+    fixture.db.prepare(
+      `INSERT INTO ${STATE_TABLE} (id, payload) VALUES (?, ?)`,
+    ).run(`row-${ordinal}`, `payload-${ordinal}`);
+    entries.push({
+      index: String(ordinal),
+      term: String(TERM),
+      entryType: 0,
+      data: Buffer.from(JSON.stringify({sql: `row-${ordinal}`})).toString('base64'),
+    });
   }
-  return lastEntry;
+  fixture.store.transaction(() => {
+    fixture.store.putBootstrapAppliedState(PARTITION_ID, fixture.confState, {
+      bootstrapIndex: '0',
+      admissionIndex: '0',
+      membershipGenerationIndex: MEMBERSHIP_GENERATION,
+    });
+    fixture.store.appendEntries(PARTITION_ID, entries);
+    fixture.store.putAppliedState(
+      PARTITION_ID,
+      String(ENTRY_COUNT),
+      fixture.confState,
+      undefined,
+      MEMBERSHIP_GENERATION,
+    );
+    fixture.store.putHardState(PARTITION_ID, {
+      term: String(TERM),
+      vote: '0',
+      commit: String(ENTRY_COUNT),
+    });
+  });
+  return ENTRY_COUNT;
 }
 
 function tableNames(db) {
   return db.prepare(SELECT_TABLE_NAMES).all().map((row) => row.name);
 }
 
-test('a sealed payload excludes consensus tables and keeps the committed image',
+test('a sealed raft-rs payload excludes consensus tables and keeps the committed image',
   async (t) => {
     const fixture = createFixture();
     try {
-      const lastEntry = seedCommittedFixture(fixture);
+      const lastIndex = seedCommittedFixture(fixture);
       const sourceTables = tableNames(fixture.db);
-      for (const excluded of RAFT_CHECKPOINT_EXCLUDED_TABLES) {
-        t.ok(sourceTables.includes(excluded),
-          `anti-vacuous: source database really contains ${excluded}`);
-      }
+      t.ok(sourceTables.some((name) => name.startsWith('_raft_rs_')),
+        'anti-vacuous: source database really contains _raft_rs_* consensus tables');
       t.ok(sourceTables.includes(STATE_TABLE),
         'anti-vacuous: source database really contains application state');
 
@@ -105,16 +134,17 @@ test('a sealed payload excludes consensus tables and keeps the committed image',
         db: fixture.db,
         identity: IDENTITY,
         checkpointsRoot: fixture.checkpointsRoot,
+        raftRsGroupId: PARTITION_ID,
       });
       t.equal(created.outcome, RAFT_CHECKPOINT_CREATION_OUTCOME.CREATED,
-        'creation succeeds on an aligned file-backed replica');
-      t.equal(created.descriptor.lastIncludedIndex, lastEntry.index,
-        'lastIncludedIndex equals the sealed image\'s own committed watermark');
+        'creation succeeds on an aligned file-backed raft-rs replica');
+      t.equal(created.descriptor.lastIncludedIndex, lastIndex,
+        'lastIncludedIndex equals the sealed image\'s applied index');
       t.equal(created.descriptor.lastIncludedTerm, TERM,
-        'lastIncludedTerm is read from the sealed image\'s own log');
+        'lastIncludedTerm is read from the sealed image\'s own raft-rs log');
       t.equal(created.descriptor.payloadKind,
-        RAFT_CHECKPOINT_PAYLOAD_KIND.SQLITE_STATE_MACHINE_IMAGE,
-        'the payload kind comes from the compatibility matrix');
+        RAFT_CHECKPOINT_PAYLOAD_KIND.RAFT_RS_REPLICA_IMAGE,
+        'the payload kind is canonical RAFT_RS_REPLICA_IMAGE');
 
       const payload = new Database(
         path.join(created.checkpointDir, RAFT_CHECKPOINT_PAYLOAD_FILE),
@@ -122,10 +152,12 @@ test('a sealed payload excludes consensus tables and keeps the committed image',
       );
       try {
         const payloadTables = tableNames(payload);
-        for (const excluded of RAFT_CHECKPOINT_EXCLUDED_TABLES) {
-          t.notOk(payloadTables.includes(excluded),
-            `sealed payload proves ${excluded} is absent`);
-        }
+        t.equal(
+          payloadTables.some((name) => name.startsWith('_raft_')),
+          false,
+          'sealed payload proves all _raft_* consensus tables are absent');
+        t.ok(payloadTables.includes('raft_rs_peer_identity'),
+          'peer identity reservations survive in the sealed payload');
         t.equal(
           payload.prepare(
             `SELECT COUNT(*) AS rows FROM ${STATE_TABLE}`).get().rows,
@@ -135,137 +167,111 @@ test('a sealed payload excludes consensus tables and keeps the committed image',
         payload.close();
       }
       t.same(listCheckpointGenerations(fixture.checkpointsRoot),
-        [lastEntry.index],
+        [lastIndex],
         'the generation is listed under its lastIncludedIndex');
     } finally {
       fixture.close();
     }
   });
 
-test('creation fails closed on every applied-watermark divergence', async (t) => {
-  await t.test('absent applied watermark', async (t) => {
-    const fixture = createFixture();
-    try {
-      const entry = fixture.adapter.saveCommand({sql: 'row'}, TERM);
-      fixture.adapter.commit(entry.index);
-      const created = await createSqliteStateMachineCheckpoint({
-        db: fixture.db,
-        identity: IDENTITY,
-        checkpointsRoot: fixture.checkpointsRoot,
-      });
-      t.equal(created.outcome,
-        RAFT_CHECKPOINT_CREATION_OUTCOME.APPLY_WATERMARK_DIVERGENCE,
-        'a committed image without an applied watermark is refused');
-      t.ok(created.reasons.includes('applied_watermark_absent'),
-        'the divergence reason is named');
-    } finally {
-      fixture.close();
-    }
-  });
-
-  await t.test('applied behind committed (apply-throw skew)', async (t) => {
-    const fixture = createFixture();
-    try {
-      commitAndApplyEntry(fixture, 1);
-      const behind = fixture.adapter.saveCommand({sql: 'row-behind'}, TERM);
-      fixture.adapter.commit(behind.index);
-      const created = await createSqliteStateMachineCheckpoint({
-        db: fixture.db,
-        identity: IDENTITY,
-        checkpointsRoot: fixture.checkpointsRoot,
-      });
-      t.equal(created.outcome,
-        RAFT_CHECKPOINT_CREATION_OUTCOME.APPLY_WATERMARK_DIVERGENCE,
-        'a watermark ahead of applied state is refused');
-      t.ok(created.reasons.includes('applied_committed_mismatch'),
-        'the divergence reason is named');
-    } finally {
-      fixture.close();
-    }
-  });
-
-  await t.test('multi-entry commit batch with a lost tail apply (MF-1)',
-    async (t) => {
-      // The adapter's committed watermark reaches the BATCH END before the
-      // first apply runs, so a checkpoint gate that
-      // copied committedIndex would seal a payload missing the batch tail.
-      // The dense advance keeps the applied watermark at the truth.
+test('creation fails closed on raft-rs watermark divergence and pending prepared tx',
+  async (t) => {
+    await t.test('absent hard state / raft-rs record', async (t) => {
       const fixture = createFixture();
       try {
-        const first = fixture.adapter.saveCommand({sql: 'row-first'}, TERM);
-        const second = fixture.adapter.saveCommand({sql: 'row-second'}, TERM);
-        fixture.adapter.commit(first.index);
-        fixture.adapter.commit(second.index);
-        fixture.db.prepare(
-          `INSERT INTO ${STATE_TABLE} (id, payload) VALUES (?, ?)`,
-        ).run('row-first', 'payload-first');
-        fixture.storage.recordAppliedAdvance();
         const created = await createSqliteStateMachineCheckpoint({
           db: fixture.db,
           identity: IDENTITY,
           checkpointsRoot: fixture.checkpointsRoot,
+          raftRsGroupId: PARTITION_ID,
         });
         t.equal(created.outcome,
           RAFT_CHECKPOINT_CREATION_OUTCOME.APPLY_WATERMARK_DIVERGENCE,
-          'a batch whose tail apply is missing can never seal a checkpoint');
-        t.ok(created.reasons.includes('applied_committed_mismatch'),
-          'the divergence reason is named');
+          'an uninitialized raft-rs database is refused');
+        t.ok(created.reasons.includes(RAFT_RS_CHECKPOINT_REASON.BOUNDARY),
+          'the divergence reason names raft_rs_boundary');
       } finally {
         fixture.close();
       }
     });
 
-  await t.test('crash gap detected at restart is a sticky refusal', async (t) => {
-    const fixture = createFixture();
-    try {
-      const first = fixture.adapter.saveCommand({sql: 'row-first'}, TERM);
-      const second = fixture.adapter.saveCommand({sql: 'row-second'}, TERM);
-      fixture.adapter.commit(first.index);
-      fixture.db.prepare(
-        `INSERT INTO ${STATE_TABLE} (id, payload) VALUES (?, ?)`,
-      ).run('row-first', 'payload-first');
-      fixture.storage.recordAppliedAdvance();
-      fixture.adapter.commit(second.index);
-      // Simulated crash: committed reached the batch end, the tail apply
-      // never ran. Restart constructs a fresh storage over the same db.
-      const restarted = new PartitionRaftStorage(
-        fixture.db, PARTITION_ID, fixture.adapter);
-      t.ok(restarted instanceof PartitionRaftStorage, 'storage restarted');
-      const created = await createSqliteStateMachineCheckpoint({
-        db: fixture.db,
-        identity: IDENTITY,
-        checkpointsRoot: fixture.checkpointsRoot,
-      });
-      t.equal(created.outcome,
-        RAFT_CHECKPOINT_CREATION_OUTCOME.APPLY_WATERMARK_DIVERGENCE,
-        'a restart over a crash gap refuses checkpoint creation');
-      t.ok(created.reasons.includes('applied_gap_marker'),
-        'the sticky gap marker names the reason');
-    } finally {
-      fixture.close();
-    }
-  });
+    await t.test('applied ahead of committed hard state', async (t) => {
+      const fixture = createFixture();
+      try {
+        seedCommittedFixture(fixture);
+        fixture.store.putHardState(PARTITION_ID, {
+          term: String(TERM),
+          vote: '0',
+          commit: String(ENTRY_COUNT - 1),
+        });
+        const created = await createSqliteStateMachineCheckpoint({
+          db: fixture.db,
+          identity: IDENTITY,
+          checkpointsRoot: fixture.checkpointsRoot,
+          raftRsGroupId: PARTITION_ID,
+        });
+        t.equal(created.outcome,
+          RAFT_CHECKPOINT_CREATION_OUTCOME.APPLY_WATERMARK_DIVERGENCE,
+          'applied ahead of commit watermark is refused');
+        t.ok(created.reasons.includes(RAFT_RS_CHECKPOINT_REASON.BOUNDARY),
+          'the divergence reason names raft_rs_boundary');
+      } finally {
+        fixture.close();
+      }
+    });
 
-  await t.test('direct-apply marker (single-replica path)', async (t) => {
-    const fixture = createFixture();
-    try {
-      commitAndApplyEntry(fixture, 1);
-      fixture.storage.recordDirectApplyMarker();
-      const created = await createSqliteStateMachineCheckpoint({
-        db: fixture.db,
-        identity: IDENTITY,
-        checkpointsRoot: fixture.checkpointsRoot,
-      });
-      t.equal(created.outcome,
-        RAFT_CHECKPOINT_CREATION_OUTCOME.APPLY_WATERMARK_DIVERGENCE,
-        'a direct-apply-marked database can never certify its image');
-      t.ok(created.reasons.includes('direct_apply_marker'),
-        'the divergence reason is named');
-    } finally {
-      fixture.close();
-    }
+    await t.test('missing boundary entry term', async (t) => {
+      const fixture = createFixture();
+      try {
+        seedCommittedFixture(fixture);
+        fixture.db.prepare(
+          'DELETE FROM _raft_rs_log WHERE group_id = ? AND log_index = ?',
+        ).run(PARTITION_ID, String(ENTRY_COUNT));
+        const created = await createSqliteStateMachineCheckpoint({
+          db: fixture.db,
+          identity: IDENTITY,
+          checkpointsRoot: fixture.checkpointsRoot,
+          raftRsGroupId: PARTITION_ID,
+        });
+        t.equal(created.outcome,
+          RAFT_CHECKPOINT_CREATION_OUTCOME.APPLY_WATERMARK_DIVERGENCE,
+          'missing boundary term entry is refused');
+        t.ok(created.reasons.includes(RAFT_RS_CHECKPOINT_REASON.BOUNDARY),
+          'the divergence reason names raft_rs_boundary');
+      } finally {
+        fixture.close();
+      }
+    });
+
+    await t.test('pending prepared participant transaction', async (t) => {
+      const fixture = createFixture();
+      try {
+        seedCommittedFixture(fixture);
+        openParticipantTransactionStore(fixture.db);
+        insertParticipantTransactionRow(fixture.db, {
+          transactionId: 'tx-prepared-refusal',
+          participantId: `${PARTITION_ID}:p1`,
+          commitMode: 'two_phase',
+          transactionEpoch: 1,
+          state: 'PREPARED',
+        });
+        const created = await createSqliteStateMachineCheckpoint({
+          db: fixture.db,
+          identity: IDENTITY,
+          checkpointsRoot: fixture.checkpointsRoot,
+          raftRsGroupId: PARTITION_ID,
+        });
+        t.equal(created.outcome,
+          RAFT_CHECKPOINT_CREATION_OUTCOME.PREPARED_TRANSACTIONS_PENDING,
+          'pending prepared participant transactions refuse checkpointing');
+        t.ok(
+          created.reasons.includes(RAFT_RS_CHECKPOINT_REASON.PREPARED_TRANSACTIONS),
+          'the refusal names prepared_participant_transactions');
+      } finally {
+        fixture.close();
+      }
+    });
   });
-});
 
 test('memory-backed databases are typed unsupported adapters', async (t) => {
   const memoryDb = new Database(':memory:');
@@ -274,10 +280,11 @@ test('memory-backed databases are typed unsupported adapters', async (t) => {
       db: memoryDb,
       identity: IDENTITY,
       checkpointsRoot: path.join(os.tmpdir(), 'raft-checkpoint-memory'),
+      raftRsGroupId: PARTITION_ID,
     });
     t.equal(created.outcome,
       RAFT_CHECKPOINT_CREATION_OUTCOME.UNSUPPORTED_ADAPTER,
-      'SQLiteLogAdapter over :memory: (message-group worker path) is refused');
+      ':memory: database is refused');
   } finally {
     memoryDb.close();
   }
@@ -285,8 +292,9 @@ test('memory-backed databases are typed unsupported adapters', async (t) => {
     db: null,
     identity: IDENTITY,
     checkpointsRoot: path.join(os.tmpdir(), 'raft-checkpoint-none'),
+    raftRsGroupId: PARTITION_ID,
   });
   t.equal(missingDb.outcome,
     RAFT_CHECKPOINT_CREATION_OUTCOME.UNSUPPORTED_ADAPTER,
-    'an adapter with no database (in-memory log adapter) is refused');
+    'null database is refused');
 });

@@ -42,7 +42,10 @@ import {
 import {
   createInProcWebSocketPair,
 } from '../../src/transport/inproc-transport.js';
-import {createSealedSourceGeneration} from './snapshot-catchup-fixture.js';
+import {
+  createSealedSourceGeneration,
+  seedEstablishedFollowerReceiver,
+} from './snapshot-catchup-fixture.js';
 import {waitForCondition} from './bulk-transfer-socket-fixture.js';
 import {genesisStamp} from
   '../../src/raft/raft-committed-membership-stamp.js';
@@ -357,7 +360,12 @@ async function checkBulkOfferAdoption(t, shuttingDown) {
     path.join(os.tmpdir(), 'wiring-loop-replica-'));
   try {
     const targetDbPath = path.join(replicaDir, 'partition', 'target.db');
-    fs.mkdirSync(path.dirname(targetDbPath), {recursive: true});
+    seedEstablishedFollowerReceiver({
+      replicaDbPath: targetDbPath,
+      partitionId: PARTITION_ID,
+      replicaId: REPLICA_ID,
+      term: TERM,
+    });
     const targetService = {
       partitionId: PARTITION_ID,
       tableId: STATE_TABLE,

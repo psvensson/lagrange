@@ -7,7 +7,6 @@ import Database from 'better-sqlite3';
 import {test} from '../../src/test-helpers/tap.js';
 
 import {SQLiteLogAdapter} from '../../src/raft/sqlite-log-adapter.js';
-import {PartitionRaftStorage} from '../../src/partition/partition-raft-storage.js';
 import {
   COMMITTED_ENTRY_WRITE_OUTCOME,
   guardCommittedEntryWrite,
@@ -18,18 +17,18 @@ import {
 import {
   RAFT_CHECKPOINT_CREATION_OUTCOME,
 } from '../../src/raft/snapshot-checkpoint-constants.js';
-import {requestSnapshotInstall} from '../../src/raft/snapshot-install.js';
 import {
+  RAFT_SNAPSHOT_BOUNDARY_STATE_KEY,
   RAFT_SNAPSHOT_INSTALL_OUTCOME,
 } from '../../src/raft/snapshot-install-constants.js';
+import {
+  createSealedSourceGeneration,
+  installSealedGeneration,
+} from './snapshot-catchup-fixture.js';
 
-// raft-snapshot-atomic-install (R3): after an install the adapters must
-// OBSERVE the reconstructed boundary — last-log identity, compacted lineage,
-// witness-silent truncation clamps, the COMPACTED idempotent write outcome,
-// and re-checkpointability at the boundary — while genuinely virgin logs keep
-// the CL-042 zero. HLC warm-up no longer reads the legacy sealed witness: the
-// partition warms from the rs-raft committed log only, and the snapshot-boundary
-// HLC on rs-raft is a recorded gap of the snapshot/catch-up quest (epic F5).
+// raft-snapshot-atomic-install (R3): boundary observability on SQLiteLogAdapter
+// and re-checkpointability of a canonical raft-rs snapshot-installed replica
+// at its own installed boundary without HLC regression.
 
 const PARTITION_ID = 'sql_transactions-p1';
 const STATE_TABLE = 'sql_transactions';
@@ -43,50 +42,27 @@ const IDENTITY = Object.freeze({
   entity: Object.freeze({kind: 'partition', id: STATE_TABLE}),
   membershipEpoch: SEALED_EPOCH,
 });
-// Source with committed entries whose commands carry HLC timestamps, sealed
-// checkpoint, installed into a target; returns an OPEN adapter over the
-// installed target (caller closes).
-async function createInstalledFixture() {
+
+function createCompactedAdapterFixture() {
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'raft-boundary-'));
-  const sourceDb = new Database(path.join(workDir, 'source.db'));
-  const adapter = new SQLiteLogAdapter(
-    sourceDb, {address: PARTITION_ID, term: TERM});
-  const storage = new PartitionRaftStorage(sourceDb, PARTITION_ID, adapter);
-  sourceDb.exec(`CREATE TABLE IF NOT EXISTS ${STATE_TABLE} ` +
-    '(id TEXT PRIMARY KEY, payload TEXT)');
-  let lastEntry = null;
-  for (let ordinal = 1; ordinal <= ENTRY_COUNT; ordinal += 1) {
-    lastEntry = adapter.saveCommand(
-      {sql: `row-${ordinal}`, timestamp: SEALED_HLC}, TERM);
-    adapter.commit(lastEntry.index);
-    sourceDb.prepare(
-      `INSERT INTO ${STATE_TABLE} (id, payload) VALUES (?, ?)`,
-    ).run(`row-${ordinal}`, `payload-${ordinal}`);
-    storage.recordAppliedAdvance();
-  }
-  const checkpointsRoot = path.join(workDir, 'checkpoints');
-  const created = await createSqliteStateMachineCheckpoint({
-    db: sourceDb,
-    identity: IDENTITY,
-    checkpointsRoot,
-  });
-  sourceDb.close();
   const targetDbPath = path.join(workDir, 'target.db');
-  const installed = await requestSnapshotInstall({
-    replicaDbPath: targetDbPath,
-    checkpointsRoot,
-    generationIndex: lastEntry.index,
-    expectedIdentity: IDENTITY,
-  });
   const targetDb = new Database(targetDbPath);
   const targetAdapter = new SQLiteLogAdapter(
     targetDb, {address: PARTITION_ID, term: TERM});
+  const upsert = targetDb.prepare(
+    'INSERT OR REPLACE INTO _raft_state (key, value) VALUES (?, ?)');
+  upsert.run(
+    RAFT_SNAPSHOT_BOUNDARY_STATE_KEY.LAST_INCLUDED_INDEX,
+    String(ENTRY_COUNT),
+  );
+  upsert.run(
+    RAFT_SNAPSHOT_BOUNDARY_STATE_KEY.LAST_INCLUDED_TERM,
+    String(TERM),
+  );
+  upsert.run('committedIndex', String(ENTRY_COUNT));
   return {
     workDir,
-    created,
-    installed,
-    boundaryIndex: lastEntry.index,
-    checkpointsRoot,
+    boundaryIndex: ENTRY_COUNT,
     targetDb,
     targetDbPath,
     targetAdapter,
@@ -97,11 +73,9 @@ async function createInstalledFixture() {
   };
 }
 
-test('the installed boundary is observable through the adapter', async (t) => {
-  const fixture = await createInstalledFixture();
+test('the compacted boundary is observable through the adapter', async (t) => {
+  const fixture = createCompactedAdapterFixture();
   try {
-    t.equal(fixture.installed.outcome,
-      RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED, 'precondition: installed');
     const adapter = fixture.targetAdapter;
     t.same(
       {...adapter.getLastInfo()},
@@ -133,6 +107,7 @@ test('the installed boundary is observable through the adapter', async (t) => {
     fixture.close();
   }
 });
+
 test('a virgin log keeps the CL-042 zero everywhere', async (t) => {
   const db = new Database(':memory:');
   try {
@@ -147,10 +122,9 @@ test('a virgin log keeps the CL-042 zero everywhere', async (t) => {
 
 test('truncation at or below the boundary is witness-silent and lossless',
   async (t) => {
-    const fixture = await createInstalledFixture();
+    const fixture = createCompactedAdapterFixture();
     try {
       const adapter = fixture.targetAdapter;
-      // Append + commit one live entry above the boundary, then attack.
       const liveEntry = adapter.saveCommand({sql: 'live-row'}, TERM);
       adapter.commit(liveEntry.index);
       adapter.removeFrom(1);
@@ -169,7 +143,7 @@ test('truncation at or below the boundary is witness-silent and lossless',
 
 test('writes at compacted indexes are the typed COMPACTED idempotent no-op',
   async (t) => {
-    const fixture = await createInstalledFixture();
+    const fixture = createCompactedAdapterFixture();
     try {
       const adapter = fixture.targetAdapter;
       const replayed = adapter.put({
@@ -198,23 +172,48 @@ test('writes at compacted indexes are the typed COMPACTED idempotent no-op',
     }
   });
 
-test('an installed replica can re-checkpoint at its own boundary', async (t) => {
-  const fixture = await createInstalledFixture();
-  try {
-    const recheck = await createSqliteStateMachineCheckpoint({
-      db: fixture.targetDb,
-      identity: IDENTITY,
-      checkpointsRoot: path.join(fixture.workDir, 'recheckpoints'),
-    });
-    t.equal(recheck.outcome, RAFT_CHECKPOINT_CREATION_OUTCOME.CREATED,
-      'readLastIncludedTerm falls back to the boundary keys');
-    t.equal(recheck.descriptor.lastIncludedIndex, fixture.boundaryIndex,
-      'the re-checkpoint seals the same boundary');
-    t.equal(recheck.descriptor.lastIncludedTerm, TERM,
-      'the boundary term is sealed from the boundary keys');
-    t.equal(recheck.descriptor.maxCommittedHlc, SEALED_HLC,
-      'the sealed max HLC survives via the installed key (no regression)');
-  } finally {
-    fixture.close();
-  }
-});
+test('an installed raft-rs replica can re-checkpoint at its own boundary',
+  async (t) => {
+    const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'raft-recheck-'));
+    let targetDb = null;
+    try {
+      const checkpointsRoot = path.join(workDir, 'checkpoints');
+      const generation = await createSealedSourceGeneration({
+        workDir,
+        checkpointsRoot,
+        partitionId: PARTITION_ID,
+        stateTable: STATE_TABLE,
+        term: TERM,
+        identity: IDENTITY,
+        entryCount: ENTRY_COUNT,
+        entryTimestamp: SEALED_HLC,
+      });
+      const targetDbPath = path.join(workDir, 'target.db');
+      const installed = await installSealedGeneration({
+        replicaDbPath: targetDbPath,
+        checkpointsRoot,
+        generationIndex: generation.boundaryIndex,
+        identity: IDENTITY,
+      });
+      t.equal(installed.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED,
+        'precondition: raft-rs follower catchup installed');
+      targetDb = new Database(targetDbPath);
+      const recheck = await createSqliteStateMachineCheckpoint({
+        db: targetDb,
+        identity: IDENTITY,
+        checkpointsRoot: path.join(workDir, 'recheckpoints'),
+        raftRsGroupId: PARTITION_ID,
+      });
+      t.equal(recheck.outcome, RAFT_CHECKPOINT_CREATION_OUTCOME.CREATED,
+        're-checkpointing at the installed raft-rs boundary succeeds');
+      t.equal(recheck.descriptor.lastIncludedIndex, generation.boundaryIndex,
+        'the re-checkpoint seals the same boundary');
+      t.equal(recheck.descriptor.lastIncludedTerm, TERM,
+        'the boundary term is sealed from the installed snapshot metadata');
+      t.equal(recheck.descriptor.maxCommittedHlc, SEALED_HLC,
+        'the sealed max HLC survives via the installed snapshot witness');
+    } finally {
+      if (targetDb) targetDb.close();
+      fs.rmSync(workDir, {recursive: true, force: true});
+    }
+  });

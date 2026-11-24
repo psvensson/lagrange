@@ -10,11 +10,6 @@ export {
 } from './partition-service.js';
 
 export {
-  PartitionRaftLogEntry,
-  PartitionRaftStorage,
-} from './partition-raft-storage.js';
-
-export {
   KeyRange,
   KeyRangeManager,
 } from './key-range-manager.js';

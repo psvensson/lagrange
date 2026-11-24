@@ -127,11 +127,23 @@ export function createLocalSystemTablePartitionServices(
   handlers = {},
 ) {
   const partitionId = INITIAL_PARTITION_IDS[tableName] || `${tableName}-p1`;
+  const role = handlers.isLeader === false ? 'follower' : 'leader';
   const partitionService = {
     partitionId,
     replicaId: `${partitionId}-r1`,
     initialized: true,
-    isLeader: handlers.isLeader !== false,
+    getRole() {
+      return typeof handlers.getRole === 'function' ? handlers.getRole() : role;
+    },
+    async executeLocalQuery(sql, params = []) {
+      if (typeof handlers.executeLocalQuery === 'function') {
+        return handlers.executeLocalQuery(sql, params);
+      }
+      return {
+        success: true,
+        rows: [],
+      };
+    },
     async executeQuery(sql, params = []) {
       if (typeof handlers.executeQuery === 'function') {
         return handlers.executeQuery(sql, params);
@@ -142,11 +154,6 @@ export function createLocalSystemTablePartitionServices(
       };
     },
   };
-  if (typeof handlers.executeLocalQuery === 'function') {
-    partitionService.executeLocalQuery = async (sql, params = []) => {
-      return handlers.executeLocalQuery(sql, params);
-    };
-  }
   return new Map([
     [partitionId, partitionService],
   ]);

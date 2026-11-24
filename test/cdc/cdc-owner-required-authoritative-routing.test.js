@@ -71,7 +71,7 @@ function createReadSurface({router, cache, localRead}) {
     sqlQueryEngine,
     systemTableCache: cache,
     partitionServicesProvider: () =>
-      createLocalSystemTablePartitionServices(TABLE, {executeQuery: localRead}),
+      createLocalSystemTablePartitionServices(TABLE, {executeLocalQuery: localRead}),
   });
   cdc.initialize();
   const gateway = new ControlPlaneSystemTableGateway({

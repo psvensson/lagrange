@@ -7,6 +7,7 @@ import Database from 'better-sqlite3';
 
 import {test} from '../../src/test-helpers/tap.js';
 
+import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {SQLiteLogAdapter} from '../../src/raft/sqlite-log-adapter.js';
 import {requestSnapshotInstall} from '../../src/raft/snapshot-install.js';
 import {
@@ -15,7 +16,8 @@ import {
 } from '../../src/raft/snapshot-install-constants.js';
 import {
   createSealedSourceGeneration,
-  installSealedGeneration,
+  defaultFollowerReplicaId,
+  seedEstablishedFollowerReceiver,
 } from './snapshot-catchup-fixture.js';
 import {
   RAFT_SNAPSHOT_TRANSFER_ACCEPT_OUTCOME,
@@ -54,7 +56,7 @@ import {TEST_BOOT_INCARNATION} from
 const PARTITION_ID = 'sql_transactions-p1';
 const STATE_TABLE = 'sql_transactions';
 const TERM = 4;
-const SEALED_EPOCH = 7;
+const SEALED_EPOCH = 3;
 const ENTRY_COUNT = 3;
 const IDENTITY = Object.freeze({
   clusterId: 'cluster-incarnation-1234',
@@ -86,28 +88,34 @@ async function createSealedGenerationFixture() {
   };
 }
 
-async function createInstalledReplicaFixture() {
-  const generation = await createSealedGenerationFixture();
-  const replicaDbPath = path.join(generation.workDir, 'replica.db');
-  await installSealedGeneration({
-    replicaDbPath,
-    checkpointsRoot: generation.checkpointsRoot,
-    generationIndex: generation.boundaryIndex,
-    identity: IDENTITY,
-  });
+async function createCompactedLogReplicaFixture() {
+  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'raft-gaps-log-'));
+  const replicaDbPath = path.join(workDir, 'replica.db');
   const db = new Database(replicaDbPath);
   const adapter = new SQLiteLogAdapter(
     db, {address: PARTITION_ID, term: TERM});
-  return {...generation, replicaDbPath, db, adapter,
+  const upsert = db.prepare(
+    'INSERT OR REPLACE INTO _raft_state (key, value) VALUES (?, ?)');
+  upsert.run(RAFT_SNAPSHOT_BOUNDARY_STATE_KEY.LAST_INCLUDED_INDEX,
+    String(ENTRY_COUNT));
+  upsert.run(RAFT_SNAPSHOT_BOUNDARY_STATE_KEY.LAST_INCLUDED_TERM, String(TERM));
+  upsert.run('committedIndex', String(ENTRY_COUNT));
+  return {
+    workDir,
+    boundaryIndex: ENTRY_COUNT,
+    replicaDbPath,
+    db,
+    adapter,
     close() {
       db.close();
-      generation.close();
-    }};
+      fs.rmSync(workDir, {recursive: true, force: true});
+    },
+  };
 }
 
 test('gap 2: the truncation witness TRIPS inside (boundary, committedIndex]',
   async (t) => {
-    const fixture = await createInstalledReplicaFixture();
+    const fixture = await createCompactedLogReplicaFixture();
     try {
       const adapter = fixture.adapter;
       // Extend past the boundary so committedIndex (6) > boundary (3).
@@ -152,25 +160,48 @@ test('gap 3: install deletes stale target sidecars and boots healthy',
     const generation = await createSealedGenerationFixture();
     try {
       const targetDbPath = path.join(generation.workDir, 'target.db');
+      const followerReplica = defaultFollowerReplicaId(PARTITION_ID);
+      seedEstablishedFollowerReceiver({
+        replicaDbPath: targetDbPath,
+        partitionId: PARTITION_ID,
+        replicaId: followerReplica,
+        term: 1,
+        vote: 0,
+      });
       const staleWal = `${targetDbPath}-wal`;
+      const staleShm = `${targetDbPath}-shm`;
       fs.writeFileSync(staleWal, Buffer.from('stale-wal-garbage'));
+      const refusedPendingWal = await requestSnapshotInstall({
+        replicaDbPath: targetDbPath,
+        checkpointsRoot: generation.checkpointsRoot,
+        generationIndex: generation.boundaryIndex,
+        expectedIdentity: IDENTITY,
+        expectedReplicaIdentity: followerReplica,
+      });
+      t.equal(refusedPendingWal.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.REJECTED,
+        'a non-empty -wal sidecar is refused fail-closed before swap');
+      // After the receiver checkpoints/truncates its WAL to 0 bytes, stale
+      // empty -wal and -shm sidecars are removed before the atomic swap.
+      fs.writeFileSync(staleWal, Buffer.alloc(0));
+      fs.writeFileSync(staleShm, Buffer.from('stale-shm-garbage'));
       const installed = await requestSnapshotInstall({
         replicaDbPath: targetDbPath,
         checkpointsRoot: generation.checkpointsRoot,
         generationIndex: generation.boundaryIndex,
         expectedIdentity: IDENTITY,
+        expectedReplicaIdentity: followerReplica,
       });
       t.equal(installed.outcome, RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALLED,
-        'the install completes over the seeded stale sidecar');
+        'the install completes over the checkpointed target sidecars');
       t.notOk(fs.existsSync(staleWal),
         'the stale -wal sidecar is deleted before the swap');
+      t.notOk(fs.existsSync(staleShm),
+        'the stale -shm sidecar is deleted before the swap');
       const db = new Database(targetDbPath, {readonly: true});
       try {
-        const row = db.prepare(
-          'SELECT value FROM _raft_state WHERE key = ?',
-        ).get(RAFT_SNAPSHOT_BOUNDARY_STATE_KEY.LAST_INCLUDED_INDEX);
-        t.equal(Number(row?.value), generation.boundaryIndex,
-          'the installed db opens healthy with the boundary keys');
+        const record = RaftRsDurableStore.readDurableRecordIn(db, PARTITION_ID);
+        t.equal(Number(record.appliedIndex), generation.boundaryIndex,
+          'the installed db opens healthy with the raft-rs boundary');
       } finally {
         db.close();
       }

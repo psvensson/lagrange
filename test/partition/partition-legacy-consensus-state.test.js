@@ -21,8 +21,6 @@ import {
   LEGACY_PARTITION_CONSENSUS_OUTCOME,
   LEGACY_PARTITION_CONSENSUS_REASON,
 } from '../../src/partition/partition-legacy-consensus-state-constants.js';
-import {PartitionRaftStorage} from
-  '../../src/partition/partition-raft-storage.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {SQLiteLogAdapter} from '../../src/raft/sqlite-log-adapter.js';
 
@@ -96,14 +94,24 @@ test('a fresh database has no legacy consensus state', () => {
   });
 });
 
+function seedLegacyRaftState(db, entries) {
+  db.exec('CREATE TABLE IF NOT EXISTS _raft_state (key TEXT PRIMARY KEY, value TEXT)');
+  const upsert = db.prepare(
+    'INSERT OR REPLACE INTO _raft_state (key, value) VALUES (?, ?)');
+  for (const [key, value] of entries) {
+    upsert.run(key, value);
+  }
+}
+
 test('the legacy tables alone are not legacy consensus state', () => {
   withDatabase((db) => {
     const adapter = new SQLiteLogAdapter(db);
-    const storage = new PartitionRaftStorage(db, PARTITION_ID, adapter);
     // The empty defaults the legacy owners persist for a group that never
     // held consensus: term 0 and no vote.
-    storage.persistTerm();
-    storage.persistVotedFor();
+    seedLegacyRaftState(db, [
+      ['currentTerm', '0'],
+      ['votedFor', ''],
+    ]);
     adapter.close();
     const decision = detect(db);
     assert.equal(decision.outcome, LEGACY_PARTITION_CONSENSUS_OUTCOME.ABSENT,
@@ -137,10 +145,7 @@ test('legacy log entries and a committed index without an rs-raft record ' +
 
 test('a persisted legacy term alone refuses', () => {
   withDatabase((db) => {
-    const storage = new PartitionRaftStorage(db, PARTITION_ID);
-    storage.currentTerm = LEGACY_TERM;
-    storage.persistTerm();
-    storage.logAdapter.close();
+    seedLegacyRaftState(db, [['currentTerm', String(LEGACY_TERM)]]);
     assert.deepEqual(detect(db), {
       outcome: LEGACY_PARTITION_CONSENSUS_OUTCOME.DETECTED,
       reasons: [LEGACY_PARTITION_CONSENSUS_REASON.CURRENT_TERM],
@@ -150,10 +155,7 @@ test('a persisted legacy term alone refuses', () => {
 
 test('a recorded legacy vote alone refuses', () => {
   withDatabase((db) => {
-    const storage = new PartitionRaftStorage(db, PARTITION_ID);
-    storage.votedFor = LEGACY_VOTE;
-    storage.persistVotedFor();
-    storage.logAdapter.close();
+    seedLegacyRaftState(db, [['votedFor', LEGACY_VOTE]]);
     assert.deepEqual(detect(db), {
       outcome: LEGACY_PARTITION_CONSENSUS_OUTCOME.DETECTED,
       reasons: [LEGACY_PARTITION_CONSENSUS_REASON.VOTED_FOR],

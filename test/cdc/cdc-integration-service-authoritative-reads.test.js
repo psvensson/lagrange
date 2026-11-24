@@ -171,7 +171,7 @@ test('CDCIntegrationService - authoritative cache confirmation prefers local par
       partitionServicesProvider: () => createLocalSystemTablePartitionServices(
         SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
         {
-          async executeQuery(sql, params) {
+          async executeLocalQuery(sql, params) {
             t.equal(
               params[0],
               operationId,
@@ -250,7 +250,7 @@ test('CDCIntegrationService - leader-only authoritative reads fall back to the o
         SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
         {
           isLeader: false,
-          async executeQuery() {
+          async executeLocalQuery() {
             return {
               success: true,
               rows: [{
@@ -374,7 +374,7 @@ test('CDCIntegrationService - leader-only authoritative reads can fall back to l
         SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
         {
           isLeader: false,
-          async executeQuery(sql, params) {
+          async executeLocalQuery(sql, params) {
             t.equal(
               params[0],
               'op-local-fallback',
@@ -429,16 +429,10 @@ test('CDCIntegrationService - leader-only authoritative reads honor live leader 
       initialized: true,
       isLeader: false,
       role: 'follower',
-      isLeaderReplica() {
-        return true;
-      },
       getRole() {
         return 'leader';
       },
-      getLeaderId() {
-        return this.replicaId;
-      },
-      async executeQuery(sql, params) {
+      async executeLocalQuery(sql, params) {
         t.equal(
           params[0],
           'op-live-method-leader',
@@ -565,7 +559,7 @@ async (t) => {
       SYSTEM_TABLE_NAME.LOGS,
       {
         isLeader: false,
-        async executeQuery(sql, params) {
+        async executeLocalQuery(sql, params) {
           t.match(sql, /SELECT log_id AS ack_id FROM logs/i,
             'local probe should preserve the original SQL');
           t.same(params, ['log-a', 'log-b'],
@@ -756,7 +750,7 @@ async (t) => {
       SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       {
         isLeader: true,
-        async executeQuery() {
+        async executeLocalQuery() {
           localReadCount += 1;
           return {
             success: true,
@@ -833,7 +827,7 @@ async (t) => {
       SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       {
         isLeader: true,
-        async executeQuery() {
+        async executeLocalQuery() {
           localReadCount += 1;
           return {
             success: true,
@@ -1014,8 +1008,10 @@ test('CDCIntegrationService - authoritative merge prefers fresher heartbeat rows
           partitionId,
           replicaId: `${partitionId}-r1`,
           initialized: true,
-          isLeader: true,
-          async executeQuery() {
+          getRole() {
+            return 'leader';
+          },
+          async executeLocalQuery() {
             return {
               success: true,
               rows: [{...olderRow}],
@@ -1026,8 +1022,10 @@ test('CDCIntegrationService - authoritative merge prefers fresher heartbeat rows
           partitionId,
           replicaId: `${partitionId}-r2`,
           initialized: true,
-          isLeader: false,
-          async executeQuery() {
+          getRole() {
+            return 'follower';
+          },
+          async executeLocalQuery() {
             return {
               success: true,
               rows: [{...newerRow}],
@@ -1321,4 +1319,66 @@ test('CDCIntegrationService - updateSystemTableRow', async (t) => {
     'should be UPDATE query',
   );
   t.end();
+});
+
+test('CDCIntegrationService - local routing rejects non-canonical leadership, ' +
+  'executeQuery-only reads, and incomplete cached partition metadata',
+async (t) => {
+  const partitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.NODES];
+  const staleFlagOnlyService = {
+    partitionId,
+    replicaId: `${partitionId}-r1`,
+    initialized: true,
+    isLeader: true,
+    role: 'leader',
+    leaderId: `${partitionId}-r1`,
+    isLeaderReplica: () => true,
+    async executeQuery() {
+      return {success: true, rows: [{node_id: 'should-not-read'}]};
+    },
+  };
+  const service = new CDCIntegrationService({
+    nodeId: 'test-node',
+    sqlQueryEngine: createMockSqlQueryEngine(),
+    systemTableCache: {
+      get: (tableName, key) =>
+        tableName === SYSTEM_TABLE_NAME.TABLES && key === SYSTEM_TABLE_NAME.NODES ?
+          {table_id: 'nodes', table_name: 'nodes', active_partition_version: 1} :
+          null,
+      getAll: (tableName) => {
+        if (tableName === SYSTEM_TABLE_NAME.PARTITIONS) {
+          return [
+            {partition_id: 'nodes-missing-state', table_id: 'nodes', partition_version: 1},
+            {partition_id: 'nodes-missing-version', table_id: 'nodes', state: 'NORMAL'},
+            {partitionId: 'nodes-camel-alias', tableId: 'nodes', partitionVersion: 1, state: 'NORMAL'},
+          ];
+        }
+        return [];
+      },
+    },
+    partitionServicesProvider: () => new Map([
+      [partitionId, staleFlagOnlyService],
+    ]),
+  });
+  service.initialize();
+
+  t.equal(
+    service.isLocalPartitionServiceLeader(staleFlagOnlyService),
+    false,
+    'missing getRole() is unavailable and never treated as leader',
+  );
+  const readResult = await service.executeLocalSystemTableRead(
+    staleFlagOnlyService,
+    'SELECT * FROM nodes',
+    [],
+  );
+  t.equal(readResult.success, false,
+    'executeQuery-only service cannot satisfy local system-table reads');
+  t.equal(readResult.error, 'local_partition_query_unavailable',
+    'missing executeLocalQuery/admitted db returns typed unavailable');
+  t.same(
+    service.resolveSystemTablePartitionIds(SYSTEM_TABLE_NAME.NODES),
+    [partitionId],
+    'cached partition rows missing state/version or using camelCase aliases are ignored',
+  );
 });

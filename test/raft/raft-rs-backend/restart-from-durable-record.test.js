@@ -264,7 +264,7 @@ test('the restore path cannot reach a cache, a service or a system table',
     }
     // The check can fail: the same rule over a module that does hold a cache.
     assert.ok([...importClosure(
-      'src/partition/partition-raft-storage.js')]
+      'src/partition/partition-service.js')]
       .some((module) => FORBIDDEN_SOURCE.test(path.basename(module))));
   });
 

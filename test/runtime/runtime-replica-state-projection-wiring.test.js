@@ -24,6 +24,9 @@ import {
   RUNTIME_REPLICA_STATE_PROJECTION_EVENT,
 } from '../../src/query/runtime-replica-state-projection-owner.js';
 import {
+  projectRuntimeReplicaServicesRow,
+} from '../../src/query/runtime-replica-state-projection.js';
+import {
   SQL_QUERY_LOOP_RUNTIME_REF,
 } from '../../src/runtime/sql-query-loop-runtime-module.js';
 import {
@@ -342,4 +345,36 @@ test('an engine composed without a lifecycle stays inert', async (t) => {
   });
   t.equal(engine.serviceRuntimeLifecycle, null,
     'no lifecycle, no wiring, no throw');
+  t.equal(engine.projectRuntimeReplicaServicesRow, undefined,
+    'obsolete direct engine projection wrapper is removed');
 });
+
+test('runtime replica projection requires ServicesOwner and retained owner submit',
+  async (t) => {
+    const gatewayOnly = {
+      updateSystemTableRow: async () => ({success: true}),
+      insertSystemTableRow: async () => ({success: true}),
+      deleteSystemTableRow: async () => ({success: true}),
+    };
+    await t.rejects(
+      projectRuntimeReplicaServicesRow(gatewayOnly, HOST_NODE_ID, SVC_ID, {
+        service_type: 'runtime_service',
+        status: 'active',
+      }),
+      /requires/,
+      'gateway-only target without ServicesOwner methods is rejected',
+    );
+    const {serviceRuntimeLifecycle} = createRuntimeStartupWiring();
+    t.throws(
+      () => new SQLQueryEngine({
+        controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+        systemCache: createMockSystemCache([], [], null),
+        messageRouter: createMockMessageRouter(),
+        nodeId: HOST_NODE_ID,
+        serviceRuntimeLifecycle,
+        runtimeReplicaStateProjectionOwner: {},
+      }),
+      /RuntimeReplicaStateProjectionOwner/,
+      'lifecycle wiring refuses a projection owner lacking submit()',
+    );
+  });

@@ -33,7 +33,6 @@ const RAFT_SNAPSHOT_INSTALL_STATE = Object.freeze({
 });
 
 const RAFT_SNAPSHOT_INSTALL_MARKER_KIND = Object.freeze({
-  LEGACY_PARTITION: 'legacy_partition',
   RAFT_RS_FRESH_CREATE: 'raft_rs_fresh_create',
   RAFT_RS_FOLLOWER_CATCHUP: 'raft_rs_follower_catchup',
 });
@@ -71,17 +70,10 @@ const RAFT_SNAPSHOT_INSTALL_MARKER_FIELDS = Object.freeze([
   'createAuthority',
   'preInstallDigest',
 ]);
-const RAFT_SNAPSHOT_INSTALL_LEGACY_MARKER_FIELDS = Object.freeze([
-  'state',
-  'installId',
-  'generationIndex',
-  'rejectionReason',
-]);
 const RAFT_SNAPSHOT_INSTALL_NO_REJECTION = 'none';
 const RAFT_SNAPSHOT_INSTALL_DETAIL = Object.freeze({
   GENERATION_MISMATCH: 'generation_mismatch',
   STAGED_CREATE_GENERATION_MISMATCH: 'staged_create_generation_mismatch',
-  LEGACY_STAGING_NONCE_MISMATCH: 'legacy_staging_nonce_mismatch',
 });
 const RAFT_SNAPSHOT_INSTALL_ARTIFACT_OUTCOME = Object.freeze({
   DELETED: 'deleted',
@@ -93,7 +85,6 @@ export {
   RAFT_SNAPSHOT_INSTALL_DETAIL,
   RAFT_SNAPSHOT_INSTALL_ARTIFACT_OUTCOME,
   RAFT_SNAPSHOT_INSTALL_MARKER_FIELDS,
-  RAFT_SNAPSHOT_INSTALL_LEGACY_MARKER_FIELDS,
   RAFT_SNAPSHOT_INSTALL_MARKER_KIND,
   RAFT_SNAPSHOT_INSTALL_MARKER_FILE,
   RAFT_SNAPSHOT_INSTALL_NO_REJECTION,

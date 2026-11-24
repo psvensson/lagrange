@@ -28,7 +28,6 @@ import {
   selectLatestPublishedMembershipEpoch,
 } from '../control-plane/membership-epoch-contract.js';
 
-import {RaftRsDurableStore} from './raft-rs-durable-store.js';
 import {
   RAFT_CHECKPOINT_CREATION_OUTCOME,
 } from './snapshot-checkpoint-constants.js';
@@ -208,15 +207,11 @@ async function resolveServableGeneration(options) {
   // The create-if-none fallback threads the OTHER dispatches' in-flight
   // generation pins into creation so its opportunistic retention sweep
   // cannot remove a generation mid-serve.
-  const hasRaftRsRecord = Boolean(
-    db && identity?.raftGroupId &&
-    RaftRsDurableStore.hasDurableRecordIn(db, identity.raftGroupId),
-  );
   const created = await createSqliteStateMachineCheckpoint({
     db,
     identity,
     checkpointsRoot,
-    ...(hasRaftRsRecord ? {raftRsGroupId: identity.raftGroupId} : {}),
+    raftRsGroupId: identity?.raftGroupId,
     inProcessPins: listInFlightGenerationIndexes(options.inflightByFollower),
   });
   if (created.outcome !== RAFT_CHECKPOINT_CREATION_OUTCOME.CREATED) {

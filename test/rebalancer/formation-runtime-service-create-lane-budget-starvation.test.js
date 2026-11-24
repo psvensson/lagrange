@@ -199,23 +199,26 @@ function attachServiceDefinition(cache) {
   return cache;
 }
 
-function createServicesProjectionGateway(cache) {
+function createServicesProjectionOwner(cache) {
   return {
-    async updateSystemTableRow(tableName, where, updateData) {
-      const serviceId = where?.service_id;
-      if (!serviceId || !cache.get(tableName, serviceId)) {
+    async updateService(serviceId, _expectedIdentity, updateData) {
+      if (!serviceId || !cache.get(SYSTEM_TABLE_NAME.SERVICES, serviceId)) {
         return {success: true, partitionResult: {affectedRows: 0}};
       }
-      cache.merge(tableName, serviceId, updateData);
+      cache.merge(SYSTEM_TABLE_NAME.SERVICES, serviceId, updateData);
       return {success: true, partitionResult: {affectedRows: 1}};
     },
-    async insertSystemTableRow(tableName, row) {
-      cache.upsert(tableName, row);
+    async insertService(row) {
+      cache.upsert(SYSTEM_TABLE_NAME.SERVICES, row);
       return {success: true, partitionResult: {affectedRows: 1}};
     },
-    async deleteSystemTableRow(tableName, where) {
-      cache.delete(tableName, where?.service_id);
+    async removeService(serviceId) {
+      cache.delete(SYSTEM_TABLE_NAME.SERVICES, serviceId);
       return {success: true, partitionResult: {affectedRows: 1}};
+    },
+    async getService(serviceId) {
+      const row = cache.get(SYSTEM_TABLE_NAME.SERVICES, serviceId);
+      return {success: true, rows: row ? [row] : []};
     },
   };
 }
@@ -435,15 +438,15 @@ async function runPlacementScenario(t, finiteAuthorityFailure = false) {
     const runtimeLifecycle =
       new ServiceRuntimeLifecycle(runtimeDriverRegistry);
 
-    const servicesProjectionGateway =
-      createServicesProjectionGateway(systemTableCache);
+    const servicesProjectionOwner =
+      createServicesProjectionOwner(systemTableCache);
     let resolveActiveProjection;
     const activeProjection = new Promise((resolve) => {
       resolveActiveProjection = resolve;
     });
     runtimeLifecycle.setStateProjectionWriter(async (serviceId, stateRow) => {
       await projectRuntimeReplicaServicesRow(
-        servicesProjectionGateway,
+        servicesProjectionOwner,
         NODE_ID,
         serviceId,
         stateRow,

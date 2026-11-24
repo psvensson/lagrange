@@ -2,17 +2,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import Database from 'better-sqlite3';
-
 import {test} from '../../src/test-helpers/tap.js';
 
-import {SQLiteLogAdapter} from '../../src/raft/sqlite-log-adapter.js';
-import {PartitionRaftStorage} from '../../src/partition/partition-raft-storage.js';
 import {
-  createSqliteStateMachineCheckpoint,
   listCheckpointGenerations,
   readCheckpoint,
 } from '../../src/raft/snapshot-checkpoint-store.js';
+import {createSealedSourceGeneration} from './snapshot-catchup-fixture.js';
 import {
   receiveSnapshotTransfer,
   serveSnapshotTransfer,
@@ -45,7 +41,7 @@ import {
 const PARTITION_ID = 'sql_transactions-p1';
 const STATE_TABLE = 'sql_transactions';
 const SOURCE_TERM = 4;
-const SEALED_EPOCH = 7;
+const SEALED_EPOCH = 3;
 const ENTRY_COUNT = 3;
 const TEST_CHUNK_BYTES = 4096;
 const TEST_TRANSFER_ID = 'transfer-guard-1';
@@ -66,34 +62,22 @@ const IDENTITY = Object.freeze({
 // (exactly the S1 fixture shape used by the S2 install guards).
 async function createTransferFixture() {
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'raft-transfer-'));
-  const sourceDb = new Database(path.join(workDir, 'source.db'));
-  const adapter = new SQLiteLogAdapter(
-    sourceDb, {address: PARTITION_ID, term: SOURCE_TERM});
-  const storage = new PartitionRaftStorage(sourceDb, PARTITION_ID, adapter);
-  sourceDb.exec(`CREATE TABLE IF NOT EXISTS ${STATE_TABLE} ` +
-    '(id TEXT PRIMARY KEY, payload TEXT)');
-  let lastEntry = null;
-  for (let ordinal = 1; ordinal <= ENTRY_COUNT; ordinal += 1) {
-    lastEntry = adapter.saveCommand({sql: `row-${ordinal}`}, SOURCE_TERM);
-    adapter.commit(lastEntry.index);
-    sourceDb.prepare(
-      `INSERT INTO ${STATE_TABLE} (id, payload) VALUES (?, ?)`,
-    ).run(`row-${ordinal}`, `payload-${ordinal}`);
-    storage.recordAppliedAdvance();
-  }
   const senderRoot = path.join(workDir, 'sender-checkpoints');
-  const created = await createSqliteStateMachineCheckpoint({
-    db: sourceDb,
-    identity: IDENTITY,
+  const {created, boundaryIndex} = await createSealedSourceGeneration({
+    workDir,
     checkpointsRoot: senderRoot,
+    partitionId: PARTITION_ID,
+    stateTable: STATE_TABLE,
+    term: SOURCE_TERM,
+    identity: IDENTITY,
+    entryCount: ENTRY_COUNT,
   });
-  sourceDb.close();
   return {
     workDir,
     senderRoot,
     receiverRoot: path.join(workDir, 'receiver-checkpoints'),
     created,
-    lastIndex: lastEntry.index,
+    lastIndex: boundaryIndex,
     close() {
       fs.rmSync(workDir, {recursive: true, force: true});
     },

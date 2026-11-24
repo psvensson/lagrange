@@ -7,8 +7,6 @@ import Database from 'better-sqlite3';
 import {test} from '../../src/test-helpers/tap.js';
 
 import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
-import {PartitionRaftStorage} from
-  '../../src/partition/partition-raft-storage.js';
 import {
   RAFT_COMPACTION_OUTCOME,
   unsupportedRaftCompactionResult,
@@ -17,10 +15,8 @@ import {readSnapshotBoundary} from '../../src/raft/snapshot-boundary.js';
 import {
   RAFT_SNAPSHOT_BOUNDARY_STATE_KEY,
 } from '../../src/raft/snapshot-install-constants.js';
-import {
-  createSqliteStateMachineCheckpoint,
-} from '../../src/raft/snapshot-checkpoint-store.js';
 import {SQLiteLogAdapter} from '../../src/raft/sqlite-log-adapter.js';
+import {createSealedSourceGeneration} from './snapshot-catchup-fixture.js';
 
 // S5 proof-gated compaction decision table (quest
 // raft-snapshot-retention-compaction): the proofless call returns the
@@ -63,8 +59,10 @@ function rowHlc(ordinal) {
 }
 
 function seedCommittedAppliedRows(context, options) {
-  const {db, adapter, storage} = context;
+  const {db, adapter} = context;
   const {from, to, term} = options;
+  const upsert = db.prepare(
+    'INSERT OR REPLACE INTO _raft_state (key, value) VALUES (?, ?)');
   for (let ordinal = from; ordinal <= to; ordinal += 1) {
     const entry = adapter.saveCommand({
       sql: `row-${ordinal}`,
@@ -74,12 +72,12 @@ function seedCommittedAppliedRows(context, options) {
     db.prepare(
       `INSERT INTO ${STATE_TABLE} (id, payload) VALUES (?, ?)`,
     ).run(`row-${ordinal}`, `payload-${ordinal}`);
-    storage.recordAppliedAdvance();
+    upsert.run('lastAppliedIndex', String(entry.index));
   }
 }
 
 // File-backed replica with committed+applied rows and (optionally) a sealed
-// proof generation created at `checkpointAt`, then grown to `entryCount`.
+// raft-rs proof generation created at `checkpointAt`, then grown to `entryCount`.
 async function createCompactionFixture(options = {}) {
   const term = options.term ?? TERM;
   const entryCount = options.entryCount ?? ENTRY_COUNT;
@@ -89,15 +87,24 @@ async function createCompactionFixture(options = {}) {
   const dbPath = path.join(workDir, 'replica.db');
   const db = new Database(dbPath);
   const adapter = new SQLiteLogAdapter(db, {address: PARTITION_ID, term});
-  const storage = new PartitionRaftStorage(db, PARTITION_ID, adapter);
   db.exec(`CREATE TABLE IF NOT EXISTS ${STATE_TABLE} ` +
     '(id TEXT PRIMARY KEY, payload TEXT)');
-  const context = {db, adapter, storage};
+  const context = {db, adapter};
   let created = null;
   if (checkpointAt !== null) {
     seedCommittedAppliedRows(context, {from: 1, to: checkpointAt, term});
-    created = await createSqliteStateMachineCheckpoint(
-      {db, identity: IDENTITY, checkpointsRoot});
+    const proofDir = path.join(workDir, 'proof-source');
+    fs.mkdirSync(proofDir, {recursive: true});
+    ({created} = await createSealedSourceGeneration({
+      workDir: proofDir,
+      checkpointsRoot,
+      partitionId: PARTITION_ID,
+      stateTable: STATE_TABLE,
+      term,
+      identity: IDENTITY,
+      entryCount: checkpointAt,
+      entryTimestamp: (ordinal) => rowHlc(ordinal).toString(),
+    }));
     seedCommittedAppliedRows(
       context, {from: checkpointAt + 1, to: entryCount, term});
   } else {
@@ -109,7 +116,6 @@ async function createCompactionFixture(options = {}) {
     dbPath,
     db,
     adapter,
-    storage,
     checkpointDir: created ? created.checkpointDir : null,
     close() {
       db.close();
