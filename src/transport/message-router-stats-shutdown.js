@@ -80,12 +80,108 @@ function countPendingCriticalReserveEligible(queue) {
   }, TRANSPORT_NUM.ZERO);
 }
 
+function buildOutboundQueueAdmissionPressureFacts(queue) {
+  return {
+    inFlight: queue.inFlight,
+    inFlightCritical: countInFlightByPriority(
+      queue,
+      OutboundDeliveryPriority.CRITICAL,
+    ),
+    inFlightBackground: countInFlightByPriority(
+      queue,
+      OutboundDeliveryPriority.BACKGROUND,
+    ),
+    inFlightReadinessReserve: countInFlightReadinessReserve(queue),
+    pending: queue.pending.length,
+    pendingCritical: countPendingByPriority(
+      queue,
+      OutboundDeliveryPriority.CRITICAL,
+    ),
+    pendingCriticalReserveEligible: countPendingCriticalReserveEligible(queue),
+    pendingReadiness: countPendingByPriority(
+      queue,
+      OutboundDeliveryPriority.READINESS,
+    ),
+    pendingBackground: countPendingByPriority(
+      queue,
+      OutboundDeliveryPriority.BACKGROUND,
+    ),
+    criticalReserve: queue.criticalReserve,
+    readinessReserve: queue.readinessReserve,
+    readinessInflightReserve: queue.readinessInflightReserve,
+    readinessInflightReserveLimit: resolveReadinessReserveInFlightLimit(queue),
+    backgroundPendingLimit: resolveBackgroundPendingLimit(queue),
+    backgroundMaxConcurrent: resolveBackgroundInFlightLimit(queue),
+    maxConcurrent: queue.maxConcurrent,
+    maxPending: queue.maxPending,
+  };
+}
+
+function readRouterPressureRevisionCounters(router) {
+  const owner = router.outboundDeliveryRegistryOwner;
+  const ownerRev = owner && Number.isSafeInteger(owner.pressureRevision) ?
+    owner.pressureRevision :
+    TRANSPORT_NUM.ZERO;
+  const bulkRegistry = router.bulkChannelRegistry;
+  const bulkRev = bulkRegistry && bulkRegistry.getPressureRevision ?
+    bulkRegistry.getPressureRevision() :
+    TRANSPORT_NUM.ZERO;
+  const bulkAttachRev = Number.isSafeInteger(router._bulkRegistryAttachRevision) ?
+    router._bulkRegistryAttachRevision :
+    TRANSPORT_NUM.ZERO;
+  return {ownerRev, bulkRev, bulkAttachRev};
+}
+
 /**
  * Observability and teardown for the message router: aggregate per-connection
  * and per-queue stats, summarize outbound pressure, and perform an orderly
  * shutdown that drains pending work, closes sockets, and tears down the server.
  */
 class MessageRouterStatsShutdown {
+  getPressureRevision() {
+    const {ownerRev, bulkRev, bulkAttachRev} =
+      readRouterPressureRevisionCounters(this);
+    if (
+      this._lastOwnerPressureRev !== ownerRev ||
+      this._lastBulkPressureRev !== bulkRev ||
+      this._lastBulkAttachRev !== bulkAttachRev
+    ) {
+      this._lastOwnerPressureRev = ownerRev;
+      this._lastBulkPressureRev = bulkRev;
+      this._lastBulkAttachRev = bulkAttachRev;
+      const current = Number.isSafeInteger(this._effectivePressureRevision) ?
+        this._effectivePressureRevision :
+        TRANSPORT_NUM.ZERO;
+      this._effectivePressureRevision = current + TRANSPORT_NUM.ONE;
+    }
+    return this._effectivePressureRevision;
+  }
+
+  get pressureRevision() {
+    return this.getPressureRevision();
+  }
+
+  getAdmissionPressureFacts() {
+    const pressureRevision = this.getPressureRevision();
+    const outboundQueueFacts = {};
+    for (const [nodeId, queue] of this.outboundQueues) {
+      outboundQueueFacts[nodeId] = Object.freeze(
+        buildOutboundQueueAdmissionPressureFacts(queue),
+      );
+    }
+    return Object.freeze({
+      pressureRevision,
+      outboundQueues: Object.freeze(outboundQueueFacts),
+      bulkChannel: this.bulkChannelRegistry ?
+        this.bulkChannelRegistry.getStats() :
+        BULK_CHANNEL_EMPTY_STATS,
+    });
+  }
+
+  readAdmissionPressureFacts() {
+    return this.getAdmissionPressureFacts();
+  }
+
   getStats() {
     const connectionStats = {};
     for (const [nodeId, connection] of this.nodeConnections) {
@@ -99,31 +195,7 @@ class MessageRouterStatsShutdown {
     const outboundQueueStats = {};
     for (const [nodeId, queue] of this.outboundQueues) {
       outboundQueueStats[nodeId] = {
-        inFlight: queue.inFlight,
-        inFlightCritical: countInFlightByPriority(
-          queue,
-          OutboundDeliveryPriority.CRITICAL,
-        ),
-        inFlightBackground: countInFlightByPriority(
-          queue,
-          OutboundDeliveryPriority.BACKGROUND,
-        ),
-        inFlightReadinessReserve: countInFlightReadinessReserve(queue),
-        pending: queue.pending.length,
-        pendingCritical: countPendingByPriority(queue, OutboundDeliveryPriority.CRITICAL),
-        pendingCriticalReserveEligible:
-          countPendingCriticalReserveEligible(queue),
-        pendingReadiness: countPendingByPriority(queue, OutboundDeliveryPriority.READINESS),
-        pendingBackground: countPendingByPriority(queue, OutboundDeliveryPriority.BACKGROUND),
-        criticalReserve: queue.criticalReserve,
-        readinessReserve: queue.readinessReserve,
-        readinessInflightReserve: queue.readinessInflightReserve,
-        readinessInflightReserveLimit:
-          resolveReadinessReserveInFlightLimit(queue),
-        backgroundPendingLimit: resolveBackgroundPendingLimit(queue),
-        backgroundMaxConcurrent: resolveBackgroundInFlightLimit(queue),
-        maxConcurrent: queue.maxConcurrent,
-        maxPending: queue.maxPending,
+        ...buildOutboundQueueAdmissionPressureFacts(queue),
         queueWait: buildQueueWaitSummary(queue),
       };
     }
@@ -198,6 +270,7 @@ class MessageRouterStatsShutdown {
       this.failOutboundQueueGracefully(nodeId, shutdownError);
     }
     this.outboundQueues.clear();
+    this.outboundDeliveryRegistryOwner?.bumpPressureRevision?.();
     const closePromises = [];
     for (const [, connection] of this.nodeConnections) {
       if (connection.pingInterval) {

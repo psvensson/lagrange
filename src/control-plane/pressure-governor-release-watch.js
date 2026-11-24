@@ -58,4 +58,109 @@ function notifyPressureReleases(released) {
   }
 }
 
-export {PRESSURE_GOVERNOR_EVENT, notifyPressureReleases, splitPressureReleases};
+function readRouterPressureRevision(messageRouter) {
+  if (!messageRouter) {
+    return null;
+  }
+  if (messageRouter.getPressureRevision) {
+    const rev = messageRouter.getPressureRevision();
+    return Number.isFinite(rev) ? rev : null;
+  }
+  return Number.isFinite(messageRouter.pressureRevision) ?
+    messageRouter.pressureRevision :
+    null;
+}
+
+const PRESSURE_PASS_UNAVAILABLE = Object.freeze({
+  available: false,
+  facts: null,
+  summariesByPartition: null,
+});
+
+function invokeRouterPressureFacts(messageRouter) {
+  if (!messageRouter) {
+    return null;
+  }
+  if (messageRouter.getAdmissionPressureFacts) {
+    return messageRouter.getAdmissionPressureFacts();
+  }
+  return messageRouter.readAdmissionPressureFacts ?
+    messageRouter.readAdmissionPressureFacts() :
+    null;
+}
+
+function hasRouterPressureFacts(messageRouter) {
+  return Boolean(
+    messageRouter &&
+      (messageRouter.getAdmissionPressureFacts ||
+        messageRouter.readAdmissionPressureFacts),
+  );
+}
+
+function isPassFactsSnapshotCurrent(pass, messageRouter) {
+  if (!pass || pass.router !== messageRouter || pass.facts === null) {
+    return false;
+  }
+  const currentRevision = readRouterPressureRevision(messageRouter);
+  return currentRevision !== null && currentRevision === pass.revision;
+}
+
+function readPressureFactsForPass(governor) {
+  const messageRouter = governor.messageRouter;
+  if (!hasRouterPressureFacts(messageRouter)) {
+    return PRESSURE_PASS_UNAVAILABLE;
+  }
+  const pass = governor.activeEvaluationPass;
+  if (!pass || pass.router !== messageRouter) {
+    return {
+      available: true,
+      facts: invokeRouterPressureFacts(messageRouter),
+      summariesByPartition: null,
+    };
+  }
+  if (isPassFactsSnapshotCurrent(pass, messageRouter)) {
+    return {
+      available: true,
+      facts: pass.facts,
+      summariesByPartition: pass.summariesByPartition,
+    };
+  }
+  pass.summariesByPartition.clear();
+  const facts = invokeRouterPressureFacts(messageRouter);
+  const currentRevision = readRouterPressureRevision(messageRouter);
+  const factsRevision = Number.isFinite(facts?.pressureRevision) ?
+    facts.pressureRevision :
+    null;
+  pass.facts = facts;
+  pass.revision = currentRevision !== null ? currentRevision : factsRevision;
+  return {
+    available: true,
+    facts,
+    summariesByPartition: pass.summariesByPartition,
+  };
+}
+
+function runWithPressureEvaluationPass(governor, fn) {
+  if (governor.activeEvaluationPass) {
+    return fn();
+  }
+  governor.activeEvaluationPass = {
+    router: governor.messageRouter,
+    revision: null,
+    facts: null,
+    summariesByPartition: new Map(),
+  };
+  try {
+    return fn();
+  } finally {
+    governor.activeEvaluationPass = null;
+  }
+}
+
+export {
+  PRESSURE_GOVERNOR_EVENT,
+  notifyPressureReleases,
+  readPressureFactsForPass,
+  runWithPressureEvaluationPass,
+  splitPressureReleases,
+};

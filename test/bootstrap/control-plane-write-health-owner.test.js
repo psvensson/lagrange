@@ -74,6 +74,9 @@ function buildOwner(options = {}) {
     nodeId: 'node-a',
     heartbeatService,
     messageRouter: {
+      getAdmissionPressureFacts() {
+        return buildMessageRouterStats(options.queueOverrides || {});
+      },
       getStats() {
         return buildMessageRouterStats(options.queueOverrides || {});
       },
@@ -132,6 +135,16 @@ test('createControlPlaneWriteHealthProvider prefers the canonical publication st
       },
     },
     messageRouter: {
+      getAdmissionPressureFacts() {
+        return buildMessageRouterStats({
+          pending: 44,
+          pendingCritical: 16,
+          pendingBackground: 28,
+          criticalReserve: 16,
+          backgroundPendingLimit: 48,
+          maxPending: 64,
+        });
+      },
       getStats() {
         return buildMessageRouterStats({
           pending: 44,

@@ -186,6 +186,9 @@ class SystemTableCache {
     // survive row deletion so an authoritative read can fence equal-value
     // same-key mutations without being blocked by unrelated table traffic.
     this.mutationVersionByTableKey = new Map();
+    this.servicesByPartitionId = new Map();
+    this.serviceKeysByPartitionId = new Map();
+    this.servicePartitionIdByKey = new Map();
     this.listeners = new Set();
     // Apply-time (synchronous) change listeners. They observe each accepted
     // apply in the turn that applied it, with the identical
@@ -577,6 +580,9 @@ class SystemTableCache {
       this.bumpTableMutationVersion(tableName);
     }
     this.tableRevisionWatermarks.clear();
+    this.servicesByPartitionId.clear();
+    this.serviceKeysByPartitionId.clear();
+    this.servicePartitionIdByKey.clear();
     this.logger.debug(CACHE_LOG_MSG.CACHE_CLEARED);
   }
 

@@ -145,7 +145,7 @@ test('PressureGovernor isolates query-plane pressure from control-plane ' +
   const governor = new PressureGovernor({
     nodeId: 'node-a',
     messageRouter: {
-      getStats() {
+      getAdmissionPressureFacts() {
         return {
           outboundQueues: {
             'node-b': {
@@ -198,7 +198,7 @@ test('PressureGovernor backpressures control-plane work when critical reserve ' 
   const governor = new PressureGovernor({
     nodeId: 'node-a',
     messageRouter: {
-      getStats() {
+      getAdmissionPressureFacts() {
         return {
           outboundQueues: {
             'node-b': {
@@ -242,7 +242,7 @@ test('PressureGovernor ignores non-reserve critical fallback backlog for ' +
   const governor = new PressureGovernor({
     nodeId: 'node-a',
     messageRouter: {
-      getStats() {
+      getAdmissionPressureFacts() {
         return {
           outboundQueues: {
             'node-b': {
@@ -372,7 +372,7 @@ test('PressureGovernor defers deferrable critical work when the control-plane ' 
   const governor = new PressureGovernor({
     nodeId: 'node-a',
     messageRouter: {
-      getStats() {
+      getAdmissionPressureFacts() {
         return {
           outboundQueues: {
             'node-b': {
@@ -416,7 +416,7 @@ test('Publication mutation workload defers when the control-plane critical ' +
   const governor = new PressureGovernor({
     nodeId: 'node-a',
     messageRouter: {
-      getStats() {
+      getAdmissionPressureFacts() {
         return {
           outboundQueues: {
             'node-b': {
@@ -473,7 +473,7 @@ test('Logs table background workload stays off the control-plane critical ' +
   const governor = new PressureGovernor({
     nodeId: 'node-a',
     messageRouter: {
-      getStats() {
+      getAdmissionPressureFacts() {
         return {
           outboundQueues: {
             'node-b': {
@@ -530,7 +530,7 @@ test('PressureGovernor keeps bootstrap-critical work admissible when the ' +
   const governor = new PressureGovernor({
     nodeId: 'node-a',
     messageRouter: {
-      getStats() {
+      getAdmissionPressureFacts() {
         return {
           outboundQueues: {
             'node-b': {
@@ -587,7 +587,7 @@ test('PressureGovernor defers background control-plane snapshot repair before cr
     const governor = new PressureGovernor({
       nodeId: 'node-a',
       messageRouter: {
-        getStats() {
+        getAdmissionPressureFacts() {
           return {
             outboundQueues: {
               'node-b': {
@@ -696,7 +696,7 @@ test('PressureGovernor admits readiness reads during control-plane ' +
   const governor = new PressureGovernor({
     nodeId: 'node-a',
     messageRouter: {
-      getStats() {
+      getAdmissionPressureFacts() {
         return {
           outboundQueues: {
             'node-b': {
@@ -745,7 +745,7 @@ test('PressureGovernor sheds readiness reads once the readiness reserve ' +
   const governor = new PressureGovernor({
     nodeId: 'node-a',
     messageRouter: {
-      getStats() {
+      getAdmissionPressureFacts() {
         return {
           outboundQueues: {
             'node-b': {

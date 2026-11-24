@@ -13,6 +13,7 @@ import {
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const LOCAL_EMPTY_ENDPOINTS = Object.freeze([]);
+const LOCAL_EMPTY_PARTITION_SERVICES = Object.freeze([]);
 
 let sharedRowReadEngagements = 0;
 
@@ -161,7 +162,80 @@ class SystemTableCacheObservationMethods {
       key,
       tableMutationRevision,
     );
+    if (tableName === TABLES.SERVICES) {
+      this.syncServicePartitionIndexForKey(key);
+    }
     return tableMutationRevision;
+  }
+
+  /** @private */
+  rebuildPartitionServicesEntry(partitionId) {
+    const partitionKeys = this.serviceKeysByPartitionId.get(partitionId);
+    if (!partitionKeys || partitionKeys.size === 0) {
+      this.serviceKeysByPartitionId.delete(partitionId);
+      this.servicesByPartitionId.delete(partitionId);
+      return;
+    }
+    const servicesTable = this.tables.get(TABLES.SERVICES);
+    const rows = [];
+    for (const serviceKey of partitionKeys) {
+      const row = servicesTable.get(serviceKey);
+      if (!row) {
+        partitionKeys.delete(serviceKey);
+        continue;
+      }
+      rows.push(Object.isFrozen(row) ? row : deepFreeze(row));
+    }
+    if (rows.length === 0) {
+      this.serviceKeysByPartitionId.delete(partitionId);
+      this.servicesByPartitionId.delete(partitionId);
+      return;
+    }
+    this.servicesByPartitionId.set(partitionId, Object.freeze(rows));
+  }
+
+  /** @private */
+  syncServicePartitionIndexForKey(key) {
+    const previousPartitionId = this.servicePartitionIdByKey.get(key);
+    const currentRow = this.tables.get(TABLES.SERVICES)?.get(key);
+    const rawPartitionId = currentRow?.[COLUMN.PARTITION_ID];
+    const nextPartitionId =
+      typeof rawPartitionId === 'string' && rawPartitionId.length > 0 ?
+        rawPartitionId :
+        null;
+    if (previousPartitionId && previousPartitionId !== nextPartitionId) {
+      this.serviceKeysByPartitionId.get(previousPartitionId)?.delete(key);
+      this.rebuildPartitionServicesEntry(previousPartitionId);
+    }
+    if (!nextPartitionId) {
+      this.servicePartitionIdByKey.delete(key);
+      return;
+    }
+    this.servicePartitionIdByKey.set(key, nextPartitionId);
+    let nextKeys = this.serviceKeysByPartitionId.get(nextPartitionId);
+    if (!nextKeys) {
+      nextKeys = new Set();
+      this.serviceKeysByPartitionId.set(nextPartitionId, nextKeys);
+    }
+    nextKeys.add(key);
+    this.rebuildPartitionServicesEntry(nextPartitionId);
+  }
+
+  /**
+   * Return the cached service rows for one partition from the partition-keyed
+   * index without scanning unrelated services.
+   * @param {string} partitionId
+   * @return {ReadonlyArray<Object>}
+   */
+  servicesForPartition(partitionId) {
+    if (typeof partitionId !== 'string' || partitionId.length === 0) {
+      return LOCAL_EMPTY_PARTITION_SERVICES;
+    }
+    const rows =
+      this.servicesByPartitionId.get(partitionId) ||
+      LOCAL_EMPTY_PARTITION_SERVICES;
+    sharedRowReadEngagements += rows.length;
+    return rows;
   }
 
   /**

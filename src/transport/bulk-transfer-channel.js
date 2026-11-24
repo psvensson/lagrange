@@ -197,11 +197,18 @@ function createByteRateTokenBucket(options = {}) {
 // in-flight chunk (sends serialize through a chain), bounded pending sends,
 // token-bucket pacing, and AbortSignal cancellation.
 function createBulkTransferConnection(context) {
-  const {nodeId, ws, tokenBucket, maxPendingSends, logger, onClosed} = context;
+  const {
+    nodeId, ws, tokenBucket, maxPendingSends, logger, onClosed, onPressureChange,
+  } = context;
   const state = {
     open: true,
     pendingSends: 0,
     inFlightBytes: 0,
+  };
+  const bumpPressure = () => {
+    if (onPressureChange) {
+      onPressureChange();
+    }
   };
   const messageListeners = [];
   // Consumer-facing close hook (S6 verifier MUST-CHANGE): transfer drivers
@@ -326,6 +333,7 @@ function createBulkTransferConnection(context) {
         return Promise.resolve(SEND_RESULT[BULK_CHANNEL_SEND_OUTCOME.PENDING_LIMIT]);
       }
       state.pendingSends += 1;
+      bumpPressure();
       return new Promise((resolve, reject) => {
         let payloadFrame = frame;
         let onQueueAbort = null;
@@ -348,6 +356,7 @@ function createBulkTransferConnection(context) {
             entry.state = nextState;
             entry.cleanup();
             state.pendingSends -= 1;
+            bumpPressure();
             resolve(result);
           },
           fail(error) {
@@ -360,6 +369,7 @@ function createBulkTransferConnection(context) {
             entry.state = ENTRY_STATE.SETTLED;
             entry.cleanup();
             state.pendingSends -= 1;
+            bumpPressure();
             reject(error);
           },
           async execute() {
@@ -387,6 +397,7 @@ function createBulkTransferConnection(context) {
             entry.state = ENTRY_STATE.ACTIVE;
             const activeFrame = payloadFrame;
             state.inFlightBytes = activeFrame.length;
+            bumpPressure();
             try {
               const grant = await tokenBucket.acquire(
                 activeFrame.length,
@@ -415,6 +426,7 @@ function createBulkTransferConnection(context) {
               entry.fail(error);
             } finally {
               state.inFlightBytes = 0;
+              bumpPressure();
             }
           },
         };
@@ -493,6 +505,10 @@ function createBulkTransferChannelRegistry(options = {}) {
       options.createWebSocket :
       (address, wsOptions) => new WebSocket(address, wsOptions);
   const connections = new Map();
+  let pressureRevision = 0;
+  const bumpPressureRevision = () => {
+    pressureRevision += 1;
+  };
   // Adoption listeners (S6): the follower-side snapshot offer router arms
   // its first-frame peek here — INBOUND adopted sockets only, never dials
   // (the dialing side is the transfer initiator, not an offer target).
@@ -504,6 +520,7 @@ function createBulkTransferChannelRegistry(options = {}) {
     // the mapped connection IS the one that closed.
     if (connections.get(nodeId) === closedConnection) {
       connections.delete(nodeId);
+      bumpPressureRevision();
     }
   };
 
@@ -520,13 +537,18 @@ function createBulkTransferChannelRegistry(options = {}) {
       maxPendingSends,
       logger,
       onClosed: dropConnection,
+      onPressureChange: bumpPressureRevision,
     });
     connections.set(nodeId, connection);
+    bumpPressureRevision();
     return connection;
   };
 
   return Object.freeze({
     tokenBucket,
+    getPressureRevision() {
+      return pressureRevision;
+    },
     adoptIncomingSocket({nodeId, ws}) {
       const connection = attach(nodeId, ws);
       for (const listener of [...adoptListeners]) {
@@ -652,6 +674,7 @@ function createBulkTransferChannelRegistry(options = {}) {
         connection.close();
       }
       connections.clear();
+      bumpPressureRevision();
       tokenBucket.dispose();
     },
   });

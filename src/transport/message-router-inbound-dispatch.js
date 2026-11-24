@@ -427,6 +427,10 @@ class MessageRouterInboundDispatch {
    */
   attachBulkChannelRegistry(registry) {
     this.bulkChannelRegistry = registry;
+    const current = Number.isSafeInteger(this._bulkRegistryAttachRevision) ?
+      this._bulkRegistryAttachRevision :
+      TRANSPORT_NUM.ZERO;
+    this._bulkRegistryAttachRevision = current + TRANSPORT_NUM.ONE;
   }
   /**
    * Hand an identified `channel: bulk` socket to the bulk channel registry.

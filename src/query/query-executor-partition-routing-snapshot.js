@@ -22,6 +22,40 @@ function readRoutingDenialAnswer(routing) {
   };
 }
 
+function hasCachedPartitionServicesReader(systemCache) {
+  return Boolean(systemCache?.servicesForPartition || systemCache?.filter);
+}
+
+function collectCachedPartitionServiceRows(systemCache, partitionId) {
+  if (!systemCache) {
+    return [];
+  }
+  if (systemCache.servicesForPartition) {
+    const indexedRows = systemCache.servicesForPartition(partitionId);
+    const matching = [];
+    for (const service of indexedRows) {
+      if (
+        service?.partition_id === partitionId &&
+        service?.service_type === SERVICE_TYPE.PARTITION
+      ) {
+        matching.push(service);
+      }
+    }
+    return matching;
+  }
+  if (systemCache.filter) {
+    return (
+      systemCache.filter(
+        TABLES.SERVICES,
+        (service) =>
+          service.partition_id === partitionId &&
+          service.service_type === SERVICE_TYPE.PARTITION,
+      ) || []
+    );
+  }
+  return [];
+}
+
 const queryExecutorPartitionRoutingSnapshotMethods = {
   /**
    * Build one owner-style snapshot for partition routing diagnostics.
@@ -130,7 +164,7 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
     }
     if (
       !hasOverlayServices &&
-      typeof this.systemCache?.filter !== QUERY_EXECUTOR_LITERAL.STRING_FUNCTION
+      !hasCachedPartitionServicesReader(this.systemCache)
     ) {
       this.logger.warn(QUERY_LOG_MSG.SYSTEM_CACHE_FILTER_UNSUPPORTED, {
         partitionId,
@@ -147,19 +181,10 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
         service.service_type === SERVICE_TYPE.PARTITION,
     );
     services.push(...overlayRows);
-    if (
-      !overlayMasksCacheServices &&
-      this.systemCache &&
-      typeof this.systemCache.filter === QUERY_EXECUTOR_LITERAL.STRING_FUNCTION
-    ) {
-      const cacheRows =
-        this.systemCache.filter(
-          TABLES.SERVICES,
-          (service) =>
-            service.partition_id === partitionId &&
-            service.service_type === SERVICE_TYPE.PARTITION,
-        ) || [];
-      services.push(...cacheRows);
+    if (!overlayMasksCacheServices) {
+      services.push(
+        ...collectCachedPartitionServiceRows(this.systemCache, partitionId),
+      );
     }
     if (services.length === 0) {
       return [];
