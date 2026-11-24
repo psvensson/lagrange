@@ -106,7 +106,7 @@ function createEmptySystemTableCache() {
 
 function createSaturatedControlPlaneRouter() {
   return {
-    getStats() {
+    getAdmissionPressureFacts() {
       return {
         outboundQueues: {
           'node-pressure-target': {

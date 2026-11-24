@@ -30,6 +30,7 @@ function createPendingItem(owner, nodeId, queue, properties, options) {
     const index = queue.pending.indexOf(item);
     if (index < 0) return;
     queue.pending.splice(index, 1);
+    owner.bumpPressureRevision();
     item.reject(deliveryAbortReason(signal));
     owner.process(nodeId);
   }
@@ -40,7 +41,7 @@ function createPendingItem(owner, nodeId, queue, properties, options) {
   return item;
 }
 
-function removeExpiredPending(queue) {
+function removeExpiredPending(owner, queue) {
   // The existing bounded queue is the only retained collection. Inspect even
   // entries behind a blocked head when delayed timer callbacks have not run.
   for (const item of [...queue.pending]) {
@@ -48,7 +49,10 @@ function removeExpiredPending(queue) {
       item.assertOpen?.();
     } catch (error) {
       const index = queue.pending.indexOf(item);
-      if (index >= 0) queue.pending.splice(index, 1);
+      if (index >= 0) {
+        queue.pending.splice(index, 1);
+        owner.bumpPressureRevision();
+      }
       item.reject(error);
     }
   }
@@ -315,6 +319,11 @@ function promoteAggregateCriticalReserveCandidate(queue) {
 class OutboundDeliveryRegistryOwner {
   constructor(router) {
     this.router = router;
+    this.pressureRevision = TRANSPORT_NUM.ZERO;
+  }
+  bumpPressureRevision() {
+    this.pressureRevision += TRANSPORT_NUM.ONE;
+    return this.pressureRevision;
   }
   getOutboundQueue(nodeId) {
     if (!this.router.outboundQueues.has(nodeId)) {
@@ -339,6 +348,7 @@ class OutboundDeliveryRegistryOwner {
         queueWaitMaxMs: TRANSPORT_NUM.ZERO,
         queueWaitHistogram: createQueueWaitHistogram(),
       });
+      this.bumpPressureRevision();
     }
     return this.router.outboundQueues.get(nodeId);
   }
@@ -400,6 +410,7 @@ class OutboundDeliveryRegistryOwner {
             replacePendingKey,
           }, options);
           queue.pending[existingPendingIndex] = replacement;
+          this.bumpPressureRevision();
           replacement.watchCancellation();
           this.process(nodeId);
           return;
@@ -452,6 +463,7 @@ class OutboundDeliveryRegistryOwner {
           if (!preemptedItem) {
             break;
           }
+          this.bumpPressureRevision();
           const preemptionError = buildOutboundQueueBackpressureError(
             nodeId,
             queue,
@@ -573,6 +585,7 @@ class OutboundDeliveryRegistryOwner {
         criticalSourceReserve: criticalSourceReserveAdmission,
       }, options);
       queue.pending.push(item);
+      this.bumpPressureRevision();
       item.watchCancellation();
       this.process(nodeId);
     });
@@ -584,9 +597,11 @@ class OutboundDeliveryRegistryOwner {
     }
     queue.processing = true;
     try {
-      removeExpiredPending(queue);
+      removeExpiredPending(this, queue);
       while (queue.pending.length > TRANSPORT_NUM.ZERO) {
-        promoteAggregateCriticalReserveCandidate(queue);
+        if (promoteAggregateCriticalReserveCandidate(queue)) {
+          this.bumpPressureRevision();
+        }
         const nextItem = peekNextPendingItem(queue);
         if (!canDispatchPendingItem(queue, nextItem)) {
           return;
@@ -594,6 +609,7 @@ class OutboundDeliveryRegistryOwner {
         const item = dequeueNextPendingItem(queue);
         item.detachAbort?.();
         acquireInFlight(queue, item);
+        this.bumpPressureRevision();
         const queueWaitMs = Math.max(
           TRANSPORT_NUM.ZERO,
           (item.clock || this.router.timeSource).now() - item.queuedAt,
@@ -601,6 +617,7 @@ class OutboundDeliveryRegistryOwner {
         recordQueueWaitDuration(queue, queueWaitMs);
         const complete = (settle, value) => {
           releaseInFlight(queue, item);
+          this.bumpPressureRevision();
           settle(value);
           if (this.router.outboundQueues.get(nodeId) === queue) this.process(nodeId);
         };
@@ -621,6 +638,9 @@ class OutboundDeliveryRegistryOwner {
     if (!queue) {
       return;
     }
+    if (queue.pending.length > TRANSPORT_NUM.ZERO) {
+      this.bumpPressureRevision();
+    }
     while (queue.pending.length > TRANSPORT_NUM.ZERO) {
       const item = queue.pending.shift();
       if (item) {
@@ -632,6 +652,9 @@ class OutboundDeliveryRegistryOwner {
     const queue = this.router.outboundQueues.get(nodeId);
     if (!queue) {
       return;
+    }
+    if (queue.pending.length > TRANSPORT_NUM.ZERO) {
+      this.bumpPressureRevision();
     }
     const errorMessage = error?.message || ROUTER_ERROR_MSG.SHUTDOWN;
     while (queue.pending.length > TRANSPORT_NUM.ZERO) {

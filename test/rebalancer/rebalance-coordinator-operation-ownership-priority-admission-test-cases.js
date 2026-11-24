@@ -699,7 +699,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
           },
         },
         messageRouter: {
-          getStats() {
+          getAdmissionPressureFacts() {
             return {
               outboundQueues: {
                 'node-remote-a': {

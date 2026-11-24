@@ -1,6 +1,10 @@
 import {METRICS_LOG_TAG} from '../constants/index.js';
-import {notifyPressureReleases, splitPressureReleases} from
-  './pressure-governor-release-watch.js';
+import {
+  notifyPressureReleases,
+  readPressureFactsForPass,
+  runWithPressureEvaluationPass,
+  splitPressureReleases,
+} from './pressure-governor-release-watch.js';
 const PRESSURE_GOVERNOR_LITERAL = Object.freeze({
   DEFAULT: 'default',
   NONE: 'none',
@@ -197,35 +201,19 @@ function resolveCapacityPartition(
   if (!Array.isArray(resourceKeys)) {
     return PRESSURE_CAPACITY_PARTITION.SHARED;
   }
-  const hasQueryPlaneResource =
-    resourceKeys.some((resourceKey) => {
-      return (
-        typeof resourceKey === 'string' &&
-        (resourceKey.startsWith(PRESSURE_GOVERNOR_LITERAL.QUERY_PLANE) ||
-          resourceKey.startsWith(PRESSURE_GOVERNOR_LITERAL.QUERY))
-      );
-    });
-  const hasControlPlaneResource =
-    resourceKeys.some((resourceKey) => {
-      return (
-        typeof resourceKey === 'string' &&
-        resourceKey.startsWith(PRESSURE_GOVERNOR_LITERAL.CONTROL_PLANE)
-      );
-    });
-  const hasControlPlaneIngressResource =
-    resourceKeys.some((resourceKey) => {
-      return (
-        resourceKey === PRESSURE_GOVERNOR_LITERAL.CONTROL_PLANE_READ ||
-        resourceKey === PRESSURE_GOVERNOR_LITERAL.CONTROL_PLANE_WRITE
-      );
-    });
-  const hasBulkTransferResource =
-    resourceKeys.some((resourceKey) => {
-      return (
-        typeof resourceKey === 'string' &&
-        resourceKey.startsWith(PRESSURE_GOVERNOR_LITERAL.SNAPSHOT_TRANSFER)
-      );
-    });
+  const hasQueryPlaneResource = resourceKeys.some((resourceKey) =>
+    typeof resourceKey === 'string' &&
+    (resourceKey.startsWith(PRESSURE_GOVERNOR_LITERAL.QUERY_PLANE) ||
+      resourceKey.startsWith(PRESSURE_GOVERNOR_LITERAL.QUERY)));
+  const hasControlPlaneResource = resourceKeys.some((resourceKey) =>
+    typeof resourceKey === 'string' &&
+    resourceKey.startsWith(PRESSURE_GOVERNOR_LITERAL.CONTROL_PLANE));
+  const hasControlPlaneIngressResource = resourceKeys.some((resourceKey) =>
+    resourceKey === PRESSURE_GOVERNOR_LITERAL.CONTROL_PLANE_READ ||
+    resourceKey === PRESSURE_GOVERNOR_LITERAL.CONTROL_PLANE_WRITE);
+  const hasBulkTransferResource = resourceKeys.some((resourceKey) =>
+    typeof resourceKey === 'string' &&
+    resourceKey.startsWith(PRESSURE_GOVERNOR_LITERAL.SNAPSHOT_TRANSFER));
   const pressurePartitionEvidence = Object.freeze({
     hasQueryPlaneResource,
     hasControlPlaneIngressResource,
@@ -254,11 +242,8 @@ function normalizeQueueStat(value) {
   return Number.isFinite(value) && value > 0 ? value : 0;
 }
 function hasBootstrapControlPlaneResource(resourceKeys = []) {
-  return normalizeResourceKeys(resourceKeys).some((resourceKey) => {
-    return resourceKey.startsWith(
-      PRESSURE_GOVERNOR_LITERAL.CONTROL_PLANE_BOOTSTRAP,
-    );
-  });
+  return normalizeResourceKeys(resourceKeys).some((resourceKey) =>
+    resourceKey.startsWith(PRESSURE_GOVERNOR_LITERAL.CONTROL_PLANE_BOOTSTRAP));
 }
 function isCriticalReserveExhausted(queue = {}, capacityPartition) {
   if (capacityPartition !== PRESSURE_CAPACITY_PARTITION.CONTROL_PLANE) {
@@ -286,14 +271,8 @@ function isPartitionBackpressured(queue = {}, capacityPartition) {
   if (maxPending > 0 && pending >= maxPending) {
     return true;
   }
-  if (capacityPartition === PRESSURE_CAPACITY_PARTITION.QUERY_PLANE) {
-    return (
-      pending > 0 &&
-      backgroundPendingLimit > 0 &&
-      pendingBackground >= backgroundPendingLimit
-    );
-  }
-  if (capacityPartition === PRESSURE_CAPACITY_PARTITION.BACKGROUND) {
+  if (capacityPartition === PRESSURE_CAPACITY_PARTITION.QUERY_PLANE ||
+      capacityPartition === PRESSURE_CAPACITY_PARTITION.BACKGROUND) {
     return (
       pending > 0 &&
       backgroundPendingLimit > 0 &&
@@ -505,6 +484,7 @@ class PressureGovernor {
     this.admissionWaiterSeq = 0;
     this.admissionPollTimer = null;
     this.releaseWatches = [];
+    this.activeEvaluationPass = null;
   }
   static getShared(options = {}) {
     const nodeId = normalizeNodeId(options.nodeId);
@@ -608,11 +588,18 @@ class PressureGovernor {
     if (!shouldUseTransportSensor(normalizedKeys)) {
       return buildNoPressureSummary();
     }
-    if (typeof this.messageRouter?.getStats === 'function') {
-      return buildPartitionedTransportPressureSummary(
-        this.messageRouter.getStats(),
+    const factsRead = readPressureFactsForPass(this);
+    if (factsRead.available) {
+      const cached = factsRead.summariesByPartition?.get(capacityPartition);
+      if (cached) {
+        return cached;
+      }
+      const summary = buildPartitionedTransportPressureSummary(
+        factsRead.facts,
         capacityPartition,
       );
+      factsRead.summariesByPartition?.set(capacityPartition, summary);
+      return summary;
     }
     if (typeof this.messageRouter?.getOutboundPressureSummary !== 'function') {
       return buildTransportPressureSummary(
@@ -719,49 +706,57 @@ class PressureGovernor {
     this.admissionPollTimer = setTimeout(() => {
       this.admissionPollTimer = null;
       try {
-        this.drainAdmissionWaiters();
-        const {remaining, released} = splitPressureReleases(this.releaseWatches,
-          (request) => this.evaluate(request), PRESSURE_GOVERNOR_ACTION.DEFER);
-        this.releaseWatches = remaining;
-        notifyPressureReleases(released);
+        this.runAdmissionPollPass();
       } finally {
         this.scheduleAdmissionPoll();
       }
     }, PRESSURE_ADMISSION_POLL_INTERVAL_MS);
   }
 
+  runAdmissionPollPass() {
+    return runWithPressureEvaluationPass(this, () => {
+      this.drainAdmissionWaiters();
+      const {remaining, released} = splitPressureReleases(this.releaseWatches,
+        (request) => this.evaluate(request), PRESSURE_GOVERNOR_ACTION.DEFER);
+      this.releaseWatches = remaining;
+      notifyPressureReleases(released);
+    });
+  }
+
   drainAdmissionWaiters() {
     if (this.admissionWaiters.length === 0) {
       return;
     }
-    const nowMs = this.now();
-    const ordered = [...this.admissionWaiters].sort(
-      (a, b) => a.rank - b.rank || a.seq - b.seq,
-    );
-    const resolved = new Set();
-    for (const waiter of ordered) {
-      // A throwing sensor counts as "still deferred": the waiter keeps its
-      // deadline guarantee (resolving with the enqueue-time decision) instead
-      // of being stranded or crashing the poll loop.
-      let decision = null;
-      try {
-        decision = this.evaluate(waiter.request);
-      } catch (_error) {
-        decision = null;
-      }
-      if (decision && decision.action !== PRESSURE_GOVERNOR_ACTION.DEFER) {
-        waiter.resolve(decision);
-        resolved.add(waiter);
-      } else if (nowMs >= waiter.deadlineAtMs) {
-        waiter.resolve(decision || waiter.deferDecision);
-        resolved.add(waiter);
-      }
-    }
-    if (resolved.size > 0) {
-      this.admissionWaiters = this.admissionWaiters.filter(
-        (waiter) => !resolved.has(waiter),
+    runWithPressureEvaluationPass(this, () => {
+      const nowMs = this.now();
+      const ordered = [...this.admissionWaiters].sort(
+        (a, b) => a.rank - b.rank || a.seq - b.seq,
       );
-    }
+      const resolved = new Set();
+      for (const waiter of ordered) {
+        // A throwing sensor counts as "still deferred": the waiter keeps its
+        // deadline guarantee (resolving with the enqueue-time decision) instead
+        // of being stranded or crashing the poll loop.
+        let decision = null;
+        try {
+          decision = this.evaluate(waiter.request);
+        } catch (_error) {
+          decision = null;
+        }
+        if (decision && decision.action !== PRESSURE_GOVERNOR_ACTION.DEFER) {
+          waiter.resolve(decision);
+          resolved.add(waiter);
+        } else if (nowMs >= waiter.deadlineAtMs) {
+          waiter.resolve(decision || waiter.deferDecision);
+          resolved.add(waiter);
+        }
+      }
+      if (resolved.size > 0) {
+        this.admissionWaiters = this.admissionWaiters.filter(
+          (waiter) => !resolved.has(waiter),
+        );
+      }
+    });
   }
 
   dispose() {

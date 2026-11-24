@@ -77,6 +77,7 @@ test('SQLQueryEngine preserves canonical result and deadline budgets for ' +
   });
   let capturedOptions = null;
   engine.queryExecutor = {
+    hasAggregates: () => false,
     async executeSelect(_ast, partitionIds, _params, options) {
       capturedOptions = options;
       return {
@@ -215,7 +216,7 @@ test('SQLQueryEngine logs typed admission defer reasons for harness playback',
 test('Shared pressure policy preserves plane isolation between query ingress ' +
   'and metadata ingress', async (t) => {
   const messageRouter = {
-    getStats() {
+    getAdmissionPressureFacts() {
       return {
         outboundQueues: {
           'node-b': {

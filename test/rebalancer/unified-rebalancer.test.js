@@ -272,7 +272,7 @@ function createMockMessageRouter(
 function createBackpressuredMessageRouter() {
   return {
     ...createMockMessageRouter(),
-    getStats() {
+    getAdmissionPressureFacts() {
       return {
         outboundQueues: {
           [REBALANCER_TEST_NODE_ID_B]: {

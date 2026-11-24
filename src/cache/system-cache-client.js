@@ -43,6 +43,8 @@ function createDirectSystemCacheClient(readOnlyCache) {
     get: (tableName, key) => readOnlyCache.get(tableName, key),
     find: (tableName, predicate) => readOnlyCache.find(tableName, predicate),
     filter: (tableName, predicate) => readOnlyCache.filter(tableName, predicate),
+    servicesForPartition: (partitionId) =>
+      readOnlyCache.servicesForPartition(partitionId),
     getAll: (tableName) => readOnlyCache.getAll(tableName),
     has: (tableName, key) => readOnlyCache.has(tableName, key),
     count: (tableName) => readOnlyCache.count(tableName),

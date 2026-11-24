@@ -7,6 +7,12 @@
 const PRESSURE_GOVERNOR_EVENT = Object.freeze({
   PRESSURE_RELEASED: 'PRESSURE_RELEASED',
 });
+const PRESSURE_PASS_LITERAL = Object.freeze({
+  EMPTY_SIGNATURE: 'empty',
+  EMPTY_BULK_PART: '0:0:0',
+  OBJECT_TYPE: 'object',
+});
+const PRESSURE_PASS_UNSET_REVISION = -1;
 
 // A watched request's standing on one evaluation: released with the
 // governor's decision, or still deferred (a throwing sensor counts as still
@@ -58,4 +64,143 @@ function notifyPressureReleases(released) {
   }
 }
 
-export {PRESSURE_GOVERNOR_EVENT, notifyPressureReleases, splitPressureReleases};
+function readRouterPressureRevision(messageRouter) {
+  if (!messageRouter) {
+    return null;
+  }
+  if (messageRouter.getPressureRevision) {
+    const rev = messageRouter.getPressureRevision();
+    return Number.isFinite(rev) ? rev : null;
+  }
+  return Number.isFinite(messageRouter.pressureRevision) ?
+    messageRouter.pressureRevision :
+    null;
+}
+
+function computePressureFactsSignature(facts) {
+  if (!facts || typeof facts !== PRESSURE_PASS_LITERAL.OBJECT_TYPE) {
+    return PRESSURE_PASS_LITERAL.EMPTY_SIGNATURE;
+  }
+  const rev = Number.isFinite(facts.pressureRevision) ?
+    facts.pressureRevision :
+    PRESSURE_PASS_UNSET_REVISION;
+  const bulk = facts.bulkChannel;
+  const bulkPart = bulk ?
+    `${bulk.pendingRequests}:${bulk.maxPendingRequests}:${bulk.saturatedPeerCount}` :
+    PRESSURE_PASS_LITERAL.EMPTY_BULK_PART;
+  let sig = `${rev}|${bulkPart}`;
+  const queues = facts.outboundQueues;
+  if (queues && typeof queues === PRESSURE_PASS_LITERAL.OBJECT_TYPE) {
+    for (const [nodeId, q] of Object.entries(queues)) {
+      if (!q) continue;
+      sig +=
+        `|${nodeId}:${q.pending}:${q.pendingCritical}:` +
+        `${q.pendingCriticalReserveEligible}:${q.pendingReadiness}:` +
+        `${q.pendingBackground}:${q.inFlight}:${q.maxPending}:` +
+        `${q.criticalReserve}:${q.readinessReserve}:${q.backgroundPendingLimit}`;
+    }
+  }
+  return sig;
+}
+
+const PRESSURE_PASS_UNAVAILABLE = Object.freeze({
+  available: false,
+  facts: null,
+  summariesByPartition: null,
+});
+
+function invokeRouterPressureFacts(messageRouter) {
+  if (!messageRouter) {
+    return null;
+  }
+  if (messageRouter.getAdmissionPressureFacts) {
+    return messageRouter.getAdmissionPressureFacts();
+  }
+  return messageRouter.readAdmissionPressureFacts ?
+    messageRouter.readAdmissionPressureFacts() :
+    null;
+}
+
+function hasRouterPressureFacts(messageRouter) {
+  return Boolean(
+    messageRouter &&
+      (messageRouter.getAdmissionPressureFacts ||
+        messageRouter.readAdmissionPressureFacts),
+  );
+}
+
+function isPassFactsSnapshotCurrent(pass, messageRouter) {
+  if (!pass || pass.router !== messageRouter || pass.facts === null) {
+    return false;
+  }
+  if (computePressureFactsSignature(pass.facts) !== pass.factsSignature) {
+    return false;
+  }
+  const currentRevision = readRouterPressureRevision(messageRouter);
+  if (currentRevision !== null) {
+    return currentRevision === pass.revision;
+  }
+  return true;
+}
+
+function readPressureFactsForPass(governor) {
+  const messageRouter = governor.messageRouter;
+  if (!hasRouterPressureFacts(messageRouter)) {
+    return PRESSURE_PASS_UNAVAILABLE;
+  }
+  const pass = governor.activeEvaluationPass;
+  if (!pass || pass.router !== messageRouter) {
+    return {
+      available: true,
+      facts: invokeRouterPressureFacts(messageRouter),
+      summariesByPartition: null,
+    };
+  }
+  if (isPassFactsSnapshotCurrent(pass, messageRouter)) {
+    return {
+      available: true,
+      facts: pass.facts,
+      summariesByPartition: pass.summariesByPartition,
+    };
+  }
+  pass.summariesByPartition.clear();
+  const facts = invokeRouterPressureFacts(messageRouter);
+  const currentRevision = readRouterPressureRevision(messageRouter);
+  const factsRevision = Number.isFinite(facts?.pressureRevision) ?
+    facts.pressureRevision :
+    null;
+  pass.facts = facts;
+  pass.revision = currentRevision !== null ? currentRevision : factsRevision;
+  pass.factsSignature = computePressureFactsSignature(facts);
+  return {
+    available: true,
+    facts,
+    summariesByPartition: pass.summariesByPartition,
+  };
+}
+
+function runWithPressureEvaluationPass(governor, fn) {
+  if (governor.activeEvaluationPass) {
+    return fn();
+  }
+  governor.activeEvaluationPass = {
+    router: governor.messageRouter,
+    revision: null,
+    facts: null,
+    factsSignature: null,
+    summariesByPartition: new Map(),
+  };
+  try {
+    return fn();
+  } finally {
+    governor.activeEvaluationPass = null;
+  }
+}
+
+export {
+  PRESSURE_GOVERNOR_EVENT,
+  notifyPressureReleases,
+  readPressureFactsForPass,
+  runWithPressureEvaluationPass,
+  splitPressureReleases,
+};

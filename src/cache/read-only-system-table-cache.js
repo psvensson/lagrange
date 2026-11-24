@@ -62,6 +62,15 @@ class ReadOnlySystemTableCache {
   }
 
   /**
+   * Get cached service rows for one partition from the partition-keyed index.
+   * @param {string} partitionId - Partition ID.
+   * @return {ReadonlyArray<Object>} Frozen array of matching service records.
+   */
+  servicesForPartition(partitionId) {
+    return this._cache.servicesForPartition(partitionId);
+  }
+
+  /**
    * Get all records from a table.
    * @param {string} tableName - Name of the system table.
    * @return {Array<Object>} Array of all records in the table.
