@@ -108,6 +108,8 @@ const LOCAL_TEXT = Object.freeze({
   GATE_LINKS_BROKEN: '[push-gate] a workspace injection link was replaced during the gate\n',
   GATE_RETAINED: '[push-gate] gate diagnostics retained in ',
   GATE_NOTHING_RETAINED: '[push-gate] no acceptance receipt to retain from the gate checkout\n',
+  MISSING_RAW_OBSERVATIONS_PREFIX: '[push-gate-corpus] missing required ',
+  MISSING_RAW_OBSERVATIONS_IN: ' in ',
 });
 const stringTrim = Function.call.bind(String.prototype.trim);
 const arrayMap = Function.call.bind(Array.prototype.map);
@@ -260,9 +262,15 @@ function reportCorpusGateResult(result, worktreePath) {
 // per command and flushing in deterministic order, returning the first failing
 // exit code (0 when all pass).
 async function runCorpusGates(worktreePath) {
-  const commands = fs.existsSync(path.join(worktreePath, BENCHMARK_RAW_OBSERVATIONS_PATH)) ?
-    [...CORPUS_GATE_COMMANDS, ...BENCHMARK_GATE_COMMANDS] :
-    CORPUS_GATE_COMMANDS;
+  const rawObservationsPath = path.join(worktreePath, BENCHMARK_RAW_OBSERVATIONS_PATH);
+  if (!fs.existsSync(rawObservationsPath)) {
+    process.stderr.write(
+      `${LOCAL_TEXT.MISSING_RAW_OBSERVATIONS_PREFIX}${BENCHMARK_RAW_OBSERVATIONS_PATH}` +
+      `${LOCAL_TEXT.MISSING_RAW_OBSERVATIONS_IN}${worktreePath}${NEWLINE}`,
+    );
+    return EXIT_GATE_FAILURE;
+  }
+  const commands = [...CORPUS_GATE_COMMANDS, ...BENCHMARK_GATE_COMMANDS];
   const executions = arrayMap(commands, ([command, args]) =>
     executeCorpusCommand(command, args, worktreePath),
   );

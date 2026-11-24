@@ -69,6 +69,22 @@ done
 # Any test change (including deletion) can change the three manifests. Tests
 # also inherit observation surfaces from helpers under test/ and scripts/, so
 # helper edits must refresh the subsystem observation census too.
+if [ ! -f "scripts/checks/check-pushed-benchmark-freshness.js" ]; then
+  echo "pre-commit: FAIL - missing required scripts/checks/check-pushed-benchmark-freshness.js"
+  exit 1
+fi
+mapfile -t BENCHMARK_PUBLICATION_PRODUCER_PATHS < <(
+  node scripts/checks/check-pushed-benchmark-freshness.js --list-producers
+)
+if [ "${#BENCHMARK_PUBLICATION_PRODUCER_PATHS[@]}" -eq 0 ]; then
+  echo "pre-commit: FAIL - check-pushed-benchmark-freshness.js returned an empty producer path set"
+  exit 1
+fi
+declare -A BENCHMARK_PRODUCER_SET=()
+for producer_path in "${BENCHMARK_PUBLICATION_PRODUCER_PATHS[@]}"; do
+  BENCHMARK_PRODUCER_SET["$producer_path"]=1
+done
+
 for f in "${STAGED_METADATA[@]}"; do
   case "$f" in
     src/*|scripts/*|test/*) REGEN_INVENTORIES=1 ;;
@@ -77,17 +93,13 @@ for f in "${STAGED_METADATA[@]}"; do
     test/*|scripts/*) REGEN_TEST_METADATA=1 ;;
   esac
   case "$f" in
-    data/tidb-comparison/*|docs/benchmarks/*|\
-    test/distributed/harness/comparative-*.js|\
-    test/distributed/harness/raw-observation-*.js|\
-    test/distributed/harness/oltp-comparison-*.js|\
-    test/distributed/harness/*-static-web.js|\
-    test/distributed/harness/benchmark-claim-admission.js|\
-    test/distributed/harness/benchmark-invalidation-ledger.js|\
-    test/distributed/harness/scaleout-*.js|\
-    scripts/checks/comparative-benchmark-recompute.js|\
-    scripts/checks/check-benchmark-history-append-only.js)
+    data/tidb-comparison/*|docs/benchmarks/*)
       REGEN_BENCHMARK_ARTIFACTS=1 ;;
+    *)
+      if [ -n "${BENCHMARK_PRODUCER_SET[$f]:-}" ]; then
+        REGEN_BENCHMARK_ARTIFACTS=1
+      fi
+      ;;
   esac
 done
 
@@ -221,23 +233,10 @@ fi
 if [ "$REGEN_BENCHMARK_ARTIFACTS" = "1" ] \
   && [ "$SOLVER_AUTHORIZED" = "0" ] \
   && [ -z "${LAGRANGE_SKIP_INVENTORY_REGEN:-}" ]; then
-  BENCHMARK_PRODUCER_INPUT_PATHS=(
-    data/tidb-comparison
-    docs/benchmarks
-    ':(glob)test/distributed/harness/comparative-*.js'
-    ':(glob)test/distributed/harness/raw-observation-*.js'
-    ':(glob)test/distributed/harness/oltp-comparison-*.js'
-    ':(glob)test/distributed/harness/*-static-web.js'
-    test/distributed/harness/benchmark-claim-admission.js
-    test/distributed/harness/benchmark-invalidation-ledger.js
-    ':(glob)test/distributed/harness/scaleout-*.js'
-    scripts/checks/comparative-benchmark-recompute.js
-    scripts/checks/check-benchmark-history-append-only.js
-  )
   mapfile -t UNSTAGED_BENCHMARK_INPUTS < <(
     {
-      git diff --name-only -- "${BENCHMARK_PRODUCER_INPUT_PATHS[@]}"
-      git ls-files --others --exclude-standard -- "${BENCHMARK_PRODUCER_INPUT_PATHS[@]}"
+      git diff --name-only -- data/tidb-comparison docs/benchmarks "${BENCHMARK_PUBLICATION_PRODUCER_PATHS[@]}"
+      git ls-files --others --exclude-standard -- data/tidb-comparison docs/benchmarks "${BENCHMARK_PUBLICATION_PRODUCER_PATHS[@]}"
     } | sort -u
   )
   if [ "${#UNSTAGED_BENCHMARK_INPUTS[@]}" -gt 0 ]; then
@@ -246,6 +245,7 @@ if [ "$REGEN_BENCHMARK_ARTIFACTS" = "1" ] \
     echo "pre-commit: WIP bypass: LAGRANGE_SKIP_INVENTORY_REGEN=1 git commit"
     exit 1
   fi
+  node scripts/checks/check-pushed-benchmark-freshness.js --check-staged-clean
   echo "pre-commit: regenerating comparative benchmark artifacts from admitted observations"
   node --input-type=module -e \
     "import {regenerateAllBenchmarkArtifactsFromAdmitted} from './test/distributed/harness/raw-observation-campaign-specs.js'; await regenerateAllBenchmarkArtifactsFromAdmitted(process.cwd());"

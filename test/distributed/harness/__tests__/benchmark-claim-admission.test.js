@@ -12,7 +12,10 @@ import {
   ADMISSION_REASON,
   CELL_STATUS_MAPPING,
   CLAIM_CELL_STATUS,
+  CLAIM_KIND,
   campaignOutcomeOfCells,
+  checkSemanticGate,
+  evaluateBenchmarkClaimAdmission,
 } from '../benchmark-claim-admission.js';
 import {appendInvalidationEntries} from '../benchmark-invalidation-ledger.js';
 import {
@@ -47,7 +50,14 @@ import {
   BENCHMARK_SCENARIO_A_ADAPTER_ID,
 } from '../benchmark-scenario-a-run.js';
 import {BENCHMARK_PROFILE_CLASS} from '../benchmark-workload-dispatch.js';
-import {OLTP_SCENARIO_A_SEMANTIC_GATE_STATUS} from '../oltp-scenario-a-semantic-gate.js';
+import {
+  CANONICAL_SCENARIO_A_CASE_PROOF_IDS,
+  CANONICAL_SCENARIO_A_PROOF_IDS,
+  OLTP_SCENARIO_A_SEMANTIC_GATE_STATUS,
+  hasCanonicalScenarioACaseProofIds,
+  hasExactCanonicalScenarioAProofIdSet,
+  isCanonicalScenarioAProofId,
+} from '../oltp-scenario-a-semantic-gate.js';
 import {
   OLTP_SCENARIO_A_SEMANTIC_PROFILES,
   hashScenarioASemanticProfile,
@@ -56,16 +66,29 @@ import {
   EXECUTION_TARGET,
   READINESS_STATE,
   RECORD_REJECTION,
+  STORAGE_KIND,
+  buildCanonicalSemanticGateCaseRecord,
   computeRunObservationsDigest,
+  hasPositiveFaultTargetDeploymentJoin,
   validateCampaignHeader,
+  validateCanonicalDurabilityCaseRecord,
+  validateCanonicalSemanticGateCaseRecord,
+  validateRawObservationRecord,
   validateRunRecord,
 } from '../raw-observation-record.js';
 import {SCENARIO_OUTCOME} from '../scenario-outcome.js';
 import {ADVERSARIAL_CASES} from
   '../comparative-benchmark-adversarial-cases.js';
+import {
+  BENCHMARK_CORPUS_PATHS,
+  BENCHMARK_PRODUCER_PATHSPECS,
+  BENCHMARK_PUBLICATION_PRODUCER_PATHS,
+} from '../../../../scripts/checks/check-pushed-benchmark-freshness.js';
 import {recomputeComparativeBenchmarks} from
   '../../../../scripts/checks/comparative-benchmark-recompute.js';
 
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayFind = Function.call.bind(Array.prototype.find);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const stringIncludes = Function.call.bind(String.prototype.includes);
@@ -1076,4 +1099,392 @@ describe('readinessDenialOf structured extraction', () => {
         reasons: ['formation_deadline_expired'],
       });
     });
+});
+
+const CANONICAL_NINE_CASE_IDS = Object.freeze([
+  'new-order-contention',
+  'visibility',
+  'payment',
+  'order-status',
+  'delivery',
+  'stock-level',
+  'failure-atomicity',
+  'retryable-conflict',
+  'durability',
+]);
+
+function buildPhysicalRunAndHeader({repetition = 1} = {}) {
+  const campaignId = 'physical-camp-20261124';
+  const header = buildFixtureHeader({
+    campaignId,
+    targetIds: [LAGRANGE],
+    executionTarget: EXECUTION_TARGET.GCP,
+  });
+  const realImageRef = 'psvensson/lagrange:0.4.0';
+  const realRepoDigest = `psvensson/lagrange@sha256:${'a'.repeat(64)}`;
+  const realVersion = '0.4.0';
+  header.products[0] = {
+    ...header.products[0],
+    reportedVersion: realVersion,
+    images: [{
+      ...header.products[0].images[0],
+      repoDigest: realRepoDigest,
+      provenance: `registry:${realRepoDigest}`,
+    }],
+  };
+  const run = buildFixtureRun({campaignId, targetId: LAGRANGE, repetition});
+  run.executionTarget = EXECUTION_TARGET.GCP;
+  for (const key of ['products', 'productsAfterWindow']) {
+    run.identity[key] = arrayMap(run.identity[key], (p) => ({
+      ...p,
+      imageRef: realImageRef,
+      repoDigest: realRepoDigest,
+      provenance: `registry:${realRepoDigest}`,
+      reportedVersion: realVersion,
+    }));
+  }
+  run.deployment.storage = arrayMap(run.deployment.roles, (r) => ({
+    role: r.role,
+    host: r.host,
+    containerId: r.containerId,
+    mount: '/data',
+    kind: STORAGE_KIND.HOST_VOLUME,
+  }));
+  const binding = {
+    campaignId,
+    containerId: run.deployment.endpoint.containerId,
+    imageId: run.identity.products[0].imageId,
+    endpoint: `${run.deployment.endpoint.host}:${run.deployment.endpoint.port}`,
+  };
+  const targetRole = run.deployment.roles[1];
+  const faultEvidence = {
+    containerId: targetRole.containerId,
+    host: targetRole.host,
+    faultTarget: {
+      nodeId: targetRole.containerId,
+      role: targetRole.role,
+      host: targetRole.host,
+      isDataReplica: true,
+      pgHostOnly: false,
+    },
+    startedAtBefore: '2026-11-24T10:00:00.000Z',
+    startedAtAfter: '2026-11-24T10:01:00.000Z',
+    beforeIncarnation: `${targetRole.containerId}:2026-11-24T10:00:00.000Z`,
+    afterIncarnation: `${targetRole.containerId}:2026-11-24T10:01:00.000Z`,
+    storageContinuity: 'preserved',
+    retainedObligations: ['committed_payment_rows', 'full_oltp_state_sha256'],
+  };
+  const cases = JSON.parse(JSON.stringify(arrayMap(CANONICAL_NINE_CASE_IDS, (caseId) => {
+    const proofIds = [...CANONICAL_SCENARIO_A_CASE_PROOF_IDS[caseId]];
+    return buildCanonicalSemanticGateCaseRecord({
+      proofCase: {id: caseId, proofIds},
+      binding,
+      evaluation: {passed: true, failures: []},
+      proofRecord: {
+        evidenceId: `lagrange-${caseId}`,
+        system: LAGRANGE,
+        status: 'passed',
+        artifactSha256: 'e'.repeat(64),
+        proofIds,
+      },
+      ...(caseId === 'durability' ? {faultEvidence} : {}),
+    });
+  })));
+  const proofs = arrayMap(cases, (c) => c.proofRecord);
+  run.correctness.semanticGate = {
+    system: LAGRANGE,
+    status: OLTP_SCENARIO_A_SEMANTIC_GATE_STATUS.PASSED,
+    passed: [...CANONICAL_SCENARIO_A_PROOF_IDS],
+    failed: [],
+    missing: [],
+    passedCount: CANONICAL_SCENARIO_A_PROOF_IDS.length,
+    failedCount: 0,
+    missingCount: 0,
+    binding,
+    bindings: [binding],
+    cases,
+    proofs,
+  };
+  sealFixtureRun(run, {keepFinalState: true});
+  return {campaignId, header, run};
+}
+
+function evaluatePhysicalRunPair(mutateRun) {
+  const first = buildPhysicalRunAndHeader({repetition: 1});
+  const second = buildPhysicalRunAndHeader({repetition: 2});
+  mutateRun(first.run);
+  mutateRun(second.run);
+  first.run.rawObservationsDigest = computeRunObservationsDigest(first.run);
+  second.run.rawObservationsDigest = computeRunObservationsDigest(second.run);
+  const claim = {
+    claimKey: `${LAGRANGE}/scenarioA/main`,
+    claimKind: CLAIM_KIND.THROUGHPUT,
+    targetId: LAGRANGE,
+    scenario: 'scenarioA',
+    subkind: 'main',
+    minDistinctHosts: 3,
+    forensicReceiptIds: [],
+  };
+  return {
+    firstRun: first.run,
+    cell: evaluateBenchmarkClaimAdmission({
+      claim,
+      runs: [
+        {file: 'data/tidb-comparison/raw-observations.ndjson', run: first.run},
+        {file: 'data/tidb-comparison/raw-observations.ndjson', run: second.run},
+      ],
+      campaignHeaders: new Map([[first.campaignId, first.header]]),
+      retainedReferences: [],
+      invalidations: [],
+    }),
+  };
+}
+
+describe('Finding 5: positive fault-target deployment join and canonical proof-ID set membership',
+  () => {
+    it('admits a valid physical run with positive deployment join and all 33 canonical proof IDs',
+      () => {
+        const {firstRun, cell} = evaluatePhysicalRunPair(() => {});
+        assert.doesNotThrow(() => validateRawObservationRecord(firstRun));
+        assert.equal(hasExactCanonicalScenarioAProofIdSet(firstRun.correctness.semanticGate.passed),
+          true);
+        const durCase = arrayFind(firstRun.correctness.semanticGate.cases,
+          (c) => c.caseId === 'durability');
+        assert.equal(hasPositiveFaultTargetDeploymentJoin(durCase, firstRun), true);
+        assert.equal(validateCanonicalDurabilityCaseRecord(durCase, firstRun).valid, true);
+        assert.equal(cell.status, CLAIM_CELL_STATUS.VALID_OBSERVED, cell.reasons.join(', '));
+      });
+
+    it('negative control 1: mutating faultEvidence.containerId to a nonexistent container ID ' +
+      'on a genuine deployed host with recomputed rawObservationsDigest is rejected by both ' +
+      'validateRawObservationRecord and evaluateBenchmarkClaimAdmission', () => {
+      const ghostContainerId = 'deadbeef'.repeat(8);
+      const {firstRun, cell} = evaluatePhysicalRunPair((run) => {
+        const durCase = arrayFind(run.correctness.semanticGate.cases,
+          (c) => c.caseId === 'durability');
+        durCase.faultEvidence = {
+          ...durCase.faultEvidence,
+          containerId: ghostContainerId,
+          faultTarget: {
+            ...durCase.faultEvidence.faultTarget,
+            nodeId: ghostContainerId,
+          },
+          beforeIncarnation: `${ghostContainerId}:2026-11-24T10:00:00.000Z`,
+          afterIncarnation: `${ghostContainerId}:2026-11-24T10:01:00.000Z`,
+        };
+      });
+      const durCase = arrayFind(firstRun.correctness.semanticGate.cases,
+        (c) => c.caseId === 'durability');
+      assert.equal(hasPositiveFaultTargetDeploymentJoin(durCase, firstRun), false);
+      assert.equal(validateCanonicalDurabilityCaseRecord(durCase, firstRun).valid, false);
+      assert.throws(
+        () => validateRawObservationRecord(firstRun),
+        (err) => err.code === RECORD_REJECTION.UNBOUND_FAULT_TARGET,
+      );
+      assert.equal(cell.status, CLAIM_CELL_STATUS.INVALID_MEASUREMENT);
+      assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.RAW_DIGEST_MISMATCH), false);
+      assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.SEMANTIC_GATE_UNBOUND), true);
+      assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.SEMANTIC_GATE_NOT_PASSED), true);
+
+      // Also verify that missing from any single table (roles, products, or storage) fails closed:
+      for (const dropTable of [
+        (run) => {
+          run.deployment.storage = arrayFilter(run.deployment.storage,
+            (s) => s.containerId !== 'ctr-2');
+        },
+        (run) => {
+          run.identity.products = arrayFilter(run.identity.products,
+            (p) => p.containerId !== 'ctr-2');
+        },
+        (run) => {
+          run.deployment.roles = arrayFilter(run.deployment.roles,
+            (r) => r.containerId !== 'ctr-2');
+        },
+      ]) {
+        const partial = evaluatePhysicalRunPair(dropTable);
+        assert.throws(() => validateRawObservationRecord(partial.firstRun));
+        assert.equal(partial.cell.status, CLAIM_CELL_STATUS.INVALID_MEASUREMENT);
+        assert.equal(
+          arrayIncludes(partial.cell.reasons, ADMISSION_REASON.SEMANTIC_GATE_UNBOUND),
+          true,
+        );
+      }
+    });
+
+    it('negative control 2: replacing one non-durability proof ID consistently across ' +
+      'gate.passed, case, and proofs (preserving count 33) with recomputed ' +
+      'rawObservationsDigest is rejected by both record validation and claim admission', () => {
+      const originalId = 'isolation:readYourOwnWritesRequired';
+      const substitutedId = 'isolation:readYourOwnWritesSubstituted';
+      assert.equal(isCanonicalScenarioAProofId(originalId), true);
+      assert.equal(isCanonicalScenarioAProofId(substitutedId), false);
+
+      const {firstRun, cell} = evaluatePhysicalRunPair((run) => {
+        const gate = run.correctness.semanticGate;
+        gate.passed = arrayMap(
+          gate.passed,
+          (id) => (id === originalId ? substitutedId : id),
+        ).sort();
+        const visCase = arrayFind(gate.cases, (c) => c.caseId === 'visibility');
+        visCase.proofIds = arrayMap(visCase.proofIds,
+          (id) => (id === originalId ? substitutedId : id)).sort();
+        visCase.proofRecord = {
+          ...visCase.proofRecord,
+          proofIds: [...visCase.proofIds],
+        };
+        gate.proofs = arrayMap(gate.proofs, (p) => (p.evidenceId === 'lagrange-visibility' ?
+          {...p, proofIds: [...visCase.proofIds]} : p));
+      });
+
+      assert.equal(firstRun.correctness.semanticGate.passed.length,
+        CANONICAL_SCENARIO_A_PROOF_IDS.length);
+      const visCase = arrayFind(firstRun.correctness.semanticGate.cases,
+        (c) => c.caseId === 'visibility');
+      assert.equal(hasCanonicalScenarioACaseProofIds('visibility', visCase.proofIds), false);
+      assert.equal(validateCanonicalSemanticGateCaseRecord(visCase, firstRun).valid, false);
+      assert.throws(
+        () => validateRawObservationRecord(firstRun),
+        (err) => err.code === RECORD_REJECTION.NON_CANONICAL_PROOF_IDS,
+      );
+      assert.equal(
+        arrayIncludes(checkSemanticGate(firstRun), ADMISSION_REASON.SEMANTIC_GATE_NOT_PASSED),
+        true,
+      );
+      assert.equal(cell.status, CLAIM_CELL_STATUS.INVALID_MEASUREMENT);
+      assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.RAW_DIGEST_MISMATCH), false);
+      assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.SEMANTIC_GATE_NOT_PASSED), true);
+      assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.SEMANTIC_GATE_INCOMPLETE), true);
+
+      // Summary count mismatch (passedCount / failedCount / missing) is also rejected:
+      const countMismatch = evaluatePhysicalRunPair((run) => {
+        run.correctness.semanticGate.passedCount = 32;
+      });
+      assert.equal(countMismatch.cell.status, CLAIM_CELL_STATUS.INVALID_MEASUREMENT);
+      assert.equal(
+        arrayIncludes(countMismatch.cell.reasons, ADMISSION_REASON.SEMANTIC_GATE_NOT_PASSED),
+        true,
+      );
+    });
+  });
+
+const REPO_ROOT_DIR = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../../../..');
+const PRODUCER_GRAPH_ROOTS = Object.freeze([
+  'docs/benchmarks/cloud/recompute-comparative-from-raw.mjs',
+  'docs/benchmarks/cloud/run-comparative-benchmarks.mjs',
+  'scripts/checks/check-pushed-benchmark-freshness.js',
+  'scripts/checks/comparative-benchmark-recompute.js',
+  'scripts/checks/check-benchmark-history-append-only.js',
+  'test/distributed/harness/raw-observation-campaign-specs.js',
+  'test/distributed/harness/comparative-landing-tables.js',
+]);
+const PRODUCER_SCOPE_PREFIXES = Object.freeze([
+  'test/distributed/',
+  'docs/benchmarks/',
+  'scripts/checks/',
+]);
+
+function isProducerScopedRelativePath(relPath) {
+  for (const prefix of PRODUCER_SCOPE_PREFIXES) {
+    if (stringStartsWith(relPath, prefix)) return true;
+  }
+  return false;
+}
+
+function collectImportedProducerFilesFromRoots() {
+  const visited = new Set();
+  const pending = [];
+  for (const relRoot of PRODUCER_GRAPH_ROOTS) {
+    const absRoot = path.join(REPO_ROOT_DIR, relRoot);
+    if (fs.existsSync(absRoot)) pending.push(absRoot);
+  }
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (visited.has(current)) continue;
+    visited.add(current);
+    const source = fs.readFileSync(current, 'utf8');
+    for (const match of source.matchAll(IMPORT_PATTERN)) {
+      const specifier = match[1] || match[2];
+      if (!stringStartsWith(specifier, '.')) continue;
+      const target = path.resolve(path.dirname(current), specifier);
+      if (!fs.existsSync(target)) continue;
+      const targetRel = path.relative(REPO_ROOT_DIR, target);
+      if (isProducerScopedRelativePath(targetRel)) {
+        pending.push(target);
+      }
+    }
+  }
+  return arrayMap([...visited], (absPath) => path.relative(REPO_ROOT_DIR, absPath)).sort();
+}
+
+describe('Finding 6: canonical benchmark producer dependency set and snapshot-fenced hooks', () => {
+  it('every imported test/distributed/**, docs/benchmarks/**, and scripts/checks/** file in ' +
+    'the benchmark publication/freshness ES module import graph is in ' +
+    'BENCHMARK_PUBLICATION_PRODUCER_PATHS', () => {
+    const producerSet = new Set(BENCHMARK_PUBLICATION_PRODUCER_PATHS);
+    const importedFiles = collectImportedProducerFilesFromRoots();
+    assert.ok(importedFiles.length > 50, 'import graph traversal must discover producer closure');
+    for (const requiredProducer of [
+      'test/distributed/harness/oltp-scenario-a-semantic-profile.js',
+      'test/distributed/harness/benchmark-workload-dispatch.js',
+      'test/distributed/harness/benchmark-oltp-state-reconciliation.js',
+      'test/distributed/harness/comparative-landing-tables.js',
+      'test/distributed/harness/benchmark-claim-admission.js',
+      'test/distributed/harness/raw-observation-record.js',
+      'test/distributed/harness/oltp-scenario-a-semantic-gate.js',
+      'scripts/checks/check-pushed-benchmark-freshness.js',
+      'scripts/checks/comparative-benchmark-recompute.js',
+      'scripts/checks/check-benchmark-history-append-only.js',
+    ]) {
+      assert.equal(producerSet.has(requiredProducer), true,
+        `missing required producer ${requiredProducer} in BENCHMARK_PUBLICATION_PRODUCER_PATHS`);
+      assert.equal(arrayIncludes(importedFiles, requiredProducer), true,
+        `expected ${requiredProducer} in traversed import graph`);
+    }
+    const missingFromCanonicalSet = arrayFilter(importedFiles, (file) => !producerSet.has(file));
+    assert.deepEqual(
+      missingFromCanonicalSet,
+      [],
+      'imported producer files missing from BENCHMARK_PUBLICATION_PRODUCER_PATHS: ' +
+      missingFromCanonicalSet.join(', '),
+    );
+    for (const corpusPath of BENCHMARK_CORPUS_PATHS) {
+      assert.equal(arrayIncludes(BENCHMARK_PRODUCER_PATHSPECS, corpusPath), true);
+    }
+  });
+
+  it('pre-commit, pre-push, and push-gate-corpus-worktree consume the canonical producer set ' +
+    'and fail closed without existence bypasses', () => {
+    const preCommit = fs.readFileSync(path.join(REPO_ROOT_DIR, '.githooks/pre-commit'), 'utf8');
+    assert.equal(stringIncludes(preCommit, 'check-pushed-benchmark-freshness.js --list-producers'),
+      true, 'pre-commit must consume --list-producers from check-pushed-benchmark-freshness.js');
+    assert.equal(
+      stringIncludes(preCommit, 'check-pushed-benchmark-freshness.js --check-staged-clean'),
+      true,
+      'pre-commit must enforce --check-staged-clean before regenerating benchmark artifacts',
+    );
+    assert.equal(stringIncludes(preCommit, ':(glob)test/distributed/harness/comparative-*.js'),
+      false, 'pre-commit must not retain a duplicate hardcoded glob producer list');
+
+    const prePush = fs.readFileSync(path.join(REPO_ROOT_DIR, '.githooks/pre-push'), 'utf8');
+    assert.equal(
+      stringIncludes(prePush, 'if [ ! -f "scripts/checks/check-pushed-benchmark-freshness.js" ]'),
+      true,
+      'pre-push must fail closed if scripts/checks/check-pushed-benchmark-freshness.js is missing',
+    );
+    assert.equal(
+      stringIncludes(prePush, 'if [ -f "scripts/checks/check-pushed-benchmark-freshness.js" ]'),
+      false,
+      'pre-push must not skip benchmark freshness when check-pushed-benchmark-freshness.js is absent',
+    );
+
+    const corpusWorktree = fs.readFileSync(
+      path.join(REPO_ROOT_DIR, 'scripts/checks/push-gate-corpus-worktree.js'),
+      'utf8',
+    );
+    assert.equal(
+      stringIncludes(corpusWorktree, 'if (!fs.existsSync(rawObservationsPath))'),
+      true,
+      'push-gate-corpus-worktree.js must fail closed when raw-observations.ndjson is missing',
+    );
+  });
 });
