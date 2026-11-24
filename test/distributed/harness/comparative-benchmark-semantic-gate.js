@@ -51,8 +51,16 @@ import {
   PGWIRE_OLTP_EXECUTION_PATH, PGWIRE_OLTP_NATIVE_LOCKING_READ_MODE, PGWIRE_OLTP_PROTOCOL,
   PGWIRE_OLTP_SNAPSHOT_LOCKING_READ_MODE, createLagrangeOltpAdapter,
 } from '../reference-client/lagrange-oltp-adapter.js';
+import {observeLagrangeDeliveryState} from '../reference-client/lagrange-delivery-observer.js';
+import {
+  observeLagrangeNewOrderContentionState,
+} from '../reference-client/lagrange-new-order-contention-observer.js';
 import {observeLagrangeOltpStateSnapshot} from '../reference-client/lagrange-oltp-state-snapshot.js';
 import {observeLagrangePaymentState} from '../reference-client/lagrange-payment-observer.js';
+import {
+  induceLagrangeRetryableConflict,
+} from '../reference-client/lagrange-retryable-conflict-probe.js';
+import {runLagrangeVisibilityProbe} from '../reference-client/lagrange-visibility-probe.js';
 import {OLTP_ADAPTER_KEEP_DATASET} from '../reference-client/oltp-adapter-contract.js';
 import {createPostgreSqlOltpAdapter} from '../reference-client/postgresql-oltp-adapter.js';
 import {
@@ -625,6 +633,30 @@ async function closePgAdapterQuietly(adapter, diagnostics) {
   }
 }
 
+function pgCaseObserverOptions(createPgClient) {
+  if (!createPgClient) return {};
+  return {
+    observeDelivery: (opts) => observeLagrangeDeliveryState({
+      ...opts, createClient: createPgClient,
+    }),
+    observeState: (opts) => observeLagrangeNewOrderContentionState({
+      ...opts, createClient: createPgClient,
+    }),
+    observeSnapshot: (opts) => observeLagrangeOltpStateSnapshot({
+      ...opts, createClient: createPgClient,
+    }),
+    observePayment: (opts) => observeLagrangePaymentState({
+      ...opts, createClient: createPgClient,
+    }),
+    induceConflict: (opts) => induceLagrangeRetryableConflict({
+      ...opts, createClient: createPgClient,
+    }),
+    runProbe: (opts) => runLagrangeVisibilityProbe({
+      ...opts, createClient: createPgClient,
+    }),
+  };
+}
+
 async function executeRemotePgCase(req, overrides) {
   const caseId = ownField(req, 'caseId');
   const executor = ownField(PG_CASE_EXECUTORS, caseId);
@@ -640,6 +672,7 @@ async function executeRemotePgCase(req, overrides) {
         createAdapter,
         prepareContext: async () => context,
         persistentStorage: req.persistentStorage,
+        ...pgCaseObserverOptions(overrides.createPgClient),
       },
       cluster: null,
     });
@@ -839,6 +872,11 @@ async function recordCaseOutcome({result, proofCase, system, outcome, evidenceDi
     result.failureKind = classifyCaseFailure(proofCase.id, result.failureReasons);
   }
   result.proofRecord = outcome.proofRecord;
+  const faultEvidence = proofCase.id === DURABILITY_CASE_ID ?
+    ownField(outcome.evidence, 'faultEvidence') : undefined;
+  if (isRecordObject(faultEvidence)) {
+    result.faultEvidence = faultEvidence;
+  }
   result.evidencePath = await persistGateArtifact(
     evidenceDir,
     `scenario-a-${proofCase.id}-${system}.json`,

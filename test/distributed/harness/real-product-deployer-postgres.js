@@ -87,7 +87,7 @@ function versionPatternOfMajor(major) {
 }
 const MAJOR_TAG = /:(\d+)(?:[.-]|$)/u;
 const SERVER_SETTINGS = Object.freeze(['listen_addresses=*', 'max_connections=300',
-  'wal_level=replica', 'max_wal_senders=10', 'hot_standby=on',
+  'wal_level=replica', 'max_wal_senders=10', 'wal_keep_size=256MB', 'hot_standby=on',
   'password_encryption=scram-sha-256']);
 
 function generatedPassword() {
@@ -119,11 +119,22 @@ function hbaFile({clientIps, standbyHosts}) {
 function standbyScript({primaryHost, name, password}) {
   const conninfo = `host=${primaryHost} port=${PORT} user=${REPLICATION_USER} ` +
     `password=${password} application_name=${name}`;
-  return arrayJoin(['set -e', `mkdir -p ${PGDATA}`, `chown postgres ${PGDATA}`,
+  const serverFlags = arrayJoin(
+    arrayMap(SERVER_SETTINGS, (setting) => `-c ${shellQuote(setting)}`),
+    ' ',
+  );
+  return arrayJoin([
+    'set -e',
+    'SU_BIN="$(command -v gosu || command -v su-exec)"',
+    `mkdir -p ${DATA_ROOT} ${PGDATA}`,
+    `chown postgres ${DATA_ROOT} ${PGDATA}`,
     `chmod 0700 ${PGDATA}`,
-    `su-exec postgres pg_basebackup -d ${shellQuote(conninfo)} -D ${PGDATA} -Fp -Xs -R`,
-    `exec su-exec postgres postgres -D ${PGDATA} ${arrayJoin(arrayMap(SERVER_SETTINGS,
-      (setting) => `-c ${setting}`), ' ')}`], '\n');
+    `if [ ! -s "${PGDATA}/PG_VERSION" ]; then`,
+    `  "$SU_BIN" postgres pg_basebackup -d ${shellQuote(conninfo)} ` +
+      `-D ${PGDATA} -Fp -Xs -R -c fast`,
+    'fi',
+    `exec "$SU_BIN" postgres postgres -D ${PGDATA} ${serverFlags}`,
+  ], '\n');
 }
 
 function resolveCallSignal(ctx, pollContext) {

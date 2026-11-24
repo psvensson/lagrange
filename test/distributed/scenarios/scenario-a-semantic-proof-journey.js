@@ -28,6 +28,16 @@ import {
   PGWIRE_OLTP_SNAPSHOT_LOCKING_READ_MODE,
   createLagrangeOltpAdapter,
 } from '../reference-client/lagrange-oltp-adapter.js';
+import {observeLagrangeDeliveryState} from '../reference-client/lagrange-delivery-observer.js';
+import {
+  observeLagrangeNewOrderContentionState,
+} from '../reference-client/lagrange-new-order-contention-observer.js';
+import {observeLagrangeOltpStateSnapshot} from '../reference-client/lagrange-oltp-state-snapshot.js';
+import {observeLagrangePaymentState} from '../reference-client/lagrange-payment-observer.js';
+import {
+  induceLagrangeRetryableConflict,
+} from '../reference-client/lagrange-retryable-conflict-probe.js';
+import {runLagrangeVisibilityProbe} from '../reference-client/lagrange-visibility-probe.js';
 import {
   createPostgreSqlOltpAdapter,
 } from '../reference-client/postgresql-oltp-adapter.js';
@@ -174,7 +184,9 @@ function createJourneyInFlightTracker(externalTrackInFlight = null) {
 // adapter; without one the adapter opens the native pg client.
 function adapterFactoryOf(request) {
   const createSystemAdapter = ADAPTER_BY_SYSTEM[request.system];
-  if (!Object.hasOwn(request, 'createClient')) return createSystemAdapter;
+  if (!Object.hasOwn(request, 'createClient')) {
+    return {createAdapter: createSystemAdapter, createTrackedClient: null};
+  }
   if (typeof request.createClient !== 'function') {
     throw new Error('Scenario A proof journey createClient must be a function');
   }
@@ -220,10 +232,37 @@ function adapterFactoryOf(request) {
       },
     };
   };
-  return (adapterOptions) => createSystemAdapter({
-    ...adapterOptions,
-    createClient: createTrackedClient,
-  });
+  return {
+    createAdapter: (adapterOptions) => createSystemAdapter({
+      ...adapterOptions,
+      createClient: createTrackedClient,
+    }),
+    createTrackedClient,
+  };
+}
+
+function observerOptionsOf(createTrackedClient) {
+  if (!createTrackedClient) return {};
+  return {
+    observeDelivery: (opts) => observeLagrangeDeliveryState({
+      ...opts, createClient: createTrackedClient,
+    }),
+    observeState: (opts) => observeLagrangeNewOrderContentionState({
+      ...opts, createClient: createTrackedClient,
+    }),
+    observeSnapshot: (opts) => observeLagrangeOltpStateSnapshot({
+      ...opts, createClient: createTrackedClient,
+    }),
+    observePayment: (opts) => observeLagrangePaymentState({
+      ...opts, createClient: createTrackedClient,
+    }),
+    induceConflict: (opts) => induceLagrangeRetryableConflict({
+      ...opts, createClient: createTrackedClient,
+    }),
+    runProbe: (opts) => runLagrangeVisibilityProbe({
+      ...opts, createClient: createTrackedClient,
+    }),
+  };
 }
 
 function requireBinding(binding) {
@@ -458,6 +497,12 @@ async function runCase(proofCase, context, options, journey) {
     }
     recordEvaluation(result, proofCase, outcome.evaluation);
     result.proofRecord = evidence.proofRecord;
+    const faultEvidence = proofCase.id === DURABILITY_CASE_ID &&
+      Object.hasOwn(evidence, 'faultEvidence') ? evidence.faultEvidence : null;
+    if (faultEvidence !== null && typeof faultEvidence === 'object' &&
+        !Array.isArray(faultEvidence)) {
+      result.faultEvidence = faultEvidence;
+    }
     result.evidencePath = await persistEvidence(journey.evidenceDir, context.system,
       proofCase.id, evidence);
   } catch (error) {
@@ -594,11 +639,14 @@ async function recordBeforeCaseError(context, proofCase, journeyRequest, error) 
   return Object.freeze(erroredCase);
 }
 
-function buildCaseRunOptions(createAdapter, current, proofCase, journeyRequest) {
+function buildCaseRunOptions(
+  createAdapter, observerOptions, current, proofCase, journeyRequest,
+) {
   return Object.freeze({
     createAdapter,
     prepareContext: async () => current,
     persistentStorage: journeyRequest.persistentStorage,
+    ...observerOptions,
     ...(journeyRequest.restartProduct ? {
       restartCluster: ({context: active}) => awaitWithJourneySignal(
         () => journeyRequest.restartProduct({context: active}),
@@ -610,7 +658,9 @@ function buildCaseRunOptions(createAdapter, current, proofCase, journeyRequest) 
   });
 }
 
-async function executeJourneyCaseStep(proofCase, context, createAdapter, journeyRequest) {
+async function executeJourneyCaseStep(
+  proofCase, context, createAdapter, observerOptions, journeyRequest,
+) {
   assertJourneyActive(journeyRequest, 'before-case', proofCase.id);
   let nextContext;
   try {
@@ -622,7 +672,9 @@ async function executeJourneyCaseStep(proofCase, context, createAdapter, journey
     };
   }
   assertJourneyActive(journeyRequest, 'run-case', proofCase.id);
-  const options = buildCaseRunOptions(createAdapter, nextContext, proofCase, journeyRequest);
+  const options = buildCaseRunOptions(
+    createAdapter, observerOptions, nextContext, proofCase, journeyRequest,
+  );
   const caseResult = await runCase(proofCase, nextContext, options, journeyRequest);
   assertJourneyActive(journeyRequest, 'after-case', proofCase.id);
   return {context: nextContext, caseResult};
@@ -639,11 +691,14 @@ async function runScenarioASemanticProofJourney(request = {}) {
     ...request,
     trackInFlight: tracker.trackInFlight,
   };
-  const createAdapter = adapterFactoryOf(journeyRequest);
+  const {createAdapter, createTrackedClient} = adapterFactoryOf(journeyRequest);
+  const observerOptions = observerOptionsOf(createTrackedClient);
   const cases = [];
   try {
     for (const proofCase of OLTP_SCENARIO_A_PROOF_CASES) {
-      const step = await executeJourneyCaseStep(proofCase, context, createAdapter, journeyRequest);
+      const step = await executeJourneyCaseStep(
+        proofCase, context, createAdapter, observerOptions, journeyRequest,
+      );
       context = step.context;
       cases.push(step.caseResult);
     }
