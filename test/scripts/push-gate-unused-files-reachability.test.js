@@ -17,6 +17,8 @@ const PROBE = fileURLToPath(new URL(
   '../../scripts/checks/push-gate-unused-files.js', import.meta.url));
 const UNREACHABLE_FLAG = '--unreachable-scripts';
 const UNREACHABLE_SRC_FLAG = '--unreachable-src';
+const ADDED_FLAG = '--added';
+const BASE_FLAG = '--base';
 const LIST_FLAG = '--list';
 
 function write(root, relativePath, content) {
@@ -147,4 +149,126 @@ test('--unreachable-src flags src modules imported only by tests while excluding
     execGit(['rm', '--force', '--quiet', 'src/completely-unused.js', 'src/test-only-orphan.js'],
       {cwd: root});
     assert.equal(probeSrc(root).count, 0);
+  });
+
+test('--unreachable-src ignores JSON baselines, data arrays, and non-entrypoint mentions',
+  () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'src-reachability-negative-'));
+    execGit(['init', '--quiet'], {cwd: root});
+    write(root, 'package.json', JSON.stringify({
+      name: 'fixture',
+      description: 'mentions src/orphan.js in metadata only',
+      main: 'src/index.js',
+      scripts: {start: 'node src/index.js'},
+    }));
+    write(root, 'Dockerfile', [
+      '# comment mentioning src/orphan.js',
+      'COPY src/orphan.js /app/src/orphan.js',
+      'CMD ["node", "src/index.js"]',
+    ].join('\n') + '\n');
+    write(root, 'src/index.js', [
+      '// import \'./orphan.js\';',
+      '/** @typedef {import(\'./orphan.js\').Orphan} Orphan */',
+      'export const live = 1;',
+    ].join('\n') + '\n');
+    write(root, 'src/orphan.js', 'export const orphan = 1;\n');
+    write(root, 'test/orphan.test.js', 'import \'../src/orphan.js\';\n');
+    write(root, 'scripts/baseline.json', JSON.stringify({
+      entries: [{filePath: 'src/orphan.js'}],
+    }) + '\n');
+    write(root, 'scripts/audit.js', [
+      'const BASELINE_URL = new URL(\'./baseline.json\', import.meta.url);',
+      'const ALLOWLIST = [\'src/orphan.js\'];',
+      'const UNUSED_PATH = \'src/orphan.js\';',
+      'console.log(BASELINE_URL, ALLOWLIST, UNUSED_PATH);',
+    ].join('\n') + '\n');
+    execGit(['add', '-A'], {cwd: root});
+
+    const run = spawnSync('node', [PROBE, UNREACHABLE_SRC_FLAG, LIST_FLAG],
+      {cwd: root, encoding: 'utf8'});
+    assert.equal(run.stderr, '', 'the src reachability probe reports on stdout only');
+    assert.equal(run.status, 1, 'orphan must fail the reachability probe');
+    const lines = run.stdout.trim().split('\n');
+    assert.deepEqual(lines.slice(0, -1), ['src/orphan.js'],
+      'JSON baseline and checker allowlist string mentions must not mark src/orphan.js reachable');
+    assert.equal(Number(lines[lines.length - 1]), 1, 'exactly 1 unused source file reported');
+  });
+
+test('--unreachable-src traverses executable import, export, require, URL, Worker, and fork edges',
+  () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'src-reachability-edges-'));
+    execGit(['init', '--quiet'], {cwd: root});
+    write(root, 'package.json', JSON.stringify({
+      main: 'src/index.js',
+      scripts: {runWorker: 'node src/script-cmd-entry.js'},
+    }));
+    write(root, 'Dockerfile', 'ENTRYPOINT ["node", "src/docker-entry.js"]\n');
+    write(root, 'src/index.js', [
+      'import {a} from \'./static-import.js\';',
+      'export {b} from \'./reexport.js\';',
+      'const DYN = \'./dynamic-const.js\';',
+      'await import(\'./dynamic-literal.js\');',
+      'await import(DYN);',
+      'require(\'./cjs-required.cjs\');',
+      'const url = new URL(\'./url-worker.js\', import.meta.url);',
+      'new Worker(\'./rel-worker.js\');',
+      'new Worker(\'src/repo-worker.js\');',
+      'fork(\'src/fork-worker.js\');',
+      'console.log(a, url);',
+    ].join('\n') + '\n');
+    write(root, 'src/static-import.js', 'export const a = 1;\n');
+    write(root, 'src/reexport.js', 'export const b = 2;\n');
+    write(root, 'src/dynamic-literal.js', 'export const c = 3;\n');
+    write(root, 'src/dynamic-const.js', 'export const d = 4;\n');
+    write(root, 'src/cjs-required.cjs', 'module.exports = 5;\n');
+    write(root, 'src/url-worker.js', 'export const e = 6;\n');
+    write(root, 'src/rel-worker.js', 'export const f = 7;\n');
+    write(root, 'src/repo-worker.js', 'export const g = 8;\n');
+    write(root, 'src/fork-worker.js', 'export const h = 9;\n');
+    write(root, 'src/script-cmd-entry.js', 'export const i = 10;\n');
+    write(root, 'src/docker-entry.js', 'export const j = 11;\n');
+    execGit(['add', '-A'], {cwd: root});
+
+    const {count, listed} = probeSrc(root, LIST_FLAG);
+    assert.deepEqual(listed, []);
+    assert.equal(count, 0);
+  });
+
+test('--unreachable-src --added flags only newly added unreachable src modules in range',
+  () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'src-reachability-added-'));
+    const gitEnv = {
+      ...process.env,
+      GIT_AUTHOR_NAME: 'test',
+      GIT_AUTHOR_EMAIL: 'test@example.com',
+      GIT_COMMITTER_NAME: 'test',
+      GIT_COMMITTER_EMAIL: 'test@example.com',
+    };
+    const commitAll = (message) => {
+      execGit(['add', '-A'], {cwd: root, env: gitEnv});
+      execGit(['commit', '--quiet', '-m', message], {cwd: root, env: gitEnv});
+    };
+    execGit(['init', '--quiet'], {cwd: root, env: gitEnv});
+    write(root, 'package.json', JSON.stringify({main: 'src/index.js'}));
+    write(root, 'src/index.js', 'export const live = 1;\n');
+    write(root, 'src/preexisting-orphan.js', 'export const oldOrphan = 1;\n');
+    commitAll('base');
+    const baseSha = execGit(['rev-parse', 'HEAD'], {cwd: root, encoding: 'utf8', env: gitEnv})
+      .trim();
+
+    write(root, 'src/new-live.js', 'export const live2 = 2;\n');
+    write(root, 'src/index.js', 'import \'./new-live.js\';\nexport const live = 1;\n');
+    commitAll('add reachable module');
+    assert.equal(probeSrc(root, ADDED_FLAG, BASE_FLAG, baseSha, LIST_FLAG).count, 0,
+      'pre-existing untouched orphan must not fail --added range check');
+    assert.deepEqual(probeSrc(root, LIST_FLAG).listed, ['src/preexisting-orphan.js']);
+
+    write(root, 'src/new-orphan.js', 'export const bad = 3;\n');
+    write(root, 'test/new-orphan.test.js', 'import \'../src/new-orphan.js\';\n');
+    write(root, 'scripts/baseline.json', '{"filePath":"src/new-orphan.js"}\n');
+    commitAll('add unreachable module');
+    const addedResult = probeSrc(root, ADDED_FLAG, BASE_FLAG, baseSha, LIST_FLAG);
+    assert.deepEqual(addedResult.listed, ['src/new-orphan.js'],
+      'newly added unreachable src module must be flagged even when referenced by tests/JSON');
+    assert.equal(addedResult.count, 1);
   });

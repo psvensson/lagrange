@@ -274,7 +274,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:roadmap-authority` — `node scripts/run-documentation-current-state-scenario.js roadmap-audience-authority-cutover`
 - `test:safety-pregate` — `node scripts/run-classified-test-files.js $(cat test/shards/safety-pregate.txt)`
 - `test:smoke` — `node scripts/run-project-hardening-acceptance.js --manifest test/manifests/developer-smoke-proof-manifest.json --receipt-dir test-output/acceptance/developer-smoke`
-- `test:static` — `node scripts/checks/run-static-audits.js --chain "npm run test:unused && npm run test:unused:prod && npm run test:unused:ratchet && npm run test:deps && npm run audit:file-size && npm run test:complexity && npm run test:metrics && npm run test:metadata-gateway:audit && npm run audit:runtime-grammar && npm run audit:operation-progress-authority && npm run audit:service-portability-claims && npm run audit:current-capabilities && npm run audit:cli-docs && npm run audit:closure-ledger && npm run audit:no-kiro && npm run audit:no-legacy-naming && npm run audit:no-legacy-consensus-references && npm run audit:leader-required-read-census && npm run audit:quest-log-append-only && npm run audit:comparative-recompute && npm run audit:benchmark-history-append-only && npm run audit:closed-quest-shape && npm run audit:steering-diet && npm run audit:rule-set && npm run audit:impact-contracts && npm run audit:shards && npm run audit:guidelines && npm run audit:doc-audience && npm run audit:doc-ascii && npm run audit:documentation-current && npm run audit:source-owner-index && npm run audit:roadmap-authority && npm run steering:check && npm run lint:scripts && npm run lint"`
+- `test:static` — `node scripts/checks/run-static-audits.js --chain "npm run test:unused && npm run test:unused:prod && npm run test:unused:src:added && npm run test:unused:ratchet && npm run test:deps && npm run audit:file-size && npm run test:complexity && npm run test:metrics && npm run test:metadata-gateway:audit && npm run audit:runtime-grammar && npm run audit:operation-progress-authority && npm run audit:service-portability-claims && npm run audit:current-capabilities && npm run audit:cli-docs && npm run audit:closure-ledger && npm run audit:no-kiro && npm run audit:no-legacy-naming && npm run audit:no-legacy-consensus-references && npm run audit:leader-required-read-census && npm run audit:quest-log-append-only && npm run audit:comparative-recompute && npm run audit:benchmark-history-append-only && npm run audit:closed-quest-shape && npm run audit:steering-diet && npm run audit:rule-set && npm run audit:impact-contracts && npm run audit:shards && npm run audit:guidelines && npm run audit:doc-audience && npm run audit:doc-ascii && npm run audit:documentation-current && npm run audit:source-owner-index && npm run audit:roadmap-authority && npm run steering:check && npm run lint:scripts && npm run lint"`
 - `test:static:postpush` — `node scripts/checks/run-static-audits.js`
 - `test:task27:invariant-suite` — `bash scripts/run-task27-deterministic-invariant-suite.sh`
 - `test:topology-failure-gates` — Run the topology failure gates.
@@ -285,6 +285,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:unused:push` — `node scripts/checks/push-gate-unused-files.js`
 - `test:unused:ratchet` — `node scripts/check-unused-exports.js`
 - `test:unused:src` — `node scripts/checks/push-gate-unused-files.js --unreachable-src --list`
+- `test:unused:src:added` — `node scripts/checks/push-gate-unused-files.js --unreachable-src --added --list`
 
 ## test-output
 
@@ -297,4 +298,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-198 scripts indexed; 38 have a curated description, 160 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+199 scripts indexed; 38 have a curated description, 161 fall back to their raw command. Improve coverage in the two sources named in the header comment.
