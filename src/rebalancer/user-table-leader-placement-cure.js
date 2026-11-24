@@ -25,16 +25,10 @@ import {deliveryAnswerOf} from '../transport/transport-semantic-outcome.js';
  * No new timers.
  *
  * Every handoff PAIRS the source handoff with the target election
- * (quest user-table-leader-handoff-demotion-pairing). On the rs-raft
- * port both are one leader-mediated leadership transfer
- * (PartitionService.requestLeadershipTransfer): the target names itself,
- * the source hands leadership to its most caught-up voter, and the core
- * moves it without a leaderless timer race. The pairing was introduced
- * for the retired directed election, which a healthy leader's heartbeat
- * re-armed away (run 20260810T221340Z: two completed dispatches, zero
- * campaigns in 420s); a lost dispatch falls back to the bounded
- * ordinal-staggered election and census re-shed keeps the actuator
- * convergent.
+ * (quest user-table-leader-handoff-demotion-pairing): on the rs-raft port
+ * both are one leader-mediated leadership transfer
+ * (PartitionService.requestLeadershipTransfer), moving leadership without
+ * a leaderless timer race.
  */
 
 import {
@@ -42,6 +36,9 @@ import {
   getPartitionRowFromCache,
   resolvePartitionTableId,
 } from '../bootstrap/system-partition-classification.js';
+import {
+  resolveDesiredReplicationFactor,
+} from '../bootstrap/replication-target-authority.js';
 import {normalizeServiceRow} from '../control-plane/system-row-normalizers.js';
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 import {SERVICE_STATUS} from '../constants/service-status.js';
@@ -287,9 +284,15 @@ function buildSystemCohortCensus(evidence) {
   const distinctLeaderHosts = new Set(
     settled.map((entry) => entry.leaderNodeId).filter(Boolean),
   );
+  const targetReplicaCount =
+    Number.isSafeInteger(evidence.targetReplicaCount) &&
+    evidence.targetReplicaCount > CURE_LITERAL.ZERO ?
+      evidence.targetReplicaCount :
+      CURE_LITERAL.ZERO;
   const eligibleVoterHostCount = Math.max(
     ownActiveVoterHosts.length,
     evidence.eligibleVoterHosts.size,
+    targetReplicaCount,
   );
   const requiredLeaderHosts = Math.min(
     sortedSystemPartitionIds.length,
@@ -443,11 +446,7 @@ function isNonTerminalReplicaOperationForPartition(row, partitionId, nowMs) {
   return !TERMINAL_STATUSES.includes(normalized.status);
 }
 
-function hasNonTerminalPartitionReplicaOperation(
-  rebalancer,
-  partitionId,
-  nowMs,
-) {
+function hasNonTerminalPartitionReplicaOperation(rebalancer, partitionId, nowMs) {
   const rows = rebalancer.systemTableCache.filter(
     SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
     (row) => isNonTerminalReplicaOperationForPartition(row, partitionId, nowMs),
@@ -456,24 +455,20 @@ function hasNonTerminalPartitionReplicaOperation(
 }
 
 function collectSettledTablePartitions(rebalancer, tableId) {
-  return [
-    ...collectSettledPartitionsWhere(
-      rebalancer,
-      (row) => resolvePartitionTableId({partitionRow: row}) === tableId,
-    ).values(),
-  ];
+  return [...collectSettledPartitionsWhere(
+    rebalancer,
+    (row) => resolvePartitionTableId({partitionRow: row}) === tableId,
+  ).values()];
 }
 
-function collectEligibleVoterHosts(rebalancer, settledPartitions) {
-  const partitionIds = new Set(
-    settledPartitions.map((entry) => entry.partitionId),
-  );
+function collectEligibleVoterHostsWhere(rebalancer, matchesPartitionId) {
   const rows = rebalancer.systemTableCache.filter(
     SYSTEM_TABLE_NAME.SERVICES,
     (row) => {
       const service = normalizeServiceRow(row);
       return service.serviceType === EntityType.PARTITION &&
-        partitionIds.has(service.partitionId);
+        Boolean(service.partitionId) &&
+        matchesPartitionId(service.partitionId);
     },
   );
   const hosts = new Set();
@@ -488,6 +483,14 @@ function collectEligibleVoterHosts(rebalancer, settledPartitions) {
     }
   }
   return hosts;
+}
+
+function collectEligibleVoterHosts(rebalancer, settledPartitions) {
+  const partitionIds = new Set(settledPartitions.map((entry) => entry.partitionId));
+  return collectEligibleVoterHostsWhere(
+    rebalancer,
+    (partitionId) => partitionIds.has(partitionId),
+  );
 }
 
 function collectOwnVoterFollowers(rebalancer) {
@@ -665,16 +668,20 @@ function isSystemTableCohortCurePartition(rebalancer, partitionRow) {
   });
 }
 
-function evaluateSystemCohortCureForRebalancer(rebalancer, cureState, nowMs) {
+function collectSystemEligibleVoterHosts(rebalancer) {
+  return collectEligibleVoterHostsWhere(
+    rebalancer,
+    (partitionId) => classifySystemPartition({partitionId}).systemTable === true,
+  );
+}
+
+function evaluateSystemCohortCureForRebalancer(rebalancer, partitionRow, cureState, nowMs) {
   const settledPartitions = collectSettledSystemPartitions(rebalancer);
+  const {replicationFactor} = resolveDesiredReplicationFactor(partitionRow);
   return evaluateSystemTableLeaderPlacementCure({
-    eligibleVoterHosts:
-      collectEligibleVoterHosts(rebalancer, settledPartitions),
+    eligibleVoterHosts: collectSystemEligibleVoterHosts(rebalancer),
     hasInFlightReplicaOperation: hasNonTerminalPartitionReplicaOperation(
-      rebalancer,
-      rebalancer.entityId,
-      nowMs,
-    ),
+      rebalancer, rebalancer.entityId, nowMs),
     lastDispatchAtMs: cureState.lastDispatchAtMs,
     nodeId: rebalancer.nodeId,
     nowMs,
@@ -682,20 +689,14 @@ function evaluateSystemCohortCureForRebalancer(rebalancer, cureState, nowMs) {
     partitionId: rebalancer.entityId,
     previousCensusFingerprint: cureState.censusFingerprint,
     settledPartitions,
+    targetReplicaCount: replicationFactor,
   });
 }
 
-function evaluateUserTableCureForRebalancer(
-  rebalancer,
-  tableId,
-  cureState,
-  nowMs,
-) {
-  const settledPartitions =
-    collectSettledTablePartitions(rebalancer, tableId);
+function evaluateUserTableCureForRebalancer(rebalancer, tableId, cureState, nowMs) {
+  const settledPartitions = collectSettledTablePartitions(rebalancer, tableId);
   return evaluateUserTableLeaderPlacementCure({
-    eligibleVoterHosts:
-      collectEligibleVoterHosts(rebalancer, settledPartitions),
+    eligibleVoterHosts: collectEligibleVoterHosts(rebalancer, settledPartitions),
     lastDispatchAtMs: cureState.lastDispatchAtMs,
     nodeId: rebalancer.nodeId,
     nowMs,
@@ -752,7 +753,12 @@ async function applyUserTableLeaderPlacementCure(rebalancer, options = {}) {
   const nowMs = Number.isFinite(options.nowMs) ? options.nowMs : Date.now();
   const cureState = resolveCureState(rebalancer);
   const decision = systemCohort ?
-    evaluateSystemCohortCureForRebalancer(rebalancer, cureState, nowMs) :
+    evaluateSystemCohortCureForRebalancer(
+      rebalancer,
+      partitionRow,
+      cureState,
+      nowMs,
+    ) :
     evaluateUserTableCureForRebalancer(rebalancer, tableId, cureState, nowMs);
   recordAndLogCureEvaluation(rebalancer, cureState, decision);
   if (

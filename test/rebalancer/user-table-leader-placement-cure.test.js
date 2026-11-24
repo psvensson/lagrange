@@ -530,6 +530,7 @@ function buildSystemCohortState() {
   const sysPartitions = entries.map(([tableId, partitionId]) => ({
     leader_node_id: NODE_1,
     partition_id: partitionId,
+    replica_count: 3,
     state: 'normal',
     table_id: tableId,
   }));
@@ -726,5 +727,69 @@ test('46-system-partition cohort deterministically distributes 39 ' +
     t, state, stubsByPartitionId);
   await assertSystemCohortPostHandoffQuiescence(
     t, state, leaderByPartitionId);
+  t.end();
+});
+
+test('a non-priority system partition at RF=2 in a 3-node cluster waits ' +
+  'until node-3 becomes an active voter before handing off in one hop',
+async (t) => {
+  const state = buildSystemCohortState();
+  const targetPartitionId = 'artifact_payloads-p1';
+  for (const row of state.serviceRows) {
+    if (isPriorityOrFormationSystemPartition(row.partition_id)) {
+      continue;
+    }
+    if (row.partition_id === targetPartitionId) {
+      if (row.node_id === NODE_3) {
+        row.raft_role = 'learner';
+        row.status = 'syncing';
+      }
+      continue;
+    }
+    if (row.node_id !== NODE_1) {
+      row.raft_role = 'learner';
+      row.status = 'syncing';
+    }
+  }
+  const stub = buildSystemPartitionRebalancer(
+    state, targetPartitionId, NODE_1);
+  const rf2PassOne = await applyUserTableLeaderPlacementCure(
+    stub, {nowMs: NOW_MS});
+  const rf2PassTwo = await applyUserTableLeaderPlacementCure(
+    stub, {nowMs: NOW_MS + 1});
+  t.equal(
+    rf2PassOne.state,
+    USER_TABLE_LEADER_PLACEMENT_CURE_STATE.NO_ELIGIBLE_TARGET,
+  );
+  t.equal(
+    rf2PassTwo.state,
+    USER_TABLE_LEADER_PLACEMENT_CURE_STATE.NO_ELIGIBLE_TARGET,
+  );
+  t.equal(stub.deliveries.length, 0);
+
+  for (const row of state.serviceRows) {
+    if (
+      row.partition_id === targetPartitionId &&
+      row.node_id === NODE_3
+    ) {
+      row.raft_role = 'follower';
+      row.status = 'active';
+    }
+  }
+  const rf3PassOne = await applyUserTableLeaderPlacementCure(
+    stub, {nowMs: NOW_MS + 2});
+  t.equal(
+    rf3PassOne.state,
+    USER_TABLE_LEADER_PLACEMENT_CURE_STATE.CENSUS_UNSTABLE,
+  );
+  t.equal(stub.deliveries.length, 0);
+  const rf3PassTwo = await applyUserTableLeaderPlacementCure(
+    stub, {nowMs: NOW_MS + 3});
+  t.equal(
+    rf3PassTwo.state,
+    USER_TABLE_LEADER_PLACEMENT_CURE_STATE.DISPATCH_HANDOFF,
+  );
+  t.equal(rf3PassTwo.target.nodeId, NODE_2);
+  t.equal(stub.deliveries.length, 2);
   t.end();
 });
