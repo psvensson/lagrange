@@ -40,8 +40,10 @@ import {
 } from '../../src/query/query-constants.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {
+  capturePeerConnectionSnapshot,
   createRecoveryReadDelivery,
   executePartitionLeaderRedirectAttempt,
+  isCurrentPeer,
 } from '../../src/query/query-executor-recovery-read-delivery.js';
 import {
   DEADLINE_EXPIRED_COMPLETION_CODE,
@@ -634,11 +636,7 @@ test('Review §4: observePersistedPartitionTerm complete production replica life
   // 1. Seed initial durable hard-state term 5 via actual RaftRsDurableStore.
   const dbPath = seedDurableStoreTerm(dataDir, PARTITION, replicaId, 5, 1);
 
-  const firstObs = observePersistedPartitionTerm({
-    dataDir,
-    partitionId: PARTITION,
-    replicaId,
-  });
+  const firstObs = observePersistedPartitionTerm({dataDir, partitionId: PARTITION, replicaId});
   t.equal(firstObs.state, PERSISTED_TERM_STATE.OBSERVED);
   t.equal(firstObs.term, 5, 'initial observation reads durable term 5');
   const firstHandleId = firstObs.handleId;
@@ -657,11 +655,7 @@ test('Review §4: observePersistedPartitionTerm complete production replica life
   replicaDb.pragma('journal_mode = WAL');
   const replicaStore = new RaftRsDurableStore(replicaDb);
   replicaStore.persistReady(PARTITION, {
-    hardState: {
-      commit: '2',
-      term: '8',
-      vote: '1',
-    },
+    hardState: {commit: '2', term: '8', vote: '1'},
     mustSync: true,
   });
   t.equal(RaftRsDurableStore.readPersistedTermIn(replicaDb, PARTITION), '8',
@@ -669,20 +663,13 @@ test('Review §4: observePersistedPartitionTerm complete production replica life
   replicaStore.close();
 
   // 3. Next observePersistedPartitionTerm observation MUST return 8.
-  const secondObs = observePersistedPartitionTerm({
-    dataDir,
-    partitionId: PARTITION,
-    replicaId,
-  });
+  const secondObs = observePersistedPartitionTerm({dataDir, partitionId: PARTITION, replicaId});
   t.equal(secondObs.state, PERSISTED_TERM_STATE.OBSERVED);
   t.equal(secondObs.term, 8,
     'next observePersistedPartitionTerm observation after store close returns 8 (never stale 5)');
   t.equal(
-    RaftRsDurableStore.observePersistedPartitionTerm({
-      dataDir,
-      partitionId: PARTITION,
-      replicaId,
-    }).term,
+    RaftRsDurableStore.observePersistedPartitionTerm({dataDir, partitionId: PARTITION, replicaId})
+      .term,
     8,
     'RaftRsDurableStore.observePersistedPartitionTerm delegates to canonical storage observer',
   );
@@ -732,9 +719,7 @@ async (t) => {
       t.equal(obs5.state, PERSISTED_TERM_STATE.OBSERVED);
       t.equal(obs5.term, 5);
       const cachedBeforeReplace = getRetainedPersistedTermReader({
-        dataDir,
-        partitionId: PARTITION,
-        replicaId,
+        dataDir, partitionId: PARTITION, replicaId,
       });
       t.equal(cachedBeforeReplace?.db?.open, true);
 
@@ -766,9 +751,7 @@ async (t) => {
 
       // Artifact deletion via removeReplicaStorageArtifacts closes the idle term reader and unlinks files.
       const cachedBeforeDelete = getRetainedPersistedTermReader({
-        dataDir,
-        partitionId: PARTITION,
-        replicaId,
+        dataDir, partitionId: PARTITION, replicaId,
       });
       t.equal(cachedBeforeDelete?.db?.open, true);
       const removal = await removeReplicaStorageArtifacts(fs, dbPath);
@@ -776,9 +759,7 @@ async (t) => {
       t.equal(cachedBeforeDelete.db.open, false, 'deleted replica term reader handle is closed');
 
       const afterDelete = observePersistedPartitionTerm({
-        dataDir,
-        partitionId: PARTITION,
-        replicaId,
+        dataDir, partitionId: PARTITION, replicaId,
       });
       t.equal(afterDelete.state, PERSISTED_TERM_STATE.UNAVAILABLE);
       t.equal(afterDelete.reason, PERSISTED_TERM_UNAVAILABLE_REASON.STORAGE_ABSENT);
@@ -795,9 +776,7 @@ async (t) => {
       t.equal(first.state, PERSISTED_TERM_STATE.OBSERVED);
       t.equal(first.term, 5);
       const firstReader = getRetainedPersistedTermReader({
-        dataDir,
-        partitionId: PARTITION,
-        replicaId,
+        dataDir, partitionId: PARTITION, replicaId,
       });
       t.equal(firstReader?.db?.open, true);
 
@@ -842,9 +821,7 @@ async (t) => {
 
       // Open reader 1 (consumes 1/1 capacity).
       const obs1 = observer.observePersistedPartitionTerm({
-        dataDir,
-        partitionId: PARTITION,
-        replicaId: replica1,
+        dataDir, partitionId: PARTITION, replicaId: replica1,
       });
       t.equal(obs1.state, PERSISTED_TERM_STATE.OBSERVED);
       t.equal(obs1.term, 6);
@@ -861,10 +838,7 @@ async (t) => {
       // Custody fences snapshot replacement and artifact deletion on dbPath1.
       t.throws(
         () => assertStorageArtifactsUnlinkSafe(dbPath1),
-        {
-          code: CUSTODY_ERROR_CODE.CUSTODY_BLOCKED,
-          name: 'RetainedReadViewCustodyError',
-        },
+        {code: CUSTODY_ERROR_CODE.CUSTODY_BLOCKED, name: 'RetainedReadViewCustodyError'},
         'snapshot replacement is blocked while failed-close term reader retains custody',
       );
       const blockedDelete = await removeReplicaStorageArtifacts(fs, dbPath1);
@@ -874,9 +848,7 @@ async (t) => {
 
       // Subsequent observation on dbPath1 refuses silent reuse while unclosed.
       const reuseAttempt = observer.observePersistedPartitionTerm({
-        dataDir,
-        partitionId: PARTITION,
-        replicaId: replica1,
+        dataDir, partitionId: PARTITION, replicaId: replica1,
       });
       t.equal(reuseAttempt.state, PERSISTED_TERM_STATE.UNAVAILABLE);
       t.equal(reuseAttempt.reason, PERSISTED_TERM_UNAVAILABLE_REASON.CUSTODY_CLOSE_FAILED,
@@ -884,9 +856,7 @@ async (t) => {
 
       // Observation on replica2 refuses to exceed maxReaders=1 capacity consumed by unclosed reader.
       const capacityAttempt = observer.observePersistedPartitionTerm({
-        dataDir,
-        partitionId: PARTITION,
-        replicaId: replica2,
+        dataDir, partitionId: PARTITION, replicaId: replica2,
       });
       t.equal(capacityAttempt.state, PERSISTED_TERM_STATE.UNAVAILABLE);
       t.equal(capacityAttempt.reason, PERSISTED_TERM_UNAVAILABLE_REASON.CAPACITY_EXHAUSTED,
@@ -895,9 +865,7 @@ async (t) => {
       // Once closure succeeds, custody and capacity are released.
       allowClose = true;
       const afterRecovery = observer.observePersistedPartitionTerm({
-        dataDir,
-        partitionId: PARTITION,
-        replicaId: replica2,
+        dataDir, partitionId: PARTITION, replicaId: replica2,
       });
       t.equal(afterRecovery.state, PERSISTED_TERM_STATE.OBSERVED);
       t.equal(afterRecovery.term, 9, 'capacity freed once retry closes the previously failed handle');
@@ -1473,5 +1441,54 @@ async (t) => {
     t.equal(readResult.success, false,
       'authority-bound read across peer connection replacement is refused');
     t.equal(readResult.failureCode, READ_ROUTE_SUPERSEDED_CODE);
+  });
+
+  await t.test('6. active nodeConnection with null peerIdentityOf stays current across probes ' +
+    'and late NODE_IDENTIFY on sockA, turns false on sockA -> sockB, and keeps committed writes',
+  async (t) => {
+    const sockA = {id: 'sock-a'};
+    const sockB = {id: 'sock-b'};
+    const nodeConnections = new Map([['node-b', {
+      authenticated: true, connectionId: 'conn-a', generation: 1,
+      socket: sockA, state: 'connected', ws: sockA,
+    }]]);
+    let primaryIdentity = null;
+    const router = {
+      getCurrentPrimaryConnectionBootIncarnation: () => primaryIdentity,
+      nodeConnections, nodeId: 'node-a',
+    };
+    const cand = {
+      address: `node-b/partition/${PARTITION}`, nodeId: 'node-b', replicaId: `${PARTITION}-r2`,
+    };
+    const snap = capturePeerConnectionSnapshot(router, 'node-b');
+    t.equal(snap.hadPrimaryIdentity, false);
+    t.equal(snap.hadNodeConnection, true);
+    t.equal(snap.connectionId, null, 'nodeConnection connectionId stays separate from primary');
+    t.equal(isCurrentPeer(router, {peer: snap}), true, 'unchanged probe stays current');
+    const writeInv = createInvocationTermFloorTracker(
+      {messageRouter: router, nodeId: 'node-a'}, PARTITION,
+      {forRead: false, preserveCommittedWritePastDeadline: true},
+    );
+    const writeTicket = writeInv.issueTicket({
+      address: cand.address, request: {}, serviceInfo: cand,
+    });
+    primaryIdentity = {bootIncarnation: 1, connectionId: 'conn-a', nodeId: 'node-b'};
+    t.equal(isCurrentPeer(router, {peer: snap}), true, 'late NODE_IDENTIFY on sockA stays current');
+    t.equal(isCurrentPeer(router, {peer: {bootIncarnation: 1, connectionId: 'conn-a', nodeId: 'node-b'}}),
+      true, 'plain peer object preserves primary identity check');
+    primaryIdentity = {bootIncarnation: 1, nodeId: 'node-b'};
+    const noConnIdSnap = capturePeerConnectionSnapshot(router, 'node-b');
+    t.equal(noConnIdSnap.connectionId, null, 'undefined primary connectionId stays null');
+    t.equal(isCurrentPeer(router, {peer: noConnIdSnap}), true, 'undefined primary connectionId matches');
+    nodeConnections.set('node-b', {
+      authenticated: true, connectionId: 'conn-b', generation: 2,
+      socket: sockB, state: 'connected', ws: sockB,
+    });
+    t.equal(isCurrentPeer(router, {peer: snap}), false, 'sockA -> sockB turns isCurrentPeer false');
+    const writeDone = writeInv.completeDelivery({
+      delivery: buildDeliveryEnvelope({acknowledged: true}, {changes: 1, success: true}),
+      ticket: writeTicket,
+    });
+    t.equal(writeDone.state, READ_COMPLETION_STATE.ACCEPTED, 'committed write survives sockA -> sockB');
   });
 });

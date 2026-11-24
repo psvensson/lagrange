@@ -1,5 +1,6 @@
 import {RealTimeSource} from '../time/time-source.js';
 import {deliveryTransportOf} from '../transport/transport-semantic-outcome.js';
+import {readLowerStateField} from '../utils/state-field-read.js';
 import {
   applySuccessfulCandidateAffinity,
   resolveRedirectParticipantNodeId,
@@ -41,6 +42,8 @@ const ROUTE_SUPERSEDED_FAILURE = Object.freeze({
   success: false,
 });
 
+const DISCONNECTED_CONN_STATES = new Set(['closed', 'closing', 'disconnected']);
+
 function executorShutdownError() {
   return Object.assign(new Error(EXECUTOR_SHUTDOWN), {code: EXECUTOR_SHUTDOWN_CODE});
 }
@@ -54,6 +57,55 @@ function peerIdentityOf(router, nodeId) {
   return raw.nodeId ? raw : {...raw, nodeId};
 }
 
+function readRouterNodeConnection(router, nodeId) {
+  if (!router || !nodeId || nodeId === router.nodeId) return null;
+  return router.nodeConnections instanceof Map ?
+    router.nodeConnections.get(nodeId) ?? null : null;
+}
+
+function isNodeConnectionInactive(conn) {
+  if (!conn || conn.authenticated === false) return true;
+  const state = readLowerStateField(conn.state);
+  return Boolean(state) && DISCONNECTED_CONN_STATES.has(state);
+}
+
+function resolvePeerSocket(conn) {
+  return conn?.socket ?? conn?.ws ?? null;
+}
+
+function resolvePeerGeneration(conn) {
+  return conn?.generation ?? conn?.connectionGeneration ?? null;
+}
+
+function isPeerConnectionSnapshot(value) {
+  return Boolean(value) &&
+    typeof value === 'object' &&
+    typeof value.hadPrimaryIdentity === 'boolean' &&
+    typeof value.hadNodeConnection === 'boolean';
+}
+
+function buildPeerSnapshotRecord(primaryPeer, activeConn, resolvedNodeId) {
+  return Object.freeze({
+    bootIncarnation: primaryPeer?.bootIncarnation ?? null,
+    connectionId: primaryPeer?.connectionId ?? null,
+    generation: resolvePeerGeneration(activeConn),
+    hadNodeConnection: Boolean(activeConn),
+    hadPrimaryIdentity: Boolean(primaryPeer),
+    nodeId: resolvedNodeId,
+    socket: resolvePeerSocket(activeConn),
+  });
+}
+
+function capturePeerConnectionSnapshot(router, nodeId, draftPeer) {
+  if (isPeerConnectionSnapshot(draftPeer)) return draftPeer;
+  const primaryPeer = draftPeer !== undefined ? draftPeer : peerIdentityOf(router, nodeId);
+  const resolvedNodeId = primaryPeer?.nodeId ?? nodeId ?? null;
+  const rawConn = readRouterNodeConnection(router, resolvedNodeId);
+  const activeConn = isNodeConnectionInactive(rawConn) ? null : rawConn;
+  if (!primaryPeer && !activeConn) return null;
+  return buildPeerSnapshotRecord(primaryPeer, activeConn, resolvedNodeId);
+}
+
 function matchesRoute(ticket, candidate) {
   if (!ticket?.serviceInfo || !candidate) return false;
   return ticket.address === candidate.address &&
@@ -61,13 +113,34 @@ function matchesRoute(ticket, candidate) {
     ticket.serviceInfo.replicaId === candidate.replicaId;
 }
 
+function matchesOptionalField(priorValue, currentValue) {
+  return priorValue === null || priorValue === undefined || currentValue === priorValue;
+}
+
+function isPrimaryIdentityCurrent(router, prior) {
+  const current = peerIdentityOf(router, prior.nodeId);
+  return Boolean(current) &&
+    (current.bootIncarnation ?? null) === (prior.bootIncarnation ?? null) &&
+    (current.connectionId ?? null) === (prior.connectionId ?? null);
+}
+
+function isNodeConnectionCurrent(router, prior) {
+  const currentConn = readRouterNodeConnection(router, prior.nodeId);
+  if (isNodeConnectionInactive(currentConn)) return false;
+  return matchesOptionalField(prior.generation, resolvePeerGeneration(currentConn)) &&
+    matchesOptionalField(prior.socket, resolvePeerSocket(currentConn));
+}
+
 function isCurrentPeer(router, ticket) {
   const prior = ticket?.peer;
   if (!prior) return true; // The bounded cold-route attempt had no primary at submission.
-  const current = peerIdentityOf(router, prior.nodeId);
-  return Boolean(current) &&
-    current.bootIncarnation === prior.bootIncarnation &&
-    current.connectionId === prior.connectionId;
+  if (prior.hadPrimaryIdentity !== false && !isPrimaryIdentityCurrent(router, prior)) {
+    return false;
+  }
+  if (prior.hadNodeConnection === true && !isNodeConnectionCurrent(router, prior)) {
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -97,7 +170,7 @@ function createRecoveryReadDelivery(executor, options = {}) {
   }
 
   function mintBoundTicket(ticket) {
-    const peer = peerIdentityOf(router, ticket.serviceInfo?.nodeId);
+    const peer = capturePeerConnectionSnapshot(router, ticket.serviceInfo?.nodeId, ticket.peer);
     if (ticketIssuer) {
       return ticketIssuer({...ticket, peer});
     }
@@ -419,10 +492,10 @@ export {
   REDIRECT_STEP_ACTION,
   ROUTE_SUPERSEDED_FAILURE,
   ROUTING_PROBE_ELAPSED,
+  capturePeerConnectionSnapshot,
   createRecoveryReadDelivery,
   executePartitionLeaderRedirectAttempt,
   executorShutdownError,
   isCurrentPeer,
   matchesRoute,
-  peerIdentityOf,
 };

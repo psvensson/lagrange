@@ -24,9 +24,9 @@ import {
   READ_ROUTE_SUPERSEDED_CODE,
   REDIRECT_STEP_ACTION,
   ROUTE_SUPERSEDED_FAILURE,
+  capturePeerConnectionSnapshot,
   isCurrentPeer,
   matchesRoute,
-  peerIdentityOf,
 } from './query-executor-recovery-read-delivery.js';
 
 const ZERO_BIGINT = 0n;
@@ -53,8 +53,6 @@ const COMPLETION_FACT_KIND = Object.freeze({
   UNSETTLED_OR_REJECTED_WRITE: 'unsettled_or_rejected_write',
 });
 
-const DISCONNECTED_CONN_STATES = new Set(['closed', 'closing', 'disconnected']);
-
 const INELIGIBLE_TERM_FLOOR = Object.freeze({
   eligible: false,
   hasLocalReplica: false,
@@ -80,72 +78,10 @@ function maxPositiveTerm(left, right) {
   return Math.max(validLeft, validRight);
 }
 
-function readRouterNodeConnection(router, nodeId) {
-  if (!router || !nodeId || nodeId === router.nodeId) return null;
-  return router.nodeConnections instanceof Map ?
-    router.nodeConnections.get(nodeId) ?? null : null;
-}
-
-function isNodeConnectionInactive(conn) {
-  if (!conn || conn.authenticated === false) return true;
-  const state = readLowerStateField(conn.state);
-  return Boolean(state) && DISCONNECTED_CONN_STATES.has(state);
-}
-
-function resolvePeerSocket(peerOrConn) {
-  return peerOrConn?.socket ?? peerOrConn?.ws ?? null;
-}
-
-function resolvePeerGeneration(peerOrConn) {
-  return peerOrConn?.generation ?? peerOrConn?.connectionGeneration ?? null;
-}
-
-function resolveFirstDefined(left, right) {
-  return left ?? right ?? null;
-}
-
-function buildPeerSnapshotRecord(primaryPeer, conn, resolvedNodeId) {
-  return Object.freeze({
-    bootIncarnation: resolveFirstDefined(primaryPeer?.bootIncarnation, conn?.bootIncarnation),
-    connectionId: resolveFirstDefined(primaryPeer?.connectionId, conn?.connectionId),
-    generation: resolveFirstDefined(resolvePeerGeneration(primaryPeer),
-      resolvePeerGeneration(conn)),
-    hadNodeConnection: Boolean(conn),
-    hadPrimaryIdentity: Boolean(primaryPeer),
-    nodeId: resolvedNodeId,
-    socket: resolveFirstDefined(resolvePeerSocket(primaryPeer), resolvePeerSocket(conn)),
-  });
-}
-
-function capturePeerConnectionSnapshot(router, nodeId, draftPeer) {
-  const primaryPeer = draftPeer !== undefined ? draftPeer : peerIdentityOf(router, nodeId);
-  const resolvedNodeId = resolveFirstDefined(primaryPeer?.nodeId, nodeId);
-  const conn = readRouterNodeConnection(router, resolvedNodeId);
-  if (!primaryPeer && isNodeConnectionInactive(conn)) return null;
-  return buildPeerSnapshotRecord(primaryPeer, conn, resolvedNodeId);
-}
-
-function matchesOptionalField(priorValue, currentValue) {
-  return priorValue === null || priorValue === undefined || currentValue === priorValue;
-}
-
-function hasPeerConnectionRemainedCurrent(router, ticket) {
-  const prior = ticket?.peer;
-  if (!prior) return true;
-  if (prior.hadPrimaryIdentity && !isCurrentPeer(router, ticket)) return false;
-  const currentPeer = peerIdentityOf(router, prior.nodeId);
-  const currentConn = readRouterNodeConnection(router, prior.nodeId);
-  if (prior.hadNodeConnection && isNodeConnectionInactive(currentConn)) return false;
-  const currentGen = resolvePeerGeneration(currentPeer) ?? resolvePeerGeneration(currentConn);
-  const currentSocket = resolvePeerSocket(currentPeer) ?? resolvePeerSocket(currentConn);
-  return matchesOptionalField(prior.generation, currentGen) &&
-    matchesOptionalField(prior.socket, currentSocket);
-}
-
 function currentInCandidates(router, ticket, candidates) {
   if (!Array.isArray(candidates)) return false;
   return candidates.some((candidate) => matchesRoute(ticket, candidate)) &&
-    hasPeerConnectionRemainedCurrent(router, ticket);
+    isCurrentPeer(router, ticket);
 }
 
 function isAuthoritativeLocalServiceRow(row, partitionId, nodeId) {
@@ -353,7 +289,7 @@ function isRedirectRouteCurrent(router, ticket, routes, redirectCandidate, stric
   if (!eligibleTarget) {
     return !strictCanonical && !ticket.hadRoutableTarget;
   }
-  if (!matchesRoute(ticket, eligibleTarget) || !hasPeerConnectionRemainedCurrent(router, ticket)) {
+  if (!matchesRoute(ticket, eligibleTarget) || !isCurrentPeer(router, ticket)) {
     return false;
   }
   if (!strictCanonical) {
@@ -528,7 +464,7 @@ function createInvocationTermFloorTracker(executor, partitionId, rawOptions = {}
     if (!requireStrictCurrency) {
       return true;
     }
-    if (!hasPeerConnectionRemainedCurrent(router, ticket)) {
+    if (!isCurrentPeer(router, ticket)) {
       return false;
     }
     if (!routes) {

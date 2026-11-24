@@ -10,7 +10,7 @@
 //    skips unrelated branch commits.
 // 3. `scripts/checks/push-gate-corpus-worktree.js` runs both benchmark checks
 //    inside `runCorpusGates` when `data/tidb-comparison/raw-observations.ndjson`
-//    is present, and preserves synthetic repos without it.
+//    is present, and fails closed when it is missing.
 // 4. `docs/benchmarks/cloud/run-comparative-benchmarks.mjs` wires canonical
 //    auto-regeneration without perturbing CLI `--help` / `--dry-run`.
 
@@ -306,7 +306,7 @@ test('pre-push refuses stale or rewritten benchmark commits on non-main branches
 });
 
 test('push-gate-corpus-worktree runs benchmark checks when raw-observations.ndjson exists ' +
-  'and skips them in synthetic repos without benchmark data', async (t) => {
+  'and fails closed when it is missing', async (t) => {
   const {repo, baseSha} = await createBenchmarkFixtureRepo(t);
 
   // Stale commit fails corpus gate via comparative-benchmark-recompute.js.
@@ -333,16 +333,20 @@ test('push-gate-corpus-worktree runs benchmark checks when raw-observations.ndjs
   assert.match(freshGate.stdout, /comparative-benchmark-recompute: PASS/u);
   assert.match(freshGate.stdout, /corpus gates passed on the pushed tree/u);
 
-  // Removing raw-observations.ndjson preserves synthetic temp-repo runs without benchmark files.
+  // Removing raw-observations.ndjson fails closed rather than silently skipping benchmark gates.
   git(repo, ['reset', '--hard', '--quiet', baseSha]);
   fs.rmSync(path.join(repo, RAW_OBSERVATIONS_PATH));
-  const syntheticGate = spawnSync(process.execPath, [CORPUS_WORKTREE_SCRIPT, '--in-place'], {
+  const missingRawGate = spawnSync(process.execPath, [CORPUS_WORKTREE_SCRIPT, '--in-place'], {
     cwd: repo,
     encoding: UTF8,
     env: cleanHookEnv(),
   });
-  assert.equal(syntheticGate.status, 0, `${syntheticGate.stdout}${syntheticGate.stderr}`);
-  assert.doesNotMatch(syntheticGate.stdout, /comparative-benchmark-recompute/u);
+  assert.equal(missingRawGate.status, 1, `${missingRawGate.stdout}${missingRawGate.stderr}`);
+  assert.match(
+    `${missingRawGate.stdout}${missingRawGate.stderr}`,
+    /missing required data\/tidb-comparison\/raw-observations\.ndjson/u,
+  );
+  assert.doesNotMatch(missingRawGate.stdout, /comparative-benchmark-recompute/u);
 });
 
 test('run-comparative-benchmarks.mjs wires canonical auto-regeneration and keeps CLI help clean',
