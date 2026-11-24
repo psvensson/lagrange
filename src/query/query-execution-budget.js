@@ -96,6 +96,8 @@ function pickLockingReadFailureFields(typed) {
   }
   if (typed.rowKey) picked.rowKey = typed.rowKey;
   if (typed.code) picked.code = typed.code;
+  if (typed.failureReason) picked.failureReason = typed.failureReason;
+  if (typed.deadlockDetected === true) picked.deadlockDetected = true;
   return picked;
 }
 

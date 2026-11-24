@@ -177,6 +177,8 @@ const TYPED_WRITE_ANSWER_FIELDS = Object.freeze([
   'conflictingTransactionId',
   'rowKey',
   'code',
+  'failureReason',
+  'deadlockDetected',
 ]);
 
 /**

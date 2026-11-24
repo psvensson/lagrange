@@ -85,6 +85,8 @@ const ANSWER_FAILURE_FIELDS = Object.freeze([
   'preparedDigest',
   'prepareIndex',
   'prepareTerm',
+  'failureReason',
+  'deadlockDetected',
 ]);
 const OPERATION_FAILURE_MESSAGE = Object.freeze({
   [QUERY_OPERATION.BEGIN]: QUERY_ERROR_MSG.BEGIN_FAILED,

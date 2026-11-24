@@ -45,6 +45,7 @@ const WRITE_TRANSACTION_OWNERSHIP = Object.freeze({
   STATEMENT_AUTOCOMMIT: 'STATEMENT_AUTOCOMMIT',
 });
 const STATEMENT_AUTOCOMMIT_SESSION_PREFIX = 'statement-autocommit';
+const ROW_KEY_WAIT_CYCLE_DETECTED = 'ROW_KEY_WAIT_CYCLE_DETECTED';
 // The planner and routing log of each partition-routed write statement.
 const PARTITION_ROUTED_WRITE = Object.freeze({
   [QUERY_AST_TYPE.UPDATE]: Object.freeze({
@@ -101,7 +102,11 @@ async function rollbackOnExplicitLockConflict(engine, writeTransaction, finalRes
   const isLockConflict =
     finalResult.errorCode === LOCKING_READ_ERROR_CODE.LOCK_NOT_AVAILABLE ||
     finalResult.sqlState === LOCKING_READ_SQL_STATE.LOCK_NOT_AVAILABLE;
-  if (isLockConflict) {
+  const isCycleConflict =
+    finalResult.deadlockDetected === true ||
+    finalResult.failureReason === ROW_KEY_WAIT_CYCLE_DETECTED;
+  if ((isLockConflict || isCycleConflict) &&
+      engine.transactionCoordinator.getTransaction?.(sessionId)) {
     await engine.transactionCoordinator.rollbackOwned?.(
       sessionId,
       writeTransaction.transactionState?.transactionId,

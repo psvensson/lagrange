@@ -14,8 +14,82 @@ import {PARTICIPANT_ENLISTMENT_MODE} from
 import {resolveNowMs} from './distributed-transaction-telemetry.js';
 
 const LOCAL_STR_TYPED_CANCELLED = 'typed_transaction_cancelled';
+const ROW_KEY_WAIT_CYCLE_DETECTED = 'ROW_KEY_WAIT_CYCLE_DETECTED';
+
+function settledCycleRollbacksOf(coordinator) {
+  if (coordinator.settledCycleRollbacksBySession === undefined) {
+    coordinator.settledCycleRollbacksBySession = new Map();
+  }
+  return coordinator.settledCycleRollbacksBySession;
+}
+
+function entryHasWaitCycleFailure(entry) {
+  return Boolean(entry && typeof entry === 'object' &&
+    (entry.deadlockDetected === true ||
+      entry.failureReason === ROW_KEY_WAIT_CYCLE_DETECTED));
+}
+
+function isRowKeyWaitCycleFailure(result) {
+  if (!result || result.success !== false) return false;
+  if (entryHasWaitCycleFailure(result) ||
+      entryHasWaitCycleFailure(result.firstFailedParticipant)) {
+    return true;
+  }
+  return (Array.isArray(result.participantFailures) &&
+    result.participantFailures.some(entryHasWaitCycleFailure)) ||
+    (Array.isArray(result.participantResults) &&
+      result.participantResults.some(entryHasWaitCycleFailure));
+}
+
+async function settleCycleVictimTransaction(coordinator, sessionId, tx, result) {
+  if (!tx || !isRowKeyWaitCycleFailure(result)) return result;
+  const manifestParticipants = coordinator.getOrderedParticipantIds(tx);
+  const manifestParticipantDetails = coordinator.getOrderedParticipantDetails(tx);
+  const rawRollback = await coordinator.runRollbackProtocol(tx);
+  const rollbackResult = {
+    ...rawRollback,
+    transactionId: tx.transactionId,
+    transactionEpoch: tx.transactionEpoch,
+    participants: rawRollback?.participants ?? manifestParticipants,
+    participantDetails: manifestParticipantDetails,
+    failureReason: ROW_KEY_WAIT_CYCLE_DETECTED,
+    deadlockDetected: true,
+  };
+  settledCycleRollbacksOf(coordinator).set(sessionId, rollbackResult);
+  return {
+    ...result,
+    failureReason: ROW_KEY_WAIT_CYCLE_DETECTED,
+    deadlockDetected: true,
+    transactionId: tx.transactionId,
+    transactionEpoch: tx.transactionEpoch,
+    participants: rollbackResult.participants,
+    participantDetails: manifestParticipantDetails,
+    rollback: rollbackResult,
+  };
+}
 
 const distributedTransactionStatementMethods = {
+  consumeSettledCycleRollback(sessionId, expectedTransactionId = null) {
+    const map = this.settledCycleRollbacksBySession;
+    const settled = map?.get(sessionId) ?? null;
+    if (!settled) return null;
+    if (expectedTransactionId !== null &&
+        expectedTransactionId !== undefined &&
+        settled.transactionId !== expectedTransactionId) {
+      map.delete(sessionId);
+      return null;
+    }
+    map.delete(sessionId);
+    return settled;
+  },
+
+  clearSettledCycleRollback(sessionId) {
+    this.settledCycleRollbacksBySession?.delete(sessionId);
+  },
+
+  async rollbackTransaction(sessionId, options = {}) {
+    return this.rollback(sessionId, options);
+  },
   /**
    * Queue transaction operations in FIFO order for one session.
    * Unlike workflow single-flight, distinct calls never share a result.
@@ -79,7 +153,7 @@ const distributedTransactionStatementMethods = {
         tx.telemetry.statementsMs += Math.max(0, resolveNowMs() - startedAtMs);
         tx.telemetry.statementCount += 1;
       }
-      return result;
+      return settleCycleVictimTransaction(this, sessionId, tx, result);
     });
   },
 
