@@ -312,7 +312,7 @@ else
   unset LAGRANGE_CHECK_BASE
 fi
 
-stage "unused-files" "unused-files check"
+stage "unused-files" "unused-files and newly added unreachable-src check"
 npm run -s test:unused:push
 # Lint the pushed range, TRACKED files only, honoring the same principle as
 # the unused-files check above: untracked files are never part of a push, so a

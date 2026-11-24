@@ -22,12 +22,16 @@
 import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import {parse as parseJavaScript} from 'espree';
+import {KEYS as VISITOR_KEYS} from 'eslint-visitor-keys';
 
+import {resolvedCheckRange} from './changed-paths.js';
 import {execGit} from './git-invocation.js';
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayForEach = Function.call.bind(Array.prototype.forEach);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const arrayIndexOf = Function.call.bind(Array.prototype.indexOf);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const arraySome = Function.call.bind(Array.prototype.some);
 const stringIncludes = Function.call.bind(String.prototype.includes);
@@ -48,10 +52,18 @@ const SOLVER_PREFIX = 'scripts/solve';
 const JS_SUFFIX = '.js';
 const MJS_SUFFIX = '.mjs';
 const CJS_SUFFIX = '.cjs';
+const INDEX_JS_SUFFIX = '/index.js';
 const PACKAGE_JSON = 'package.json';
 const KNIP_JSON = 'knip.json';
 const PRODUCTION_ENTRY_SUFFIX = '!';
 const LEADING_DOT_SLASH = /^\.\//u;
+const RELATIVE_SPECIFIER_PREFIX = './';
+const PARENT_SPECIFIER_PREFIX = '../';
+const SPECIFIER_QUERY_OR_HASH = /[?#].*$/u;
+const HASHBANG_LINE = /^#!.*(?:\r?\n|$)/u;
+const DOCKER_LINE_CONTINUATION = /\\\r?\n/gu;
+const DOCKER_LINE_SPLIT = /\r?\n/u;
+const DOCKER_ENTRYPOINT_OR_CMD = /^\s*(?:ENTRYPOINT|CMD)\b/iu;
 const PRODUCTION_SRC_ROOTS = Object.freeze(['src/index.js', 'src/main.js']);
 const WORKFLOWS_DIR = '.github/workflows';
 const HOOKS_DIR = '.githooks';
@@ -66,13 +78,65 @@ const EXAMPLES_DIR = 'examples';
 const CLOSED_EPIC_STATUS = /^status:\s*(?:closed|done|superseded)\b/mu;
 const ARG_UNREACHABLE = '--unreachable-scripts';
 const ARG_UNREACHABLE_SRC = '--unreachable-src';
+const ARG_ADDED = '--added';
+const ARG_BASE = '--base';
 const ARG_LIST = '--list';
+const SOURCE_TYPE_MODULE = 'module';
+const SOURCE_TYPE_SCRIPT = 'script';
+const ECMA_VERSION_LATEST = 'latest';
+const SPACE = ' ';
+const REPORT_HEADER = Object.freeze({
+  KNIP_ISSUES: 'Knip issues',
+  UNREACHABLE_ADDED_SRC: 'Unreachable newly added src modules',
+  UNUSED_TRACKED_FILES: 'Unused tracked files',
+});
+const GIT_DIFF_ADDED_ARGS = Object.freeze([
+  'diff',
+  '--name-only',
+  '--diff-filter=A',
+  '-z',
+]);
+const GIT_DIFF_CACHED_ADDED_ARGS = Object.freeze([
+  'diff',
+  '--cached',
+  '--name-only',
+  '--diff-filter=A',
+  '-z',
+]);
+const AST_TYPE = Object.freeze({
+  CALL_EXPRESSION: 'CallExpression',
+  EXPORT_ALL: 'ExportAllDeclaration',
+  EXPORT_NAMED: 'ExportNamedDeclaration',
+  IDENTIFIER: 'Identifier',
+  IMPORT_DECLARATION: 'ImportDeclaration',
+  IMPORT_EXPRESSION: 'ImportExpression',
+  LITERAL: 'Literal',
+  MEMBER_EXPRESSION: 'MemberExpression',
+  META_PROPERTY: 'MetaProperty',
+  NEW_EXPRESSION: 'NewExpression',
+  TEMPLATE_LITERAL: 'TemplateLiteral',
+  VARIABLE_DECLARATION: 'VariableDeclaration',
+});
+const CONST_KIND = 'const';
+const IMPORT_META_NAME = 'import';
+const META_PROPERTY_NAME = 'meta';
+const URL_PROPERTY_NAME = 'url';
+const CALL_SPECIFIER_CALLEES = Object.freeze(['require', 'fork']);
+const WORKER_CONSTRUCTOR = 'Worker';
+const URL_CONSTRUCTOR = 'URL';
+const MODULE_EXTENSION_CANDIDATES = Object.freeze([
+  '',
+  JS_SUFFIX,
+  MJS_SUFFIX,
+  CJS_SUFFIX,
+  INDEX_JS_SUFFIX,
+]);
 // A literal mention of a script anywhere in a reachable text: a package
 // script body, a workflow step, a hook, a spawn argument, a probe command.
 const SCRIPT_MENTION = /scripts\/[\w./-]+?\.(?:js|sh|mjs)\b/gu;
-// A literal mention of a runtime module under src/ (e.g. package.json script,
-// Dockerfile, or worker entrypoint spawn).
-const SRC_MENTION = /src\/[\w./-]+?\.js\b/gu;
+// A literal mention of a runtime module under src/ in package.json scripts or
+// Dockerfile ENTRYPOINT/CMD directives.
+const SRC_MENTION = /src\/[\w./-]+?\.(?:js|mjs|cjs)\b/gu;
 // A quoted relative path in a script - an import specifier, a `new URL`
 // argument, a spawn argument - resolved against the mentioning file.
 const RELATIVE_PATH_LITERAL = /['"](\.{1,2}\/[^'"\s]+)['"]/gu;
@@ -199,31 +263,65 @@ function runKnip() {
   return report;
 }
 
-function unusedFilesGate() {
+function resolveExplicitBase(argv) {
+  const index = arrayIndexOf(argv, ARG_BASE);
+  if (index < 0 || index + 1 >= argv.length) return null;
+  return argv[index + 1] || null;
+}
+
+function addedTrackedPaths(tracked, explicitBase) {
+  const root = process.cwd();
+  const range = resolvedCheckRange(explicitBase, process.env, root);
+  const added = new Set();
+  const recordDiff = (args) => {
+    const out = execGit(args, {cwd: root, encoding: TEXT_ENCODING});
+    arrayForEach(
+      arrayFilter(stringSplit(out, NUL), Boolean),
+      (file) => {
+        if (tracked.has(file)) added.add(file);
+      },
+    );
+  };
+  if (range.base) {
+    recordDiff([...GIT_DIFF_ADDED_ARGS, `${range.base}..HEAD`]);
+  }
+  recordDiff([...GIT_DIFF_CACHED_ADDED_ARGS]);
+  return added;
+}
+
+function unreachableAddedSrcModules(tracked, explicitBase = null) {
+  const added = addedTrackedPaths(tracked, explicitBase);
+  if (added.size === 0) return [];
+  const unreachable = unreachableSrcModules(tracked);
+  return arrayFilter(unreachable, (file) => added.has(file));
+}
+
+function reportList(header, items, formatItem = (item) => item) {
+  if (items.length === 0) return;
+  console.error(`${header} (${items.length})`);
+  for (const item of items) {
+    console.error(`  ${formatItem(item)}`);
+  }
+}
+
+function unusedFilesGate(argv = []) {
   const tracked = trackedPaths();
   const report = runKnip();
   const files = Array.isArray(report.files) ? report.files : [];
   const issues = Array.isArray(report.issues) ? report.issues : [];
   const trackedUnusedFiles = arrayFilter(files, (file) => tracked.has(file));
   const untrackedUnusedFiles = arrayFilter(files, (file) => !tracked.has(file));
+  const unreachableAddedSrc = unreachableAddedSrcModules(tracked, resolveExplicitBase(argv));
   for (const file of untrackedUnusedFiles) {
     console.warn(`push-gate: ignoring untracked unused file ${file}`);
   }
-  if (trackedUnusedFiles.length === 0 && issues.length === 0) {
-    return 0;
-  }
-  if (trackedUnusedFiles.length > 0) {
-    console.error(`Unused tracked files (${trackedUnusedFiles.length})`);
-    for (const file of trackedUnusedFiles) {
-      console.error(`  ${file}`);
-    }
-  }
-  if (issues.length > 0) {
-    console.error(`Knip issues (${issues.length})`);
-    for (const issue of issues) {
-      console.error(`  ${JSON.stringify(issue)}`);
-    }
-  }
+  const hasFailures = trackedUnusedFiles.length > 0 ||
+    issues.length > 0 ||
+    unreachableAddedSrc.length > 0;
+  if (!hasFailures) return 0;
+  reportList(REPORT_HEADER.UNUSED_TRACKED_FILES, trackedUnusedFiles);
+  reportList(REPORT_HEADER.UNREACHABLE_ADDED_SRC, unreachableAddedSrc);
+  reportList(REPORT_HEADER.KNIP_ISSUES, issues, (issue) => JSON.stringify(issue));
   return 1;
 }
 
@@ -265,11 +363,47 @@ function readJsonOrNull(relativePath) {
   }
 }
 
+function mentionedSrcModules(text, tracked) {
+  const found = [];
+  for (const match of stringMatchAll(text, SRC_MENTION)) {
+    const candidate = match[0];
+    if (tracked.has(candidate) && isProductionTarget(candidate) && isJsLikeModule(candidate)) {
+      found.push(candidate);
+    }
+  }
+  return found;
+}
+
+function dockerfileRuntimeEntrypoints(tracked) {
+  const text = readText(DOCKERFILE);
+  if (!text) return [];
+  const unfolded = stringReplace(text, DOCKER_LINE_CONTINUATION, SPACE);
+  const found = [];
+  for (const line of stringSplit(unfolded, DOCKER_LINE_SPLIT)) {
+    if (DOCKER_ENTRYPOINT_OR_CMD.test(line)) {
+      arrayForEach(mentionedSrcModules(line, tracked), (file) => found.push(file));
+    }
+  }
+  return found;
+}
+
+function packageScriptEntrypoints(pkg, tracked) {
+  if (!pkg || !pkg.scripts || typeof pkg.scripts !== 'object') return [];
+  const found = [];
+  for (const command of Object.values(pkg.scripts)) {
+    if (typeof command === 'string') {
+      arrayForEach(mentionedSrcModules(command, tracked), (file) => found.push(file));
+    }
+  }
+  return found;
+}
+
 function productionEntrypoints(tracked) {
   const roots = [];
   const addCandidate = (rawPath) => {
     const normalized = normalizeEntryCandidate(rawPath);
-    if (normalized && tracked.has(normalized) && isProductionTarget(normalized)) {
+    if (normalized && tracked.has(normalized) &&
+        isProductionTarget(normalized) && isJsLikeModule(normalized)) {
       roots.push(normalized);
     }
   };
@@ -280,7 +414,9 @@ function productionEntrypoints(tracked) {
     collectNestedStrings(pkg.exports, extra);
     collectNestedStrings(pkg.bin, extra);
     arrayForEach(extra, addCandidate);
+    arrayForEach(packageScriptEntrypoints(pkg, tracked), addCandidate);
   }
+  arrayForEach(dockerfileRuntimeEntrypoints(tracked), addCandidate);
   const knip = readJsonOrNull(KNIP_JSON);
   if (knip && Array.isArray(knip.entry)) {
     for (const entry of knip.entry) {
@@ -291,38 +427,181 @@ function productionEntrypoints(tracked) {
   }
   arrayForEach(PRODUCTION_SRC_ROOTS, addCandidate);
   for (const file of tracked) {
-    if (stringStartsWith(file, SCRIPTS_DIR)) roots.push(file);
+    if (stringStartsWith(file, SCRIPTS_DIR) && isJsLikeModule(file)) {
+      roots.push(file);
+    }
   }
   return roots;
 }
 
-function mentionedSrcModules(text, tracked) {
-  const found = [];
-  for (const match of stringMatchAll(text, SRC_MENTION)) {
-    const candidate = match[0];
-    if (tracked.has(candidate) && isProductionTarget(candidate)) found.push(candidate);
+function parseModuleAst(text, file) {
+  const source = stringReplace(text, HASHBANG_LINE, LINE_SEPARATOR);
+  const sourceTypes = stringEndsWith(file, CJS_SUFFIX) ?
+    [SOURCE_TYPE_SCRIPT, SOURCE_TYPE_MODULE] :
+    [SOURCE_TYPE_MODULE, SOURCE_TYPE_SCRIPT];
+  for (const sourceType of sourceTypes) {
+    try {
+      return parseJavaScript(source, {ecmaVersion: ECMA_VERSION_LATEST, sourceType});
+    } catch {
+      continue;
+    }
   }
-  return found;
+  return null;
+}
+
+function visitAst(node, visitor) {
+  if (!node || typeof node !== 'object') return;
+  visitor(node);
+  const keys = VISITOR_KEYS[node.type];
+  if (!keys) return;
+  for (const key of keys) {
+    const child = node[key];
+    if (Array.isArray(child)) {
+      for (const item of child) visitAst(item, visitor);
+    } else if (child && typeof child === 'object') {
+      visitAst(child, visitor);
+    }
+  }
+}
+
+function staticStringLiteral(node) {
+  if (!node) return null;
+  if (node.type === AST_TYPE.LITERAL && typeof node.value === 'string') {
+    return node.value;
+  }
+  if (node.type === AST_TYPE.TEMPLATE_LITERAL && node.expressions.length === 0) {
+    return node.quasis[0]?.value?.cooked ?? null;
+  }
+  return null;
+}
+
+function collectConstStringBindings(ast) {
+  const bindings = new Map();
+  const seen = new Set();
+  visitAst(ast, (node) => {
+    if (node.type !== AST_TYPE.VARIABLE_DECLARATION || node.kind !== CONST_KIND) return;
+    for (const declarator of node.declarations) {
+      if (declarator.id?.type !== AST_TYPE.IDENTIFIER) continue;
+      const value = staticStringLiteral(declarator.init);
+      if (value === null) continue;
+      const name = declarator.id.name;
+      if (seen.has(name)) {
+        bindings.delete(name);
+      } else {
+        seen.add(name);
+        bindings.set(name, value);
+      }
+    }
+  });
+  return bindings;
+}
+
+function resolveSpecifierArg(node, constBindings) {
+  const literal = staticStringLiteral(node);
+  if (literal !== null) return literal;
+  if (node?.type === AST_TYPE.IDENTIFIER && constBindings.has(node.name)) {
+    return constBindings.get(node.name);
+  }
+  return null;
+}
+
+function calleeIdentifierName(callee) {
+  if (!callee) return null;
+  if (callee.type === AST_TYPE.IDENTIFIER) return callee.name;
+  if (callee.type === AST_TYPE.MEMBER_EXPRESSION && !callee.computed &&
+      callee.property?.type === AST_TYPE.IDENTIFIER) {
+    return callee.property.name;
+  }
+  return null;
+}
+
+function isImportMetaUrl(node) {
+  return node?.type === AST_TYPE.MEMBER_EXPRESSION &&
+    !node.computed &&
+    node.object?.type === AST_TYPE.META_PROPERTY &&
+    node.object.meta?.name === IMPORT_META_NAME &&
+    node.object.property?.name === META_PROPERTY_NAME &&
+    node.property?.type === AST_TYPE.IDENTIFIER &&
+    node.property.name === URL_PROPERTY_NAME;
+}
+
+function isStaticModuleDeclaration(node) {
+  return node.type === AST_TYPE.IMPORT_DECLARATION ||
+    node.type === AST_TYPE.EXPORT_NAMED ||
+    node.type === AST_TYPE.EXPORT_ALL;
+}
+
+function callOrNewSpecifier(node, constBindings) {
+  const name = calleeIdentifierName(node.callee);
+  if (!name) return null;
+  if (node.type === AST_TYPE.CALL_EXPRESSION) {
+    return arrayIncludes(CALL_SPECIFIER_CALLEES, name) ?
+      resolveSpecifierArg(node.arguments?.[0], constBindings) : null;
+  }
+  if (node.type === AST_TYPE.NEW_EXPRESSION) {
+    const isWorkerOrMetaUrl = name === WORKER_CONSTRUCTOR ||
+      (name === URL_CONSTRUCTOR && isImportMetaUrl(node.arguments?.[1]));
+    return isWorkerOrMetaUrl ? resolveSpecifierArg(node.arguments?.[0], constBindings) : null;
+  }
+  return null;
+}
+
+function executableSpecifierForNode(node, constBindings) {
+  if (isStaticModuleDeclaration(node) && node.source) {
+    return staticStringLiteral(node.source);
+  }
+  if (node.type === AST_TYPE.IMPORT_EXPRESSION) {
+    return resolveSpecifierArg(node.source, constBindings);
+  }
+  return callOrNewSpecifier(node, constBindings);
+}
+
+function executableModuleSpecifiers(text, file) {
+  const ast = parseModuleAst(text, file);
+  if (!ast) return [];
+  const constBindings = collectConstStringBindings(ast);
+  const specifiers = [];
+  visitAst(ast, (node) => {
+    const specifier = executableSpecifierForNode(node, constBindings);
+    if (specifier) specifiers.push(specifier);
+  });
+  return specifiers;
+}
+
+function resolveProductionModulePath(basePath, tracked) {
+  for (const suffix of MODULE_EXTENSION_CANDIDATES) {
+    const candidate = `${basePath}${suffix}`;
+    if (tracked.has(candidate) && isProductionTarget(candidate) && isJsLikeModule(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
 }
 
 function importedProductionModules(text, from, tracked) {
   const found = [];
-  for (const match of stringMatchAll(text, RELATIVE_PATH_LITERAL)) {
-    const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(from), match[1]));
-    if (tracked.has(resolved) && isProductionTarget(resolved)) {
-      found.push(resolved);
-    } else if (tracked.has(`${resolved}${JS_SUFFIX}`) &&
-        isProductionTarget(`${resolved}${JS_SUFFIX}`)) {
-      found.push(`${resolved}${JS_SUFFIX}`);
+  for (const rawSpecifier of executableModuleSpecifiers(text, from)) {
+    const specifier = stringReplace(rawSpecifier, SPECIFIER_QUERY_OR_HASH, '');
+    let basePath = null;
+    if (stringStartsWith(specifier, RELATIVE_SPECIFIER_PREFIX) ||
+        stringStartsWith(specifier, PARENT_SPECIFIER_PREFIX)) {
+      basePath = path.posix.normalize(path.posix.join(path.posix.dirname(from), specifier));
+    } else {
+      const normalized = path.posix.normalize(stringReplace(specifier, LEADING_DOT_SLASH, ''));
+      if (stringStartsWith(normalized, SRC_DIR)) basePath = normalized;
     }
+    if (!basePath) continue;
+    const resolved = resolveProductionModulePath(basePath, tracked);
+    if (resolved) found.push(resolved);
   }
   return found;
 }
 
 /**
  * Tracked runtime modules under src/** (excluding src/test-helpers/**) that
- * no production entrypoint (package.json main/bin/exports, knip production
- * entries, src/index.js, src/main.js, Dockerfile, or scripts/**) reaches.
+ * no production entrypoint (package.json main/bin/exports/scripts, knip
+ * production entries, src/index.js, src/main.js, Dockerfile ENTRYPOINT/CMD,
+ * or executable scripts/**) reaches via executable module/worker edges.
  * @param {Set<string>} tracked tracked paths of the tree
  * @returns {string[]} unreachable src module paths, sorted
  */
@@ -330,27 +609,21 @@ function unreachableSrcModules(tracked) {
   const srcModules = arrayFilter(
     [...tracked],
     (file) => stringStartsWith(file, SRC_DIR) &&
-      stringEndsWith(file, JS_SUFFIX) &&
+      isJsLikeModule(file) &&
       !stringStartsWith(file, TEST_HELPERS_DIR),
   );
   const reachable = new Set();
   const queue = [];
   const admit = (file) => {
-    if (reachable.has(file) || !isProductionTarget(file)) return;
+    if (reachable.has(file) || !isProductionTarget(file) || !isJsLikeModule(file)) return;
     reachable.add(file);
     queue.push(file);
   };
   arrayForEach(productionEntrypoints(tracked), admit);
-  for (const text of [readText(PACKAGE_JSON), readText(DOCKERFILE)]) {
-    arrayForEach(mentionedSrcModules(text, tracked), admit);
-  }
   for (let cursor = 0; cursor < queue.length; cursor += 1) {
     const file = queue[cursor];
     const text = readText(file);
-    arrayForEach(mentionedSrcModules(text, tracked), admit);
-    if (isJsLikeModule(file)) {
-      arrayForEach(importedProductionModules(text, file, tracked), admit);
-    }
+    arrayForEach(importedProductionModules(text, file, tracked), admit);
   }
   return arrayFilter(srcModules, (file) => !reachable.has(file)).sort();
 }
@@ -368,9 +641,13 @@ function main(argv) {
     return runReachabilityProbe(unreachableScripts(trackedPaths()), argv);
   }
   if (arrayIncludes(argv, ARG_UNREACHABLE_SRC)) {
-    return runReachabilityProbe(unreachableSrcModules(trackedPaths()), argv);
+    const tracked = trackedPaths();
+    const unreachable = arrayIncludes(argv, ARG_ADDED) ?
+      unreachableAddedSrcModules(tracked, resolveExplicitBase(argv)) :
+      unreachableSrcModules(tracked);
+    return runReachabilityProbe(unreachable, argv);
   }
-  return unusedFilesGate();
+  return unusedFilesGate(argv);
 }
 
 process.exit(main(process.argv.slice(2)));
