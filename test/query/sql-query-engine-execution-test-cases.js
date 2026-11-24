@@ -692,7 +692,13 @@ function registerSqlQueryEngineExecutionTestCases({
       if (tableName === TABLES.TABLES) {
         return {
           success: true,
-          rows: [{table_id: 'tbl-probe', table_name: 'ffr_probe', primaryKey: 'id', partition_key_type: 'TEXT'}],
+          rows: [{
+            table_id: 'tbl-probe',
+            table_name: 'ffr_probe',
+            primaryKey: 'id',
+            partition_key_type: 'TEXT',
+            active_partition_version: 1,
+          }],
         };
       }
       if (tableName === TABLES.PARTITIONS) {
@@ -704,6 +710,8 @@ function registerSqlQueryEngineExecutionTestCases({
             partition_key_start: null,
             partition_key_end: null,
             partition_key_type: 'TEXT',
+            partition_version: 1,
+            state: 'NORMAL',
             leader_node_id: 'test-node',
           }],
         };

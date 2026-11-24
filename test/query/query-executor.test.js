@@ -1028,8 +1028,8 @@ test('QueryExecutor - findPartitionLeaderAddress fails closed without canonical 
     t.end();
   });
 
-test('QueryExecutor - findPartitionLeaderAddress allows a fresh bootstrap ' +
-  'leader fallback before leader_node_id converges', (t) => {
+test('QueryExecutor - findPartitionLeaderAddress delegates fresh bootstrap ' +
+  'leader resolution solely to bootstrapTopologySnapshotOwner', (t) => {
   const systemCache = {
     partitions: [
       {
@@ -1085,15 +1085,38 @@ test('QueryExecutor - findPartitionLeaderAddress allows a fresh bootstrap ' +
     },
   };
 
-  const executor = new QueryExecutor({
+  // Without bootstrapTopologySnapshotOwner wired, caller fails closed.
+  const unwiredExecutor = new QueryExecutor({
     controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
     messageRouter: createMockMessageRouter(),
     systemCache,
   });
+  t.equal(unwiredExecutor.findPartitionLeaderAddress('p1'), null);
 
-  const address = executor.findPartitionLeaderAddress('p1');
+  // When bootstrapTopologySnapshotOwner returns [], caller must not second-guess it.
+  const emptyOwnerExecutor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    bootstrapTopologySnapshotOwner: {
+      isFreshPartitionBootstrapWindow: () => true,
+      getFreshBootstrapLeaderServices: () => [],
+    },
+    messageRouter: createMockMessageRouter(),
+    systemCache,
+  });
+  t.equal(emptyOwnerExecutor.findPartitionLeaderAddress('p1'), null);
 
-  t.equal(address, 'node2/partition/p1-r2');
+  // When bootstrapTopologySnapshotOwner returns the leader service, caller uses it.
+  const ownedExecutor = new QueryExecutor({
+    controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    bootstrapTopologySnapshotOwner: {
+      isFreshPartitionBootstrapWindow: () => true,
+      getFreshBootstrapLeaderServices: (_partitionId, services) =>
+        services.filter((service) => service.raft_role === 'leader'),
+    },
+    messageRouter: createMockMessageRouter(),
+    systemCache,
+  });
+  t.equal(ownedExecutor.findPartitionLeaderAddress('p1'), 'node2/partition/p1-r2');
   t.end();
 });
 

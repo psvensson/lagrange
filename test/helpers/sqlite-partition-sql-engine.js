@@ -47,9 +47,12 @@ function createSystemCache(table, partitions) {
   const tables = [{
     table_name: table.name,
     primaryKey: table.primaryKey,
+    active_partition_version: 1,
     schema_definition: schemaDefinition,
   }];
   const partitionRows = partitions.map((partition) => ({
+    partition_version: 1,
+    state: 'NORMAL',
     ...partition,
     table_name: table.name,
     leader_node_id: FIXTURE_NODE,

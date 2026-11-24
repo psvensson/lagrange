@@ -437,18 +437,18 @@ test('QueryExecutor - executeOnPartitions forwards router delivery source',
   });
 
 test('QueryExecutor - executeOnPartition dispatches writes during the fresh ' +
-  'bootstrap leader window', async (t) => {
+  'bootstrap leader window only when bootstrapTopologySnapshotOwner grants it',
+async (t) => {
   let deliveries = 0;
   let lastAddress = null;
+  const partitionRow = {
+    partition_id: 'p1',
+    leader_node_id: null,
+    created_at: 100,
+    updated_at: 100,
+  };
   const systemCache = {
-    partitions: [
-      {
-        partition_id: 'p1',
-        leader_node_id: null,
-        created_at: 100,
-        updated_at: 100,
-      },
-    ],
+    partitions: [partitionRow],
     services: [
       {
         service_id: 'p1-r1',
@@ -488,8 +488,34 @@ test('QueryExecutor - executeOnPartition dispatches writes during the fresh ' +
     },
   };
 
+  // Without bootstrapTopologySnapshotOwner wired, no caller-side fallback
+  // selects a bootstrap leader.
+  const unwired = await executeSteadyStateWrite(systemCache);
+  t.equal(unwired.result.success, false);
+  t.equal(unwired.result.error, ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE);
+  t.equal(
+    unwired.deliveries,
+    0,
+    'without bootstrapTopologySnapshotOwner, fresh bootstrap window fails closed',
+  );
+
+  // With bootstrapTopologySnapshotOwner wired, selection delegates solely to it.
+  const ownerCalls = [];
+  const bootstrapTopologySnapshotOwner = {
+    isBootstrapRoutingGraceWindow(partition) {
+      return partition?.partition_id === 'p1';
+    },
+    isFreshPartitionBootstrapWindow(partition) {
+      return partition?.partition_id === 'p1';
+    },
+    getFreshBootstrapLeaderServices(partitionId, services) {
+      ownerCalls.push(partitionId);
+      return services.filter((service) => service.raft_role === 'leader');
+    },
+  };
   const executor = new QueryExecutor({
     controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    bootstrapTopologySnapshotOwner,
     messageRouter,
     systemCache,
   });
@@ -508,7 +534,10 @@ test('QueryExecutor - executeOnPartition dispatches writes during the fresh ' +
 
   t.equal(result.success, true);
   t.equal(lastAddress, 'node2/partition/p1-r2');
-  t.equal(deliveries, 1, 'write path should dispatch through the visible bootstrap leader');
+  t.equal(deliveries, 1, 'write path should dispatch through the owner-selected bootstrap leader');
+  t.same(ownerCalls, ['p1']);
+  t.equal(executor.isFreshPartitionBootstrapWindow(partitionRow), true);
+  t.equal(executor.isBootstrapRoutingGraceWindow(partitionRow), true);
 });
 
 test('QueryExecutor - executeOnPartition fails closed during the fresh ' +

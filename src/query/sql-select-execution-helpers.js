@@ -14,6 +14,10 @@ import {
 } from './distributed/distributed-select-fanout-plan.js';
 import {renderSelectWithParameters} from './sql-statement-renderer.js';
 import {
+  attachLazyPresentedRows,
+  defineLazyRowObjectsGetter,
+  getResultRowCount,
+  hasLazyRowsProperty,
   presentRawSqlRows,
   presentSqlRowObjects,
 } from './sql-value-presentation.js';
@@ -128,15 +132,16 @@ export function executeFromlessSelectInSession(ast, params = [], queryOptions = 
       expectedColumns: resolveExpectedOutputColumns(ast),
     });
     const safeIntegers = opts.safeIntegers === true;
-    const presentedRows = presentSqlRowObjects(merged.rows, {safeIntegers});
-    const presentedRawRows = presentRawSqlRows(merged.rawRows, {safeIntegers});
-    return {
+    const hasRawRows = Array.isArray(merged.rawRows);
+    const presentedRawRows = hasRawRows ?
+      presentRawSqlRows(merged.rawRows, {safeIntegers}) :
+      merged.rawRows;
+    const result = {
       success: true,
-      rows: presentedRows,
       rawRows: presentedRawRows,
       columns: merged.columns,
       rowSet: merged.rowSet,
-      count: presentedRows.length,
+      count: hasRawRows ? presentedRawRows.length : getResultRowCount(merged),
       partitions: [],
       tableName: null,
       distributedPlan: null,
@@ -148,6 +153,22 @@ export function executeFromlessSelectInSession(ast, params = [], queryOptions = 
         mergeDurationMs: 0,
       },
     };
+    if (hasRawRows) {
+      return attachLazyPresentedRows(result, {
+        columns: merged.columns,
+        rawRows: presentedRawRows,
+        safeIntegers,
+      });
+    }
+    if (hasLazyRowsProperty(merged)) {
+      return defineLazyRowObjectsGetter(result, () =>
+        presentSqlRowObjects(merged.rows, {safeIntegers}),
+      );
+    }
+    const presentedRows = presentSqlRowObjects(merged.rows, {safeIntegers});
+    result.rows = presentedRows;
+    result.count = Array.isArray(presentedRows) ? presentedRows.length : 0;
+    return result;
   } finally {
     session.close();
   }

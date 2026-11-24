@@ -62,12 +62,16 @@ test('SQLQueryEngine - seeds bootstrap routing overlay snapshots for ' +
       {
         partition_id: 'nodes-p1',
         table_name: TABLES.NODES,
+        partition_version: 1,
+        state: 'NORMAL',
         created_at: 1,
         updated_at: 1,
       },
       {
         partition_id: 'users-p1',
         table_name: 'users',
+        partition_version: 1,
+        state: 'NORMAL',
         created_at: 1,
         updated_at: 1,
       },

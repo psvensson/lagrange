@@ -18,12 +18,15 @@ function createMockSystemCache(tableName = SYSTEM_TABLE_NAME.SERVICES) {
   const tables = [{
     table_name: tableName,
     primaryKey,
+    active_partition_version: 1,
   }];
   const partitions = [{
     partition_id: partitionId,
     table_name: tableName,
     partition_key_start: null,
     partition_key_end: null,
+    partition_version: 1,
+    state: 'NORMAL',
     leader_node_id: 'test-node',
   }];
   const services = [{

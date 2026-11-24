@@ -9,6 +9,7 @@ const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_STRING = 'string';
 
 const {
+  ACTIVE_PARTITION_STATE,
   BOOTSTRAP_ROUTING_OVERLAY_ENTRY_STATE,
   BOOTSTRAP_ROUTING_OVERLAY_INSTALL_STATE,
   BOOTSTRAP_ROUTING_OVERLAY_NO_EXPIRY_MS,
@@ -16,6 +17,7 @@ const {
   BOOTSTRAP_ROUTING_OVERLAY_REASON,
   BOOTSTRAP_ROUTING_OVERLAY_RETENTION_MODE,
   BOOTSTRAP_ROUTING_OVERLAY_REUSE_STATE,
+  DEFAULT_PARTITION_VERSION,
   SERVICE_TYPE,
   TABLES,
   buildBootstrapRoutingOverlayEntry,
@@ -547,6 +549,8 @@ class SQLQueryEngineBootstrapRoutingOverlay extends SQLQueryEnginePartitionRouti
     const overlayPartition = {
       partition_id: partitionId,
       table_name: tableName,
+      partition_version: DEFAULT_PARTITION_VERSION,
+      state: ACTIVE_PARTITION_STATE,
       leader_node_id: resolveBootstrapLeaderSelection({
         services: serviceRows,
       }).leaderNodeId,

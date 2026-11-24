@@ -460,3 +460,101 @@ test('C56-6: BEGIN admits only the canonical recovery epoch domain before ' +
     created_at: 1, updated_at: 1,
   }], participants: [], writeOperations: []}));
 });
+
+test('Pending-BEGIN identity vs session closure: stale ROLLBACK for old tx A ' +
+  'leaves in-flight BEGIN B intact while closeSession disposes in-flight BEGIN C',
+async () => {
+  const persistedByTxId = new Map();
+  let gateNextInsert = false;
+  let persistEntered = null;
+  let releasePersist = null;
+  const coordinator = new DistributedTransactionCoordinator({
+    logger,
+    async persistTransaction(row, options = {}) {
+      persistedByTxId.set(row.transactionId, {...row});
+      if (gateNextInsert && options.insertOnce === true) {
+        gateNextInsert = false;
+        persistEntered.resolve(row.transactionId);
+        await releasePersist.promise;
+      }
+    },
+  });
+
+  const sessionId = 'pending-begin-identity-vs-closure';
+  // Establish and roll back transaction A so A is now a stale transaction ID.
+  const txA = await coordinator.begin(sessionId);
+  assert.equal(txA.success, true);
+  const rolledBackA = await coordinator.rollback(sessionId, {
+    expectedTransactionId: txA.transactionId,
+  });
+  assert.equal(rolledBackA.success, true);
+  assert.equal(coordinator.getTransaction(sessionId), null);
+
+  // (a) Start BEGIN B and pause it inside persistTransaction. While B is in
+  // flight, issue a stale rollback naming old transaction A.
+  gateNextInsert = true;
+  persistEntered = deferred();
+  releasePersist = deferred();
+  const beginBPromise = coordinator.begin(sessionId);
+  const txBId = await persistEntered.promise;
+  assert.notEqual(txBId, txA.transactionId);
+
+  const staleRollbackPromise = coordinator.rollback(sessionId, {
+    expectedTransactionId: txA.transactionId,
+  });
+  await ticks();
+  releasePersist.resolve();
+
+  const [txB, staleRollbackResult] = await Promise.all([
+    beginBPromise,
+    staleRollbackPromise,
+  ]);
+  assert.equal(txB.success, true);
+  assert.equal(txB.transactionId, txBId);
+  assert.equal(staleRollbackResult.success, false);
+  assert.equal(staleRollbackResult.errorCode, 'NO_TRANSACTION');
+  assert.equal(
+    coordinator.getTransaction(sessionId)?.transactionId,
+    txBId,
+    'stale rollback naming tx A must leave in-flight BEGIN B active and intact',
+  );
+  assert.equal(
+    persistedByTxId.get(txBId)?.status,
+    'ACTIVE',
+    'tx B durable status must remain ACTIVE after stale rollback for tx A',
+  );
+
+  // Cleanly end tx B before testing actual session closure on BEGIN C.
+  const rolledBackB = await coordinator.rollback(sessionId, {
+    expectedTransactionId: txBId,
+  });
+  assert.equal(rolledBackB.success, true);
+  assert.equal(coordinator.getTransaction(sessionId), null);
+
+  // (b) Start BEGIN C and pause it inside persistTransaction. While C is in
+  // flight, close the session explicitly via closeSession(sessionId).
+  gateNextInsert = true;
+  persistEntered = deferred();
+  releasePersist = deferred();
+  const beginCPromise = coordinator.begin(sessionId);
+  const txCId = await persistEntered.promise;
+  assert.notEqual(txCId, txBId);
+
+  const closePromise = coordinator.closeSession(sessionId);
+  await ticks();
+  releasePersist.resolve();
+
+  const [txC] = await Promise.all([beginCPromise, closePromise]);
+  assert.equal(txC.success, true);
+  assert.equal(txC.transactionId, txCId);
+  assert.equal(
+    coordinator.getTransaction(sessionId),
+    null,
+    'closeSession during in-flight BEGIN C must dispose and remove tx C',
+  );
+  assert.equal(
+    persistedByTxId.get(txCId)?.status,
+    'ROLLED_BACK',
+    'closeSession during in-flight BEGIN C must roll back tx C durably',
+  );
+});

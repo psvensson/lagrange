@@ -120,6 +120,7 @@ class PostgresWireAdapter {
       throw new Error(ADAPTER_ERROR_MSG.AUTH_HANDLER_REQUIRED);
     }
     this.sqlCore = options.sqlCore;
+    this.transactionCoordinator = options.sqlCore.transactionCoordinator || null;
     this.authHandler = options.authHandler;
     this.sessions = new Map();
     this.logger = options.logger || this.initLogger();
@@ -398,6 +399,7 @@ class PostgresWireAdapter {
     session.closed = true;
     session.state = PG_SESSION_STATE.CLOSED;
     this.sessions.delete(sessionId);
+    this.transactionCoordinator?.markInFlightBeginsClosed(sessionId);
     if (options.transactionOpen === true || session.inFlightBeginCount > 0) {
       session.rollbackPromise = this.rollbackClosedSessionTransaction(session);
     }

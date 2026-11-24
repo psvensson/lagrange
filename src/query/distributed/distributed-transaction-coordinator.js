@@ -242,6 +242,17 @@ class DistributedTransactionCoordinator {
   }
 
   /**
+   * Close a session: mark any in-flight BEGINs closed so they dispose on
+   * completion, and roll back any active transaction held by the session.
+   * @param {string} sessionId - Session ID.
+   * @return {Promise<Object>} Rollback settlement result.
+   */
+  async closeSession(sessionId) {
+    this.markInFlightBeginsClosed(sessionId);
+    return this.rollback(sessionId, {sessionClosed: true});
+  }
+
+  /**
    * Begin a distributed transaction for a session.
    * @param {string} sessionId - Session ID.
    * @param {Object} [options] - {transactionMode, timeoutDeadline}: a
@@ -563,15 +574,23 @@ class DistributedTransactionCoordinator {
    * @return {Promise<Object>} Rollback result.
    */
   async rollback(sessionId, options = {}) {
-    this.markInFlightBeginsClosed(sessionId);
-    const capturedTransactionId = options.expectedTransactionId ??
+    const hasExpectedTransactionId =
+      typeof options.expectedTransactionId === 'string' &&
+      options.expectedTransactionId.length > 0;
+    if (options.sessionClosed === true) {
+      this.markInFlightBeginsClosed(sessionId);
+    }
+    const capturedTransactionId = hasExpectedTransactionId ?
+      options.expectedTransactionId :
       this.getTransaction(sessionId)?.transactionId ?? null;
     return this.runTransactionOperation(
       sessionId,
       () => this.rollbackOwned(
         sessionId,
-        capturedTransactionId ??
-          this.getTransaction(sessionId)?.transactionId ?? null,
+        hasExpectedTransactionId ?
+          options.expectedTransactionId :
+          capturedTransactionId ??
+            this.getTransaction(sessionId)?.transactionId ?? null,
       ),
     );
   }

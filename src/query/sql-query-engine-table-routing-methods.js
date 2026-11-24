@@ -11,8 +11,10 @@ import {
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_NUMBER = 'number';
 const LOCAL_STR_BACKGROUND = 'background';
 const LOCAL_STR_CRITICAL = 'critical';
+const POSITIVE_INTEGER_PATTERN = /^\d+$/;
 
 const {
   ACTIVE_PARTITION_STATE,
@@ -25,6 +27,63 @@ const {
   QUERY_ERROR_MSG,
   TABLES,
 } = SQL_QUERY_ENGINE_SHARED;
+
+function parsePositivePartitionVersion(value) {
+  if (typeof value === LOCAL_STR_NUMBER) {
+    return Number.isInteger(value) && value >= DEFAULT_PARTITION_VERSION ?
+      value :
+      null;
+  }
+  if (typeof value === LOCAL_STR_STRING) {
+    const trimmed = value.trim();
+    if (POSITIVE_INTEGER_PATTERN.test(trimmed)) {
+      const parsed = Number(trimmed);
+      return Number.isSafeInteger(parsed) && parsed >= DEFAULT_PARTITION_VERSION ?
+        parsed :
+        null;
+    }
+  }
+  return null;
+}
+
+/**
+ * Resolve active partition version from table metadata.
+ * Requires an explicit valid integer `active_partition_version` /
+ * `activePartitionVersion`; returns `null` when missing or invalid.
+ * @param {Object|null} tableInfo - Table metadata row.
+ * @return {number|null} Active partition-set version or null.
+ */
+function resolveActivePartitionVersion(tableInfo) {
+  const value = tableInfo?.active_partition_version ??
+    tableInfo?.activePartitionVersion;
+  return parsePositivePartitionVersion(value);
+}
+
+/**
+ * Determine whether a partition row should participate in normal routing.
+ * Requires valid integer `activePartitionVersion` and `partition_version`
+ * matching each other, plus explicit `state` equal to `'NORMAL'`.
+ * @param {Object|null} partition - Partition metadata row.
+ * @param {number|null} activePartitionVersion - Active partition-set version.
+ * @return {boolean} True when the partition is routable for table traffic.
+ */
+function isPartitionVisibleForRouting(partition, activePartitionVersion) {
+  const expectedVersion = parsePositivePartitionVersion(activePartitionVersion);
+  if (expectedVersion === null) {
+    return false;
+  }
+  const partitionVersion = parsePositivePartitionVersion(
+    partition?.partition_version ?? partition?.partitionVersion,
+  );
+  if (partitionVersion === null || partitionVersion !== expectedVersion) {
+    return false;
+  }
+  const rawState = partition?.state;
+  if (typeof rawState !== LOCAL_STR_STRING) {
+    return false;
+  }
+  return rawState.trim().toUpperCase() === ACTIVE_PARTITION_STATE;
+}
 
 class SQLQueryEngineTableRoutingMethods {
   /**
@@ -53,7 +112,9 @@ class SQLQueryEngineTableRoutingMethods {
     const tableInfo = this.getTableInfo(tableName);
     const tableId = tableInfo?.table_id || tableInfo?.tableId || null;
     const activePartitionVersion =
-      this.resolveActivePartitionVersion(tableInfo);
+      tableInfo === null && this.isSystemTable(tableName) ?
+        DEFAULT_PARTITION_VERSION :
+        this.resolveActivePartitionVersion(tableInfo);
 
     // Get partitions from the raw observed system cache.
     if (typeof this.systemCache.filter === LOCAL_STR_FUNCTION) {
@@ -432,45 +493,24 @@ class SQLQueryEngineTableRoutingMethods {
 
   /**
    * Resolve active partition version from table metadata.
-   * Missing values default to version 1 for compatibility.
    * @param {Object|null} tableInfo - Table metadata row.
-   * @return {number} Active partition-set version.
+   * @return {number|null} Active partition-set version or null.
    * @private
    */
   resolveActivePartitionVersion(tableInfo) {
-    const value = tableInfo?.active_partition_version ??
-      tableInfo?.activePartitionVersion;
-    const parsed = Number(value);
-    if (!Number.isInteger(parsed) || parsed < DEFAULT_PARTITION_VERSION) {
-      return DEFAULT_PARTITION_VERSION;
-    }
-    return parsed;
+    return resolveActivePartitionVersion(tableInfo);
   }
 
   /**
    * Determine whether a partition row should participate in normal routing.
    * Hidden or non-normal child partitions remain invisible until cutover.
    * @param {Object} partition - Partition metadata row.
-   * @param {number} activePartitionVersion - Active partition-set version.
+   * @param {number|null} activePartitionVersion - Active partition-set version.
    * @return {boolean} True when the partition is routable for table traffic.
    * @private
    */
   isPartitionVisibleForRouting(partition, activePartitionVersion) {
-    const partitionVersion = Number(
-      partition?.partition_version ?? partition?.partitionVersion,
-    );
-    const normalizedVersion = Number.isInteger(partitionVersion) &&
-      partitionVersion >= DEFAULT_PARTITION_VERSION ?
-      partitionVersion :
-      DEFAULT_PARTITION_VERSION;
-    if (normalizedVersion !== activePartitionVersion) {
-      return false;
-    }
-
-    const state = String(
-      partition?.state ?? ACTIVE_PARTITION_STATE,
-    ).toUpperCase();
-    return state === ACTIVE_PARTITION_STATE;
+    return isPartitionVisibleForRouting(partition, activePartitionVersion);
   }
 
   /**
@@ -519,4 +559,8 @@ function createSQLQueryEngineTableRoutingMethods() {
   );
 }
 
-export {createSQLQueryEngineTableRoutingMethods};
+export {
+  createSQLQueryEngineTableRoutingMethods,
+  isPartitionVisibleForRouting,
+  resolveActivePartitionVersion,
+};

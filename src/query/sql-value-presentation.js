@@ -14,6 +14,7 @@
  * @module query/sql-value-presentation
  */
 
+import {types as utilTypes} from 'node:util';
 import {QUERY_ERROR_CODE} from './query-constants.js';
 
 const MIN_SAFE_BIGINT = BigInt(Number.MIN_SAFE_INTEGER);
@@ -29,6 +30,45 @@ const PROP_ROWS = 'rows';
 const LOCAL_STR_BOOLEAN = 'boolean';
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
+const LOCAL_STR_VALUE = 'value';
+const objectDefineProperty = Object.defineProperty;
+const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const objectHasOwn = Object.hasOwn;
+const objectKeys = Object.keys;
+const reflectApply = Reflect.apply;
+const {isProxy} = utilTypes;
+
+function isInspectableObject(value) {
+  return (
+    value !== null &&
+    (typeof value === LOCAL_STR_OBJECT ||
+      typeof value === LOCAL_STR_FUNCTION) &&
+    !isProxy(value)
+  );
+}
+
+function readOwnDataValue(source, property) {
+  if (!isInspectableObject(source)) {
+    return undefined;
+  }
+  const descriptor = objectGetOwnPropertyDescriptor(source, property);
+  return descriptor && objectHasOwn(descriptor, LOCAL_STR_VALUE) ?
+    descriptor.value :
+    undefined;
+}
+
+function defineOwnDataProperty(target, key, value) {
+  reflectApply(objectDefineProperty, Object, [
+    target,
+    key,
+    {
+      configurable: true,
+      enumerable: true,
+      value,
+      writable: true,
+    },
+  ]);
+}
 
 let objectRowMaterializationCount = 0;
 
@@ -277,15 +317,99 @@ function createPositionalLazyRowsBuilder(target, options = {}) {
   };
 }
 
+function memoizeLazyRowsBuilder(builder) {
+  let materialized = false;
+  let cachedRows;
+  return () => {
+    if (!materialized) {
+      cachedRows = builder();
+      materialized = true;
+    }
+    return cachedRows;
+  };
+}
+
 function resolveLazyRowsBuilder(target, getterOrOptions) {
   if (typeof getterOrOptions === LOCAL_STR_FUNCTION) {
-    return getterOrOptions;
+    return memoizeLazyRowsBuilder(getterOrOptions);
   }
   const customGetRows = getterOrOptions?.getRows;
   if (typeof customGetRows === LOCAL_STR_FUNCTION) {
-    return customGetRows;
+    return memoizeLazyRowsBuilder(customGetRows);
   }
   return createPositionalLazyRowsBuilder(target, getterOrOptions);
+}
+
+function attachLazyPresentedRows(target, options = {}) {
+  const columns = Array.isArray(options?.columns) ?
+    options.columns :
+    target?.columns;
+  const rawRows = Array.isArray(options?.rawRows) ?
+    options.rawRows :
+    target?.rawRows;
+  const safeIntegers = resolveBuilderEffectivePolicy(
+    options?.safeIntegers,
+    rawRows,
+  );
+  const residentBytes = resolveBuilderResidentBytes(
+    options?.residentBytes,
+    rawRows,
+  );
+  if (Array.isArray(rawRows)) {
+    stampRowCollectionPresentation(rawRows, safeIntegers, residentBytes);
+  }
+  return defineLazyRowObjectsGetter(target, {
+    columns,
+    rawRows,
+    safeIntegers,
+    residentBytes,
+  });
+}
+
+function readOwnOrLazyRows(source) {
+  const ownDataRows = readOwnDataValue(source, PROP_ROWS);
+  if (ownDataRows !== undefined) {
+    return ownDataRows;
+  }
+  const lazyGetter = readOwnDataValue(source, LAZY_ROWS_GETTER_SYMBOL);
+  if (typeof lazyGetter === LOCAL_STR_FUNCTION) {
+    return reflectApply(lazyGetter, source, []);
+  }
+  return undefined;
+}
+
+function copyResultPreservingLazyRows(source) {
+  if (source === null || typeof source !== LOCAL_STR_OBJECT) {
+    return source;
+  }
+  const copy = {};
+  const keys = objectKeys(source);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    const descriptor = objectGetOwnPropertyDescriptor(source, key);
+    if (!descriptor) {
+      continue;
+    }
+    if (key === PROP_ROWS && Boolean(descriptor.get)) {
+      reflectApply(objectDefineProperty, Object, [copy, key, descriptor]);
+      continue;
+    }
+    defineOwnDataProperty(copy, key, source[key]);
+  }
+  const lazyGetter = readOwnDataValue(source, LAZY_ROWS_GETTER_SYMBOL);
+  if (typeof lazyGetter === LOCAL_STR_FUNCTION) {
+    reflectApply(objectDefineProperty, Object, [
+      copy,
+      LAZY_ROWS_GETTER_SYMBOL,
+      {
+        configurable: true,
+        enumerable: false,
+        value: lazyGetter,
+        writable: true,
+      },
+    ]);
+  }
+  return copy;
 }
 
 function defineCachedRowsValue(holder, rows) {
@@ -402,7 +526,9 @@ export {
   LAZY_ROWS_GETTER_SYMBOL,
   PRESENTED_SAFE_INTEGERS_SYMBOL,
   RESIDENT_RESULT_BYTES_SYMBOL,
+  attachLazyPresentedRows,
   cloneResultWithMetadata,
+  copyResultPreservingLazyRows,
   defineLazyRowObjectsGetter,
   getObjectRowMaterializationCount,
   getResultRowCount,
@@ -412,6 +538,7 @@ export {
   presentRawSqlRows,
   presentSqlRowObjects,
   presentSqlValue,
+  readOwnOrLazyRows,
   resetObjectRowMaterializationCount,
   stampRowCollectionPresentation,
 };

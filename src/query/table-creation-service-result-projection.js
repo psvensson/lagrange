@@ -6,6 +6,11 @@
  */
 
 import {QUERY_ERROR_CODE, QUERY_ERROR_MSG} from './query-constants.js';
+import {
+  copyResultPreservingLazyRows,
+  defineLazyRowObjectsGetter,
+  hasLazyRowsProperty,
+} from './sql-value-presentation.js';
 import {TABLE_CREATION_SERVICE_LITERAL} from './table-creation-service-completion.js';
 
 
@@ -45,8 +50,6 @@ function validatePrimaryKey(ast) {
   };
 }
 
-const LAZY_ROWS_GETTER_SYMBOL = Symbol.for('lagrange.query.lazyRowsGetter');
-const PROP_ROWS = 'rows';
 const INTERNAL_PARTITION_ROW_FIELD = Object.freeze({
   PARTITION_ID_SNAKE: '_partition_id',
   PARTITION_ID_CAMEL: '_partitionId',
@@ -78,55 +81,6 @@ function stripInternalPartitionFieldsFromRows(rows) {
   });
 }
 
-function attachStrippedLazyRows(target, sourceResult) {
-  let cachedRows = null;
-  const getRows = () => {
-    if (cachedRows === null) {
-      cachedRows = stripInternalPartitionFieldsFromRows(sourceResult.rows);
-    }
-    return cachedRows;
-  };
-  Object.defineProperty(target, LAZY_ROWS_GETTER_SYMBOL, {
-    value: getRows,
-    writable: true,
-    enumerable: false,
-    configurable: true,
-  });
-  Object.defineProperty(target, PROP_ROWS, {
-    enumerable: true,
-    configurable: true,
-    get() {
-      const receiver = this && typeof this === 'object' ? this : target;
-      const materialized = getRows();
-      Object.defineProperty(target, PROP_ROWS, {
-        value: materialized,
-        writable: true,
-        enumerable: true,
-        configurable: true,
-      });
-      if (receiver !== target) {
-        Object.defineProperty(receiver, PROP_ROWS, {
-          value: materialized,
-          writable: true,
-          enumerable: true,
-          configurable: true,
-        });
-      }
-      return materialized;
-    },
-    set(nextRows) {
-      const receiver = this && typeof this === 'object' ? this : target;
-      Object.defineProperty(receiver, PROP_ROWS, {
-        value: nextRows,
-        writable: true,
-        enumerable: true,
-        configurable: true,
-      });
-    },
-  });
-  return target;
-}
-
 /**
  * Strip partition details from query results.
  * Requirement 20.10: Never expose partition details in query results.
@@ -140,15 +94,8 @@ function stripPartitionDetails(result) {
     return result;
   }
 
-  const rowsDescriptor = Object.getOwnPropertyDescriptor(result, PROP_ROWS);
-  const hasLazyRows = Boolean(rowsDescriptor?.get);
-  const stripped = {};
-  for (const key of Object.keys(result)) {
-    if (hasLazyRows && key === PROP_ROWS) {
-      continue;
-    }
-    stripped[key] = result[key];
-  }
+  const hasLazyRows = hasLazyRowsProperty(result);
+  const stripped = copyResultPreservingLazyRows(result);
 
   // Remove internal partition-related fields from top-level result
   // Keep 'partitions' array as it's useful metadata about which partitions were queried
@@ -159,7 +106,9 @@ function stripPartitionDetails(result) {
   delete stripped.partitionKeyType;
 
   if (hasLazyRows) {
-    return attachStrippedLazyRows(stripped, result);
+    return defineLazyRowObjectsGetter(stripped, () =>
+      stripInternalPartitionFieldsFromRows(result.rows),
+    );
   }
   if (Array.isArray(stripped.rows)) {
     stripped.rows = stripInternalPartitionFieldsFromRows(stripped.rows);

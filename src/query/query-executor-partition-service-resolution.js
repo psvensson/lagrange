@@ -26,7 +26,6 @@ const {
   compactEligibilitySnapshot,
   evaluateEligibilityDecision,
   isDeferredReadinessPlanningSnapshot,
-  resolveBootstrapLeaderSelection,
   resolveCanonicalPartitionLeaderObservation,
 } = QUERY_EXECUTOR_SHARED;
 
@@ -564,25 +563,15 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
           partitionId,
           services,
         );
-      if (Array.isArray(ownerServices) && ownerServices.length > 0) {
-        return ownerServices;
-      }
+      return Array.isArray(ownerServices) ? ownerServices : [];
     }
-    const partition = this.getPartitionRecord(partitionId);
-    if (!this.isFreshPartitionBootstrapWindow(partition)) {
-      return [];
-    }
-    const leaderSelection = resolveBootstrapLeaderSelection({
-      services,
-    });
-    return leaderSelection.selectedService ?
-      [leaderSelection.selectedService] :
-      [];
+    return [];
   }
 
   /**
    * Identify the narrow bootstrap window where a partition has been created
    * but the canonical leader_node_id has not yet been persisted.
+   * Delegates solely to bootstrapTopologySnapshotOwner.
    * @param {Object|null} partition
    * @return {boolean}
    * @private
@@ -593,27 +582,19 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
         ?.isFreshPartitionBootstrapWindow ===
       QUERY_EXECUTOR_LITERAL.STRING_FUNCTION
     ) {
-      return this.bootstrapTopologySnapshotOwner.isFreshPartitionBootstrapWindow(
-        partition,
+      return (
+        this.bootstrapTopologySnapshotOwner.isFreshPartitionBootstrapWindow(
+          partition,
+        ) === true
       );
     }
-    if (!partition || !this.isBootstrapRoutingGraceWindow(partition)) {
-      return false;
-    }
-    const leaderNodeId =
-      partition?.[COLUMN.LEADER_NODE_ID] ??
-      partition?.leader_node_id ??
-      partition?.leaderNodeId ??
-      null;
-    return (
-      typeof leaderNodeId !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
-      leaderNodeId.length === 0
-    );
+    return false;
   }
 
   /**
    * Identify the short-lived partition bootstrap grace window before the
    * partition owner row is updated post-creation.
+   * Delegates solely to bootstrapTopologySnapshotOwner.
    * @param {Object|null} partition
    * @return {boolean}
    * @private
@@ -624,28 +605,13 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
         ?.isBootstrapRoutingGraceWindow ===
       QUERY_EXECUTOR_LITERAL.STRING_FUNCTION
     ) {
-      return this.bootstrapTopologySnapshotOwner.isBootstrapRoutingGraceWindow(
-        partition,
+      return (
+        this.bootstrapTopologySnapshotOwner.isBootstrapRoutingGraceWindow(
+          partition,
+        ) === true
       );
     }
-    if (!partition) {
-      return false;
-    }
-    const createdAt =
-      partition?.[COLUMN.CREATED_AT] ??
-      partition?.created_at ??
-      partition?.createdAt ??
-      null;
-    const updatedAt =
-      partition?.[COLUMN.UPDATED_AT] ??
-      partition?.updated_at ??
-      partition?.updatedAt ??
-      null;
-    return (
-      Number.isFinite(createdAt) &&
-      Number.isFinite(updatedAt) &&
-      createdAt === updatedAt
-    );
+    return false;
   }
 
   /**

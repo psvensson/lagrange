@@ -50,8 +50,13 @@ export function createMockMessageRouter() {
 // Mock system cache with services for routing
 export function createMockSystemCache(tables, partitions, services, nodes = []) {
   const resolvedTables = (tables || []).map((t) => {
-    if (t.partition_key_type || t.partitionKeyType) return t;
-    return {...t, partition_key_type: 'TEXT'};
+    const withKeyType = t.partition_key_type || t.partitionKeyType ?
+      t :
+      {...t, partition_key_type: 'TEXT'};
+    return Object.hasOwn(withKeyType, 'active_partition_version') ||
+      Object.hasOwn(withKeyType, 'activePartitionVersion') ?
+      withKeyType :
+      {...withKeyType, active_partition_version: 1};
   });
   const resolvedServices = services || partitions.map((p) => ({
     service_id: p.partition_id,
@@ -82,6 +87,11 @@ export function createMockSystemCache(tables, partitions, services, nodes = []) 
         partition.leaderNodeId ||
         leaderService?.node_id ||
         'test-node',
+      ...(Object.hasOwn(partition, 'partition_version') ||
+          Object.hasOwn(partition, 'partitionVersion') ?
+        {} :
+        {partition_version: 1}),
+      ...(Object.hasOwn(partition, 'state') ? {} : {state: 'NORMAL'}),
     };
   });
   return {

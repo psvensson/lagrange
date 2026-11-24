@@ -67,11 +67,7 @@ function normalizeProvisioningSummary(provisioningResult = null, context = {}) {
     normalized.resolvedReplicaCount > 0 ?
       normalized.resolvedReplicaCount :
       requestedReplicaCount;
-  const fallbackRoutableReplicaCount =
-    Number.isInteger(minimumRoutableReplicaCount) &&
-    minimumRoutableReplicaCount > 0 ?
-      minimumRoutableReplicaCount :
-      0;
+  const fallbackRoutableReplicaCount = 0;
   const routableReplicaCount =
     Number.isInteger(normalized?.routableReplicaCount) &&
     normalized.routableReplicaCount >= 0 ?
@@ -105,7 +101,11 @@ function normalizeProvisioningSummary(provisioningResult = null, context = {}) {
       OWNER_CONTRACT_NEXT_ACTION.PROCEED ?
       defaultProvisioningContractOutcome :
       requestedProvisioningContractOutcome;
-  const committedReplicaCount = routableReplicaCount;
+  const committedReplicaCount =
+    Number.isInteger(normalized?.committedReplicaCount) &&
+    normalized.committedReplicaCount >= 0 ?
+      normalized.committedReplicaCount :
+      routableReplicaCount;
   const missingReplicaCount =
     Number.isInteger(normalized?.missingReplicaCount) ?
       normalized.missingReplicaCount :

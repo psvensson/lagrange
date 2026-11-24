@@ -8,6 +8,26 @@ import {
   OWNER_CONTRACT_NEXT_ACTION,
   OWNER_CONTRACT_STATE,
 } from '../../src/control-plane/owner-contract-outcome.js';
+import {
+  projectApplicationDatabaseResult,
+  withExecutedStatementType,
+} from '../../src/query/application-database-result.js';
+import {
+  SQLParser,
+} from '../../src/query/sql-parser.js';
+import {
+  executeFromlessSelectInSession,
+} from '../../src/query/sql-select-execution-helpers.js';
+import {
+  defineLazyRowObjectsGetter,
+  getObjectRowMaterializationCount,
+  hasLazyRowsProperty,
+  resetObjectRowMaterializationCount,
+} from '../../src/query/sql-value-presentation.js';
+import {
+  isPartitionVisibleForRouting,
+  resolveActivePartitionVersion,
+} from '../../src/query/sql-query-engine-table-routing-methods.js';
 
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
@@ -904,53 +924,54 @@ test('TableCreationService - CREATE TABLE stays pending when only the minimum ro
     );
   });
 
-test('TableCreationService - CREATE TABLE without provisioning detail stays pending on the quorum contract',
-  async (t) => {
-    const service = new TableCreationService({
-      systemCache: {
-        find() {
-          return null;
-        },
+test('TableCreationService - CREATE TABLE without provisioning detail reports ' +
+  '0 observed routable replicas while retaining minimumRoutableReplicaCount target',
+async (t) => {
+  const service = new TableCreationService({
+    systemCache: {
+      find() {
+        return null;
       },
-      cdcIntegrationService: {
-        async insertSystemTableRow() {
-          return {success: true};
-        },
+    },
+    cdcIntegrationService: {
+      async insertSystemTableRow() {
+        return {success: true};
       },
-      partitionProvisioner: async () => {},
-    });
-
-    const result = await service.executeCreateTableProvisioning(createCreateTableAst());
-
-    t.equal(
-      result.completionState,
-      TABLE_CREATION_TEST_COMPLETION_STATE.ACTIVE,
-    );
-    t.equal(
-      result.completionReason,
-      null,
-    );
-    t.equal(result.contractState, OWNER_CONTRACT_STATE.UNDER_REPLICATED);
-    t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.PROCEED);
-    t.same(
-      result.provisioningSummary,
-      {
-        requestedReplicaCount: 3,
-        resolvedReplicaCount: 3,
-        minimumRoutableReplicaCount: 2,
-        routableReplicaCount: 2,
-        committedReplicaCount: 2,
-        missingReplicaCount: 1,
-        epoch: null,
-        fullReplicaCountConverged: false,
-        contractState: OWNER_CONTRACT_STATE.UNDER_REPLICATED,
-        nextAction: OWNER_CONTRACT_NEXT_ACTION.PROCEED,
-        reasonCodes: [],
-        retryAfterMs: 0,
-      },
-      'table creation should default to the quorum-sized routable contract when the provisioner does not report convergence detail',
-    );
+    },
+    partitionProvisioner: async () => {},
   });
+
+  const result = await service.executeCreateTableProvisioning(createCreateTableAst());
+
+  t.equal(
+    result.completionState,
+    TABLE_CREATION_TEST_COMPLETION_STATE.ACTIVE,
+  );
+  t.equal(
+    result.completionReason,
+    null,
+  );
+  t.equal(result.contractState, OWNER_CONTRACT_STATE.UNDER_REPLICATED);
+  t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.PROCEED);
+  t.same(
+    result.provisioningSummary,
+    {
+      requestedReplicaCount: 3,
+      resolvedReplicaCount: 3,
+      minimumRoutableReplicaCount: 2,
+      routableReplicaCount: 0,
+      committedReplicaCount: 0,
+      missingReplicaCount: 3,
+      epoch: null,
+      fullReplicaCountConverged: false,
+      contractState: OWNER_CONTRACT_STATE.UNDER_REPLICATED,
+      nextAction: OWNER_CONTRACT_NEXT_ACTION.PROCEED,
+      reasonCodes: [],
+      retryAfterMs: 0,
+    },
+    'table creation must not fabricate observed routable/committed replica counts from minimumRoutableReplicaCount',
+  );
+});
 
 test('buildSchemaDefinition round-trips string defaults as SQL literals',
   async (t) => {
@@ -1032,3 +1053,134 @@ test('buildSchemaDefinition round-trips string defaults as SQL literals',
       'the decimal default is stored as a REAL in an untyped (BLOB) column');
     db.close();
   });
+
+test('Lazy-row consolidation: stripPartitionDetails, withExecutedStatementType, ' +
+  'and projectApplicationDatabaseResult share canonical lazy mechanics and ' +
+  'preserve proxy/accessor sanitization', async (t) => {
+  const service = new TableCreationService({});
+  let getterCalls = 0;
+  const source = defineLazyRowObjectsGetter(
+    {
+      success: true,
+      sourcePartition: 'p1',
+      partition_key_start: 'a',
+      columns: ['id', 'name'],
+      rawRows: [[1, 'Ada']],
+    },
+    () => {
+      getterCalls += 1;
+      return [{id: 1, name: 'Ada', _partition_id: 'p1', _sourcePartition: 'p1'}];
+    },
+  );
+
+  const stripped = service.stripPartitionDetails(source);
+  t.equal(getterCalls, 0, 'stripPartitionDetails must not eagerly materialize rows');
+  t.equal(hasLazyRowsProperty(stripped), true);
+  t.equal('sourcePartition' in stripped, false);
+
+  const stamped = withExecutedStatementType(stripped, 'SELECT');
+  t.equal(getterCalls, 0, 'withExecutedStatementType must not eagerly materialize rows');
+  t.equal(hasLazyRowsProperty(stamped), true);
+  t.equal(stamped.statementType, 'SELECT');
+
+  const projected = projectApplicationDatabaseResult(stamped);
+  t.equal(getterCalls, 1, 'projectApplicationDatabaseResult materializes lazy rows once');
+  t.equal(Object.getPrototypeOf(projected), null);
+  t.equal(Object.isFrozen(projected), true);
+  t.same(projected.rows, [{id: 1, name: 'Ada'}]);
+
+  // Accessing stamped.rows again must reuse the memoized stripped array without re-running getter.
+  t.same(stamped.rows, [{id: 1, name: 'Ada'}]);
+  t.equal(getterCalls, 1);
+
+  // Untrusted hostile getter (without canonical LAZY_ROWS_GETTER_SYMBOL) and
+  // Proxies must never be invoked by projectApplicationDatabaseResult.
+  let hostileGetterCalls = 0;
+  const hostile = {
+    success: true,
+    get rows() {
+      hostileGetterCalls += 1;
+      return [{id: 999}];
+    },
+  };
+  const hostileProjected = projectApplicationDatabaseResult(hostile);
+  t.equal(hostileGetterCalls, 0, 'untrusted rows getter must not be invoked');
+  t.same(hostileProjected.rows, []);
+
+  const proxied = new Proxy({success: true, rows: [{id: 1}]}, {});
+  t.same(projectApplicationDatabaseResult(proxied).rows, []);
+});
+
+test('executeFromlessSelectInSession preserves lazy rows until .rows is read',
+  async (t) => {
+    resetObjectRowMaterializationCount();
+    const ast = new SQLParser('SELECT 42 AS answer, \'ok\' AS label').parse();
+    const result = executeFromlessSelectInSession(ast, [], {safeIntegers: false});
+    t.equal(result.success, true);
+    t.equal(result.count, 1);
+    t.same(result.rawRows, [[42, 'ok']]);
+    t.equal(hasLazyRowsProperty(result), true);
+    t.equal(
+      getObjectRowMaterializationCount(),
+      0,
+      'executeFromlessSelectInSession must not eagerly materialize object rows',
+    );
+    t.same(result.rows, [{answer: 42, label: 'ok'}]);
+    t.equal(getObjectRowMaterializationCount(), 1);
+    t.same(result.rows, [{answer: 42, label: 'ok'}]);
+    t.equal(getObjectRowMaterializationCount(), 1);
+
+    resetObjectRowMaterializationCount();
+    const safeResult = executeFromlessSelectInSession(ast, [], {safeIntegers: true});
+    t.same(safeResult.rawRows, [[42n, 'ok']]);
+    t.equal(getObjectRowMaterializationCount(), 0);
+    t.same(safeResult.rows, [{answer: 42n, label: 'ok'}]);
+    t.equal(getObjectRowMaterializationCount(), 1);
+  });
+
+test('resolveActivePartitionVersion and isPartitionVisibleForRouting require ' +
+  'valid integer versions and explicit NORMAL state', async (t) => {
+  t.equal(resolveActivePartitionVersion(null), null);
+  t.equal(resolveActivePartitionVersion({}), null);
+  t.equal(resolveActivePartitionVersion({active_partition_version: null}), null);
+  t.equal(resolveActivePartitionVersion({active_partition_version: 0}), null);
+  t.equal(resolveActivePartitionVersion({active_partition_version: 1.5}), null);
+  t.equal(resolveActivePartitionVersion({active_partition_version: 'abc'}), null);
+  t.equal(resolveActivePartitionVersion({active_partition_version: 2}), 2);
+  t.equal(resolveActivePartitionVersion({activePartitionVersion: 3}), 3);
+
+  t.equal(
+    isPartitionVisibleForRouting({partition_version: 1, state: 'NORMAL'}, 1),
+    true,
+  );
+  t.equal(
+    isPartitionVisibleForRouting({partition_version: 1, state: 'normal'}, 1),
+    true,
+  );
+  t.equal(
+    isPartitionVisibleForRouting({partition_version: 1}, 1),
+    false,
+    'missing state must not default to NORMAL',
+  );
+  t.equal(
+    isPartitionVisibleForRouting({partition_version: 1, state: null}, 1),
+    false,
+  );
+  t.equal(
+    isPartitionVisibleForRouting({partition_version: 1, state: 'SPLITTING'}, 1),
+    false,
+  );
+  t.equal(
+    isPartitionVisibleForRouting({state: 'NORMAL'}, 1),
+    false,
+    'missing partition_version must not default to 1',
+  );
+  t.equal(
+    isPartitionVisibleForRouting({partition_version: 2, state: 'NORMAL'}, 1),
+    false,
+  );
+  t.equal(
+    isPartitionVisibleForRouting({partition_version: 1, state: 'NORMAL'}, null),
+    false,
+  );
+});

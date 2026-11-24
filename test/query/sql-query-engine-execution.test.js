@@ -425,12 +425,19 @@ test('SQLQueryEngine - falls back to tables.find when tables.get is keyed by tab
   async (t) => {
     mockPartitionData.set('p1', [{id: 'alice', name: 'Alice'}]);
 
-    const tableRecord = {table_id: 'tbl-users', table_name: 'users', primaryKey: 'id'};
+    const tableRecord = {
+      table_id: 'tbl-users',
+      table_name: 'users',
+      primaryKey: 'id',
+      active_partition_version: 1,
+    };
     const partitionRecords = [{
       partition_id: 'p1',
       table_id: 'tbl-users',
       partition_key_start: null,
       partition_key_end: null,
+      partition_version: 1,
+      state: 'NORMAL',
     }];
     const serviceRecords = [{
       service_id: 'p1',
@@ -498,12 +505,19 @@ test('SQLQueryEngine - resolves partitions when table metadata is only available
   ' via tables.getAll', async (t) => {
   mockPartitionData.set('p1', [{id: 'alice', name: 'Alice'}]);
 
-  const tableRecord = {table_id: 'tbl-users', table_name: 'users', primaryKey: 'id'};
+  const tableRecord = {
+    table_id: 'tbl-users',
+    table_name: 'users',
+    primaryKey: 'id',
+    active_partition_version: 1,
+  };
   const partitionRecords = [{
     partition_id: 'p1',
     table_id: 'tbl-users',
     partition_key_start: null,
     partition_key_end: null,
+    partition_version: 1,
+    state: 'NORMAL',
   }];
   const serviceRecords = [{
     service_id: 'p1',

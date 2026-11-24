@@ -37,6 +37,8 @@ const DATA_ROW_COL_KIND_TEXT = 1;
 const DATA_ROW_COL_KIND_BYTEA = 2;
 const HIGH_SURROGATE_MIN = 0xd800;
 const HIGH_SURROGATE_MAX = 0xdbff;
+const LOW_SURROGATE_MIN = 0xdc00;
+const LOW_SURROGATE_MAX = 0xdfff;
 const LOCAL_STR_UTF8 = 'utf8';
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_OBJECT = 'object';
@@ -371,11 +373,21 @@ function isHighSurrogateCode(code) {
   return code >= HIGH_SURROGATE_MIN && code <= HIGH_SURROGATE_MAX;
 }
 
+function isLowSurrogateCode(code) {
+  return code >= LOW_SURROGATE_MIN && code <= LOW_SURROGATE_MAX;
+}
+
+function isSurrogatePairAt(text, index) {
+  return (
+    index >= 0 &&
+    index + 1 < text.length &&
+    isHighSurrogateCode(text.charCodeAt(index)) &&
+    isLowSurrogateCode(text.charCodeAt(index + 1))
+  );
+}
+
 function clampSurrogateBoundary(text, candidateEnd) {
-  if (
-    candidateEnd < text.length &&
-    isHighSurrogateCode(text.charCodeAt(candidateEnd - 1))
-  ) {
+  if (candidateEnd > 0 && isSurrogatePairAt(text, candidateEnd - 1)) {
     return candidateEnd - 1;
   }
   return candidateEnd;
@@ -385,11 +397,7 @@ function takeUtf8SliceWithinBytes(text, charOffset, maxBytes) {
   if (maxBytes <= 0 || charOffset >= text.length) {
     return {slice: '', byteLen: 0, nextCharOffset: charOffset};
   }
-  const firstUnits =
-    isHighSurrogateCode(text.charCodeAt(charOffset)) &&
-    charOffset + 1 < text.length ?
-      LOCAL_NUM_TWO :
-      1;
+  const firstUnits = isSurrogatePairAt(text, charOffset) ? LOCAL_NUM_TWO : 1;
   const firstSlice = text.slice(charOffset, charOffset + firstUnits);
   const firstByteLen = Buffer.byteLength(firstSlice, LOCAL_STR_UTF8);
   if (firstByteLen > maxBytes) {
@@ -417,13 +425,14 @@ function takeUtf8SliceWithinBytes(text, charOffset, maxBytes) {
       firstUnits,
       Math.floor(charCount * (maxBytes / byteLen)),
     );
-    end = clampSurrogateBoundary(
+    let nextEnd = clampSurrogateBoundary(
       text,
       charOffset + Math.min(charCount - 1, scaled),
     );
-    if (end <= charOffset) {
-      end = charOffset + firstUnits;
+    if (nextEnd <= charOffset || nextEnd >= end) {
+      nextEnd = charOffset + firstUnits;
     }
+    end = nextEnd;
     slice = text.slice(charOffset, end);
     byteLen = Buffer.byteLength(slice, LOCAL_STR_UTF8);
   }

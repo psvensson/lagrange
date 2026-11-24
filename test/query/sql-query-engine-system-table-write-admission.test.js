@@ -67,16 +67,28 @@ function partitionRow(partitionId, tableName) {
     table_name: tableName,
     partition_key_start: null,
     partition_key_end: null,
+    partition_version: 1,
+    state: 'NORMAL',
     leader_node_id: 'test-node',
   };
 }
 
 function createSystemCache() {
   const tables = [
-    {table_name: 'orders', table_id: 'tbl-orders', primaryKey: 'id'},
+    {
+      table_name: 'orders',
+      table_id: 'tbl-orders',
+      primaryKey: 'id',
+      active_partition_version: 1,
+    },
     {table_name: 'Logs', table_id: 'tbl-Logs', primaryKey: 'id',
       active_partition_version: 1},
-    {table_name: 'tables', table_id: 'tables', primaryKey: 'table_id'},
+    {
+      table_name: 'tables',
+      table_id: 'tables',
+      primaryKey: 'table_id',
+      active_partition_version: 1,
+    },
   ];
   const partitions = [
     partitionRow('orders-p1', 'orders'),

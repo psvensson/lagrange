@@ -147,6 +147,8 @@ function createAccountsPartitionRow(replicaCount, leaderNodeId = 'node-1') {
     partition_key_start: null,
     partition_key_end: null,
     partition_key_type: 'INTEGER',
+    partition_version: 1,
+    state: 'NORMAL',
     replica_count: replicaCount,
     leader_node_id: leaderNodeId,
   };

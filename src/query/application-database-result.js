@@ -1,4 +1,8 @@
 import {types as utilTypes} from 'node:util';
+import {
+  copyResultPreservingLazyRows,
+  readOwnOrLazyRows,
+} from './sql-value-presentation.js';
 
 // The public Application Database result and failure-cause shapes.
 //
@@ -34,7 +38,6 @@ const APPLICATION_DATABASE_RESULT_FIELD = Object.freeze({
   ROWS: 'rows',
   STATEMENT_TYPE: 'statementType',
 });
-const LAZY_ROWS_GETTER_SYMBOL = Symbol.for('lagrange.query.lazyRowsGetter');
 const APPLICATION_DATABASE_CAUSE_FIELD = Object.freeze({
   CODE: 'code',
   MESSAGE: 'message',
@@ -94,23 +97,8 @@ function projectRow(row) {
   return projected;
 }
 
-function readResultRowsForProjection(result) {
-  const ownDataRows = readOwnDataValue(
-    result,
-    APPLICATION_DATABASE_RESULT_FIELD.ROWS,
-  );
-  if (ownDataRows !== undefined) {
-    return ownDataRows;
-  }
-  const lazyGetter = readOwnDataValue(result, LAZY_ROWS_GETTER_SYMBOL);
-  if (typeof lazyGetter === LOCAL_STR_FUNCTION) {
-    return reflectApply(lazyGetter, result, []);
-  }
-  return undefined;
-}
-
 function projectRows(result) {
-  const rows = readResultRowsForProjection(result);
+  const rows = readOwnOrLazyRows(result);
   if (!arrayIsArray(rows) || isProxy(rows)) return new ArrayConstructor(0);
   const projected = new ArrayConstructor(rows.length);
   for (let index = 0; index < rows.length; index++) {
@@ -133,38 +121,6 @@ function readAffectedRowCount(result) {
   return isAffectedRowCount(affectedRows) ?
     affectedRows + NO_AFFECTED_ROWS :
     NO_AFFECTED_ROW_COUNT;
-}
-
-function copyResultPreservingLazyRows(result) {
-  const copy = {};
-  const keys = objectKeys(result);
-  for (let index = 0; index < keys.length; index++) {
-    const key = keys[index];
-    const descriptor = objectGetOwnPropertyDescriptor(result, key);
-    if (!descriptor) continue;
-    if (
-      key === APPLICATION_DATABASE_RESULT_FIELD.ROWS &&
-      Boolean(descriptor.get)
-    ) {
-      reflectApply(objectDefineProperty, Object, [copy, key, descriptor]);
-      continue;
-    }
-    defineDataProperty(copy, key, result[key]);
-  }
-  const lazyGetter = readOwnDataValue(result, LAZY_ROWS_GETTER_SYMBOL);
-  if (typeof lazyGetter === LOCAL_STR_FUNCTION) {
-    reflectApply(objectDefineProperty, Object, [
-      copy,
-      LAZY_ROWS_GETTER_SYMBOL,
-      {
-        configurable: true,
-        enumerable: false,
-        value: lazyGetter,
-        writable: true,
-      },
-    ]);
-  }
-  return copy;
 }
 
 /**

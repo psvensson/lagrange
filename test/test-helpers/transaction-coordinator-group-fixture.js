@@ -176,8 +176,8 @@ async function withTransactionGroup(name, body) {
     partition_key: 'id', primary_key: 'id'};
   const partitionRow = {partition_id: partitionId, table_id: GROUP_TABLE,
     table_name: GROUP_TABLE, partition_key_start: null,
-    partition_key_end: null, replica_count: members.length,
-    leader_node_id: members[0][1]};
+    partition_key_end: null, partition_version: 1, state: 'NORMAL',
+    replica_count: members.length, leader_node_id: members[0][1]};
   const group = await formAdmittedGroup({partitionId, members,
     tempPrefix: `tx1-coord-${name}-`, budgetMs: GROUP_BUDGET_MS,
     serviceOptions: {tableId: GROUP_TABLE, tableName: GROUP_TABLE,
