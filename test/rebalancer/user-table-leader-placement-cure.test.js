@@ -518,21 +518,41 @@ test('46-system-partition cohort deterministically distributes 39 ' +
   t.equal(metaStub.deliveries.length, 0);
 
   const inFlightPartitionId = 'artifact_payloads-p1';
-  for (const opPartitionId of [inFlightPartitionId, 'sql_transactions-p1']) {
-    state.operationRows.push({
-      entity_id: opPartitionId,
-      operation_id: `op-${opPartitionId}`,
-      partition_id: opPartitionId,
-      status: 'syncing',
-      type: 'GROWTH_PROMOTE',
-      workflow_step: 'SYNCING',
-    });
-    const inFlightStub = buildSystemPartitionRebalancer(state, inFlightPartitionId, NODE_1);
-    const blockedByOp = await applyUserTableLeaderPlacementCure(inFlightStub, {nowMs: NOW_MS});
-    t.equal(blockedByOp.state, S.NO_ELIGIBLE_TARGET);
-    t.equal(inFlightStub.deliveries.length, 0);
-    state.operationRows.length = 0;
-  }
+  state.operationRows.push({
+    entity_id: inFlightPartitionId,
+    operation_id: `op-${inFlightPartitionId}`,
+    partition_id: inFlightPartitionId,
+    status: 'syncing',
+    type: 'GROWTH_PROMOTE',
+    workflow_step: 'SYNCING',
+  });
+  const inFlightStub = buildSystemPartitionRebalancer(state, inFlightPartitionId, NODE_1);
+  const blockedByOwnOp = await applyUserTableLeaderPlacementCure(inFlightStub, {nowMs: NOW_MS});
+  t.equal(blockedByOwnOp.state, S.NO_ELIGIBLE_TARGET);
+  t.equal(inFlightStub.deliveries.length, 0);
+  state.operationRows.length = 0;
+
+  state.operationRows.push({
+    entity_id: 'sql_transactions-p1',
+    operation_id: 'op-sql_transactions-p1',
+    partition_id: 'sql_transactions-p1',
+    status: 'syncing',
+    type: 'GROWTH_PROMOTE',
+    workflow_step: 'SYNCING',
+  });
+  const settledStub = buildSystemPartitionRebalancer(state, inFlightPartitionId, NODE_1);
+  const passOneWithUnrelatedPriorityOp = await applyUserTableLeaderPlacementCure(
+    settledStub,
+    {nowMs: NOW_MS},
+  );
+  const passTwoWithUnrelatedPriorityOp = await applyUserTableLeaderPlacementCure(
+    settledStub,
+    {nowMs: NOW_MS + 1},
+  );
+  t.equal(passOneWithUnrelatedPriorityOp.state, S.CENSUS_UNSTABLE);
+  t.equal(passTwoWithUnrelatedPriorityOp.state, S.DISPATCH_HANDOFF);
+  t.equal(settledStub.deliveries.length, 2);
+  state.operationRows.length = 0;
 
   const stubsByPartitionId = new Map(state.partitionRows.map((row) => [
     row.partition_id,
@@ -737,7 +757,11 @@ test('coordinator pass bounds active handoffs per pass and uses ' +
   t.equal(targetHandoffsPass2.length, MAX_COORDINATOR_CURE_HANDOFFS_PER_PASS);
   t.equal(coordinator.filterCounts.services, 0);
   t.equal(coordinator.filterCounts.partitions, 2);
-  t.equal(coordinator.filterCounts.replica_operations, 2);
+  t.equal(
+    coordinator.filterCounts.replica_operations,
+    3,
+    'one scan per pass plus one post-handoff freshness revalidation before candidate 2',
+  );
   t.end();
 });
 

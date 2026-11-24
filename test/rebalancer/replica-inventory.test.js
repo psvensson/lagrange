@@ -376,4 +376,150 @@ test('canonical replica inventory', async (t) => {
     ), 'missing accounting cannot silently become a safe zero');
     t.end();
   });
+
+  await t.test('committed rows distinguish active vs occupied and ignore node-less rows',
+    (t) => {
+      const snapshot = build({
+        rows: [
+          service('r1', 'n1', {status: 'active'}),
+          service('r2', 'n2', {status: 'creating'}),
+          service('r3', 'n3', {status: 'syncing'}),
+          {replica_id: 'rX', service_id: 'rX', partition_id: PARTITION_ID, node_id: null},
+        ],
+      });
+      t.equal(snapshot.accounting.activeCount, 1, 'only ACTIVE rows are active');
+      t.equal(snapshot.accounting.occupiedCount, 3, 'pending/creating/syncing/active occupy');
+      t.equal(snapshot.accounting.deficitEffectiveCount, 1, 'no in-flight ops to add');
+      t.equal(snapshot.accounting.creationEffectiveCount, 1);
+      t.end();
+    },
+  );
+
+  await t.test('in-flight ADD and dispatch-SENDING step increase deficit and creation counts',
+    (t) => {
+      const addOp = (workflowStep) => ({
+        operation_id: `op-add-${workflowStep}`,
+        type: 'ADD',
+        entity_type: 'partition',
+        entity_id: PARTITION_ID,
+        partition_id: PARTITION_ID,
+        replica_id: 'r3',
+        target_node_id: 'n3',
+        workflow_step: workflowStep,
+      });
+      const creating = build({
+        rows: [service('r1', 'n1'), service('r2', 'n2')],
+        operations: [addOp('creating')],
+      });
+      t.equal(creating.accounting.activeCount, 2);
+      t.equal(creating.accounting.inFlightAddCount, 1);
+      t.equal(creating.accounting.inFlightReplaceInCreationCount, 0);
+      t.equal(creating.accounting.deficitEffectiveCount, 3, 'ADD fills the deficit');
+      t.equal(creating.accounting.creationEffectiveCount, 3);
+
+      const sending = build({
+        rows: [service('r1', 'n1'), service('r2', 'n2')],
+        operations: [addOp('SENDING')],
+      });
+      t.equal(sending.accounting.inFlightAddCount, 1, 'SENDING step counts as add-transitional');
+      t.end();
+    },
+  );
+
+  await t.test('two in-flight REPLACEs produce +2 creation pressure; terminal/other-partition ops are excluded',
+    (t) => {
+      const twoReplaces = build({
+        rows: [service('r1', 'n1'), service('r2', 'n2'), service('r3', 'n3')],
+        operations: [
+          productionReplace({
+            operationId: 'replace-r3-n4',
+            sourceReplicaId: 'r3',
+            sourceNodeId: 'n3',
+            targetReplicaId: 'r4',
+            targetNodeId: 'n4',
+          }),
+          productionReplace({
+            operationId: 'replace-r3-n5',
+            sourceReplicaId: 'r3',
+            sourceNodeId: 'n3',
+            targetReplicaId: 'r5',
+            targetNodeId: 'n5',
+          }),
+        ],
+      });
+      t.equal(twoReplaces.accounting.inFlightReplaceInCreationCount, 2);
+      t.equal(twoReplaces.accounting.creationEffectiveCount, 5,
+        'active 3 + 2 replacements = over target+1');
+
+      const nonTransitionalAndForeign = build({
+        rows: [service('r1', 'n1'), service('r2', 'n2'), service('r3', 'n3')],
+        operations: [
+          productionReplace({
+            operationId: 'replace-removing',
+            sourceReplicaId: 'r3',
+            targetReplicaId: 'r4',
+            targetNodeId: 'n4',
+            status: 'removing',
+            workflowStep: 'removing',
+          }),
+          {
+            operation_id: 'add-removed',
+            type: 'ADD',
+            entity_type: 'partition',
+            entity_id: PARTITION_ID,
+            partition_id: PARTITION_ID,
+            replica_id: 'r4',
+            target_node_id: 'n4',
+            status: 'removed',
+            workflow_step: 'removed',
+          },
+          {
+            operation_id: 'add-other-partition',
+            type: 'ADD',
+            entity_type: 'partition',
+            entity_id: 'other-p1',
+            partition_id: 'other-p1',
+            replica_id: 'r9',
+            target_node_id: 'n9',
+            workflow_step: 'creating',
+          },
+        ],
+      });
+      t.equal(nonTransitionalAndForeign.accounting.inFlightAddCount, 0);
+      t.equal(nonTransitionalAndForeign.accounting.inFlightReplaceInCreationCount, 0);
+      t.equal(nonTransitionalAndForeign.accounting.creationEffectiveCount, 3);
+      t.end();
+    },
+  );
+
+  await t.test('activeVoterCount reads raft_role and excludes learners, non-live, and role-less rows',
+    (t) => {
+      const promotedLag = build({
+        rows: [
+          service('r1', 'n1', {status: 'active', raftRole: 'leader'}),
+          service('r2', 'n2', {status: 'active', raftRole: 'follower'}),
+          service('r3', 'n3', {status: 'active', raftRole: 'follower'}),
+          service('r4', 'n4', {status: 'creating', raftRole: 'follower'}),
+        ],
+      });
+      t.equal(promotedLag.accounting.activeCount, 3,
+        'status===ACTIVE misses the lagging promoted voter');
+      t.equal(promotedLag.accounting.activeVoterCount, 4,
+        'raft_role count sees all four voters');
+
+      const mixedRoles = build({
+        rows: [
+          service('r1', 'n1', {status: 'active', raftRole: 'leader'}),
+          service('r2', 'n2', {status: 'syncing', raftRole: 'learner'}),
+          service('r3', 'n3', {status: 'removing', raftRole: 'follower'}),
+          service('r4', 'n4', {status: 'active', raftRole: ''}),
+        ],
+      });
+      t.equal(mixedRoles.accounting.activeVoterCount, 1,
+        'only the live voter-role row counts as a voter');
+      t.equal(mixedRoles.accounting.activeCount, 2,
+        'activeCount still counts the role-less ACTIVE row');
+      t.end();
+    },
+  );
 });

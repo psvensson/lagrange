@@ -1096,8 +1096,15 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       'observed progress should still attempt the bounded non-strict ' +
       'owner observation before giving up',
     );
-    assertReplaceReconcileLedgerReadScope(t, authoritativeReadCalls, operationRow,
-      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED, false);
+    t.same(
+      authoritativeReadCalls.filter((call) =>
+        call.tableName === 'replica_operations' &&
+        call.options.authoritativeReadMode ===
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+      ),
+      [],
+      'empty authoritative observation does not fall back to cache to enter source retirement',
+    );
   });
 
   test('priority REMOVE drain fails (never completes) a stale undispatched ' +

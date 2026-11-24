@@ -377,30 +377,6 @@ function collectEligibleVoterHosts(rebalancer, settledPartitions) {
   );
 }
 
-function isPrioritySystemPartitionUnsettled(
-  systemTableCache,
-  partitionId,
-  row,
-  inFlightPartitionIds,
-  clusterVoterHostCount,
-) {
-  if (inFlightPartitionIds.has(partitionId)) {
-    return true;
-  }
-  const {replicationFactor} = resolveDesiredReplicationFactor(row);
-  const requiredVoters = replicationFactor > CURE_LITERAL.ZERO ?
-    Math.min(replicationFactor, clusterVoterHostCount) :
-    clusterVoterHostCount;
-  if (requiredVoters < MIN_SETTLED_PARTITION_COUNT) {
-    return false;
-  }
-  const activeVoters = collectEligibleVoterHostsForPartitionIds(
-    systemTableCache,
-    new Set([partitionId]),
-  );
-  return activeVoters.size < requiredVoters;
-}
-
 function indexPartitionRowForPassCensus(row, indexState) {
   const partitionId = readPartitionIdFromRow(row);
   if (!partitionId) return;
@@ -412,7 +388,6 @@ function indexPartitionRowForPassCensus(row, indexState) {
     classification.priorityControlPlane ||
     classification.formationLivenessDependency
   ) {
-    indexState.prioritySystemPartitions.push({partitionId, row});
     return;
   }
   if (!isSplitOrMergePartitionState(row?.state)) {
@@ -421,6 +396,39 @@ function indexPartitionRowForPassCensus(row, indexState) {
       partitionId,
     });
   }
+}
+
+const HANDOFF_NOT_CANCELLED = () => false;
+
+function readReplicaOperationsMutationVersion(systemTableCache) {
+  const version = systemTableCache?.getTableMutationVersion?.(
+    SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+  );
+  return Number.isSafeInteger(version) ? version : null;
+}
+
+function refreshSharedPassInFlightReplicaOperations(
+  systemTableCache,
+  passCensus,
+  nowMs = Date.now(),
+) {
+  if (!systemTableCache || !passCensus) {
+    return passCensus?.inFlightReplicaOperationPartitionIds || new Set();
+  }
+  const currentVersion = readReplicaOperationsMutationVersion(systemTableCache);
+  if (
+    currentVersion !== null &&
+    currentVersion === passCensus.replicaOperationsMutationVersion
+  ) {
+    return passCensus.inFlightReplicaOperationPartitionIds;
+  }
+  const refreshed = collectInFlightReplicaOperationPartitionIds(
+    systemTableCache,
+    nowMs,
+  );
+  passCensus.inFlightReplicaOperationPartitionIds = refreshed;
+  passCensus.replicaOperationsMutationVersion = currentVersion;
+  return refreshed;
 }
 
 function buildSharedLeaderPlacementPassCensus(owner, nowMs = Date.now()) {
@@ -432,7 +440,6 @@ function buildSharedLeaderPlacementPassCensus(owner, nowMs = Date.now()) {
   );
   const indexState = {
     partitionRowsById: new Map(),
-    prioritySystemPartitions: [],
     settledSystemPartitionsById: new Map(),
     systemPartitionIds: new Set(),
   };
@@ -446,18 +453,10 @@ function buildSharedLeaderPlacementPassCensus(owner, nowMs = Date.now()) {
     indexState.systemPartitionIds,
   );
   return {
-    hasUnsettledPrioritySystemPartition: indexState.prioritySystemPartitions.some(
-      ({partitionId, row}) =>
-        isPrioritySystemPartitionUnsettled(
-          systemTableCache,
-          partitionId,
-          row,
-          inFlightReplicaOperationPartitionIds,
-          systemEligibleVoterHosts.size,
-        ),
-    ),
     inFlightReplicaOperationPartitionIds,
     partitionRowsById: indexState.partitionRowsById,
+    replicaOperationsMutationVersion:
+      readReplicaOperationsMutationVersion(systemTableCache),
     settledSystemPartitionsById: indexState.settledSystemPartitionsById,
     systemEligibleVoterHosts,
   };
@@ -590,11 +589,15 @@ async function demoteLocalSourceLeader(rebalancer) {
   );
 }
 
-async function dispatchLeaderHandoff(rebalancer, decision, nowMs) {
+async function dispatchLeaderHandoff(rebalancer, decision, nowMs, options = {}) {
+  const {isCancelled = HANDOFF_NOT_CANCELLED} = options || {};
+  if (rebalancer.isShuttingDown || isCancelled()) {
+    return;
+  }
   const cureState = resolveCureState(rebalancer);
   cureState.lastDispatchAtMs = nowMs;
   await demoteLocalSourceLeader(rebalancer);
-  if (rebalancer.isShuttingDown) {
+  if (rebalancer.isShuttingDown || isCancelled()) {
     return;
   }
   await deliverStepDownLeg(
@@ -642,7 +645,6 @@ function evaluateSystemCohortCureForRebalancer(
   return evaluateSystemTableLeaderPlacementCure({
     eligibleVoterHosts: passCensus.systemEligibleVoterHosts,
     hasInFlightReplicaOperation:
-      passCensus.hasUnsettledPrioritySystemPartition === true ||
       passCensus.inFlightReplicaOperationPartitionIds.has(rebalancer.entityId),
     lastDispatchAtMs: cureState.lastDispatchAtMs,
     nodeId: rebalancer.nodeId,
@@ -764,4 +766,5 @@ export {
   evaluateUserTableLeaderPlacementCure,
   isUserTableLeaderCureGapActionable,
   readPartitionServiceRows,
+  refreshSharedPassInFlightReplicaOperations,
 };

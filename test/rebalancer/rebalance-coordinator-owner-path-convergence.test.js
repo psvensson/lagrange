@@ -525,11 +525,16 @@ test('Owner-path convergence: all progression entry points ' +
         t.ok(pointReadFaults > 0, 'the ACTIVE removal turn hits the exact operation read fault');
         t.same(removalDispatchSteps, [], 'the cache cannot authorize the source removal effect');
 
-        const retained = owner.safetyDeferredRetryTimerByOperationId.get(operationId);
+        const retained =
+          owner.observedProgressRetryTimerByOperationId.get(operationId)?.timeoutHandle ||
+          owner.safetyDeferredRetryTimerByOperationId.get(operationId);
         t.ok(timers.scheduled.includes(retained) && !retained.cleared,
-          'the exact operation retains its live removal-safety retry');
+          'the exact operation retains its live observed-progress retry');
         blockOperationPointRead = false;
         await retained?.callback();
+        for (let turn = 0; turn < 20; turn += 1) {
+          await new Promise((resolve) => setImmediate(resolve));
+        }
         const stopping = operationMap.get(operationId);
         t.equal(stopping?.workflow_step, WORKFLOW_STEP.STOPPING,
           'restored authority lets the owner persist its exact removal intent');

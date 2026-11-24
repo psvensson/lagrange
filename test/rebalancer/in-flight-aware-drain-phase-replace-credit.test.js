@@ -25,9 +25,11 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
+import {buildReplicaInventorySnapshot} from '../../src/rebalancer/replica-inventory.js';
 import {
-  computeInFlightAwareReplicaAccounting,
-} from '../../src/rebalancer/in-flight-aware-replica-count.js';
+  REPLICA_INVENTORY_OBSERVATION_STATE,
+} from '../../src/rebalancer/replica-inventory-constants.js';
+import {SERVICE_TYPE} from '../../src/constants/service.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {REBALANCER_MOVE_TYPE as MoveType} from '../../src/rebalancer/rebalancer-constants.js';
 
@@ -42,32 +44,53 @@ function replica(nodeId, replicaId, status) {
   };
 }
 
-// A drain-phase REPLACE: its SOURCE (replica_id) has already left activeCount
-// (removed, not present in currentReplicas); the replacement lands on
-// target_node_id.
-function drainPhaseReplace(sourceReplicaId, targetNodeId) {
+// A drain-phase REPLACE: its SOURCE has already left activeCount (removed, not
+// present in currentReplicas); the replacement lands on target_node_id.
+function drainPhaseReplace(sourceReplicaId, targetNodeId, targetReplicaId = null) {
   return {
+    operation_id: `replace-${sourceReplicaId}-${targetNodeId}`,
     type: MoveType.REPLACE,
-    replica_id: sourceReplicaId,
+    entity_type: SERVICE_TYPE.PARTITION,
+    entity_id: PARTITION,
     partition_id: PARTITION,
+    source_replica_id: sourceReplicaId,
+    replica_id: targetReplicaId,
     target_node_id: targetNodeId,
     status: ReplicaStatus.SYNCING,
     workflow_step: 'SENDING',
   };
 }
 
+function accountingFor({currentReplicas, inFlightOperations}) {
+  return buildReplicaInventorySnapshot({
+    entityType: SERVICE_TYPE.PARTITION,
+    entityId: PARTITION,
+    committedRowsObservation: {
+      state: currentReplicas.length > 0 ?
+        REPLICA_INVENTORY_OBSERVATION_STATE.PRESENT :
+        REPLICA_INVENTORY_OBSERVATION_STATE.EMPTY,
+      rows: currentReplicas,
+    },
+    inFlightOperationObservation: {
+      state: inFlightOperations.length > 0 ?
+        REPLICA_INVENTORY_OBSERVATION_STATE.PRESENT :
+        REPLICA_INVENTORY_OBSERVATION_STATE.EMPTY,
+      operations: inFlightOperations,
+    },
+  }).accounting;
+}
+
 test('stale-syncing 1/3/0/0 -> deficit 1 (no REPLACE: stale learners are NOT credited)',
   async (t) => {
     // 1 active + 2 stale syncing learners, no drain-phase REPLACE. A raw
     // occupied-count would wrongly read 3; row-op-linked credits nothing.
-    const acc = computeInFlightAwareReplicaAccounting({
+    const acc = accountingFor({
       currentReplicas: [
         replica('node-a', 'r-a', ReplicaStatus.ACTIVE),
         replica('node-b', 'r-stale1', ReplicaStatus.SYNCING),
         replica('node-c', 'r-stale2', ReplicaStatus.SYNCING),
       ],
       inFlightOperations: [],
-      partitionId: PARTITION,
     });
     t.equal(acc.activeCount, 1, 'activeCount');
     t.equal(acc.deficitEffectiveCount, 1,
@@ -79,13 +102,12 @@ test('serialization 2/2/0/1 -> deficit 2 (drain-phase REPLACE whose replacement 
   async (t) => {
     // Source removed (active 2), replacement not yet materialized on node-c
     // (occupied 2). No replacement row -> no credit -> genuine deficit -> ADD.
-    const acc = computeInFlightAwareReplicaAccounting({
+    const acc = accountingFor({
       currentReplicas: [
         replica('node-a', 'r-a', ReplicaStatus.ACTIVE),
         replica('node-b', 'r-b', ReplicaStatus.ACTIVE),
       ],
       inFlightOperations: [drainPhaseReplace('r-old-source', 'node-c')],
-      partitionId: PARTITION,
     });
     t.equal(acc.activeCount, 2, 'activeCount');
     t.equal(acc.deficitEffectiveCount, 2,
@@ -98,14 +120,13 @@ test('run-28 2/3/0/1 -> deficit 3 (credit the drain-phase replacement learner: S
     // Source removed (active 2); replacement is a syncing learner on node-c
     // (occupied 3). Credit it -> 3 -> no deficit -> the spurious count-increasing
     // ADD is suppressed and the group never reaches 4 voters. RED on revert.
-    const acc = computeInFlightAwareReplicaAccounting({
+    const acc = accountingFor({
       currentReplicas: [
         replica('node-a', 'r-a', ReplicaStatus.ACTIVE),
         replica('node-b', 'r-b', ReplicaStatus.ACTIVE),
         replica('node-c', 'r-repl', ReplicaStatus.SYNCING),
       ],
-      inFlightOperations: [drainPhaseReplace('r-old-source', 'node-c')],
-      partitionId: PARTITION,
+      inFlightOperations: [drainPhaseReplace('r-old-source', 'node-c', 'r-repl')],
     });
     t.equal(acc.activeCount, 2, 'activeCount');
     t.equal(acc.deficitEffectiveCount, 3,
@@ -119,14 +140,13 @@ test('verifier-starvation 1/3/0/1 -> deficit 2 (credit ONLY the linked replaceme
     // REPLACE's replacement (node-c); the other (node-d) is an unlinked stale
     // learner. Row-op-linked credits ONLY the linked one -> 1+1=2 < 3 -> ADD.
     // A raw occupied-count would wrongly read 3 and suppress a genuine deficit.
-    const acc = computeInFlightAwareReplicaAccounting({
+    const acc = accountingFor({
       currentReplicas: [
         replica('node-a', 'r-a', ReplicaStatus.ACTIVE),
         replica('node-c', 'r-repl', ReplicaStatus.SYNCING),
         replica('node-d', 'r-stale', ReplicaStatus.SYNCING),
       ],
-      inFlightOperations: [drainPhaseReplace('r-old-source', 'node-c')],
-      partitionId: PARTITION,
+      inFlightOperations: [drainPhaseReplace('r-old-source', 'node-c', 'r-repl')],
     });
     t.equal(acc.activeCount, 1, 'activeCount');
     t.equal(acc.deficitEffectiveCount, 2,
@@ -138,23 +158,13 @@ test('net-neutral REPLACE (source STILL active) is NOT credited (no double-count
   async (t) => {
     // Source r-a is still ACTIVE (net-neutral in-creation REPLACE), replacement
     // syncing on node-c. Crediting here would double-count the source's slot.
-    const acc = computeInFlightAwareReplicaAccounting({
+    const acc = accountingFor({
       currentReplicas: [
         replica('node-a', 'r-a', ReplicaStatus.ACTIVE),
         replica('node-b', 'r-b', ReplicaStatus.ACTIVE),
         replica('node-c', 'r-repl', ReplicaStatus.SYNCING),
       ],
-      inFlightOperations: [
-        {
-          type: MoveType.REPLACE,
-          replica_id: 'r-a',
-          partition_id: PARTITION,
-          target_node_id: 'node-c',
-          status: ReplicaStatus.SYNCING,
-          workflow_step: 'SENDING',
-        },
-      ],
-      partitionId: PARTITION,
+      inFlightOperations: [drainPhaseReplace('r-a', 'node-c', 'r-repl')],
     });
     t.equal(acc.activeCount, 2, 'activeCount');
     t.equal(acc.deficitEffectiveCount, 2,

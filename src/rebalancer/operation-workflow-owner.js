@@ -47,6 +47,7 @@ const OPERATION_WORKFLOW_OWNER_NO_OPERATION = null;
 const {
   OBSERVED_PROGRESS_OPERATION_ROUTE_ACTION,
   OPERATION_WORKFLOW_OWNER_LITERAL,
+  SYSTEM_TABLE_NAME,
 } = OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED;
 
 function shouldReturnDeferredDispatchOwnerProgressResult(result) {
@@ -334,7 +335,17 @@ class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
       this.observedProgressRetryTimerByOperationId.get(operationId)?.timeoutHandle;
     const observation = await this.repository.getOperationByIdVisibilityObservation(operationId, {
       allowPriorityRecoveryDeferredVisibility: true,
+      requireAbsenceConfirmation: true,
     });
+    if (observation?.deferredOutcome && !observation?.operation) {
+      this.scheduleObservedProgressRetry(
+        operationId,
+        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+        OPERATION_WORKFLOW_OWNER_LITERAL.SYNTHETIC_UPSERT,
+        observation.retryAfterMs,
+      );
+      return false;
+    }
     return this.reconcileObservedOperation(operationId, observation, expectedTimeoutHandle);
   }
 

@@ -29,9 +29,6 @@ import {
   decideOperationLifecycle,
   resolveOperationLifecycleEvent,
 } from '../../src/rebalancer/operation-lifecycle.js';
-import {
-  decideOperationWorkflowProgress,
-} from '../../src/rebalancer/operation-workflow-owner-decision.js';
 
 const TEST_OPERATION_KEY = 'operation-progress-test';
 const TEST_CORRELATION_KEY = 'operation-progress-correlation';
@@ -220,7 +217,7 @@ test('operation lifecycle records terminal failure as terminal progress',
     t.end();
   });
 
-test('workflow decision facade consumes the owned lifecycle outcome', (t) => {
+test('operation lifecycle advances existing transition directly', (t) => {
   const evidence = buildEvidence({
     workflowHistory: {
       ...buildEvidence().workflowHistory,
@@ -229,9 +226,19 @@ test('workflow decision facade consumes the owned lifecycle outcome', (t) => {
     },
   });
   const lifecycleOutcome = decideOperationLifecycle(evidence);
-  const workflowOutcome = decideOperationWorkflowProgress(evidence);
 
-  t.equal(workflowOutcome.resource, OPERATION_PROGRESS_RESOURCE);
-  t.same(workflowOutcome, lifecycleOutcome);
+  t.equal(lifecycleOutcome.resource, OPERATION_PROGRESS_RESOURCE);
+  t.equal(
+    lifecycleOutcome.state,
+    OPERATION_WORKFLOW_PROGRESS_STATE_VALUES
+      .EXISTING_OPERATION_ADVANCEMENT_READY,
+  );
+  t.same(
+    lifecycleOutcome.sideEffects,
+    [
+      OPERATION_WORKFLOW_EFFECT_COMMAND_VALUES
+        .ADVANCE_EXISTING_OPERATION_COMMAND,
+    ],
+  );
   t.end();
 });

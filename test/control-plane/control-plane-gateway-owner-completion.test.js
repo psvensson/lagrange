@@ -158,3 +158,32 @@ test('5. a rejected execution still retires its lifecycle record', async () => {
     'a failure never leaves the owner permanently busy');
   assert.equal(gateway.inFlightMutationRequestsByKey.size, 0);
 });
+
+test('6. authoritative reads fail unavailable instead of falling back to sqlQueryEngine when CDC authoritative reader is missing',
+  async () => {
+    let sqlFallbackCalls = 0;
+    const gateway = new ControlPlaneSystemTableGateway({
+      nodeId: 'node-gateway',
+      cdcIntegrationService: {},
+      sqlQueryEngine: {
+        async executeQuery() {
+          sqlFallbackCalls += 1;
+          return {success: true, rows: [{node_id: 'stale-sql-row'}], rowSetComplete: true};
+        },
+      },
+      systemTableCache: {getAll: () => [], applySystemTableChange() {}},
+    });
+    const result = await gateway.executeRead({
+      owner: 'placement-authority-test',
+      tableName: 'replica_operations',
+      sql: 'SELECT * FROM replica_operations WHERE operation_id = ?',
+      params: ['op-1'],
+      strategy: 'authoritative',
+    });
+    assert.equal(sqlFallbackCalls, 0,
+      'missing CDC authoritative reader must not fall back to sqlQueryEngine.executeQuery');
+    assert.equal(result.success, false);
+    assert.equal(result.outcome, 'owner_not_ready');
+    assert.equal(result.error, 'authoritative_read_owner_unavailable');
+    assert.deepEqual(result.rows, []);
+  });

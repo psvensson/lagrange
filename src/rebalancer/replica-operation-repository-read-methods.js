@@ -601,32 +601,32 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
     }
 
     async getOperationByIdVisibilityObservation(operationId, options = {}) {
+      const readOptions = options || {};
+      const allowOwnerPersistedTransitionDeferredVisibility =
+        readOptions.allowOwnerPersistedTransitionDeferredVisibility !== false;
       const authoritativeObservation = await this.queryAuthoritativeOperationVisibilityObservation(
         operationId,
         {
-          authoritativeReadMode: options?.authoritativeReadMode,
-          leaderMode: options?.leaderMode,
+          authoritativeReadMode: readOptions.authoritativeReadMode,
+          leaderMode: readOptions.leaderMode,
           allowPriorityRecoveryDeferredVisibility:
-          options?.allowPriorityRecoveryDeferredVisibility === true,
-          allowOwnerPersistedTransitionDeferredVisibility:
-          options?.allowOwnerPersistedTransitionDeferredVisibility !== false,
+            readOptions.allowPriorityRecoveryDeferredVisibility === true,
+          allowOwnerPersistedTransitionDeferredVisibility,
           requireAbsenceConfirmation:
-          options?.requireAbsenceConfirmation === true,
+            readOptions.requireAbsenceConfirmation === true,
         },
       );
       if (authoritativeObservation?.operation) {
         return this.buildOperationVisibilityObservation(authoritativeObservation.operation, null);
       }
+      const deferredOutcome = authoritativeObservation?.deferredOutcome || null;
       const ownerPersistedFallbackOperation =
-      options?.allowOwnerPersistedTransitionDeferredVisibility === false ?
-        null :
-        this.getOwnerPersistedTransitionVisibilityFallbackOperation(operationId);
-      const cacheFallbackOperation = await this.queryOperationById(operationId);
-      const fallbackOperation =
-      ownerPersistedFallbackOperation || cacheFallbackOperation;
+        allowOwnerPersistedTransitionDeferredVisibility && deferredOutcome ?
+          this.getOwnerPersistedTransitionVisibilityFallbackOperation(operationId) :
+          null;
       return this.buildOperationVisibilityObservation(
-        fallbackOperation,
-        authoritativeObservation?.deferredOutcome || null,
+        ownerPersistedFallbackOperation,
+        deferredOutcome,
       );
     }
 

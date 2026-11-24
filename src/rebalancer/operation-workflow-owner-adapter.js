@@ -4,6 +4,7 @@ import {
 } from './operation-workflow-owner-effects.js';
 import {
   advanceOperationLifecycle,
+  decideOperationLifecycle,
   resolveOperationLifecycleEvent,
 } from './operation-lifecycle.js';
 import {
@@ -14,9 +15,6 @@ import {
   OPERATION_WORKFLOW_RECORD_FIELDS,
   OPERATION_WORKFLOW_REVISION_VARIANTS,
 } from './operation-workflow-owner-constants.js';
-import {
-  decideOperationWorkflowProgress,
-} from './operation-workflow-owner-decision.js';
 
 const OPERATION_WORKFLOW_ADAPTER_EMPTY_TEXT = '';
 const OPERATION_WORKFLOW_ADAPTER_DEFAULT_CONTEXT = Object.freeze({});
@@ -277,7 +275,7 @@ function createOperationWorkflowOwnerAdapter({ports}) {
         currentProgress,
         ingressEvent,
       );
-      const outcome = decideOperationWorkflowProgress(
+      const outcome = decideOperationLifecycle(
         evidence,
         currentProgress,
       );
@@ -339,7 +337,7 @@ function decideOperationWorkflowOwnerAdapterOutcomeForOperation({
     context,
     ports,
   });
-  return decideOperationWorkflowProgress(evidence);
+  return decideOperationLifecycle(evidence);
 }
 
 export {

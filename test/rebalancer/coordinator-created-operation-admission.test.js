@@ -420,6 +420,48 @@ test('lost CREATE response adopts durable admission and cannot terminalize ' +
       'admission winning the terminal CAS race is retained');
     t.equal(retained.length, 1,
       'the race winner converges on the same retained-progress owner');
+
+    // When the authoritative OWNER_RPC_REQUIRED read returns empty/unavailable,
+    // a stale cache row without create admission must NOT be fabricated via cache
+    // fallback to trigger failOperation — ambiguous create delivery must defer.
+    failCalls = 0;
+    const staleCachedRow = {
+      operation_id: operation.operationId,
+      type: operation.type,
+      entity_type: operation.entityType,
+      entity_id: operation.entityId,
+      partition_id: operation.partitionId,
+      replica_id: operation.replicaId,
+      target_node_id: operation.targetNodeId,
+      node_id: operation.nodeId,
+      status: ReplicaStatus.PENDING,
+      workflow_step: WORKFLOW_STEP.SENDING,
+      steps_history: '[]',
+    };
+    const originalGetObservation =
+      Object.getPrototypeOf(owner.repository).getOperationByIdVisibilityObservation;
+    owner.repository.getOperationByIdVisibilityObservation =
+      originalGetObservation.bind(owner.repository);
+    owner.repository.getReplicaOperationRowFromCache = () => staleCachedRow;
+    owner.repository.executeReplicaOperationsRead = async () => ({
+      success: true,
+      rows: [],
+    });
+    const scheduledObservations = [];
+    owner.scheduleObservedProgressRetry = (opId) => {
+      scheduledObservations.push(opId);
+      return true;
+    };
+    const absentResult = await owner.executeOperationInternal(
+      {...operation},
+      {},
+    );
+    t.equal(absentResult.skipped, true,
+      'absent authoritative observation defers ambiguous create delivery instead of failing from cache');
+    t.equal(failCalls, 0,
+      'stale cached row must not trigger terminal failure when authoritative observation is absent');
+    t.same(scheduledObservations, [operation.operationId],
+      'ambiguous create delivery schedules authoritative observation retry');
   } finally {
     await coordinator.shutdown();
   }
