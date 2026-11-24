@@ -21,11 +21,17 @@ import {
   reconcileNov2026ComparisonHistoryToDisk,
 } from '../oltp-comparison-history-store.js';
 import {
+  arrayFilter,
   arrayIncludes,
+  arrayJoin,
   arrayMap,
   stringIncludes,
+  stringSplit,
   stringStartsWith,
+  stringTrim,
 } from '../real-product-captured-intrinsics.js';
+
+const arraySlice = Function.call.bind(Array.prototype.slice);
 import {describeExhaustedDeployment} from '../real-product-exhausted-deployment.js';
 import {
   clusterReady,
@@ -539,13 +545,23 @@ describe('readiness summary and canonical history outcome accounting', () => {
     'digests and append-only invalidation of lines 21-43', async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'nov2026-history-reconcile-'));
     try {
-      const srcHistory = await fs.readFile('data/tidb-comparison/history.ndjson', 'utf8');
-      const srcLedger = await fs.readFile('data/tidb-comparison/invalidations.ndjson', 'utf8');
+      const rawHistory = await fs.readFile('data/tidb-comparison/history.ndjson', 'utf8');
+      const rawLedger = await fs.readFile('data/tidb-comparison/invalidations.ndjson', 'utf8');
+      const historyLines = arrayFilter(
+        stringSplit(rawHistory, '\n'),
+        (line) => stringTrim(line).length > 0,
+      );
+      const ledgerLines = arrayFilter(
+        stringSplit(rawLedger, '\n'),
+        (line) => stringTrim(line).length > 0 && !stringIncludes(line, '"id":"inv-0026"'),
+      );
+      const preHistory = `${arrayJoin(arraySlice(historyLines, 0, 43), '\n')}\n`;
+      const preLedger = `${arrayJoin(arraySlice(ledgerLines, 0, 25), '\n')}\n`;
       const ndjsonPath = path.join(tmpDir, 'history.ndjson');
       const ledgerPath = path.join(tmpDir, 'invalidations.ndjson');
       const summaryPath = path.join(tmpDir, 'progress-summary.json');
-      await fs.writeFile(ndjsonPath, srcHistory, 'utf8');
-      await fs.writeFile(ledgerPath, srcLedger, 'utf8');
+      await fs.writeFile(ndjsonPath, preHistory, 'utf8');
+      await fs.writeFile(ledgerPath, preLedger, 'utf8');
 
       const result = await reconcileNov2026ComparisonHistoryToDisk({
         ndjsonPath,
@@ -557,8 +573,8 @@ describe('readiness summary and canonical history outcome accounting', () => {
 
       const afterHistory = await fs.readFile(ndjsonPath, 'utf8');
       const afterLedger = await fs.readFile(ledgerPath, 'utf8');
-      assert.equal(stringStartsWith(afterHistory, srcHistory), true);
-      assert.equal(stringStartsWith(afterLedger, srcLedger), true);
+      assert.equal(stringStartsWith(afterHistory, preHistory), true);
+      assert.equal(stringStartsWith(afterLedger, preLedger), true);
       assert.equal(result.invalidationEntry.id, 'inv-0026');
       assert.equal(result.invalidationEntry.scope.receiptIds.length, 23);
       assert.equal(result.appendedRecords.length, 23);
@@ -602,6 +618,17 @@ describe('readiness summary and canonical history outcome accounting', () => {
         'every reconciled 2026-11-23..24 history record must bind a distinct artifactSha256');
       assert.equal(Object.keys(NOV_2026_HISTORY_RECONCILIATION_SPECS).length, 23);
       assert.ok(createComparisonHistoryRecord(r613b).recordSha256 === r613b.recordSha256);
+
+      const liveParsed = parseComparisonHistoryNdjson(rawHistory);
+      assert.ok(liveParsed.length >= 43);
+      if (stringIncludes(rawLedger, '"id":"inv-0026"')) {
+        assert.ok(liveParsed.length >= 66);
+        const liveAppended = arraySlice(liveParsed, 43);
+        for (const rec of liveAppended) {
+          assert.ok(typeof rec.evidenceSource.artifactSha256 === 'string');
+          assert.equal(rec.evidenceSource.artifactSha256.length, 64);
+        }
+      }
     } finally {
       await fs.rm(tmpDir, {recursive: true, force: true});
     }
