@@ -24,9 +24,7 @@ class AuthoritativeRowMutationHelper {
       buildWhereClause,
       buildUpdateData,
       buildUpdateOptions,
-      readValueFromCache,
       readLiveValue,
-      readRowFromCache,
       buildExpectedCacheFields,
       isWriteReady,
       prepareFlush,
@@ -55,16 +53,14 @@ class AuthoritativeRowMutationHelper {
       tableName,
       buildWhereClause,
       buildUpdateData,
-      readValueFromCache,
+      readAuthoritativeRow,
     });
 
     this.tableName = tableName;
     this.buildWhereClause = buildWhereClause;
     this.buildUpdateData = buildUpdateData;
     this.buildUpdateOptions = withDefault(buildUpdateOptions, () => ({}));
-    this.readValueFromCache = readValueFromCache;
     this.readLiveValue = optionalFunction(readLiveValue);
-    this.readRowFromCache = withDefault(readRowFromCache, null);
     this.buildExpectedCacheFields = withDefault(buildExpectedCacheFields, null);
     this.isWriteReady = withDefault(isWriteReady, () => true);
     this.prepareFlush = withDefault(prepareFlush, () => ({skip: false}));
@@ -83,7 +79,7 @@ class AuthoritativeRowMutationHelper {
     this.messageRouter = withDefault(messageRouter, null);
     this.systemTableCache = withDefault(systemTableCache, null);
     this.refreshObservedRow = optionalFunction(refreshObservedRow);
-    this.readAuthoritativeRow = optionalFunction(readAuthoritativeRow);
+    this.readAuthoritativeRow = readAuthoritativeRow;
     this.onObservedStateChanged = withDefault(onObservedStateChanged, () => {});
     this.onAsyncError = withDefault(onAsyncError, () => {});
     // Loudness/budget hooks (quest
@@ -304,9 +300,6 @@ class AuthoritativeRowMutationHelper {
   }
 
   async resolveAuthoritativeProbe(value, flushRevision) {
-    if (!this.readAuthoritativeRow) {
-      return {settled: false, row: null};
-    }
     return this.probeAuthoritativeRow(value, flushRevision);
   }
 
@@ -350,17 +343,12 @@ class AuthoritativeRowMutationHelper {
   }
 
   buildMutationSubmission(value, authoritativeRow) {
-    const cachedRow = optionalFunction(this.readRowFromCache) ?
-      this.readRowFromCache(this.systemTableCache) :
-      null;
     const updatedAt = this.now();
     const updateData = this.buildUpdateData(value, updatedAt);
     const mutationContext = {
-      cachedRow,
-      // The CAS guard must come from the authoritative row when one was
-      // observed: the merged cache row can be locally seeded NEWER than the
-      // durable row (stale-guard protected), so guarding on it zero-rows
-      // forever — permanent retry spin with the write never landing.
+      // The CAS guard comes exclusively from the authoritative row: a merged
+      // cache row can be locally seeded newer than the durable row, so guarding
+      // on it zero-rows forever.
       authoritativeRow,
       persistedValue: this.persistedValue,
     };

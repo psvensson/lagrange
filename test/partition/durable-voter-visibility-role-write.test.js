@@ -680,9 +680,9 @@ test('durable voter visibility - leader replica flushes collapsed follower voter
     }),
   );
   t.equal(
-    helper.syncFromCache(),
-    false,
-    'syncFromCache rejects stale cached leader role after stepdown to follower',
+    helper.syncFromCache,
+    undefined,
+    'legacy cache-sync method is absent; stale cached leader role cannot dedup',
   );
   helper.queue(RAFT_ROLE.LEADER);
   const staleResult = await helper.flush();

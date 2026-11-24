@@ -62,8 +62,8 @@ function initializeTestConfig() {
  * return true for the partitions table. The cache must contain:
  * - A partition record for the partitions system table partition
  * - A leader service record for that partition
- * Also supports get() for the child partition row (used by
- * readRowFromCache in the leaderNodeMutationHelper).
+ * Also supports get() for the child partition row (used to determine
+ * leader-publication read priority in the leaderNodeMutationHelper).
  */
 function createMockSystemTableCache() {
   const partitionRecords = [

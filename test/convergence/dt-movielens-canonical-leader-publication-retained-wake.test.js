@@ -49,7 +49,10 @@ function createPublicationHelper(options = {}) {
     tableName: TABLES.PARTITIONS,
     buildWhereClause: () => ({partition_id: PARTITION_ID}),
     buildUpdateData: (value) => ({leader_node_id: value}),
-    readValueFromCache: () => null,
+    readAuthoritativeRow: async () => ({
+      available: true,
+      row: {partition_id: PARTITION_ID, leader_node_id: null},
+    }),
     ...options,
   });
 }

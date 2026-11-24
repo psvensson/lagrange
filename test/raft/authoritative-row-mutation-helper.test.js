@@ -8,6 +8,23 @@ import {
   createWasmServiceRoleMutationHelper,
 } from '../../src/wasm-service/wasm-service-metadata-mutation-helpers.js';
 
+test('AuthoritativeRowMutationHelper - constructor requires readAuthoritativeRow',
+  async (t) => {
+    t.throws(() => new AuthoritativeRowMutationHelper({
+      tableName: 'services',
+      buildWhereClause: () => ({service_id: 'replica-1'}),
+      buildUpdateData: (value) => ({raft_role: value}),
+    }), /AuthoritativeRowMutationHelper requires readAuthoritativeRow/,
+    'constructing without readAuthoritativeRow must throw fail-closed');
+    t.throws(() => new AuthoritativeRowMutationHelper({
+      tableName: 'services',
+      buildWhereClause: () => ({service_id: 'replica-1'}),
+      buildUpdateData: (value) => ({raft_role: value}),
+      readAuthoritativeRow: null,
+    }), /AuthoritativeRowMutationHelper requires readAuthoritativeRow/,
+    'non-function readAuthoritativeRow must throw fail-closed');
+  });
+
 test('AuthoritativeRowMutationHelper - flush persists pending owner-row update',
   async (t) => {
     const updates = [];
@@ -19,7 +36,10 @@ test('AuthoritativeRowMutationHelper - flush persists pending owner-row update',
         updated_at: now,
       }),
       buildExpectedCacheFields: (value) => ({raft_role: value}),
-      readValueFromCache: () => null,
+      readAuthoritativeRow: async () => ({
+        available: true,
+        row: {service_id: 'replica-1', raft_role: 'follower'},
+      }),
       cdcIntegrationService: {
         updateSystemTableRow: async (tableName, whereClause, data, options) => {
           updates.push({tableName, whereClause, data, options});
@@ -86,7 +106,6 @@ test('AuthoritativeRowMutationHelper - flush recovers from cache visibility gap 
         updated_at: now,
       }),
       buildExpectedCacheFields: (value) => ({raft_role: value}),
-      readValueFromCache: () => 'leader',
       readAuthoritativeRow: async () => ({
         available: true,
         row: {service_id: 'replica-1', raft_role: 'leader'},
@@ -128,7 +147,6 @@ test('AuthoritativeRowMutationHelper - unsupported authoritative probe fails clo
         updated_at: now,
       }),
       buildExpectedCacheFields: (value) => ({raft_role: value}),
-      readValueFromCache: () => 'leader',
       readAuthoritativeRow: async () => ({
         supported: false,
         available: false,
@@ -171,7 +189,10 @@ test('AuthoritativeRowMutationHelper - flush schedules retry when owner row is n
         updated_at: now,
       }),
       buildExpectedCacheFields: (value) => ({raft_role: value}),
-      readValueFromCache: () => null,
+      readAuthoritativeRow: async () => ({
+        available: true,
+        row: {service_id: 'replica-1', raft_role: 'follower'},
+      }),
       isWriteReady: () => ready,
       cdcIntegrationService: {
         updateSystemTableRow: async () => {
@@ -207,11 +228,6 @@ test('AuthoritativeRowMutationHelper - authoritative read failure cannot dedup a
     const scheduled = [];
     const writes = [];
     let authoritativeReadCount = 0;
-    const locallySeededRow = {
-      partition_id: 'p1',
-      leader_node_id: 'node-b',
-      updated_at: 7,
-    };
     const durableRow = {
       partition_id: 'p1',
       leader_node_id: 'node-a',
@@ -231,7 +247,6 @@ test('AuthoritativeRowMutationHelper - authoritative read failure cannot dedup a
       buildExpectedCacheFields: (value) => ({
         leader_node_id: value,
       }),
-      readValueFromCache: () => locallySeededRow.leader_node_id,
       readAuthoritativeRow: async () => {
         authoritativeReadCount += 1;
         if (authoritativeReadCount === 1) {
@@ -307,7 +322,10 @@ test('AuthoritativeRowMutationHelper - deferred gateway outcome preserves pendin
         updated_at: now,
       }),
       buildExpectedCacheFields: (value) => ({raft_role: value}),
-      readValueFromCache: () => null,
+      readAuthoritativeRow: async () => ({
+        available: true,
+        row: {service_id: 'replica-1', raft_role: 'follower'},
+      }),
       retryDelayMs: 100,
       cdcIntegrationService: {},
       controlPlaneSystemTableGateway: {
@@ -365,7 +383,10 @@ test('AuthoritativeRowMutationHelper - repeated retryable outcomes back off expo
         raft_role: value,
         updated_at: now,
       }),
-      readValueFromCache: () => null,
+      readAuthoritativeRow: async () => ({
+        available: true,
+        row: {service_id: 'replica-1', raft_role: 'follower'},
+      }),
       retryDelayMs: 100,
       maxRetryDelayMs: 350,
       cdcIntegrationService: {},
@@ -415,7 +436,10 @@ test('AuthoritativeRowMutationHelper - prepareFlush can defer and retry a pendin
         raft_role: value,
         updated_at: now,
       }),
-      readValueFromCache: () => null,
+      readAuthoritativeRow: async () => ({
+        available: true,
+        row: {service_id: 'replica-1', raft_role: 'follower'},
+      }),
       prepareFlush: () => ({
         skip: settling,
         clearPending: false,
@@ -477,7 +501,10 @@ test('AuthoritativeRowMutationHelper - flushes newer pending value after in-flig
         updated_at: updatedAt,
       }),
       buildExpectedCacheFields: (value) => ({raft_role: value}),
-      readValueFromCache: () => null,
+      readAuthoritativeRow: async () => ({
+        available: true,
+        row: {service_id: 'replica-1', raft_role: 'follower'},
+      }),
       cdcIntegrationService: {
         updateSystemTableRow: async (tableName, whereClause, data, options) => {
           updateCallCount += 1;
@@ -524,7 +551,7 @@ test('AuthoritativeRowMutationHelper - guarded owner write miss preserves pendin
     const scheduled = [];
     let capturedWhereClause = null;
     let updateCallCount = 0;
-    const cachedRow = {
+    const observedRow = {
       partition_id: 'p1',
       leader_node_id: 'node-a',
       updated_at: 7,
@@ -533,15 +560,17 @@ test('AuthoritativeRowMutationHelper - guarded owner write miss preserves pendin
       tableName: 'partitions',
       buildWhereClause: (_value, context = {}) => ({
         partition_id: 'p1',
-        leader_node_id: context.cachedRow?.leader_node_id,
-        updated_at: context.cachedRow?.updated_at,
+        leader_node_id: context.authoritativeRow?.leader_node_id,
+        updated_at: context.authoritativeRow?.updated_at,
       }),
       buildUpdateData: (value, now) => ({
         leader_node_id: value,
         updated_at: now,
       }),
-      readRowFromCache: () => cachedRow,
-      readValueFromCache: () => cachedRow.leader_node_id,
+      readAuthoritativeRow: async () => ({
+        available: true,
+        row: {...observedRow},
+      }),
       cdcIntegrationService: {
         updateSystemTableRow: async (_tableName, whereClause) => {
           updateCallCount += 1;
@@ -593,7 +622,7 @@ test('AuthoritativeRowMutationHelper - queued owner update is not stranded behin
   async (t) => {
     const scheduled = [];
     const writes = [];
-    const cachedRow = {
+    const observedRow = {
       partition_id: 'p1',
       leader_node_id: 'node-a',
       updated_at: 7,
@@ -608,15 +637,17 @@ test('AuthoritativeRowMutationHelper - queued owner update is not stranded behin
       tableName: 'partitions',
       buildWhereClause: (_value, context = {}) => ({
         partition_id: 'p1',
-        leader_node_id: context.cachedRow?.leader_node_id,
-        updated_at: context.cachedRow?.updated_at,
+        leader_node_id: context.authoritativeRow?.leader_node_id,
+        updated_at: context.authoritativeRow?.updated_at,
       }),
       buildUpdateData: (value, updatedAt) => ({
         leader_node_id: value,
         updated_at: updatedAt,
       }),
-      readRowFromCache: () => cachedRow,
-      readValueFromCache: () => cachedRow.leader_node_id,
+      readAuthoritativeRow: async () => ({
+        available: true,
+        row: {...observedRow},
+      }),
       cdcIntegrationService: {
         updateSystemTableRow: async (_tableName, whereClause, data) => {
           updateCallCount += 1;
@@ -651,8 +682,8 @@ test('AuthoritativeRowMutationHelper - queued owner update is not stranded behin
       'initial guarded miss should schedule reconciliation');
     t.equal(scheduled.length, 1, 'guard miss should arm one retry timer');
 
-    cachedRow.leader_node_id = 'node-b';
-    cachedRow.updated_at = 8;
+    observedRow.leader_node_id = 'node-b';
+    observedRow.updated_at = 8;
     helper.queue('node-c');
     await secondWriteCompleted;
     await new Promise((resolve) => setImmediate(resolve));
@@ -686,8 +717,8 @@ test('AuthoritativeRowMutationHelper - queued owner update is not stranded behin
     t.ok(writes[1].data.updated_at > writes[0].data.updated_at,
       'and each follow-up write is stamped later than the one it follows');
 
-    cachedRow.leader_node_id = 'node-c';
-    cachedRow.updated_at = 9;
+    observedRow.leader_node_id = 'node-c';
+    observedRow.updated_at = 9;
     await scheduled[0]();
 
     t.equal(updateCallCount, 2, 'stale retry timer should no-op once the latest value is persisted');
@@ -712,7 +743,10 @@ test('AuthoritativeRowMutationHelper - prepareFlush can clear pending owner upda
         leader_node_id: value,
         updated_at: now,
       }),
-      readValueFromCache: () => null,
+      readAuthoritativeRow: async () => ({
+        available: true,
+        row: {partition_id: 'p1', leader_node_id: null},
+      }),
       prepareFlush: () => ({
         skip: true,
         clearPending: true,
@@ -756,7 +790,10 @@ test('AuthoritativeRowMutationHelper - shutdown prevents retries from an in-flig
         raft_role: value,
         updated_at: now,
       }),
-      readValueFromCache: () => null,
+      readAuthoritativeRow: async () => ({
+        available: true,
+        row: {service_id: 'replica-1', raft_role: 'follower'},
+      }),
       cdcIntegrationService: {
         updateSystemTableRow: async () => {
           await writeStarted;
@@ -797,12 +834,12 @@ test('AuthoritativeRowMutationHelper - guard miss refreshes the observed row so 
     const writes = [];
     const observedEvents = [];
     let refreshCallCount = 0;
-    const cachedRow = {
+    const observedRow = {
       partition_id: 'p1',
       leader_node_id: 'node-a',
       updated_at: 7,
     };
-    // What the authority actually holds (advanced past the cached snapshot
+    // What the authority actually holds (advanced past the observed snapshot
     // by a write whose CDC event this node never received).
     const authoritativeRow = {
       partition_id: 'p1',
@@ -813,15 +850,17 @@ test('AuthoritativeRowMutationHelper - guard miss refreshes the observed row so 
       tableName: 'partitions',
       buildWhereClause: (_value, context = {}) => ({
         partition_id: 'p1',
-        leader_node_id: context.cachedRow?.leader_node_id,
-        updated_at: context.cachedRow?.updated_at,
+        leader_node_id: context.authoritativeRow?.leader_node_id,
+        updated_at: context.authoritativeRow?.updated_at,
       }),
       buildUpdateData: (value, updatedAt) => ({
         leader_node_id: value,
         updated_at: updatedAt,
       }),
-      readRowFromCache: () => cachedRow,
-      readValueFromCache: () => cachedRow.leader_node_id,
+      readAuthoritativeRow: async () => ({
+        available: true,
+        row: {...observedRow},
+      }),
       cdcIntegrationService: {
         updateSystemTableRow: async (_tableName, whereClause, data) => {
           writes.push({whereClause: {...whereClause}, data: {...data}});
@@ -836,7 +875,7 @@ test('AuthoritativeRowMutationHelper - guard miss refreshes the observed row so 
       },
       refreshObservedRow: async () => {
         refreshCallCount += 1;
-        Object.assign(cachedRow, authoritativeRow);
+        Object.assign(observedRow, authoritativeRow);
       },
       onObservedStateChanged: (context) => {
         observedEvents.push(context);

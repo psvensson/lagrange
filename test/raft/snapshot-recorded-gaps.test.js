@@ -8,10 +8,8 @@ import Database from 'better-sqlite3';
 import {test} from '../../src/test-helpers/tap.js';
 
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
-import {SQLiteLogAdapter} from '../../src/raft/sqlite-log-adapter.js';
 import {requestSnapshotInstall} from '../../src/raft/snapshot-install.js';
 import {
-  RAFT_SNAPSHOT_BOUNDARY_STATE_KEY,
   RAFT_SNAPSHOT_INSTALL_OUTCOME,
 } from '../../src/raft/snapshot-install-constants.js';
 import {
@@ -87,73 +85,6 @@ async function createSealedGenerationFixture() {
     },
   };
 }
-
-async function createCompactedLogReplicaFixture() {
-  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'raft-gaps-log-'));
-  const replicaDbPath = path.join(workDir, 'replica.db');
-  const db = new Database(replicaDbPath);
-  const adapter = new SQLiteLogAdapter(
-    db, {address: PARTITION_ID, term: TERM});
-  const upsert = db.prepare(
-    'INSERT OR REPLACE INTO _raft_state (key, value) VALUES (?, ?)');
-  upsert.run(RAFT_SNAPSHOT_BOUNDARY_STATE_KEY.LAST_INCLUDED_INDEX,
-    String(ENTRY_COUNT));
-  upsert.run(RAFT_SNAPSHOT_BOUNDARY_STATE_KEY.LAST_INCLUDED_TERM, String(TERM));
-  upsert.run('committedIndex', String(ENTRY_COUNT));
-  return {
-    workDir,
-    boundaryIndex: ENTRY_COUNT,
-    replicaDbPath,
-    db,
-    adapter,
-    close() {
-      db.close();
-      fs.rmSync(workDir, {recursive: true, force: true});
-    },
-  };
-}
-
-test('gap 2: the truncation witness TRIPS inside (boundary, committedIndex]',
-  async (t) => {
-    const fixture = await createCompactedLogReplicaFixture();
-    try {
-      const adapter = fixture.adapter;
-      // Extend past the boundary so committedIndex (6) > boundary (3).
-      for (let ordinal = 1; ordinal <= 3; ordinal += 1) {
-        const entry = adapter.saveCommand({sql: `extra-${ordinal}`}, TERM);
-        adapter.commit(entry.index);
-      }
-      const committedIndex = adapter.getCommittedIndex();
-      t.equal(committedIndex, fixture.boundaryIndex + 3,
-        'fixture: committedIndex sits above the boundary');
-
-      const blockedBefore = adapter.committedTruncationBlockedCount;
-      adapter.removeFrom(fixture.boundaryIndex + 2);
-      t.equal(adapter.committedTruncationBlockedCount, blockedBefore + 1,
-        'an inclusive truncation inside (boundary, committedIndex] trips');
-      t.same(adapter.lastCommittedTruncationBlocked && {
-        requestedIndex:
-          adapter.lastCommittedTruncationBlocked.requestedIndex,
-        committedIndex:
-          adapter.lastCommittedTruncationBlocked.committedIndex,
-      }, {
-        requestedIndex: fixture.boundaryIndex + 2,
-        committedIndex,
-      }, 'the witness records the anomalous request');
-      t.ok(await adapter.get(fixture.boundaryIndex + 2),
-        'the committed suffix survives (clamped, not deleted)');
-
-      adapter.removeFrom(fixture.boundaryIndex + 1);
-      t.equal(adapter.committedTruncationBlockedCount, blockedBefore + 2,
-        'a second inclusive truncation inside the committed suffix trips');
-
-      adapter.removeFrom(fixture.boundaryIndex);
-      t.equal(adapter.committedTruncationBlockedCount, blockedBefore + 2,
-        'a truncation at or below the boundary clamps SILENTLY (no trip)');
-    } finally {
-      fixture.close();
-    }
-  });
 
 test('gap 3: install deletes stale target sidecars and boots healthy',
   async (t) => {

@@ -27,7 +27,10 @@ function createMutationHarness(partitionResult) {
     tableName: 'services',
     buildWhereClause: () => ({service_id: 'replica-1'}),
     buildUpdateData: (value) => ({raft_role: value}),
-    readValueFromCache: () => null,
+    readAuthoritativeRow: async () => ({
+      available: true,
+      row: {service_id: 'replica-1', raft_role: 'follower'},
+    }),
     cdcIntegrationService: {},
     controlPlaneSystemTableGateway: {
       submitMutation: async () => partitionResult,

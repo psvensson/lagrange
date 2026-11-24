@@ -216,7 +216,7 @@ function buildLeaderNodeMutationDeliveryOptions(
   context = {},
   publishingNodeId = null,
 ) {
-  const observedRow = context.authoritativeRow || context.cachedRow;
+  const observedRow = context.authoritativeRow;
   const critical = isCriticalLeaderPublication({
     observedLeaderNodeId: observedRow?.[COLUMN.LEADER_NODE_ID] ?? null,
     partitionId: owner.partitionId,
@@ -249,9 +249,8 @@ function createRoleMutationHelper(owner) {
         replica_id: owner.replicaId,
         node_id: owner.nodeId,
       };
-      // The merged cache may carry a newer local voter-ready seed, so prefer
-      // the authoritative observation when building the durable CAS guard.
-      const guardRow = context.authoritativeRow || context.cachedRow;
+      // The CAS guard comes exclusively from the authoritative observation.
+      const guardRow = context.authoritativeRow;
       if (
         typeof guardRow?.raft_role === 'string' &&
         guardRow.raft_role.length > 0
@@ -285,15 +284,6 @@ function createRoleMutationHelper(owner) {
     },
     readLiveValue: (expectedRole) =>
       resolveComparableLiveRole(expectedRole, owner.role),
-    readRowFromCache: (systemTableCache) =>
-      systemTableCache?.get?.(TABLES.SERVICES, owner.replicaId) || null,
-    readValueFromCache: (systemTableCache) => {
-      const cached = systemTableCache?.get?.(
-        TABLES.SERVICES,
-        owner.replicaId,
-      );
-      return readStateField(cached?.raft_role);
-    },
     isWriteReady: () => owner.isServicesLeaderAvailable(),
     systemTableCache: owner.systemTableCache,
     cdcIntegrationService: owner.cdcIntegrationService,
@@ -344,9 +334,9 @@ function createLeaderNodeMutationHelper(owner) {
     buildWhereClause: (_leaderNodeId, context = {}) => {
       const whereClause = {[COLUMN.PARTITION_ID]: owner.partitionId};
       // A locally won election can seed the merged cache before the durable
-      // write lands.  That seed is visibility, not storage proof, so the CAS
-      // must guard on the authoritative row when that read is available.
-      const guardRow = context.authoritativeRow || context.cachedRow;
+      // write lands. That seed is visibility, not storage proof, so the CAS
+      // guards exclusively on the authoritative row.
+      const guardRow = context.authoritativeRow;
       if (
         typeof guardRow?.[COLUMN.LEADER_NODE_ID] === 'string' &&
         guardRow[COLUMN.LEADER_NODE_ID].length > 0
@@ -374,19 +364,6 @@ function createLeaderNodeMutationHelper(owner) {
         [COLUMN.LEADER_NODE_ID]: leaderNodeId,
         ...(leaderTerm !== null ? {[COLUMN.LEADER_TERM]: leaderTerm} : {}),
       };
-    },
-    readRowFromCache: (systemTableCache) =>
-      systemTableCache?.get?.(TABLES.PARTITIONS, owner.partitionId) || null,
-    readValueFromCache: (systemTableCache) => {
-      const cached = systemTableCache?.get?.(
-        TABLES.PARTITIONS,
-        owner.partitionId,
-      );
-      const leaderTerm = resolvePublishedLeaderTerm(owner);
-      if (leaderTerm !== null && cached?.[COLUMN.LEADER_TERM] !== leaderTerm) {
-        return null;
-      }
-      return cached?.[COLUMN.LEADER_NODE_ID] || null;
     },
     prepareFlush: () => ({
       skip: !owner.isLeader,

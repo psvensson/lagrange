@@ -24,7 +24,6 @@ import Database from 'better-sqlite3';
 import {parse} from 'espree';
 import {KEYS} from 'eslint-visitor-keys';
 
-import {SQLiteLogAdapter} from '../../../src/raft/sqlite-log-adapter.js';
 import {
   DeterministicRaftRsCluster,
 } from './deterministic-raft-rs-cluster.js';
@@ -128,7 +127,11 @@ function restoreParameterNames() {
 // The caches a replica really keeps beside its Raft record, poisoned.
 function poisonEveryCacheInTheDatabase(dbFile) {
   const db = new Database(dbFile);
-  const adapter = new SQLiteLogAdapter(db);
+  db.exec(
+    'CREATE TABLE IF NOT EXISTS _raft_state (key TEXT PRIMARY KEY, value TEXT); ' +
+    'CREATE TABLE IF NOT EXISTS _raft_log ' +
+    '(log_index INTEGER PRIMARY KEY, term INTEGER NOT NULL, ' +
+    'command TEXT NOT NULL, timestamp INTEGER NOT NULL)');
   db.prepare(
     'INSERT OR REPLACE INTO _raft_state (key, value) VALUES (?, ?)')
     .run('currentTerm', POISON.TERM);
@@ -144,7 +147,6 @@ function poisonEveryCacheInTheDatabase(dbFile) {
     'status TEXT)');
   db.prepare('INSERT OR REPLACE INTO services VALUES (?, ?, ?)')
     .run(GROUP_ID, POISON.SERVICE_PEERS, 'SYNCING');
-  adapter.close();
   db.close();
 }
 

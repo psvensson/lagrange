@@ -19,8 +19,7 @@ transactions, and partition-local write kernels.
   application-transaction owner are the only partition consensus record: the
   one durable log, hard state and applied watermark. Committed `ConfState` is
   current consensus membership; service/cache metadata is not a second
-  membership authority. `SQLiteLogAdapter` is not constructed on the partition
-  path.
+  membership authority. The retired `SQLiteLogAdapter` has been deleted.
 - `partition-legacy-consensus-state.js` owns the startup refusal of a
   partition database that holds the retired backend's consensus state and no
   rs-raft record (`legacy_partition_consensus_state_detected`); such state is
