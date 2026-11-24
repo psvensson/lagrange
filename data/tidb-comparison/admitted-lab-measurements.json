@@ -5,7 +5,7 @@
   "sources": [
     {
       "path": "data/tidb-comparison/raw-observations.ndjson",
-      "sha256": "sha256:62d8b4f264d92abc4215553f4d8638715e673aa595d8758581b766bf8b4c4b74"
+      "sha256": "sha256:77cf4ac96aff465f117587270d3f899ea8ba5c6ce2bebed30c25737dc1e4cc66"
     },
     {
       "path": "data/tidb-comparison/forensic/raw-observations-86e795c44.ndjson",
@@ -4323,11 +4323,13 @@
       "evidence": {
         "runIds": [
           "bench-gcp-3sys-smoke-887007107-20261124-r001",
-          "bench-gcp-3sys-smoke-44eeb290a-20261124-r001"
+          "bench-gcp-3sys-smoke-44eeb290a-20261124-r001",
+          "bench-gcp-lagrange-smoke-77fe9bc52-20261124-r001"
         ],
         "rawObservationsDigests": [
           "sha256:bece660d8bda3ad63a21e8f731a0244fc1e75e5949fcaade5b91c6454bd848ab",
-          "sha256:05659368d82c9dcec291fbf4d84e8413820a556961df656fbe10e319c41f90a6"
+          "sha256:05659368d82c9dcec291fbf4d84e8413820a556961df656fbe10e319c41f90a6",
+          "sha256:a212af182a4a0ec58b6cfbddf003a630acc52076af37b949e5526f2b555082a1"
         ],
         "invalidatedRunIds": [
           "bench-live-20261101-b-r6-r001",

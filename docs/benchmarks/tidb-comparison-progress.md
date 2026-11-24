@@ -2,9 +2,9 @@
 
 # Lagrange and TiDB comparison history
 
-The history holds 68 records over 45 combinations. History records are forensic: none is admitted as a current result.
+The history holds 70 records over 47 combinations. History records are forensic: none is admitted as a current result.
 
-Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 26 entries; 10 of them name the defect ids behind the withdrawal and 9 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 25 of 68 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
+Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 26 entries; 10 of them name the defect ids behind the withdrawal and 9 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 27 of 70 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
 
 ![Lagrange and TiDB comparison history](tidb-comparison-progress.svg)
 
@@ -57,6 +57,8 @@ Definition: tidb-reference-scenarios.md#scenario-a-tidb-oltp-baseline. Latest re
 | 2026-11-24T07:46:02.310Z tidb-oltp-baseline/scenario-a-smoke-v1 [gcp-comparative-smoke] aee92bfd5e87 | invalid-measurement (forensic-record-not-admissible) |
 | 2026-11-24T10:23:32.217Z tidb-oltp-baseline/scenario-a-smoke-v1 [gcp-comparative-smoke] 4f4cedfa33c1 | invalid-measurement (forensic-record-not-admissible) |
 | 2026-11-24T10:41:57.132Z tidb-oltp-baseline/scenario-a-smoke-v1 [lab-tv-dator-3node-smoke] 7d78e043b47c | invalid-measurement (forensic-record-not-admissible) |
+| 2026-11-24T14:04:10.909Z tidb-oltp-baseline/scenario-a-smoke-v1 [lab-tv-dator-3node-smoke] a0a8fc341a01 | invalid-measurement (forensic-record-not-admissible) |
+| 2026-11-24T14:08:01.744Z tidb-oltp-baseline/scenario-a-smoke-v1 [gcp-comparative-smoke] ccd1d19926f0 | invalid-measurement (forensic-record-not-admissible) |
 
 ## Scenario B history
 
@@ -85,4 +87,4 @@ Latest record per combination.
 
 ## Sources
 
-- `data/tidb-comparison/progress-summary.json` sha256:ec1724b9f08643e177edb99baa9fb91b0259ea42895aa70130fe13a0d42ec4cf
+- `data/tidb-comparison/progress-summary.json` sha256:1b8cb7a656da3b2e56e50185215fe2a65250a94ae8eb6abd4470153bb75a37cf

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "totalRecords": 68,
-  "totalCombinations": 45,
+  "totalRecords": 70,
+  "totalCombinations": 47,
   "entries": [
     {
       "recordSha256": "ae6bd0386ece94749f2f78ab2bf5783d5bb3105a10df6b872bc4571eeece9024",
@@ -2173,15 +2173,109 @@
         ],
         "defectIds": []
       }
+    },
+    {
+      "recordSha256": "a0a8fc341a0198236f1889abc17d761ed0e8f2d502d9fe822f96b3a7d571325f",
+      "combinationSha256": "f2ba9a74773a1f93274fad14376fda99c40cee81571d02347aa848724c650af4",
+      "recordedAt": "2026-11-24T14:04:10.909Z",
+      "framework": {
+        "frameworkVersion": "0.4.0",
+        "frameworkCommitSha": "77fe9bc52fbd541b47ca31a0ddbb90795faecd2f",
+        "scenarioId": "tidb-oltp-baseline",
+        "profileId": "scenario-a-smoke-v1",
+        "profileSha256": "2062639f3bc903789f581664dbb7b0e90d72199fc2edc5c446fec092bb6d789b",
+        "datasetSha256": "95a4381c932e2f74d1e3808dab05206b446f9b62c315df78966ebc5d1d6b4c83",
+        "workloadPlanSha256": "9f3576072d1883165ccb152810ea09a35dae043c3b9b61a8e7f65e11c53f0f60",
+        "measurementPlanSha256": "99f0800fc906c3b3f662ed720f0a554020e455b86505ede941fd551fce749492",
+        "retryPolicyId": "scenario-a-retry-v2",
+        "openLoopProfileId": "scenario-a-open-loop-v2",
+        "comparisonView": "tv-dator-3node-smoke"
+      },
+      "systems": {
+        "lagrange": {
+          "present": true,
+          "version": "0.4.0",
+          "commitSha": "77fe9bc52fbd541b47ca31a0ddbb90795faecd2f"
+        },
+        "tidbTikv": {
+          "present": false,
+          "version": null,
+          "commitSha": null
+        }
+      },
+      "evidenceSource": {
+        "kind": "lab-tv-dator-3node-smoke",
+        "runId": "tv-dator-3node-smoke-77fe9bc52",
+        "issueNumber": null,
+        "url": null,
+        "artifactSha256": "a0624af922b35635ffaac10ca69f836f3a848ee98e6e109c0a6b2b195bfdc32e",
+        "artifactKind": "lab-tv-dator-receipt-json",
+        "sourcePath": "/mnt/data/peter/projects/lagrange-takeover-20261121/lab/lab-bench-77fe9bc52/tv-dator-3node-smoke/receipt.json"
+      },
+      "recordsForCombination": 1,
+      "admission": {
+        "status": "invalid-measurement",
+        "reasons": [
+          "forensic-record-not-admissible"
+        ],
+        "defectIds": []
+      }
+    },
+    {
+      "recordSha256": "ccd1d19926f0082df4777e1731b2efaa0b819036787fe5984adf145239447678",
+      "combinationSha256": "b11e674cb15d7f18fbb84c7d75c7598df724e1a07d52f49ef1832d31e770733f",
+      "recordedAt": "2026-11-24T14:08:01.744Z",
+      "framework": {
+        "frameworkVersion": "0.4.0",
+        "frameworkCommitSha": "77fe9bc52fbd541b47ca31a0ddbb90795faecd2f",
+        "scenarioId": "tidb-oltp-baseline",
+        "profileId": "scenario-a-smoke-v1",
+        "profileSha256": "2062639f3bc903789f581664dbb7b0e90d72199fc2edc5c446fec092bb6d789b",
+        "datasetSha256": "95a4381c932e2f74d1e3808dab05206b446f9b62c315df78966ebc5d1d6b4c83",
+        "workloadPlanSha256": "9f3576072d1883165ccb152810ea09a35dae043c3b9b61a8e7f65e11c53f0f60",
+        "measurementPlanSha256": "99f0800fc906c3b3f662ed720f0a554020e455b86505ede941fd551fce749492",
+        "retryPolicyId": "scenario-a-retry-v2",
+        "openLoopProfileId": "scenario-a-open-loop-v2",
+        "comparisonView": "gcp-smoke"
+      },
+      "systems": {
+        "lagrange": {
+          "present": true,
+          "version": "0.4.0",
+          "commitSha": "77fe9bc52fbd541b47ca31a0ddbb90795faecd2f"
+        },
+        "tidbTikv": {
+          "present": false,
+          "version": null,
+          "commitSha": null
+        }
+      },
+      "evidenceSource": {
+        "kind": "gcp-comparative-smoke",
+        "runId": "bench-gcp-lagrange-smoke-77fe9bc52-20261124-r001",
+        "issueNumber": null,
+        "url": null,
+        "artifactSha256": "22763c6c066da51ed4a740f5956b7eeabbcffa2e84a3fd54cb375bc7a7579081",
+        "artifactKind": "raw-observation-run-record",
+        "sourcePath": "data/tidb-comparison/raw-observations.ndjson#bench-gcp-lagrange-smoke-77fe9bc52-20261124-r001"
+      },
+      "recordsForCombination": 1,
+      "admission": {
+        "status": "invalid-measurement",
+        "reasons": [
+          "forensic-record-not-admissible"
+        ],
+        "defectIds": []
+      }
     }
   ],
   "withdrawal": {
     "ledgerEntries": 26,
     "entriesWithDefectIds": 10,
     "entriesWithRecordIds": 9,
-    "historyRecords": 68,
-    "historyRecordsWithoutEntry": 25,
+    "historyRecords": 70,
+    "historyRecordsWithoutEntry": 27,
     "admissionRule": "forensic-record-not-admissible"
   },
-  "summarySha256": "ec1724b9f08643e177edb99baa9fb91b0259ea42895aa70130fe13a0d42ec4cf"
+  "summarySha256": "1b8cb7a656da3b2e56e50185215fe2a65250a94ae8eb6abd4470153bb75a37cf"
 }

@@ -4,7 +4,7 @@
 
 PostgreSQL variants: single primary, and a primary with two streaming standbys under synchronous_standby_names, each with client-side SQL or a PL/pgSQL function.
 
-Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 26 entries; 10 of them name the defect ids behind the withdrawal and 9 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 25 of 68 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
+Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 26 entries; 10 of them name the defect ids behind the withdrawal and 9 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 27 of 70 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
 
 ![PostgreSQL comparison](postgresql-comparison-progress.svg)
 
@@ -65,6 +65,6 @@ PostgreSQL variants as the deployer starts them, with Lagrange and TiDB.
 
 ## Sources
 
-- `data/tidb-comparison/raw-observations.ndjson` sha256:62d8b4f264d92abc4215553f4d8638715e673aa595d8758581b766bf8b4c4b74
+- `data/tidb-comparison/raw-observations.ndjson` sha256:77cf4ac96aff465f117587270d3f899ea8ba5c6ce2bebed30c25737dc1e4cc66
 - `data/tidb-comparison/forensic/raw-observations-86e795c44.ndjson` sha256:79698d1b6cd709d227c9712e75c3471243ee99f473212c495ad15c6c1e96f32e
 - `data/tidb-comparison/invalidations.ndjson` sha256:58fa2ce6b61188c9ccde878db0f19efee0425cb665cbd5317a26708c5bbf898f
