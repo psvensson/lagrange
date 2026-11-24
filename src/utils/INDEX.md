@@ -9,7 +9,7 @@ documentClass: generated
 
 - [assert.js](assert.js) - Assert a critical dependency is available. (importers: hub)
 - [base-error.js](base-error.js) - BaseError - Foundation class for custom errors. (importers: many)
-- [canonical-json-data.js](canonical-json-data.js) - Intrinsics-independent canonical JSON data: admission predicates, index-based collection processing, owned... (importers: many)
+- [canonical-json-data.js](canonical-json-data.js) - Intrinsics-independent canonical JSON data: admission predicates, index-based collection processing, owned... (importers: hub)
 - [cause-id.js](cause-id.js) - No leading comment; first export: getOrCreateCauseId. (importers: many)
 - [certification-evidence-record.js](certification-evidence-record.js) - The distributed certification archive's reader. (importers: few)
 - [correlation.js](correlation.js) - HTTP header name for correlation ID propagation. (importers: many)

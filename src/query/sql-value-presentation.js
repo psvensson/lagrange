@@ -372,10 +372,10 @@ function readOwnOrLazyRows(source) {
     return ownDataRows;
   }
   const lazyGetter = readOwnDataValue(source, LAZY_ROWS_GETTER_SYMBOL);
-  if (typeof lazyGetter === LOCAL_STR_FUNCTION) {
-    return reflectApply(lazyGetter, source, []);
+  if (typeof lazyGetter !== LOCAL_STR_FUNCTION) {
+    return undefined;
   }
-  return undefined;
+  return reflectApply(lazyGetter, source, []);
 }
 
 function copyResultPreservingLazyRows(source) {
@@ -523,7 +523,6 @@ function cloneResultWithMetadata(sourceResult, extraFields = undefined) {
 }
 
 export {
-  LAZY_ROWS_GETTER_SYMBOL,
   PRESENTED_SAFE_INTEGERS_SYMBOL,
   RESIDENT_RESULT_BYTES_SYMBOL,
   attachLazyPresentedRows,

@@ -23,7 +23,7 @@ documentClass: generated
 - [call-cell-routing-contract.js](call-cell-routing-contract.js) - Whether a failure proves that no guest code ran for the invocation: a typed request/placement refusal the owner... (importers: hub)
 - [call-cell-routing-surface.js](call-cell-routing-surface.js) - No leading comment; first export: createCallCellRoutingSurface. (importers: few)
 - [call-cell-statement-adapter.js](call-cell-statement-adapter.js) - No leading comment; first export: CallCellStatementAdapter. (importers: few)
-- [call-direct-invocation-replay.js](call-direct-invocation-replay.js) - Direct public CALL BINDING identity, durable admission record, and replay owner. (importers: one)
+- [call-direct-invocation-replay.js](call-direct-invocation-replay.js) - Direct public CALL BINDING identity, durable admission record, and replay owner. (importers: few)
 - [call-partition-topology.js](call-partition-topology.js) - Shard-host topology resolution for data-local call dispatch (sole owner of the call-path view onto partition ownership). (importers: few)
 - [call-selector-parameter-contract.js](call-selector-parameter-contract.js) - Canonical owner of Call Cell selector parameter schema declaration, SQL placeholder correspondence, and runtime... (importers: many)
 - [call-shard-dispatch-pool.js](call-shard-dispatch-pool.js) - Bounded shard-dispatch pool - the named concurrency owner for the call-cell invocation path (brief:... (importers: few)

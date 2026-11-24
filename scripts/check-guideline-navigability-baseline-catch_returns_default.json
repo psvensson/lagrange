@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-21T23:05:05.704Z",
-  "rawViolationCount": 367,
+  "generatedAt": "2026-11-24T17:29:03.940Z",
+  "rawViolationCount": 357,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-diagnostic-loss-accounting.js",
@@ -212,7 +212,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-backfill-merge-and-status.js",
-      "line": 281,
+      "line": 278,
       "column": 6,
       "functionName": "queryBackfillReplicaAddress",
       "kind": "catch_returns_default",
@@ -230,7 +230,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-ready-signal-readiness.js",
-      "line": 503,
+      "line": 504,
       "column": 6,
       "functionName": "hydrateCdcPropagatedTablesAfterSubscription",
       "kind": "catch_returns_default",
@@ -266,7 +266,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/bootstrap-join-admission-owner.js",
-      "line": 464,
+      "line": 463,
       "column": 6,
       "functionName": "readAuthoritativeNodeRow",
       "kind": "catch_returns_default",
@@ -356,7 +356,7 @@
     },
     {
       "filePath": "src/bootstrap/owners/startup-runtime-handoff-owner.js",
-      "line": 143,
+      "line": 115,
       "column": 12,
       "functionName": "<anonymous>",
       "kind": "catch_returns_default",
@@ -383,7 +383,7 @@
     },
     {
       "filePath": "src/bootstrap/rejoin-hints-durable-evidence.js",
-      "line": 94,
+      "line": 96,
       "column": 4,
       "functionName": "statReplicaDbPath",
       "kind": "catch_returns_default",
@@ -392,7 +392,7 @@
     },
     {
       "filePath": "src/bootstrap/rejoin-hints-durable-evidence.js",
-      "line": 105,
+      "line": 107,
       "column": 4,
       "functionName": "collectPartitionReplicaDbPaths",
       "kind": "catch_returns_default",
@@ -401,7 +401,7 @@
     },
     {
       "filePath": "src/bootstrap/rejoin-hints-durable-evidence.js",
-      "line": 135,
+      "line": 137,
       "column": 4,
       "functionName": "readPartitionsDirectoryEntries",
       "kind": "catch_returns_default",
@@ -410,7 +410,7 @@
     },
     {
       "filePath": "src/bootstrap/rejoin-hints-durable-evidence.js",
-      "line": 188,
+      "line": 190,
       "column": 4,
       "functionName": "inspectServicesReplicaDirectory",
       "kind": "catch_returns_default",
@@ -419,7 +419,7 @@
     },
     {
       "filePath": "src/bootstrap/rejoin-hints-durable-evidence.js",
-      "line": 266,
+      "line": 268,
       "column": 4,
       "functionName": "readServicesRowsFromReplicaDbOutcome",
       "kind": "catch_returns_default",
@@ -428,7 +428,7 @@
     },
     {
       "filePath": "src/bootstrap/rejoin-hints-durable-evidence.js",
-      "line": 367,
+      "line": 369,
       "column": 4,
       "functionName": "readNodesRowsFromReplicaDbOutcome",
       "kind": "catch_returns_default",
@@ -437,7 +437,7 @@
     },
     {
       "filePath": "src/bootstrap/rejoin-hints.js",
-      "line": 733,
+      "line": 759,
       "column": 6,
       "functionName": "persistSnapshot",
       "kind": "catch_returns_default",
@@ -455,7 +455,7 @@
     },
     {
       "filePath": "src/bootstrap/shared/control-plane-setup.js",
-      "line": 449,
+      "line": 464,
       "column": 10,
       "functionName": "getMembers",
       "kind": "catch_returns_default",
@@ -464,7 +464,7 @@
     },
     {
       "filePath": "src/bootstrap/shared/control-plane-setup.js",
-      "line": 523,
+      "line": 538,
       "column": 10,
       "functionName": "isNodeLifecycleReady",
       "kind": "catch_returns_default",
@@ -473,7 +473,7 @@
     },
     {
       "filePath": "src/bootstrap/shared/node-registration-owner-durable-rejoin-methods.js",
-      "line": 287,
+      "line": 253,
       "column": 6,
       "functionName": "resolveClusterIncarnationFence",
       "kind": "catch_returns_default",
@@ -482,7 +482,7 @@
     },
     {
       "filePath": "src/bootstrap/shared/node-registration-owner-publication-methods.js",
-      "line": 94,
+      "line": 97,
       "column": 4,
       "functionName": "readOwnDataProperty",
       "kind": "catch_returns_default",
@@ -491,7 +491,7 @@
     },
     {
       "filePath": "src/cache/system-table-cache-row-merge.js",
-      "line": 562,
+      "line": 531,
       "column": 4,
       "functionName": "tryParseHLCTimestamp",
       "kind": "catch_returns_default",
@@ -599,7 +599,7 @@
     },
     {
       "filePath": "src/cli/service-pipeline-command.js",
-      "line": 538,
+      "line": 540,
       "column": 6,
       "functionName": "resolveDeployRegistration",
       "kind": "catch_returns_default",
@@ -608,7 +608,7 @@
     },
     {
       "filePath": "src/cli/service-pipeline-command.js",
-      "line": 688,
+      "line": 690,
       "column": 4,
       "functionName": "readServiceNameFromReceipt",
       "kind": "catch_returns_default",
@@ -662,7 +662,7 @@
     },
     {
       "filePath": "src/control-plane/authoritative-node-evidence-reconciler.js",
-      "line": 492,
+      "line": 502,
       "column": 10,
       "functionName": "<anonymous>",
       "kind": "catch_returns_default",
@@ -671,7 +671,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-mutation-outcome-classifier.js",
-      "line": 129,
+      "line": 150,
       "column": 4,
       "functionName": "isPlainDataRecord",
       "kind": "catch_returns_default",
@@ -680,7 +680,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-mutation-outcome-classifier.js",
-      "line": 138,
+      "line": 159,
       "column": 4,
       "functionName": "readOwnDataProperty",
       "kind": "catch_returns_default",
@@ -770,7 +770,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reconcile.js",
-      "line": 119,
+      "line": 118,
       "column": 8,
       "functionName": "<anonymous>",
       "kind": "catch_returns_default",
@@ -779,7 +779,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reconcile.js",
-      "line": 539,
+      "line": 570,
       "column": 6,
       "functionName": "driveOwnerMembershipReconcile",
       "kind": "catch_returns_default",
@@ -788,7 +788,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-planning-evidence.js",
-      "line": 201,
+      "line": 202,
       "column": 6,
       "functionName": "normalizeReplicaOperationView",
       "kind": "catch_returns_default",
@@ -797,7 +797,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-planning-evidence.js",
-      "line": 231,
+      "line": 232,
       "column": 4,
       "functionName": "normalizeReplicaOperationView",
       "kind": "catch_returns_default",
@@ -851,7 +851,7 @@
     },
     {
       "filePath": "src/control-plane/owners/endpoint-incarnation-authority.js",
-      "line": 162,
+      "line": 164,
       "column": 4,
       "functionName": "attemptWrite",
       "kind": "catch_returns_default",
@@ -860,7 +860,7 @@
     },
     {
       "filePath": "src/control-plane/owners/node-registration-incarnation-write.js",
-      "line": 135,
+      "line": 397,
       "column": 4,
       "functionName": "attempt",
       "kind": "catch_returns_default",
@@ -959,7 +959,7 @@
     },
     {
       "filePath": "src/control-plane/readiness-planning-semantic-currency-methods.js",
-      "line": 175,
+      "line": 171,
       "column": 6,
       "functionName": "readFeedbackSemanticSignature",
       "kind": "catch_returns_default",
@@ -968,7 +968,7 @@
     },
     {
       "filePath": "src/control-plane/readiness-planning-semantic-currency-methods.js",
-      "line": 290,
+      "line": 285,
       "column": 6,
       "functionName": "refreshLivenessSemanticIdentities",
       "kind": "catch_returns_default",
@@ -977,7 +977,7 @@
     },
     {
       "filePath": "src/control-plane/readiness-planning-semantic-currency-methods.js",
-      "line": 303,
+      "line": 298,
       "column": 6,
       "functionName": "refreshCapacitySemanticIdentity",
       "kind": "catch_returns_default",
@@ -1058,7 +1058,7 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-replay-health-readiness.js",
-      "line": 651,
+      "line": 661,
       "column": 6,
       "functionName": "acknowledgeMembershipPublicationForNode",
       "kind": "catch_returns_default",
@@ -1130,7 +1130,7 @@
     },
     {
       "filePath": "src/entrypoint-runtime-join-decision.js",
-      "line": 254,
+      "line": 250,
       "column": 4,
       "functionName": "probeAutoRejoinPeerPath",
       "kind": "catch_returns_default",
@@ -1165,28 +1165,10 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/function/function-query-executor.js",
-      "line": 335,
-      "column": 6,
-      "functionName": "executeQueryThenInvoke",
-      "kind": "catch_returns_default",
-      "reason": "catch that returns a default; surface a typed refusal instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/hlc/hlc-timestamp.js",
       "line": 74,
       "column": 6,
       "functionName": "tryFromString",
-      "kind": "catch_returns_default",
-      "reason": "catch that returns a default; surface a typed refusal instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/live-query/live-query-group.js",
-      "line": 587,
-      "column": 6,
-      "functionName": "refreshQueryResult",
       "kind": "catch_returns_default",
       "reason": "catch that returns a default; surface a typed refusal instead",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -1265,7 +1247,7 @@
     },
     {
       "filePath": "src/message-group/message-group-forwarding-owner-target-methods.js",
-      "line": 99,
+      "line": 97,
       "column": 8,
       "functionName": "resolveForwardTargetNodeId",
       "kind": "catch_returns_default",
@@ -1355,7 +1337,7 @@
     },
     {
       "filePath": "src/node/participant-release-client.js",
-      "line": 28,
+      "line": 29,
       "column": 4,
       "functionName": "releaseNodeOfAddress",
       "kind": "catch_returns_default",
@@ -1363,8 +1345,17 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
+      "filePath": "src/node/replica-cleanup-tombstone-owner.js",
+      "line": 120,
+      "column": 4,
+      "functionName": "observeScopedLearnerCleanup",
+      "kind": "catch_returns_default",
+      "reason": "catch that returns a default; surface a typed refusal instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
       "filePath": "src/node/replica-handler-create-status-methods.js",
-      "line": 305,
+      "line": 300,
       "column": 8,
       "functionName": "persistReplicaCreateInitialStatus",
       "kind": "catch_returns_default",
@@ -1381,8 +1372,17 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
+      "filePath": "src/node/replica-handler-learner-retirement-authority.js",
+      "line": 127,
+      "column": 4,
+      "functionName": "handOffAbsentLearnerCleanup",
+      "kind": "catch_returns_default",
+      "reason": "catch that returns a default; surface a typed refusal instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
       "filePath": "src/node/replica-handler-participant-release.js",
-      "line": 352,
+      "line": 368,
       "column": 4,
       "functionName": "canFastPathPausedResume",
       "kind": "catch_returns_default",
@@ -1391,7 +1391,7 @@
     },
     {
       "filePath": "src/node/replica-handler-remove-execution-methods.js",
-      "line": 569,
+      "line": 545,
       "column": 8,
       "functionName": "publishReplicaRetiringRow",
       "kind": "catch_returns_default",
@@ -1400,7 +1400,7 @@
     },
     {
       "filePath": "src/node/replica-handler-removed-cleanup-sweep.js",
-      "line": 71,
+      "line": 69,
       "column": 4,
       "functionName": "listOnDiskReplicaDbFiles",
       "kind": "catch_returns_default",
@@ -1409,7 +1409,7 @@
     },
     {
       "filePath": "src/node/replica-handler-removed-cleanup-sweep.js",
-      "line": 84,
+      "line": 82,
       "column": 6,
       "functionName": "listOnDiskReplicaDbFiles",
       "kind": "catch_returns_default",
@@ -1525,71 +1525,8 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
-      "filePath": "src/partition/partition-locking-read-reservation.js",
-      "line": 123,
-      "column": 4,
-      "functionName": "ensureTableInitialized",
-      "kind": "catch_returns_default",
-      "reason": "catch that returns a default; surface a typed refusal instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-locking-read-reservation.js",
-      "line": 204,
-      "column": 4,
-      "functionName": "checkDbReservation",
-      "kind": "catch_returns_default",
-      "reason": "catch that returns a default; surface a typed refusal instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-locking-read-reservation.js",
-      "line": 219,
-      "column": 6,
-      "functionName": "checkDbReservation",
-      "kind": "catch_returns_default",
-      "reason": "catch that returns a default; surface a typed refusal instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-locking-read-reservation.js",
-      "line": 251,
-      "column": 4,
-      "functionName": "insertDbReservation",
-      "kind": "catch_returns_default",
-      "reason": "catch that returns a default; surface a typed refusal instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-locking-read-reservation.js",
-      "line": 546,
-      "column": 4,
-      "functionName": "releaseDbTransactionReservations",
-      "kind": "catch_returns_default",
-      "reason": "catch that returns a default; surface a typed refusal instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-locking-read-reservation.js",
-      "line": 620,
-      "column": 4,
-      "functionName": "releaseDbSessionReservations",
-      "kind": "catch_returns_default",
-      "reason": "catch that returns a default; surface a typed refusal instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-locking-read-reservation.js",
-      "line": 694,
-      "column": 4,
-      "functionName": "sweepExpiredReservations",
-      "kind": "catch_returns_default",
-      "reason": "catch that returns a default; surface a typed refusal instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
       "filePath": "src/partition/partition-participant-release-contract.js",
-      "line": 111,
+      "line": 113,
       "column": 4,
       "functionName": "rowidValid",
       "kind": "catch_returns_default",
@@ -1598,7 +1535,7 @@
     },
     {
       "filePath": "src/partition/partition-participant-transaction-bytes.js",
-      "line": 108,
+      "line": 124,
       "column": 4,
       "functionName": "parsedJsonOf",
       "kind": "catch_returns_default",
@@ -1607,7 +1544,7 @@
     },
     {
       "filePath": "src/partition/partition-participant-transaction-request.js",
-      "line": 693,
+      "line": 715,
       "column": 4,
       "functionName": "answerParticipantSessionQuery",
       "kind": "catch_returns_default",
@@ -1634,7 +1571,7 @@
     },
     {
       "filePath": "src/partition/partition-service-cdc-stream-base.js",
-      "line": 649,
+      "line": 674,
       "column": 6,
       "functionName": "calculatePartitionSize",
       "kind": "catch_returns_default",
@@ -1643,7 +1580,7 @@
     },
     {
       "filePath": "src/partition/partition-service-entry-apply-base.js",
-      "line": 467,
+      "line": 331,
       "column": 6,
       "functionName": "handleTransactionMessage",
       "kind": "catch_returns_default",
@@ -1670,7 +1607,7 @@
     },
     {
       "filePath": "src/partition/partition-service-raft-init-base.js",
-      "line": 96,
+      "line": 103,
       "column": 6,
       "functionName": "resolveCurrentTermSafe",
       "kind": "catch_returns_default",
@@ -1679,7 +1616,7 @@
     },
     {
       "filePath": "src/partition/partition-service-raft-peer-cache-reconciliation.js",
-      "line": 60,
+      "line": 61,
       "column": 4,
       "functionName": "addressMatchesReplica",
       "kind": "catch_returns_default",
@@ -1733,7 +1670,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-coordinator.js",
-      "line": 263,
+      "line": 305,
       "column": 6,
       "functionName": "beginOwned",
       "kind": "catch_returns_default",
@@ -1742,7 +1679,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-coordinator.js",
-      "line": 304,
+      "line": 356,
       "column": 8,
       "functionName": "registerUniqueTransaction",
       "kind": "catch_returns_default",
@@ -1778,7 +1715,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-write-coordinator.js",
-      "line": 450,
+      "line": 489,
       "column": 6,
       "functionName": "executePartitionStatement",
       "kind": "catch_returns_default",
@@ -1814,7 +1751,7 @@
     },
     {
       "filePath": "src/query/partition-resolver-composite.js",
-      "line": 407,
+      "line": 408,
       "column": 4,
       "functionName": "findTableInCache",
       "kind": "catch_returns_default",
@@ -1823,7 +1760,7 @@
     },
     {
       "filePath": "src/query/query-executor-partition-routing-snapshot.js",
-      "line": 510,
+      "line": 535,
       "column": 10,
       "functionName": "<anonymous>",
       "kind": "catch_returns_default",
@@ -1850,7 +1787,7 @@
     },
     {
       "filePath": "src/query/runtime-replica-state-projection.js",
-      "line": 95,
+      "line": 88,
       "column": 4,
       "functionName": "submitRuntimeReplicaInsert",
       "kind": "catch_returns_default",
@@ -1859,7 +1796,7 @@
     },
     {
       "filePath": "src/query/runtime-replica-state-projection.js",
-      "line": 125,
+      "line": 104,
       "column": 4,
       "functionName": "observeRuntimeReplicaService",
       "kind": "catch_returns_default",
@@ -1877,16 +1814,7 @@
     },
     {
       "filePath": "src/query/sql-locking-read-execution.js",
-      "line": 67,
-      "column": 4,
-      "functionName": "resolvePartitionDb",
-      "kind": "catch_returns_default",
-      "reason": "catch that returns a default; surface a typed refusal instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/query/sql-locking-read-execution.js",
-      "line": 267,
+      "line": 232,
       "column": 4,
       "functionName": "tryResolveCanonicalPkTuples",
       "kind": "catch_returns_default",
@@ -1895,7 +1823,7 @@
     },
     {
       "filePath": "src/query/sql-locking-read-execution.js",
-      "line": 460,
+      "line": 496,
       "column": 4,
       "functionName": "checkQueriedCandidatesConflict",
       "kind": "catch_returns_default",
@@ -1922,7 +1850,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-request-dispatch.js",
-      "line": 247,
+      "line": 260,
       "column": 6,
       "functionName": "checkPlanRequestStatement",
       "kind": "catch_returns_default",
@@ -1931,7 +1859,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-statement-execution.js",
-      "line": 293,
+      "line": 314,
       "column": 6,
       "functionName": "executeQuery",
       "kind": "catch_returns_default",
@@ -1940,7 +1868,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-statement-execution.js",
-      "line": 558,
+      "line": 587,
       "column": 6,
       "functionName": "executeExplainDistributed",
       "kind": "catch_returns_default",
@@ -1958,7 +1886,7 @@
     },
     {
       "filePath": "src/query/sql-select-execution-helpers.js",
-      "line": 25,
+      "line": 40,
       "column": 4,
       "functionName": "observeConditionWait",
       "kind": "catch_returns_default",
@@ -1985,7 +1913,7 @@
     },
     {
       "filePath": "src/raft/authoritative-row-mutation-helper.js",
-      "line": 517,
+      "line": 475,
       "column": 6,
       "functionName": "probeAuthoritativeRow",
       "kind": "catch_returns_default",
@@ -1994,7 +1922,7 @@
     },
     {
       "filePath": "src/raft/authoritative-row-mutation-vocabulary.js",
-      "line": 87,
+      "line": 92,
       "column": 4,
       "functionName": "readOwnRetryAfterMs",
       "kind": "catch_returns_default",
@@ -2003,7 +1931,7 @@
     },
     {
       "filePath": "src/raft/raft-committed-membership-stamp.js",
-      "line": 151,
+      "line": 158,
       "column": 4,
       "functionName": "isCanonicalPeerId",
       "kind": "catch_returns_default",
@@ -2012,7 +1940,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-committed-membership-read.js",
-      "line": 211,
+      "line": 302,
       "column": 4,
       "functionName": "normalizeCommittedLearnerRead",
       "kind": "catch_returns_default",
@@ -2021,18 +1949,9 @@
     },
     {
       "filePath": "src/raft/raft-rs-group-membership-admission.js",
-      "line": 330,
+      "line": 421,
       "column": 4,
       "functionName": "liveDelivery",
-      "kind": "catch_returns_default",
-      "reason": "catch that returns a default; surface a typed refusal instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/raft/raft-rs-ingress.js",
-      "line": 182,
-      "column": 4,
-      "functionName": "isPortProposal",
       "kind": "catch_returns_default",
       "reason": "catch that returns a default; surface a typed refusal instead",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -2057,7 +1976,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 306,
+      "line": 215,
       "column": 4,
       "functionName": "readOpeningRecord",
       "kind": "catch_returns_default",
@@ -2066,7 +1985,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 540,
+      "line": 460,
       "column": 4,
       "functionName": "persistInitialBootstrapState",
       "kind": "catch_returns_default",
@@ -2075,7 +1994,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 1175,
+      "line": 1110,
       "column": 4,
       "functionName": "resolveEntryConfStateOrFailure",
       "kind": "catch_returns_default",
@@ -2084,7 +2003,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 1342,
+      "line": 1295,
       "column": 4,
       "functionName": "processReadyCycle",
       "kind": "catch_returns_default",
@@ -2093,7 +2012,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-runtime-owner.js",
-      "line": 1402,
+      "line": 1364,
       "column": 4,
       "functionName": "semanticLeaderIdentity",
       "kind": "catch_returns_default",
@@ -2102,7 +2021,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-snapshot-witness.js",
-      "line": 71,
+      "line": 76,
       "column": 4,
       "functionName": "decodeSnapshotWitnessMaxHlc",
       "kind": "catch_returns_default",
@@ -2111,7 +2030,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-snapshot-witness.js",
-      "line": 171,
+      "line": 193,
       "column": 4,
       "functionName": "extractLogRowHlc",
       "kind": "catch_returns_default",
@@ -2120,7 +2039,7 @@
     },
     {
       "filePath": "src/raft/raft-rs-status-observation.js",
-      "line": 45,
+      "line": 116,
       "column": 4,
       "functionName": "resolvePeerObservation",
       "kind": "catch_returns_default",
@@ -2129,7 +2048,7 @@
     },
     {
       "filePath": "src/raft/snapshot-catchup.js",
-      "line": 181,
+      "line": 180,
       "column": 4,
       "functionName": "resolveFollowerNodeId",
       "kind": "catch_returns_default",
@@ -2147,16 +2066,7 @@
     },
     {
       "filePath": "src/raft/snapshot-checkpoint-store.js",
-      "line": 171,
-      "column": 4,
-      "functionName": "parseEntryData",
-      "kind": "catch_returns_default",
-      "reason": "catch that returns a default; surface a typed refusal instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/raft/snapshot-checkpoint-store.js",
-      "line": 208,
+      "line": 71,
       "column": 4,
       "functionName": "readRaftRsRecord",
       "kind": "catch_returns_default",
@@ -2165,7 +2075,7 @@
     },
     {
       "filePath": "src/raft/snapshot-checkpoint-store.js",
-      "line": 216,
+      "line": 79,
       "column": 4,
       "functionName": "readRaftRsReservations",
       "kind": "catch_returns_default",
@@ -2174,7 +2084,7 @@
     },
     {
       "filePath": "src/raft/snapshot-checkpoint-store.js",
-      "line": 438,
+      "line": 272,
       "column": 4,
       "functionName": "readDescriptorFile",
       "kind": "catch_returns_default",
@@ -2192,7 +2102,7 @@
     },
     {
       "filePath": "src/raft/snapshot-install.js",
-      "line": 157,
+      "line": 138,
       "column": 4,
       "functionName": "stagedInstallBindingMatches",
       "kind": "catch_returns_default",
@@ -2201,16 +2111,7 @@
     },
     {
       "filePath": "src/raft/snapshot-install.js",
-      "line": 170,
-      "column": 4,
-      "functionName": "stagingHasInstallBinding",
-      "kind": "catch_returns_default",
-      "reason": "catch that returns a default; surface a typed refusal instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/raft/snapshot-install.js",
-      "line": 414,
+      "line": 316,
       "column": 4,
       "functionName": "raftRsInstalledImageMatches",
       "kind": "catch_returns_default",
@@ -2318,7 +2219,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-coordinator-created-handoff-scheduling.js",
-      "line": 120,
+      "line": 121,
       "column": 4,
       "functionName": "readHandoffStepBound",
       "kind": "catch_returns_default",
@@ -2335,8 +2236,17 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
+      "filePath": "src/rebalancer/operation-workflow-executor-outcome-redrive.js",
+      "line": 59,
+      "column": 8,
+      "functionName": "redriveExecutorOutcomeReconcile",
+      "kind": "catch_returns_default",
+      "reason": "catch that returns a default; surface a typed refusal instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
       "filePath": "src/rebalancer/operation-workflow-gate-operation-row-repair.js",
-      "line": 46,
+      "line": 18,
       "column": 4,
       "functionName": "repairOperationRowForGateRepairedReservation",
       "kind": "catch_returns_default",
@@ -2344,8 +2254,17 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
+      "filePath": "src/rebalancer/operation-workflow-placement-learner-retirement.js",
+      "line": 77,
+      "column": 4,
+      "functionName": "readSupersededDispatchReplay",
+      "kind": "catch_returns_default",
+      "reason": "catch that returns a default; surface a typed refusal instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
       "filePath": "src/rebalancer/operation-workflow-recovery-reconcile.js",
-      "line": 579,
+      "line": 591,
       "column": 6,
       "functionName": "persistReplaceRemovalIntent",
       "kind": "catch_returns_default",
@@ -2354,7 +2273,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-timeout.js",
-      "line": 498,
+      "line": 471,
       "column": 6,
       "functionName": "shouldReconcileOrphanedOperation",
       "kind": "catch_returns_default",
@@ -2362,8 +2281,17 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
+      "filePath": "src/rebalancer/operation-workflow-reentry-authority.js",
+      "line": 26,
+      "column": 4,
+      "functionName": "matchesRemoteReentryOperation",
+      "kind": "catch_returns_default",
+      "reason": "catch that returns a default; surface a typed refusal instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
       "filePath": "src/rebalancer/operation-workflow-replace-terminal-admission.js",
-      "line": 292,
+      "line": 393,
       "column": 4,
       "functionName": "deliverClaimFailedCreateCleanup",
       "kind": "catch_returns_default",
@@ -2380,8 +2308,17 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
+      "filePath": "src/rebalancer/operation-workflow-terminal-reservation-release.js",
+      "line": 9,
+      "column": 4,
+      "functionName": "isTerminalTransitionOutcomeSettled",
+      "kind": "catch_returns_default",
+      "reason": "catch that returns a default; surface a typed refusal instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
       "filePath": "src/rebalancer/operation-workflow-terminal-transition-repair.js",
-      "line": 98,
+      "line": 103,
       "column": 4,
       "functionName": "deliverFailedCreateCleanupRelease",
       "kind": "catch_returns_default",
@@ -2398,6 +2335,15 @@
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     },
     {
+      "filePath": "src/rebalancer/priority-recovery-observation.js",
+      "line": 88,
+      "column": 4,
+      "functionName": "selectAuthoritativePartitionOperations",
+      "kind": "catch_returns_default",
+      "reason": "catch that returns a default; surface a typed refusal instead",
+      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
+    },
+    {
       "filePath": "src/rebalancer/provisioning-admission-policy.js",
       "line": 315,
       "column": 6,
@@ -2408,7 +2354,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js",
-      "line": 521,
+      "line": 525,
       "column": 8,
       "functionName": "isOperationLedgerQuorumSpreadAuthoritativelyConfirmed",
       "kind": "catch_returns_default",
@@ -2417,7 +2363,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-operation-creation-support.js",
-      "line": 75,
+      "line": 720,
       "column": 6,
       "functionName": "runCoordinatorCreatedOperationProgressStep",
       "kind": "catch_returns_default",
@@ -2426,7 +2372,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-operation-creation.js",
-      "line": 304,
+      "line": 292,
       "column": 6,
       "functionName": "resolveProvisioningLedgerInterlockDeferral",
       "kind": "catch_returns_default",
@@ -2435,7 +2381,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-topology-guard-methods.js",
-      "line": 302,
+      "line": 110,
       "column": 6,
       "functionName": "resolveTopologyGuardTargetReplicaCount",
       "kind": "catch_returns_default",
@@ -2579,7 +2525,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-mutation-update-methods.js",
-      "line": 339,
+      "line": 456,
       "column": 8,
       "functionName": "touchOperationOwnerLease",
       "kind": "catch_returns_default",
@@ -2660,27 +2606,9 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 558,
+      "line": 513,
       "column": 6,
       "functionName": "getReplicaOperationStepsHistory",
-      "kind": "catch_returns_default",
-      "reason": "catch that returns a default; surface a typed refusal instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/user-table-leader-placement-cure.js",
-      "line": 410,
-      "column": 4,
-      "functionName": "demoteLocalSourceLeader",
-      "kind": "catch_returns_default",
-      "reason": "catch that returns a default; surface a typed refusal instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/rebalancer/user-table-leader-placement-cure.js",
-      "line": 447,
-      "column": 4,
-      "functionName": "dispatchLeaderHandoff",
       "kind": "catch_returns_default",
       "reason": "catch that returns a default; surface a typed refusal instead",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -2822,7 +2750,7 @@
     },
     {
       "filePath": "src/runtime/pgwire-protocol-handler.js",
-      "line": 434,
+      "line": 435,
       "column": 6,
       "functionName": "_completeAuthentication",
       "kind": "catch_returns_default",
@@ -2894,7 +2822,7 @@
     },
     {
       "filePath": "src/runtime/sql-query-loop-runtime-module.js",
-      "line": 274,
+      "line": 277,
       "column": 6,
       "functionName": "parseRawRuntimeConfig",
       "kind": "catch_returns_default",
@@ -2930,18 +2858,9 @@
     },
     {
       "filePath": "src/service/call-direct-invocation-replay.js",
-      "line": 84,
+      "line": 96,
       "column": 4,
       "functionName": "extractWitnessMeta",
-      "kind": "catch_returns_default",
-      "reason": "catch that returns a default; surface a typed refusal instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/service/call-shard-read-view-manager.js",
-      "line": 79,
-      "column": 4,
-      "functionName": "closePinnedWalReader",
       "kind": "catch_returns_default",
       "reason": "catch that returns a default; surface a typed refusal instead",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
@@ -3011,7 +2930,7 @@
     },
     {
       "filePath": "src/service/service-installation-reconciler.js",
-      "line": 176,
+      "line": 190,
       "column": 6,
       "functionName": "_runSweep",
       "kind": "catch_returns_default",
@@ -3092,7 +3011,7 @@
     },
     {
       "filePath": "src/transport/message-router-connection-authority.js",
-      "line": 360,
+      "line": 361,
       "column": 6,
       "functionName": "resolveNodeAddressForDelivery",
       "kind": "catch_returns_default",
@@ -3101,7 +3020,7 @@
     },
     {
       "filePath": "src/transport/message-router-connection-close-reconnect.js",
-      "line": 258,
+      "line": 271,
       "column": 10,
       "functionName": "<anonymous>",
       "kind": "catch_returns_default",
@@ -3110,7 +3029,7 @@
     },
     {
       "filePath": "src/transport/message-router-connection-lifecycle-methods.js",
-      "line": 151,
+      "line": 152,
       "column": 6,
       "functionName": "extractWebSocketPort",
       "kind": "catch_returns_default",
@@ -3119,16 +3038,7 @@
     },
     {
       "filePath": "src/transport/message-router-delivery-behaviors.js",
-      "line": 270,
-      "column": 4,
-      "functionName": "tryDeliverRaftDirect",
-      "kind": "catch_returns_default",
-      "reason": "catch that returns a default; surface a typed refusal instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/transport/message-router-delivery-behaviors.js",
-      "line": 477,
+      "line": 427,
       "column": 4,
       "functionName": "completeRemoteDelivery",
       "kind": "catch_returns_default",
@@ -3290,7 +3200,7 @@
     },
     {
       "filePath": "src/wasm-service/wasm-service-replica.js",
-      "line": 460,
+      "line": 455,
       "column": 6,
       "functionName": "_handleWrite",
       "kind": "catch_returns_default",
@@ -3306,6 +3216,5 @@
       "reason": "catch that returns a default; surface a typed refusal instead",
       "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
     }
-  ],
-  "maxViolations": 373
+  ]
 }

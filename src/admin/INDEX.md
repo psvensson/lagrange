@@ -18,7 +18,6 @@ documentClass: generated
 - [admin-authoritative-repair-evaluation.js](admin-authoritative-repair-evaluation.js) - No leading comment; first export: hasAuthoritativeRepairTrigger. (importers: few)
 - [admin-authoritative-repair-policy.js](admin-authoritative-repair-policy.js) - No leading comment; first export: AUTHORITATIVE_REPAIR_TRIGGER. (importers: many)
 - [admin-cache-owner-state.js](admin-cache-owner-state.js) - No leading comment; first export: AdminCacheOwnerState. (importers: few)
-- [admin-cli-compat.js](admin-cli-compat.js) - CLI compatibility contract for the node-local admin adapter. (importers: few)
 - [admin-command-metrics.js](admin-command-metrics.js) - Lightweight metrics collector for meta-service command execution. (importers: few)
 - [admin-constants.js](admin-constants.js) - No leading comment; first export: ADMIN_PARTITION_DIAGNOSTICS_VIEW. (importers: hub)
 - [admin-control-membership-publication-handoff-outcomes.js](admin-control-membership-publication-handoff-outcomes.js) - Membership publication handoff outcome builders for admin control snapshots. (importers: one)

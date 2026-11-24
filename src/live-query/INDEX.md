@@ -8,7 +8,7 @@ documentClass: generated
 ## Files
 
 - [live-query-constants.js](live-query-constants.js) - No leading comment; first export: LIVE_QUERY_AST_TYPE. (importers: many)
-- [live-query-group-helpers.js](live-query-group-helpers.js) - Helper utilities and extracted functions for Live Query Group. (importers: few)
+- [live-query-group-helpers.js](live-query-group-helpers.js) - Helper utilities and extracted functions for Live Query Group. (importers: many)
 - [live-query-group.js](live-query-group.js) - QueryGroup manages clients with identical queries sharing CDC subscriptions. (importers: many)
 - [live-query-manager.js](live-query-manager.js) - Live Query Manager - Manages live query subscriptions and query grouping. (importers: few)
 - [live-query-refresh-outcome.js](live-query-refresh-outcome.js) - Explicit refresh outcome owner for QueryGroup snapshot re-execution. (importers: few)

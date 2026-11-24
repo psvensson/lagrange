@@ -118,7 +118,7 @@ documentClass: generated
 - [sql-query-engine-shared.js](sql-query-engine-shared.js) - SQL Query Engine - Main entry point for SQL query processing. (importers: hub)
 - [sql-query-engine-statement-admission.js](sql-query-engine-statement-admission.js) - Statement admission refusals the engine answers before it executes: a statement sent for an explicit transaction the... (importers: many)
 - [sql-query-engine-statement-execution.js](sql-query-engine-statement-execution.js) - The row count the query-lifecycle metric records: a write's engine-reported affected-row count (null when it has... (importers: one)
-- [sql-query-engine-table-routing-methods.js](sql-query-engine-table-routing-methods.js) - Get partitions for a table. (importers: few)
+- [sql-query-engine-table-routing-methods.js](sql-query-engine-table-routing-methods.js) - Resolve active partition version from table metadata. (importers: many)
 - [sql-query-engine-transaction-persistence-methods.js](sql-query-engine-transaction-persistence-methods.js) - The engine's persistence of distributed transaction state through the canonical control-plane gateway (TX1 design... (importers: few)
 - [sql-query-engine-transaction-recovery-methods.js](sql-query-engine-transaction-recovery-methods.js) - Recover distributed transaction state from system cache snapshots. (importers: one)
 - [sql-query-engine-transaction-set-methods.js](sql-query-engine-transaction-set-methods.js) - sql_transactions owns admission, freeze and its exact recovery census. (importers: few)

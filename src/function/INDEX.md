@@ -8,6 +8,4 @@ documentClass: generated
 ## Files
 
 - [context-manager.js](context-manager.js) - Context Manager - Manages function state storage via contexts table. (importers: few)
-- [function-constants.js](function-constants.js) - No leading comment; first export: FUNCTION_CONFIG_KEY. (importers: few)
-- [function-query-executor.js](function-query-executor.js) - Function Query Executor - Internal API for programmatic query execution. (importers: few)
-- [function-registry.js](function-registry.js) - Function Registry - Plugin registry for function executors. (importers: few)
+- [function-constants.js](function-constants.js) - No leading comment; first export: FUNCTION_CONTEXT_TYPE. (importers: one)

@@ -1,8 +1,8 @@
 import {hostname} from 'node:os';
 import {AddressManager} from '../../src/address/address-manager.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
-import {BootstrapReadinessState} from
-  '../../src/bootstrap/bootstrap-readiness-state.js';
+import {LifecycleController} from
+  '../../src/bootstrap/lifecycle-controller.js';
 import {BootstrapService} from
   '../../src/bootstrap/bootstrap-service.js';
 import {reserveBootIncarnation} from
@@ -253,7 +253,7 @@ async function bootExampleNode(dataDir, options = {}) {
   const wsPort = options.wsPort ?? EXAMPLE_NODE.WS_PORT;
   const dataDirectoryManager = initializeEnvironment(dataDir, wsPort);
   const credentialEnv = buildCredentialEnvironment();
-  const readinessState = new BootstrapReadinessState();
+  const readinessState = new LifecycleController();
   readinessState.setMaxListeners(0);
   const nodeAddress = `${EXAMPLE_RUNTIME.HOST}:0`;
   const advertisedNodeWsAddress =

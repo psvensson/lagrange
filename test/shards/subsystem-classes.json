@@ -2,33 +2,33 @@
   "schemaVersion": 1,
   "id": "test-subsystem-classification",
   "counts": {
-    "admin-diagnostics": 123,
+    "admin-diagnostics": 122,
     "architecture-governance": 21,
-    "bootstrap-membership": 360,
+    "bootstrap-membership": 358,
     "cdc-metadata": 81,
     "cli-tooling": 99,
     "control-plane": 243,
     "convergence-topology": 88,
     "distributed-harness": 226,
     "examples-e2e": 8,
-    "pgwire-compat": 24,
-    "placement-rebalance": 312,
+    "pgwire-compat": 25,
+    "placement-rebalance": 311,
     "query-sql": 225,
     "release-packaging": 15,
     "runtime-primitives": 24,
-    "services-runtime": 163,
+    "services-runtime": 160,
     "solver-tooling": 7,
-    "storage-partition": 260,
+    "storage-partition": 259,
     "storage-raft": 171,
     "test-infrastructure": 170,
     "transactions": 17,
     "transport-messaging": 123,
-    "wasm-toolchain": 74
+    "wasm-toolchain": 73
   },
-  "censusSize": 2834,
-  "digest": "fnv1a32-cc2cc688",
+  "censusSize": 2826,
+  "digest": "fnv1a32-a233fe85",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-791e2b32",
+  "observationDigest": "fnv1a32-16e87811",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -42,7 +42,6 @@
     "test/admin/admin-audit-queries.test.js": "admin-diagnostics",
     "test/admin/admin-auth-middleware.test.js": "admin-diagnostics",
     "test/admin/admin-authoritative-repair-policy.test.js": "admin-diagnostics",
-    "test/admin/admin-cli-compat.test.js": "admin-diagnostics",
     "test/admin/admin-command-metrics.test.js": "admin-diagnostics",
     "test/admin/admin-control-snapshot-active-gate-handoff-target-blocked.test.js": "admin-diagnostics",
     "test/admin/admin-control-snapshot-bounded-probe-deadline.test.js": "admin-diagnostics",
@@ -149,8 +148,6 @@
     "test/bootstrap/bootstrap-topology-snapshot.test.js": "bootstrap-membership",
     "test/bootstrap/bootstrap-websocket-server-reentry.test.js": "bootstrap-membership",
     "test/bootstrap/cache-hydration-correctness.property.test.js": "bootstrap-membership",
-    "test/bootstrap/cache-hydration-gate.property.test.js": "bootstrap-membership",
-    "test/bootstrap/cache-hydration-gate.test.js": "bootstrap-membership",
     "test/bootstrap/cache-hydration-performance.test.js": "bootstrap-membership",
     "test/bootstrap/cache-hydration-strictness.test.js": "bootstrap-membership",
     "test/bootstrap/call-cell-invocation-setup.test.js": "bootstrap-membership",
@@ -1131,11 +1128,6 @@
     "test/function/change-binding-compilation.test.js": "services-runtime",
     "test/function/context-cdc-consistency.property.test.js": "services-runtime",
     "test/function/context-manager.test.js": "services-runtime",
-    "test/function/function-query-executor-wait-bound-spent.test.js": "services-runtime",
-    "test/function/function-query-executor.test.js": "services-runtime",
-    "test/function/function-registry-no-executor.property.test.js": "services-runtime",
-    "test/function/function-registry.test.js": "services-runtime",
-    "test/function/query-then-invoke-continuation.property.test.js": "services-runtime",
     "test/helm/lagrange-node-admin-default-deny.test.js": "release-packaging",
     "test/hlc/hlc.test.js": "runtime-primitives",
     "test/index-management/global-index-distributed-execution-contract.test.js": "query-sql",
@@ -1516,7 +1508,6 @@
     "test/partition/partition-participant-transaction-staging.test.js": "storage-partition",
     "test/partition/partition-participant-transaction-topology.test.js": "storage-partition",
     "test/partition/partition-port-refusal-outcomes.test.js": "storage-partition",
-    "test/partition/partition-raft-storage.test.js": "storage-partition",
     "test/partition/partition-rebalancer-dependency-wiring-characterization.test.js": "storage-partition",
     "test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js": "storage-partition",
     "test/partition/partition-registration-exact-birth.test.js": "storage-partition",
@@ -2015,7 +2006,6 @@
     "test/rebalancer/blocked-spread-release-event-wake.test.js": "placement-rebalance",
     "test/rebalancer/call-activation-pin-planning.test.js": "placement-rebalance",
     "test/rebalancer/canonical-replica-completion-observation.test.js": "placement-rebalance",
-    "test/rebalancer/canonical-replica-inventory-cutover-guard.test.js": "placement-rebalance",
     "test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js": "placement-rebalance",
     "test/rebalancer/cl-036-publications-quorum-escape.test.js": "placement-rebalance",
     "test/rebalancer/cl-038-surplus-drain-retains-leader-node.test.js": "placement-rebalance",
@@ -2065,7 +2055,6 @@
     "test/rebalancer/formation-runtime-service-create-lane-budget-starvation.test.js": "placement-rebalance",
     "test/rebalancer/growth-promote-authoritative-completion-and-progress.test.js": "placement-rebalance",
     "test/rebalancer/in-flight-aware-drain-phase-replace-credit.test.js": "placement-rebalance",
-    "test/rebalancer/in-flight-aware-replica-count.test.js": "placement-rebalance",
     "test/rebalancer/interlock-skip-label-fidelity.test.js": "placement-rebalance",
     "test/rebalancer/late-dispatch-honored-stops-redrive.test.js": "placement-rebalance",
     "test/rebalancer/ledger-quorum-spread-hold-cure-drain-admission.test.js": "placement-rebalance",
@@ -2157,6 +2146,7 @@
     "test/rebalancer/rebalance-coordinator-create-budget-intent-serialization.test.js": "placement-rebalance",
     "test/rebalancer/rebalance-coordinator-diagnostics.test.js": "placement-rebalance",
     "test/rebalancer/rebalance-coordinator-facade-compatibility.test.js": "placement-rebalance",
+    "test/rebalancer/rebalance-coordinator-leader-placement-cure.test.js": "placement-rebalance",
     "test/rebalancer/rebalance-coordinator-metrics.test.js": "placement-rebalance",
     "test/rebalancer/rebalance-coordinator-operation-ownership.test.js": "placement-rebalance",
     "test/rebalancer/rebalance-coordinator-outcome-routing.test.js": "placement-rebalance",
@@ -2365,6 +2355,7 @@
     "test/runtime/pgwire-descriptor.test.js": "pgwire-compat",
     "test/runtime/pgwire-disconnect-ends-lifecycle-wait.test.js": "pgwire-compat",
     "test/runtime/pgwire-metrics.test.js": "pgwire-compat",
+    "test/runtime/pgwire-output-writer.test.js": "pgwire-compat",
     "test/runtime/pgwire-password-authentication-cutover.test.js": "pgwire-compat",
     "test/runtime/pgwire-port-allocator.test.js": "pgwire-compat",
     "test/runtime/pgwire-protocol-handler.test.js": "pgwire-compat",
@@ -2377,6 +2368,7 @@
     "test/runtime/pgwire-tls-policy-cutover.test.js": "pgwire-compat",
     "test/runtime/pgwire-transaction-outcome.test.js": "pgwire-compat",
     "test/runtime/request-cell-definition-classification.test.js": "services-runtime",
+    "test/runtime/request-cell-invocation-owner.test.js": "services-runtime",
     "test/runtime/request-cell-table-read-index.test.js": "services-runtime",
     "test/runtime/runtime-adapter-determinism.test.js": "services-runtime",
     "test/runtime/runtime-adapter-ingress.test.js": "services-runtime",
@@ -2599,6 +2591,7 @@
     "test/service/call-cell-public-outcome.test.js": "services-runtime",
     "test/service/call-cell-routing-contract.test.js": "services-runtime",
     "test/service/call-cell-statement-adapter.test.js": "services-runtime",
+    "test/service/call-direct-invocation-replay.test.js": "services-runtime",
     "test/service/call-shard-dispatch-pool.test.js": "services-runtime",
     "test/service/data-local-owner-boundaries.test.js": "services-runtime",
     "test/service/external-service-manifest.test.js": "services-runtime",
@@ -2812,7 +2805,6 @@
     "test/wasm-service/registry-resolver.test.js": "wasm-toolchain",
     "test/wasm-service/resolver-precedence.test.js": "wasm-toolchain",
     "test/wasm-service/runtime-descriptor-validator.test.js": "wasm-toolchain",
-    "test/wasm-service/runtime-legacy-mapping.test.js": "wasm-toolchain",
     "test/wasm-service/safety-interval.test.js": "wasm-toolchain",
     "test/wasm-service/service-cell-v2-world-abi.test.js": "wasm-toolchain",
     "test/wasm-service/service-cell-world-abi.test.js": "wasm-toolchain",
@@ -5176,12 +5168,10 @@
     },
     "test/cli/service-init-scaffold.test.js": {
       "files": [
-        "Dockerfile",
-        "README.md",
         "package-lock.json",
         "package.json",
         "src/cli/service-command-router.js",
-        "src/cli/service-project-scaffold.js",
+        "src/cli/service-wasm-scaffold.js",
         "src/sea-entry.js"
       ],
       "directories": [
@@ -5204,7 +5194,6 @@
         "src/cli/service-lifecycle-command.js",
         "src/cli/service-lifecycle-sql-client.js",
         "src/cli/service-project-build-input.js",
-        "src/cli/service-project-scaffold.js",
         "src/sea-entry.js"
       ]
     },
@@ -6491,6 +6480,7 @@
         "src/control-plane/control-plane-system-table-gateway-constants.js",
         "src/control-plane/membership-planning-version-key.js",
         "src/control-plane/membership-publication-coordinator.js",
+        "src/control-plane/node-liveness-semantic-projection-owner.js",
         "src/control-plane/projection-readiness-constants.js",
         "src/control-plane/readiness-planning-snapshot-owner.js",
         "src/control-plane/readiness-planning-version-contract.js"
@@ -7783,6 +7773,9 @@
         "scripts/checks/push-gate-corpus-worktree.js",
         "scripts/checks/quest-record-transitions.js",
         "scripts/checks/wait-for-thermal-headroom.js",
+        "scripts/lab/probe.js",
+        "scripts/lab/state.js",
+        "scripts/solve/store.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/diagnostics/source-fingerprint.js",
@@ -7974,8 +7967,9 @@
         "data/tidb-comparison",
         "data/tidb-comparison/forensic",
         "docs/benchmarks",
-        "scripts/checks",
+        "scripts",
         "src",
+        "test",
         "test/distributed",
         "test/distributed/harness"
       ]
@@ -15503,11 +15497,6 @@
         "src/logging/wait-bound-spent.js"
       ]
     },
-    "test/partition/partition-legacy-consensus-state.test.js": {
-      "files": [
-        "src/partition/partition-raft-storage.js"
-      ]
-    },
     "test/partition/partition-participant-durable-read-dependencies.test.js": {
       "files": [
         "src/bootstrap/shared/partition-service-construction.js",
@@ -15536,6 +15525,7 @@
         "src/bootstrap/system-table-workflow-schema-definitions.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-bytes.js",
         "src/partition/partition-participant-transaction-connection.js",
         "src/partition/partition-participant-transaction-constants.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
@@ -15638,11 +15628,6 @@
         "test/partition/committed-operation-gateway-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
-      ]
-    },
-    "test/partition/partition-raft-storage.test.js": {
-      "files": [
-        "src/partition/partition-raft-storage.js"
       ]
     },
     "test/partition/partition-rebalancer-dependency-wiring-characterization.test.js": {
@@ -15778,7 +15763,7 @@
     "test/partition/partition-service-cleanup-token-schema.test.js": {
       "files": [
         "src/bootstrap/system-table-core-schema-definitions.js",
-        "src/partition/partition-service-schema-migration-base.js"
+        "src/partition/partition-service-table-bootstrap.js"
       ]
     },
     "test/partition/partition-service-hlc-monotonicity.test.js": {
@@ -18800,13 +18785,13 @@
     "test/query/transaction-recovery-poison-row-attribution.test.js": {
       "files": [
         "src/query/distributed/distributed-transaction-coordinator-constants.js",
-        "src/query/distributed/distributed-transaction-coordinator.js",
-        "src/query/distributed/distributed-transaction-recovery-validation.js"
+        "src/query/distributed/distributed-transaction-coordinator.js"
       ]
     },
     "test/query/transaction-release-census.test.js": {
       "files": [
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
+        "src/partition/partition-participant-transaction-bytes.js",
         "src/query/distributed/distributed-transaction-release-census.js",
         "src/query/distributed/distributed-transaction-schema-enforcement.js"
       ]
@@ -19118,7 +19103,6 @@
     },
     "test/raft/raft-log-write-owner.test.js": {
       "files": [
-        "src/partition/partition-raft-storage.js",
         "src/raft/sqlite-log-adapter.js"
       ],
       "directories": [
@@ -20309,7 +20293,7 @@
     },
     "test/raft/raft-rs-backend/restart-from-durable-record.test.js": {
       "files": [
-        "src/partition/partition-raft-storage.js",
+        "src/partition/partition-service.js",
         "src/raft/raft-rs-durable-store.js",
         "src/raft/raft-rs-host-contract.js",
         "src/raft/raft-rs-runtime-owner.js"
@@ -20536,7 +20520,6 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
-        "src/partition/partition-raft-storage.js",
         "src/partition/partition-service-constants.js",
         "src/partition/partition-service.js",
         "src/partition/partition-transaction-determinism-constants.js",
@@ -20943,22 +20926,12 @@
         "test/raft/raft-rs-backend/partition-node-cluster.js"
       ]
     },
-    "test/raft/snapshot-compaction-catchup-integration.test.js": {
-      "files": [
-        "src/partition/partition-raft-storage.js"
-      ]
-    },
     "test/raft/snapshot-dispatcher-wiring.test.js": {
       "files": [
         "src/bootstrap/shared/partition-service-construction.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/raft/raft-committed-membership-stamp.js",
         "test/test-helpers/boot-incarnation-fixture.js"
-      ]
-    },
-    "test/raft/snapshot-gated-compaction-contract.test.js": {
-      "files": [
-        "src/partition/partition-raft-storage.js"
       ]
     },
     "test/raft/snapshot-lifecycle-staging.test.js": {
@@ -20982,11 +20955,6 @@
       "directories": [
         "src",
         "src/raft"
-      ]
-    },
-    "test/raft/snapshot-proof-gated-compaction.test.js": {
-      "files": [
-        "src/partition/partition-raft-storage.js"
       ]
     },
     "test/raft/snapshot-recorded-gaps.test.js": {
@@ -21122,17 +21090,6 @@
       ],
       "directories": [
         "src/rebalancer"
-      ]
-    },
-    "test/rebalancer/canonical-replica-inventory-cutover-guard.test.js": {
-      "files": [
-        "src/rebalancer/in-flight-aware-replica-count.js",
-        "src/rebalancer/move-planner-move-calculation-methods.js",
-        "src/rebalancer/move-planner-state-methods.js",
-        "src/rebalancer/move-planner.js",
-        "src/rebalancer/rebalance-coordinator-priority-budget-admission.js",
-        "src/rebalancer/rebalance-coordinator-topology-guard-methods.js",
-        "src/rebalancer/unified-rebalancer-follow-up-move.js"
       ]
     },
     "test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js": {
@@ -26290,6 +26247,7 @@
         "data/tidb-comparison/progress-summary.json",
         "data/tidb-comparison/raw-observations.ndjson",
         "docs/benchmarks/README.md",
+        "docs/benchmarks/cloud/gcp-vm-lifetime-args.mjs",
         "docs/benchmarks/cloud/run-comparative-benchmarks.mjs",
         "docs/benchmarks/tidb-comparison-progress.html",
         "docs/benchmarks/tidb-comparison-progress.md",
@@ -26303,14 +26261,198 @@
         "scripts/check-guideline-navigability.js",
         "scripts/check-guideline-silent-catch.js",
         "scripts/check-staged-constant-names.js",
+        "scripts/checks/change-proof-string-collections.js",
+        "scripts/checks/change-selection-constants.js",
+        "scripts/checks/changed-paths.js",
+        "scripts/checks/check-benchmark-history-append-only.js",
+        "scripts/checks/check-quest-log-append-only.js",
+        "scripts/checks/comparative-benchmark-recompute.js",
+        "scripts/checks/git-invocation.js",
+        "scripts/checks/git-process-environment.js",
         "scripts/checks/push-gate-corpus-worktree.js",
+        "scripts/checks/quest-record-transitions.js",
+        "scripts/checks/wait-for-thermal-headroom.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "test/distributed/config/local.json",
+        "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/assertions-consistency-checks.js",
+        "test/distributed/harness/assertions-consistency-comparison.js",
+        "test/distributed/harness/assertions-consistency-observation-cohort.js",
+        "test/distributed/harness/assertions-consistency-shared.js",
+        "test/distributed/harness/assertions-control-snapshot-extraction.js",
+        "test/distributed/harness/assertions-convergence-wait.js",
+        "test/distributed/harness/assertions-publication-gate-comparison.js",
+        "test/distributed/harness/assertions-publication-recovery-gate.js",
+        "test/distributed/harness/assertions.js",
+        "test/distributed/harness/benchmark-claim-admission.js",
+        "test/distributed/harness/benchmark-invalidation-ledger.js",
+        "test/distributed/harness/benchmark-oltp-attempt-capture.js",
+        "test/distributed/harness/benchmark-oltp-state-reconciliation.js",
+        "test/distributed/harness/benchmark-operation-outcome.js",
+        "test/distributed/harness/benchmark-partition-convergence.js",
+        "test/distributed/harness/benchmark-readiness-denial.js",
+        "test/distributed/harness/benchmark-scenario-a-run.js",
+        "test/distributed/harness/benchmark-semantic-integrity.js",
+        "test/distributed/harness/benchmark-workload-dispatch.js",
+        "test/distributed/harness/benchmark-workload-semantics-constants.js",
+        "test/distributed/harness/benchmark-workload-semantics.js",
+        "test/distributed/harness/chaos.js",
+        "test/distributed/harness/citus-comparison-static-web.js",
+        "test/distributed/harness/cluster-active-wait-diagnostics.js",
+        "test/distributed/harness/cluster-active-wait-formatting-layer.js",
+        "test/distributed/harness/cluster-active-wait-normalization.js",
+        "test/distributed/harness/cluster-active-wait-priority-recovery-progress.js",
+        "test/distributed/harness/cluster-active-wait-progress-layer.js",
+        "test/distributed/harness/cluster-active-wait-publication-gate.js",
+        "test/distributed/harness/cluster-base-layer.js",
+        "test/distributed/harness/cluster-control-snapshot-admin-layer.js",
+        "test/distributed/harness/cluster-node-handle-layer.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
+        "test/distributed/harness/cluster-node-resource-diagnostics.js",
+        "test/distributed/harness/cluster-startup-gate-layer.js",
+        "test/distributed/harness/comparative-benchmark-campaign-manifest.js",
+        "test/distributed/harness/comparative-benchmark-campaign-runner.js",
+        "test/distributed/harness/comparative-benchmark-harness-identity.js",
+        "test/distributed/harness/comparative-benchmark-host-preparation.js",
+        "test/distributed/harness/comparative-benchmark-lab-hosts.js",
+        "test/distributed/harness/comparative-benchmark-product-pins.js",
+        "test/distributed/harness/comparative-benchmark-provisioning.js",
+        "test/distributed/harness/comparative-benchmark-record-owner.js",
+        "test/distributed/harness/comparative-benchmark-semantic-gate.js",
+        "test/distributed/harness/comparative-benchmark-tidb-cases.js",
+        "test/distributed/harness/comparative-benchmark-workload-call-site.js",
         "test/distributed/harness/comparative-coverage-manifest.js",
+        "test/distributed/harness/comparative-efficiency-evidence-contract.js",
+        "test/distributed/harness/comparative-landing-page.js",
+        "test/distributed/harness/comparative-landing-svg-renderer.js",
+        "test/distributed/harness/comparative-landing-tables.js",
+        "test/distributed/harness/comparative-matrix-runner.js",
+        "test/distributed/harness/comparative-page-columns.js",
+        "test/distributed/harness/comparative-system-budget.js",
+        "test/distributed/harness/consistency-evaluator.js",
+        "test/distributed/harness/constants.js",
+        "test/distributed/harness/container-log-window.js",
         "test/distributed/harness/container-memory-working-set.js",
-        "test/distributed/harness/scaleout-series-experiments.js"
+        "test/distributed/harness/convergence-voter-targets.js",
+        "test/distributed/harness/docker-build-context.js",
+        "test/distributed/harness/docker-image-retirement.js",
+        "test/distributed/harness/docker-provider.js",
+        "test/distributed/harness/failure-bundle-artifact-foundation.js",
+        "test/distributed/harness/failure-bundle-log-window.js",
+        "test/distributed/harness/gcp-vm-lifetime.js",
+        "test/distributed/harness/invariant-breaches.js",
+        "test/distributed/harness/lagrange-evolution-static-web.js",
+        "test/distributed/harness/load-generator-runtime-methods.js",
+        "test/distributed/harness/load-generator.js",
+        "test/distributed/harness/load-node-availability.js",
+        "test/distributed/harness/log-analyzer.js",
+        "test/distributed/harness/log-collector.js",
+        "test/distributed/harness/movement-scenario-c-scaling-static-web.js",
+        "test/distributed/harness/node-client-normalization-methods.js",
+        "test/distributed/harness/node-client.js",
+        "test/distributed/harness/oltp-baseline-dataset.js",
+        "test/distributed/harness/oltp-baseline-transaction-executor.js",
+        "test/distributed/harness/oltp-baseline-workload.js",
+        "test/distributed/harness/oltp-comparison-history-store.js",
+        "test/distributed/harness/oltp-comparison-static-web.js",
+        "test/distributed/harness/oltp-comparison-svg-renderer.js",
+        "test/distributed/harness/oltp-error-classification.js",
+        "test/distributed/harness/oltp-open-loop-step-owner.js",
+        "test/distributed/harness/oltp-paired-retry-owner.js",
+        "test/distributed/harness/oltp-paired-sweep-plan.js",
+        "test/distributed/harness/oltp-scenario-a-comparison-systems.js",
+        "test/distributed/harness/oltp-scenario-a-delivery-case.js",
+        "test/distributed/harness/oltp-scenario-a-durability-case.js",
+        "test/distributed/harness/oltp-scenario-a-failure-atomicity-case.js",
+        "test/distributed/harness/oltp-scenario-a-lagrange-live-admission.js",
+        "test/distributed/harness/oltp-scenario-a-lagrange-proof-plan.js",
+        "test/distributed/harness/oltp-scenario-a-lagrange-public-pg-context.js",
+        "test/distributed/harness/oltp-scenario-a-lagrange-runtime-preflight.js",
+        "test/distributed/harness/oltp-scenario-a-new-order-contention-case.js",
+        "test/distributed/harness/oltp-scenario-a-order-status-case.js",
+        "test/distributed/harness/oltp-scenario-a-payment-case.js",
+        "test/distributed/harness/oltp-scenario-a-proof-cases.js",
+        "test/distributed/harness/oltp-scenario-a-retryable-conflict-case.js",
+        "test/distributed/harness/oltp-scenario-a-semantic-gate.js",
+        "test/distributed/harness/oltp-scenario-a-semantic-profile.js",
+        "test/distributed/harness/oltp-scenario-a-stock-level-case.js",
+        "test/distributed/harness/oltp-scenario-a-visibility-case.js",
+        "test/distributed/harness/oracle-blindness.js",
+        "test/distributed/harness/partition-granularity-comparison-static-web.js",
+        "test/distributed/harness/playback-recorder.js",
+        "test/distributed/harness/post-rebalance-closure-contract.js",
+        "test/distributed/harness/postgresql-comparison-static-web.js",
+        "test/distributed/harness/publication-convergence-claim.js",
+        "test/distributed/harness/raw-observation-campaign-specs.js",
+        "test/distributed/harness/raw-observation-forensic-reader.js",
+        "test/distributed/harness/raw-observation-metrics.js",
+        "test/distributed/harness/raw-observation-record.js",
+        "test/distributed/harness/raw-observation-store.js",
+        "test/distributed/harness/real-product-campaign-cleanup.js",
+        "test/distributed/harness/real-product-captured-intrinsics.js",
+        "test/distributed/harness/real-product-cluster-deployers.js",
+        "test/distributed/harness/real-product-component-recovery.js",
+        "test/distributed/harness/real-product-deployer-lagrange.js",
+        "test/distributed/harness/real-product-deployer-postgres.js",
+        "test/distributed/harness/real-product-deployer-tidb.js",
+        "test/distributed/harness/real-product-deployment-contract.js",
+        "test/distributed/harness/real-product-exhausted-deployment.js",
+        "test/distributed/harness/real-product-identity.js",
+        "test/distributed/harness/real-product-lagrange-observations.js",
+        "test/distributed/harness/real-product-lagrange-readiness-evaluation.js",
+        "test/distributed/harness/real-product-network-impairment.js",
+        "test/distributed/harness/real-product-readiness.js",
+        "test/distributed/harness/real-product-remote-shell.js",
+        "test/distributed/harness/real-product-sql-clients.js",
+        "test/distributed/harness/real-product-workload-drivers.js",
+        "test/distributed/harness/scale-certification-receipt-freshness.js",
+        "test/distributed/harness/scale-evidence-contract.js",
+        "test/distributed/harness/scaleout-node-rf-comparison-static-web.js",
+        "test/distributed/harness/scaleout-series-experiments.js",
+        "test/distributed/harness/scenario-b-rtt-working-set-static-web.js",
+        "test/distributed/harness/scenario-c-comparison-static-web.js",
+        "test/distributed/harness/scenario-host-topology.js",
+        "test/distributed/harness/scenario-outcome.js",
+        "test/distributed/harness/scenario-setup-breakdown-renderer.js",
+        "test/distributed/harness/startup-readiness-evidence.js",
+        "test/distributed/harness/tidb-reference-lifecycle.js",
+        "test/distributed/harness/tidb-reference-physical-placement-proof.js",
+        "test/distributed/harness/trace-artifact-recorder.js",
+        "test/distributed/harness/yugabyte-ignite-comparison-static-web.js",
+        "test/distributed/reference-client/lagrange-delivery-observer.js",
+        "test/distributed/reference-client/lagrange-new-order-contention-observer.js",
+        "test/distributed/reference-client/lagrange-oltp-adapter.js",
+        "test/distributed/reference-client/lagrange-oltp-state-snapshot.js",
+        "test/distributed/reference-client/lagrange-payment-observer.js",
+        "test/distributed/reference-client/lagrange-retryable-conflict-probe.js",
+        "test/distributed/reference-client/lagrange-visibility-probe.js",
+        "test/distributed/reference-client/native-clients.js",
+        "test/distributed/reference-client/oltp-adapter-contract.js",
+        "test/distributed/reference-client/oltp-state-snapshot-shared.js",
+        "test/distributed/reference-client/pg-wire-client.js",
+        "test/distributed/reference-client/postgresql-oltp-adapter.js",
+        "test/distributed/reference-client/retryable-conflict-probe.js",
+        "test/distributed/reference-client/tidb-delivery-observer.js",
+        "test/distributed/reference-client/tidb-new-order-contention-observer.js",
+        "test/distributed/reference-client/tidb-oltp-adapter.js",
+        "test/distributed/reference-client/tidb-oltp-state-snapshot.js",
+        "test/distributed/reference-client/tidb-payment-observer.js",
+        "test/distributed/reference-client/tidb-retryable-conflict-probe.js",
+        "test/distributed/reference-client/tidb-visibility-probe.js",
+        "test/distributed/scenarios/postgres-baseline-node-admission.js",
+        "test/distributed/scenarios/scenario-a-delivery-lagrange.js",
+        "test/distributed/scenarios/scenario-a-durability-lagrange.js",
+        "test/distributed/scenarios/scenario-a-failure-atomicity-lagrange.js",
+        "test/distributed/scenarios/scenario-a-lagrange-shared.js",
+        "test/distributed/scenarios/scenario-a-new-order-contention-lagrange.js",
+        "test/distributed/scenarios/scenario-a-order-status-lagrange.js",
+        "test/distributed/scenarios/scenario-a-payment-lagrange.js",
+        "test/distributed/scenarios/scenario-a-retryable-conflict-lagrange.js",
+        "test/distributed/scenarios/scenario-a-semantic-proof-journey.js",
+        "test/distributed/scenarios/scenario-a-stock-level-lagrange.js",
+        "test/distributed/scenarios/scenario-a-visibility-lagrange.js"
       ],
       "directories": [
         ".githooks",
@@ -26322,6 +26464,7 @@
         "solve/epics",
         "solve/quests",
         "src",
+        "test/distributed",
         "test/distributed/harness",
         "test/distributed/reference-client",
         "test/distributed/scenarios"
@@ -28371,7 +28514,9 @@
         "Dockerfile",
         "package.json",
         "scripts/checks/push-gate-unused-files.js",
-        "scripts/solve.js"
+        "scripts/solve.js",
+        "src/index.js",
+        "src/public-api.js"
       ]
     },
     "test/scripts/quest-evidence-harness-expected-tests.test.js": {
@@ -29156,7 +29301,6 @@
     },
     "test/service/minimal-deployment-artifact-owner-guard.test.js": {
       "files": [
-        "src/cli/service-project-scaffold.js",
         "src/control-plane/owners/service-install-catalog-contract.js",
         "src/service/service-lifecycle-command-owner.js"
       ]
@@ -29279,7 +29423,6 @@
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
-        "src/raft/snapshot-checkpoint-store.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]

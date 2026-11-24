@@ -97,7 +97,6 @@ function isUsableSystemCacheKey(value) {
 
 export {
   SYSTEM_CACHE_KEY_DESCRIPTOR,
-  SYSTEM_CACHE_KEY_DESCRIPTOR_ERROR_MSG,
   getSystemCachePrimaryKeyField,
   hasSystemCacheKeyDescriptor,
   isUsableSystemCacheKey,

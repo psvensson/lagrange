@@ -259,7 +259,6 @@ export {
   createLargeSealedSourceGeneration,
   createSealedSourceGeneration,
   defaultFollowerReplicaId,
-  defaultLeaderReplicaId,
   installSealedGeneration,
   seedEstablishedFollowerReceiver,
 };

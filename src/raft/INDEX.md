@@ -7,7 +7,7 @@ documentClass: generated
 
 ## Files
 
-- [authoritative-row-mutation-helper.js](authoritative-row-mutation-helper.js) - Capability-gated authoritative dedup + CAS-guard acquisition. (importers: many)
+- [authoritative-row-mutation-helper.js](authoritative-row-mutation-helper.js) - Authoritative dedup + CAS-guard acquisition. (importers: many)
 - [authoritative-row-mutation-vocabulary.js](authoritative-row-mutation-vocabulary.js) - Typed vocabulary and pure classification helpers for the authoritative-row mutation flow - the stateless layer of... (importers: one)
 - [bulk-connection-transfer-socket.js](bulk-connection-transfer-socket.js) - Bulk-connection / transfer-socket adapter (quest raft-snapshot-live-rebuild, spec... (importers: many)
 - [committed-entry-guard.js](committed-entry-guard.js) - No leading comment; first export: COMMITTED_ENTRY_WRITE_OUTCOME. (importers: few)
@@ -17,7 +17,7 @@ documentClass: generated
 - [leader-activation-scheduler.js](leader-activation-scheduler.js) - No leading comment; first export: DEFAULT_LEADER_ACTIVATION_NODE_SPACING_MS. (importers: few)
 - [learner-catch-up-acknowledgement.js](learner-catch-up-acknowledgement.js) - The group leader's acknowledgement that a fresh learner has caught up, judged on one observation of that leader. (importers: few)
 - [learner-promotion-progress.js](learner-promotion-progress.js) - Learner-promotion progress proof (quest learner-promotion-progress-proof). (importers: many)
-- [log-index.js](log-index.js) - Decide whether a value is a valid Raft log index at an API boundary. (importers: many)
+- [log-index.js](log-index.js) - Decide whether a value is a valid Raft log index at an API boundary. (importers: few)
 - [published-raft-role.js](published-raft-role.js) - No leading comment; first export: normalizePublishedRaftRole. (importers: many)
 - [raft-committed-membership-constants.js](raft-committed-membership-constants.js) - The vocabulary of the committed-membership boundary (owner decision O1, committed-read amendment 1, 2026-09-26):... (importers: hub)
 - [raft-committed-membership-stamp.js](raft-committed-membership-stamp.js) - The committed-membership stamp (owner decision O1, committed-read amendment 1, section 3.2): the one serialised... (importers: hub)
@@ -104,6 +104,6 @@ documentClass: generated
 - [snapshot-transfer-receiver.js](snapshot-transfer-receiver.js) - Raft snapshot bulk-transfer RECEIVER state machine (quest raft-snapshot-bulk-transfer, R2/S3): offer admission... (importers: few)
 - [snapshot-transfer.js](snapshot-transfer.js) - Raft snapshot bulk transfer (quest raft-snapshot-bulk-transfer, R2/S3): versioned receiver-driven chunk protocol... (importers: many)
 - [sqlite-log-adapter-query-api.js](sqlite-log-adapter-query-api.js) - Synchronous SQLite Raft-log query helpers. (importers: one)
-- [sqlite-log-adapter.js](sqlite-log-adapter.js) - SQLiteLogAdapter - SQLite-backed consensus log storage. (importers: hub)
-- [sqlite-log-entry-shape.js](sqlite-log-entry-shape.js) - Helpers for converting SQLite-stored raft log payloads into the canonical entry shape consumed by the consensus log... (importers: one)
-- [sqlite-raft-state-constants.js](sqlite-raft-state-constants.js) - Canonical SQLite-backed Raft state keys shared by storage and snapshot owners. (importers: few)
+- [sqlite-log-adapter.js](sqlite-log-adapter.js) - SQLiteLogAdapter - SQLite-backed consensus log storage. (importers: many)
+- [sqlite-log-entry-shape.js](sqlite-log-entry-shape.js) - Helpers for validating and normalizing canonical SQLite-stored raft log entries consumed by the consensus log owners. (importers: one)
+- [sqlite-raft-state-constants.js](sqlite-raft-state-constants.js) - Canonical SQLite-backed Raft state keys shared by storage and snapshot owners. (importers: one)

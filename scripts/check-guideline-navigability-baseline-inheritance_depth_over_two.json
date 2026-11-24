@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-16T14:05:09.536Z",
-  "rawViolationCount": 57,
+  "generatedAt": "2026-11-24T17:29:03.925Z",
+  "rawViolationCount": 56,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
@@ -23,7 +23,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-leadership-summary.js",
-      "line": 279,
+      "line": 280,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -59,7 +59,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-backfill-merge-and-status.js",
-      "line": 74,
+      "line": 75,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -77,7 +77,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-message-group-runtime-delegation.js",
-      "line": 23,
+      "line": 29,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -86,7 +86,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-publication-activation.js",
-      "line": 62,
+      "line": 68,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -113,7 +113,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-reconcile.js",
-      "line": 80,
+      "line": 79,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -122,7 +122,7 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-operation-execution.js",
-      "line": 38,
+      "line": 46,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -131,7 +131,7 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-readiness-capture.js",
-      "line": 47,
+      "line": 38,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -140,7 +140,7 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-replay-health-readiness.js",
-      "line": 77,
+      "line": 79,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -167,7 +167,7 @@
     },
     {
       "filePath": "src/partition/partition-service-assembly.js",
-      "line": 33,
+      "line": 41,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -176,7 +176,7 @@
     },
     {
       "filePath": "src/partition/partition-service-cdc-stream-base.js",
-      "line": 83,
+      "line": 84,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -185,16 +185,7 @@
     },
     {
       "filePath": "src/partition/partition-service-entry-apply-base.js",
-      "line": 113,
-      "column": 6,
-      "functionName": "<anonymous>",
-      "kind": "inheritance_depth_over_two",
-      "reason": "extends chain deeper than two; compose named collaborators instead",
-      "ruleReference": "docs/development/code-style.md \"Navigability and fallback patterns\": each pattern makes an agent re-derive what an owner is or what a value means; write the replacement form named in the reason instead"
-    },
-    {
-      "filePath": "src/partition/partition-service-schema-migration-base.js",
-      "line": 33,
+      "line": 155,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -212,7 +203,7 @@
     },
     {
       "filePath": "src/partition/partition-service-write-metrics-base.js",
-      "line": 159,
+      "line": 184,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -221,7 +212,7 @@
     },
     {
       "filePath": "src/query/query-executor-cancellation-routing-install.js",
-      "line": 20,
+      "line": 18,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -230,7 +221,7 @@
     },
     {
       "filePath": "src/query/query-executor-partition-service-resolution.js",
-      "line": 109,
+      "line": 117,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -248,7 +239,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-bootstrap-routing-overlay.js",
-      "line": 27,
+      "line": 29,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -257,7 +248,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
-      "line": 60,
+      "line": 106,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -275,7 +266,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-select-execution.js",
-      "line": 101,
+      "line": 119,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -284,7 +275,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-statement-execution.js",
-      "line": 130,
+      "line": 148,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -302,7 +293,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-write-execution.js",
-      "line": 90,
+      "line": 117,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -320,7 +311,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine.js",
-      "line": 141,
+      "line": 143,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -329,7 +320,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-dispatch-execution.js",
-      "line": 35,
+      "line": 42,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -338,7 +329,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-owner.js",
-      "line": 63,
+      "line": 66,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -347,7 +338,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-drain.js",
-      "line": 108,
+      "line": 125,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -356,7 +347,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-observation.js",
-      "line": 96,
+      "line": 110,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -365,7 +356,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-reconcile.js",
-      "line": 88,
+      "line": 95,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -374,7 +365,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 119,
+      "line": 102,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -383,7 +374,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-timeout.js",
-      "line": 136,
+      "line": 141,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -401,7 +392,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-leader-safety.js",
-      "line": 22,
+      "line": 24,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -410,7 +401,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-safety-rows.js",
-      "line": 73,
+      "line": 75,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -419,7 +410,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-safety-topology.js",
-      "line": 28,
+      "line": 60,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -428,7 +419,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-recovery-observation.js",
-      "line": 72,
+      "line": 104,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -437,7 +428,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-recovery-superseded-target.js",
-      "line": 56,
+      "line": 59,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -482,7 +473,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-move-execution.js",
-      "line": 263,
+      "line": 271,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -491,7 +482,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-rebalance-loop.js",
-      "line": 56,
+      "line": 318,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",
@@ -500,7 +491,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 77,
+      "line": 78,
       "column": 6,
       "functionName": "<anonymous>",
       "kind": "inheritance_depth_over_two",

@@ -555,17 +555,17 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
   getFreshBootstrapLeaderServices(partitionId, services) {
     if (
       typeof this.bootstrapTopologySnapshotOwner
-        ?.getFreshBootstrapLeaderServices ===
+        ?.getFreshBootstrapLeaderServices !==
       QUERY_EXECUTOR_LITERAL.STRING_FUNCTION
     ) {
-      const ownerServices =
-        this.bootstrapTopologySnapshotOwner.getFreshBootstrapLeaderServices(
-          partitionId,
-          services,
-        );
-      return Array.isArray(ownerServices) ? ownerServices : [];
+      return [];
     }
-    return [];
+    const ownerServices =
+      this.bootstrapTopologySnapshotOwner.getFreshBootstrapLeaderServices(
+        partitionId,
+        services,
+      );
+    return Array.isArray(ownerServices) ? ownerServices : [];
   }
 
   /**
@@ -579,16 +579,16 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
   isFreshPartitionBootstrapWindow(partition) {
     if (
       typeof this.bootstrapTopologySnapshotOwner
-        ?.isFreshPartitionBootstrapWindow ===
+        ?.isFreshPartitionBootstrapWindow !==
       QUERY_EXECUTOR_LITERAL.STRING_FUNCTION
     ) {
-      return (
-        this.bootstrapTopologySnapshotOwner.isFreshPartitionBootstrapWindow(
-          partition,
-        ) === true
-      );
+      return false;
     }
-    return false;
+    return (
+      this.bootstrapTopologySnapshotOwner.isFreshPartitionBootstrapWindow(
+        partition,
+      ) === true
+    );
   }
 
   /**
@@ -602,16 +602,16 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
   isBootstrapRoutingGraceWindow(partition) {
     if (
       typeof this.bootstrapTopologySnapshotOwner
-        ?.isBootstrapRoutingGraceWindow ===
+        ?.isBootstrapRoutingGraceWindow !==
       QUERY_EXECUTOR_LITERAL.STRING_FUNCTION
     ) {
-      return (
-        this.bootstrapTopologySnapshotOwner.isBootstrapRoutingGraceWindow(
-          partition,
-        ) === true
-      );
+      return false;
     }
-    return false;
+    return (
+      this.bootstrapTopologySnapshotOwner.isBootstrapRoutingGraceWindow(
+        partition,
+      ) === true
+    );
   }
 
   /**

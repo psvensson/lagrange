@@ -3,11 +3,8 @@
 // decision-and-apply): its three committed commands, the states of its durable
 // row and the causes a row is refused with, its typed answers, the pinned byte
 // form of its digests and entryIds, its two tables and their SQL, and its
-// log, and the coordinator's durable record columns on the two transaction
-// system tables with the DDL that adds each to a table created before it. A
-// leaf but for the system-table name owner: the partition constants owner
-// lists these command types among the types it recognises.
-import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
+// log. The partition constants owner lists these command types among the types
+// it recognises.
 
 // The three committed commands. PARTICIPANT_PREPARE carries the staged
 // operations and the conflict evidence; PARTICIPANT_DECISION carries the
@@ -443,36 +440,6 @@ const PARTICIPANT_TRANSACTION_LOG_MSG = Object.freeze({
     'participant transactions retained for explicit incident disposition',
 });
 
-// The origin columns of the generation table, each with the DDL that adds
-// it to a table created without it.
-const PARTICIPANT_TRANSACTION_GENERATION_ORIGIN_COLUMNS = Object.freeze({
-  origin_index:
-    'ALTER TABLE _partition_write_generation ADD COLUMN origin_index INTEGER',
-  origin_term:
-    'ALTER TABLE _partition_write_generation ADD COLUMN origin_term INTEGER',
-});
-
-// The coordinator's durable record columns on the two transaction system
-// tables (TX1 seams C and E, the coordinator seam's participant obligations,
-// 0.0.15): the insert-once decision record on `sql_transactions` and the
-// retained PREPARE evidence on `sql_transaction_participants`. A fresh cluster
-// creates them from the schema definitions
-// (src/bootstrap/system-table-workflow-schema-definitions.js); a table created
-// before them gains each at open, idempotently, by the DDL beside its name
-// (partition-coordinator-table-columns.js).
-const PARTICIPANT_COORDINATOR_TABLE_COLUMNS = Object.freeze({
-  [SYSTEM_TABLE_NAME.SQL_TRANSACTIONS]: Object.freeze({
-    decision: 'ADD COLUMN decision TEXT',
-    decision_text: 'ADD COLUMN decision_text TEXT',
-    decision_digest: 'ADD COLUMN decision_digest TEXT',
-  }),
-  [SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS]: Object.freeze({
-    prepared_digest: 'ADD COLUMN prepared_digest TEXT',
-    prepare_index: 'ADD COLUMN prepare_index INTEGER',
-    prepare_term: 'ADD COLUMN prepare_term INTEGER',
-  }),
-});
-
 const PARTICIPANT_CONCURRENCY_GRANULARITY = Object.freeze({
   PARTITION: 'partition',
   ROW_KEY: 'row-key',
@@ -491,7 +458,6 @@ function resolveParticipantConcurrencyGranularity(value) {
 
 export {
   PARTICIPANT_CONCURRENCY_GRANULARITY,
-  PARTICIPANT_COORDINATOR_TABLE_COLUMNS,
   PARTICIPANT_ORIGIN_HISTORY_REASON,
   PARTICIPANT_ORIGIN_HISTORY_STATE,
   PARTICIPANT_READ_DEPENDENCY_BOUND,
@@ -502,7 +468,6 @@ export {
   PARTICIPANT_TRANSACTION_COMMAND_TYPES,
   PARTICIPANT_TRANSACTION_DECISION,
   PARTICIPANT_TRANSACTION_FAILURE_CODE,
-  PARTICIPANT_TRANSACTION_GENERATION_ORIGIN_COLUMNS,
   PARTICIPANT_TRANSACTION_LOG_MSG,
   PARTICIPANT_TRANSACTION_MESSAGE,
   PARTICIPANT_TRANSACTION_REFUSAL_CAUSE,

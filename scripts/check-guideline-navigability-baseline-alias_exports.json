@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-16T14:05:09.610Z",
+  "generatedAt": "2026-11-24T17:29:03.941Z",
   "rawViolationCount": 38,
   "violations": [
     {
@@ -59,7 +59,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-coordinator-queue.js",
-      "line": 671,
+      "line": 672,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "alias_exports",
@@ -176,7 +176,7 @@
     },
     {
       "filePath": "src/node/participant-release-diagnostic-observation.js",
-      "line": 157,
+      "line": 261,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "alias_exports",
@@ -212,7 +212,7 @@
     },
     {
       "filePath": "src/partition/partition-participant-transaction-pause.js",
-      "line": 297,
+      "line": 318,
       "column": 2,
       "functionName": "<anonymous>",
       "kind": "alias_exports",
@@ -221,7 +221,7 @@
     },
     {
       "filePath": "src/public-api.js",
-      "line": 27,
+      "line": 33,
       "column": 8,
       "functionName": "<anonymous>",
       "kind": "alias_exports",

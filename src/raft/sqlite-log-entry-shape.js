@@ -52,7 +52,6 @@ function normalizeLogEntry(entry, fallback = {}) {
 }
 
 export {
-  UNSUPPORTED_LOG_ENTRY_SHAPE_ERROR_CODE,
   isCanonicalLogEntryShape,
   normalizeLogEntry,
 };

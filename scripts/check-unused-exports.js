@@ -84,7 +84,10 @@ import {printRatchetTighteningHint} from './metric-check-helpers.js';
 // 2026-11-23 (integration composition Stage 1 + Stage 2 + unused-exports):
 // tightened 1316 -> 1305 on the checker hint after de-exporting 37
 // internal-only symbols in endpoint-sync and service-discovery-catalog.
-const BASELINE_UNUSED_EXPORT_COUNT = 1305;
+// 2026-11-24 (Wave 8 & 44-finding deletion audit): tightened 1305 -> 1300 on
+// the checker hint after deleting dead legacy modules and de-exporting
+// internal symbols.
+const BASELINE_UNUSED_EXPORT_COUNT = 1300;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;
 const SELF_REFERENCE = 'scripts/check-unused-exports.js';

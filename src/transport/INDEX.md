@@ -15,7 +15,7 @@ documentClass: generated
 - [inproc-transport.js](inproc-transport.js) - In-process transport for test environments. (importers: many)
 - [message-router-ack-delivery.js](message-router-ack-delivery.js) - No leading comment; first export: sendMessage. (importers: one)
 - [message-router-admission-controls.js](message-router-admission-controls.js) - Admission and identification controls for the message router: pending-node connection pressure bookkeeping plus the... (importers: one)
-- [message-router-connection-authority.js](message-router-connection-authority.js) - Normalize one boot-incarnation candidate: a positive safe integer is KNOWN, anything else (0, absent, non-numeric -... (importers: one)
+- [message-router-connection-authority.js](message-router-connection-authority.js) - Normalize one boot-incarnation candidate: a positive safe integer is valid, anything else (0, absent, non-numeric)... (importers: one)
 - [message-router-connection-close-reconnect.js](message-router-connection-close-reconnect.js) - The reconnect loop spent its attempt budget: one wait_bound_spent ERROR with the attempts and the connection's last... (importers: one)
 - [message-router-connection-lifecycle-methods.js](message-router-connection-lifecycle-methods.js) - An outbound connect spent its bound before OPEN: one wait_bound_spent ERROR per node with the socket's ready state... (importers: one)
 - [message-router-connection-record.js](message-router-connection-record.js) - The one shape of a router's peer connection record. (importers: few)

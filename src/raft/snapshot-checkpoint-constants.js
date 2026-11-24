@@ -60,27 +60,6 @@ const RAFT_RS_CHECKPOINT_REASON = Object.freeze({
   LOCAL_TRANSACTION_OPEN: 'local_transaction_open',
 });
 
-// Follower-local consensus tables that never cross replicas inside a payload.
-const RAFT_CHECKPOINT_EXCLUDED_TABLES = Object.freeze([
-  '_raft_log',
-  '_raft_state',
-]);
-
-// `_raft_state` keys for the durable applied watermark introduced by this
-// protocol. The raft commit path records LAST_APPLIED_INDEX after a
-// successful apply; the single-replica direct-apply path records
-// DIRECT_APPLY_MARKER (its writes bypass raft commit, so no committed
-// watermark can certify the image). Both keys live in `_raft_state` and are
-// therefore scrubbed from payloads by the exclude set above.
-const RAFT_CHECKPOINT_APPLIED_STATE_KEY = Object.freeze({
-  LAST_APPLIED_INDEX: 'lastAppliedIndex',
-  DIRECT_APPLY_MARKER: 'directApplyMarker',
-  APPLIED_GAP_MARKER: 'appliedGapMarker',
-});
-
-const RAFT_CHECKPOINT_DIRECT_APPLY_MARKER_VALUE = 'direct_apply';
-const RAFT_CHECKPOINT_APPLIED_GAP_MARKER_VALUE = 'applied_gap';
-
 // Typed creation outcomes. CREATED is the only success; every other outcome
 // must never be advertised as recovery progress.
 const RAFT_CHECKPOINT_CREATION_OUTCOME = Object.freeze({
@@ -130,15 +109,11 @@ const RAFT_RS_CHECKPOINT_ENVELOPE_FIELDS = Object.freeze([
 const RAFT_CHECKPOINT_ENTITY_FIELDS = Object.freeze(['kind', 'id']);
 
 export {
-  RAFT_CHECKPOINT_APPLIED_GAP_MARKER_VALUE,
-  RAFT_CHECKPOINT_APPLIED_STATE_KEY,
   RAFT_CHECKPOINT_CREATION_OUTCOME,
   RAFT_CHECKPOINT_DESCRIPTOR_FIELDS,
   RAFT_CHECKPOINT_DESCRIPTOR_FILE,
-  RAFT_CHECKPOINT_DIRECT_APPLY_MARKER_VALUE,
   RAFT_CHECKPOINT_ENTITY_FIELDS,
   RAFT_CHECKPOINT_ENVELOPE_VERSION,
-  RAFT_CHECKPOINT_EXCLUDED_TABLES,
   RAFT_CHECKPOINT_PAYLOAD_FILE,
   RAFT_CHECKPOINT_PAYLOAD_KIND,
   RAFT_CHECKPOINT_PAYLOAD_SIDECAR_SUFFIXES,
