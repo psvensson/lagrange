@@ -16,6 +16,7 @@ import {execGit} from '../../scripts/checks/git-invocation.js';
 const PROBE = fileURLToPath(new URL(
   '../../scripts/checks/push-gate-unused-files.js', import.meta.url));
 const UNREACHABLE_FLAG = '--unreachable-scripts';
+const UNREACHABLE_SRC_FLAG = '--unreachable-src';
 const LIST_FLAG = '--list';
 
 function write(root, relativePath, content) {
@@ -98,3 +99,52 @@ test('deleting the unreachable scripts brings the count to zero', () => {
   }
   assert.equal(probe(root).count, 0);
 });
+
+function probeSrc(root, ...flags) {
+  const run = spawnSync('node', [PROBE, UNREACHABLE_SRC_FLAG, ...flags],
+    {cwd: root, encoding: 'utf8'});
+  assert.equal(run.stderr, '', 'the src reachability probe reports on stdout only');
+  const lines = run.stdout.trim().split('\n');
+  const count = Number(lines[lines.length - 1]);
+  assert.equal(run.status, count === 0 ? 0 : 1, 'exit status follows the count');
+  return {count, listed: lines.slice(0, -1)};
+}
+
+test('--unreachable-src flags src modules imported only by tests while excluding test-helpers',
+  () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'src-reachability-'));
+    execGit(['init', '--quiet'], {cwd: root});
+    write(root, 'package.json', JSON.stringify({
+      main: 'src/public-api.js',
+      exports: {'.': './src/public-api.js', './extra': './src/exported.js'},
+      bin: {cli: './src/bin-entry.js'},
+      scripts: {start: 'node src/index.js'},
+    }));
+    write(root, 'Dockerfile', 'CMD ["node", "src/docker-worker.js"]\n');
+    write(root, 'src/public-api.js', 'import \'./live-dep.js\';\n');
+    write(root, 'src/live-dep.js', 'export const live = 1;\n');
+    write(root, 'src/exported.js', 'export const extra = 1;\n');
+    write(root, 'src/bin-entry.js', 'export const bin = 1;\n');
+    write(root, 'src/index.js', 'export const idx = 1;\n');
+    write(root, 'src/docker-worker.js', 'export const worker = 1;\n');
+    write(root, 'scripts/tool.js', 'import \'../src/script-dep.js\';\n');
+    write(root, 'src/script-dep.js', 'export const tool = 1;\n');
+    write(root, 'src/test-helpers/helper.js', 'export const helper = 1;\n');
+    write(root, 'src/test-only-orphan.js', 'export const orphan = 1;\n');
+    write(root, 'src/completely-unused.js', 'export const unused = 1;\n');
+    write(root, 'test/orphan.test.js', 'import \'../src/test-only-orphan.js\';\n');
+    execGit(['add', '-A'], {cwd: root});
+
+    const {count, listed} = probeSrc(root, LIST_FLAG);
+    assert.deepEqual(listed, [
+      'src/completely-unused.js',
+      'src/test-only-orphan.js',
+    ], 'modules only imported by test/** or unimported must be flagged; prod roots and ' +
+      'src/test-helpers/** must not');
+    assert.equal(count, 2);
+    assert.equal(probeSrc(root).listed.length, 0, 'without --list only the count prints');
+
+    execGit(['rm', '--force', '--quiet', 'src/completely-unused.js', 'src/test-only-orphan.js'],
+      {cwd: root});
+    assert.equal(probeSrc(root).count, 0);
+  });

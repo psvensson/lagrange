@@ -25,6 +25,7 @@ const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayJoin = Function.call.bind(Array.prototype.join);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const arraySome = Function.call.bind(Array.prototype.some);
+const stringMatchAll = Function.call.bind(String.prototype.matchAll);
 const stringSplit = Function.call.bind(String.prototype.split);
 const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 const stringTrim = Function.call.bind(String.prototype.trim);
@@ -42,12 +43,12 @@ const REMOTE_SHA_INDEX = 3;
 const RELATIVE_SPECIFIER_PREFIX = '.';
 const MODULE_ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const PRODUCER_IMPORT_PATTERN =
-  /(?:import|export)\s[^'"]*?from\s*['"]([^'"]+)['"]|import\(\s*['"]([^'"]+)['"]\s*\)/gu;
+  /(?:import|export)\s[^'"]*?from\s*['"]([^'"]+)['"]|import(?:\(\s*|\s+)['"]([^'"]+)['"]/gu;
 const PRODUCER_SCOPE_PREFIXES = Object.freeze([
   'src/',
   'test/distributed/',
   'docs/benchmarks/',
-  'scripts/checks/',
+  'scripts/',
 ]);
 const PRODUCER_CLOSURE_ENTRYPOINTS = Object.freeze([
   'docs/benchmarks/cloud/recompute-comparative-from-raw.mjs',
@@ -261,12 +262,21 @@ function isProducerScopedPath(relPath) {
   return arraySome(PRODUCER_SCOPE_PREFIXES, (prefix) => stringStartsWith(relPath, prefix));
 }
 
+function collectRelativeImportSpecifiers(source) {
+  const specifiers = [];
+  for (const match of stringMatchAll(source, PRODUCER_IMPORT_PATTERN)) {
+    const specifier = match[1] || match[2];
+    if (stringStartsWith(specifier, RELATIVE_SPECIFIER_PREFIX)) {
+      specifiers.push(specifier);
+    }
+  }
+  return specifiers;
+}
+
 function collectRelativeImportTargets(currentAbsPath, rootDir) {
   const source = fs.readFileSync(currentAbsPath, UTF8);
   const targets = [];
-  for (const match of source.matchAll(PRODUCER_IMPORT_PATTERN)) {
-    const specifier = match[1] || match[2];
-    if (!stringStartsWith(specifier, RELATIVE_SPECIFIER_PREFIX)) continue;
+  for (const specifier of collectRelativeImportSpecifiers(source)) {
     const candidate = path.resolve(path.dirname(currentAbsPath), specifier);
     if (!fs.existsSync(candidate) || !fs.statSync(candidate).isFile()) continue;
     const relPath = path.relative(rootDir, candidate);
@@ -321,6 +331,8 @@ const GIT_IS_ANCESTOR_ARGUMENTS = Object.freeze(['merge-base', '--is-ancestor'])
 const GIT_DIFF_NAME_ONLY_ARGUMENTS = Object.freeze(['diff', '--name-only']);
 const GIT_LOG_NAME_ONLY_ARGUMENTS = Object.freeze(['log', '--format=', '--name-only']);
 const GIT_LS_TREE_ARGUMENTS = Object.freeze(['ls-tree', '-r', '--name-only']);
+const GIT_SHOW_ARGUMENTS = Object.freeze(['show']);
+const GIT_HEAD_REF = 'HEAD';
 const GIT_WORKTREE_ADD_ARGUMENTS = Object.freeze(['worktree', 'add', '--detach', '--quiet']);
 const GIT_WORKTREE_REMOVE_ARGUMENTS = Object.freeze(['worktree', 'remove', '--force']);
 const APPEND_ONLY_SCRIPT = 'scripts/checks/check-benchmark-history-append-only.js';
@@ -426,21 +438,102 @@ function nonEmptyLines(output) {
   return arrayFilter(stringSplit(String(output), NEWLINE), (line) => stringTrim(line) !== '');
 }
 
+function readGitTreeBlob(rootDir, gitRef, relPath) {
+  return execGit(
+    [GIT_C_FLAG, rootDir, ...GIT_SHOW_ARGUMENTS, `${gitRef}:${relPath}`],
+    {encoding: UTF8, env: gitEnv()},
+  );
+}
+
+function collectGitTreeProducerPathsForRef(rootDir, gitRef) {
+  const treeOut = execGit(
+    [GIT_C_FLAG, rootDir, ...GIT_LS_TREE_ARGUMENTS, gitRef],
+    {encoding: UTF8, env: gitEnv()},
+  );
+  const treeFiles = new Set(nonEmptyLines(treeOut));
+  const seeds = [...PRODUCER_CLOSURE_ENTRYPOINTS, ...SEED_BENCHMARK_PUBLICATION_PRODUCER_PATHS];
+  const visited = new Set();
+  const pending = [];
+  for (const relSeed of seeds) {
+    if (treeFiles.has(relSeed)) pending.push(relSeed);
+  }
+  while (pending.length > 0) {
+    const currentRel = pending.pop();
+    if (visited.has(currentRel)) continue;
+    visited.add(currentRel);
+    const source = readGitTreeBlob(rootDir, gitRef, currentRel);
+    const currentDir = path.posix.dirname(currentRel);
+    for (const specifier of collectRelativeImportSpecifiers(source)) {
+      const candidateRel = path.posix.normalize(path.posix.join(currentDir, specifier));
+      if (treeFiles.has(candidateRel) && isProducerScopedPath(candidateRel)) {
+        pending.push(candidateRel);
+      }
+    }
+  }
+  return [...visited];
+}
+
+function computeBenchmarkProducerPathsForGitRefs(repoRoot = MODULE_ROOT_DIR, gitRefs = []) {
+  const rawRefs = Array.isArray(gitRefs) ? gitRefs : [gitRefs];
+  const validRefs = [...new Set(arrayFilter(rawRefs, (ref) =>
+    typeof ref === 'string' && stringTrim(ref) !== '' && commitExists(repoRoot, ref)))];
+  if (validRefs.length === 0) {
+    return computeBenchmarkPublicationProducerPaths(repoRoot);
+  }
+  const union = new Set(SEED_BENCHMARK_PUBLICATION_PRODUCER_PATHS);
+  for (const gitRef of validRefs) {
+    for (const discovered of collectGitTreeProducerPathsForRef(repoRoot, gitRef)) {
+      union.add(discovered);
+    }
+  }
+  return Object.freeze([...union].sort());
+}
+
+function isBenchmarkCorpusPath(relPath) {
+  return arraySome(BENCHMARK_CORPUS_PATHS, (prefix) =>
+    relPath === prefix || stringStartsWith(relPath, `${prefix}/`));
+}
+
+function classifyChangedPathsSinceBenchmarkRefresh(
+  root,
+  {baseSha = null, commitSha = null, changedPaths = []} = {},
+) {
+  const refs = arrayFilter([baseSha, commitSha], Boolean);
+  const producerPaths = computeBenchmarkProducerPathsForGitRefs(root, refs);
+  const producerSet = new Set(producerPaths);
+  const benchmarkPaths = [];
+  const nonBenchmarkPaths = [];
+  for (const relPath of changedPaths) {
+    if (isBenchmarkCorpusPath(relPath) || producerSet.has(relPath)) {
+      benchmarkPaths.push(relPath);
+    } else {
+      nonBenchmarkPaths.push(relPath);
+    }
+  }
+  return Object.freeze({
+    producerPaths,
+    benchmarkPaths: Object.freeze(benchmarkPaths),
+    nonBenchmarkPaths: Object.freeze(nonBenchmarkPaths),
+    touchesBenchmark: benchmarkPaths.length > 0,
+  });
+}
+
 function rangeTouchedBenchmarkPaths(root, baseSha, headSha) {
   const env = gitEnv();
   const diffOut = execGit(
-    [GIT_C_FLAG, root, ...GIT_DIFF_NAME_ONLY_ARGUMENTS, baseSha, headSha,
-      GIT_DOUBLE_DASH, ...BENCHMARK_PRODUCER_PATHSPECS],
+    [GIT_C_FLAG, root, ...GIT_DIFF_NAME_ONLY_ARGUMENTS, baseSha, headSha],
     {encoding: UTF8, env},
   );
-  if (nonEmptyLines(diffOut).length > 0) return true;
   const logOut = execGit(
     [GIT_C_FLAG, root, ...GIT_LOG_NAME_ONLY_ARGUMENTS,
-      `${baseSha}${GIT_RANGE_SEPARATOR}${headSha}`,
-      GIT_DOUBLE_DASH, ...BENCHMARK_PRODUCER_PATHSPECS],
+      `${baseSha}${GIT_RANGE_SEPARATOR}${headSha}`],
     {encoding: UTF8, env},
   );
-  return nonEmptyLines(logOut).length > 0;
+  const changedPaths = [...new Set([...nonEmptyLines(diffOut), ...nonEmptyLines(logOut)])];
+  if (changedPaths.length === 0) return false;
+  return classifyChangedPathsSinceBenchmarkRefresh(root, {
+    baseSha, commitSha: headSha, changedPaths,
+  }).touchesBenchmark;
 }
 
 function treeContainsPaths(root, commitSha, pathspecs) {
@@ -481,7 +574,10 @@ function resolveCheckTarget(root, entry) {
   if (!hasCorpus && !baseHadCorpus) return null;
   const touched = diffBase ?
     rangeTouchedBenchmarkPaths(root, diffBase, commitSha) :
-    treeContainsPaths(root, commitSha, BENCHMARK_PRODUCER_PATHSPECS);
+    treeContainsPaths(root, commitSha, [
+      ...BENCHMARK_CORPUS_PATHS,
+      ...computeBenchmarkProducerPathsForGitRefs(root, [commitSha]),
+    ]);
   if (!touched) return null;
   if (!hasCorpus) {
     throw new Error(
@@ -585,9 +681,15 @@ function verifyMaterializedCommit(root, target) {
 
 function checkStagedBenchmarkInputsClean(root, writeOut = (text) => process.stdout.write(text)) {
   const env = gitEnv();
+  const headPaths = commitExists(root, GIT_HEAD_REF) ?
+    computeBenchmarkProducerPathsForGitRefs(root, [GIT_HEAD_REF]) : [];
+  const producerPathspecs = [
+    ...BENCHMARK_CORPUS_PATHS,
+    ...new Set([...computeBenchmarkPublicationProducerPaths(root), ...headPaths]),
+  ];
   const unstaged = nonEmptyLines(execGit(
     [GIT_C_FLAG, root, ...GIT_DIFF_NAME_ONLY_ARGUMENTS,
-      GIT_DOUBLE_DASH, ...BENCHMARK_PRODUCER_PATHSPECS],
+      GIT_DOUBLE_DASH, ...producerPathspecs],
     {encoding: UTF8, env},
   ));
   const untracked = nonEmptyLines(execGit(
@@ -651,6 +753,8 @@ export {
   PRODUCER_CLOSURE_ENTRYPOINTS,
   PRODUCER_SCOPE_PREFIXES,
   checkStagedBenchmarkInputsClean,
+  classifyChangedPathsSinceBenchmarkRefresh,
+  computeBenchmarkProducerPathsForGitRefs,
   computeBenchmarkPublicationProducerPaths,
   resolveCheckTarget,
 };

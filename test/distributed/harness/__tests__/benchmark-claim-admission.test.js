@@ -95,6 +95,7 @@ const arrayFind = Function.call.bind(Array.prototype.find);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayJoin = Function.call.bind(Array.prototype.join);
 const arrayMap = Function.call.bind(Array.prototype.map);
+const arraySome = Function.call.bind(Array.prototype.some);
 const stringIncludes = Function.call.bind(String.prototype.includes);
 const stringReplace = Function.call.bind(String.prototype.replace);
 const stringStartsWith = Function.call.bind(String.prototype.startsWith);
@@ -188,6 +189,12 @@ describe('raw observation record v2 validator', () => {
   });
 });
 
+function clearFixtureGateCases(gate) {
+  gate.passed = [];
+  delete gate.cases;
+  delete gate.proofs;
+}
+
 describe('claim admission through the publication path', () => {
   it('admits a sufficient capacity run and renders its observed numbers', async () => {
     const {matrix, readme} = await publish([
@@ -217,6 +224,7 @@ describe('claim admission through the publication path', () => {
     }],
     ['semantic gate incomplete', ADMISSION_REASON.SEMANTIC_GATE_NOT_PASSED, (run) => {
       run.correctness.semanticGate.status = 'incomplete';
+      clearFixtureGateCases(run.correctness.semanticGate);
     }],
     ['final state absent', ADMISSION_REASON.FINAL_STATE_MISSING, (run) => {
       run.correctness.finalState = null;
@@ -299,9 +307,23 @@ describe('claim admission through the publication path', () => {
     const {cell} = await publishedLagrangeCell((run) => {
       run.correctness.semanticGate.status = 'failed';
       run.correctness.semanticGate.failed = ['visibility'];
+      clearFixtureGateCases(run.correctness.semanticGate);
     });
     assert.equal(cell.status, CLAIM_CELL_STATUS.PRODUCT_FAILURE);
     assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.SEMANTIC_GATE_FAILED), true);
+  });
+
+  it('rejects a fixture-labelled passed gate that omits cases/proofs with passed: []', async () => {
+    const stripped = buildFixtureRun();
+    clearFixtureGateCases(stripped.correctness.semanticGate);
+    sealFixtureRun(stripped, {keepFinalState: true});
+    assertRejected(stripped, RECORD_REJECTION.MISSING_FIELD);
+    assert.equal(arrayIncludes(checkSemanticGate(stripped),
+      ADMISSION_REASON.SEMANTIC_GATE_NOT_PASSED), true);
+    const {cell} = await publishedLagrangeCell((run) =>
+      clearFixtureGateCases(run.correctness.semanticGate));
+    assert.equal(cell.status, CLAIM_CELL_STATUS.INVALID_MEASUREMENT);
+    assert.equal(arrayIncludes(cell.reasons, ADMISSION_REASON.SEMANTIC_GATE_NOT_PASSED), true);
   });
 
   it('fewer than 100 committed per run publishes counts, not capacity', async () => {
@@ -476,6 +498,7 @@ describe('semantic gate by profile class and stopped runs', () => {
   const incomplete = (run) => {
     run.correctness.semanticGate.status = OLTP_SCENARIO_A_SEMANTIC_GATE_STATUS.INCOMPLETE;
     run.correctness.semanticGate.missing = ['durability'];
+    clearFixtureGateCases(run.correctness.semanticGate);
   };
 
   it('a smoke run with an incomplete gate is admitted and says so', async () => {
@@ -512,6 +535,7 @@ describe('semantic gate by profile class and stopped runs', () => {
       run.correctness.semanticGate.failed = ['forbidden:lost_successful_write'];
       run.correctness.semanticGate.failureKinds = [{caseId: 'retryable-conflict',
         kind: 'product_anomaly', reasons: ['lost_update']}];
+      clearFixtureGateCases(run.correctness.semanticGate);
     }, SMOKE);
     assert.equal(anomaly.cell.status, CLAIM_CELL_STATUS.PRODUCT_FAILURE);
     assert.equal(arrayIncludes(anomaly.cell.reasons, 'semantic-gate-failed:retryable-conflict'),
@@ -1130,10 +1154,8 @@ function buildPhysicalRunAndHeader({
     const proofIds = [...CANONICAL_SCENARIO_A_CASE_PROOF_IDS[caseId]];
     return buildCanonicalSemanticGateCaseRecord({
       proofCase: {id: caseId, proofIds}, binding, evaluation: {passed: true, failures: []},
-      proofRecord: {
-        evidenceId: `${spec.system}-${caseId}`, system: spec.system, status: 'passed',
-        artifactSha256: 'e'.repeat(64), proofIds,
-      },
+      proofRecord: {evidenceId: `${spec.system}-${caseId}`, system: spec.system,
+        status: 'passed', artifactSha256: 'e'.repeat(64), proofIds},
       ...(caseId === 'durability' ? {faultEvidence} : {}),
     });
   })));
@@ -1155,18 +1177,13 @@ function evaluatePhysicalRunPair(mutateRun, options = {}) {
   mutateRun(second.run, second.header);
   first.run.rawObservationsDigest = computeRunObservationsDigest(first.run);
   second.run.rawObservationsDigest = computeRunObservationsDigest(second.run);
-  const claim = {
-    claimKey: `${targetId}/scenarioA/main`, claimKind: CLAIM_KIND.THROUGHPUT,
-    targetId, scenario: 'scenarioA', subkind: 'main', minDistinctHosts: 3, forensicReceiptIds: [],
-  };
+  const claim = {claimKey: `${targetId}/scenarioA/main`, claimKind: CLAIM_KIND.THROUGHPUT,
+    targetId, scenario: 'scenarioA', subkind: 'main', minDistinctHosts: 3, forensicReceiptIds: []};
+  const file = 'data/tidb-comparison/raw-observations.ndjson';
   return {
     firstRun: first.run,
     cell: evaluateBenchmarkClaimAdmission({
-      claim,
-      runs: [
-        {file: 'data/tidb-comparison/raw-observations.ndjson', run: first.run},
-        {file: 'data/tidb-comparison/raw-observations.ndjson', run: second.run},
-      ],
+      claim, runs: [{file, run: first.run}, {file, run: second.run}],
       campaignHeaders: new Map([[first.campaignId, first.header]]),
       retainedReferences: [], invalidations: [],
     }),
@@ -1345,35 +1362,26 @@ const PRODUCER_GRAPH_ROOTS = Object.freeze([
   'test/distributed/harness/comparative-landing-tables.js',
 ]);
 const PRODUCER_SCOPE_PREFIXES = Object.freeze([
-  'src/', 'test/distributed/', 'docs/benchmarks/', 'scripts/checks/',
+  'src/', 'test/distributed/', 'docs/benchmarks/', 'scripts/',
 ]);
-
-function isProducerScopedRelativePath(relPath) {
-  for (const prefix of PRODUCER_SCOPE_PREFIXES) {
-    if (stringStartsWith(relPath, prefix)) return true;
-  }
-  return false;
-}
 
 function collectImportedProducerFilesFromRoots() {
   const visited = new Set();
-  const pending = [];
-  for (const relRoot of PRODUCER_GRAPH_ROOTS) {
-    const absRoot = path.join(REPO_ROOT_DIR, relRoot);
-    if (fs.existsSync(absRoot)) pending.push(absRoot);
-  }
+  const pending = arrayFilter(
+    arrayMap(PRODUCER_GRAPH_ROOTS, (r) => path.join(REPO_ROOT_DIR, r)),
+    (abs) => fs.existsSync(abs),
+  );
   while (pending.length > 0) {
     const current = pending.pop();
     if (visited.has(current)) continue;
     visited.add(current);
-    const source = fs.readFileSync(current, 'utf8');
-    for (const match of source.matchAll(IMPORT_PATTERN)) {
+    for (const match of fs.readFileSync(current, 'utf8').matchAll(IMPORT_PATTERN)) {
       const specifier = match[1] || match[2];
       if (!stringStartsWith(specifier, '.')) continue;
       const target = path.resolve(path.dirname(current), specifier);
       if (!fs.existsSync(target) || !fs.statSync(target).isFile()) continue;
-      const targetRel = path.relative(REPO_ROOT_DIR, target);
-      if (isProducerScopedRelativePath(targetRel)) pending.push(target);
+      const rel = path.relative(REPO_ROOT_DIR, target);
+      if (arraySome(PRODUCER_SCOPE_PREFIXES, (p) => stringStartsWith(rel, p))) pending.push(target);
     }
   }
   return arrayMap([...visited], (absPath) => path.relative(REPO_ROOT_DIR, absPath)).sort();
@@ -1394,8 +1402,7 @@ describe('Finding 6: canonical benchmark producer dependency set and snapshot-fe
     assert.ok(importedFiles.length > 50, 'import graph traversal must discover producer closure');
     assert.ok(importedSrcFiles.length > 0, 'import graph traversal must include imported src/ files');
     for (const requiredProducer of [
-      'src/utils/canonical-json-data.js',
-      'src/diagnostics/source-fingerprint.js',
+      'src/utils/canonical-json-data.js', 'src/diagnostics/source-fingerprint.js',
       'test/distributed/harness/oltp-scenario-a-semantic-profile.js',
       'test/distributed/harness/benchmark-workload-dispatch.js',
       'test/distributed/harness/benchmark-oltp-state-reconciliation.js',
@@ -1406,18 +1413,14 @@ describe('Finding 6: canonical benchmark producer dependency set and snapshot-fe
       'scripts/checks/check-pushed-benchmark-freshness.js',
       'scripts/checks/comparative-benchmark-recompute.js',
       'scripts/checks/check-benchmark-history-append-only.js',
+      'scripts/lab/probe.js', 'scripts/lab/state.js', 'scripts/solve/store.js',
     ]) {
-      assert.equal(producerSet.has(requiredProducer), true,
-        `missing required producer ${requiredProducer} in BENCHMARK_PUBLICATION_PRODUCER_PATHS`);
-      assert.equal(arrayIncludes(importedFiles, requiredProducer), true,
-        `expected ${requiredProducer} in traversed import graph`);
+      assert.equal(producerSet.has(requiredProducer), true, `missing ${requiredProducer}`);
+      assert.equal(arrayIncludes(importedFiles, requiredProducer), true, `graph ${requiredProducer}`);
     }
     const missingFromCanonicalSet = arrayFilter(importedFiles, (file) => !producerSet.has(file));
-    assert.deepEqual(
-      missingFromCanonicalSet, [],
-      'imported producer files missing from BENCHMARK_PUBLICATION_PRODUCER_PATHS: ' +
-      missingFromCanonicalSet.join(', '),
-    );
+    assert.deepEqual(missingFromCanonicalSet, [],
+      `missing from producer set: ${missingFromCanonicalSet.join(', ')}`);
     for (const corpusPath of BENCHMARK_CORPUS_PATHS) {
       assert.equal(arrayIncludes(BENCHMARK_PRODUCER_PATHSPECS, corpusPath), true);
     }
@@ -1428,10 +1431,13 @@ describe('Finding 6: canonical benchmark producer dependency set and snapshot-fe
       gitInTempRepo(tmpRepo, ['config', 'user.email', 'test@example.com']);
       gitInTempRepo(tmpRepo, ['config', 'user.name', 'Test']);
       const rawObsFile = path.join(tmpRepo, 'data/tidb-comparison/raw-observations.ndjson');
+      const entryFile = path.join(tmpRepo, 'docs/benchmarks/cloud/recompute-comparative-from-raw.mjs');
       const srcDepFile = path.join(tmpRepo, importedSrcDep);
       fs.mkdirSync(path.dirname(rawObsFile), {recursive: true});
+      fs.mkdirSync(path.dirname(entryFile), {recursive: true});
       fs.mkdirSync(path.dirname(srcDepFile), {recursive: true});
       fs.writeFileSync(rawObsFile, '{}\n', 'utf8');
+      fs.writeFileSync(entryFile, `import '../../../${importedSrcDep}';\n`, 'utf8');
       fs.writeFileSync(srcDepFile, 'export const v = 1;\n', 'utf8');
       gitInTempRepo(tmpRepo, ['add', '.']);
       gitInTempRepo(tmpRepo, ['commit', '-q', '-m', 'base']);
@@ -1461,34 +1467,20 @@ describe('Finding 6: canonical benchmark producer dependency set and snapshot-fe
     const preCommit = fs.readFileSync(path.join(REPO_ROOT_DIR, '.githooks/pre-commit'), 'utf8');
     assert.equal(stringIncludes(preCommit, 'check-pushed-benchmark-freshness.js --list-producers'),
       true, 'pre-commit must consume --list-producers from check-pushed-benchmark-freshness.js');
-    assert.equal(
-      stringIncludes(preCommit, 'check-pushed-benchmark-freshness.js --check-staged-clean'),
-      true,
-      'pre-commit must enforce --check-staged-clean before regenerating benchmark artifacts',
-    );
+    assert.equal(stringIncludes(preCommit, 'check-pushed-benchmark-freshness.js --check-staged-clean'),
+      true, 'pre-commit must enforce --check-staged-clean before regenerating benchmark artifacts');
     assert.equal(stringIncludes(preCommit, ':(glob)test/distributed/harness/comparative-*.js'),
       false, 'pre-commit must not retain a duplicate hardcoded glob producer list');
 
     const prePush = fs.readFileSync(path.join(REPO_ROOT_DIR, '.githooks/pre-push'), 'utf8');
-    assert.equal(
-      stringIncludes(prePush, 'if [ ! -f "scripts/checks/check-pushed-benchmark-freshness.js" ]'),
-      true,
-      'pre-push must fail closed if scripts/checks/check-pushed-benchmark-freshness.js is missing',
-    );
-    assert.equal(
-      stringIncludes(prePush, 'if [ -f "scripts/checks/check-pushed-benchmark-freshness.js" ]'),
-      false,
-      'pre-push must not skip benchmark freshness when check-pushed-benchmark-freshness.js is absent',
-    );
+    assert.equal(stringIncludes(prePush, 'if [ ! -f "scripts/checks/check-pushed-benchmark-freshness.js" ]'),
+      true, 'pre-push must fail closed if scripts/checks/check-pushed-benchmark-freshness.js is missing');
+    assert.equal(stringIncludes(prePush, 'if [ -f "scripts/checks/check-pushed-benchmark-freshness.js" ]'),
+      false, 'pre-push must not skip benchmark freshness when check-pushed-benchmark-freshness.js is absent');
 
     const corpusWorktree = fs.readFileSync(
-      path.join(REPO_ROOT_DIR, 'scripts/checks/push-gate-corpus-worktree.js'),
-      'utf8',
-    );
-    assert.equal(
-      stringIncludes(corpusWorktree, 'if (!fs.existsSync(rawObservationsPath))'),
-      true,
-      'push-gate-corpus-worktree.js must fail closed when raw-observations.ndjson is missing',
-    );
+      path.join(REPO_ROOT_DIR, 'scripts/checks/push-gate-corpus-worktree.js'), 'utf8');
+    assert.equal(stringIncludes(corpusWorktree, 'if (!fs.existsSync(rawObservationsPath))'),
+      true, 'push-gate-corpus-worktree.js must fail closed when raw-observations.ndjson is missing');
   });
 });

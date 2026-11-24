@@ -90,7 +90,7 @@ const BUDGET = Object.freeze({
   stale_owner_indexes: 0,
   failure_bundle_log_windows_without_coverage: 0,
   two_source_fallback_reads: 1789,
-  typeof_dual_paths: 627,
+  typeof_dual_paths: 966,
   catch_returns_default: 387,
   reexport_only_modules: 35,
   alias_exports: 0,

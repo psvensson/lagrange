@@ -658,6 +658,42 @@ describe('readiness summary and canonical history outcome accounting', () => {
       assert.equal(await fs.readFile(ndjsonPath, 'utf8'), afterHistory);
       assert.equal(await fs.readFile(ledgerPath, 'utf8'), afterLedger);
 
+      // Summary-repair witness: simulating a crash right before writeSummary (missing,
+      // corrupt JSON, or stale JSON summaryPath while ndjson + ledger are already complete)
+      // heals summaryPath and reports alreadyReconciled: false, then returns to no-op:
+      const canonicalSummaryText = await fs.readFile(summaryPath, 'utf8');
+      for (const [label, corrupt] of [
+        ['missing summary', async () => fs.rm(summaryPath, {force: true})],
+        ['invalid JSON summary', async () => fs.writeFile(summaryPath, '{truncated', 'utf8')],
+        ['stale JSON summary', async () => fs.writeFile(summaryPath, '{"stale":true}\n', 'utf8')],
+      ]) {
+        await corrupt();
+        const repaired = await reconcileNov2026ComparisonHistoryToDisk({
+          ndjsonPath,
+          ledgerPath,
+          summaryPath,
+          recordedAt: '2026-11-24T12:07:00.000Z',
+          recordedBy: 'evidence-report-owner-test',
+        });
+        assert.equal(repaired.applied, true, label);
+        assert.equal(repaired.alreadyReconciled, false, label);
+        assert.equal(repaired.resumed, true, label);
+        assert.equal(repaired.appendedInvalidationCount, 0, label);
+        assert.equal(repaired.appendedHistoryCount, 0, label);
+        assert.equal(await fs.readFile(summaryPath, 'utf8'), canonicalSummaryText, label);
+        assert.equal(await fs.readFile(ndjsonPath, 'utf8'), afterHistory, label);
+        assert.equal(await fs.readFile(ledgerPath, 'utf8'), afterLedger, label);
+        const postRepairNoop = await reconcileNov2026ComparisonHistoryToDisk({
+          ndjsonPath,
+          ledgerPath,
+          summaryPath,
+          recordedAt: '2026-11-24T12:08:00.000Z',
+          recordedBy: 'evidence-report-owner-test',
+        });
+        assert.equal(postRepairNoop.alreadyReconciled, true, `${label} post-repair`);
+        assert.equal(postRepairNoop.applied, false, `${label} post-repair`);
+      }
+
       // Resumability witness: simulating an interrupted reconciliation (inv-0026 + first 5
       // replacement history records on disk) and calling reconcileNov2026ComparisonHistoryToDisk
       // resumes and writes only the remaining 18 records without duplicating inv-0026 or any

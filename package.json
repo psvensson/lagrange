@@ -65,6 +65,7 @@
     "test:unused": "knip --exclude exports,duplicates",
     "test:unused:push": "node scripts/checks/push-gate-unused-files.js",
     "test:unused:prod": "knip --production --include dependencies",
+    "test:unused:src": "node scripts/checks/push-gate-unused-files.js --unreachable-src --list",
     "test:unused:exports": "knip --include exports",
     "test:unused:ratchet": "node scripts/check-unused-exports.js",
     "test:deps": "depcruise --config dependency-cruiser.config.cjs src scripts test",

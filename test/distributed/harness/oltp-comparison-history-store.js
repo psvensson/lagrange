@@ -2,6 +2,8 @@ import {createHash} from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
+import {serializeJsonData} from '../../../src/utils/canonical-json-data.js';
+
 import {
   ADMISSION_REASON,
   CLAIM_CELL_STATUS,
@@ -1211,6 +1213,19 @@ async function applyPrevalidatedReconciliationWrites({
   await writeSummary(summaryPath, summary);
 }
 
+async function isSummaryFileUpToDate(summaryPath, expectedSummary) {
+  const existingText = await readExistingText(summaryPath);
+  if (stringTrim(existingText) === '') return false;
+  let parsed;
+  try {
+    parsed = JSON.parse(existingText);
+  } catch {
+    return false;
+  }
+  return serializeJsonData(parsed, {sortKeys: true}) ===
+    serializeJsonData(expectedSummary, {sortKeys: true});
+}
+
 async function reconcileNov2026ComparisonHistoryToDisk(options = {}) {
   const {ndjsonPath, summaryPath, ledgerPath} = resolveReconciliationPaths(options);
   const existingText = await readExistingText(ndjsonPath);
@@ -1233,10 +1248,14 @@ async function reconcileNov2026ComparisonHistoryToDisk(options = {}) {
     existingRecords, existingInvalidations, existingLedgerText, plan, missingRecords,
   });
   if (!plan.needsInvalidationAppend && missingRecords.length === 0) {
+    const summaryUpToDate = await isSummaryFileUpToDate(summaryPath, summary);
+    if (!summaryUpToDate) {
+      await writeSummary(summaryPath, summary);
+    }
     return Object.freeze({
-      applied: false,
-      alreadyReconciled: true,
-      resumed: false,
+      applied: !summaryUpToDate,
+      alreadyReconciled: summaryUpToDate,
+      resumed: !summaryUpToDate,
       appendedInvalidationCount: 0,
       appendedHistoryCount: 0,
       invalidationEntry: plan.invalidationEntry,
