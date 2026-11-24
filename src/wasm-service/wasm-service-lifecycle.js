@@ -285,8 +285,8 @@ class WasmServiceLifecycle {
 
   /**
    * The node owners a replica publishes its role and leader through: its CDC
-   * owner, the node's cache (design RV2.6, RV3.6; the replica keeps its
-   * singleton fallback when absent) and any injected writers.
+   * owner, the node-owned system table cache (design RV2.6, RV3.6) and any
+   * injected writers.
    * @return {Object}
    * @private
    */

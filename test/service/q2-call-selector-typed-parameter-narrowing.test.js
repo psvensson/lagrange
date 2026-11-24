@@ -342,7 +342,7 @@ import {defineService, distributed, sql} from 'lagrange-server/authoring';
 
 const accountSummary = distributed({
   statement: sql\`${POINT_SELECTOR_SQL}\`,
-  params: ${JSON.stringify(POINT_PARAM_SCHEMA)},
+  parameters: ${JSON.stringify(POINT_PARAM_SCHEMA)},
   run(rows, _args, {emit}) {
     let sum = 0;
     for (const row of rows) {
@@ -620,7 +620,7 @@ describe('Q2 — call-selector-typed-parameter-narrowing', () => {
     );
 
     const accountSummary = distributed({
-      params: POINT_PARAM_SCHEMA,
+      parameters: POINT_PARAM_SCHEMA,
       reduce: (partials) => partials,
       run: (rows) => rows.length,
       statement: sql`SELECT id, account_id, amount_cents FROM account_activity WHERE account_id = $1 AND active = $2 AND category = $3 AND ($4 IS NULL OR note = $4)`,

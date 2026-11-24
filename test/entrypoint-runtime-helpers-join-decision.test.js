@@ -63,8 +63,11 @@ function createLogger() {
   };
 }
 
-function createProbeServer(routes) {
+function createProbeServer(routes, observedUrls = null) {
   return createServer((request, response) => {
+    if (Array.isArray(observedUrls)) {
+      observedUrls.push(request.url);
+    }
     const route = routes[request.url] || {
       statusCode: HTTP_STATUS.NOT_FOUND,
       body: TEST_RESPONSE_BODY_EMPTY,
@@ -282,6 +285,64 @@ test(
         startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
         reasonCode: TEST_MEMBERSHIP_REASON_JOIN_PROBED_PEER,
         evidenceSource: TEST_DECISION_SOURCE_REJOIN_HINTS,
+      },
+    });
+  },
+);
+
+test(
+  'resolveStartupJoinDecision does not fall back to /health or select a peer when /bootstrap/ready returns 404',
+  async (t) => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'entrypoint-join-decision-'));
+    t.after(() => rm(dataDir, {recursive: true, force: true}));
+
+    const observedUrls = [];
+    const legacyHealthOnlyPeer = createProbeServer({
+      [ENTRYPOINT_DEFAULT.AUTO_REJOIN_BOOTSTRAP_READY_PATH]: {
+        statusCode: HTTP_STATUS.NOT_FOUND,
+        body: TEST_RESPONSE_BODY_EMPTY,
+      },
+      [ENTRYPOINT_DEFAULT.AUTO_REJOIN_HEALTH_PATH]: {
+        statusCode: HTTP_STATUS.OK,
+        body: TEST_RESPONSE_BODY_OK,
+      },
+    }, observedUrls);
+    const legacyPeerAddress = await listenProbeServer(legacyHealthOnlyPeer);
+    t.after(() => closeProbeServer(legacyHealthOnlyPeer));
+
+    await persistBootstrapRejoinHints({
+      bootIncarnation: TEST_BOOT_INCARNATION,
+      dataDir,
+      nodeId: TEST_NODE_ID,
+      nodeAddress: TEST_NODE_ADDRESS,
+      nodeRole: TEST_NODE_ROLE_JOINER,
+      peerAddresses: [legacyPeerAddress],
+      clusterNodeCount: TEST_CLUSTER_NODE_COUNT,
+      now: () => TEST_UPDATED_AT,
+    });
+
+    const decision = await resolveStartupJoinDecision(
+      createDecisionOptions(dataDir, {
+        [ENTRYPOINT_ENV.SEED_NODE_ADDRESS]: TEST_EXPLICIT_SEED_NODE_ADDRESS,
+      }),
+    );
+
+    t.same(
+      observedUrls,
+      [ENTRYPOINT_DEFAULT.AUTO_REJOIN_BOOTSTRAP_READY_PATH],
+      'probe must only hit the canonical bootstrap-ready endpoint and never fall back to /health',
+    );
+    t.match(decision, {
+      seedNodeAddress: TEST_EXPLICIT_SEED_NODE_ADDRESS,
+      startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+      source: TEST_DECISION_SOURCE_EXPLICIT,
+      membershipOwnerOutcome: {
+        semanticOwner: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.SEMANTIC_OWNER,
+        boundary: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.BOUNDARY,
+        outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.RESTART_REENTRY,
+        startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+        reasonCode: TEST_MEMBERSHIP_REASON_EXPLICIT_SEED,
+        evidenceSource: TEST_DECISION_SOURCE_EXPLICIT,
       },
     });
   },

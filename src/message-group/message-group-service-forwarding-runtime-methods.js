@@ -89,10 +89,6 @@ class MessageGroupServiceForwardingRuntimeMethods {
     return this.forwardingOwner.resolveForwardTargetNodeId(target);
   }
 
-  isStrictForwardNodeReady(nodeId) {
-    return this.forwardingOwner.isStrictForwardNodeReady(nodeId);
-  }
-
   isStrictForwardNodeConnected(nodeId) {
     return this.forwardingOwner.isStrictForwardNodeConnected(nodeId);
   }

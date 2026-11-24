@@ -19,7 +19,6 @@ function readOwnRaftStatus(service) {
 function createMessageGroupForwardingOwnerTargetMethods(options = {}) {
   const buildMessageGroupLeaderIdentitySnapshot =
     options.buildMessageGroupLeaderIdentitySnapshot;
-  const column = options.column || {};
   const entityType = options.entityType || {};
   const messageGroupLeaderIdentitySource =
     options.messageGroupLeaderIdentitySource || {};
@@ -27,7 +26,6 @@ function createMessageGroupForwardingOwnerTargetMethods(options = {}) {
     options.messageGroupLeaderIdentityState || {};
   const num = options.num || {};
   const state = options.state || {};
-  const tables = options.tables || {};
   const typeofToken = options.typeofToken || {};
 
   return {
@@ -100,48 +98,6 @@ function createMessageGroupForwardingOwnerTargetMethods(options = {}) {
         // Unplaced (typed refusal) or malformed: no node to forward to.
         return null;
       }
-    },
-
-    isStrictForwardNodeReady(nodeId) {
-      const service = this.service;
-      if (typeof nodeId !== typeofToken.STRING || nodeId.length === num.ZERO) {
-        return false;
-      }
-
-      const cache = service.systemTableCache;
-      if (!cache) {
-        return true;
-      }
-
-      if (typeof cache.getReadyNodes === typeofToken.FUNCTION) {
-        const readyNodes = cache.getReadyNodes();
-        if (Array.isArray(readyNodes)) {
-          return readyNodes.includes(nodeId);
-        }
-      }
-
-      const allNodeRows = typeof cache.getAll === typeofToken.FUNCTION ?
-        cache.getAll(tables.NODES) || [] :
-        typeof cache.filter === typeofToken.FUNCTION ?
-          cache.filter(tables.NODES, () => true) || [] :
-          [];
-      if (!Array.isArray(allNodeRows) || allNodeRows.length === num.ZERO) {
-        return true;
-      }
-
-      const nodeRow = typeof cache.get === typeofToken.FUNCTION ?
-        cache.get(tables.NODES, nodeId) :
-        allNodeRows.find((row) => row?.[column.NODE_ID] === nodeId) || null;
-      if (!nodeRow) {
-        return false;
-      }
-
-      const readyLeaseExpiresAt = Number(
-        nodeRow?.[column.READY_LEASE_EXPIRES_AT],
-      );
-      return nodeRow?.[column.CONNECTION_STATE] === state.READY &&
-        Number.isFinite(readyLeaseExpiresAt) &&
-        readyLeaseExpiresAt > Date.now();
     },
 
     isStrictForwardNodeConnected(nodeId) {

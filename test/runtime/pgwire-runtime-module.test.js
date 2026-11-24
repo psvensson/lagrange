@@ -100,13 +100,21 @@ describe('pgwire-runtime-module', () => {
       assert.equal(cfg.maxSessions, 50);
     });
 
-    it('should accept object config (runtime_config key)', () => {
+    it('should accept object config (canonical runtimeConfig key)', () => {
       const def = {
-        runtime_config: {host: '10.0.0.1', port: 8888},
+        runtimeConfig: {host: '10.0.0.1', port: 8888},
       };
       const cfg = resolveConfig(def);
       assert.equal(cfg.host, '10.0.0.1');
       assert.equal(cfg.port, 8888);
+    });
+
+    it('should ignore legacy snake_case runtime_config key', () => {
+      const cfg = resolveConfig({
+        runtime_config: {host: '10.0.0.1', port: 8888},
+      });
+      assert.equal(cfg.host, PGWIRE_DEFAULT.HOST);
+      assert.equal(cfg.port, PGWIRE_DEFAULT.PORT);
     });
 
     it('should apply overrides over config values', () => {

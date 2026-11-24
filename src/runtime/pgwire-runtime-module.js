@@ -113,7 +113,6 @@ const PGWIRE_EVENT = Object.freeze({
 
 const PGWIRE_CONTEXT_FIELD = Object.freeze({
   SERVICE_ID: 'serviceId',
-  SERVICE_ID_LEGACY: 'service_id',
 });
 
 const PGWIRE_CONFIG_OVERRIDE_FIELD = Object.freeze({
@@ -172,9 +171,7 @@ function readRawDefinitionRuntimeConfig(definition) {
   if (!definition || typeof definition !== 'object') {
     return undefined;
   }
-  return definition.runtimeConfig !== undefined ?
-    definition.runtimeConfig :
-    definition.runtime_config;
+  return definition.runtimeConfig;
 }
 
 function parseDefinitionConfig(definition) {
@@ -328,8 +325,7 @@ class PostgresWireRuntimeModule {
         PGWIRE_MODULE_ERROR.DEFINITION_REQUIRED,
       );
     } else {
-      const configStr = definition.runtimeConfig ??
-        definition.runtime_config;
+      const configStr = definition.runtimeConfig;
       const validation = validatePgwireRuntimeConfig(configStr);
       if (!validation.valid) {
         result = buildStatusResult(
@@ -341,8 +337,7 @@ class PostgresWireRuntimeModule {
             `${validation.errors.join(PGWIRE_SEPARATOR.ERROR_LIST)}`,
         );
       } else {
-        const serviceId = definition[PGWIRE_CONTEXT_FIELD.SERVICE_ID] ??
-          definition[PGWIRE_CONTEXT_FIELD.SERVICE_ID_LEGACY];
+        const serviceId = definition[PGWIRE_CONTEXT_FIELD.SERVICE_ID];
         const config = resolveConfig(definition);
         this._prepared.set(serviceId, {config, definition});
         result = buildStatusResult(PREPARE_STATUS.READY);
@@ -371,8 +366,7 @@ class PostgresWireRuntimeModule {
       );
     }
 
-    const serviceId = replicaContext[PGWIRE_CONTEXT_FIELD.SERVICE_ID] ??
-      replicaContext[PGWIRE_CONTEXT_FIELD.SERVICE_ID_LEGACY];
+    const serviceId = replicaContext[PGWIRE_CONTEXT_FIELD.SERVICE_ID];
     if (!serviceId) {
       return buildStatusResult(
         START_STATUS.FAILED,
@@ -548,8 +542,7 @@ class PostgresWireRuntimeModule {
       return;
     }
 
-    const serviceId = replicaContext[PGWIRE_CONTEXT_FIELD.SERVICE_ID] ??
-      replicaContext[PGWIRE_CONTEXT_FIELD.SERVICE_ID_LEGACY];
+    const serviceId = replicaContext[PGWIRE_CONTEXT_FIELD.SERVICE_ID];
     if (!serviceId) {
       return;
     }
@@ -598,8 +591,7 @@ class PostgresWireRuntimeModule {
         PGWIRE_MODULE_ERROR.REPLICA_CONTEXT_REQUIRED,
       );
     } else {
-      const serviceId = replicaContext[PGWIRE_CONTEXT_FIELD.SERVICE_ID] ??
-        replicaContext[PGWIRE_CONTEXT_FIELD.SERVICE_ID_LEGACY];
+      const serviceId = replicaContext[PGWIRE_CONTEXT_FIELD.SERVICE_ID];
       if (!serviceId) {
         result = buildStatusResult(
           HEALTH_STATUS.UNKNOWN,

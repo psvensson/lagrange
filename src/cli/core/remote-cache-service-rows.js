@@ -100,10 +100,10 @@ export function getLogicalServiceRows(tables, filter = {}) {
     logicalServices.push({
       ...definition,
       service_id: serviceId,
-      service_name: definition.service_name || definition.serviceName || serviceId,
-      service_type: definition.service_type || definition.serviceType || LOCAL_STR_RUNTIME_SERVICE,
-      runtime_kind: definition.runtime_kind || definition.runtimeKind || null,
-      runtime_ref: definition.runtime_ref || definition.runtimeRef || null,
+      service_name: definition.service_name || serviceId,
+      service_type: definition.service_type || LOCAL_STR_RUNTIME_SERVICE,
+      runtime_kind: definition.runtime_kind || null,
+      runtime_ref: definition.runtime_ref || null,
       replica_count: desiredReplicaCount,
       replica_count_observed: observedReplicaCount,
       healthy_replica_count: healthyReplicaCount,
@@ -183,7 +183,7 @@ export function formatEndpointAddress(endpoint) {
   if (!address) {
     return null;
   }
-  const port = endpoint.port ?? endpoint.ws_port ?? endpoint.wsPort;
+  const port = endpoint.port ?? endpoint.ws_port;
   if (port === undefined || port === null) {
     return address;
   }
@@ -191,7 +191,7 @@ export function formatEndpointAddress(endpoint) {
 }
 
 /**
- * Resolve a service identifier from snake_case, camelCase, or id fallback.
+ * Resolve a canonical service identifier from a dump row.
  * @param {Object|undefined|null} row
  * @return {string}
  */
@@ -199,11 +199,11 @@ export function resolveServiceId(row) {
   if (!row) {
     return '';
   }
-  return row.service_id || row.serviceId || row.id || '';
+  return row.service_id || '';
 }
 
 /**
- * Resolve a node identifier from snake_case or camelCase fields.
+ * Resolve a canonical node identifier from a dump row.
  * @param {Object|undefined|null} row
  * @return {string|null}
  */
@@ -211,11 +211,11 @@ export function resolveNodeId(row) {
   if (!row) {
     return null;
   }
-  return row.node_id || row.nodeId || null;
+  return row.node_id || null;
 }
 
 /**
- * Resolve a service type from snake_case or legacy aliases.
+ * Resolve a canonical service type from a dump row.
  * @param {Object|undefined|null} row
  * @return {string|null}
  */
@@ -223,11 +223,11 @@ export function resolveServiceType(row) {
   if (!row) {
     return null;
   }
-  return row.service_type || row.serviceType || row.type || null;
+  return row.service_type || null;
 }
 
 /**
- * Resolve endpoint identifier from snake_case, camelCase, or id fallback.
+ * Resolve a canonical endpoint identifier from an endpoint row.
  * @param {Object|undefined|null} endpoint
  * @return {string|null}
  */
@@ -235,11 +235,12 @@ export function resolveEndpointId(endpoint) {
   if (!endpoint) {
     return null;
   }
-  return endpoint.endpoint_id || endpoint.endpointId || endpoint.id || null;
+  return endpoint.endpoint_id || null;
 }
 
 /**
- * Resolve display address from common node/endpoint field variants.
+ * Resolve display address from canonical node (`node_address`) or endpoint
+ * (`address`) dump fields.
  * @param {Object|undefined|null} row
  * @return {string|null}
  */
@@ -247,7 +248,7 @@ export function resolveNodeAddress(row) {
   if (!row) {
     return null;
   }
-  return row.node_address || row.nodeAddress || row.address || row.host || null;
+  return row.node_address || row.address || null;
 }
 
 /**
@@ -255,15 +256,13 @@ export function resolveNodeAddress(row) {
  * runtime row has an endpoint row, whose health_status column is NOT NULL
  * DEFAULT 'healthy' (SERVICE_ENDPOINTS_SCHEMA in
  * src/bootstrap/system-table-runtime-schema-definitions.js); service_endpoints
- * has no status column. A dump row carrying neither health spelling shows
- * the named UNKNOWN.
+ * has no status column. A dump row without health_status shows the named
+ * UNKNOWN.
  * @param {Object|null|undefined} endpoint
  * @return {string}
  */
 export function resolveRuntimeStatus(endpoint) {
-  return endpoint?.health_status ||
-    endpoint?.healthStatus ||
-    LOCAL_STR_UNKNOWN;
+  return endpoint?.health_status || LOCAL_STR_UNKNOWN;
 }
 
 /**

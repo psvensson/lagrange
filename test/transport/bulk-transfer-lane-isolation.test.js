@@ -78,6 +78,7 @@ function identifyMessage(overrides = {}) {
     nodeId: TEST_PEER_NODE_ID,
     nodeAddress: TEST_PEER_ADDRESS,
     address: TEST_PEER_ADDRESS,
+    bootIncarnation: TEST_BOOT_INCARNATION,
     timestamp: Date.now(),
     ...overrides,
   });

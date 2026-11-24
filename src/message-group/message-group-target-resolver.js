@@ -12,33 +12,14 @@ const BOOLEAN_TYPE = 'boolean';
 const MIN_LEASE_TIMESTAMP_MS = 0;
 
 function filterRows(cache, tableName, predicate) {
-  if (!cache) {
+  if (typeof cache?.filter !== 'function') {
     return [];
   }
-  if (typeof cache.filter === 'function') {
-    return cache.filter(tableName, predicate) || [];
-  }
-  if (typeof cache.getAll === 'function') {
-    return (cache.getAll(tableName) || []).filter(predicate);
-  }
-  return [];
+  return cache.filter(tableName, predicate) || [];
 }
 
 function findRow(cache, tableName, predicate) {
   return filterRows(cache, tableName, predicate)[0] || null;
-}
-
-function hasNodeReadinessRows(cache) {
-  if (!cache) {
-    return false;
-  }
-  if (typeof cache.getAll === 'function') {
-    return (cache.getAll(TABLES.NODES) || []).length > 0;
-  }
-  if (typeof cache.filter === 'function') {
-    return (cache.filter(TABLES.NODES, () => true) || []).length > 0;
-  }
-  return false;
 }
 
 function isReadyNodeRow(nodeRow, nowMs = Date.now()) {
@@ -67,20 +48,11 @@ function isReadyNode(cache, nodeId) {
   if (typeof nodeId !== 'string' || nodeId.length === 0) {
     return false;
   }
-  if (!hasNodeReadinessRows(cache)) {
-    return true;
+  if (typeof cache?.getReadyNodes !== 'function') {
+    return false;
   }
-  if (typeof cache?.getReadyNodes === 'function') {
-    const readyNodes = cache.getReadyNodes();
-    if (Array.isArray(readyNodes)) {
-      return readyNodes.includes(nodeId);
-    }
-  }
-
-  const nodeRow = findRow(cache, TABLES.NODES, (row) => {
-    return row?.[COLUMN.NODE_ID] === nodeId;
-  });
-  return isReadyNodeRow(nodeRow, Date.now());
+  const readyNodes = cache.getReadyNodes();
+  return Array.isArray(readyNodes) && readyNodes.includes(nodeId);
 }
 
 function getMessageGroupServiceCandidates(cache, groupId, options = {}) {

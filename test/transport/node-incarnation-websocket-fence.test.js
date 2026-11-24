@@ -1,11 +1,10 @@
 /**
  * Receiver-side boot-incarnation fencing (node-incarnation-fencing-v2,
  * frontier 2), transport half: an IDENTIFY frame whose bootIncarnation is
- * KNOWN and LOWER than the receiver's per-node high-water is a zombie and
- * must never rekey the peer connection slot — the incoming socket is
- * terminated and the existing connection is kept. A fresh-incarnation
- * IDENTIFY adopts normally. UNKNOWN incarnation (0 / pre-incarnation) never
- * fences (clusterId UNKNOWN compat policy).
+ * missing/invalid or LOWER than the receiver's per-node high-water is refused
+ * fail-closed — the incoming socket is terminated and the existing connection
+ * is kept. A fresh-incarnation IDENTIFY with a valid positive safe integer
+ * adopts normally.
  */
 
 import t from '../../src/test-helpers/tap.js';
@@ -336,7 +335,7 @@ t.test(
 );
 
 t.test(
-  'an UNKNOWN incarnation IDENTIFY never fences (pre-incarnation compat)',
+  'missing or invalid bootIncarnation IDENTIFY frames are rejected fail-closed',
   async (t) => {
     initializeTestEnvironment();
     t.teardown(cleanupTestEnvironment);
@@ -349,27 +348,55 @@ t.test(
       await router.shutdown().catch(() => {});
     });
 
-    // Even with a known high-water recorded, a pre-incarnation IDENTIFY (no
-    // field) is UNKNOWN and adopts normally.
-    router.nodeBootIncarnationWatermarks.set(REMOTE_NODE_ID, 9);
-    const legacyWs = createTerminableWsStub();
-    registerIncomingConnection(router, 'incoming-legacy', legacyWs);
+    for (const [label, message] of [
+      ['missing bootIncarnation (no prior watermark)', buildIdentifyMessage({})],
+      ['zero bootIncarnation (no prior watermark)', buildIdentifyMessage({bootIncarnation: 0})],
+      ['negative bootIncarnation', buildIdentifyMessage({bootIncarnation: -1})],
+      ['non-integer bootIncarnation', buildIdentifyMessage({bootIncarnation: '7'})],
+    ]) {
+      const legacyWs = createTerminableWsStub();
+      const connId = `incoming-${label}`;
+      registerIncomingConnection(router, connId, legacyWs);
+      router.handleIdentification(connId, legacyWs, message);
+      t.equal(
+        legacyWs.terminateCalled,
+        true,
+        `${label}: incoming socket is terminated fail-closed`,
+      );
+      t.equal(
+        router.nodeConnections.get(REMOTE_NODE_ID),
+        undefined,
+        `${label}: peer slot is never adopted`,
+      );
+      t.notOk(
+        router.nodeConnections.has(connId),
+        `${label}: pre-identify record is removed`,
+      );
+    }
 
+    router.nodeBootIncarnationWatermarks.set(REMOTE_NODE_ID, 9);
+    const legacyWithWatermarkWs = createTerminableWsStub();
+    registerIncomingConnection(router, 'incoming-legacy', legacyWithWatermarkWs);
     router.handleIdentification(
       'incoming-legacy',
-      legacyWs,
+      legacyWithWatermarkWs,
       buildIdentifyMessage({}),
     );
 
     t.equal(
-      router.nodeConnections.get(REMOTE_NODE_ID)?.connectionId,
-      'incoming-legacy',
-      'a pre-incarnation IDENTIFY is not fenced by the high-water',
+      legacyWithWatermarkWs.terminateCalled,
+      true,
+      'pre-incarnation IDENTIFY with prior high-water is terminated fail-closed',
+    );
+    t.equal(
+      router.nodeConnections.get(REMOTE_NODE_ID),
+      undefined,
+      'pre-incarnation IDENTIFY never adopts the peer slot',
     );
     t.equal(
       router.nodeBootIncarnationWatermarks.get(REMOTE_NODE_ID),
       9,
-      'an UNKNOWN identification does not move the high-water',
+      'a refused pre-incarnation identification does not move the high-water',
     );
 
     t.end();

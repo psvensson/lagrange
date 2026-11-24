@@ -7,7 +7,7 @@
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
-import {TABLES} from '../constants/index.js';
+import {COLUMN, TABLES} from '../constants/index.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {
   CONTROL_PLANE_READ_STRATEGY,
@@ -191,20 +191,11 @@ class TablePolicyService extends EventEmitter {
       return null;
     }
 
-    let row = null;
-    if (typeof this.systemTableCache.filter === 'function') {
-      const rows = this.systemTableCache.filter(
-        TABLES.TABLES,
-        (table) => table?.table_id === tableId || table?.tableId === tableId,
-      );
-      row = rows[0] || null;
-    } else if (typeof this.systemTableCache.getAll === 'function') {
-      const rows = this.systemTableCache.getAll(TABLES.TABLES) || [];
-      row = rows.find((table) =>
-        table?.table_id === tableId || table?.tableId === tableId,
-      ) || null;
-    }
-
+    const rows = this.systemTableCache.filter(
+      TABLES.TABLES,
+      (table) => table?.[COLUMN.TABLE_ID] === tableId,
+    );
+    const row = rows[0] || null;
     return this.applyCommittedPolicyFence(tableId, row);
   }
 
@@ -219,25 +210,11 @@ class TablePolicyService extends EventEmitter {
       return null;
     }
 
-    if (typeof this.systemTableCache.filter === 'function') {
-      const rows = this.systemTableCache.filter(
-        TABLES.PARTITIONS,
-        (partition) =>
-          partition?.partition_id === partitionId ||
-          partition?.partitionId === partitionId,
-      );
-      return rows[0] || null;
-    }
-
-    if (typeof this.systemTableCache.getAll === 'function') {
-      const rows = this.systemTableCache.getAll(TABLES.PARTITIONS) || [];
-      return rows.find((partition) =>
-        partition?.partition_id === partitionId ||
-        partition?.partitionId === partitionId,
-      ) || null;
-    }
-
-    return null;
+    const rows = this.systemTableCache.filter(
+      TABLES.PARTITIONS,
+      (partition) => partition?.[COLUMN.PARTITION_ID] === partitionId,
+    );
+    return rows[0] || null;
   }
 
   hasCachedReadSource() {
@@ -565,22 +542,11 @@ class TablePolicyService extends EventEmitter {
       return null;
     }
 
-    if (typeof this.systemTableCache.filter === 'function') {
-      const rows = this.systemTableCache.filter(
-        TABLES.MESSAGE_GROUPS,
-        (group) => group?.group_id === groupId || group?.groupId === groupId,
-      );
-      return rows[0] || null;
-    }
-
-    if (typeof this.systemTableCache.getAll === 'function') {
-      const rows = this.systemTableCache.getAll(TABLES.MESSAGE_GROUPS) || [];
-      return rows.find((group) =>
-        group?.group_id === groupId || group?.groupId === groupId,
-      ) || null;
-    }
-
-    return null;
+    const rows = this.systemTableCache.filter(
+      TABLES.MESSAGE_GROUPS,
+      (group) => group?.[COLUMN.GROUP_ID] === groupId,
+    );
+    return rows[0] || null;
   }
 
   /**

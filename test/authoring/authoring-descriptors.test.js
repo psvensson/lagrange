@@ -80,6 +80,55 @@ describe('authoring descriptors', () => {
     assert.equal(Object.isFrozen(operation.reduce), true);
   });
 
+  it('requires canonical distributed() option names and rejects shorthand aliases', () => {
+    const parameters = [{name: 'accountId', type: 'integer'}];
+    const partialSchema = {fields: {count: {type: 'integer'}}, type: 'record'};
+    const stateSchema = {fields: {count: {type: 'integer'}}, type: 'record'};
+    const canonical = distributed({
+      parameters,
+      partialSchema,
+      stateSchema,
+      statement: sql`SELECT count(*) FROM rides WHERE account_id = $1`,
+      init: () => ({count: 0}),
+      step: (state, rows) => ({count: state.count + rows.length}),
+      finish: (state) => state,
+      reduce: (partials) => partials,
+    });
+    assert.deepEqual(canonical.parameters, parameters);
+    assert.deepEqual(canonical.partialSchema, partialSchema);
+    assert.deepEqual(canonical.stateSchema, stateSchema);
+
+    assert.throws(
+      () => distributed({
+        params: parameters,
+        statement: sql`SELECT 1`,
+        run: (rows) => rows.length,
+        reduce: (partials) => partials,
+      }),
+      TypeError,
+    );
+    assert.throws(
+      () => distributed({
+        partial: partialSchema,
+        statement: sql`SELECT 1`,
+        run: (rows) => rows.length,
+        reduce: (partials) => partials,
+      }),
+      TypeError,
+    );
+    assert.throws(
+      () => distributed({
+        state: stateSchema,
+        statement: sql`SELECT 1`,
+        init: () => ({count: 0}),
+        step: (state) => state,
+        finish: (state) => state,
+        reduce: (partials) => partials,
+      }),
+      TypeError,
+    );
+  });
+
   it('survives reference cycles while freezing', () => {
     const node = {};
     node.self = node;

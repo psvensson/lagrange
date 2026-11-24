@@ -117,17 +117,33 @@ describe('meta-validation-pipeline', () => {
         ));
       });
 
-    it('passes when debug capability has legacy artifactPointer',
+    it('passes when debug capability declares canonical debugArtifact',
+      () => {
+        const manifest = buildValidManifest({
+          capabilities: [DEBUG_CAPABILITY.SNAPSHOT],
+          debugArtifact: {
+            mode: 'sidecar',
+            sidecarUri: 'oci://debug/test@sha256:def',
+          },
+        });
+        const result = validatePublishPipeline({manifest});
+        assert.equal(result.valid, true);
+      });
+
+    it('rejects debug capability with legacy artifactPointer-only manifest',
       () => {
         const manifest = buildValidManifest({
           capabilities: [DEBUG_CAPABILITY.SNAPSHOT],
           artifactPointer: 'oci://debug/test@sha256:def',
         });
         const result = validatePublishPipeline({manifest});
-        assert.equal(result.valid, true);
+        assert.equal(result.valid, false);
+        assert.ok(result.errors.includes(
+          VALIDATION_PIPELINE_ERROR_MSG.DEBUG_ARTIFACT_REQUIRED,
+        ));
       });
 
-    it('allows debug artifact downgrade when policy disables requirement',
+    it('enforces debug artifact requirement unconditionally even when policy sets requireDebugArtifacts: false',
       () => {
         const manifest = buildValidManifest({
           capabilities: [DEBUG_CAPABILITY.BREAKPOINT],
@@ -137,7 +153,10 @@ describe('meta-validation-pipeline', () => {
           capabilityPolicy: {requireDebugArtifacts: false},
           tenantAllowlist: [DEBUG_CAPABILITY.BREAKPOINT],
         });
-        assert.equal(result.valid, true);
+        assert.equal(result.valid, false);
+        assert.ok(result.errors.includes(
+          VALIDATION_PIPELINE_ERROR_MSG.DEBUG_ARTIFACT_REQUIRED,
+        ));
       });
   });
 
@@ -248,15 +267,20 @@ describe('meta-validation-pipeline', () => {
         ));
       });
 
-    it('passes when policy disables debug artifact requirement', () => {
-      const result = validateDebugArtifactPolicy(
-        buildValidManifest({
-          capabilities: [DEBUG_CAPABILITY.SNAPSHOT],
-        }),
-        {requireDebugArtifacts: false},
-      );
-      assert.equal(result.valid, true);
-    });
+    it('rejects legacy artifactPointer-only manifest and ignores requireDebugArtifacts: false',
+      () => {
+        const result = validateDebugArtifactPolicy(
+          buildValidManifest({
+            capabilities: [DEBUG_CAPABILITY.SNAPSHOT],
+            artifactPointer: 'oci://debug/test@sha256:def',
+          }),
+          {requireDebugArtifacts: false},
+        );
+        assert.equal(result.valid, false);
+        assert.ok(result.errors.includes(
+          VALIDATION_PIPELINE_ERROR_MSG.DEBUG_ARTIFACT_REQUIRED,
+        ));
+      });
   });
 
   describe('validateResolvedDependencies', () => {

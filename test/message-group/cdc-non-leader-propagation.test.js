@@ -861,6 +861,14 @@ test(
         'fresh-node/message-group/mg-stale-canonical-leader-r3',
       ]);
 
+      const readyLeaseExpiresAt = Date.now() + 60000;
+      for (const readyNodeId of ['stale-node', 'fresh-node']) {
+        mg.systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+          node_id: readyNodeId,
+          connection_state: STATE.READY,
+          ready_lease_expires_at: readyLeaseExpiresAt,
+        });
+      }
       mg.systemTableCache.applySystemTableChange(
         TABLES.MESSAGE_GROUPS,
         CDC_OPERATION.UPSERT,
@@ -968,6 +976,14 @@ test(
         'remote-node-3/message-group/mg-lagging-leader-metadata-r3',
       ]);
 
+      const readyLeaseExpiresAt = Date.now() + 60000;
+      for (const readyNodeId of ['remote-node-2', 'remote-node-3']) {
+        mg.systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+          node_id: readyNodeId,
+          connection_state: STATE.READY,
+          ready_lease_expires_at: readyLeaseExpiresAt,
+        });
+      }
       mg.systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
         service_id: 'mg-lagging-leader-metadata-r2',
         service_type: SERVICE_TYPE.MESSAGE_GROUP,
@@ -1354,6 +1370,14 @@ test(
         'node-relay/message-group/mg-connected-relay-r3',
       ]);
 
+      const readyLeaseExpiresAt = Date.now() + 60000;
+      for (const readyNodeId of ['node-leader', 'node-relay']) {
+        mg.systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+          node_id: readyNodeId,
+          connection_state: STATE.READY,
+          ready_lease_expires_at: readyLeaseExpiresAt,
+        });
+      }
       mg.systemTableCache.applySystemTableChange(TABLES.MESSAGE_GROUPS, CDC_OPERATION.UPSERT, {
         group_id: 'mg-connected-relay',
         leader_node_id: 'node-leader',

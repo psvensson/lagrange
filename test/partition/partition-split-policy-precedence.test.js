@@ -47,6 +47,9 @@ function createPolicyCache() {
   return {
     tables,
     partitions,
+    filter(tableName, predicate) {
+      return this.getAll(tableName).filter(predicate);
+    },
     getAll(tableName) {
       if (tableName === 'tables') {
         return tables;
@@ -232,6 +235,9 @@ test('MovieLens ratings override leaves system logs on the production ' +
       table_name: 'logs',
       size_bytes: OBSERVED_RATINGS_SIZE_BYTES,
     }],
+    filter(tableName, predicate) {
+      return this.getAll(tableName).filter(predicate);
+    },
     getAll(tableName) {
       if (tableName === 'tables') {
         return this.tables;

@@ -69,11 +69,11 @@ const WEBSOCKET_CLOSED_BEFORE_CONNECTION_ESTABLISHED_MESSAGE =
   'WebSocket was closed before the connection was established';
 
 /**
- * Normalize one boot-incarnation candidate: a positive safe integer is KNOWN,
- * anything else (0, absent, non-numeric — the pre-incarnation compat shape)
- * is UNKNOWN and never fences.
+ * Normalize one boot-incarnation candidate: a positive safe integer is valid,
+ * anything else (0, absent, non-numeric) is invalid (0) and refused fail-closed
+ * on IDENTIFY.
  * @param {*} value - Candidate incarnation.
- * @return {number} The known incarnation, or 0 when unknown.
+ * @return {number} The valid positive incarnation, or 0 when absent/invalid.
  */
 function normalizeKnownBootIncarnation(value) {
   return typeof value === typeof TRANSPORT_NUM.ZERO &&
@@ -158,20 +158,21 @@ class RouterConnectionAuthorityOwner {
   }
   /**
    * Incarnation fence for the identification slot: refuse an IDENTIFY whose
-   * boot incarnation is KNOWN and LOWER than the retained per-node high-water
-   * (a zombie from an earlier boot). UNKNOWN on either side never fences —
-   * the same compat policy as the clusterId UNKNOWN gate.
+   * boot incarnation is missing/invalid (not a positive safe integer) or LOWER
+   * than the retained per-node high-water (a zombie from an earlier boot).
    * @param {string} nodeId - Identified peer node id.
    * @param {*} bootIncarnation - Incarnation stamped on the IDENTIFY frame.
    * @return {boolean} True when the incoming identification must be refused.
    */
   shouldRefuseStaleBootIncarnationIdentification(nodeId, bootIncarnation) {
     const incomingIncarnation = normalizeKnownBootIncarnation(bootIncarnation);
+    if (incomingIncarnation <= TRANSPORT_NUM.ZERO) {
+      return true;
+    }
     const knownIncarnation = normalizeKnownBootIncarnation(
       mapPrototypeGet(this.router.nodeBootIncarnationWatermarks, nodeId),
     );
-    return incomingIncarnation > TRANSPORT_NUM.ZERO &&
-      knownIncarnation > TRANSPORT_NUM.ZERO &&
+    return knownIncarnation > TRANSPORT_NUM.ZERO &&
       incomingIncarnation < knownIncarnation;
   }
   /**
@@ -214,10 +215,10 @@ class RouterConnectionAuthorityOwner {
       return false;
     }
     const incarnation = normalizeKnownBootIncarnation(bootIncarnation);
-    connection.bootIncarnation = incarnation;
     if (incarnation <= TRANSPORT_NUM.ZERO) {
       return false;
     }
+    connection.bootIncarnation = incarnation;
     this.recordAcceptedBootIncarnation(nodeId, incarnation);
     return true;
   }
