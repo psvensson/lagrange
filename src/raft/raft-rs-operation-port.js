@@ -63,10 +63,8 @@ import {registerPeerIdentityReservationOwner} from
 import {reportRaftRsRuntimeFault} from './raft-rs-runtime-fault-log.js';
 import {
   RAFT_AUTHORITY_CLOCK_UNSETTLED_REASON,
-  RAFT_CLOCK_OBLIGATION_STATE,
   READ_CLOCK_OBLIGATION_TOKEN,
   createPortClockObligationController,
-  hasMultiMemberConfState,
   isPortScheduling,
   readPortClockObligation,
   reconcilePortClockObligation,
@@ -783,10 +781,8 @@ function createRaftRsOperationPort(request) {
 // digest and load check that returns a state and never dispatches.
 export {
   RAFT_AUTHORITY_CLOCK_UNSETTLED_REASON,
-  RAFT_CLOCK_OBLIGATION_STATE,
   applyPortRaftTimingConfig,
   createRaftRsOperationPort,
-  hasMultiMemberConfState,
   isPortScheduling,
   readPortClockObligation,
   readPortEffectiveRaftTiming,

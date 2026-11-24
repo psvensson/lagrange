@@ -20,6 +20,10 @@ import {
 } from '../transport/transport-semantic-outcome.js';
 import {readLowerStateField} from '../utils/state-field-read.js';
 import {
+  READ_COMPLETION_STATE,
+  READ_ROUTE_SUPERSEDED_CODE,
+  REDIRECT_STEP_ACTION,
+  ROUTE_SUPERSEDED_FAILURE,
   isCurrentPeer,
   matchesRoute,
   peerIdentityOf,
@@ -31,8 +35,6 @@ const COMPLETED_READ_RESULT_SEAL = Symbol('completedReadResultSeal');
 const TICKET_AUTHORITY_SEAL = Symbol('readInvocationTicketSeal');
 const READ_INVOCATION_SEAL_DESC = 'readInvocationSeal';
 const REMOVED_SERVICE_STATUS = 'removed';
-const READ_ROUTE_SUPERSEDED_ERROR = 'Recovery read route superseded';
-const READ_ROUTE_SUPERSEDED_CODE = 'READ_ROUTE_SUPERSEDED';
 const UNSEALED_READ_COMPLETION_CODE = 'UNSEALED_READ_COMPLETION_REJECTED';
 const UNSEALED_READ_COMPLETION_MSG =
   'Unsealed read completion result rejected: authority validation required';
@@ -48,30 +50,10 @@ const TERM_FLOOR_CHECK_STATE = Object.freeze({
   BELOW_FLOOR: 'below_floor',
 });
 
-const READ_COMPLETION_STATE = Object.freeze({
-  ACCEPTED: 'accepted',
-  BELOW_TERM_FLOOR: 'below_term_floor',
-  DEADLINE_EXPIRED: 'deadline_expired',
-  REJECTED_RESPONSE: 'rejected_response',
-  ROUTE_SUPERSEDED: 'route_superseded',
-});
-
-const REDIRECT_STEP_ACTION = Object.freeze({
-  BREAK: 'break',
-  CONTINUE: 'continue',
-  RETURN: 'return',
-});
-
 const INELIGIBLE_TERM_FLOOR = Object.freeze({
   eligible: false,
   hasLocalReplica: false,
   termFloor: null,
-});
-
-const ROUTE_SUPERSEDED_FAILURE = Object.freeze({
-  error: READ_ROUTE_SUPERSEDED_ERROR,
-  failureCode: READ_ROUTE_SUPERSEDED_CODE,
-  success: false,
 });
 
 function positiveSafeTerm(value) {
@@ -286,17 +268,6 @@ function checkDeliveryTermFloor(delivery, termFloor) {
       success: false,
     },
   });
-}
-
-function evaluateTermFloorDeliveryOutcome(delivery, isSuccessfulResponse, termFloor) {
-  const succeeded = Boolean(isSuccessfulResponse(delivery));
-  if (!succeeded) {
-    return {accepted: false, response: deliveryReadingOf(delivery)};
-  }
-  const check = checkDeliveryTermFloor(delivery, termFloor);
-  return check.state === TERM_FLOOR_CHECK_STATE.ACCEPTED ?
-    {accepted: true, response: deliveryReadingOf(delivery)} :
-    {accepted: false, response: check.failure};
 }
 
 function shouldRetainTermFloorFailure(currentDetails, nextFailure) {
@@ -669,18 +640,11 @@ export {
   DEADLINE_EXPIRED_COMPLETION_CODE,
   READ_COMPLETION_STATE,
   READ_ROUTE_SUPERSEDED_CODE,
-  READ_ROUTE_SUPERSEDED_ERROR,
   REDIRECT_STEP_ACTION,
-  ROUTE_SUPERSEDED_FAILURE,
   UNISSUED_READ_TICKET_CODE,
   UNSEALED_READ_COMPLETION_CODE,
   createInvocationTermFloorTracker,
-  evaluateTermFloorDeliveryOutcome,
-  isCurrentPeer,
-  matchesRoute,
-  mergeSelfLeaderTermFloor,
   orderSelfLeaderProbeServices,
-  peerIdentityOf,
   resolveSelfPublishedLeaderTermFloor,
   shouldRetainTermFloorFailure,
 };

@@ -35,9 +35,6 @@ import {
 } from './oltp-scenario-a-semantic-gate.js';
 import {
   buildCanonicalSemanticGateCaseRecord,
-  hasDurabilityRestartEvidence,
-  validateCanonicalDurabilityCaseRecord,
-  validateCanonicalSemanticGateCaseRecord,
 } from './raw-observation-record.js';
 import {
   DateConstructor, MapConstructor, arrayEvery, arrayFilter, arrayFind, arrayIncludes,
@@ -1448,14 +1445,9 @@ function createSemanticGateStage({journey, tidbJourney = null, _redeploy, sshRun
 
 export {
   TIDB_CASE_EXECUTORS,
-  TIDB_DATABASE_BY_CASE,
   TIDB_EXECUTED_CASE_IDS,
-  buildCanonicalSemanticGateCaseRecord,
   buildObservedFaultEvidence,
   createSemanticGateStage,
   executeRemoteGateAction,
-  hasDurabilityRestartEvidence,
   runTiDbSemanticGate,
-  validateCanonicalDurabilityCaseRecord,
-  validateCanonicalSemanticGateCaseRecord,
 };
