@@ -27,7 +27,67 @@ const TRANSACTION_AUTHORITY_STATE = Object.freeze({
   NOT_READ: 'not_read',
 });
 
-function restoredParticipants(tx, pairs, rows) {
+const NOT_TERMINAL_SETTLED = Object.freeze({settled: false});
+
+function invalidAuthorityRefusal(refused, error) {
+  const dimension = error?.decisionDimension;
+  return typeof dimension === 'string' && dimension.length > 0 ?
+    {...refused, decisionDimension: dimension} :
+    refused;
+}
+
+function terminalSettledStatusOf(row, pairs, record, participantRows) {
+  if (row?.participant_set_state !== PARTICIPANT_SET_STATE.FROZEN ||
+      !isRecordedDecision(record) || !Array.isArray(pairs) ||
+      !Array.isArray(participantRows)) {
+    return NOT_TERMINAL_SETTLED;
+  }
+  const frozenCount = Number(row.frozen_participant_count);
+  if (frozenCount !== pairs.length ||
+      record.participants.length !== pairs.length ||
+      !record.participants.every(([id], index) => id === pairs[index][0])) {
+    return NOT_TERMINAL_SETTLED;
+  }
+  const commitTerminal = row.status === TRANSACTION_STATUS.COMMITTED &&
+    record.decision === DECISION.COMMIT;
+  const rollbackTerminal = row.status === TRANSACTION_STATUS.ROLLED_BACK &&
+    record.decision === DECISION.ROLLBACK;
+  if (!commitTerminal && !rollbackTerminal) {
+    return NOT_TERMINAL_SETTLED;
+  }
+  const participantStatus = commitTerminal ?
+    PARTICIPANT_STATUS.COMMITTED :
+    PARTICIPANT_STATUS.ROLLED_BACK;
+  const txId = row.transaction_id;
+  const byId = new Map();
+  for (const participant of participantRows) {
+    if (participant.transaction_id !== txId ||
+        !participant.participant_id ||
+        byId.has(participant.participant_id)) {
+      return NOT_TERMINAL_SETTLED;
+    }
+    byId.set(participant.participant_id, participant);
+  }
+  const allTerminal = pairs.every(([participantId, partitionId]) => {
+    const participant = byId.get(participantId);
+    return participant && participant.partition_id === partitionId &&
+      participant.status === participantStatus;
+  });
+  return allTerminal ?
+    {settled: true, transactionStatus: row.status, participantStatus} :
+    NOT_TERMINAL_SETTLED;
+}
+
+function isFullyTerminalTransactionRow(row, participantRows) {
+  const txId = row?.transaction_id;
+  if (typeof txId !== 'string' || txId.length === 0) return false;
+  const pairs = readParticipantSet(txId, row.participant_set_text);
+  if (!pairs) return false;
+  const record = decisionRecordOfRow(row, txId);
+  return terminalSettledStatusOf(row, pairs, record, participantRows).settled;
+}
+
+function restoredParticipants(tx, pairs, rows, terminalParticipantStatus = null) {
   if (!Array.isArray(rows)) return null;
   const byId = new Map();
   for (const row of rows) {
@@ -45,10 +105,14 @@ function restoredParticipants(tx, pairs, rows) {
     });
     const retained = row?.status === PARTICIPANT_STATUS.PREPARED &&
       evidence !== null;
+    const status = terminalParticipantStatus !== null ?
+      terminalParticipantStatus :
+      (retained ? PARTICIPANT_STATUS.PREPARED : PARTICIPANT_STATUS.FAILED);
     return [partitionId, {workflowId: tx.workflowId, transactionId: tx.transactionId,
       participantId, partitionKey: partitionId, participantKey: partitionId, partitionId,
-      // A progress hint never suppresses an exact decision re-drive.
-      status: retained ? PARTICIPANT_STATUS.PREPARED : PARTICIPANT_STATUS.FAILED,
+      // A progress hint never suppresses an exact decision re-drive; only a
+      // verified terminal row with all participants already terminal stays terminal.
+      status,
       preparedDigest: retained ? evidence.preparedDigest : null,
       prepareIndex: retained ? evidence.prepareIndex : null,
       prepareTerm: retained ? evidence.prepareTerm : null,
@@ -68,25 +132,38 @@ function authorityCandidate(tx, payload) {
       !isCanonicalTransactionEpoch(row.transaction_epoch) ||
       !Number.isFinite(row.timeout_deadline) || row.timeout_deadline < 0) return refused;
   const pairs = readParticipantSet(tx.transactionId, row.participant_set_text);
-  const participants = pairs && restoredParticipants(tx, pairs, payload.participants);
-  if (!participants) return refused;
   const frozen = row.participant_set_state === PARTICIPANT_SET_STATE.FROZEN;
   const record = decisionRecordOfRow(row, tx.transactionId);
-  if (record.state === RECORDED_DECISION_STATE.INVALID ||
+  if (!pairs || record.state === RECORDED_DECISION_STATE.INVALID ||
       (isRecordedDecision(record) && !frozen) || (tx.decision &&
         (!isRecordedDecision(record) || tx.decision.decisionText !== record.decisionText ||
           tx.decision.decisionDigest !== record.decisionDigest))) return refused;
+  const terminalSettled = terminalSettledStatusOf(
+    row,
+    pairs,
+    record,
+    payload.participants,
+  );
+  const participants = restoredParticipants(
+    tx,
+    pairs,
+    payload.participants,
+    terminalSettled.settled ? terminalSettled.participantStatus : null,
+  );
+  if (!participants) return refused;
   const candidate = {...tx, participants, transactionEpoch: row.transaction_epoch,
     transactionMode: row.transaction_mode, timeoutDeadline: row.timeout_deadline,
     participantSetState: row.participant_set_state, participantSetText: row.participant_set_text,
     commitMode: row.commit_mode, frozenParticipantCount: row.frozen_participant_count,
     decision: isRecordedDecision(record) ? record : null, decisionReadState: record.state,
-    status: frozen ? TRANSACTION_STATUS.PREPARING : TRANSACTION_STATUS.ACTIVE};
+    status: terminalSettled.settled ?
+      terminalSettled.transactionStatus :
+      (frozen ? TRANSACTION_STATUS.PREPARING : TRANSACTION_STATUS.ACTIVE)};
   try {
     validateRecoveredTransactionDecision(candidate, row);
-  } catch {
+  } catch (error) {
     // The one recovered-decision validator refuses the restored state.
-    return refused;
+    return invalidAuthorityRefusal(refused, error);
   }
   return {state: TRANSACTION_AUTHORITY_STATE.AVAILABLE, candidate};
 }
@@ -108,8 +185,14 @@ async function refreshRecoveryAuthority(coordinator, tx) {
   const authority = await readRecoveryAuthority(coordinator, tx);
   if (authority.state !== TRANSACTION_AUTHORITY_STATE.AVAILABLE) {
     tx.decisionReadState = authority.state;
+    if (typeof authority.decisionDimension === 'string') {
+      tx.decisionReadDimension = authority.decisionDimension;
+    } else {
+      delete tx.decisionReadDimension;
+    }
     return false;
   }
+  delete tx.decisionReadDimension;
   Object.assign(tx, authority.candidate);
   return true;
 }
@@ -142,4 +225,8 @@ async function redriveAuthoritativeRecovery(coordinator, tx) {
   return {path: commit ? QUERY_OPERATION.COMMIT : QUERY_OPERATION.ROLLBACK, result};
 }
 
-export {TRANSACTION_AUTHORITY_STATE, redriveAuthoritativeRecovery};
+export {
+  TRANSACTION_AUTHORITY_STATE,
+  isFullyTerminalTransactionRow,
+  redriveAuthoritativeRecovery,
+};

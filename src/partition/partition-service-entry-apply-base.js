@@ -3,14 +3,12 @@ import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
 import {assertReplicaHandlerServing} from '../node/replica-transport-handler-identity.js';
 import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
-import {PartitionServiceSchemaMigrationBase} from './partition-service-schema-migration-base.js';
+import {PartitionServiceRaftInitBase} from './partition-service-raft-init-base.js';
 import {
   PARTITION_COMMITTED_COMMAND_ERROR_CODE, PARTITION_COMMITTED_COMMAND_HOST_FAILURE_REASON,
   PARTITION_COMMITTED_COMMAND_OUTCOME,
   PARTITION_SERVICE_MESSAGE_TYPE as SERVICE_MSG_TYPE,
 } from './partition-service-constants.js';
-import {REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMNS} from
-  '../bootstrap/replica-operation-message-group-membership-schema-constants.js';
 import {isCommittedCommandType, isCommittedSqlCommandType} from
   './partition-committed-command-admission.js';
 import {PARTITION_COMMITTED_STATEMENT_RECORD_STATE} from
@@ -50,7 +48,6 @@ import {FORMATION_TRANSITION_TYPE, requestFormationTransition} from
   '../control-plane/membership-publication-formation-record.js';
 import {applyFormationTransitionCommand, registerFormationPartitionApplyHooks} from
   '../control-plane/membership-publication-formation-transition-command.js';
-import {ensureSqlTransactionsDecisionColumns} from './partition-coordinator-table-columns.js';
 import {admitsParticipantSessionQueryDuringRemoval, routeParticipantTransactionRequest} from
   './partition-participant-transaction-request.js';
 import {
@@ -101,8 +98,6 @@ function findNonSqlCommittedEntryApplier(commandType) {
 }
 
 const {
-  PARTITION_SERVICE_COLUMN,
-  PARTITION_SERVICE_COLUMN_SQL,
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_EVENT,
   PARTITION_SERVICE_LITERAL,
@@ -110,7 +105,6 @@ const {
   PARTITION_SERVICE_MESSAGE_TYPE,
   PARTITION_SERVICE_OPERATION,
   buildDurableCommitWitness,
-  SYSTEM_TABLE_NAME,
   isRaftRsTransportEnvelope,
   stepRaftEnvelope,
 } = PARTITION_SERVICE_SHARED;
@@ -158,180 +152,7 @@ function committedCommandGate(service, committed) {
   }
 }
 
-class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase {
-  ensureReplicaOperationsTableColumns() {
-    if (this.tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
-      return;
-    }
-    const columns = this.db
-      .prepare(`PRAGMA table_info(${this.tableName})`)
-      .all();
-    const hasTargetClaimKey = columns.some(
-      (col) => col.name === PARTITION_SERVICE_COLUMN.TARGET_CLAIM_KEY,
-    );
-    const hasMembershipPublicationEpoch = columns.some(
-      (col) => col.name ===
-        PARTITION_SERVICE_COLUMN.MEMBERSHIP_PUBLICATION_EPOCH,
-    );
-    const admissionColumns = [
-      [PARTITION_SERVICE_COLUMN.CREATE_ADMISSION_STATE,
-        PARTITION_SERVICE_COLUMN_SQL.ADD_CREATE_ADMISSION_STATE],
-      [PARTITION_SERVICE_COLUMN.CREATE_ADMISSION_TOKEN,
-        PARTITION_SERVICE_COLUMN_SQL.ADD_CREATE_ADMISSION_TOKEN],
-      [PARTITION_SERVICE_COLUMN.CREATE_ADMISSION_REPLICA_CREATED_AT,
-        PARTITION_SERVICE_COLUMN_SQL.ADD_CREATE_ADMISSION_REPLICA_CREATED_AT],
-      [PARTITION_SERVICE_COLUMN.CREATE_ADMISSION_ATTEMPT_TOKEN,
-        PARTITION_SERVICE_COLUMN_SQL.ADD_CREATE_ADMISSION_ATTEMPT_TOKEN],
-      [PARTITION_SERVICE_COLUMN.CREATE_ADMISSION_PREVIOUS_ATTEMPT_TOKEN,
-        PARTITION_SERVICE_COLUMN_SQL
-          .ADD_CREATE_ADMISSION_PREVIOUS_ATTEMPT_TOKEN],
-      [PARTITION_SERVICE_COLUMN.CREATE_ADMISSION_ATTEMPT_SEQ,
-        PARTITION_SERVICE_COLUMN_SQL.ADD_CREATE_ADMISSION_ATTEMPT_SEQ],
-      [PARTITION_SERVICE_COLUMN.CREATE_ADMISSION_WORKFLOW_UPDATED_AT,
-        PARTITION_SERVICE_COLUMN_SQL
-          .ADD_CREATE_ADMISSION_WORKFLOW_UPDATED_AT],
-      [PARTITION_SERVICE_COLUMN.CREATE_ADMISSION_OWNER_INCARNATION,
-        PARTITION_SERVICE_COLUMN_SQL
-          .ADD_CREATE_ADMISSION_OWNER_INCARNATION],
-    ];
-    const membershipColumns =
-      REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMNS.map((column) => [
-        column.name,
-        `ADD COLUMN ${column.name} ${column.type}`,
-      ]);
-    if (!hasTargetClaimKey) {
-      this.db.exec(
-        `ALTER TABLE ${this.tableName} ` +
-          PARTITION_SERVICE_COLUMN_SQL.ADD_TARGET_CLAIM_KEY,
-      );
-      this.logger.info(
-        PARTITION_SERVICE_LOG_MSG
-          .ADDED_REPLICA_OPERATIONS_TARGET_CLAIM_KEY,
-        {tableName: this.tableName, partitionId: this.partitionId},
-      );
-    }
-    if (!hasMembershipPublicationEpoch) {
-      this.db.exec(
-        `ALTER TABLE ${this.tableName} ` +
-          PARTITION_SERVICE_COLUMN_SQL.ADD_MEMBERSHIP_PUBLICATION_EPOCH,
-      );
-      this.logger.info(
-        PARTITION_SERVICE_LOG_MSG
-          .ADDED_REPLICA_OPERATIONS_MEMBERSHIP_PUBLICATION_EPOCH,
-        {tableName: this.tableName, partitionId: this.partitionId},
-      );
-    }
-    for (const [columnName, addColumnSql] of admissionColumns) {
-      if (columns.some((column) => column.name === columnName)) continue;
-      this.db.exec(`ALTER TABLE ${this.tableName} ${addColumnSql}`);
-      this.logger.info(
-        PARTITION_SERVICE_LOG_MSG
-          .ADDED_REPLICA_OPERATIONS_CREATE_ADMISSION_COLUMN,
-        {tableName: this.tableName, partitionId: this.partitionId, columnName},
-      );
-    }
-    for (const [columnName, addColumnSql] of membershipColumns) {
-      if (columns.some((column) => column.name === columnName)) continue;
-      this.db.exec(`ALTER TABLE ${this.tableName} ${addColumnSql}`);
-      this.logger.info(
-        PARTITION_SERVICE_LOG_MSG
-          .ADDED_REPLICA_OPERATIONS_MESSAGE_GROUP_MEMBERSHIP_COLUMN,
-        {tableName: this.tableName, partitionId: this.partitionId, columnName},
-      );
-    }
-  }
-
-  ensureSqlTransactionsTableColumns() {
-    if (this.tableName !== SYSTEM_TABLE_NAME.SQL_TRANSACTIONS) {
-      return;
-    }
-    const columns = this.db
-      .prepare(`PRAGMA table_info(${this.tableName})`)
-      .all();
-    const hasTransactionEpoch = columns.some(
-      (col) => col.name === PARTITION_SERVICE_COLUMN.TRANSACTION_EPOCH,
-    );
-    const hasTimeoutDeadline = columns.some(
-      (col) => col.name === PARTITION_SERVICE_COLUMN.TIMEOUT_DEADLINE,
-    );
-    const hasTransactionMode = columns.some(
-      (col) => col.name === PARTITION_SERVICE_COLUMN.TRANSACTION_MODE,
-    );
-    const hasParticipantSetState = columns.some(
-      (col) => col.name === PARTITION_SERVICE_COLUMN.PARTICIPANT_SET_STATE,
-    );
-    const hasCommitMode = columns.some(
-      (col) => col.name === PARTITION_SERVICE_COLUMN.COMMIT_MODE,
-    );
-    const hasFrozenParticipantCount = columns.some(
-      (col) => col.name === PARTITION_SERVICE_COLUMN.FROZEN_PARTICIPANT_COUNT,
-    );
-    if (!hasTransactionEpoch) {
-      this.db.exec(
-        `ALTER TABLE ${this.tableName} ` +
-          PARTITION_SERVICE_COLUMN_SQL.ADD_TRANSACTION_EPOCH,
-      );
-      this.logger.info(
-        PARTITION_SERVICE_LOG_MSG.ADDED_SQL_TRANSACTIONS_TRANSACTION_EPOCH,
-        {tableName: this.tableName, partitionId: this.partitionId},
-      );
-    }
-    if (!hasTimeoutDeadline) {
-      this.db.exec(
-        `ALTER TABLE ${this.tableName} ` +
-          PARTITION_SERVICE_COLUMN_SQL.ADD_TIMEOUT_DEADLINE,
-      );
-      this.logger.info(
-        PARTITION_SERVICE_LOG_MSG.ADDED_SQL_TRANSACTIONS_TIMEOUT_DEADLINE,
-        {tableName: this.tableName, partitionId: this.partitionId},
-      );
-    }
-    if (!hasTransactionMode) {
-      this.db.exec(
-        `ALTER TABLE ${this.tableName} ` +
-          PARTITION_SERVICE_COLUMN_SQL.ADD_TRANSACTION_MODE,
-      );
-      this.logger.info(
-        PARTITION_SERVICE_LOG_MSG.ADDED_SQL_TRANSACTIONS_TRANSACTION_MODE,
-        {tableName: this.tableName, partitionId: this.partitionId},
-      );
-    }
-    if (!hasParticipantSetState) {
-      this.db.exec(
-        `ALTER TABLE ${this.tableName} ` +
-          PARTITION_SERVICE_COLUMN_SQL.ADD_PARTICIPANT_SET_STATE,
-      );
-      this.logger.info(
-        PARTITION_SERVICE_LOG_MSG
-          .ADDED_SQL_TRANSACTIONS_PARTICIPANT_SET_STATE,
-        {tableName: this.tableName, partitionId: this.partitionId},
-      );
-    }
-    if (!hasCommitMode) {
-      this.db.exec(
-        `ALTER TABLE ${this.tableName} ` +
-          PARTITION_SERVICE_COLUMN_SQL.ADD_COMMIT_MODE,
-      );
-      this.logger.info(
-        PARTITION_SERVICE_LOG_MSG.ADDED_SQL_TRANSACTIONS_COMMIT_MODE,
-        {tableName: this.tableName, partitionId: this.partitionId},
-      );
-    }
-    if (!hasFrozenParticipantCount) {
-      this.db.exec(
-        `ALTER TABLE ${this.tableName} ` +
-          PARTITION_SERVICE_COLUMN_SQL.ADD_FROZEN_PARTICIPANT_COUNT,
-      );
-      this.logger.info(
-        PARTITION_SERVICE_LOG_MSG
-          .ADDED_SQL_TRANSACTIONS_FROZEN_PARTICIPANT_COUNT,
-        {tableName: this.tableName, partitionId: this.partitionId},
-      );
-    }
-    // The coordinator's insert-once decision record (TX1 seam C): the
-    // participant vocabulary names the columns and their DDL.
-    ensureSqlTransactionsDecisionColumns(this);
-  }
+class PartitionServiceEntryApplyBase extends PartitionServiceRaftInitBase {
   /**
    * Handle incoming transport message.
    * A raft-rs semantic envelope is stepped into the replica's operation

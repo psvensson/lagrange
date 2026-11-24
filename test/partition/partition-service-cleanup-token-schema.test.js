@@ -1,8 +1,9 @@
+import Database from 'better-sqlite3';
 import {test} from '../../src/test-helpers/tap.js';
 import {SERVICES_SCHEMA} from
   '../../src/bootstrap/system-table-core-schema-definitions.js';
-import {PartitionServiceSchemaMigrationBase} from
-  '../../src/partition/partition-service-schema-migration-base.js';
+import {createPartitionServiceTable} from
+  '../../src/partition/partition-service-table-bootstrap.js';
 
 test('fresh services schema includes durable cleanup and attempt identity', (t) => {
   const columns = SERVICES_SCHEMA.columns.filter(({name}) =>
@@ -14,37 +15,30 @@ test('fresh services schema includes durable cleanup and attempt identity', (t) 
   t.end();
 });
 
-test('legacy services table upgrade adds nullable owner columns once', (t) => {
-  const columns = [{name: 'service_id'}, {name: 'status'}];
+test('createPartitionServiceTable creates services columns from canonical schema without ALTER TABLE', (t) => {
+  const db = new Database(':memory:');
+  t.teardown(() => db.close());
   const statements = [];
-  const logs = [];
-  const owner = {
-    tableName: 'services',
-    partitionId: 'services-p1',
-    db: {
-      prepare() {
-        return {all: () => columns.map((column) => ({...column}))};
-      },
-      exec(sql) {
-        statements.push(sql);
-        if (sql.includes('cleanup_token')) columns.push({name: 'cleanup_token'});
-        if (sql.includes('create_attempt_token')) {
-          columns.push({name: 'create_attempt_token'});
-        }
-      },
-    },
-    logger: {info: (...args) => logs.push(args)},
+  const originalExec = db.exec.bind(db);
+  db.exec = (sql) => {
+    statements.push(sql);
+    return originalExec(sql);
   };
-
-  PartitionServiceSchemaMigrationBase.prototype
-    .ensureServicesTableColumns.call(owner);
-  PartitionServiceSchemaMigrationBase.prototype
-    .ensureServicesTableColumns.call(owner);
-
-  t.same(statements, [
-    'ALTER TABLE services ADD COLUMN cleanup_token TEXT',
-    'ALTER TABLE services ADD COLUMN create_attempt_token TEXT',
-  ], 'upgrade is idempotent');
-  t.equal(logs.length, 2, 'upgrade records both schema changes');
+  createPartitionServiceTable({
+    db,
+    tableName: SERVICES_SCHEMA.tableName,
+    schema: SERVICES_SCHEMA,
+    partitionId: 'services-p1',
+    logger: {debug() {}},
+  });
+  const columnNames = db.prepare('PRAGMA table_info(services)').all()
+    .map((column) => column.name);
+  t.ok(columnNames.includes('cleanup_token'));
+  t.ok(columnNames.includes('create_attempt_token'));
+  t.equal(
+    statements.some((sql) => sql.toUpperCase().includes('ALTER TABLE')),
+    false,
+    'bootstrap creates canonical schema directly without internal ALTER TABLE migrations',
+  );
   t.end();
 });

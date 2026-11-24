@@ -13,8 +13,8 @@ import {
 } from '../partition/partition-participant-transaction-pause.js';
 import {readPartitionWriteOrigin} from
   '../partition/partition-participant-transaction-store.js';
-import {isReleaseDrained, releaseAnswer, releaseCensusDefect,
-  releaseIdentityOf, releaseIdentityValid, releaseMemberIds} from
+import {isCurrentOriginRevalidatableQueryCensus, isReleaseDrained, releaseAnswer,
+  releaseCensusDefect, releaseIdentityOf, releaseIdentityValid, releaseMemberIds} from
   '../partition/partition-participant-release-contract.js';
 import {askParticipantRelease, participantReleaseAbsoluteClockValid, participantReleaseWaitRemainingMs,
   releaseNodeOfAddress, requestParticipantRelease} from
@@ -261,9 +261,7 @@ function cleanCurrentControlCohort(service, release, attempt, census) {
       return false;
     }
     return census.every((facts) =>
-      facts?.queryCensus?.state === TRANSACTION_RELEASE_CENSUS_STATE.CLEAR &&
-      facts.queryCensus.enforcement?.state ===
-        TRANSACTION_SCHEMA_ENFORCEMENT_STATE.ENFORCED) &&
+      isCurrentOriginRevalidatableQueryCensus(facts, {originRequired: true})) &&
       releaseCensusDefect(release, census, local, {attempt}) === null;
   }
   return census.every((facts) => facts?.queryCensus === null) &&

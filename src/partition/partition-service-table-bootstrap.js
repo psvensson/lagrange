@@ -1,7 +1,7 @@
-// Partition state-table bootstrap: schema-driven CREATE TABLE, the
-// nodes-table column upgrades, and index creation, extracted verbatim from
-// partition-service-raft-init-base.js (S4 file-size relief). The service owns
-// the open database handle and schema; this module owns only the DDL.
+// Partition state-table bootstrap: schema-driven CREATE TABLE and index
+// creation, extracted verbatim from partition-service-raft-init-base.js (S4
+// file-size relief). The service owns the open database handle and schema;
+// this module owns only the DDL.
 
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {
@@ -10,15 +10,11 @@ import {
 import {
   getSchemaByTableName,
 } from '../bootstrap/system-table-schemas-constants.js';
-import {ensureSqlTransactionParticipantsTableColumns} from
-  './partition-coordinator-table-columns.js';
 import {
   renderTableDefinitionSql,
 } from '../query/sql-table-definition.js';
 
 const {
-  PARTITION_SERVICE_COLUMN,
-  PARTITION_SERVICE_COLUMN_SQL,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_SQL_FRAGMENT,
   SYSTEM_TABLE_NAME,
@@ -83,133 +79,6 @@ function quoteSqliteIdentifier(identifier) {
     PARTITION_SERVICE_SQL_FRAGMENT.DOUBLE_QUOTE;
 }
 
-// Ensure nodes table includes connection_state column for readiness
-// tracking (verbatim from the init base).
-function ensureNodesTableColumns(service) {
-  if (service.tableName !== SYSTEM_TABLE_NAME.NODES) {
-    return;
-  }
-  const columns = service.db
-    .prepare(`PRAGMA table_info(${service.tableName})`)
-    .all();
-  const hasConnectionState = columns.some(
-    (col) => col.name === PARTITION_SERVICE_COLUMN.CONNECTION_STATE,
-  );
-  const hasLegacyWsConnectionState = columns.some(
-    (col) => col.name === PARTITION_SERVICE_COLUMN.LEGACY_WS_CONNECTION_STATE,
-  );
-  const hasCapabilities = columns.some(
-    (col) => col.name === PARTITION_SERVICE_COLUMN.CAPABILITIES,
-  );
-  const hasReadyLease = columns.some(
-    (col) => col.name === PARTITION_SERVICE_COLUMN.READY_LEASE_EXPIRES_AT,
-  );
-  const hasBootIncarnation = columns.some(
-    (col) => col.name === PARTITION_SERVICE_COLUMN.BOOT_INCARNATION,
-  );
-  if (!hasBootIncarnation) {
-    service.db.exec(
-      `ALTER TABLE ${service.tableName} ` +
-        PARTITION_SERVICE_COLUMN_SQL.ADD_BOOT_INCARNATION,
-    );
-    service.logger.info(PARTITION_SERVICE_LOG_MSG.ADDED_BOOT_INCARNATION, {
-      tableName: service.tableName,
-      partitionId: service.partitionId,
-    });
-  }
-  let connectionStateAdded = false;
-  if (!hasConnectionState) {
-    service.db.exec(
-      `ALTER TABLE ${service.tableName} ` +
-        PARTITION_SERVICE_COLUMN_SQL.ADD_CONNECTION_STATE,
-    );
-    connectionStateAdded = true;
-    service.logger.info(PARTITION_SERVICE_LOG_MSG.ADDED_CONNECTION_STATE, {
-      tableName: service.tableName,
-      partitionId: service.partitionId,
-    });
-  }
-  if (connectionStateAdded && hasLegacyWsConnectionState) {
-    service.db.exec(
-      `UPDATE ${service.tableName} ` +
-        PARTITION_SERVICE_COLUMN_SQL.BACKFILL_CONNECTION_STATE_FROM_LEGACY_WS,
-    );
-    service.logger.info(
-      PARTITION_SERVICE_LOG_MSG.MIGRATED_CONNECTION_STATE_FROM_LEGACY_WS,
-      {tableName: service.tableName, partitionId: service.partitionId},
-    );
-  }
-  if (!hasCapabilities) {
-    service.db.exec(
-      `ALTER TABLE ${service.tableName} ` +
-        PARTITION_SERVICE_COLUMN_SQL.ADD_CAPABILITIES,
-    );
-    service.logger.info(PARTITION_SERVICE_LOG_MSG.ADDED_CAPABILITIES, {
-      tableName: service.tableName,
-      partitionId: service.partitionId,
-    });
-  }
-  if (!hasReadyLease) {
-    service.db.exec(
-      `ALTER TABLE ${service.tableName} ` +
-        PARTITION_SERVICE_COLUMN_SQL.ADD_READY_LEASE_EXPIRES_AT,
-    );
-    service.logger.info(PARTITION_SERVICE_LOG_MSG.ADDED_READY_LEASE, {
-      tableName: service.tableName,
-      partitionId: service.partitionId,
-    });
-  }
-}
-
-// Endpoint rows carry the exact owning node boot incarnation. Existing
-// tables gain the column at 0 (legacy): the endpoint validity rule treats 0
-// as never current, and the owning node's next endpoint publication stamps
-// its real incarnation.
-const LOG_ADDED_ENDPOINT_BOOT_INCARNATION =
-  'Added endpoint boot_incarnation column';
-const ENDPOINT_INCARNATION_TABLES = new Set([
-  SYSTEM_TABLE_NAME.NODE_ENDPOINTS,
-  SYSTEM_TABLE_NAME.SERVICE_ENDPOINTS,
-]);
-
-function ensureEndpointTableColumns(service) {
-  if (!ENDPOINT_INCARNATION_TABLES.has(service.tableName)) {
-    return;
-  }
-  const hasBootIncarnation = service.db
-    .prepare(`PRAGMA table_info(${service.tableName})`)
-    .all()
-    .some((col) => col.name === PARTITION_SERVICE_COLUMN.BOOT_INCARNATION);
-  if (hasBootIncarnation) {
-    return;
-  }
-  service.db.exec(
-    `ALTER TABLE ${service.tableName} ` +
-      PARTITION_SERVICE_COLUMN_SQL.ADD_BOOT_INCARNATION,
-  );
-  service.logger.info(LOG_ADDED_ENDPOINT_BOOT_INCARNATION,
-    {tableName: service.tableName, partitionId: service.partitionId});
-}
-
-const FORMATION_RECORD_COLUMN = 'formation_record';
-const ADD_FORMATION_RECORD_SQL = 'ADD COLUMN formation_record TEXT';
-
-function ensureControlPlanePublicationsTableColumns(service) {
-  if (service.tableName !== SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS) {
-    return;
-  }
-  const hasFormationRecord = service.db
-    .prepare(`PRAGMA table_info(${service.tableName})`)
-    .all()
-    .some((col) => col.name === FORMATION_RECORD_COLUMN);
-  if (hasFormationRecord) {
-    return;
-  }
-  service.db.exec(
-    `ALTER TABLE ${service.tableName} ${ADD_FORMATION_RECORD_SQL}`,
-  );
-}
-
 function createPartitionServiceTable(service) {
   if (!service.schema || !service.schema.columns) {
     return;
@@ -217,20 +86,6 @@ function createPartitionServiceTable(service) {
   const sql = renderTableDefinitionSql(service.tableName, service.schema)
     .replace('CREATE TABLE ', 'CREATE TABLE IF NOT EXISTS ');
   service.db.exec(sql);
-  ensureNodesTableColumns(service);
-  ensureEndpointTableColumns(service);
-  ensureControlPlanePublicationsTableColumns(service);
-  service.ensureServicesTableColumns();
-  service.ensureTablesTableColumns();
-  service.ensureMessageGroupsTableColumns();
-  service.ensurePartitionsTableColumns();
-  if (typeof service.ensureIndicesTableColumns === 'function') {
-    service.ensureIndicesTableColumns();
-  }
-  service.ensureSqlTransactionsTableColumns();
-  // The coordinator's retained PREPARE evidence (TX1 seam E).
-  ensureSqlTransactionParticipantsTableColumns(service);
-  service.ensureReplicaOperationsTableColumns();
   const indexSchema =
     service.tableName === SYSTEM_TABLE_NAME.WASM_OPERATIONS ?
       getSchemaByTableName(service.tableName) || service.schema :

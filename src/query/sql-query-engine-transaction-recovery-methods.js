@@ -40,23 +40,18 @@ class SQLQueryEngineTransactionRecoveryMethods
       return;
     }
 
-    const transactions = this.loadSystemTableRows(TABLES.SQL_TRANSACTIONS);
-    if (transactions.length === 0) {
+    const allTransactions = this.loadSystemTableRows(TABLES.SQL_TRANSACTIONS);
+    if (allTransactions.length === 0) {
       return;
     }
 
-    const participants = this.loadSystemTableRows(
-      TABLES.SQL_TRANSACTION_PARTICIPANTS,
+    const payload = this.filterEligibleRecoveryRows(
+      allTransactions,
+      this.nowFn(),
     );
-    const writeOperations = this.loadSystemTableRows(
-      TABLES.SQL_WRITE_OPERATIONS,
-    );
-
-    this.transactionCoordinator.recoverFromSystemTables({
-      transactions,
-      participants,
-      writeOperations,
-    });
+    if (payload.transactions.length > 0) {
+      this.transactionCoordinator.recoverFromSystemTables(payload);
+    }
     this.transactionStateRecovered = true;
   }
 
@@ -146,16 +141,18 @@ class SQLQueryEngineTransactionRecoveryMethods
   }
 
   /**
-   * Load distributed transaction recovery rows from system cache snapshots.
+   * Filter recovery rows to sweep-eligible transactions and their matching
+   * participant / write-operation rows.
+   * @param {Object[]} allTransactions - All cached sql_transactions rows.
+   * @param {number} now - Current epoch milliseconds.
    * @return {{transactions: Object[], participants: Object[], writeOperations: Object[]}}
-   *   Recovery payload.
+   *   Filtered recovery payload.
    * @private
    */
-  loadDistributedTransactionRecoveryState() {
-    const now = this.transactionCoordinator.now();
-    const transactions = this.loadSystemTableRows(
-      TABLES.SQL_TRANSACTIONS,
-    ).filter((row) => isSweepEligibleTransactionRow(row, now));
+  filterEligibleRecoveryRows(allTransactions, now) {
+    const transactions = allTransactions.filter((row) =>
+      isSweepEligibleTransactionRow(row, now),
+    );
     const eligibleIds = new Set(
       transactions
         .map((row) => row?.transaction_id)
@@ -176,6 +173,20 @@ class SQLQueryEngineTransactionRecoveryMethods
         TABLES.SQL_WRITE_OPERATIONS,
       ).filter(matchesEligibleTransaction),
     };
+  }
+
+  /**
+   * Load distributed transaction recovery rows from system cache snapshots.
+   * @return {{transactions: Object[], participants: Object[], writeOperations: Object[]}}
+   *   Recovery payload.
+   * @private
+   */
+  loadDistributedTransactionRecoveryState() {
+    const now = this.transactionCoordinator.now();
+    return this.filterEligibleRecoveryRows(
+      this.loadSystemTableRows(TABLES.SQL_TRANSACTIONS),
+      now,
+    );
   }
 
   /**

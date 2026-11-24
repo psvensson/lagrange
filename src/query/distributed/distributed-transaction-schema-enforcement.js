@@ -26,7 +26,6 @@ const ERROR = TRANSACTION_SCHEMA_ENFORCEMENT_ERROR;
 const TRIGGER_NAME = 'sql_transactions_initial_lineage_v1';
 const SCHEMA_SQL = 'PRAGMA table_info(sql_transactions)';
 const TRIGGER_SQL = 'SELECT sql FROM sqlite_schema WHERE type = ? AND name = ? AND tbl_name = ?';
-const COUNT_SQL = 'SELECT count(*) AS count FROM sql_transactions';
 const INITIAL_ROW_TRIGGER_SQL = `CREATE TRIGGER ${TRIGGER_NAME}
 BEFORE INSERT ON sql_transactions
 WHEN COALESCE((
@@ -72,10 +71,11 @@ function readTransactionSchemaEnforcement(database) {
     const shapeValid = byName.get('transaction_id')?.pk === 1 &&
       SQL_TRANSACTIONS_SCHEMA.columns.every((column) => !byName.has(column.name) ||
         byName.get(column.name).type.toUpperCase() === column.type.toUpperCase());
-    if (!shapeValid || (trigger !== null && trigger !== INITIAL_ROW_TRIGGER_SQL)) {
+    if (!shapeValid || missing.length > 0 ||
+        (trigger !== null && trigger !== INITIAL_ROW_TRIGGER_SQL)) {
       return enforcementResult(STATE.INCOMPATIBLE, columns, trigger, missing);
     }
-    return enforcementResult(missing.length === 0 && trigger === INITIAL_ROW_TRIGGER_SQL ?
+    return enforcementResult(trigger === INITIAL_ROW_TRIGGER_SQL ?
       STATE.ENFORCED : STATE.REQUIRED, columns, trigger, missing);
   } catch {
     return enforcementResult(STATE.UNAVAILABLE);
@@ -114,15 +114,8 @@ function assertTransactionSchemaWriteEnforced(database, tableName, originPresent
 function installTransactionSchemaEnforcement(database) {
   const before = readTransactionSchemaEnforcement(database);
   if (before.state === STATE.ENFORCED) return before;
-  if (before.state !== STATE.REQUIRED ||
-      (before.missingColumns.length > 0 && database.prepare(COUNT_SQL).get().count !== 0)) {
+  if (before.state !== STATE.REQUIRED) {
     throw enforcementError();
-  }
-  for (const name of before.missingColumns) {
-    const column = SQL_TRANSACTIONS_SCHEMA.columns.find((candidate) => candidate.name === name);
-    // These bytes come only from the schema owner. No default, inferred [],
-    // row rewrite or caller-provided SQL can enter this application path.
-    database.exec(`ALTER TABLE sql_transactions ADD COLUMN ${column.name} ${column.type}`);
   }
   if (before.enforcerDigest === null) database.exec(INITIAL_ROW_TRIGGER_SQL);
   const after = readTransactionSchemaEnforcement(database);

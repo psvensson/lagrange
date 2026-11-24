@@ -5,23 +5,29 @@ import {
   openParticipantTransactionStore,
   recordPartitionWriteOrigin,
 } from '../../src/partition/partition-participant-transaction-store.js';
+import {buildDecisionRecord} from
+  '../../src/partition/partition-participant-transaction-bytes.js';
 import {installTransactionSchemaEnforcement} from
   '../../src/query/distributed/distributed-transaction-schema-enforcement.js';
 import {readTransactionReleaseCensus} from
   '../../src/query/distributed/distributed-transaction-release-census.js';
 
-test('query release census: measured empty schema is clear; unreadable schema is unavailable',
+test('query release census: measured empty schema is clear; unreadable or incomplete schema is unavailable',
   (t) => {
     const gateway = createTransactionPersistenceGateway();
     t.after(() => gateway.db.close());
     const empty = readTransactionReleaseCensus(gateway.db);
     assert.equal(empty.state, 'clear');
+    assert.equal(empty.currentSchemaValid, true);
     assert.equal(empty.schemaVersion, 2);
     assert.match(empty.rowGenerationDigest, /^[a-f0-9]{64}$/u);
     assert.equal(readTransactionReleaseCensus(null).state, 'unavailable');
     gateway.db.exec('ALTER TABLE sql_transactions DROP COLUMN participant_set_text');
-    assert.equal(readTransactionReleaseCensus(gateway.db).state, 'empty_legacy_schema');
-    assert.equal(readTransactionReleaseCensus(gateway.db).schemaVersion, null);
+    const missingColumn = readTransactionReleaseCensus(gateway.db);
+    assert.equal(missingColumn.state, 'unavailable');
+    assert.equal(missingColumn.enforcement.state, 'incompatible');
+    assert.equal(missingColumn.currentSchemaValid, false);
+    assert.equal(missingColumn.schemaVersion, null);
   });
 
 test('query release census: legacy terminal labels never certify drain; exact generation changes',
@@ -138,20 +144,55 @@ test('query release census: post-origin open undecided rows stay clear while dig
       assert.deepEqual(inFlight.recoverableTransactionIds, []);
     }
 
-    // Mismatched frozen_participant_count on a FROZEN undecided row is held in recoverableTransactionIds.
+    // Mismatched frozen_participant_count on a FROZEN undecided row is held in recoverableTransactionIds
+    // and marked currentSchemaValid === false so it can never pass current-origin revalidation.
     gateway.db.prepare(
       'UPDATE sql_transactions SET status = ?, frozen_participant_count = ? WHERE transaction_id = ?',
     ).run('PREPARING', 2, txId);
     const mismatchedCount = readTransactionReleaseCensus(gateway.db);
     assert.equal(mismatchedCount.state, 'held');
+    assert.equal(mismatchedCount.currentSchemaValid, false);
     assert.deepEqual(mismatchedCount.recoverableTransactionIds, [txId]);
 
-    // Post-origin COMMITTING (FROZEN) row is held in recoverableTransactionIds.
+    // Post-origin COMMITTING (FROZEN) row without a decision is held in recoverableTransactionIds
+    // and marked currentSchemaValid === false.
     gateway.db.prepare(
       'UPDATE sql_transactions SET status = ?, frozen_participant_count = ? WHERE transaction_id = ?',
     ).run('COMMITTING', 1, txId);
     const committing = readTransactionReleaseCensus(gateway.db);
     assert.equal(committing.state, 'held');
+    assert.equal(committing.currentSchemaValid, false);
     assert.deepEqual(committing.legacyTransactionIds, []);
     assert.deepEqual(committing.recoverableTransactionIds, [txId]);
+
+    // Valid post-origin FROZEN terminal COMMITTED row with matching decision record is
+    // held in recoverableTransactionIds with currentSchemaValid === true.
+    const commitRecord = buildDecisionRecord(txId, 'COMMIT', [[`${txId}:p1`, 'prepared-digest']]);
+    gateway.db.prepare(
+      'UPDATE sql_transactions SET status = ?, decision = ?, decision_text = ?, decision_digest = ? ' +
+      'WHERE transaction_id = ?',
+    ).run('COMMITTED', commitRecord.decision, commitRecord.decisionText,
+      commitRecord.decisionDigest, txId);
+    const validCommitted = readTransactionReleaseCensus(gateway.db);
+    assert.equal(validCommitted.state, 'held');
+    assert.equal(validCommitted.currentSchemaValid, true);
+    assert.deepEqual(validCommitted.legacyTransactionIds, []);
+    assert.deepEqual(validCommitted.recoverableTransactionIds, [txId]);
+
+    // Contradictory terminal status (ROLLED_BACK with COMMIT decision) is rejected from currentSchemaValid.
+    gateway.db.prepare(
+      'UPDATE sql_transactions SET status = ? WHERE transaction_id = ?',
+    ).run('ROLLED_BACK', txId);
+    const contradictory = readTransactionReleaseCensus(gateway.db);
+    assert.equal(contradictory.state, 'held');
+    assert.equal(contradictory.currentSchemaValid, false);
+
+    // Invalid decision digest is rejected into legacyTransactionIds with currentSchemaValid === false.
+    gateway.db.prepare(
+      'UPDATE sql_transactions SET status = ?, decision_digest = ? WHERE transaction_id = ?',
+    ).run('COMMITTED', '0'.repeat(64), txId);
+    const invalidDecision = readTransactionReleaseCensus(gateway.db);
+    assert.equal(invalidDecision.state, 'held');
+    assert.equal(invalidDecision.currentSchemaValid, false);
+    assert.deepEqual(invalidDecision.legacyTransactionIds, [txId]);
   });

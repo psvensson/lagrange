@@ -58,7 +58,7 @@ test('coordinator schema: existing NULL rows survive install and never gain an e
       participant_set_text: null}), /transaction_initial_row_refused/u);
   });
 
-test('coordinator schema: empty old schema installs nullable columns, nonempty old schema stays held',
+test('coordinator schema: missing required column is always incompatible (empty or populated)',
   (t) => {
     for (const populated of [false, true]) {
       const gateway = createTransactionPersistenceGateway();
@@ -69,15 +69,15 @@ test('coordinator schema: empty old schema installs nullable columns, nonempty o
           'transaction_mode, participant_set_state, commit_mode, frozen_participant_count, ' +
           'created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
           .run(row.transaction_id, 'old', 'COMMITTED', 'EXPLICIT', 'OPEN', 'NOT_SELECTED', 0, 1, 1);
-        assert.throws(() => gateway.db.transaction(() =>
-          installTransactionSchemaEnforcement(gateway.db))(), /enforcement_unavailable/u);
-      } else {
-        gateway.db.transaction(() => installTransactionSchemaEnforcement(gateway.db))();
-        const column = gateway.db.prepare('PRAGMA table_info(sql_transactions)').all()
-          .find((field) => field.name === 'participant_set_text');
-        assert.equal(column.dflt_value, null);
-        assert.equal(column.notnull, 0);
       }
+      const enforcement = readTransactionSchemaEnforcement(gateway.db);
+      assert.equal(enforcement.state, 'incompatible');
+      assert.deepEqual(enforcement.missingColumns, ['participant_set_text']);
+      assert.throws(() => gateway.db.transaction(() =>
+        installTransactionSchemaEnforcement(gateway.db))(), /enforcement_unavailable/u);
+      const column = gateway.db.prepare('PRAGMA table_info(sql_transactions)').all()
+        .find((field) => field.name === 'participant_set_text');
+      assert.equal(column, undefined, 'no internal ALTER TABLE adds missing columns');
     }
   });
 

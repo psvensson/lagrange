@@ -7,6 +7,8 @@ import {COMMITTED_MEMBERSHIP_MAX_PEERS} from '../raft/raft-committed-membership-
 import {PARTITION_ROWID_LIMIT} from './partition-statement-admission-constants.js';
 import {TRANSACTION_RELEASE_CENSUS_STATE, TRANSACTION_RELEASE_TERMINAL_STATUS} from
   '../query/distributed/distributed-transaction-release-census.js';
+import {TRANSACTION_SCHEMA_ENFORCEMENT_STATE} from
+  '../query/distributed/distributed-transaction-schema-enforcement.js';
 import {PARTICIPANT_CUTOVER_OUTCOME as OUTCOME, PARTICIPANT_RELEASE_VERSION} from
   './partition-participant-transaction-cutover-constants.js';
 
@@ -119,6 +121,23 @@ function isReleaseDrained(work) {
     work.appliedIndex === work.commitIndex && work.commitIndex === work.lastIndex;
 }
 
+function isCurrentOriginRevalidatableQueryCensus(facts, options = {}) {
+  const {originRequired = true} = options;
+  const hasDrainProof = options.queryDrainProof !== undefined &&
+    options.queryDrainProof !== null;
+  const query = facts?.queryCensus;
+  return originRequired === true &&
+    !hasDrainProof &&
+    originEqual(facts?.origin, facts?.origin) &&
+    query !== null &&
+    query !== undefined &&
+    query.enforcement?.state === TRANSACTION_SCHEMA_ENFORCEMENT_STATE.ENFORCED &&
+    query.legacyTransactionIds?.length === 0 &&
+    query.currentSchemaValid === true &&
+    (query.state === TRANSACTION_RELEASE_CENSUS_STATE.CLEAR ||
+      query.state === TRANSACTION_RELEASE_CENSUS_STATE.HELD);
+}
+
 function releaseFactsDefect(release, facts, options = {}) {
   const {originRequired = true} = options;
   if (facts?.outcome !== OUTCOME.OBSERVED || !facts.membership || !facts.generation ||
@@ -138,14 +157,17 @@ function releaseFactsDefect(release, facts, options = {}) {
   if (!rowidValid(facts.rowid)) return OUTCOME.ROWID_CEILING_REACHED;
   if (facts.queryCensus !== null) {
     const query = facts.queryCensus;
+    if (originRequired &&
+        query.enforcement?.state !== TRANSACTION_SCHEMA_ENFORCEMENT_STATE.ENFORCED) {
+      return OUTCOME.QUERY_DRAIN_PENDING;
+    }
     const invocationSettled = query.state === TRANSACTION_RELEASE_CENSUS_STATE.HELD &&
       transactionReleaseProofValid(options.queryDrainProof,
         {release, attempt: options.attempt, census: query});
-    const beforeOriginClear = query.state === TRANSACTION_RELEASE_CENSUS_STATE.CLEAR ||
-      (originRequired === false &&
-        query.state === TRANSACTION_RELEASE_CENSUS_STATE.EMPTY_LEGACY_SCHEMA) ||
-      invocationSettled;
-    if (!beforeOriginClear) return OUTCOME.QUERY_DRAIN_PENDING;
+    const queryCleared = query.state === TRANSACTION_RELEASE_CENSUS_STATE.CLEAR ||
+      invocationSettled ||
+      isCurrentOriginRevalidatableQueryCensus(facts, options);
+    if (!queryCleared) return OUTCOME.QUERY_DRAIN_PENDING;
   }
   if (originRequired && (!originEqual(facts.origin, facts.origin) ||
       facts.membership.appliedIndex < facts.origin.originIndex)) {
@@ -172,6 +194,8 @@ function releaseCensusDefect(release, census, local, options = {}) {
       facts.queryCensus.schemaVersion === local.queryCensus.schemaVersion &&
       facts.queryCensus.semanticVersion === local.queryCensus.semanticVersion &&
       facts.queryCensus.rowGenerationDigest === local.queryCensus.rowGenerationDigest &&
+      facts.queryCensus.currentSchemaValid === local.queryCensus.currentSchemaValid &&
+      facts.queryCensus.enforcement?.state === local.queryCensus.enforcement?.state &&
       facts.queryCensus.enforcement?.schemaDigest ===
         local.queryCensus.enforcement?.schemaDigest &&
       facts.queryCensus.enforcement?.enforcerDigest ===
@@ -196,8 +220,7 @@ function releaseAnswer(outcome, request = {}, fields = {}) {
     phase: request.action ?? null, ...fields});
 }
 
-export {isReleaseDrained, originEqual, releaseAnswer, releaseCensusDefect,
-  participantReleaseGenerationValid, releaseIdentityOf,
-  releaseIdentityValid, releaseMemberIds,
-  sameReplicaGeneration,
-  transactionReleaseProofValid};
+export {isCurrentOriginRevalidatableQueryCensus, isReleaseDrained, originEqual,
+  releaseAnswer, releaseCensusDefect, participantReleaseGenerationValid,
+  releaseIdentityOf, releaseIdentityValid, releaseMemberIds,
+  sameReplicaGeneration, transactionReleaseProofValid};
