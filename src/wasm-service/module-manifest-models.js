@@ -146,8 +146,6 @@ function validateCapabilities(caps, errors) {
  * - {mode: 'embedded', embeddedSection?: string}
  * - {mode: 'sidecar', sidecarUri: string}
  *
- * For sidecar mode, a legacy artifactPointer fallback is accepted.
- *
  * @param {Object} manifest - Module manifest object.
  * @param {string[]} errors - Errors array to append to.
  */
@@ -170,9 +168,7 @@ function validateDebugArtifact(manifest, errors) {
   }
 
   if (mode === DAM.SIDECAR) {
-    const sidecarUri = debugArtifact[DAF.SIDECAR_URI] ||
-      manifest[MF.ARTIFACT_POINTER] ||
-      null;
+    const sidecarUri = debugArtifact[DAF.SIDECAR_URI];
     if (typeof sidecarUri !== 'string' ||
         sidecarUri.trim().length === 0) {
       errors.push(ERR.DEBUG_ARTIFACT_SIDECAR_URI_REQUIRED);

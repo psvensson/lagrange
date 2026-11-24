@@ -184,6 +184,15 @@ test(
     };
 
     service.systemTableCache.applySystemTableChange(
+      TABLES.NODES,
+      CDC_OPERATION.UPSERT,
+      {
+        [COLUMN.NODE_ID]: TEST_STRICT_RECOVERY_FORWARD_REMOTE_NODE_ID,
+        [COLUMN.CONNECTION_STATE]: STATE.READY,
+        [COLUMN.READY_LEASE_EXPIRES_AT]: Date.now() + 60000,
+      },
+    );
+    service.systemTableCache.applySystemTableChange(
       TABLES.MESSAGE_GROUPS,
       CDC_OPERATION.UPSERT,
       {

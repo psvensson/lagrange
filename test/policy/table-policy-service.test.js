@@ -185,25 +185,23 @@ test('TablePolicyService - getPolicyForPartition looks up table',
 
 test('TablePolicyService - getPolicyForPartition reads the configured system-cache observation',
   async (t) => {
+    const tables = {
+      partitions: [{
+        partition_id: 'partition-1',
+        table_id: 'table-1',
+        replica_count: 5,
+      }],
+      tables: [{
+        table_id: 'table-1',
+        table_policies: JSON.stringify({
+          splitTrafficThreshold: 5,
+          splitStorageThreshold: 16384,
+        }),
+      }],
+    };
     const mockCache = {
-      getAll(tableName) {
-        if (tableName === 'partitions') {
-          return [{
-            partition_id: 'partition-1',
-            table_id: 'table-1',
-            replica_count: 5,
-          }];
-        }
-        if (tableName === 'tables') {
-          return [{
-            table_id: 'table-1',
-            table_policies: JSON.stringify({
-              splitTrafficThreshold: 5,
-              splitStorageThreshold: 16384,
-            }),
-          }];
-        }
-        return [];
+      filter(tableName, predicate) {
+        return (tables[tableName] || []).filter(predicate);
       },
     };
 
@@ -922,10 +920,10 @@ async (t) => {
 
   const cacheOnlyService = new TablePolicyService({
     systemTableCache: {
-      get: () => ({
+      filter: (_tableName, predicate) => [{
         group_id: 'mg-fact', replica_count: 5,
         policy: JSON.stringify({targetReplicaCount: 5}),
-      }),
+      }].filter(predicate),
     },
   });
   const cacheOnlyDecision = await cacheOnlyService.resolveMessageGroupPolicyFact(

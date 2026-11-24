@@ -1,6 +1,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
+  resolveMessageGroupForwardServiceCandidatesFromCache,
   resolveMessageGroupForwardServiceFromCache,
   resolveMessageGroupLeaderServiceFromCache,
   resolveMessageGroupTargetAddressFromCache,
@@ -23,9 +24,19 @@ function addNode(cache, row) {
   cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, row);
 }
 
+function addReadyNode(cache, nodeId, now = Date.now()) {
+  addNode(cache, {
+    [COLUMN.NODE_ID]: nodeId,
+    [COLUMN.CONNECTION_STATE]: STATE.READY,
+    [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60000,
+  });
+}
+
 test('message-group target resolver prefers explicit services leader over stale message_groups leader node',
   async (t) => {
     const cache = new SystemTableCache();
+    addReadyNode(cache, 'node-a');
+    addReadyNode(cache, 'node-b');
 
     cache.applySystemTableChange(TABLES.MESSAGE_GROUPS, CDC_OPERATION.UPSERT, {
       [COLUMN.GROUP_ID]: 'mg-1',
@@ -78,6 +89,8 @@ test('message-group target resolver prefers explicit services leader over stale 
 test('message-group target resolver falls back to canonical leader node when no explicit leader row exists',
   async (t) => {
     const cache = new SystemTableCache();
+    addReadyNode(cache, 'node-a');
+    addReadyNode(cache, 'node-b');
 
     cache.applySystemTableChange(TABLES.MESSAGE_GROUPS, CDC_OPERATION.UPSERT, {
       [COLUMN.GROUP_ID]: 'mg-1',
@@ -132,6 +145,7 @@ test('message-group target resolver falls back to canonical leader node when no 
 test('message-group target resolver avoids ambiguous same-node canonical leader picks',
   async (t) => {
     const cache = new SystemTableCache();
+    addReadyNode(cache, 'seed-node');
 
     cache.applySystemTableChange(TABLES.MESSAGE_GROUPS, CDC_OPERATION.UPSERT, {
       [COLUMN.GROUP_ID]: 'mg-1',
@@ -387,5 +401,64 @@ test('message-group target resolver prefers connected relay candidates over disc
       targetAddress,
       'node-relay/message-group/mg-1-r3',
       'target address resolution should prefer a connected relay candidate',
+    );
+  });
+
+test('message-group target resolver fails closed when cache is absent, NODES is empty, or getReadyNodes is missing',
+  async (t) => {
+    t.equal(
+      resolveMessageGroupTargetAddressFromCache(null, 'mg-1'),
+      null,
+      'absent cache should not resolve a target address',
+    );
+    t.same(
+      resolveMessageGroupForwardServiceCandidatesFromCache(null, 'mg-1'),
+      [],
+      'absent cache should yield no forward candidates',
+    );
+
+    const cacheWithEmptyNodes = new SystemTableCache();
+    cacheWithEmptyNodes.applySystemTableChange(
+      TABLES.MESSAGE_GROUPS,
+      CDC_OPERATION.UPSERT,
+      {
+        [COLUMN.GROUP_ID]: 'mg-1',
+        [COLUMN.LEADER_NODE_ID]: 'node-a',
+      },
+    );
+    addMessageGroupService(cacheWithEmptyNodes, {
+      [COLUMN.SERVICE_ID]: 'mg-1-r1',
+      [COLUMN.GROUP_ID]: 'mg-1',
+      [COLUMN.NODE_ID]: 'node-a',
+      [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.ADDRESS]: 'node-a/message-group/mg-1-r1',
+      [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
+    });
+
+    t.equal(
+      resolveMessageGroupLeaderServiceFromCache(cacheWithEmptyNodes, 'mg-1'),
+      null,
+      'empty NODES must never treat unknown node readiness as ready for leader resolution',
+    );
+    t.equal(
+      resolveMessageGroupForwardServiceFromCache(cacheWithEmptyNodes, 'mg-1'),
+      null,
+      'empty NODES must never treat unknown node readiness as ready for forward resolution',
+    );
+    t.equal(
+      resolveMessageGroupTargetAddressFromCache(cacheWithEmptyNodes, 'mg-1'),
+      null,
+      'empty NODES must never treat unknown node readiness as ready for target address resolution',
+    );
+
+    const incompleteCache = {
+      filter: (tableName, predicate) =>
+        cacheWithEmptyNodes.filter(tableName, predicate),
+    };
+    t.equal(
+      resolveMessageGroupLeaderServiceFromCache(incompleteCache, 'mg-1'),
+      null,
+      'cache missing canonical getReadyNodes() must fail closed',
     );
   });

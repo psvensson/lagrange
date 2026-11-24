@@ -115,19 +115,14 @@ function validateResolvedDependencies(resolvedDependencies) {
 /**
  * Validate debug artifact availability policy for debug capabilities.
  *
- * By default, debug capabilities require either:
- * - `manifest.debugArtifact`, or
- * - legacy `manifest.artifactPointer` declaration.
- *
- * Policy hook:
- * - `capabilityPolicy.requireDebugArtifacts === false` downgrades
- *   enforcement for transitional rollouts.
+ * Debug capabilities unconditionally require canonical `manifest.debugArtifact`
+ * metadata (`{mode: 'embedded', embeddedSection?}` or
+ * `{mode: 'sidecar', sidecarUri}`).
  *
  * @param {Object} manifest - Module manifest object.
- * @param {Object|null} capabilityPolicy - Capability policy options.
  * @return {{valid: boolean, errors: string[]}} Result.
  */
-function validateDebugArtifactPolicy(manifest, capabilityPolicy) {
+function validateDebugArtifactPolicy(manifest) {
   const caps = manifest ? manifest[MF.CAPABILITIES] : null;
   if (!caps || !Array.isArray(caps) ||
       caps.length === 0) {
@@ -141,15 +136,7 @@ function validateDebugArtifactPolicy(manifest, capabilityPolicy) {
     return {valid: true, errors: []};
   }
 
-  const requireDebugArtifacts =
-    capabilityPolicy?.requireDebugArtifacts !== false;
-  if (!requireDebugArtifacts) {
-    return {valid: true, errors: []};
-  }
-
-  const hasDebugArtifact = Boolean(manifest[MF.DEBUG_ARTIFACT]) ||
-    Boolean(manifest[MF.ARTIFACT_POINTER]);
-  if (!hasDebugArtifact) {
+  if (!manifest[MF.DEBUG_ARTIFACT]) {
     return {
       valid: false,
       errors: [VALIDATION_PIPELINE_ERROR_MSG.DEBUG_ARTIFACT_REQUIRED],
@@ -194,10 +181,7 @@ function buildPublishValidationChain() {
     },
     {
       name: VALIDATION_STEP.DEBUG_ARTIFACTS,
-      validate: (params) => validateDebugArtifactPolicy(
-        params.manifest,
-        params.capabilityPolicy || null,
-      ),
+      validate: (params) => validateDebugArtifactPolicy(params.manifest),
     },
     {
       name: VALIDATION_STEP.DEPENDENCIES,

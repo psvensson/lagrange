@@ -81,7 +81,7 @@ const MODULE_MANIFEST_ERROR_MSG = Object.freeze({
   DEBUG_ARTIFACT_MODE_INVALID:
     'debugArtifact.mode must be one of: embedded, sidecar',
   DEBUG_ARTIFACT_SIDECAR_URI_REQUIRED:
-    'debugArtifact.sidecarUri or artifactPointer is required for sidecar mode',
+    'debugArtifact.sidecarUri is required for sidecar mode',
   DEBUG_ARTIFACT_EMBEDDED_SECTION_INVALID:
     'debugArtifact.embeddedSection must be a non-empty string when provided',
   UNDECLARED_CAPABILITY:

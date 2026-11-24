@@ -228,6 +228,14 @@ describe('WasmServiceReplica', () => {
       assert.equal(replica.db, null);
     });
 
+    it('requires injected systemTableCache and never falls back to global NodeService singleton', () => {
+      const singletonCache = createWriteReadySystemTableCache();
+      NodeService.getInstance().systemTableCache = singletonCache;
+      const replica = new WasmServiceReplica(defaultOpts());
+      assert.equal(replica.systemTableCache, null);
+      assert.equal(replica.isServicesLeaderAvailable(), false);
+    });
+
     it('should initialize timerManager', () => {
       const replica = createReplica(defaultOpts());
       assert.notEqual(replica.timerManager, null);

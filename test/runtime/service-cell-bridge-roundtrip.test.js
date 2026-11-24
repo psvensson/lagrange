@@ -183,6 +183,7 @@ function bridgeDefinition(manifestDigest) {
     runtime_kind: 'wasm_component',
     runtime_ref: 'registry.example.test/acme/request-call-bridge:1.0.0@' +
       BRIDGE_ARTIFACT_DIGEST,
+    serviceId: BRIDGE_SERVICE_ID,
     service_id: BRIDGE_SERVICE_ID,
     tenantId: BRIDGE_TENANT_ID,
   };

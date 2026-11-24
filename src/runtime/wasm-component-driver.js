@@ -65,7 +65,7 @@ import {startBoundReplica, retireBoundReplica, markBoundServicesRowPresent,
 
 const DRIVER_FIELD = Object.freeze({
   SERVICE_ID: 'serviceId',
-  SERVICE_ID_LEGACY: 'service_id',
+  TENANT_ID: 'tenantId',
 });
 
 const DRIVER_ENDPOINT_DEFAULT = Object.freeze({
@@ -127,17 +127,11 @@ function resolvePreparePolicyFailure(context, definition) {
 }
 
 function resolveDriverServiceId(value) {
-  return value?.[DRIVER_FIELD.SERVICE_ID] ??
-    value?.[DRIVER_FIELD.SERVICE_ID_LEGACY] ??
-    value?.definition?.[DRIVER_FIELD.SERVICE_ID] ??
-    value?.definition?.[DRIVER_FIELD.SERVICE_ID_LEGACY];
+  return value?.[DRIVER_FIELD.SERVICE_ID];
 }
 
 function resolveDriverTenantId(value) {
-  return value?.tenantId ??
-    value?.tenant_id ??
-    value?.definition?.tenantId ??
-    value?.definition?.tenant_id;
+  return value?.[DRIVER_FIELD.TENANT_ID];
 }
 
 async function resolveRuntimeAccessTables(replicaContext) {

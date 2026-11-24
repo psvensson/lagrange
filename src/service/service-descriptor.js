@@ -26,15 +26,18 @@ const RUNTIME_EXTENSION_FIELD = Object.freeze({
   RESOURCE_BUDGET: 'resource_budget',
 });
 
-function firstDefined(primary, fallback) {
-  return primary ?? fallback;
-}
+const PERSISTED_SQL_DESCRIPTOR_COLUMNS = Object.freeze([
+  ['service_id', SERVICE_DESCRIPTOR_FIELD.SERVICE_ID],
+  ['service_type', SERVICE_DESCRIPTOR_FIELD.SERVICE_TYPE],
+  ['tenant_id', SERVICE_DESCRIPTOR_FIELD.TENANT_ID],
+  ['replica_count', SERVICE_DESCRIPTOR_FIELD.REPLICA_COUNT],
+  ['runtime_kind', SERVICE_DESCRIPTOR_FIELD.RUNTIME_KIND],
+  ['runtime_ref', SERVICE_DESCRIPTOR_FIELD.RUNTIME_REF],
+  ['runtime_config', SERVICE_DESCRIPTOR_FIELD.RUNTIME_CONFIG],
+]);
 
 function serializeRuntimeExtensionBudget(descriptor) {
-  const budget = firstDefined(
-    descriptor?.resource_budget,
-    descriptor?.resourceBudget,
-  );
+  const budget = descriptor?.[RUNTIME_EXTENSION_FIELD.RESOURCE_BUDGET];
   return budget === undefined || typeof budget === 'string' ?
     budget :
     JSON.stringify(budget);
@@ -43,60 +46,64 @@ function serializeRuntimeExtensionBudget(descriptor) {
 function runtimeExtensionFields(descriptor) {
   return {
     [RUNTIME_EXTENSION_FIELD.BINDING_DIGEST]:
-      firstDefined(descriptor?.binding_digest, descriptor?.bindingDigest),
+      descriptor?.[RUNTIME_EXTENSION_FIELD.BINDING_DIGEST],
     [RUNTIME_EXTENSION_FIELD.BINDING_PROJECTION]:
-      firstDefined(
-        descriptor?.binding_projection,
-        descriptor?.bindingProjection,
-      ),
+      descriptor?.[RUNTIME_EXTENSION_FIELD.BINDING_PROJECTION],
     [RUNTIME_EXTENSION_FIELD.BINDING_VERSION_ID]:
-      firstDefined(
-        descriptor?.binding_version_id,
-        descriptor?.bindingVersionId,
-      ),
+      descriptor?.[RUNTIME_EXTENSION_FIELD.BINDING_VERSION_ID],
     [RUNTIME_EXTENSION_FIELD.RESOURCE_BUDGET]:
       serializeRuntimeExtensionBudget(descriptor),
   };
 }
 
 /**
- * Normalize a mixed-case descriptor into canonical camelCase fields.
+ * Convert persisted SQL snake_case descriptor columns once at the boundary
+ * into canonical camelCase domain fields, leaving already-canonical fields
+ * authoritative when present.
+ *
+ * @param {Object|null|undefined} descriptor
+ * @return {Object}
+ */
+function adaptPersistedSqlDescriptorFields(descriptor) {
+  if (!descriptor || typeof descriptor !== 'object') {
+    return {};
+  }
+  const adapted = {...descriptor};
+  for (const [sqlColumn, canonicalField] of PERSISTED_SQL_DESCRIPTOR_COLUMNS) {
+    if (adapted[canonicalField] === undefined &&
+        Object.hasOwn(descriptor, sqlColumn)) {
+      adapted[canonicalField] = descriptor[sqlColumn];
+    }
+  }
+  return adapted;
+}
+
+/**
+ * Normalize a persisted SQL row or canonical descriptor into canonical
+ * camelCase descriptor fields.
  *
  * @param {Object} descriptor
  * @return {Object}
  */
 function normalizeServiceDescriptor(descriptor) {
-  const serviceId = descriptor?.[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID] ||
-    descriptor?.service_id ||
-    null;
+  const canonical = adaptPersistedSqlDescriptorFields(descriptor);
+  const serviceId = canonical[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID] || null;
 
   return {
-    ...runtimeExtensionFields(descriptor),
+    ...runtimeExtensionFields(canonical),
     [SERVICE_DESCRIPTOR_FIELD.SERVICE_ID]: serviceId,
     [SERVICE_DESCRIPTOR_FIELD.SERVICE_TYPE]:
-      descriptor?.[SERVICE_DESCRIPTOR_FIELD.SERVICE_TYPE] ||
-      descriptor?.service_type ||
-      null,
+      canonical[SERVICE_DESCRIPTOR_FIELD.SERVICE_TYPE] || null,
     [SERVICE_DESCRIPTOR_FIELD.TENANT_ID]:
-      descriptor?.[SERVICE_DESCRIPTOR_FIELD.TENANT_ID] ||
-      descriptor?.tenant_id ||
-      serviceId,
+      canonical[SERVICE_DESCRIPTOR_FIELD.TENANT_ID] || serviceId,
     [SERVICE_DESCRIPTOR_FIELD.REPLICA_COUNT]:
-      descriptor?.[SERVICE_DESCRIPTOR_FIELD.REPLICA_COUNT] ??
-      descriptor?.replica_count ??
-      0,
+      canonical[SERVICE_DESCRIPTOR_FIELD.REPLICA_COUNT] ?? 0,
     [SERVICE_DESCRIPTOR_FIELD.RUNTIME_KIND]:
-      descriptor?.[SERVICE_DESCRIPTOR_FIELD.RUNTIME_KIND] ||
-      descriptor?.runtime_kind ||
-      null,
+      canonical[SERVICE_DESCRIPTOR_FIELD.RUNTIME_KIND] || null,
     [SERVICE_DESCRIPTOR_FIELD.RUNTIME_REF]:
-      descriptor?.[SERVICE_DESCRIPTOR_FIELD.RUNTIME_REF] ??
-      descriptor?.runtime_ref ??
-      null,
+      canonical[SERVICE_DESCRIPTOR_FIELD.RUNTIME_REF] ?? null,
     [SERVICE_DESCRIPTOR_FIELD.RUNTIME_CONFIG]:
-      descriptor?.[SERVICE_DESCRIPTOR_FIELD.RUNTIME_CONFIG] ??
-      descriptor?.runtime_config ??
-      null,
+      canonical[SERVICE_DESCRIPTOR_FIELD.RUNTIME_CONFIG] ?? null,
   };
 }
 

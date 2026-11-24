@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
+import {createInProcWebSocketPair} from '../../src/transport/inproc-transport.js';
+import {ROUTER_MESSAGE_TYPE, TRANSPORT_EVENT} from '../../src/constants/transport.js';
 import {createServiceDeliveryFixture} from '../test-helpers/service-delivery-fixture.js';
 
 const LOCAL = 'delivery-receiver';
@@ -33,11 +35,29 @@ test('socket closure and same-boot replacement cannot revive an old delivery', a
   assert.equal(old.isCurrent(), false, 'old delivery remains invalid after same-boot replacement');
 });
 
-test('UNKNOWN identification stays compatible but grants no privileged delivery', async (t) => {
+test('missing or zero bootIncarnation IDENTIFY is rejected fail-closed without adoption', async (t) => {
   const f = await createServiceDeliveryFixture(t, LOCAL);
-  const delivery = await f.remote(REMOTE, 0);
-  assert.equal(f.router.nodeConnections.get(REMOTE).bootIncarnation, 0);
-  assert.equal(delivery, null, 'UNKNOWN socket identity must not become a membership grant');
+  for (const frame of [
+    {type: ROUTER_MESSAGE_TYPE.IDENTIFY, nodeId: REMOTE, nodeAddress: `ws://${REMOTE}:9999`},
+    {type: ROUTER_MESSAGE_TYPE.IDENTIFY, nodeId: REMOTE, nodeAddress: `ws://${REMOTE}:9999`, bootIncarnation: 0},
+  ]) {
+    const pair = createInProcWebSocketPair();
+    t.after(() => pair.a.terminate());
+    const closed = Promise.withResolvers();
+    let repliedIdentify = false;
+    pair.a.on(TRANSPORT_EVENT.MESSAGE, (data) => {
+      if (JSON.parse(data.toString()).type === ROUTER_MESSAGE_TYPE.IDENTIFY) {
+        repliedIdentify = true;
+      }
+    });
+    pair.a.once(TRANSPORT_EVENT.CLOSE, closed.resolve);
+    f.router.handleIncomingConnection(pair.b, null);
+    pair.a.send(JSON.stringify(frame));
+    await closed.promise;
+    assert.equal(repliedIdentify, false, 'incomplete IDENTIFY must never be answered or adopted');
+    assert.equal(f.router.nodeConnections.get(REMOTE), undefined,
+      'incomplete IDENTIFY must not occupy the peer connection slot');
+  }
 });
 
 test('newer boot adoption invalidates old socket delivery', async (t) => {

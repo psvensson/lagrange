@@ -292,7 +292,20 @@ describe('validateModuleManifest', () => {
       ));
     });
 
-  it('should accept sidecar debugArtifact with artifactPointer fallback',
+  it('should accept sidecar debugArtifact with explicit sidecarUri',
+    () => {
+      const result = validateModuleManifest(
+        makeValidManifest({
+          debugArtifact: {
+            mode: 'sidecar',
+            sidecarUri: 'oci://debug/acme/mod@sha256:def',
+          },
+        }),
+      );
+      assert.equal(result.valid, true);
+    });
+
+  it('should reject sidecar debugArtifact relying on legacy artifactPointer',
     () => {
       const result = validateModuleManifest(
         makeValidManifest({
@@ -300,7 +313,11 @@ describe('validateModuleManifest', () => {
           artifactPointer: 'oci://debug/acme/mod@sha256:def',
         }),
       );
-      assert.equal(result.valid, true);
+      assert.equal(result.valid, false);
+      assert.ok(result.errors.includes(
+        MODULE_MANIFEST_ERROR_MSG
+          .DEBUG_ARTIFACT_SIDECAR_URI_REQUIRED,
+      ));
     });
 
   it('should reject invalid name format', () => {

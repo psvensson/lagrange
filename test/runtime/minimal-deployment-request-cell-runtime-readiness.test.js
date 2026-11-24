@@ -165,6 +165,7 @@ function definition(overrides = {}) {
     runtime_kind: RUNTIME_KIND.WASM_COMPONENT,
     runtime_ref:
       `registry.example.test/acme/request-cell:1.0.0@${ARTIFACT_DIGEST}`,
+    serviceId: SERVICE_ID,
     service_id: SERVICE_ID,
     tenantId: 'tenant-a',
     ...overrides,
@@ -288,14 +289,17 @@ function createFixture(options = {}) {
     }
     projections.push(row);
   });
+  const replicaDefinition = options.definition || definition();
   return {
     cellRuntime,
     driver,
     lifecycle,
     projections,
     replica: {
-      definition: options.definition || definition(),
+      definition: replicaDefinition,
       nodeId: 'node-a',
+      serviceId: replicaDefinition.serviceId,
+      tenantId: replicaDefinition.tenantId,
     },
     sqlRequests,
   };

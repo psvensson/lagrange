@@ -628,6 +628,7 @@ export async function registerMessageRouterTailTests({
       type: RouterMessageType.IDENTIFY,
       nodeId: 'remote-node',
       nodeAddress: 'ws://remote-node:9999',
+      bootIncarnation: TEST_BOOT_INCARNATION,
     });
 
     t.ok(eventPayload, 'should emit nodeConnected');
@@ -670,6 +671,7 @@ export async function registerMessageRouterTailTests({
       type: RouterMessageType.IDENTIFY,
       nodeId: 'remote-bare',
       nodeAddress: 'ddb-test-node-3:8080',
+      bootIncarnation: TEST_BOOT_INCARNATION,
     });
 
     const conn = router.nodeConnections.get('remote-bare');
@@ -730,6 +732,7 @@ export async function registerMessageRouterTailTests({
         type: RouterMessageType.IDENTIFY,
         nodeId: 'a-remote-node',
         nodeAddress: 'ws://remote-node:9999',
+        bootIncarnation: TEST_BOOT_INCARNATION,
       });
 
       t.equal(
@@ -784,6 +787,7 @@ export async function registerMessageRouterTailTests({
         type: RouterMessageType.IDENTIFY,
         nodeId: 'a-remote-node',
         nodeAddress: 'ws://remote-node:9999',
+        bootIncarnation: TEST_BOOT_INCARNATION,
       });
 
       t.equal(

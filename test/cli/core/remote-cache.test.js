@@ -173,12 +173,12 @@ test('RemoteCache - getServices includes runtime services from definitions/endpo
       'runtime service row is enriched with node address');
   });
 
-test('RemoteCache - runtime services support legacy id/camelCase payload fields',
+test('RemoteCache - runtime services require canonical dump schema and ignore legacy id/type/host aliases',
   async (t) => {
     const cache = new RemoteCache();
     cache.loadFromDump({
       nodes: [
-        {id: 'node-1', address: '127.0.0.1:8080'},
+        {node_id: 'node-1', host: '127.0.0.1:8080'},
       ],
       service_definitions: [
         {
@@ -193,28 +193,23 @@ test('RemoteCache - runtime services support legacy id/camelCase payload fields'
           id: 'endpoint-1',
           serviceId: 'sys-admin-meta',
           nodeId: 'node-1',
-          address: '127.0.0.1',
+          host: '127.0.0.1',
           port: 7090,
           healthStatus: 'healthy',
         },
       ],
     });
 
-    const runtimeServices = cache.getServices().filter((service) => {
-      return service.service_type === 'runtime_service';
-    });
-
-    t.equal(runtimeServices.length, 1, 'includes one runtime replica row');
-    t.equal(runtimeServices[0].service_id, 'sys-admin-meta',
-      'runtime row resolves service ID from legacy fields');
-    t.equal(runtimeServices[0].endpoint_id, 'endpoint-1',
-      'runtime row resolves endpoint ID from legacy fields');
-    t.equal(runtimeServices[0].node_id, 'node-1',
-      'runtime row resolves node ID from legacy fields');
-    t.equal(runtimeServices[0].status, 'healthy',
-      'runtime row prefers endpoint health status');
-    t.equal(runtimeServices[0].node_address, '127.0.0.1:8080',
-      'runtime row resolves node address from legacy node field');
+    t.equal(cache.getRuntimeServices().length, 0,
+      'legacy id/camelCase definitions are not materialized as runtime services');
+    t.equal(cache.resolveServiceId({id: 'legacy-svc'}), '',
+      'resolveServiceId ignores generic id alias');
+    t.equal(cache.resolveServiceType({type: 'partition'}), null,
+      'resolveServiceType ignores generic type alias');
+    t.equal(cache.resolveEndpointId({id: 'legacy-ep'}), null,
+      'resolveEndpointId ignores generic id alias');
+    t.equal(cache.resolveNodeAddress({host: '127.0.0.1'}), null,
+      'resolveNodeAddress ignores generic host alias');
   });
 
 test('RemoteCache - node filter excludes runtime definitions without endpoints',

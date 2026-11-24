@@ -22,7 +22,7 @@ import {
   ENTRYPOINT_LOG_MSG,
   ENTRYPOINT_RUNTIME_VALUE,
 } from './constants/entrypoint.js';
-import {HTTP_STATUS, STRING} from './constants/index.js';
+import {STRING} from './constants/index.js';
 import {resolveRuntimeAddresses} from './entrypoint-runtime-options.js';
 import {reportWaitBoundSpent} from './logging/wait-bound-spent.js';
 
@@ -224,25 +224,14 @@ async function probeAutoRejoinPeerAddress(peerAddress) {
     baseUrl,
     ENTRYPOINT_DEFAULT.AUTO_REJOIN_BOOTSTRAP_READY_PATH,
   );
-  if (bootstrapReadyProbe.ready === true) {
-    return true;
-  }
-  if (bootstrapReadyProbe.legacyFallback !== true) {
-    return false;
-  }
-
-  const healthProbe = await probeAutoRejoinPeerPath(
-    baseUrl,
-    ENTRYPOINT_DEFAULT.AUTO_REJOIN_HEALTH_PATH,
-  );
-  return healthProbe.ready === true;
+  return bootstrapReadyProbe.ready === true;
 }
 
 /**
  * Probe one peer path used by auto-rejoin peer selection.
  * @param {string} baseUrl
  * @param {string} path
- * @return {Promise<Object>}
+ * @return {Promise<{ready: boolean}>}
  */
 async function probeAutoRejoinPeerPath(baseUrl, path) {
   try {
@@ -257,7 +246,6 @@ async function probeAutoRejoinPeerPath(baseUrl, path) {
     );
     return {
       ready: response.ok,
-      legacyFallback: response.status === HTTP_STATUS.NOT_FOUND,
     };
   } catch (error) {
     if (error?.name === AUTO_REJOIN_PROBE_WAIT.ABORT_TIMEOUT_ERROR_NAME) {
@@ -275,7 +263,6 @@ async function probeAutoRejoinPeerPath(baseUrl, path) {
     }
     return {
       ready: false,
-      legacyFallback: false,
     };
   }
 }

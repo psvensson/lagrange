@@ -69,24 +69,32 @@ function resolveOptionalAccumulatorFields(options, declaredStateSchema) {
   return result;
 }
 
-function resolveAliasedOption(primary, fallback) {
-  return primary !== undefined ? primary : fallback;
+const FORBIDDEN_OPTION_ALIASES = Object.freeze([
+  ['params', 'parameters'],
+  ['partial', 'partialSchema'],
+  ['state', 'stateSchema'],
+]);
+
+function assertCanonicalDistributedOptions(options) {
+  for (const [alias, canonical] of FORBIDDEN_OPTION_ALIASES) {
+    if (Object.hasOwn(options, alias) && options[alias] !== undefined) {
+      throw new TypeError(
+        `distributed() option "${alias}" is not supported; use "${canonical}"`,
+      );
+    }
+  }
 }
 
 function distributed(options) {
-  const {reduce, run, statement} = options;
-  const declaredParameters = resolveAliasedOption(
-    options.parameters,
-    options.params,
-  );
-  const declaredPartialSchema = resolveAliasedOption(
-    options.partialSchema,
-    options.partial,
-  );
-  const declaredStateSchema = resolveAliasedOption(
-    options.stateSchema,
-    options.state,
-  );
+  assertCanonicalDistributedOptions(options);
+  const {
+    parameters: declaredParameters,
+    partialSchema: declaredPartialSchema,
+    reduce,
+    run,
+    stateSchema: declaredStateSchema,
+    statement,
+  } = options;
   const resolvedRun = typeof run === 'function' ?
     run :
     createAccumulatorRunBridge(options.init, options.step, options.finish);
