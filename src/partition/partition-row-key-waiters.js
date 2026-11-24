@@ -77,7 +77,75 @@ function enqueueBoundedRowKeyWaiter(service, session, rowKey, boundedWaitMs) {
   });
 }
 
+function collectAwaitedKeysBySession(waiters, isSessionClosed) {
+  const awaitedBySession = new Map();
+  for (const waiter of waiters) {
+    if (!waiter.session || isSessionClosed(waiter.session)) continue;
+    let keys = awaitedBySession.get(waiter.session);
+    if (keys === undefined) {
+      keys = [];
+      awaitedBySession.set(waiter.session, keys);
+    }
+    keys.push(waiter.rowKey);
+  }
+  return awaitedBySession;
+}
+
+function enqueueUnvisitedHolders(queue, visited, holders, selfSession) {
+  for (const holder of holders) {
+    if (holder === selfSession) return true;
+    if (!visited.has(holder)) queue.push(holder);
+  }
+  return false;
+}
+
+function holderFormsCycle(service, holder, session, awaitedBySession, queue, visited, listHolders) {
+  const awaitedKeys = awaitedBySession.get(holder);
+  if (!awaitedKeys) return false;
+  for (const nextKey of awaitedKeys) {
+    if (enqueueUnvisitedHolders(queue, visited, listHolders(service, holder, nextKey), session)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Detect whether parking `session` on `rowKey` creates a wait-for cycle with
+ * currently parked row-key waiters on the same partition service.
+ * @param {Object} service - Partition service leader.
+ * @param {Object|null} session - Candidate waiting participant session.
+ * @param {string} rowKey - Conflicting row key or sentinel.
+ * @param {{isSessionClosed: Function, listHolderSessions: Function}} policy
+ * @return {boolean} True when waiting would form a cycle.
+ */
+function hasRowKeyWaitForCycle(service, session, rowKey, {
+  isSessionClosed,
+  listHolderSessions,
+}) {
+  const waiters = service?.rowKeyWaiters;
+  if (!session || !waiters || waiters.size === 0) return false;
+  const awaitedBySession = collectAwaitedKeysBySession(waiters, isSessionClosed);
+  const visited = new Set([session]);
+  const queue = [];
+  if (enqueueUnvisitedHolders(queue, visited, listHolderSessions(service, session, rowKey),
+    session)) {
+    return true;
+  }
+  while (queue.length > 0) {
+    const holder = queue.shift();
+    if (visited.has(holder)) continue;
+    visited.add(holder);
+    if (holderFormsCycle(service, holder, session, awaitedBySession, queue, visited,
+      listHolderSessions)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export {
   enqueueBoundedRowKeyWaiter,
+  hasRowKeyWaitForCycle,
   notifyFifoRowKeyWaiters,
 };

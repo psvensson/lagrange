@@ -20,8 +20,7 @@ import {hasLockingReadReservations} from './partition-locking-read-reservation.j
 import {hasDbTransactionReservations} from './partition-locking-read-store.js';
 import {extractStatementWriteFootprint} from './partition-write-footprint-contract.js';
 import {
-  enqueueBoundedRowKeyWaiter,
-  notifyFifoRowKeyWaiters,
+  enqueueBoundedRowKeyWaiter, hasRowKeyWaitForCycle, notifyFifoRowKeyWaiters,
 } from './partition-row-key-waiters.js';
 
 // Per partition service: participantId -> session.
@@ -40,19 +39,13 @@ const UNSCOPED_CONFLICT_SENTINEL = '*';
 
 function perServiceMap(store, service) {
   let map = store.get(service);
-  if (map === undefined) {
-    map = new Map();
-    store.set(service, map);
-  }
+  if (map === undefined) store.set(service, map = new Map());
   return map;
 }
 
 function perServiceSet(store, service) {
   let set = store.get(service);
-  if (set === undefined) {
-    set = new Set();
-    store.set(service, set);
-  }
+  if (set === undefined) store.set(service, set = new Set());
   return set;
 }
 
@@ -83,10 +76,22 @@ function hasPreparedEntryWriteFootprint(entry) {
     (entry.hasUnscopedWrite === true || Boolean(entry.rowKeys && entry.rowKeys.size > 0));
 }
 
-function hasAnyActiveOrPreparedWriteByOther(service, session) {
+function sessionMatchesRowKey(other, rowKey) {
+  if (other.phase === PHASE.DOOMED) return false;
+  return rowKey === UNSCOPED_CONFLICT_SENTINEL ?
+    hasSessionWriteFootprint(other) :
+    (other.hasUnscopedWrite === true || other.touchedRowKeys?.has(rowKey));
+}
+
+function listActiveRowKeyHolders(service, session, rowKey) {
+  const holders = [];
   for (const other of SESSIONS.get(service)?.values() ?? []) {
-    if (other !== session && hasSessionWriteFootprint(other)) return true;
+    if (other !== session && sessionMatchesRowKey(other, rowKey)) holders.push(other);
   }
+  return holders;
+}
+
+function hasAnyPreparedWriteByOther(service, session) {
   const preparedMap = PREPARED_PARTICIPANT_ROW_KEYS.get(service);
   if (!preparedMap) return false;
   const selfParticipantId = session ? session.identity.participantId : null;
@@ -99,17 +104,11 @@ function hasAnyActiveOrPreparedWriteByOther(service, session) {
 }
 
 function hasRowKeyConflictWithOtherSession(service, session, rowKey) {
-  if (rowKey === UNSCOPED_CONFLICT_SENTINEL) {
-    return hasAnyActiveOrPreparedWriteByOther(service, session);
-  }
-  for (const other of SESSIONS.get(service)?.values() ?? []) {
-    if (other !== session && other.phase !== PHASE.DOOMED &&
-        (other.hasUnscopedWrite === true || other.touchedRowKeys?.has(rowKey))) {
-      return true;
-    }
-  }
-  return isRowKeyHeldByOtherPreparedParticipant(
-    PREPARED_PARTICIPANT_ROW_KEYS.get(service), session?.identity?.participantId, rowKey);
+  if (listActiveRowKeyHolders(service, session, rowKey).length > 0) return true;
+  return rowKey === UNSCOPED_CONFLICT_SENTINEL ?
+    hasAnyPreparedWriteByOther(service, session) :
+    isRowKeyHeldByOtherPreparedParticipant(
+      PREPARED_PARTICIPANT_ROW_KEYS.get(service), session?.identity?.participantId, rowKey);
 }
 
 function isWaiterSessionClosed(service, session) {
@@ -135,6 +134,15 @@ function releaseEmptyWaiterSessionClaims(service, session) {
   if (hadKeys || hadUnscoped) notifyRowKeySettlementWaiters(service);
 }
 
+function resolveBoundedSettleWaitMs(service, timeoutMs) {
+  const configured = service?.conflictSettleWaitMs;
+  const hasCap = Number.isFinite(configured) && configured > 0;
+  const capMs = hasCap ?
+    Math.min(Math.floor(configured), DEFAULT_CONFLICT_SETTLE_WAIT_MS) :
+    DEFAULT_CONFLICT_SETTLE_WAIT_MS;
+  return Math.max(1, Math.min(Math.floor(timeoutMs), capMs));
+}
+
 function waitForConflictingRowKeyHolderToSettle(
   service, payload, rowKey, timeoutMs = DEFAULT_CONFLICT_SETTLE_WAIT_MS,
 ) {
@@ -148,15 +156,16 @@ function waitForConflictingRowKeyHolderToSettle(
     return Promise.resolve({waited: false, settled: true});
   }
   releaseEmptyWaiterSessionClaims(service, session);
-  const capMs = Number.isFinite(service?.conflictSettleWaitMs) && service.conflictSettleWaitMs > 0 ?
-    Math.min(Math.floor(service.conflictSettleWaitMs), DEFAULT_CONFLICT_SETTLE_WAIT_MS) :
-    DEFAULT_CONFLICT_SETTLE_WAIT_MS;
+  const cyclePolicy = {
+    isSessionClosed: (candidate) => isWaiterSessionClosed(service, candidate),
+    listHolderSessions: listActiveRowKeyHolders,
+  };
+  if (session && hasSessionWriteFootprint(session) &&
+      hasRowKeyWaitForCycle(service, session, rowKey, cyclePolicy)) {
+    return Promise.resolve({waited: false, settled: false});
+  }
   return enqueueBoundedRowKeyWaiter(
-    service,
-    session,
-    rowKey,
-    Math.max(1, Math.min(Math.floor(timeoutMs), capMs)),
-  );
+    service, session, rowKey, resolveBoundedSettleWaitMs(service, timeoutMs));
 }
 
 function findConflictingScopedRowKey(service, session, rowKeys) {
@@ -295,10 +304,7 @@ function getOrBuildPreparedEntry(service, preparedMap, row) {
   if (entry) return entry;
   const opsFp = extractOperationsRowKeyFootprint(service, operationsOf(row.operationsText));
   const baseGen = resolveExactValidationBaseGeneration(service, row.validationText) ?? 0;
-  const prepareGen = Math.max(
-    baseGen,
-    readDurablePrepareGeneration(service.db, row.prepareIndex),
-  );
+  const prepareGen = Math.max(baseGen, readDurablePrepareGeneration(service.db, row.prepareIndex));
   entry = {rowKeys: new Set(opsFp.rowKeys), hasUnscopedWrite: Boolean(opsFp.hasUnscopedWrite),
     generationBase: baseGen, validatedThroughGeneration: prepareGen};
   preparedMap.set(row.participantId, entry);
@@ -498,11 +504,8 @@ function recordCommittedParticipantRowKeys(service, participantId, generation) {
   preparedMap?.delete(participantId);
   const scoped = isScopedPreparedEntry(entry);
   if (service.db?.open === true) {
-    recordPartitionWriteGenerationFootprint(
-      service.db,
-      generation,
-      scoped ? {scoped: true, hasUnscopedWrite: false, rowKeys: entry.rowKeys} : null,
-    );
+    const fp = scoped ? {scoped: true, hasUnscopedWrite: false, rowKeys: entry.rowKeys} : null;
+    recordPartitionWriteGenerationFootprint(service.db, generation, fp);
   }
   if (scoped) {
     perServiceSet(SCOPED_COMMIT_GENERATIONS, service).add(generation);
@@ -530,16 +533,23 @@ function isRowKeyTouchedAfterGeneration(service, session, rk) {
     PREPARED_PARTICIPANT_ROW_KEYS.get(service), session.identity?.participantId, rk);
 }
 
-function isScopedRowKeySession(service, session) {
-  if (!isRowKeyConcurrencyEnabled(service) || session?.hasUnscopedWrite === true ||
-      !(session?.touchedRowKeys instanceof Set) || session.touchedRowKeys.size === 0) {
-    return false;
-  }
-  if (typeof session.schemaVersionBase === 'number' &&
-      resolveTablePkMetadata(service).schemaVersion !== session.schemaVersionBase) {
-    return false;
+function hasUnmodifiedRowKeySet(service, session, rowKeys) {
+  for (const rk of rowKeys ?? []) {
+    if (isRowKeyTouchedAfterGeneration(service, session, rk)) return false;
   }
   return true;
+}
+
+function isSessionSchemaCurrent(service, session) {
+  return typeof session?.schemaVersionBase !== 'number' ||
+    resolveTablePkMetadata(service).schemaVersion === session.schemaVersionBase;
+}
+
+function isScopedRowKeySession(service, session) {
+  return isRowKeyConcurrencyEnabled(service) &&
+    session?.hasUnscopedWrite !== true && session?.hasUnscopedRead !== true &&
+    session?.touchedRowKeys instanceof Set && session.touchedRowKeys.size > 0 &&
+    isSessionSchemaCurrent(service, session);
 }
 
 function canAdvanceRowKeySessionGeneration(service, session, targetGeneration) {
@@ -548,22 +558,27 @@ function canAdvanceRowKeySessionGeneration(service, session, targetGeneration) {
       !areIntermediateGenerationsScoped(service, session.generationBase, targetGeneration)) {
     return false;
   }
-  for (const rk of session.touchedRowKeys) {
-    if (isRowKeyTouchedAfterGeneration(service, session, rk)) return false;
+  return hasUnmodifiedRowKeySet(service, session, session.touchedRowKeys) &&
+    hasUnmodifiedRowKeySet(service, session, session.readRowKeys);
+}
+
+function canRebaseEmptyWaitingSession(service, session, targetGeneration) {
+  if (!session || session.hasUnscopedRead === true || !isSessionSchemaCurrent(service, session)) {
+    return false;
   }
-  return true;
+  if (!(session.readRowKeys instanceof Set) || session.readRowKeys.size === 0) return true;
+  hydrateDurablePreparedAndCommittedState(service);
+  return isRowKeyConcurrencyEnabled(service) &&
+    areIntermediateGenerationsScoped(service, session.generationBase, targetGeneration) &&
+    hasUnmodifiedRowKeySet(service, session, session.readRowKeys);
 }
 
 function recordConflictingPair(contradictoryIds, contradictions, left, right) {
-  if (!isPreparedEntryConflicting(left.fp, right.fp.rowKeys, right.fp.hasUnscopedWrite)) {
-    return;
-  }
+  if (!isPreparedEntryConflicting(left.fp, right.fp.rowKeys, right.fp.hasUnscopedWrite)) return;
   contradictoryIds.add(left.participantId);
   contradictoryIds.add(right.participantId);
   contradictions.push(Object.freeze({
-    leftParticipantId: left.participantId,
-    rightParticipantId: right.participantId,
-  }));
+    leftParticipantId: left.participantId, rightParticipantId: right.participantId}));
 }
 
 function inspectRetainedPreparedObligations(service) {
@@ -572,10 +587,8 @@ function inspectRetainedPreparedObligations(service) {
       contradictoryParticipantIds: Object.freeze([]), contradictions: Object.freeze([])});
   }
   const durableRows = readPreparedParticipantRows(service.db);
-  const footprints = durableRows.map((row) => ({
-    participantId: row.participantId,
-    fp: extractOperationsRowKeyFootprint(service, operationsOf(row.operationsText)),
-  }));
+  const footprints = durableRows.map((row) => ({participantId: row.participantId,
+    fp: extractOperationsRowKeyFootprint(service, operationsOf(row.operationsText))}));
   const contradictoryIds = new Set();
   const contradictions = [];
   for (let i = 0; i < footprints.length; i += 1) {
@@ -583,12 +596,9 @@ function inspectRetainedPreparedObligations(service) {
       recordConflictingPair(contradictoryIds, contradictions, footprints[i], footprints[j]);
     }
   }
-  return Object.freeze({
-    healthy: contradictions.length === 0,
-    preparedCount: durableRows.length,
+  return Object.freeze({healthy: contradictions.length === 0, preparedCount: durableRows.length,
     contradictoryParticipantIds: Object.freeze([...contradictoryIds]),
-    contradictions: Object.freeze(contradictions),
-  });
+    contradictions: Object.freeze(contradictions)});
 }
 
 function isRowTouchedInGeneration(row, expectedGen, operationsFootprint) {
@@ -622,9 +632,9 @@ function canAdvanceCommittedValidationText(service, validationText, operationsFo
 
 function recordCommittedAutocommitRowKeys(service, command, generation) {
   if (!isRowKeyConcurrencyEnabled(service) || !command?.sql) return;
-  const operationsFootprint = extractOperationsRowKeyFootprint(service, [
-    {sql: command.sql, params: Array.isArray(command.params) ? command.params : []},
-  ]);
+  const params = Array.isArray(command.params) ? command.params : [];
+  const operationsFootprint =
+    extractOperationsRowKeyFootprint(service, [{sql: command.sql, params}]);
   if (service.db?.open === true) {
     recordPartitionWriteGenerationFootprint(service.db, generation, operationsFootprint);
   }
@@ -654,9 +664,7 @@ function reconcilePreparedParticipantRowKeys(service) {
   const preparedMap = PREPARED_PARTICIPANT_ROW_KEYS.get(service);
   const durablePrepared = new Set(readPreparedParticipantIds(service.db));
   if (preparedMap) {
-    for (const participantId of [...preparedMap.keys()]) {
-      if (!durablePrepared.has(participantId)) preparedMap.delete(participantId);
-    }
+    for (const id of [...preparedMap.keys()]) if (!durablePrepared.has(id)) preparedMap.delete(id);
   }
   hydrateDurablePreparedAndCommittedState(service);
 }
@@ -666,12 +674,12 @@ function openParticipantSession(service, identity, base) {
   const schemaVersionBase = resolveTablePkMetadata(service).schemaVersion;
   const session = {
     identity: Object.freeze({...identity}), operations: [], compiledOperations: [],
-    touchedRowKeys: new Set(), hasUnscopedWrite: false,
-    stagedLockClaims: {rowKeys: new Set(), hasUnscopedWrite: false}, bytes: 0,
-    generationBase: base.generationBase, lastValidatedGeneration: base.generationBase,
+    touchedRowKeys: new Set(), hasUnscopedWrite: false, readRowKeys: new Set(),
+    hasUnscopedRead: false, stagedLockClaims: {rowKeys: new Set(), hasUnscopedWrite: false},
+    bytes: 0, generationBase: base.generationBase, lastValidatedGeneration: base.generationBase,
     lastValidatedSchemaVersion: null, schemaVersionBase, originIndex: base.originIndex,
     startedAt: service.timeSource.now(), phase: PHASE.ACTIVE, sealed: null,
-    inFlight: false, doomCode: null, hasExecutedRead: false,
+    inFlight: false, doomCode: null,
   };
   sessionsOf(service).set(identity.participantId, session);
   return session;
@@ -698,8 +706,7 @@ function participantRoutingSessionCollision(service, sessionId) {
 
 const listActiveParticipantSessions = (service) => SESSIONS.get(service)?.values() ?? [];
 const hasParticipantSession = (service) => (SESSIONS.get(service)?.size ?? 0) > 0;
-const participantTransactionActive = (service) =>
-  hasParticipantSession(service) || isPartitionReserved(service.db);
+const participantTransactionActive = (s) => hasParticipantSession(s) || isPartitionReserved(s.db);
 
 function endParticipantSession(service, session) {
   const sessions = SESSIONS.get(service);
@@ -750,9 +757,7 @@ function sweepExpiredParticipantSessions(service, nowMs, holdTimeoutMs) {
 function reportHeldPreparedRows(service, nowMs, holdTimeoutMs) {
   const prepared = new Set(readPreparedParticipantIds(service.db));
   const holds = perServiceMap(PREPARED_HOLDS, service);
-  for (const participantId of [...holds.keys()]) {
-    if (!prepared.has(participantId)) holds.delete(participantId);
-  }
+  for (const id of [...holds.keys()]) if (!prepared.has(id)) holds.delete(id);
   for (const participantId of prepared) {
     const hold = holds.get(participantId) ?? {firstSeenMs: nowMs, reported: false};
     holds.set(participantId, hold);
@@ -778,15 +783,14 @@ function sweepParticipantTransactionHolds(service, nowMs) {
 
 export {
   canAdmitConcurrentParticipantSession, canAdvanceCommittedValidationText,
-  canAdvanceRowKeySessionGeneration, checkAndRecordSessionRowKey, clearPreparedParticipantRowKeys,
+  canAdvanceRowKeySessionGeneration, canRebaseEmptyWaitingSession,
+  checkAndRecordSessionRowKey, clearPreparedParticipantRowKeys,
   discardParticipantSessions, endParticipantSession, extractOperationsRowKeyFootprint,
   findParticipantSession, getRetainedRowKeyHistoryStats, hasParticipantSession,
   inspectRetainedPreparedObligations, isPartitionReservedForPrepare, isRowKeyConcurrencyEnabled,
   listActiveParticipantSessions, notifyRowKeySettlementWaiters, openParticipantSession,
   participantRoutingSessionCollision, participantTransactionActive,
-  recordCommittedAutocommitRowKeys,
-  recordCommittedParticipantRowKeys, resetParticipantRowKeyHistory,
-  revertSessionRowKeyCheck,
-  stagePreparedParticipantRowKeys, sweepParticipantTransactionHolds,
-  waitForConflictingRowKeyHolderToSettle,
+  recordCommittedAutocommitRowKeys, recordCommittedParticipantRowKeys,
+  resetParticipantRowKeyHistory, revertSessionRowKeyCheck, stagePreparedParticipantRowKeys,
+  sweepParticipantTransactionHolds, waitForConflictingRowKeyHolderToSettle,
 };
