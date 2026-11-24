@@ -133,23 +133,18 @@ function buildConfigureTickSnapshotFields(safe) {
 function formatConfigureTickReport(report) {
   const safe = isRecordObject(report) ? report : {};
   const applied = safe.appliedToExistingCore === true;
-  return coreOk(
-    applied ? TIMING_CONFIGURED : TIMING_PENDING_RECREATION,
-    {
-      appliedToExistingCore: applied,
-      pendingRecreation: safe.pendingRecreation === true,
-      ...buildConfigureTickSnapshotFields(safe),
-    },
-  );
+  return coreOk(applied ? TIMING_CONFIGURED : TIMING_PENDING_RECREATION, {
+    appliedToExistingCore: applied,
+    pendingRecreation: safe.pendingRecreation === true,
+    ...buildConfigureTickSnapshotFields(safe),
+  });
 }
 
 function readPortEffectiveRaftTiming(port) {
   const turn = port?.configureTick?.();
   return turn?.settled === true &&
     turn.result?.outcome === RAFT_OPERATION_OUTCOME.CORE_OK &&
-    turn.result?.createdCoreTuning ?
-    turn.result :
-    null;
+    turn.result?.createdCoreTuning ? turn.result : null;
 }
 
 function buildUnwrappedTurn(ok, outcome, reason, report = null) {
@@ -157,10 +152,8 @@ function buildUnwrappedTurn(ok, outcome, reason, report = null) {
 }
 
 function isDirectConfigureTickReport(value) {
-  return isRecordObject(value) && (
-    typeof value.appliedToExistingCore === 'boolean' ||
-    isRecordObject(value.createdCoreTuning)
-  );
+  return isRecordObject(value) && (typeof value.appliedToExistingCore === 'boolean' ||
+    isRecordObject(value.createdCoreTuning));
 }
 
 function unwrapCoreOkResultObject(result) {
@@ -181,11 +174,9 @@ function unwrapSettledTurnAnswer(turn) {
     unwrapped = buildUnwrappedTurn(
       false, TIMING_TURN_OUTCOME.UNAVAILABLE, TIMING_TURN_REASON.MISSING_RESULT);
   } else if (turn.result.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
-    unwrapped = buildUnwrappedTurn(
-      false,
+    unwrapped = buildUnwrappedTurn(false,
       normalizeNonEmptyString(turn.result.outcome, TIMING_TURN_OUTCOME.UNAVAILABLE),
-      normalizeNonEmptyString(turn.result.reason, TIMING_TURN_REASON.REFUSED),
-    );
+      normalizeNonEmptyString(turn.result.reason, TIMING_TURN_REASON.REFUSED));
   } else {
     unwrapped = unwrapCoreOkResultObject(turn.result);
   }
@@ -220,11 +211,8 @@ function unwrapConfigureTickTurn(turn) {
     unwrapped = unwrapOutcomeTurnAnswer(turn);
   } else if (isDirectConfigureTickReport(turn)) {
     unwrapped = buildUnwrappedTurn(
-      true,
-      RAFT_OPERATION_OUTCOME.CORE_OK,
-      normalizeNonEmptyString(turn.reason, TIMING_CONFIGURED),
-      turn,
-    );
+      true, RAFT_OPERATION_OUTCOME.CORE_OK,
+      normalizeNonEmptyString(turn.reason, TIMING_CONFIGURED), turn);
   } else {
     unwrapped = buildUnwrappedTurn(
       false, TIMING_TURN_OUTCOME.UNAVAILABLE, TIMING_TURN_REASON.INVALID_REPORT);
@@ -234,11 +222,8 @@ function unwrapConfigureTickTurn(turn) {
 
 function buildPortTickApplyOutcome(applied, unwrapped, logExtra) {
   return {
-    applied,
-    appliedToExistingCore: applied,
-    outcome: unwrapped.outcome,
-    reason: unwrapped.reason,
-    logExtra,
+    applied, appliedToExistingCore: applied,
+    outcome: unwrapped.outcome, reason: unwrapped.reason, logExtra,
   };
 }
 
@@ -248,43 +233,28 @@ function resolvePortTickApplyOutcome(replica, unwrapped, params) {
     resolved = buildPortTickApplyOutcome(false, unwrapped, null);
   } else if (unwrapped.report?.appliedToExistingCore === false) {
     resolved = buildPortTickApplyOutcome(false, unwrapped, {
-      appliedToExistingCore: false,
-      pendingRecreation: true,
+      appliedToExistingCore: false, pendingRecreation: true,
       createdCoreTuning: unwrapped.report.createdCoreTuning || null,
     });
   } else {
-    const tickChanged =
-      params.hasTickInterval &&
+    const tickChanged = params.hasTickInterval &&
       params.tickIntervalMs !== params.previousTickIntervalMs;
-    const tickRuntimeApplied =
-      !tickChanged ||
+    const tickRuntimeApplied = !tickChanged ||
       unwrapped.report?.appliedToExistingCore === true ||
       replica.applyRuntimeTickInterval(params.tickIntervalMs);
-    resolved = buildPortTickApplyOutcome(
-      tickRuntimeApplied,
-      unwrapped,
-      {tickRuntimeApplied},
-    );
+    resolved = buildPortTickApplyOutcome(tickRuntimeApplied, unwrapped, {tickRuntimeApplied});
   }
   return resolved;
 }
 
 function applyPortRaftTimingConfig(replica, params) {
   const timingArg = {
-    heartbeatMs: params.heartbeatMs,
-    electionMinMs: params.electionMinMs,
-    electionMaxMs: params.electionMaxMs,
-    rearmTimer: params.rearmTimer,
+    heartbeatMs: params.heartbeatMs, electionMinMs: params.electionMinMs,
+    electionMaxMs: params.electionMaxMs, rearmTimer: params.rearmTimer,
+    ...(params.hasTickInterval ? {tickIntervalMs: params.tickIntervalMs} : {}),
   };
-  if (params.hasTickInterval) {
-    timingArg.tickIntervalMs = params.tickIntervalMs;
-  }
   const turn = replica.raft?.configureTick?.(timingArg);
-  return resolvePortTickApplyOutcome(
-    replica,
-    unwrapConfigureTickTurn(turn),
-    params,
-  );
+  return resolvePortTickApplyOutcome(replica, unwrapConfigureTickTurn(turn), params);
 }
 
 function required(request, field) {
@@ -415,9 +385,22 @@ function isCommittedOrRefusedMembershipAnswer(committed) {
     kind === COMMITTED_MEMBERSHIP_ANSWER_KIND.REFUSED;
 }
 
+function hasRequestedTimingMutation(command) {
+  return (
+    command.tickIntervalMs !== undefined ||
+    command.heartbeatMs !== undefined ||
+    command.electionMinMs !== undefined ||
+    command.electionMaxMs !== undefined ||
+    command.rearmTimer === true
+  );
+}
+
 function applyConfigureTickToClock(clockController, dispatcher, tickIntervalMs, nextTiming) {
   const command = typeof nextTiming === 'number' ?
     {tickIntervalMs: nextTiming} : (nextTiming || {});
+  if (!hasRequestedTimingMutation(command)) {
+    return settledTurn(formatConfigureTickReport(dispatcher.effectiveRaftTiming()));
+  }
   const report = dispatcher.configureTiming(command);
   if (report?.appliedToExistingCore === true) {
     const nextMs = Number.isFinite(command?.tickIntervalMs) && command.tickIntervalMs > 0 ?

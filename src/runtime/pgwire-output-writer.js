@@ -23,7 +23,6 @@ import {
   extractColumns,
   extractRowValues,
 } from './pgwire-result-mapper.js';
-import {takeTransactionEndNotice} from './pgwire-transaction-outcome.js';
 import {OWNER_CONTRACT_STATE} from '../control-plane/owner-contract-outcome.js';
 
 const DEFAULT_PGWIRE_OUTPUT_BATCH_BYTES = 64 * 1024;
@@ -123,6 +122,8 @@ class PgWireOutputWriter {
 
   /**
    * Write a buffer to the connection socket and await drain if backpressured.
+   * Oversized buffers exceeding the batch threshold are sliced into bounded
+   * chunks in exact byte order with backpressure and event-loop yield cadence.
    * @param {Buffer} buffer - Encoded frame or batch buffer.
    * @return {Promise<boolean>} True if connection remains open after write.
    */
@@ -130,10 +131,40 @@ class PgWireOutputWriter {
     if (!buffer || buffer.length === 0 || this.isDisconnected()) {
       return false;
     }
+    if (buffer.length > this._batchMaxBytes) {
+      return this._writeOversizedBuffer(buffer, false);
+    }
+    return this._writeSingleChunk(buffer);
+  }
+
+  async _writeSingleChunk(chunk) {
+    if (!chunk || chunk.length === 0 || this.isDisconnected()) {
+      return false;
+    }
     const socket = this._getSocket();
-    const canContinue = socket.write(buffer);
+    const canContinue = socket.write(chunk);
     if (canContinue === false && !this.isDisconnected()) {
       await this._waitForDrain(socket);
+    }
+    return !this.isDisconnected();
+  }
+
+  async _writeOversizedBuffer(buffer, yieldAfterLastChunk) {
+    for (let offset = 0; offset < buffer.length; offset += this._batchMaxBytes) {
+      if (this.isDisconnected()) {
+        return false;
+      }
+      const end = Math.min(offset + this._batchMaxBytes, buffer.length);
+      const wrote = await this._writeSingleChunk(buffer.subarray(offset, end));
+      if (!wrote) {
+        return false;
+      }
+      if (end < buffer.length || yieldAfterLastChunk) {
+        await yieldEventLoopTurn();
+        if (this.isDisconnected()) {
+          return false;
+        }
+      }
     }
     return !this.isDisconnected();
   }
@@ -170,16 +201,14 @@ class PgWireOutputWriter {
    * @param {Object} params.result - Execution result.
    * @param {Object} params.executionMeta - Execution metadata.
    * @param {string} params.tag - Validated CommandComplete tag.
-   * @param {?string} params.statementType - Executed statement type.
-   * @param {Object} params.session - PgWireSession instance.
+   * @param {?Buffer} [params.txNotice] - Pre-captured transaction-end notice.
    * @return {Promise<boolean>} True if CommandComplete was written before disconnect.
    */
   async writeExecutionSuccess({
     result,
     executionMeta,
     tag,
-    statementType,
-    session,
+    txNotice = null,
   }) {
     await this.writeExecutionRows(result, executionMeta);
     if (this.isDisconnected()) {
@@ -191,13 +220,26 @@ class PgWireOutputWriter {
         return false;
       }
     }
-    const txNotice = takeTransactionEndNotice(session, statementType);
     if (txNotice) {
       if (!(await this.writeBuffer(txNotice))) {
         return false;
       }
     }
     return this.writeBuffer(buildCommandComplete(tag));
+  }
+
+  async _writeOversizedRowFrame(frame, batchChunks, batchBytes, hasMoreRows) {
+    if (batchBytes > 0) {
+      const flushedPending = await this._flushBatchAndYield(
+        batchChunks,
+        batchBytes,
+        true,
+      );
+      if (!flushedPending) {
+        return false;
+      }
+    }
+    return this._writeOversizedBuffer(frame, hasMoreRows);
   }
 
   async _writeBatchedDataRows(rows, columns) {
@@ -208,6 +250,21 @@ class PgWireOutputWriter {
         return;
       }
       const frame = buildDataRow(extractRowValues(rows[index], columns), columns);
+      const hasMoreRows = index + 1 < rows.length;
+      if (frame.length > this._batchMaxBytes) {
+        const ok = await this._writeOversizedRowFrame(
+          frame,
+          batchChunks,
+          batchBytes,
+          hasMoreRows,
+        );
+        batchChunks = [];
+        batchBytes = 0;
+        if (!ok) {
+          return;
+        }
+        continue;
+      }
       if (batchBytes > 0 && batchBytes + frame.length > this._batchMaxBytes) {
         const ok = await this._flushBatchAndYield(batchChunks, batchBytes, true);
         batchChunks = [];
@@ -219,7 +276,6 @@ class PgWireOutputWriter {
       batchChunks.push(frame);
       batchBytes += frame.length;
       if (batchBytes >= this._batchMaxBytes) {
-        const hasMoreRows = index + 1 < rows.length;
         const ok = await this._flushBatchAndYield(
           batchChunks,
           batchBytes,
