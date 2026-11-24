@@ -172,7 +172,10 @@ function buildHelperHarness(overrides = {}) {
       events.probeDeferred.push(context),
     onPendingDropped: (context) => events.dropped.push(context),
     onRetryBudgetExhausted: (context) => events.budget.push(context),
-    readValueFromCache: () => null,
+    readAuthoritativeRow: async () => ({
+      available: true,
+      row: {partition_id: ORDINARY_PARTITION, leader_node_id: null},
+    }),
     retryBudgetAttempts: 3,
     setTimeoutFn: (fn, delayMs) => {
       timers.push({delayMs, fn});

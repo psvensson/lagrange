@@ -11,21 +11,23 @@ import {
   RAFT_COMPACTION_OUTCOME,
   unsupportedRaftCompactionResult,
 } from '../../src/raft/compaction-policy.js';
-import {readSnapshotBoundary} from '../../src/raft/snapshot-boundary.js';
+import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {
-  RAFT_SNAPSHOT_BOUNDARY_STATE_KEY,
-} from '../../src/raft/snapshot-install-constants.js';
-import {SQLiteLogAdapter} from '../../src/raft/sqlite-log-adapter.js';
+  RaftRsPeerIdentityRegistry,
+} from '../../src/raft/raft-rs-peer-identity.js';
+import {
+  compactRaftRsCommittedEntries,
+} from '../../src/raft/snapshot-compaction.js';
 import {createSealedSourceGeneration} from './snapshot-catchup-fixture.js';
 
-// S5 proof-gated compaction decision table (quest
+// S5 proof-gated compaction decision table for RaftRsDurableStore (quest
 // raft-snapshot-retention-compaction): the proofless call returns the
 // byte-identical frozen snapshot_protocol_unavailable refusal (asserted by
 // IDENTITY and by deep equality against the two-field literal); every other
 // row of the table is a typed refusal that removes nothing; and the single
-// COMPACT path round-trips — prefix gone, suffix intact, boundary advanced
-// from the pre-deletion term, watermarks untouched, maxCommittedHlc folded
-// from the deleted rows, and the SAME facade answering correctly afterwards.
+// COMPACT path round-trips — prefix gone, suffix intact, snapshot boundary
+// advanced from the pre-deletion term, watermarks untouched, maxCommittedHlc
+// folded from the deleted rows.
 // Red direction: no combination of arguments lacking a valid proof removes
 // any row (the CL-040-class loss is structurally unreachable).
 
@@ -58,41 +60,73 @@ function rowHlc(ordinal) {
     HLC_BASE_MS - (ordinal * HLC_STEP_MS), ordinal, 'compaction-node');
 }
 
-function seedCommittedAppliedRows(context, options) {
-  const {db, adapter} = context;
-  const {from, to, term} = options;
-  const upsert = db.prepare(
-    'INSERT OR REPLACE INTO _raft_state (key, value) VALUES (?, ?)');
-  for (let ordinal = from; ordinal <= to; ordinal += 1) {
-    const entry = adapter.saveCommand({
-      sql: `row-${ordinal}`,
-      timestamp: rowHlc(ordinal).toString(),
-    }, term);
-    adapter.commit(entry.index);
+function seedRaftRsRows(db, options) {
+  const {entryCount, commitIndex, appliedIndex, term} = options;
+  const registry = new RaftRsPeerIdentityRegistry(db);
+  const leaderPeer = registry.registerReplica(`${PARTITION_ID}-r1`);
+  const followerPeer = registry.registerReplica(`${PARTITION_ID}-r2`);
+  const confState = {
+    voters: [leaderPeer, followerPeer],
+    learners: [],
+    votersOutgoing: [],
+    learnersNext: [],
+    autoLeave: false,
+  };
+  const store = new RaftRsDurableStore(db);
+  db.exec(`CREATE TABLE IF NOT EXISTS ${STATE_TABLE} ` +
+    '(id TEXT PRIMARY KEY, payload TEXT)');
+  const entries = [];
+  for (let ordinal = 1; ordinal <= entryCount; ordinal += 1) {
     db.prepare(
       `INSERT INTO ${STATE_TABLE} (id, payload) VALUES (?, ?)`,
     ).run(`row-${ordinal}`, `payload-${ordinal}`);
-    upsert.run('lastAppliedIndex', String(entry.index));
+    entries.push({
+      index: String(ordinal),
+      term: String(term),
+      entryType: 0,
+      data: Buffer.from(JSON.stringify({
+        sql: `row-${ordinal}`,
+        timestamp: rowHlc(ordinal).toString(),
+      })).toString('base64'),
+    });
   }
+  store.transaction(() => {
+    store.putBootstrapAppliedState(PARTITION_ID, confState, {
+      bootstrapIndex: '0',
+      admissionIndex: '0',
+      membershipGenerationIndex: '0',
+    });
+    store.appendEntries(PARTITION_ID, entries);
+    store.putAppliedState(
+      PARTITION_ID,
+      String(appliedIndex),
+      confState,
+      undefined,
+      String(IDENTITY.membershipEpoch),
+    );
+    store.putHardState(PARTITION_ID, {
+      term: String(term),
+      vote: '0',
+      commit: String(commitIndex),
+    });
+  });
 }
 
-// File-backed replica with committed+applied rows and (optionally) a sealed
-// raft-rs proof generation created at `checkpointAt`, then grown to `entryCount`.
+// File-backed raft-rs replica with committed+applied rows and (optionally) a
+// sealed raft-rs proof generation created at `checkpointAt`.
 async function createCompactionFixture(options = {}) {
   const term = options.term ?? TERM;
   const entryCount = options.entryCount ?? ENTRY_COUNT;
+  const commitIndex = options.commitIndex ?? entryCount;
+  const appliedIndex = options.appliedIndex ?? commitIndex;
   const checkpointAt = options.checkpointAt ?? null;
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'raft-compaction-'));
   const checkpointsRoot = path.join(workDir, 'checkpoints');
   const dbPath = path.join(workDir, 'replica.db');
   const db = new Database(dbPath);
-  const adapter = new SQLiteLogAdapter(db, {address: PARTITION_ID, term});
-  db.exec(`CREATE TABLE IF NOT EXISTS ${STATE_TABLE} ` +
-    '(id TEXT PRIMARY KEY, payload TEXT)');
-  const context = {db, adapter};
+  seedRaftRsRows(db, {entryCount, commitIndex, appliedIndex, term});
   let created = null;
   if (checkpointAt !== null) {
-    seedCommittedAppliedRows(context, {from: 1, to: checkpointAt, term});
     const proofDir = path.join(workDir, 'proof-source');
     fs.mkdirSync(proofDir, {recursive: true});
     ({created} = await createSealedSourceGeneration({
@@ -105,17 +139,12 @@ async function createCompactionFixture(options = {}) {
       entryCount: checkpointAt,
       entryTimestamp: (ordinal) => rowHlc(ordinal).toString(),
     }));
-    seedCommittedAppliedRows(
-      context, {from: checkpointAt + 1, to: entryCount, term});
-  } else {
-    seedCommittedAppliedRows(context, {from: 1, to: entryCount, term});
   }
   return {
     workDir,
     checkpointsRoot,
     dbPath,
     db,
-    adapter,
     checkpointDir: created ? created.checkpointDir : null,
     close() {
       db.close();
@@ -125,25 +154,26 @@ async function createCompactionFixture(options = {}) {
 }
 
 function logRowCount(db) {
-  return db.prepare('SELECT COUNT(*) AS n FROM _raft_log').get().n;
+  return db.prepare(
+    'SELECT COUNT(*) AS n FROM _raft_rs_log WHERE group_id = ?',
+  ).get(PARTITION_ID).n;
 }
 
-function readStateValue(db, key) {
-  const row = db.prepare(
-    'SELECT value FROM _raft_state WHERE key = ?').get(key);
-  return row ? row.value : null;
+function snapshotIndex(db) {
+  return Number(RaftRsDurableStore.readSnapshotIndexIn(db, PARTITION_ID));
 }
 
 function assertRefusal(t, fixture, request, outcome, label) {
   const rowsBefore = logRowCount(fixture.db);
-  const boundaryBefore = readSnapshotBoundary(fixture.db);
-  const result = fixture.adapter.compactCommittedEntries(request);
+  const boundaryBefore = snapshotIndex(fixture.db);
+  const result = compactRaftRsCommittedEntries(
+    fixture.db, PARTITION_ID, request);
   t.equal(result.outcome, outcome, `${label}: typed ${outcome}`);
   t.equal(result.changed, false, `${label}: reports no change`);
   t.equal(logRowCount(fixture.db), rowsBefore,
     `${label}: removes no row`);
-  t.same(readSnapshotBoundary(fixture.db), boundaryBefore,
-    `${label}: boundary keys untouched`);
+  t.equal(snapshotIndex(fixture.db), boundaryBefore,
+    `${label}: snapshot boundary untouched`);
 }
 
 test('the proofless call returns the byte-identical frozen refusal',
@@ -151,12 +181,12 @@ test('the proofless call returns the byte-identical frozen refusal',
     const fixture = await createCompactionFixture(
       {checkpointAt: COMPACT_AT});
     try {
-      const bare = fixture.adapter.compactCommittedEntries();
+      const bare = compactRaftRsCommittedEntries(fixture.db, PARTITION_ID);
       t.equal(bare, unsupportedRaftCompactionResult(),
         'no-argument call returns the shared frozen result by IDENTITY');
       t.same(bare, UNSUPPORTED_LITERAL,
         'the result is byte-compatible with the two-field literal');
-      const empty = fixture.adapter.compactCommittedEntries({});
+      const empty = compactRaftRsCommittedEntries(fixture.db, PARTITION_ID, {});
       t.equal(empty, unsupportedRaftCompactionResult(),
         'a request naming neither toIndex nor proof draws the same identity');
       t.equal(logRowCount(fixture.db), ENTRY_COUNT,
@@ -207,9 +237,8 @@ test('every non-COMPACT decision-table row is a typed removing-nothing refusal',
       'foreign proof term-anchor conflict');
       t.equal(logRowCount(fixture.db), ENTRY_COUNT,
         'red direction: the full refusal battery removed no row');
-      t.same(readSnapshotBoundary(fixture.db),
-        {lastIncludedIndex: 0, lastIncludedTerm: 0},
-        'red direction: the boundary never moved');
+      t.equal(snapshotIndex(fixture.db), 0,
+        'red direction: the snapshot boundary never moved');
     } finally {
       foreign.close();
       fixture.close();
@@ -218,24 +247,17 @@ test('every non-COMPACT decision-table row is a typed removing-nothing refusal',
 
 test('beyond-committed and unresolvable-term requests are typed refusals',
   async (t) => {
-    // Target: five rows but only three committed. Proof: a sibling replica
-    // of the SAME term sealed at five, so the proof itself is valid and
-    // anchored — only the durable watermark refuses the removal.
+    // Target: five rows but only three committed/applied. Proof: a sibling
+    // replica of the SAME term sealed at five, so the proof itself is valid
+    // and anchored — only the durable watermark refuses the removal.
     const proofSource = await createCompactionFixture(
       {checkpointAt: ENTRY_COUNT});
-    const workDir = fs.mkdtempSync(
-      path.join(os.tmpdir(), 'raft-compaction-target-'));
-    const db = new Database(path.join(workDir, 'replica.db'));
-    const adapter = new SQLiteLogAdapter(db, {address: PARTITION_ID, term: TERM});
+    const target = await createCompactionFixture({
+      entryCount: ENTRY_COUNT,
+      commitIndex: COMPACT_AT,
+      appliedIndex: COMPACT_AT,
+    });
     try {
-      for (let ordinal = 1; ordinal <= ENTRY_COUNT; ordinal += 1) {
-        adapter.saveCommand({
-          sql: `row-${ordinal}`,
-          timestamp: rowHlc(ordinal).toString(),
-        }, TERM);
-      }
-      adapter.commit(COMPACT_AT);
-      const target = {db, adapter};
       assertRefusal(t, target, {
         toIndex: COMPACT_AT + 1,
         proof: {checkpointDir: proofSource.checkpointDir},
@@ -243,15 +265,16 @@ test('beyond-committed and unresolvable-term requests are typed refusals',
       'physical removal never outruns the durable watermark');
       // A hole at the requested boundary index: the pre-deletion term is
       // unresolvable and the request is refused, never guessed.
-      db.prepare('DELETE FROM _raft_log WHERE log_index = ?').run(2);
+      target.db.prepare(
+        'DELETE FROM _raft_rs_log WHERE group_id = ? AND log_index = ?',
+      ).run(PARTITION_ID, 2);
       assertRefusal(t, target, {
         toIndex: 2,
         proof: {checkpointDir: proofSource.checkpointDir},
       }, RAFT_COMPACTION_OUTCOME.BOUNDARY_TERM_UNRESOLVABLE,
       'a genuinely absent boundary term is a typed refusal');
     } finally {
-      db.close();
-      fs.rmSync(workDir, {recursive: true, force: true});
+      target.close();
       proofSource.close();
     }
   });
@@ -261,15 +284,12 @@ test('a valid local proof compacts in one transaction and round-trips',
     const fixture = await createCompactionFixture(
       {checkpointAt: COMPACT_AT});
     try {
-      const {adapter, db} = fixture;
+      const {db} = fixture;
       const expectedMaxHlc = rowHlc(1).toString();
-      t.equal(adapter.getCommittedIndex(), ENTRY_COUNT,
-        'anti-vacuous: the head sits above the compaction point');
-      t.equal(readStateValue(
-        db, RAFT_SNAPSHOT_BOUNDARY_STATE_KEY.MAX_COMMITTED_HLC), null,
-      'anti-vacuous: no maxCommittedHlc key exists before compaction');
+      t.equal(RaftRsDurableStore.readCompactedMaxHlcIn(db, PARTITION_ID), null,
+        'anti-vacuous: no compacted max HLC exists before compaction');
 
-      const result = adapter.compactCommittedEntries({
+      const result = compactRaftRsCommittedEntries(db, PARTITION_ID, {
         toIndex: COMPACT_AT,
         proof: {checkpointDir: fixture.checkpointDir},
       });
@@ -284,35 +304,24 @@ test('a valid local proof compacts in one transaction and round-trips',
       t.ok(Object.isFrozen(result), 'the result is frozen');
 
       t.equal(db.prepare(
-        'SELECT COUNT(*) AS n FROM _raft_log WHERE log_index <= ?',
-      ).get(COMPACT_AT).n, 0, 'rows at or below K are physically gone');
+        'SELECT COUNT(*) AS n FROM _raft_rs_log ' +
+        'WHERE group_id = ? AND log_index <= ?',
+      ).get(PARTITION_ID, COMPACT_AT).n, 0,
+      'rows at or below K are physically gone');
       t.equal(logRowCount(db), ENTRY_COUNT - COMPACT_AT,
         'the suffix above K is intact');
-      t.same(adapter.get(COMPACT_AT + 1).command.sql, `row-${COMPACT_AT + 1}`,
-        'the first surviving row is exactly K+1 with its payload');
-      t.same(readSnapshotBoundary(db),
-        {lastIncludedIndex: COMPACT_AT, lastIncludedTerm: TERM},
-        'the durable boundary keys advanced from the pre-deletion term');
-      t.equal(adapter.getCommittedIndex(), ENTRY_COUNT,
-        'committedIndex is untouched');
-      t.equal(readStateValue(db, 'lastAppliedIndex'), String(ENTRY_COUNT),
-        'lastAppliedIndex is untouched');
-      t.equal(readStateValue(
-        db, RAFT_SNAPSHOT_BOUNDARY_STATE_KEY.MAX_COMMITTED_HLC),
-      expectedMaxHlc,
-      'maxCommittedHlc folds the max HLC over the DELETED rows');
-
-      t.same(adapter.getLastInfo(), {
-        index: ENTRY_COUNT,
-        term: TERM,
-        committedIndex: ENTRY_COUNT,
-      }, 'getLastInfo answers from the surviving suffix on the same facade');
-      t.equal(adapter.has(1), true,
-        'has() answers compacted lineage below K on the same facade');
-      t.equal(adapter.has(COMPACT_AT), true, 'has(K) is compacted lineage');
-      t.equal(adapter.has(0), false, 'has(0) stays the virgin false');
-      t.equal(adapter.getEntriesAfter(0).length, ENTRY_COUNT - COMPACT_AT,
-        'entry reads see exactly the suffix');
+      const record = RaftRsDurableStore.readDurableRecordIn(db, PARTITION_ID);
+      t.equal(Number(record.entries[0].index), COMPACT_AT + 1,
+        'the first surviving row is exactly K+1');
+      t.equal(snapshotIndex(db), COMPACT_AT,
+        'the durable snapshot boundary advanced to K');
+      t.equal(Number(record.hardState.commit), ENTRY_COUNT,
+        'commit index is untouched');
+      t.equal(Number(record.appliedIndex), ENTRY_COUNT,
+        'applied index is untouched');
+      t.equal(RaftRsDurableStore.readCompactedMaxHlcIn(db, PARTITION_ID),
+        expectedMaxHlc,
+        'maxCommittedHlc folds the max HLC over the deleted rows');
 
       assertRefusal(t, fixture, {
         toIndex: COMPACT_AT,
@@ -323,7 +332,7 @@ test('a valid local proof compacts in one transaction and round-trips',
         toIndex: COMPACT_AT - 1,
         proof: {checkpointDir: fixture.checkpointDir},
       }, RAFT_COMPACTION_OUTCOME.ALREADY_COMPACTED,
-      'a below-boundary request can never write the keys downward');
+      'a below-boundary request can never move the boundary downward');
     } finally {
       fixture.close();
     }
@@ -348,16 +357,18 @@ test('red direction: without a valid proof no argument shape removes a row',
         {toIndex: '3', proof: {checkpointDir: fixture.checkpointDir}},
       ];
       for (const request of attacks) {
-        const result = fixture.adapter.compactCommittedEntries(request);
+        const result = compactRaftRsCommittedEntries(
+          fixture.db, PARTITION_ID, request);
         t.not(result.outcome, RAFT_COMPACTION_OUTCOME.COMPACTED,
           `attack ${JSON.stringify(request) ?? 'undefined'} never compacts`);
         t.equal(logRowCount(fixture.db), ENTRY_COUNT,
           'every row survives the attack');
       }
-      t.same(readSnapshotBoundary(fixture.db),
-        {lastIncludedIndex: 0, lastIncludedTerm: 0},
-        'the boundary never moved under attack');
-      t.equal(fixture.adapter.getCommittedIndex(), ENTRY_COUNT,
+      t.equal(snapshotIndex(fixture.db), 0,
+        'the snapshot boundary never moved under attack');
+      const record = RaftRsDurableStore.readDurableRecordIn(
+        fixture.db, PARTITION_ID);
+      t.equal(Number(record.hardState.commit), ENTRY_COUNT,
         'the committed watermark never moved under attack');
     } finally {
       fixture.close();

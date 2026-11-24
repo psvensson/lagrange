@@ -35,8 +35,14 @@ const RETIRED_ACCOMMODATION = Object.freeze([
   'test/transport/pending-response-round-trip.property.test.js',
 ]);
 const RETIRED_IMPLEMENTATION = Object.freeze([
+  'src/raft/committed-entry-guard.js',
   'src/raft/committed-prefix-divergence.js',
   'src/raft/in-memory-log-adapter.js',
+  'src/raft/snapshot-boundary.js',
+  'src/raft/sqlite-log-adapter.js',
+  'src/raft/sqlite-log-adapter-query-api.js',
+  'src/raft/sqlite-log-entry-shape.js',
+  'src/raft/sqlite-raft-state-constants.js',
   ['src/raft/', RETIRED_RUNTIME, '.js'].join(''),
   ['src/raft/', RETIRED_RUNTIME, '-provider.js'].join(''),
   ['src/raft/', RETIRED_RUNTIME, '-commit-scheduler.js'].join(''),
@@ -141,11 +147,6 @@ test('retired compatibility shells cannot reappear under neutral names', () => {
   const constants = read('src/raft/constants.js');
   assert.doesNotMatch(constants, /\bRAFT_PACKET_TYPE\b|\bRAFT_PACKET_TYPES\b/,
     'delivery policy has no retired native packet vocabulary');
-
-  const sqliteAdapter = read('src/raft/sqlite-log-adapter.js');
-  assert.doesNotMatch(sqliteAdapter,
-    /sqlite-log-adapter-callback-api|getLastEntryCallback|getVotedFor|setVotedFor/,
-    'SQLite consensus storage has no callback compatibility facade');
 });
 
 test('process and harness provider selection is absent', () => {

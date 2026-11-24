@@ -39,8 +39,8 @@ const AUTHORITATIVE_ROW_MUTATION_ERROR_MSG = Object.freeze({
     'AuthoritativeRowMutationHelper requires buildUpdateData',
   MISSING_BUILD_WHERE_CLAUSE:
     'AuthoritativeRowMutationHelper requires buildWhereClause',
-  MISSING_READ_VALUE_FROM_CACHE:
-    'AuthoritativeRowMutationHelper requires readValueFromCache',
+  MISSING_READ_AUTHORITATIVE_ROW:
+    'AuthoritativeRowMutationHelper requires readAuthoritativeRow',
   MISSING_TABLE_NAME: 'AuthoritativeRowMutationHelper requires tableName',
 });
 const AUTHORITATIVE_ROW_MUTATION_RETRY = Object.freeze({
@@ -136,9 +136,9 @@ function validateMutationHelperOptions(options) {
       AUTHORITATIVE_ROW_MUTATION_ERROR_MSG.MISSING_BUILD_UPDATE_DATA,
     );
   }
-  if (typeof options.readValueFromCache !== 'function') {
+  if (typeof options.readAuthoritativeRow !== 'function') {
     throw new Error(
-      AUTHORITATIVE_ROW_MUTATION_ERROR_MSG.MISSING_READ_VALUE_FROM_CACHE,
+      AUTHORITATIVE_ROW_MUTATION_ERROR_MSG.MISSING_READ_AUTHORITATIVE_ROW,
     );
   }
 }

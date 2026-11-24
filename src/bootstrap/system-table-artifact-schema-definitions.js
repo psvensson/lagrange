@@ -20,7 +20,7 @@
  *
  * Chunk bytes ride as base64 TEXT (`chunk_bytes_base64`), NOT as a
  * binary column: Raft log entries are JSON-serialized
- * (src/raft/sqlite-log-adapter.js) and transport frames are JSON text,
+ * (src/raft/raft-rs-durable-store.js) and transport frames are JSON text,
  * so raw binary SQL parameters do not survive replication. The ~33%
  * encoding overhead is the price of staying on the normal replicated
  * write path.

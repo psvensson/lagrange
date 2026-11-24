@@ -41,7 +41,6 @@ import {PARTITION_SERVICE_OPERATION} from
   '../../../src/partition/partition-service-constants.js';
 import {RAFT_RS_SQL} from
   '../../../src/raft/raft-rs-durable-store-constants.js';
-import {SQLiteLogAdapter} from '../../../src/raft/sqlite-log-adapter.js';
 import {
   cleanupTestEnvironment,
   createVirginSeedBootstrapService,
@@ -154,26 +153,11 @@ async function shutdownQuietly(service) {
   }
 }
 
-// The table(s) the legacy log adapter itself writes an entry into, measured on
-// a scratch database rather than named here.
+// The retired SQLite log table that must stay absent/empty on the rs-raft path.
+const LEGACY_LOG_TABLES = Object.freeze(['_raft_log']);
+
 function legacyLogTables() {
-  const scratch = new Database(':memory:');
-  try {
-    const adapter = new SQLiteLogAdapter(scratch);
-    const counts = () => new Map(scratch.prepare(
-      'SELECT name FROM sqlite_master WHERE type = \'table\'').all()
-      .map(({name}) => [name,
-        scratch.prepare(`SELECT COUNT(*) AS count FROM "${name}"`).get()
-          .count]));
-    const before = counts();
-    adapter.saveCommand({probe: true}, 1);
-    const grew = [...counts()].filter(([name, count]) =>
-      count > (before.get(name) ?? 0)).map(([name]) => name);
-    adapter.close();
-    return grew;
-  } finally {
-    scratch.close();
-  }
+  return LEGACY_LOG_TABLES;
 }
 
 function tableExists(db, name) {
@@ -494,20 +478,41 @@ test('legacy durable consensus state fails closed',
     // Meaningful legacy consensus state: three committed entries in the
     // legacy log and a persisted legacy term, and no rs-raft record.
     const seeded = new Database(dbPath);
-    const adapter = new SQLiteLogAdapter(seeded);
-    for (const row of WRITES) {
-      adapter.saveCommand({type: PARTITION_SERVICE_OPERATION.INSERT,
-        sql: INSERT_SQL, params: [row.id, row.value]}, LEGACY_TERM);
+    seeded.exec(
+      'CREATE TABLE IF NOT EXISTS _raft_log ' +
+      '(log_index INTEGER PRIMARY KEY, term INTEGER NOT NULL, ' +
+      'command TEXT NOT NULL, timestamp INTEGER NOT NULL); ' +
+      'CREATE TABLE IF NOT EXISTS _raft_state ' +
+      '(key TEXT PRIMARY KEY, value TEXT)');
+    const insertLegacy = seeded.prepare(
+      'INSERT INTO _raft_log (log_index, term, command, timestamp) ' +
+      'VALUES (?, ?, ?, ?)');
+    for (const [offset, row] of WRITES.entries()) {
+      const index = offset + 1;
+      insertLegacy.run(
+        index,
+        LEGACY_TERM,
+        JSON.stringify({
+          index,
+          term: LEGACY_TERM,
+          committed: true,
+          command: {
+            type: PARTITION_SERVICE_OPERATION.INSERT,
+            sql: INSERT_SQL,
+            params: [row.id, row.value],
+          },
+        }),
+        index,
+      );
     }
-    adapter.commit(WRITES.length);
-    seeded.prepare(
-      'INSERT OR REPLACE INTO _raft_state (key, value) VALUES (?, ?)',
-    ).run('currentTerm', String(LEGACY_TERM));
+    const upsertState = seeded.prepare(
+      'INSERT OR REPLACE INTO _raft_state (key, value) VALUES (?, ?)');
+    upsertState.run('committedIndex', String(WRITES.length));
+    upsertState.run('currentTerm', String(LEGACY_TERM));
     const legacyState = {
-      committedIndex: adapter.getCommittedIndex(),
-      lastInfo: adapter.getLastInfo(),
+      committedIndex: WRITES.length,
+      lastInfo: {index: WRITES.length, term: LEGACY_TERM},
     };
-    adapter.close();
     seeded.close();
     const precondition = new Database(dbPath, {readonly: true});
     const rsRecordBefore = RS_RAFT_RECORD_TABLES

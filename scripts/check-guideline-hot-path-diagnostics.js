@@ -27,8 +27,6 @@ const HOT_PATH_MODULE = Object.freeze([
   'src/control-plane/control-plane-readiness-snapshot-store.js',
   // CL-011: JSON roundtrip per cache row per read
   'src/cache/system-table-cache.js',
-  // CL-018: readEntryRow full-log parse per heartbeat
-  'src/raft/sqlite-log-adapter.js',
   // CL-009: outbound-queue saturation warn storm (67-69% of seed log)
   'src/transport/message-router-shared-vocabulary.js',
   // CL-014: per-event CDC fan-out resolution

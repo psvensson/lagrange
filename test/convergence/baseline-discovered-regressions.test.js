@@ -297,15 +297,17 @@ test('Convergence regression - delayed owner-row convergence does not strand a n
       tableName: 'partitions',
       buildWhereClause: (_value, context = {}) => ({
         partition_id: 'benchmark-p1',
-        leader_node_id: context.cachedRow?.leader_node_id,
-        updated_at: context.cachedRow?.updated_at,
+        leader_node_id: context.authoritativeRow?.leader_node_id,
+        updated_at: context.authoritativeRow?.updated_at,
       }),
       buildUpdateData: (value, updatedAt) => ({
         leader_node_id: value,
         updated_at: updatedAt,
       }),
-      readRowFromCache: () => cachedOwnerRow,
-      readValueFromCache: () => cachedOwnerRow.leader_node_id,
+      readAuthoritativeRow: async () => ({
+        available: true,
+        row: {...cachedOwnerRow},
+      }),
       cdcIntegrationService: {
         updateSystemTableRow: async (_tableName, whereClause, data) => {
           writes.push({whereClause, data});

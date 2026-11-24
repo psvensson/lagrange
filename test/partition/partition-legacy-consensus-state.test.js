@@ -22,7 +22,6 @@ import {
   LEGACY_PARTITION_CONSENSUS_REASON,
 } from '../../src/partition/partition-legacy-consensus-state-constants.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
-import {SQLiteLogAdapter} from '../../src/raft/sqlite-log-adapter.js';
 
 const PARTITION_ID = 'legacy-detector-p1';
 const OTHER_GROUP_ID = 'legacy-detector-p2';
@@ -68,14 +67,32 @@ function storeHasRecord(db, groupId = PARTITION_ID) {
   return new RaftRsDurableStore(db).hasDurableRecord(groupId);
 }
 
+function ensureLegacyTables(db) {
+  db.exec(
+    'CREATE TABLE IF NOT EXISTS _raft_log ' +
+    '(log_index INTEGER PRIMARY KEY, term INTEGER NOT NULL, ' +
+    'command TEXT NOT NULL, timestamp INTEGER NOT NULL); ' +
+    'CREATE TABLE IF NOT EXISTS _raft_state ' +
+    '(key TEXT PRIMARY KEY, value TEXT)');
+}
+
 function seedLegacyLog(db) {
-  const adapter = new SQLiteLogAdapter(db);
-  let last = null;
-  for (const command of COMMANDS) {
-    last = adapter.saveCommand(command, LEGACY_TERM);
-  }
-  adapter.commit(last.index);
-  return adapter;
+  ensureLegacyTables(db);
+  const insert = db.prepare(
+    'INSERT INTO _raft_log (log_index, term, command, timestamp) ' +
+    'VALUES (?, ?, ?, ?)');
+  COMMANDS.forEach((command, offset) => {
+    const index = offset + 1;
+    insert.run(
+      index,
+      LEGACY_TERM,
+      JSON.stringify({index, term: LEGACY_TERM, committed: true, command}),
+      index,
+    );
+  });
+  db.prepare(
+    'INSERT OR REPLACE INTO _raft_state (key, value) VALUES (?, ?)')
+    .run('committedIndex', String(COMMANDS.length));
 }
 
 function seedRsRecord(db, groupId) {
@@ -105,14 +122,13 @@ function seedLegacyRaftState(db, entries) {
 
 test('the legacy tables alone are not legacy consensus state', () => {
   withDatabase((db) => {
-    const adapter = new SQLiteLogAdapter(db);
+    ensureLegacyTables(db);
     // The empty defaults the legacy owners persist for a group that never
     // held consensus: term 0 and no vote.
     seedLegacyRaftState(db, [
       ['currentTerm', '0'],
       ['votedFor', ''],
     ]);
-    adapter.close();
     const decision = detect(db);
     assert.equal(decision.outcome, LEGACY_PARTITION_CONSENSUS_OUTCOME.ABSENT,
       `tables and empty defaults are not state: ${JSON.stringify(decision)}`);
@@ -123,7 +139,7 @@ test('the legacy tables alone are not legacy consensus state', () => {
 test('legacy log entries and a committed index without an rs-raft record ' +
   'refuse with typed reasons', () => {
   withDatabase((db) => {
-    seedLegacyLog(db).close();
+    seedLegacyLog(db);
     const decision = detect(db);
     assert.deepEqual(decision, {
       outcome: LEGACY_PARTITION_CONSENSUS_OUTCOME.DETECTED,
@@ -166,7 +182,7 @@ test('a recorded legacy vote alone refuses', () => {
 test('legacy content beside an rs-raft record of the same partition is ' +
   'tolerated', () => {
   withDatabase((db) => {
-    seedLegacyLog(db).close();
+    seedLegacyLog(db);
     seedRsRecord(db, PARTITION_ID);
     const decision = detect(db);
     assert.equal(decision.outcome,
@@ -182,7 +198,7 @@ test('legacy content beside an rs-raft record of the same partition is ' +
 test('an rs-raft record of another partition does not excuse legacy state',
   () => {
     withDatabase((db) => {
-      seedLegacyLog(db).close();
+      seedLegacyLog(db);
       seedRsRecord(db, OTHER_GROUP_ID);
       assert.equal(detect(db).outcome,
         LEGACY_PARTITION_CONSENSUS_OUTCOME.DETECTED);

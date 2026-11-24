@@ -4,7 +4,7 @@ import {readStateField} from '../utils/state-field-read.js';
  * row-mutation helper construction (raft role + leader-node id writes).
  * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5
  */
-import {COLUMN, SERVICE_TYPE, TABLES} from '../constants/index.js';
+import {COLUMN, SERVICE_TYPE} from '../constants/index.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   getTrafficReadinessSnapshot,
@@ -239,7 +239,7 @@ function assignMetadataPublication(serviceClass) {
             [COLUMN.REPLICA_ID]: this.replicaId,
             [COLUMN.NODE_ID]: this.nodeId,
           };
-          const guardRow = context.authoritativeRow || context.cachedRow;
+          const guardRow = context.authoritativeRow;
           if (
             typeof guardRow?.raft_role === 'string' &&
             guardRow.raft_role.length > 0
@@ -289,15 +289,6 @@ function assignMetadataPublication(serviceClass) {
         },
         readLiveValue: (expectedRole) =>
           resolveComparableLiveRole(expectedRole, this.role),
-        readRowFromCache: (systemTableCache) =>
-          systemTableCache?.get?.(TABLES.SERVICES, this.replicaId) || null,
-        readValueFromCache: (systemTableCache) => {
-          const cached = systemTableCache?.get?.(
-            TABLES.SERVICES,
-            this.replicaId,
-          );
-          return readStateField(cached?.raft_role);
-        },
         isWriteReady: () => this.isServicesLeaderAvailable(),
         systemTableCache: this.systemTableCache,
         cdcIntegrationService: this.cdcIntegrationService,
@@ -322,7 +313,7 @@ function assignMetadataPublication(serviceClass) {
         tableName: SYSTEM_TABLE_NAME.MESSAGE_GROUPS,
         buildWhereClause: (_leaderNodeId, context = {}) => {
           const whereClause = {[COLUMN.GROUP_ID]: this.groupId};
-          const guardRow = context.authoritativeRow || context.cachedRow;
+          const guardRow = context.authoritativeRow;
           if (
             typeof guardRow?.[COLUMN.LEADER_NODE_ID] === 'string' &&
             guardRow[COLUMN.LEADER_NODE_ID].length > 0
@@ -347,15 +338,6 @@ function assignMetadataPublication(serviceClass) {
         buildExpectedCacheFields: (leaderNodeId) => ({
           [COLUMN.LEADER_NODE_ID]: leaderNodeId,
         }),
-        readRowFromCache: (systemTableCache) =>
-          systemTableCache?.get?.(TABLES.MESSAGE_GROUPS, this.groupId) || null,
-        readValueFromCache: (systemTableCache) => {
-          const cached = systemTableCache?.get?.(
-            TABLES.MESSAGE_GROUPS,
-            this.groupId,
-          );
-          return cached?.[COLUMN.LEADER_NODE_ID] || null;
-        },
         prepareFlush: () => ({
           skip: !this.publishLeaderNodeMetadata || !this.isLeader,
           clearPending: !this.publishLeaderNodeMetadata || !this.isLeader,

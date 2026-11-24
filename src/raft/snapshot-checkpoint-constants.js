@@ -22,9 +22,8 @@ const RAFT_CHECKPOINT_PAYLOAD_SIDECAR_SUFFIXES = Object.freeze(['-wal', '-shm'])
 // state-machine include/exclude rule. One raft group == one SQLite file, so
 // the rule is table-name-based; an exclude built as `_%` would silently
 // discard application state after install.
-// Adapters with no durable state-machine/consensus separation (the in-memory
-// log adapter, and SQLiteLogAdapter over a `:memory:` database as used by the
-// message-group worker) are typed UNSUPPORTED_ADAPTER at creation.
+// Databases with no durable on-disk file (e.g., `:memory:` SQLite databases)
+// are typed UNSUPPORTED_ADAPTER at creation.
 const RAFT_CHECKPOINT_PAYLOAD_KIND = Object.freeze({
   SQLITE_STATE_MACHINE_IMAGE: 'sqlite_state_machine_image',
   RAFT_RS_REPLICA_IMAGE: 'raft_rs_replica_image',

@@ -1,11 +1,10 @@
-import {readStateField} from '../utils/state-field-read.js';
 // How a WASM service replica publishes its role and its group's leader node
 // to its services row: each value flows through an authoritative row
 // mutation helper whose transport is the replica's own owner writer.
 
 import {AuthoritativeRowMutationHelper} from
   '../raft/authoritative-row-mutation-helper.js';
-import {COLUMN, TABLES} from '../constants/index.js';
+import {COLUMN} from '../constants/index.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
@@ -54,31 +53,21 @@ async function readAuthoritativeWasmServiceRow(replica) {
 }
 
 /**
- * The replica's services row as cached.
- * @param {Object} replica - The WASM service replica.
- * @param {Object} systemTableCache - The system table cache.
- * @return {Object|null} The row.
- */
-function cachedServiceRow(replica, systemTableCache) {
-  return systemTableCache?.get?.(TABLES.SERVICES, replica.replicaId) || null;
-}
-
-/**
  * The compare-and-set guard of a services-row update: the row's identity
- * plus the cached column value and update time it replaces.
+ * plus the authoritative column value and update time it replaces.
  * @param {Object} replica - The WASM service replica.
  * @param {string} column - The published column.
- * @param {Object} cachedRow - The cached row, if any.
+ * @param {Object} authoritativeRow - The authoritative row, if any.
  * @return {Object} The where clause.
  */
-function serviceRowWhereClause(replica, column, cachedRow) {
+function serviceRowWhereClause(replica, column, authoritativeRow) {
   const whereClause = {[COLUMN.SERVICE_ID]: replica.replicaId};
-  if (typeof cachedRow?.[column] === LOCAL_STR_STRING &&
-    cachedRow[column].length > 0) {
-    whereClause[column] = cachedRow[column];
+  if (typeof authoritativeRow?.[column] === LOCAL_STR_STRING &&
+    authoritativeRow[column].length > 0) {
+    whereClause[column] = authoritativeRow[column];
   }
-  if (Number.isFinite(cachedRow?.[COLUMN.UPDATED_AT])) {
-    whereClause[COLUMN.UPDATED_AT] = cachedRow[COLUMN.UPDATED_AT];
+  if (Number.isFinite(authoritativeRow?.[COLUMN.UPDATED_AT])) {
+    whereClause[COLUMN.UPDATED_AT] = authoritativeRow[COLUMN.UPDATED_AT];
   }
   return whereClause;
 }
@@ -95,17 +84,13 @@ function createWasmServiceRoleMutationHelper(replica) {
       serviceRowWhereClause(
         replica,
         COLUMN.RAFT_ROLE,
-        context.authoritativeRow || context.cachedRow,
+        context.authoritativeRow,
       ),
     buildUpdateData: (role, updatedAt) => ({
       [COLUMN.RAFT_ROLE]: role,
       [COLUMN.UPDATED_AT]: updatedAt,
     }),
     buildExpectedCacheFields: (role) => ({[COLUMN.RAFT_ROLE]: role}),
-    readRowFromCache: (systemTableCache) =>
-      cachedServiceRow(replica, systemTableCache),
-    readValueFromCache: (systemTableCache) =>
-      readStateField(cachedServiceRow(replica, systemTableCache)?.[COLUMN.RAFT_ROLE]),
     readAuthoritativeRow: () => readAuthoritativeWasmServiceRow(replica),
     isWriteReady: () => replica.isServicesLeaderAvailable(),
     retryDelayMs: METADATA_FLUSH_RETRY_DELAY_MS,
@@ -138,7 +123,7 @@ function createWasmServiceLeaderNodeMutationHelper(replica) {
       serviceRowWhereClause(
         replica,
         COLUMN.NODE_ID,
-        context.authoritativeRow || context.cachedRow,
+        context.authoritativeRow,
       ),
     buildUpdateData: (leaderNodeId, updatedAt) => ({
       [COLUMN.NODE_ID]: leaderNodeId,
@@ -149,10 +134,6 @@ function createWasmServiceLeaderNodeMutationHelper(replica) {
       [COLUMN.NODE_ID]: leaderNodeId,
       [COLUMN.RAFT_ROLE]: replica.role,
     }),
-    readRowFromCache: (systemTableCache) =>
-      cachedServiceRow(replica, systemTableCache),
-    readValueFromCache: (systemTableCache) =>
-      cachedServiceRow(replica, systemTableCache)?.[COLUMN.NODE_ID] || null,
     readAuthoritativeRow: () => readAuthoritativeWasmServiceRow(replica),
     prepareFlush: () => ({
       skip: !replica.isLeader,
