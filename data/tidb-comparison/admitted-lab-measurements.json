@@ -5,7 +5,7 @@
   "sources": [
     {
       "path": "data/tidb-comparison/raw-observations.ndjson",
-      "sha256": "sha256:11b313cf249014fcd2d632a9162a67b529911a675da59c0a6e9d96a59037892c"
+      "sha256": "sha256:62d8b4f264d92abc4215553f4d8638715e673aa595d8758581b766bf8b4c4b74"
     },
     {
       "path": "data/tidb-comparison/forensic/raw-observations-86e795c44.ndjson",
@@ -13,7 +13,7 @@
     },
     {
       "path": "data/tidb-comparison/invalidations.ndjson",
-      "sha256": "sha256:0fd25fbc78b78cab95d75320dab2f89d8b675c3b4358905502712e4fd563f630"
+      "sha256": "sha256:58fa2ce6b61188c9ccde878db0f19efee0425cb665cbd5317a26708c5bbf898f"
     }
   ],
   "cells": [
@@ -4305,10 +4305,10 @@
     {
       "claimKey": "lagrange/scenarioA/smoke",
       "claimKind": "throughput",
-      "status": "product-failure",
+      "status": "invalid-measurement",
       "reasons": [
-        "no-committed-operations",
-        "readiness-exhausted"
+        "duplicate-claim",
+        "mixed-campaign"
       ],
       "defectIds": [
         "D33",
@@ -4322,10 +4322,12 @@
       ],
       "evidence": {
         "runIds": [
-          "bench-gcp-3sys-smoke-887007107-20261124-r001"
+          "bench-gcp-3sys-smoke-887007107-20261124-r001",
+          "bench-gcp-3sys-smoke-44eeb290a-20261124-r001"
         ],
         "rawObservationsDigests": [
-          "sha256:bece660d8bda3ad63a21e8f731a0244fc1e75e5949fcaade5b91c6454bd848ab"
+          "sha256:bece660d8bda3ad63a21e8f731a0244fc1e75e5949fcaade5b91c6454bd848ab",
+          "sha256:05659368d82c9dcec291fbf4d84e8413820a556961df656fbe10e319c41f90a6"
         ],
         "invalidatedRunIds": [
           "bench-live-20261101-b-r6-r001",
@@ -4349,77 +4351,7 @@
         "forensic": [],
         "semanticProofIds": []
       },
-      "metrics": {
-        "profileClass": "smoke",
-        "sufficiencyRuleId": "comparative-capacity-sufficiency-v1",
-        "accounting": {
-          "offered": 100,
-          "issued": 0,
-          "unissued": 100,
-          "attempts": 0,
-          "committed": 0,
-          "conflicts": 0,
-          "conflictExhausted": 0,
-          "terminalFailures": {
-            "product_error": 0,
-            "correctness_failure": 0,
-            "transport_failure": 0,
-            "harness_fault": 0
-          },
-          "unresolved": 0,
-          "ambiguousCommits": 0
-        },
-        "runs": [
-          {
-            "runId": "bench-gcp-3sys-smoke-887007107-20261124-r001",
-            "runStatus": "setup-failed",
-            "offeredRatePerSec": 5,
-            "repetition": 1,
-            "accounting": {
-              "offered": 100,
-              "issued": 0,
-              "unissued": 100,
-              "attempts": 0,
-              "committed": 0,
-              "conflicts": 0,
-              "conflictExhausted": 0,
-              "terminalFailures": {
-                "product_error": 0,
-                "correctness_failure": 0,
-                "transport_failure": 0,
-                "harness_fault": 0
-              },
-              "unresolved": 0,
-              "ambiguousCommits": 0
-            },
-            "drainOverrunMs": 0,
-            "maxLatencyMs": null
-          }
-        ],
-        "setupFailures": [
-          {
-            "runId": "bench-gcp-3sys-smoke-887007107-20261124-r001",
-            "failureClass": "product_error",
-            "sqlState": null,
-            "code": "readiness_exhausted",
-            "message": "lagrange-system-tables did not report ready before 240000ms formation deadline after 49 attempts",
-            "readinessDenial": {
-              "component": "lagrange-system-tables",
-              "attempts": 49,
-              "elapsedMs": 156738,
-              "phase": "cluster-readiness",
-              "state": "denied",
-              "reasons": [
-                "partition_under_replicated:wasm_operations-p1",
-                "replica_operations_in_flight:00000000-0000-4000-8000-000000000001:1",
-                "replica_operations_in_flight:00000000-0000-4000-8000-000000000003:1",
-                "replica_operations_in_flight:00000000-0000-4000-8000-000000000002:1"
-              ]
-            }
-          }
-        ],
-        "capacity": null
-      }
+      "metrics": null
     },
     {
       "claimKey": "lagrange/scenarioB/fan-out",
@@ -5122,17 +5054,20 @@
     {
       "claimKey": "pg-patroni-sync-ha-rf3/scenarioA/smoke",
       "claimKind": "throughput",
-      "status": "valid-observed",
+      "status": "invalid-measurement",
       "reasons": [
-        "smoke-profile-no-capacity-claim"
+        "duplicate-claim",
+        "mixed-campaign"
       ],
       "defectIds": [],
       "evidence": {
         "runIds": [
-          "bench-gcp-pg-ha-smoke-887007107-20261124-r001"
+          "bench-gcp-pg-ha-smoke-887007107-20261124-r001",
+          "bench-gcp-pg-ha-smoke-44eeb290a-20261124-r001"
         ],
         "rawObservationsDigests": [
-          "sha256:d878b3b64758d07d842c3208a2fe7d2c2ff238d902689bf9fd45973e4fa9824b"
+          "sha256:d878b3b64758d07d842c3208a2fe7d2c2ff238d902689bf9fd45973e4fa9824b",
+          "sha256:da85b4267743f2d4f7751b6a4fcf5768b1e6b15f7a40ff49ff6fd70c84cdc6c8"
         ],
         "invalidatedRunIds": [],
         "forensic": [],
@@ -5172,56 +5107,7 @@
           "transaction:stock_level:reported_low_stock_count_uses_canonical_recent_order_window"
         ]
       },
-      "metrics": {
-        "profileClass": "smoke",
-        "sufficiencyRuleId": "comparative-capacity-sufficiency-v1",
-        "accounting": {
-          "offered": 100,
-          "issued": 100,
-          "unissued": 0,
-          "attempts": 100,
-          "committed": 100,
-          "conflicts": 0,
-          "conflictExhausted": 0,
-          "terminalFailures": {
-            "product_error": 0,
-            "correctness_failure": 0,
-            "transport_failure": 0,
-            "harness_fault": 0
-          },
-          "unresolved": 0,
-          "ambiguousCommits": 0
-        },
-        "runs": [
-          {
-            "runId": "bench-gcp-pg-ha-smoke-887007107-20261124-r001",
-            "runStatus": "completed",
-            "offeredRatePerSec": 5,
-            "repetition": 1,
-            "accounting": {
-              "offered": 100,
-              "issued": 100,
-              "unissued": 0,
-              "attempts": 100,
-              "committed": 100,
-              "conflicts": 0,
-              "conflictExhausted": 0,
-              "terminalFailures": {
-                "product_error": 0,
-                "correctness_failure": 0,
-                "transport_failure": 0,
-                "harness_fault": 0
-              },
-              "unresolved": 0,
-              "ambiguousCommits": 0
-            },
-            "drainOverrunMs": 0,
-            "maxLatencyMs": 60.186
-          }
-        ],
-        "setupFailures": [],
-        "capacity": null
-      }
+      "metrics": null
     },
     {
       "claimKey": "pg-patroni-sync-ha-rf3/scenarioB/fan-out",
@@ -7293,9 +7179,10 @@
     {
       "claimKey": "pg-single-primary/scenarioA/smoke",
       "claimKind": "throughput",
-      "status": "valid-observed",
+      "status": "invalid-measurement",
       "reasons": [
-        "smoke-profile-no-capacity-claim"
+        "duplicate-claim",
+        "mixed-campaign"
       ],
       "defectIds": [
         "D33",
@@ -7309,10 +7196,12 @@
       ],
       "evidence": {
         "runIds": [
-          "bench-gcp-3sys-smoke-887007107-20261124-r003"
+          "bench-gcp-3sys-smoke-887007107-20261124-r003",
+          "bench-gcp-3sys-smoke-44eeb290a-20261124-r003"
         ],
         "rawObservationsDigests": [
-          "sha256:aa8178b50574d7d7c070cbc665b1fc962218a4cc22879e79d70cca3ebf7e8f11"
+          "sha256:aa8178b50574d7d7c070cbc665b1fc962218a4cc22879e79d70cca3ebf7e8f11",
+          "sha256:7d99fc19a22aee063e6758a2746a4891112ae7b89b5e0d6d3acff10c95e8370d"
         ],
         "invalidatedRunIds": [
           "bench-live-20261101-b-r6-r003",
@@ -7358,56 +7247,7 @@
           "transaction:stock_level:reported_low_stock_count_uses_canonical_recent_order_window"
         ]
       },
-      "metrics": {
-        "profileClass": "smoke",
-        "sufficiencyRuleId": "comparative-capacity-sufficiency-v1",
-        "accounting": {
-          "offered": 100,
-          "issued": 100,
-          "unissued": 0,
-          "attempts": 100,
-          "committed": 100,
-          "conflicts": 0,
-          "conflictExhausted": 0,
-          "terminalFailures": {
-            "product_error": 0,
-            "correctness_failure": 0,
-            "transport_failure": 0,
-            "harness_fault": 0
-          },
-          "unresolved": 0,
-          "ambiguousCommits": 0
-        },
-        "runs": [
-          {
-            "runId": "bench-gcp-3sys-smoke-887007107-20261124-r003",
-            "runStatus": "completed",
-            "offeredRatePerSec": 5,
-            "repetition": 1,
-            "accounting": {
-              "offered": 100,
-              "issued": 100,
-              "unissued": 0,
-              "attempts": 100,
-              "committed": 100,
-              "conflicts": 0,
-              "conflictExhausted": 0,
-              "terminalFailures": {
-                "product_error": 0,
-                "correctness_failure": 0,
-                "transport_failure": 0,
-                "harness_fault": 0
-              },
-              "unresolved": 0,
-              "ambiguousCommits": 0
-            },
-            "drainOverrunMs": 0,
-            "maxLatencyMs": 53.556
-          }
-        ],
-        "setupFailures": [],
-        "capacity": null
-      }
+      "metrics": null
     },
     {
       "claimKey": "pg-single-primary/scenarioB/fan-out",
@@ -9365,9 +9205,10 @@
     {
       "claimKey": "tidb-tikv/scenarioA/smoke",
       "claimKind": "throughput",
-      "status": "valid-observed",
+      "status": "invalid-measurement",
       "reasons": [
-        "smoke-profile-no-capacity-claim"
+        "duplicate-claim",
+        "mixed-campaign"
       ],
       "defectIds": [
         "D33",
@@ -9381,10 +9222,12 @@
       ],
       "evidence": {
         "runIds": [
-          "bench-gcp-3sys-smoke-887007107-20261124-r002"
+          "bench-gcp-3sys-smoke-887007107-20261124-r002",
+          "bench-gcp-3sys-smoke-44eeb290a-20261124-r002"
         ],
         "rawObservationsDigests": [
-          "sha256:239e65563d8dc49c5c2d480655b8f2179fb82558b48beb774398fe9afb2ac47e"
+          "sha256:239e65563d8dc49c5c2d480655b8f2179fb82558b48beb774398fe9afb2ac47e",
+          "sha256:2f3bb6673976a9fac75cd221e16968e6541cd4ed99ff2d0035850819768adbdf"
         ],
         "invalidatedRunIds": [
           "bench-live-20261101-b-r6-r002",
@@ -9430,56 +9273,7 @@
           "transaction:stock_level:reported_low_stock_count_uses_canonical_recent_order_window"
         ]
       },
-      "metrics": {
-        "profileClass": "smoke",
-        "sufficiencyRuleId": "comparative-capacity-sufficiency-v1",
-        "accounting": {
-          "offered": 100,
-          "issued": 100,
-          "unissued": 0,
-          "attempts": 100,
-          "committed": 100,
-          "conflicts": 0,
-          "conflictExhausted": 0,
-          "terminalFailures": {
-            "product_error": 0,
-            "correctness_failure": 0,
-            "transport_failure": 0,
-            "harness_fault": 0
-          },
-          "unresolved": 0,
-          "ambiguousCommits": 0
-        },
-        "runs": [
-          {
-            "runId": "bench-gcp-3sys-smoke-887007107-20261124-r002",
-            "runStatus": "completed",
-            "offeredRatePerSec": 5,
-            "repetition": 1,
-            "accounting": {
-              "offered": 100,
-              "issued": 100,
-              "unissued": 0,
-              "attempts": 100,
-              "committed": 100,
-              "conflicts": 0,
-              "conflictExhausted": 0,
-              "terminalFailures": {
-                "product_error": 0,
-                "correctness_failure": 0,
-                "transport_failure": 0,
-                "harness_fault": 0
-              },
-              "unresolved": 0,
-              "ambiguousCommits": 0
-            },
-            "drainOverrunMs": 0,
-            "maxLatencyMs": 203.88
-          }
-        ],
-        "setupFailures": [],
-        "capacity": null
-      }
+      "metrics": null
     },
     {
       "claimKey": "tidb-tikv/scenarioB/fan-out",
