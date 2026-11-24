@@ -385,7 +385,17 @@ test('Review §1 Witness 2: retained concurrency companion allows disjoint read/
     );
     assert.equal(generationOf(leader), baseGen);
 
-    // T2 prepares and commits cleanly while T1 remains PREPARED:
+    // Also open an empty prepared transaction (0 reads, 0 writes) and an empty active session
+    // at baseGen to verify they both survive concurrent disjoint generation advances:
+    const txEmptyPrepared = identityOf('23'.repeat(16), {sessionId: 'sess-comp-empty-prepared'});
+    assert.equal((await send(leader, beginMessage(txEmptyPrepared))).success, true);
+    const {prepResult: emptyPrep} = await prepareParticipantTx(leader, proposed, txEmptyPrepared);
+    assert.equal(emptyPrep.success, true);
+
+    const txEmptyActive = identityOf('24'.repeat(16), {sessionId: 'sess-comp-empty-active'});
+    assert.equal((await send(leader, beginMessage(txEmptyActive))).success, true);
+
+    // T2 prepares and commits cleanly while T1 and txEmptyPrepared remain PREPARED:
     await commitParticipantTx(leader, proposed, txT2);
     assert.equal(generationOf(leader), baseGen + 1);
     assert.equal(readRowValue(leader, 'D'), '41');
@@ -394,6 +404,14 @@ test('Review §1 Witness 2: retained concurrency companion allows disjoint read/
     await commitPreparedParticipantTx(leader, proposed, txT1, t1Prep.preparedDigest);
     assert.equal(generationOf(leader), baseGen + 2);
     assert.equal(readRowValue(leader, 'B'), '21');
+
+    // Empty prepared tx (operations=[], readScope='none') commits cleanly after gen advanced baseGen -> baseGen + 2:
+    await commitPreparedParticipantTx(leader, proposed, txEmptyPrepared, emptyPrep.preparedDigest);
+    assert.equal(generationOf(leader), baseGen + 2);
+
+    // Empty active session (operations=[], readScope='none') rebases cleanly at PREPARE across baseGen -> baseGen + 2 and commits:
+    await commitParticipantTx(leader, proposed, txEmptyActive);
+    assert.equal(generationOf(leader), baseGen + 2);
   } finally {
     await shutdownAll(leader);
     fs.rmSync(directory, {recursive: true, force: true});

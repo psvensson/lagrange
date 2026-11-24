@@ -628,12 +628,10 @@ function isEntryDisjointFromCommittedMap(entry, committedGenMap) {
 }
 
 function hasScopedCandidateFootprint(operationsFootprint, decodedValidation) {
-  const hasScopedWrite = (operationsFootprint?.rowKeys?.size ?? ZERO) > ZERO;
-  const hasScopedRead = decodedValidation.readScope === SCOPE.KEYS;
   return Boolean(operationsFootprint?.scoped) &&
     !operationsFootprint.hasUnscopedWrite &&
-    !decodedValidation.hasUnscopedRead &&
-    (hasScopedWrite || hasScopedRead);
+    Boolean(decodedValidation) &&
+    !decodedValidation.hasUnscopedRead;
 }
 
 function isRowTouchedInGeneration(row, expectedGen, candidateFootprint) {

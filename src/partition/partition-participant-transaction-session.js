@@ -5,7 +5,7 @@
 // Recovery / wake entry: hydrateDurablePreparedAndCommittedState on reopen and resetParticipantRowKeyHistory on afterRollback.
 // Representative production tests: test/query/scenario-a-transaction-coordination-fast-path.test.js, test/partition/partition-participant-transaction-apply.test.js.
 import {
-  PARTICIPANT_CONCURRENCY_GRANULARITY, PARTICIPANT_READ_DEPENDENCY_SCOPE as SCOPE,
+  PARTICIPANT_CONCURRENCY_GRANULARITY,
   PARTICIPANT_TRANSACTION_LOG_MSG as LOG_MSG, PARTICIPANT_TRANSACTION_SESSION_PHASE as PHASE,
 } from './partition-participant-transaction-constants.js';
 import {operationsOf} from './partition-participant-transaction-bytes.js';
@@ -556,11 +556,10 @@ function isSessionSchemaCurrent(service, session) {
 }
 
 function isScopedRowKeySession(service, session) {
-  const hasScopedWrite = session?.touchedRowKeys instanceof Set && session.touchedRowKeys.size > 0;
-  const hasScopedRead = session?.readScope === SCOPE.KEYS;
   return isRowKeyConcurrencyEnabled(service) &&
-    session?.hasUnscopedWrite !== true && session?.hasUnscopedRead !== true &&
-    (hasScopedWrite || hasScopedRead) &&
+    Boolean(session) &&
+    session.hasUnscopedWrite !== true &&
+    session.hasUnscopedRead !== true &&
     isSessionSchemaCurrent(service, session);
 }
 
