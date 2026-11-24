@@ -71,6 +71,13 @@ function requireAffectedRowCount(result, command) {
 
 const fixedTag = (tag) => () => tag;
 
+function resolveSelectCommandTagRowCount(result) {
+  if (Array.isArray(result?.rawRows)) {
+    return result.rawRows.length;
+  }
+  return Array.isArray(result?.rows) ? result.rows.length : 0;
+}
+
 // Executed statement kind (the engine's parsed statement type, the service
 // lifecycle command, or the EXPLAIN DISTRIBUTED operation) -> the
 // CommandComplete tag. DML and SELECT carry their counts; every other kind
@@ -78,7 +85,7 @@ const fixedTag = (tag) => () => tag;
 // (DROP TABLE) never reach the mapper.
 const COMMAND_TAG_BY_STATEMENT_TYPE = new Map([
   [AST_TYPE.SELECT, (result) =>
-    `SELECT ${Array.isArray(result?.rows) ? result.rows.length : 0}`],
+    `SELECT ${resolveSelectCommandTagRowCount(result)}`],
   [AST_TYPE.INSERT, (result) =>
     `INSERT 0 ${requireAffectedRowCount(result, LOCAL_STR_INSERT)}`],
   [AST_TYPE.UPDATE, (result) =>

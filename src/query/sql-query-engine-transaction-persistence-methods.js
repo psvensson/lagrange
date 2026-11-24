@@ -648,13 +648,68 @@ const sqlQueryEngineTransactionPersistenceMethods = {
   },
 };
 
-function createSQLQueryEngineTransactionPersistenceMethods() {
-  return Object.fromEntries(Object.entries(
-    {...sqlQueryEngineTransactionSetMethods,
-      ...sqlQueryEngineTransactionPersistenceMethods}).map(([name, method]) => [
-    name,
-    {value: method, writable: true, configurable: true, enumerable: false},
-  ]));
+const METHOD_BAG_CONSTRUCTOR_KEY = 'constructor';
+const DEFAULT_METHOD_BAG_OWNER_NAME = 'SQLQueryEngine';
+const PERSISTENCE_METHODS_OWNER_NAME =
+  'SQLQueryEngineTransactionPersistenceMethods';
+
+/**
+ * Compose an ordered list of method or property-descriptor bags while
+ * enforcing that their own property names are pairwise disjoint.
+ *
+ * @param {Array<Object>} bags - Method or descriptor bags to compose.
+ * @param {string} [ownerName] - Human-readable owner name for error messages.
+ * @return {Object} Composed own-property record.
+ * @throws {Error} When any property name appears in more than one bag.
+ */
+function composeDisjointMethodBags(
+  bags,
+  ownerName = DEFAULT_METHOD_BAG_OWNER_NAME,
+) {
+  if (!Array.isArray(bags)) {
+    throw new TypeError(
+      `Expected method bag array for ${ownerName} composition`,
+    );
+  }
+  const seenKeys = new Set();
+  const composed = {};
+  for (const bag of bags) {
+    if (!bag || typeof bag !== 'object') {
+      continue;
+    }
+    const ownKeys = Object.getOwnPropertyNames(bag).filter(
+      (key) => key !== METHOD_BAG_CONSTRUCTOR_KEY,
+    );
+    for (const key of ownKeys) {
+      if (seenKeys.has(key)) {
+        throw new Error(
+          `Duplicate method "${key}" in ${ownerName} composition`,
+        );
+      }
+      seenKeys.add(key);
+      composed[key] = bag[key];
+    }
+  }
+  return composed;
 }
 
-export {createSQLQueryEngineTransactionPersistenceMethods};
+function createSQLQueryEngineTransactionPersistenceMethods() {
+  const composedMethods = composeDisjointMethodBags(
+    [
+      sqlQueryEngineTransactionSetMethods,
+      sqlQueryEngineTransactionPersistenceMethods,
+    ],
+    PERSISTENCE_METHODS_OWNER_NAME,
+  );
+  return Object.fromEntries(
+    Object.entries(composedMethods).map(([name, method]) => [
+      name,
+      {value: method, writable: true, configurable: true, enumerable: false},
+    ]),
+  );
+}
+
+export {
+  composeDisjointMethodBags,
+  createSQLQueryEngineTransactionPersistenceMethods,
+};

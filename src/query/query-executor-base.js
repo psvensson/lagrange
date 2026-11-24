@@ -14,6 +14,11 @@ import {
   collectAllBaseTableNames,
   hasSubqueryCteOrCompound,
 } from './distributed/distributed-select-fanout-soundness.js';
+import {
+  attachAggregatedSelectRows,
+  getResultRowCount,
+  resolveSinglePartitionMergeOptions,
+} from './distributed/parallel-query-partition-outcomes.js';
 import {PartitionResolver} from './partition-resolver.js';
 import {
   installQueryExecutorJoinExecutionHelpers,
@@ -418,16 +423,15 @@ class QueryExecutorBase {
       params,
       mergeOptions,
     );
-    return {
-      success: true,
-      rows: aggregated.rows,
-      rawRows: aggregated.rawRows,
-      columns: aggregated.columns,
-      rowSet: aggregated.rowSet,
-      count: aggregated.rows.length,
-      partitions: [],
-      timestamp: queryTimestamp ? queryTimestamp.toString() : null,
-    };
+    return attachAggregatedSelectRows(
+      {
+        success: true,
+        partitions: [],
+        timestamp: queryTimestamp ? queryTimestamp.toString() : null,
+      },
+      aggregated,
+      mergeOptions,
+    );
   }
 
   tryExecuteJoinSelect(ast, partitionIds, params, options, queryTimestamp) {
@@ -551,7 +555,7 @@ class QueryExecutorBase {
       this,
       fanoutPlan,
       params,
-      mergeOptions,
+      resolveSinglePartitionMergeOptions(fanoutPlan, results, mergeOptions),
     );
     if (
       fanoutPlan.kind === FANOUT_PLAN_KIND.GUARDED_PARTIAL &&
@@ -576,12 +580,11 @@ class QueryExecutorBase {
         this,
         fanoutPlan.unmergedPlan,
         params,
-        mergeOptions,
+        resolveSinglePartitionMergeOptions(fanoutPlan.unmergedPlan, results, mergeOptions),
       );
     }
     const mergeDurationMs = Date.now() - mergeStartTimeMs;
-    const presentedRows = aggregated.rows;
-    const presentedRawRows = aggregated.rawRows;
+    const totalRows = getResultRowCount(aggregated);
 
     try {
       this.logger.info(METRICS_LOG_TAG.SELECT_DISTRIBUTED, {
@@ -589,60 +592,36 @@ class QueryExecutorBase {
         fanoutTotalLatencyMs: fanoutMetrics?.totalLatencyMs,
         fanoutMedianLatencyMs: fanoutMetrics?.medianLatencyMs,
         mergeDurationMs,
-        totalRows: presentedRows.length,
+        totalRows,
         stragglerCount: fanoutMetrics?.stragglers?.length ?? 0,
         speculativeExecutions: fanoutMetrics?.speculativeExecutions ?? 0,
       });
     } catch (_metricsErr) {
       // Metrics logging must not propagate to callers
     }
-    const readAuthorityWitnesses = results
-      .map((result) => result.readAuthorityWitness)
-      .filter(Boolean);
-    const rowSetComplete =
-      partitionIds.length > 0 &&
-      results.length === partitionIds.length &&
-      results.every(
-        (result) =>
-          result?.success === true &&
-          result?.rowSetComplete === true &&
-          result?.partial !== true,
-      );
+    const readAuthorityWitnesses = results.map((r) => r.readAuthorityWitness).filter(Boolean);
+    const rowSetComplete = partitionIds.length > 0 && results.length === partitionIds.length &&
+      results.every((r) =>
+        r?.success === true && r?.rowSetComplete === true && r?.partial !== true);
     const authoritativeObservation = rowSetComplete ?
       (results.length === 1 && results[0]?.authoritativeObservation ?
         results[0].authoritativeObservation :
         buildLocalAuthoritativeObservation(
-          tableName,
-          rowSetComplete,
-          readAuthorityWitnesses,
-          sql,
-          params,
-        )) :
+          tableName, rowSetComplete, readAuthorityWitnesses, sql, params)) :
       null;
     const readGenerationsByPartition = collectReadGenerationsByPartition(results);
-    return {
+    return attachAggregatedSelectRows({
       success: true,
-      rows: presentedRows,
-      rawRows: presentedRawRows,
-      columns: aggregated.columns,
-      rowSet: aggregated.rowSet,
-      count: presentedRows.length,
       partitions: partitionIds,
       tableName,
       rowSetComplete,
       readAuthorityWitness: readAuthorityWitnesses[0] || null,
       readAuthorityWitnesses,
       authoritativeObservation,
-      ...(Object.keys(readGenerationsByPartition).length > 0 ?
-        {readGenerationsByPartition} :
-        {}),
+      ...(Object.keys(readGenerationsByPartition).length > 0 ? {readGenerationsByPartition} : {}),
       timestamp: queryTimestamp.toString(),
-      distributedMetrics: {
-        fanout: fanoutMetrics,
-        mergeDurationMs,
-        failedPartitionCount: 0,
-      },
-    };
+      distributedMetrics: {fanout: fanoutMetrics, mergeDurationMs, failedPartitionCount: 0},
+    }, aggregated, mergeOptions);
   }
 
   /**

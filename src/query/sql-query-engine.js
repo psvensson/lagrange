@@ -10,8 +10,10 @@ import {SQLQueryEngineWriteExecution} from './sql-query-engine-write-execution.j
 import {COMMIT_POINT_REACHED_FIELD} from
   './distributed/distributed-transaction-commit-point.js';
 import {createSQLQueryEngineTableRoutingMethods} from './sql-query-engine-table-routing-methods.js';
-import {createSQLQueryEngineTransactionPersistenceMethods} from
-  './sql-query-engine-transaction-persistence-methods.js';
+import {
+  composeDisjointMethodBags,
+  createSQLQueryEngineTransactionPersistenceMethods,
+} from './sql-query-engine-transaction-persistence-methods.js';
 import {
   isParticipantTransactionAnswer,
   participantDeliveryAnswerOf,
@@ -708,13 +710,24 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
   }
 }
 
-Object.defineProperties(
-  SQLQueryEngine.prototype,
-  createSQLQueryEngineTableRoutingMethods(),
+const SQL_QUERY_ENGINE_PROTOTYPE_OWNER_NAME = 'SQLQueryEngine.prototype';
+const sqlQueryEngineComposedMethodDescriptors = composeDisjointMethodBags(
+  [
+    createSQLQueryEngineTableRoutingMethods(),
+    createSQLQueryEngineTransactionPersistenceMethods(),
+  ],
+  SQL_QUERY_ENGINE_PROTOTYPE_OWNER_NAME,
+);
+composeDisjointMethodBags(
+  [
+    SQLQueryEngine.prototype,
+    sqlQueryEngineComposedMethodDescriptors,
+  ],
+  SQL_QUERY_ENGINE_PROTOTYPE_OWNER_NAME,
 );
 Object.defineProperties(
   SQLQueryEngine.prototype,
-  createSQLQueryEngineTransactionPersistenceMethods(),
+  sqlQueryEngineComposedMethodDescriptors,
 );
 
 export {SQLQueryEngine};
