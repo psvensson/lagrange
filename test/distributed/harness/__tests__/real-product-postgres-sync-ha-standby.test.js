@@ -201,7 +201,7 @@ test('live postgres:17-alpine deployPostgresCluster witness forms primary + 2 sy
   'recovers interrupted partial PGDATA, replicates sentinel rows, preserves PGDATA across ' +
   'standby restart, and fails closed on reverted su-exec command', async (t) => {
   if (!(await hasLocalPostgres17Image())) {
-    t.skip('postgres:17-alpine local Docker image not available on this host');
+    t.diagnostic('postgres:17-alpine local Docker image not available on this host; live Docker witness skipped');
     return;
   }
   const suffix = `${process.pid}-${Date.now().toString(36)}`;

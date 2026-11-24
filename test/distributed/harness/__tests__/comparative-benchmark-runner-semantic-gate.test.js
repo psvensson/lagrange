@@ -32,27 +32,14 @@ import {
   buildCoverageManifest,
   listManifestClaims,
 } from '../comparative-coverage-manifest.js';
-import {
-  OLTP_SQL_STATEMENT as S,
-} from '../oltp-baseline-transaction-executor.js';
-import {
-  OLTP_SCENARIO_A_DURABILITY_PROOF_IDS,
-  evaluateScenarioADurabilityObservation,
-} from '../oltp-scenario-a-durability-case.js';
-import {
-  OLTP_SCENARIO_A_FAILURE_ATOMICITY_PROOF_IDS,
-} from '../oltp-scenario-a-failure-atomicity-case.js';
-import {
-  OLTP_SCENARIO_A_PAYMENT_PROOF_IDS,
-} from '../oltp-scenario-a-payment-case.js';
-import {
-  OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS,
-  buildScenarioASemanticGateEvidence,
-} from '../oltp-scenario-a-semantic-gate.js';
-import {
-  OLTP_SCENARIO_A_VISIBILITY_PROOF_IDS,
-} from '../oltp-scenario-a-visibility-case.js';
-import {validateRunRecord} from '../raw-observation-record.js';
+import {OLTP_SQL_STATEMENT as S} from '../oltp-baseline-transaction-executor.js';
+import {OLTP_SCENARIO_A_DURABILITY_PROOF_IDS, evaluateScenarioADurabilityObservation} from '../oltp-scenario-a-durability-case.js';
+import {OLTP_SCENARIO_A_FAILURE_ATOMICITY_PROOF_IDS} from '../oltp-scenario-a-failure-atomicity-case.js';
+import {OLTP_SCENARIO_A_PAYMENT_PROOF_IDS} from '../oltp-scenario-a-payment-case.js';
+import {OLTP_SCENARIO_A_PROOF_CASES} from '../oltp-scenario-a-proof-cases.js';
+import {OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS} from '../oltp-scenario-a-semantic-gate.js';
+import {OLTP_SCENARIO_A_VISIBILITY_PROOF_IDS} from '../oltp-scenario-a-visibility-case.js';
+import {buildCanonicalSemanticGateCaseRecord, validateRunRecord} from '../raw-observation-record.js';
 import {
   arrayFilter,
   arrayFind,
@@ -743,24 +730,34 @@ test('Item 5: proofs from deployment A cannot authorize measurements on deployme
   const {sshRun} = createScriptedSsh([...dockerRules(ledger)]);
   const deploymentA = armOf(ledger, 0, {persistent: true});
   const deploymentB = armOf(ledger, 1, {persistent: true});
-  const allPassedEvidence = buildScenarioASemanticGateEvidence({
-    systems: ['lagrange'],
-    proofs: [{
-      evidenceId: 'lagrange-all',
-      system: 'lagrange',
-      status: 'passed',
-      artifactSha256: 'e'.repeat(64),
-      proofIds: [...OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS],
-    }],
-  });
-  const singleCaseJourney = async ({binding}) => ({
-    status: 'passed',
-    passed: allPassedEvidence.systems.lagrange.passedProofIds,
-    failed: [],
-    missing: [],
-    binding,
-    bindings: [binding],
-  });
+  const singleCaseJourney = async ({system, binding}) => {
+    const host = stringSplit(binding.endpoint, ':')[0];
+    const role = system === 'lagrange' ? 'lagrange-node' : 'postgres-primary';
+    const faultEvidence = {
+      containerId: binding.containerId, host,
+      faultTarget: {
+        nodeId: binding.containerId, role, host, isDataReplica: true, pgHostOnly: false,
+      },
+      startedAtBefore: '2026-11-01T10:00:00.000Z', startedAtAfter: '2026-11-01T10:01:00.000Z',
+      beforeIncarnation: `${binding.containerId}:2026-11-01T10:00:00.000Z`,
+      afterIncarnation: `${binding.containerId}:2026-11-01T10:01:00.000Z`,
+      storageContinuity: 'preserved',
+      retainedObligations: ['committed_payment_rows', 'full_oltp_state_sha256'],
+    };
+    const cases = arrayMap(OLTP_SCENARIO_A_PROOF_CASES, (proofCase) =>
+      buildCanonicalSemanticGateCaseRecord({
+        proofCase, binding, evaluation: {passed: true, failures: []},
+        proofRecord: {
+          evidenceId: `${system}-${proofCase.id}`, system, status: 'passed',
+          artifactSha256: 'e'.repeat(64), proofIds: [...proofCase.proofIds],
+        },
+        ...(proofCase.id === 'durability' ? {faultEvidence} : {}),
+      }));
+    return {
+      status: 'passed', system, passed: [...OLTP_SCENARIO_A_REQUIRED_SYSTEM_PROOF_IDS],
+      failed: [], missing: [], binding, bindings: [binding], cases,
+    };
+  };
   const reformedStage = createSemanticGateStage({
     journey: singleCaseJourney,
     sshRun,

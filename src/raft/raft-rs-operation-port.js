@@ -511,6 +511,7 @@ function createRaftRsOperationPort(request) {
   });
   const listeners = new Map();
   let clockController = null;
+  let heldForReseedBeforeClockInit = false;
   const emit = (eventName, ...args) => {
     clockController?.reconcile();
     for (const listener of listeners.get(eventName) || []) {
@@ -643,13 +644,20 @@ function createRaftRsOperationPort(request) {
     readSettledStatus,
     emit,
   });
+  if (heldForReseedBeforeClockInit) {
+    clockController.markHeldForReseed();
+  }
   const stopScheduling = () =>
     coreOk('scheduling-stopped', clockController.requestStopScheduling());
   // A group whose own history was proven lost - by the local-log guard, or
   // at its opening by the open-time rule - is held for a reseed by its
   // lifecycle owner (durable, survives a restart) and its ticks stop.
   function holdForReseed() {
-    clockController.markHeldForReseed();
+    if (clockController === null) {
+      heldForReseedBeforeClockInit = true;
+    } else {
+      clockController.markHeldForReseed();
+    }
     return lifecycle.holdForReseed();
   }
   const startScheduling = (options) => {

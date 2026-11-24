@@ -214,6 +214,7 @@ async function restartDependentWithLostNotifications(context, restore) {
   }));
   await replacement.initialize();
   await turnChainValue(replacement.raft.campaign());
+  replacement.raft.startScheduling();
   assert.equal(replacement.raft.readStatus().role, RAFT_ROLE.LEADER,
     'native current leader must exist before the missing-control recovery attempt');
   assert.ok(suppression.dropped.length > 0,
@@ -230,6 +231,7 @@ async function restoreCurrentControl(context) {
   replaceControl(replacement);
   await replacement.initialize();
   await turnChainValue(replacement.raft.campaign());
+  replacement.raft.startScheduling();
   assert.equal(replacement.raft.readStatus().role, RAFT_ROLE.LEADER);
   assert.strictEqual(handler.localServices.get(CONTROL_REPLICA), replacement);
   return replacement;

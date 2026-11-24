@@ -202,6 +202,7 @@ test('real release route pauses initial writes, applies origin, censuses and res
     replace(replacement);
     await replacement.initialize();
     await turnChainValue(replacement.raft.campaign());
+    replacement.raft.startScheduling();
     assert.notEqual(participantCutoverPauseOf(replacement), null);
     assert.equal((await replacement.executeQuery(SQL, ['restarted', 'not yet'])).success, false);
     assert.equal(await waitForCondition(() => participantCutoverPauseOf(replacement) === null,
@@ -1241,6 +1242,7 @@ test('idempotent add-peer conf-change, restart and stale-service rejection prese
     replace(restarted);
     await restarted.initialize();
     await turnChainValue(restarted.raft.campaign());
+    restarted.raft.startScheduling();
     assert.equal(await waitForCondition(() => participantCutoverPauseOf(restarted) === null,
       5000, 20), true, 'restarted service recovers valid OPEN admission');
     assert.notEqual(participantCutoverPauseOf(service), null,
