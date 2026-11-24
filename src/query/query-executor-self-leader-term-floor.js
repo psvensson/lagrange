@@ -1,18 +1,5 @@
 // Self-published leader term-fenced peer probing (Option A, S0 ruling Q1
-// refinement). When a node is ITSELF the published canonical leader of a
-// partition (canonicalLeaderNodeId === this.nodeId) and knows in-process that
-// it does NOT currently hold RAFT_ROLE.LEADER (for example during
-// DURABLE_REJOIN before local replicas open, or as a local follower without a
-// leader redirect address), it can determine its own local durable Raft term
-// T_self >= T_pub from its live local Raft core or the exact authoritative
-// local replica's on-disk SQLite _raft_rs_hard_state. By Raft Election Safety
-// (at most one leader per term), no honest deposed predecessor can hold
-// term >= T_self, so peer probing fenced by readAuthorityWitness.term >= T_self
-// breaks restart deadlocks without weakening S0 ruling Q1 for any other
-// published leader or any case where T_self cannot be durably established or
-// lags the published leader_claim_raft_term.
-import fs from 'node:fs';
-import Database from 'better-sqlite3';
+// refinement) and inseparable read-completion authority boundary (Review §3 & §4).
 import {
   COLUMN,
   SERVICE_TYPE,
@@ -23,69 +10,73 @@ import {OWNER_FACT_UNAVAILABLE_REASON} from
 import {RAFT_ROLE} from '../raft/constants.js';
 import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
 import {
-  RAFT_RS_SCHEMA_SQL,
-  RAFT_RS_TABLE,
-} from '../raft/raft-rs-durable-store-constants.js';
-import {getPartitionDbPath} from '../storage/data-directory-manager.js';
+  PERSISTED_TERM_STATE,
+  invalidatePartitionPersistedTermReaders,
+  observePersistedPartitionTerm,
+} from '../storage/retained-read-view-custody.js';
 import {
   deliveryAnswerOf,
   deliveryReadingOf,
 } from '../transport/transport-semantic-outcome.js';
 import {readLowerStateField} from '../utils/state-field-read.js';
+import {
+  isCurrentPeer,
+  matchesRoute,
+  peerIdentityOf,
+} from './query-executor-recovery-read-delivery.js';
 
-const SELECT_HARD_STATE_TERM_SQL =
-  `SELECT term FROM ${RAFT_RS_TABLE.HARD_STATE} WHERE group_id = ?`;
-const SELECT_HARD_STATE_ROOTPAGE_SQL =
-  'SELECT rootpage FROM sqlite_master WHERE type = \'table\' AND name = ?';
-const PRAGMA_PAGE_SIZE = 'page_size';
-const FILE_OPEN_READ_ONLY = 'r';
-const WAL_FILE_SUFFIX = '-wal';
-const SHM_FILE_SUFFIX = '-shm';
-const JOURNAL_FILE_SUFFIX = '-journal';
-const UTF8_ENCODING = 'utf8';
-const SQLITE_HEADER_BYTES = 100;
-const WAL_HEADER_BYTES = 32;
-const SHM_HEADER_BYTES = 96;
-const SHM_HALF_BYTES = 48;
-const MIN_SQLITE_PAGE_SIZE = 512;
-const MIN_TABLE_ROOTPAGE = 2;
-const INLINE_ROW_OVERHEAD_BYTES = 64;
-const LEAF_TABLE_BTREE_PAGE_TYPE = 0x0d;
-const WAL_INDEX_FORMAT_VERSION = 3007000;
 const ZERO_BIGINT = 0n;
-const WAL_HEADER_BYTES_BIGINT = BigInt(WAL_HEADER_BYTES);
-const SHM_HEADER_BYTES_BIGINT = BigInt(SHM_HEADER_BYTES);
-const PHYSICAL_WITNESS_STATE = Object.freeze({
-  OBSERVED: 'observed',
-  UNAVAILABLE: 'unavailable',
-});
-const UNAVAILABLE_WITNESS_OUTCOME = Object.freeze({
-  state: PHYSICAL_WITNESS_STATE.UNAVAILABLE,
-});
-const HARD_STATE_TERM_OUTCOME = Object.freeze({
-  OBSERVED: 'observed',
-  ABSENT: 'absent',
-  UNREADABLE: 'unreadable',
-});
-const ABSENT_TERM_OUTCOME = Object.freeze({
-  state: HARD_STATE_TERM_OUTCOME.ABSENT,
-});
+const MAX_SAFE_TERM_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
+const COMPLETED_READ_RESULT_SEAL = Symbol('completedReadResultSeal');
+const TICKET_AUTHORITY_SEAL = Symbol('readInvocationTicketSeal');
+const READ_INVOCATION_SEAL_DESC = 'readInvocationSeal';
+const REMOVED_SERVICE_STATUS = 'removed';
+const READ_ROUTE_SUPERSEDED_ERROR = 'Recovery read route superseded';
+const READ_ROUTE_SUPERSEDED_CODE = 'READ_ROUTE_SUPERSEDED';
+const UNSEALED_READ_COMPLETION_CODE = 'UNSEALED_READ_COMPLETION_REJECTED';
+const UNSEALED_READ_COMPLETION_MSG =
+  'Unsealed read completion result rejected: authority validation required';
+const UNISSUED_READ_TICKET_CODE = 'UNISSUED_READ_DELIVERY_TICKET';
+const UNISSUED_READ_TICKET_MSG =
+  'Read completion rejected: delivery ticket was not issued by this invocation';
+const DEADLINE_EXPIRED_COMPLETION_CODE = 'READ_COMPLETION_DEADLINE_EXPIRED';
+const DEADLINE_EXPIRED_COMPLETION_MSG =
+  'Read completion rejected: original invocation deadline expired';
+
 const TERM_FLOOR_CHECK_STATE = Object.freeze({
   ACCEPTED: 'accepted',
   BELOW_FLOOR: 'below_floor',
 });
+
+const READ_COMPLETION_STATE = Object.freeze({
+  ACCEPTED: 'accepted',
+  BELOW_TERM_FLOOR: 'below_term_floor',
+  DEADLINE_EXPIRED: 'deadline_expired',
+  REJECTED_RESPONSE: 'rejected_response',
+  ROUTE_SUPERSEDED: 'route_superseded',
+});
+
+const REDIRECT_STEP_ACTION = Object.freeze({
+  BREAK: 'break',
+  CONTINUE: 'continue',
+  RETURN: 'return',
+});
+
 const INELIGIBLE_TERM_FLOOR = Object.freeze({
   eligible: false,
   hasLocalReplica: false,
   termFloor: null,
 });
-const REMOVED_SERVICE_STATUS = 'removed';
-const SELF_LEADER_TERM_READ_UNAVAILABLE_LOG =
-  'Failed closed reading local durable Raft term for self-published leader probe';
+
+const ROUTE_SUPERSEDED_FAILURE = Object.freeze({
+  error: READ_ROUTE_SUPERSEDED_ERROR,
+  failureCode: READ_ROUTE_SUPERSEDED_CODE,
+  success: false,
+});
 
 function positiveSafeTerm(value) {
   if (typeof value === 'bigint') {
-    if (value <= ZERO_BIGINT || value > BigInt(Number.MAX_SAFE_INTEGER)) {
+    if (value <= ZERO_BIGINT || value > MAX_SAFE_TERM_BIGINT) {
       return null;
     }
     return Number(value);
@@ -102,317 +93,10 @@ function maxPositiveTerm(left, right) {
   return Math.max(validLeft, validRight);
 }
 
-function statFileIdentity(filePath) {
-  const stat = fs.statSync(filePath, {bigint: true, throwIfNoEntry: false});
-  if (!stat) {
-    return null;
-  }
-  return Object.freeze({
-    ino: stat.ino,
-    size: stat.size,
-    mtimeNs: stat.mtimeNs,
-    ctimeNs: stat.ctimeNs,
-  });
-}
-
-function fileStatsEqual(left, right) {
-  if (left === right) return true;
-  if (!left || !right) return false;
-  return left.ino === right.ino &&
-    left.size === right.size &&
-    left.mtimeNs === right.mtimeNs &&
-    left.ctimeNs === right.ctimeNs;
-}
-
-function buffersEqualOrBothNull(left, right) {
-  if (left === right) return true;
-  if (!left || !right) return false;
-  return left.equals(right);
-}
-
-function readFileSlice(filePath, offset, length) {
-  let fd;
-  try {
-    fd = fs.openSync(filePath, FILE_OPEN_READ_ONLY);
-    const buffer = Buffer.allocUnsafe(length);
-    const bytesRead = fs.readSync(fd, buffer, 0, length, offset);
-    return bytesRead === length ?
-      Object.freeze({state: PHYSICAL_WITNESS_STATE.OBSERVED, buffer}) :
-      UNAVAILABLE_WITNESS_OUTCOME;
-  } catch (error) {
-    return Object.freeze({state: PHYSICAL_WITNESS_STATE.UNAVAILABLE, error});
-  } finally {
-    if (fd !== undefined) {
-      fs.closeSync(fd);
-    }
-  }
-}
-
-function readDbHeaderAndRootPage(dbPath, pageSize, rootpage) {
-  let fd;
-  try {
-    fd = fs.openSync(dbPath, FILE_OPEN_READ_ONLY);
-    const dbHeader = Buffer.allocUnsafe(SQLITE_HEADER_BYTES);
-    if (fs.readSync(fd, dbHeader, 0, SQLITE_HEADER_BYTES, 0) !== SQLITE_HEADER_BYTES) {
-      return UNAVAILABLE_WITNESS_OUTCOME;
-    }
-    const rootPageBytes = Buffer.allocUnsafe(pageSize);
-    const pageOffset = (rootpage - 1) * pageSize;
-    if (
-      fs.readSync(fd, rootPageBytes, 0, pageSize, pageOffset) !== pageSize ||
-      rootPageBytes[0] !== LEAF_TABLE_BTREE_PAGE_TYPE
-    ) {
-      return UNAVAILABLE_WITNESS_OUTCOME;
-    }
-    return Object.freeze({
-      state: PHYSICAL_WITNESS_STATE.OBSERVED,
-      dbHeader,
-      rootPageBytes,
-    });
-  } catch (error) {
-    return Object.freeze({state: PHYSICAL_WITNESS_STATE.UNAVAILABLE, error});
-  } finally {
-    if (fd !== undefined) {
-      fs.closeSync(fd);
-    }
-  }
-}
-
-function isValidWalIndexVersion(header) {
-  return header.readUInt32LE(0) === WAL_INDEX_FORMAT_VERSION ||
-    header.readUInt32BE(0) === WAL_INDEX_FORMAT_VERSION;
-}
-
-function readWalHeaderWitness(walPath, walStat) {
-  if (walStat === null || walStat.size === ZERO_BIGINT) {
-    return Object.freeze({state: PHYSICAL_WITNESS_STATE.OBSERVED, header: null});
-  }
-  if (walStat.size < WAL_HEADER_BYTES_BIGINT) {
-    return UNAVAILABLE_WITNESS_OUTCOME;
-  }
-  const slice = readFileSlice(walPath, 0, WAL_HEADER_BYTES);
-  if (slice.state !== PHYSICAL_WITNESS_STATE.OBSERVED) {
-    return UNAVAILABLE_WITNESS_OUTCOME;
-  }
-  return Object.freeze({state: PHYSICAL_WITNESS_STATE.OBSERVED, header: slice.buffer});
-}
-
-function readShmHeaderWitness(shmPath, shmStat, hasNonEmptyWal) {
-  if (shmStat === null) {
-    return hasNonEmptyWal ?
-      UNAVAILABLE_WITNESS_OUTCOME :
-      Object.freeze({state: PHYSICAL_WITNESS_STATE.OBSERVED, header: null});
-  }
-  if (shmStat.size === ZERO_BIGINT) {
-    return hasNonEmptyWal ?
-      UNAVAILABLE_WITNESS_OUTCOME :
-      Object.freeze({state: PHYSICAL_WITNESS_STATE.OBSERVED, header: null});
-  }
-  if (shmStat.size < SHM_HEADER_BYTES_BIGINT) {
-    return UNAVAILABLE_WITNESS_OUTCOME;
-  }
-  const slice = readFileSlice(shmPath, 0, SHM_HEADER_BYTES);
-  if (slice.state !== PHYSICAL_WITNESS_STATE.OBSERVED) {
-    return UNAVAILABLE_WITNESS_OUTCOME;
-  }
-  const firstHalf = slice.buffer.subarray(0, SHM_HALF_BYTES);
-  const secondHalf = slice.buffer.subarray(SHM_HALF_BYTES, SHM_HEADER_BYTES);
-  if (!firstHalf.equals(secondHalf) || !isValidWalIndexVersion(firstHalf)) {
-    return UNAVAILABLE_WITNESS_OUTCOME;
-  }
-  return Object.freeze({state: PHYSICAL_WITNESS_STATE.OBSERVED, header: firstHalf});
-}
-
-function captureDiskTermPhysicalWitness(dbPath, pageSize, rootpage) {
-  const dbStat = statFileIdentity(dbPath);
-  if (!dbStat || statFileIdentity(`${dbPath}${JOURNAL_FILE_SUFFIX}`) !== null) {
-    return UNAVAILABLE_WITNESS_OUTCOME;
-  }
-  const walPath = `${dbPath}${WAL_FILE_SUFFIX}`;
-  const shmPath = `${dbPath}${SHM_FILE_SUFFIX}`;
-  const walStat = statFileIdentity(walPath);
-  const shmStat = statFileIdentity(shmPath);
-  const hasNonEmptyWal = walStat !== null && walStat.size > ZERO_BIGINT;
-  const walWitness = readWalHeaderWitness(walPath, walStat);
-  if (walWitness.state !== PHYSICAL_WITNESS_STATE.OBSERVED) {
-    return UNAVAILABLE_WITNESS_OUTCOME;
-  }
-  const shmWitness = readShmHeaderWitness(shmPath, shmStat, hasNonEmptyWal);
-  if (shmWitness.state !== PHYSICAL_WITNESS_STATE.OBSERVED) {
-    return UNAVAILABLE_WITNESS_OUTCOME;
-  }
-  const dbPages = readDbHeaderAndRootPage(dbPath, pageSize, rootpage);
-  if (dbPages.state !== PHYSICAL_WITNESS_STATE.OBSERVED) {
-    return UNAVAILABLE_WITNESS_OUTCOME;
-  }
-  return Object.freeze({
-    state: PHYSICAL_WITNESS_STATE.OBSERVED,
-    witness: Object.freeze({
-      pageSize,
-      rootpage,
-      dbStat,
-      walStat,
-      shmStat,
-      dbHeader: dbPages.dbHeader,
-      walHeader: walWitness.header,
-      shmHeader: shmWitness.header,
-      rootPageBytes: dbPages.rootPageBytes,
-    }),
-  });
-}
-
-function physicalWitnessesEqual(left, right) {
-  return left.pageSize === right.pageSize &&
-    left.rootpage === right.rootpage &&
-    fileStatsEqual(left.dbStat, right.dbStat) &&
-    fileStatsEqual(left.walStat, right.walStat) &&
-    fileStatsEqual(left.shmStat, right.shmStat) &&
-    left.dbHeader.equals(right.dbHeader) &&
-    buffersEqualOrBothNull(left.walHeader, right.walHeader) &&
-    buffersEqualOrBothNull(left.shmHeader, right.shmHeader) &&
-    left.rootPageBytes.equals(right.rootPageBytes);
-}
-
-function readHardStateTableMetadataInDb(db, partitionId) {
-  const pageSize = db.pragma(PRAGMA_PAGE_SIZE, {simple: true});
-  const row = db.prepare(SELECT_HARD_STATE_ROOTPAGE_SQL)
-    .get(RAFT_RS_TABLE.HARD_STATE);
-  const rootpage = row?.rootpage;
-  if (
-    !Number.isSafeInteger(pageSize) ||
-    pageSize < MIN_SQLITE_PAGE_SIZE ||
-    !Number.isSafeInteger(rootpage) ||
-    rootpage < MIN_TABLE_ROOTPAGE ||
-    Buffer.byteLength(partitionId, UTF8_ENCODING) + INLINE_ROW_OVERHEAD_BYTES >= pageSize
-  ) {
-    return UNAVAILABLE_WITNESS_OUTCOME;
-  }
-  return Object.freeze({
-    state: PHYSICAL_WITNESS_STATE.OBSERVED,
-    pageSize,
-    rootpage,
-  });
-}
-
-function queryHardStateTermInDb(db, partitionId) {
-  const hasTable = db.prepare(RAFT_RS_SCHEMA_SQL.SELECT_TABLE_PRESENT)
-    .get(RAFT_RS_TABLE.HARD_STATE) !== undefined;
-  if (!hasTable) {
-    return ABSENT_TERM_OUTCOME;
-  }
-  const row = db.prepare(SELECT_HARD_STATE_TERM_SQL).get(partitionId);
-  const term = positiveSafeTerm(row?.term);
-  return term !== null ?
-    Object.freeze({state: HARD_STATE_TERM_OUTCOME.OBSERVED, term}) :
-    ABSENT_TERM_OUTCOME;
-}
-
-function attachVerifiedPhysicalWitness(dbPath, tableMeta, witnessBefore, termOutcome) {
-  if (
-    termOutcome.state !== HARD_STATE_TERM_OUTCOME.OBSERVED ||
-    tableMeta.state !== PHYSICAL_WITNESS_STATE.OBSERVED ||
-    witnessBefore.state !== PHYSICAL_WITNESS_STATE.OBSERVED
-  ) {
-    return termOutcome;
-  }
-  const witnessAfter = captureDiskTermPhysicalWitness(
-    dbPath,
-    tableMeta.pageSize,
-    tableMeta.rootpage,
-  );
-  if (
-    witnessAfter.state !== PHYSICAL_WITNESS_STATE.OBSERVED ||
-    !physicalWitnessesEqual(witnessBefore.witness, witnessAfter.witness)
-  ) {
-    return termOutcome;
-  }
-  return Object.freeze({
-    state: HARD_STATE_TERM_OUTCOME.OBSERVED,
-    term: termOutcome.term,
-    witness: witnessAfter.witness,
-  });
-}
-
-function readHardStateTermFromDbFile(dbPath, partitionId, logger) {
-  if (!dbPath || !fs.existsSync(dbPath)) {
-    return ABSENT_TERM_OUTCOME;
-  }
-  let db = null;
-  let tableMeta = UNAVAILABLE_WITNESS_OUTCOME;
-  let witnessBefore = UNAVAILABLE_WITNESS_OUTCOME;
-  let termOutcome = ABSENT_TERM_OUTCOME;
-  try {
-    db = new Database(dbPath, {readonly: true, fileMustExist: true});
-    tableMeta = readHardStateTableMetadataInDb(db, partitionId);
-    if (tableMeta.state === PHYSICAL_WITNESS_STATE.OBSERVED) {
-      witnessBefore = captureDiskTermPhysicalWitness(
-        dbPath,
-        tableMeta.pageSize,
-        tableMeta.rootpage,
-      );
-    }
-    termOutcome = queryHardStateTermInDb(db, partitionId);
-  } catch (error) {
-    logger?.debug?.(SELF_LEADER_TERM_READ_UNAVAILABLE_LOG, {
-      partitionId,
-      dbPath,
-      error: error?.message || String(error),
-    });
-    return Object.freeze({state: HARD_STATE_TERM_OUTCOME.UNREADABLE, error});
-  } finally {
-    if (db?.open) {
-      db.close();
-    }
-  }
-  return attachVerifiedPhysicalWitness(dbPath, tableMeta, witnessBefore, termOutcome);
-}
-
-function ensureExecutorDiskTermMemo(executor) {
-  if (!(executor.selfPublishedLeaderDiskTermMemo instanceof Map)) {
-    executor.selfPublishedLeaderDiskTermMemo = new Map();
-  }
-  return executor.selfPublishedLeaderDiskTermMemo;
-}
-
-function lookupDiskTermMemo(executor, partitionId, memoKey, dbPath) {
-  const byReplica = executor?.selfPublishedLeaderDiskTermMemo?.get(partitionId);
-  const entry = byReplica?.get(memoKey);
-  if (!entry) {
-    return ABSENT_TERM_OUTCOME;
-  }
-  const current = captureDiskTermPhysicalWitness(
-    dbPath,
-    entry.witness.pageSize,
-    entry.witness.rootpage,
-  );
-  if (
-    current.state !== PHYSICAL_WITNESS_STATE.OBSERVED ||
-    !physicalWitnessesEqual(entry.witness, current.witness)
-  ) {
-    byReplica.delete(memoKey);
-    if (byReplica.size === 0) {
-      executor.selfPublishedLeaderDiskTermMemo.delete(partitionId);
-    }
-    return ABSENT_TERM_OUTCOME;
-  }
-  return Object.freeze({
-    state: HARD_STATE_TERM_OUTCOME.OBSERVED,
-    term: entry.term,
-  });
-}
-
-function storeDiskTermMemo(executor, partitionId, memoKey, term, witness) {
-  const byPartition = ensureExecutorDiskTermMemo(executor);
-  let byReplica = byPartition.get(partitionId);
-  if (!byReplica) {
-    byReplica = new Map();
-    byPartition.set(partitionId, byReplica);
-  }
-  byReplica.set(memoKey, Object.freeze({term, witness}));
-}
-
-function invalidatePartitionDiskTermMemo(executor, partitionId) {
-  executor?.selfPublishedLeaderDiskTermMemo?.delete(partitionId);
+function currentInCandidates(router, ticket, candidates) {
+  if (!Array.isArray(candidates)) return false;
+  return candidates.some((candidate) => matchesRoute(ticket, candidate)) &&
+    isCurrentPeer(router, ticket);
 }
 
 function isAuthoritativeLocalServiceRow(row, partitionId, nodeId) {
@@ -435,6 +119,16 @@ function readPartitionServiceRows(executor, partitionId, routingSnapshot) {
   ) || [];
 }
 
+function resolveServiceRowReplicaId(row) {
+  if (typeof row?.service_id === 'string' && row.service_id.length > 0) {
+    return row.service_id;
+  }
+  if (typeof row?.replica_id === 'string' && row.replica_id.length > 0) {
+    return row.replica_id;
+  }
+  return null;
+}
+
 function collectAuthoritativeLocalReplicaIds(executor, partitionId, routingSnapshot) {
   const rows = readPartitionServiceRows(executor, partitionId, routingSnapshot);
   const replicaIds = new Set();
@@ -442,35 +136,18 @@ function collectAuthoritativeLocalReplicaIds(executor, partitionId, routingSnaps
     if (!isAuthoritativeLocalServiceRow(row, partitionId, executor.nodeId)) {
       continue;
     }
-    const replicaId = row.service_id || row.replica_id || null;
-    if (typeof replicaId === 'string' && replicaId.length > 0) {
+    const replicaId = resolveServiceRowReplicaId(row);
+    if (replicaId !== null) {
       replicaIds.add(replicaId);
     }
   }
   return [...replicaIds];
 }
 
-function readReplicaDiskTerm(executor, partitionId, replicaId) {
+function readPersistedTermFloor(executor, partitionId, routingSnapshot) {
   const dataDir = executor?.dataDir;
   if (!dataDir) {
-    return ABSENT_TERM_OUTCOME;
-  }
-  const dbPath = getPartitionDbPath(dataDir, partitionId, replicaId);
-  const memoKey = `${dataDir}\0${replicaId}`;
-  const memoized = lookupDiskTermMemo(executor, partitionId, memoKey, dbPath);
-  if (memoized.state === HARD_STATE_TERM_OUTCOME.OBSERVED) {
-    return memoized;
-  }
-  const outcome = readHardStateTermFromDbFile(dbPath, partitionId, executor.logger);
-  if (outcome.state === HARD_STATE_TERM_OUTCOME.OBSERVED && outcome.witness) {
-    storeDiskTermMemo(executor, partitionId, memoKey, outcome.term, outcome.witness);
-  }
-  return outcome;
-}
-
-function readDiskHardStateTermFloor(executor, partitionId, routingSnapshot) {
-  if (!executor?.dataDir) {
-    return ABSENT_TERM_OUTCOME;
+    return null;
   }
   const replicaIds = collectAuthoritativeLocalReplicaIds(
     executor,
@@ -479,14 +156,17 @@ function readDiskHardStateTermFloor(executor, partitionId, routingSnapshot) {
   );
   let maxTerm = null;
   for (const replicaId of replicaIds) {
-    const outcome = readReplicaDiskTerm(executor, partitionId, replicaId);
-    if (outcome.state === HARD_STATE_TERM_OUTCOME.OBSERVED) {
+    const outcome = observePersistedPartitionTerm({
+      dataDir,
+      logger: executor.logger,
+      partitionId,
+      replicaId,
+    });
+    if (outcome.state === PERSISTED_TERM_STATE.OBSERVED) {
       maxTerm = maxPositiveTerm(maxTerm, outcome.term);
     }
   }
-  return maxTerm !== null ?
-    Object.freeze({state: HARD_STATE_TERM_OUTCOME.OBSERVED, term: maxTerm}) :
-    ABSENT_TERM_OUTCOME;
+  return maxTerm;
 }
 
 function readPublishedLeaderClaimTerm(executor, partitionId) {
@@ -527,24 +207,17 @@ function readLocalPartitionTermState(executor, partitionId, routingSnapshot) {
   const rawLocalReplicas = executor.getLocalPartitionReplicas?.(partitionId) ?? null;
   const localReplicas = Array.isArray(rawLocalReplicas) ? rawLocalReplicas : [];
   if (localReplicas.length > 0) {
-    invalidatePartitionDiskTermMemo(executor, partitionId);
+    invalidatePartitionPersistedTermReaders(executor?.dataDir, partitionId);
     const {isLocalLeader, liveTerm} = observeLocalReplicasTermState(
       localReplicas,
       partitionId,
     );
     return {hasLocalReplica: true, isLocalLeader, localTerm: liveTerm};
   }
-  const diskOutcome = readDiskHardStateTermFloor(
-    executor,
-    partitionId,
-    routingSnapshot,
-  );
   return {
     hasLocalReplica: false,
     isLocalLeader: false,
-    localTerm: diskOutcome.state === HARD_STATE_TERM_OUTCOME.OBSERVED ?
-      diskOutcome.term :
-      null,
+    localTerm: readPersistedTermFloor(executor, partitionId, routingSnapshot),
   };
 }
 
@@ -594,33 +267,6 @@ function mergeSelfLeaderTermFloor(currentFloor, nextFloor) {
   return maxPositiveTerm(currentFloor, nextFloor);
 }
 
-function createInvocationTermFloorTracker(executor, partitionId) {
-  let termFloor = null;
-  return Object.freeze({
-    observe(resolution) {
-      const resolvedFloor = positiveSafeTerm(resolution?.selfPublishedLeaderTermFloor);
-      if (resolvedFloor !== null) {
-        termFloor = mergeSelfLeaderTermFloor(termFloor, resolvedFloor);
-        return termFloor;
-      }
-      if (termFloor !== null && resolution?.routingSnapshot) {
-        termFloor = mergeSelfLeaderTermFloor(
-          termFloor,
-          observeActiveSelfLeaderTermFloor(executor, partitionId, resolution.routingSnapshot),
-        );
-      }
-      return termFloor;
-    },
-    merge(nextFloor) {
-      termFloor = mergeSelfLeaderTermFloor(termFloor, nextFloor);
-      return termFloor;
-    },
-    current() {
-      return termFloor;
-    },
-  });
-}
-
 function checkDeliveryTermFloor(delivery, termFloor) {
   const validFloor = positiveSafeTerm(termFloor);
   if (validFloor === null) {
@@ -635,18 +281,14 @@ function checkDeliveryTermFloor(delivery, termFloor) {
   return Object.freeze({
     state: TERM_FLOOR_CHECK_STATE.BELOW_FLOOR,
     failure: {
-      success: false,
       error: OWNER_FACT_UNAVAILABLE_REASON.BELOW_TERM_FLOOR,
       failureCode: OWNER_FACT_UNAVAILABLE_REASON.BELOW_TERM_FLOOR,
+      success: false,
     },
   });
 }
 
-function evaluateTermFloorDeliveryOutcome(
-  delivery,
-  isSuccessfulResponse,
-  termFloor,
-) {
+function evaluateTermFloorDeliveryOutcome(delivery, isSuccessfulResponse, termFloor) {
   const succeeded = Boolean(isSuccessfulResponse(delivery));
   if (!succeeded) {
     return {accepted: false, response: deliveryReadingOf(delivery)};
@@ -662,14 +304,381 @@ function shouldRetainTermFloorFailure(currentDetails, nextFailure) {
     return false;
   }
   const nextCode = nextFailure?.failureCode ?? null;
-  return nextCode === null || nextCode === OWNER_FACT_UNAVAILABLE_REASON.NOT_LEADER;
+  return nextCode === null ||
+    nextCode === OWNER_FACT_UNAVAILABLE_REASON.NOT_LEADER ||
+    nextCode === READ_ROUTE_SUPERSEDED_CODE;
+}
+
+function executorNowMs(executor) {
+  if (executor?.nowFn) {
+    return executor.nowFn();
+  }
+  if (executor?.timeSource) {
+    return executor.timeSource.now();
+  }
+  return Date.now();
+}
+
+function resolveExplicitDeadlineMs(executionOptions) {
+  if (Number.isFinite(executionOptions?.deadlineMs)) {
+    return Math.floor(executionOptions.deadlineMs);
+  }
+  if (Number.isFinite(executionOptions?.timeoutBudget?.deadlineMs)) {
+    return Math.floor(executionOptions.timeoutBudget.deadlineMs);
+  }
+  return null;
+}
+
+function buildTypedAuthorityError(message, code) {
+  return Object.assign(new Error(message), {code});
+}
+
+function isRedirectRouteCurrent(router, ticket, routes, redirectCandidate, strictCanonical) {
+  const eligibleTarget = redirectCandidate ?
+    redirectCandidate(ticket.address, routes) :
+    null;
+  if (!eligibleTarget) {
+    return !strictCanonical && !ticket.hadRoutableTarget;
+  }
+  if (!matchesRoute(ticket, eligibleTarget) || !isCurrentPeer(router, ticket)) {
+    return false;
+  }
+  if (!strictCanonical) {
+    return true;
+  }
+  return currentInCandidates(router, ticket, routes?.candidates) ||
+    (Boolean(ticket.originTicket) &&
+      currentInCandidates(router, ticket.originTicket, routes?.candidates));
+}
+
+function stampCompletedReadResult(result, invocationSeal, sealedResults) {
+  Object.defineProperty(result, COMPLETED_READ_RESULT_SEAL, {
+    configurable: false,
+    enumerable: false,
+    value: invocationSeal,
+    writable: false,
+  });
+  sealedResults.add(result);
+  return result;
+}
+
+function defaultSuccessBuilder(answer) {
+  return answer;
+}
+
+function defaultIsSuccessfulResponse(delivery) {
+  return Boolean(deliveryAnswerOf(delivery)?.success);
+}
+
+function normalizeInvocationTrackerOptions(options = {}) {
+  return {
+    buildSuccessResult: options.buildSuccessResult || defaultSuccessBuilder,
+    cancellationToken: options.cancellationToken || null,
+    candidateEligibility: options.candidateEligibility || null,
+    executionOptions: options.executionOptions || {},
+    forRead: options.forRead !== false,
+    getRemainingExecutionBudgetMs: options.getRemainingExecutionBudgetMs || null,
+    isSuccessfulResponse: options.isSuccessfulResponse || defaultIsSuccessfulResponse,
+    readDelivery: options.readDelivery || null,
+    requireCanonicalLeader: options.requireCanonicalLeader === true,
+    resolveCandidates: options.resolveCandidates || null,
+  };
+}
+
+function createInvocationTermFloorTracker(executor, partitionId, rawOptions = {}) {
+  const {
+    buildSuccessResult,
+    cancellationToken,
+    candidateEligibility,
+    executionOptions,
+    forRead,
+    getRemainingExecutionBudgetMs,
+    isSuccessfulResponse,
+    readDelivery,
+    requireCanonicalLeader,
+    resolveCandidates,
+  } = normalizeInvocationTrackerOptions(rawOptions);
+  const router = executor?.messageRouter ?? null;
+  const explicitDeadlineMs = resolveExplicitDeadlineMs(executionOptions);
+  const strictRouteCurrency = forRead &&
+    (Boolean(readDelivery) || requireCanonicalLeader);
+  const invocationSeal = Symbol(READ_INVOCATION_SEAL_DESC);
+  const issuedTickets = new WeakSet();
+  const sealedResults = new WeakSet();
+  let termFloor = null;
+  let latestRoutes = null;
+
+  function observe(resolution) {
+    if (resolution) {
+      latestRoutes = resolution;
+    }
+    const resolvedFloor = positiveSafeTerm(resolution?.selfPublishedLeaderTermFloor);
+    if (resolvedFloor !== null) {
+      termFloor = mergeSelfLeaderTermFloor(termFloor, resolvedFloor);
+      return termFloor;
+    }
+    if (termFloor !== null && resolution?.routingSnapshot) {
+      termFloor = mergeSelfLeaderTermFloor(
+        termFloor,
+        observeActiveSelfLeaderTermFloor(executor, partitionId, resolution.routingSnapshot),
+      );
+    }
+    return termFloor;
+  }
+
+  function resolveRoutes() {
+    if (typeof resolveCandidates !== 'function') {
+      if (latestRoutes?.routingSnapshot) {
+        observe(latestRoutes);
+      }
+      return latestRoutes || {candidates: [], routingSnapshot: null};
+    }
+    const resolved = resolveCandidates();
+    observe(resolved);
+    return resolved;
+  }
+
+  function isIssuedTicket(ticket) {
+    return Boolean(ticket) &&
+      issuedTickets.has(ticket) &&
+      ticket[TICKET_AUTHORITY_SEAL] === invocationSeal;
+  }
+
+  function issueTicket(draft) {
+    if (isIssuedTicket(draft)) {
+      return draft;
+    }
+    if (!draft || typeof draft.address !== 'string' || draft.address.length === 0) {
+      throw buildTypedAuthorityError(UNISSUED_READ_TICKET_MSG, UNISSUED_READ_TICKET_CODE);
+    }
+    if (draft.isRedirect && draft.originTicket && !isIssuedTicket(draft.originTicket)) {
+      throw buildTypedAuthorityError(UNISSUED_READ_TICKET_MSG, UNISSUED_READ_TICKET_CODE);
+    }
+    const peer = draft.peer !== undefined ?
+      draft.peer :
+      peerIdentityOf(router, draft.serviceInfo?.nodeId);
+    const ticket = {...draft, peer};
+    Object.defineProperty(ticket, TICKET_AUTHORITY_SEAL, {
+      configurable: false,
+      enumerable: false,
+      value: invocationSeal,
+      writable: false,
+    });
+    Object.freeze(ticket);
+    issuedTickets.add(ticket);
+    return ticket;
+  }
+
+  function isTicketRouteCurrent(ticket, routes = latestRoutes) {
+    if (!isIssuedTicket(ticket) || !isCurrentPeer(router, ticket)) {
+      return false;
+    }
+    if (!strictRouteCurrency || !routes) {
+      return true;
+    }
+    if (ticket.isRedirect) {
+      return isRedirectRouteCurrent(
+        router,
+        ticket,
+        routes,
+        candidateEligibility?.redirectCandidate,
+        strictRouteCurrency,
+      );
+    }
+    return currentInCandidates(router, ticket, routes.candidates);
+  }
+
+  function throwIfAborted() {
+    executor?.throwIfCancelled?.(cancellationToken);
+    readDelivery?.throwIfAborted?.();
+    if (executionOptions?.signal?.aborted) {
+      executionOptions.signal.throwIfAborted();
+    }
+  }
+
+  function isDeadlineExpired() {
+    if (typeof getRemainingExecutionBudgetMs === 'function') {
+      const remainingMs = getRemainingExecutionBudgetMs();
+      if (remainingMs !== null && remainingMs <= 0) {
+        return true;
+      }
+    }
+    return explicitDeadlineMs !== null && executorNowMs(executor) >= explicitDeadlineMs;
+  }
+
+  function refreshObservationsForCompletion() {
+    if (!strictRouteCurrency) {
+      if (termFloor !== null && latestRoutes?.routingSnapshot) {
+        observe(latestRoutes);
+      }
+      return latestRoutes;
+    }
+    const refreshed = resolveRoutes();
+    if (refreshed?.candidates) {
+      readDelivery?.reconcile?.(refreshed.candidates);
+    }
+    return refreshed;
+  }
+
+  function buildAcceptedCompletion(ticket, delivery, redirectedFromAddress, routes) {
+    const builtResult = buildSuccessResult(deliveryAnswerOf(delivery), {
+      address: ticket.address,
+      executionOptions,
+      partitionId,
+      ...(redirectedFromAddress ? {redirectedFromAddress} : {}),
+      request: ticket.request,
+    });
+    if (!builtResult || builtResult.success !== true) {
+      return Object.freeze({
+        accepted: false,
+        latestRoutes: routes,
+        response: builtResult || deliveryReadingOf(delivery),
+        state: READ_COMPLETION_STATE.REJECTED_RESPONSE,
+      });
+    }
+    const sealed = stampCompletedReadResult(builtResult, invocationSeal, sealedResults);
+    return Object.freeze({
+      accepted: true,
+      completedResult: sealed,
+      latestRoutes: routes,
+      response: deliveryReadingOf(delivery),
+      state: READ_COMPLETION_STATE.ACCEPTED,
+    });
+  }
+
+  function handleCompletionError(error, ticket, routes) {
+    if (strictRouteCurrency && !isTicketRouteCurrent(ticket, routes)) {
+      return Object.freeze({
+        accepted: false,
+        latestRoutes: routes,
+        response: ROUTE_SUPERSEDED_FAILURE,
+        state: READ_COMPLETION_STATE.ROUTE_SUPERSEDED,
+      });
+    }
+    throw error;
+  }
+
+  function isLateCompletionOrRedirect(succeeded, reading) {
+    if (!isDeadlineExpired()) {
+      return false;
+    }
+    if (succeeded) {
+      return true;
+    }
+    return Boolean(reading?.redirect) && Boolean(reading?.leaderAddress);
+  }
+
+  function completeDelivery({
+    ticket,
+    delivery,
+    error = null,
+    redirectedFromAddress = undefined,
+  }) {
+    if (!isIssuedTicket(ticket)) {
+      throw buildTypedAuthorityError(UNISSUED_READ_TICKET_MSG, UNISSUED_READ_TICKET_CODE);
+    }
+    const routes = refreshObservationsForCompletion();
+    if (error) {
+      return handleCompletionError(error, ticket, routes);
+    }
+    throwIfAborted();
+    const succeeded = Boolean(isSuccessfulResponse(delivery));
+    const reading = deliveryReadingOf(delivery);
+    if (isLateCompletionOrRedirect(succeeded, reading)) {
+      return Object.freeze({
+        accepted: false,
+        latestRoutes: routes,
+        response: null,
+        state: READ_COMPLETION_STATE.DEADLINE_EXPIRED,
+      });
+    }
+    if (succeeded) {
+      const floorCheck = checkDeliveryTermFloor(delivery, termFloor);
+      if (floorCheck.state !== TERM_FLOOR_CHECK_STATE.ACCEPTED) {
+        return Object.freeze({
+          accepted: false,
+          latestRoutes: routes,
+          response: floorCheck.failure,
+          state: READ_COMPLETION_STATE.BELOW_TERM_FLOOR,
+        });
+      }
+    }
+    if (!isTicketRouteCurrent(ticket, routes)) {
+      return Object.freeze({
+        accepted: false,
+        latestRoutes: routes,
+        response: ROUTE_SUPERSEDED_FAILURE,
+        state: READ_COMPLETION_STATE.ROUTE_SUPERSEDED,
+      });
+    }
+    if (!succeeded) {
+      return Object.freeze({
+        accepted: false,
+        latestRoutes: routes,
+        response: reading,
+        state: READ_COMPLETION_STATE.REJECTED_RESPONSE,
+      });
+    }
+    return buildAcceptedCompletion(ticket, delivery, redirectedFromAddress, routes);
+  }
+
+  function finalizeAcceptedResult(result) {
+    throwIfAborted();
+    if (isDeadlineExpired()) {
+      throw buildTypedAuthorityError(
+        DEADLINE_EXPIRED_COMPLETION_MSG,
+        DEADLINE_EXPIRED_COMPLETION_CODE,
+      );
+    }
+    if (!result || !sealedResults.has(result) ||
+        result[COMPLETED_READ_RESULT_SEAL] !== invocationSeal) {
+      throw buildTypedAuthorityError(
+        UNSEALED_READ_COMPLETION_MSG,
+        UNSEALED_READ_COMPLETION_CODE,
+      );
+    }
+    return result;
+  }
+
+  readDelivery?.bindTicketIssuer?.(issueTicket);
+
+  return Object.freeze({
+    completeDelivery,
+    current: () => termFloor,
+    finalizeAcceptedResult,
+    getLatestRoutes: () => latestRoutes,
+    isDeadlineExpired,
+    isIssuedTicket,
+    isTicketRouteCurrent,
+    issueTicket,
+    merge: (nextFloor) => {
+      termFloor = mergeSelfLeaderTermFloor(termFloor, nextFloor);
+      return termFloor;
+    },
+    observe,
+    requiresCanonicalRouteCurrency: () => strictRouteCurrency,
+    resolveRoutes,
+    shouldRefreshRoutesOnCompletion: () => strictRouteCurrency,
+    throwIfAborted,
+  });
 }
 
 export {
+  DEADLINE_EXPIRED_COMPLETION_CODE,
+  READ_COMPLETION_STATE,
+  READ_ROUTE_SUPERSEDED_CODE,
+  READ_ROUTE_SUPERSEDED_ERROR,
+  REDIRECT_STEP_ACTION,
+  ROUTE_SUPERSEDED_FAILURE,
+  UNISSUED_READ_TICKET_CODE,
+  UNSEALED_READ_COMPLETION_CODE,
   createInvocationTermFloorTracker,
   evaluateTermFloorDeliveryOutcome,
+  isCurrentPeer,
+  matchesRoute,
   mergeSelfLeaderTermFloor,
   orderSelfLeaderProbeServices,
+  peerIdentityOf,
   resolveSelfPublishedLeaderTermFloor,
   shouldRetainTermFloorFailure,
 };
