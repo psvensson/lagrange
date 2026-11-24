@@ -22,7 +22,7 @@ documentClass: generated
 - [index-constants.js](index-constants.js) - No leading comment; first export: BASE_PARTITION_ID_COLUMN. (importers: many)
 - [index-service-cdc-handler.js](index-service-cdc-handler.js) - No leading comment; first export: indexServiceCdcHandler. (importers: one)
 - [index-service-global-methods.js](index-service-global-methods.js) - Index Service Global Methods. (importers: few)
-- [index-service-partition-methods.js](index-service-partition-methods.js) - Execute SQL on a partition using any available interface. (importers: one)
+- [index-service-partition-methods.js](index-service-partition-methods.js) - Partition index DDL execution methods for IndexService via the mandatory canonical partitionExecutor contract. (importers: one)
 - [index-service.js](index-service.js) - Index Service - Manages database indices for query optimization. (importers: many)
 - [query-optimizer-suggestions.js](query-optimizer-suggestions.js) - No leading comment; first export: queryOptimizerSuggestions. (importers: one)
 - [query-optimizer.js](query-optimizer.js) - Query Optimizer - Uses indices for query optimization. (importers: few)

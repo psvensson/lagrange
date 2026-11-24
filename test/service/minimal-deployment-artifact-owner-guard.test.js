@@ -6,7 +6,7 @@ const COMMAND_OWNER_SOURCE =
   'src/service/service-lifecycle-command-owner.js';
 const CATALOG_CONTRACT_SOURCE =
   'src/control-plane/owners/service-install-catalog-contract.js';
-const SCAFFOLD_SOURCE = 'src/cli/service-project-scaffold.js';
+const REMOVED_LEGACY_OCI_SCAFFOLD = 'src/cli/service-project-scaffold.js';
 
 function between(source, startMarker, endMarker) {
   const start = source.indexOf(startMarker);
@@ -19,7 +19,6 @@ function between(source, startMarker, endMarker) {
 test('artifact declarations retain one validation-to-catalog owner path', () => {
   const commandOwner = fs.readFileSync(COMMAND_OWNER_SOURCE, 'utf8');
   const catalogContract = fs.readFileSync(CATALOG_CONTRACT_SOURCE, 'utf8');
-  const scaffold = fs.readFileSync(SCAFFOLD_SOURCE, 'utf8');
   const submission = between(
     commandOwner,
     'async submitArtifactIntent(',
@@ -39,5 +38,5 @@ test('artifact declarations retain one validation-to-catalog owner path', () => 
     catalogContract,
     /normalized_manifest: canonicalJson\(\s*manifest,/u,
   );
-  assert.match(scaffold, /validateExternalServiceManifest\(manifest\)/u);
+  assert.equal(fs.existsSync(REMOVED_LEGACY_OCI_SCAFFOLD), false);
 });

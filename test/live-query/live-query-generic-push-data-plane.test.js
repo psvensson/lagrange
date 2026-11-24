@@ -24,13 +24,22 @@ function createMockClient(id = 'client-1') {
 }
 
 function createTableCache(tables, partitions) {
-  const tableMap = new Map(tables.map((t) => [t.table_name, t]));
+  const canonicalTables = tables.map((t) => ({
+    active_partition_version: 1,
+    ...t,
+  }));
+  const canonicalPartitions = partitions.map((p) => ({
+    partition_version: 1,
+    state: 'NORMAL',
+    ...p,
+  }));
+  const tableMap = new Map(canonicalTables.map((t) => [t.table_name, t]));
   return {
     get: (table, key) => (table === 'tables' ? tableMap.get(key) || null : null),
-    find: (table, pred) => (table === 'tables' ? tables.find(pred) || null : null),
+    find: (table, pred) => (table === 'tables' ? canonicalTables.find(pred) || null : null),
     filter: (table, pred) => {
       if (table === 'partitions') {
-        return partitions.filter(pred || (() => true));
+        return canonicalPartitions.filter(pred || (() => true));
       }
       return [];
     },
@@ -248,7 +257,13 @@ test('D2 & D3: gap-free attachAfterVersion handshake deduplicates overlap and ap
   let cdcHandler = null;
   const subscribeToPartition = async (partitionId, queryId, handler) => {
     cdcHandler = handler;
-    return {status: 'ok', versionContext: {streamVersion: 10}};
+    return {
+      acknowledged: true,
+      success: true,
+      subscribed: true,
+      status: 'ok',
+      versionContext: {streamVersion: 10},
+    };
   };
 
   const client = createMockClient('c1');
@@ -432,10 +447,23 @@ test('D4 Tier 2: complex queries with ORDER BY, LIMIT re-execute on push without
 
 test('D5: dynamic partition split reconfigures subscriptions without client resubscription', async (t) => {
   let partitions = [
-    {partition_id: 'p1', table_name: 'orders', partition_key_start: null, partition_key_end: null, partition_key_type: 'INTEGER'},
+    {
+      partition_id: 'p1',
+      table_name: 'orders',
+      partition_key_start: null,
+      partition_key_end: null,
+      partition_key_type: 'INTEGER',
+      partition_version: 1,
+      state: 'NORMAL',
+    },
   ];
   const tables = [
-    {table_name: 'orders', primary_key: 'id', partition_key_type: 'INTEGER'},
+    {
+      table_name: 'orders',
+      primary_key: 'id',
+      partition_key_type: 'INTEGER',
+      active_partition_version: 1,
+    },
   ];
 
   const systemCache = {
@@ -451,6 +479,7 @@ test('D5: dynamic partition split reconfigures subscriptions without client resu
   manager.initialize({
     subscribeToPartition: async (partitionId) => {
       subscribedPartitions.add(partitionId);
+      return {acknowledged: true, success: true, subscribed: true};
     },
     unsubscribeFromPartition: async (partitionId) => {
       unsubscribedPartitions.add(partitionId);
@@ -465,8 +494,24 @@ test('D5: dynamic partition split reconfigures subscriptions without client resu
 
   // Trigger partition split in system metadata: p1 -> p1a, p1b
   partitions = [
-    {partition_id: 'p1a', table_name: 'orders', partition_key_start: null, partition_key_end: 100, partition_key_type: 'INTEGER'},
-    {partition_id: 'p1b', table_name: 'orders', partition_key_start: 100, partition_key_end: null, partition_key_type: 'INTEGER'},
+    {
+      partition_id: 'p1a',
+      table_name: 'orders',
+      partition_key_start: null,
+      partition_key_end: 100,
+      partition_key_type: 'INTEGER',
+      partition_version: 1,
+      state: 'NORMAL',
+    },
+    {
+      partition_id: 'p1b',
+      table_name: 'orders',
+      partition_key_start: 100,
+      partition_key_end: null,
+      partition_key_type: 'INTEGER',
+      partition_version: 1,
+      state: 'NORMAL',
+    },
   ];
 
   await manager.handlePartitionTopologyChange({
@@ -512,6 +557,7 @@ test('D6: zero background polling queries while idle, and complete partition tea
     sqlQueryEngine: mockSqlEngine,
     subscribeToPartition: async (partitionId) => {
       activeSubscriptions.add(partitionId);
+      return {acknowledged: true, success: true, subscribed: true};
     },
     unsubscribeFromPartition: async (partitionId) => {
       activeSubscriptions.delete(partitionId);

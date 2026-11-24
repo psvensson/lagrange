@@ -2,7 +2,6 @@ import {describe, it, beforeEach} from 'node:test';
 import assert from 'node:assert/strict';
 import {WasmExecutor} from '../../src/wasm-service/wasm-executor.js';
 import {
-  WASM_SERVICE_EXECUTOR_TYPE,
   WASM_SERVICE_ERROR_MSG,
   DEFAULT_RESOURCE_BUDGET,
 } from '../../src/wasm-service/wasm-service-constants.js';
@@ -33,21 +32,6 @@ function createMockMirror(modules = new Map()) {
   return {
     getModule(functionId) {
       return modules.get(functionId) || null;
-    },
-  };
-}
-
-/**
- * Creates a mock FunctionRegistry that records registerExecutor
- * calls.
- * @return {Object} Mock FunctionRegistry with `calls` array.
- */
-function createMockRegistry() {
-  const calls = [];
-  return {
-    calls,
-    registerExecutor(type, executor) {
-      calls.push({type, executor});
     },
   };
 }
@@ -91,25 +75,6 @@ describe('WasmExecutor', () => {
         const ex = new WasmExecutor();
         assert.strictEqual(ex.moduleMirror, null);
       });
-  });
-
-  describe('register', () => {
-    it('should call registerExecutor with wasm_service type',
-      () => {
-        const registry = createMockRegistry();
-        executor.register(registry);
-        assert.equal(registry.calls.length, 1);
-        assert.equal(
-          registry.calls[0].type,
-          WASM_SERVICE_EXECUTOR_TYPE,
-        );
-      });
-
-    it('should pass itself as the executor', () => {
-      const registry = createMockRegistry();
-      executor.register(registry);
-      assert.strictEqual(registry.calls[0].executor, executor);
-    });
   });
 
   describe('execute', () => {

@@ -82,15 +82,17 @@ test('HLCClockService update() handles remote timestamps', async (t) => {
   );
 });
 
-test('HLCClockService detects clock drift', async (t) => {
-  let driftWarning = null;
+test('HLCClockService detects clock drift via canonical logger diagnostic', async (t) => {
+  const localDiagnostics = [];
 
   const clock = new HLCClockService('local-node', {
     maxDrift: 100,
-    onDriftWarning: (warning) => {
-      driftWarning = warning;
-    },
   });
+  clock.logger = {
+    logConsoleOnly: (level, message, context) => {
+      localDiagnostics.push({level, message, context});
+    },
+  };
 
   // Create a remote timestamp far in the future
   const futureTime = Date.now() + 1000;
@@ -98,20 +100,28 @@ test('HLCClockService detects clock drift', async (t) => {
 
   clock.update(remoteTs);
 
-  t.ok(driftWarning, 'should trigger drift warning');
-  t.ok(driftWarning.drift > 100, 'should report drift amount');
+  t.equal(localDiagnostics.length, 1, 'should emit drift warning diagnostic');
+  t.equal(localDiagnostics[0].level, 'warn', 'should emit warning level');
+  t.ok(localDiagnostics[0].context.drift > 100, 'should report drift amount');
+  t.equal(
+    localDiagnostics[0].context.remoteNodeId,
+    'remote-node',
+    'should report remote node ID',
+  );
+  t.equal(clock.onDriftWarning, undefined, 'legacy onDriftWarning callback is removed');
+  t.equal(
+    clock.setDriftWarningCallback,
+    undefined,
+    'legacy setDriftWarningCallback API is removed',
+  );
 });
 
 test('HLCClockService keeps drift diagnostics out of distributed logs',
   async (t) => {
     const localDiagnostics = [];
     const distributedDiagnostics = [];
-    const callbacks = [];
     const clock = new HLCClockService('local-node', {
       maxDrift: 100,
-      onDriftWarning: (warning) => {
-        callbacks.push(warning);
-      },
     });
     clock.logger = {
       logConsoleOnly: (level, message, context) => {
@@ -145,26 +155,22 @@ test('HLCClockService keeps drift diagnostics out of distributed logs',
     );
     t.equal(distributedDiagnostics.length, 0,
       'drift cannot recursively create an HLC-stamped distributed log row');
-    t.equal(callbacks.length, 2,
-      'the programmatic drift signal still fires on every occurrence');
     t.equal(
-      callbacks[0].remoteNodeId,
       localDiagnostics[0].context.remoteNodeId,
-      'the callback and first local diagnostic observe the same drift source',
+      'remote-node',
+      'the first local diagnostic observes the initial drift source',
     );
     t.equal(localDiagnostics[0].context.suppressedSinceLastWarning, 0,
       'the first bounded diagnostic reports no prior suppression');
+    t.equal(clock.suppressedDriftWarningCount, 1,
+      'suppressed repeat drift warning is accounted for');
   });
 
 test('HLCClockService does not classify delayed remote events as clock drift',
   async (t) => {
     const localDiagnostics = [];
-    const callbacks = [];
     const clock = new HLCClockService('local-node', {
       maxDrift: 100,
-      onDriftWarning: (warning) => {
-        callbacks.push(warning);
-      },
     });
     clock.logger = {
       logConsoleOnly: (...args) => {
@@ -182,8 +188,6 @@ test('HLCClockService does not classify delayed remote events as clock drift',
 
     t.equal(localDiagnostics.length, 0,
       'a delayed past timestamp emits no false forward-skew warning');
-    t.equal(callbacks.length, 0,
-      'a delayed past timestamp emits no programmatic drift signal');
     t.ok(before.isBefore(updated),
       'the ordinary HLC merge still advances monotonically');
   });

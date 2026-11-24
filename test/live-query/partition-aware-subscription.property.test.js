@@ -36,13 +36,23 @@ function createMockSystemCache(tableName, partitions) {
   return {
     get: (type, key) => {
       if (type === 'tables' && key === tableName) {
-        return {table_name: tableName, primary_key: 'id', partition_key_type: 'INTEGER'};
+        return {
+          table_name: tableName,
+          primary_key: 'id',
+          partition_key_type: 'INTEGER',
+          active_partition_version: 1,
+        };
       }
       return null;
     },
     find: (type, predicate) => {
       if (type === 'tables') {
-        const table = {table_name: tableName, primary_key: 'id', partition_key_type: 'INTEGER'};
+        const table = {
+          table_name: tableName,
+          primary_key: 'id',
+          partition_key_type: 'INTEGER',
+          active_partition_version: 1,
+        };
         return predicate(table) ? table : null;
       }
       return null;
@@ -69,6 +79,8 @@ function createNumericPartitions(tableName, ranges) {
     partition_key_start: range[0],
     partition_key_end: range[1],
     partition_key_type: 'INTEGER',
+    partition_version: 1,
+    state: 'NORMAL',
   }));
 }
 
@@ -443,6 +455,7 @@ test('Property 33: Query grouping shares CDC subscriptions', async (t) => {
               cdcSubscriptions.set(partitionId, new Set());
             }
             cdcSubscriptions.get(partitionId).add(queryId);
+            return {acknowledged: true, success: true, subscribed: true};
           },
           unsubscribeFromPartition: async (partitionId, queryId) => {
             if (cdcSubscriptions.has(partitionId)) {
@@ -523,7 +536,11 @@ test('Property 34: Lease expiry cleans up subscriptions', async (t) => {
         });
 
         manager.initialize({
-          subscribeToPartition: async () => {},
+          subscribeToPartition: async () => ({
+            acknowledged: true,
+            success: true,
+            subscribed: true,
+          }),
           unsubscribeFromPartition: async () => {},
         });
 

@@ -8,22 +8,37 @@ import {LiveQueryManager, QueryGroup} from '../../src/live-query/live-query-mana
 
 // Mock system cache
 function createMockSystemCache(partitions = []) {
+  const canonicalPartitions = partitions.map((partition) => ({
+    partition_version: 1,
+    state: 'NORMAL',
+    ...partition,
+  }));
   return {
     get: (table, key) => {
       if (table === 'tables') {
-        return {table_name: key, primary_key: 'id', partition_key_type: 'INTEGER'};
+        return {
+          table_name: key,
+          primary_key: 'id',
+          partition_key_type: 'INTEGER',
+          active_partition_version: 1,
+        };
       }
       return null;
     },
     find: (table, _predicate) => {
       if (table === 'tables') {
-        return {table_name: 'orders', primary_key: 'id', partition_key_type: 'INTEGER'};
+        return {
+          table_name: 'orders',
+          primary_key: 'id',
+          partition_key_type: 'INTEGER',
+          active_partition_version: 1,
+        };
       }
       return null;
     },
     filter: (table, _predicate) => {
       if (table === 'partitions') {
-        return partitions;
+        return canonicalPartitions;
       }
       return [];
     },
@@ -352,7 +367,7 @@ test('LiveQueryManager - registers live query', async (t) => {
   });
 
   manager.initialize({
-    subscribeToPartition: async () => {},
+    subscribeToPartition: async () => ({acknowledged: true, success: true, subscribed: true}),
     unsubscribeFromPartition: async () => {},
   });
 
@@ -384,7 +399,7 @@ test('LiveQueryManager - groups identical queries', async (t) => {
   });
 
   manager.initialize({
-    subscribeToPartition: async () => {},
+    subscribeToPartition: async () => ({acknowledged: true, success: true, subscribed: true}),
     unsubscribeFromPartition: async () => {},
   });
 
@@ -424,7 +439,7 @@ test('LiveQueryManager - enforces query limit per client', async (t) => {
 
   manager.maxQueriesPerClient = 2;
   manager.initialize({
-    subscribeToPartition: async () => {},
+    subscribeToPartition: async () => ({acknowledged: true, success: true, subscribed: true}),
     unsubscribeFromPartition: async () => {},
   });
 
@@ -470,7 +485,7 @@ test('LiveQueryManager - renews subscription', async (t) => {
   });
 
   manager.initialize({
-    subscribeToPartition: async () => {},
+    subscribeToPartition: async () => ({acknowledged: true, success: true, subscribed: true}),
     unsubscribeFromPartition: async () => {},
   });
 
@@ -496,7 +511,7 @@ test('LiveQueryManager - unregisters subscription', async (t) => {
   });
 
   manager.initialize({
-    subscribeToPartition: async () => {},
+    subscribeToPartition: async () => ({acknowledged: true, success: true, subscribed: true}),
     unsubscribeFromPartition: async () => {},
   });
 
@@ -521,7 +536,7 @@ test('LiveQueryManager - handles client disconnection', async (t) => {
   });
 
   manager.initialize({
-    subscribeToPartition: async () => {},
+    subscribeToPartition: async () => ({acknowledged: true, success: true, subscribed: true}),
     unsubscribeFromPartition: async () => {},
   });
 
@@ -558,7 +573,7 @@ test('LiveQueryManager - cleans up expired subscriptions', async (t) => {
 
   manager.cleanupIntervalMs = 100000; // Don't auto-run
   manager.initialize({
-    subscribeToPartition: async () => {},
+    subscribeToPartition: async () => ({acknowledged: true, success: true, subscribed: true}),
     unsubscribeFromPartition: async () => {},
   });
 
@@ -590,7 +605,7 @@ test('LiveQueryManager - gets statistics', async (t) => {
   });
 
   manager.initialize({
-    subscribeToPartition: async () => {},
+    subscribeToPartition: async () => ({acknowledged: true, success: true, subscribed: true}),
     unsubscribeFromPartition: async () => {},
   });
 
@@ -612,8 +627,13 @@ test('LiveQueryManager - gets statistics', async (t) => {
 
 test('LiveQueryManager - handles partition topology change', async (t) => {
   let currentPartitions = [
-    {partition_id: 'p1', table_name: 'orders', partition_key_start: null,
+    {
+      partition_id: 'p1',
+      table_name: 'orders',
+      partition_key_start: null,
       partition_key_end: null,
+      partition_version: 1,
+      state: 'NORMAL',
     },
   ];
 
@@ -621,8 +641,8 @@ test('LiveQueryManager - handles partition topology change', async (t) => {
 
   const manager = new LiveQueryManager({
     systemCache: {
-      get: () => ({table_name: 'orders', primary_key: 'id'}),
-      find: () => ({table_name: 'orders', primary_key: 'id'}),
+      get: () => ({table_name: 'orders', primary_key: 'id', active_partition_version: 1}),
+      find: () => ({table_name: 'orders', primary_key: 'id', active_partition_version: 1}),
       filter: () => currentPartitions,
     },
     nodeId: 'test-node',
@@ -631,6 +651,7 @@ test('LiveQueryManager - handles partition topology change', async (t) => {
   manager.initialize({
     subscribeToPartition: async (partitionId, queryId, handler) => {
       subscriptions.set(partitionId, {queryId, handler});
+      return {acknowledged: true, success: true, subscribed: true};
     },
     unsubscribeFromPartition: async (partitionId) => {
       subscriptions.delete(partitionId);
@@ -645,8 +666,24 @@ test('LiveQueryManager - handles partition topology change', async (t) => {
 
   // Simulate partition split
   currentPartitions = [
-    {partition_id: 'p1a', table_name: 'orders', partition_key_start: null, partition_key_end: 100, partition_key_type: 'INTEGER'},
-    {partition_id: 'p1b', table_name: 'orders', partition_key_start: 100, partition_key_end: null, partition_key_type: 'INTEGER'},
+    {
+      partition_id: 'p1a',
+      table_name: 'orders',
+      partition_key_start: null,
+      partition_key_end: 100,
+      partition_key_type: 'INTEGER',
+      partition_version: 1,
+      state: 'NORMAL',
+    },
+    {
+      partition_id: 'p1b',
+      table_name: 'orders',
+      partition_key_start: 100,
+      partition_key_end: null,
+      partition_key_type: 'INTEGER',
+      partition_version: 1,
+      state: 'NORMAL',
+    },
   ];
 
   await manager.handlePartitionTopologyChange({
@@ -663,8 +700,13 @@ test('LiveQueryManager - handles partition topology change', async (t) => {
 
 test('QueryGroup - updates subscriptions on partition change', async (t) => {
   let currentPartitions = [
-    {partition_id: 'p1', table_name: 'orders', partition_key_start: null,
+    {
+      partition_id: 'p1',
+      table_name: 'orders',
+      partition_key_start: null,
       partition_key_end: null,
+      partition_version: 1,
+      state: 'NORMAL',
     },
   ];
 
@@ -673,8 +715,8 @@ test('QueryGroup - updates subscriptions on partition change', async (t) => {
   const group = new QueryGroup({
     parsedQuery: {from: {name: 'orders'}},
     systemCache: {
-      get: () => ({table_name: 'orders', primary_key: 'id'}),
-      find: () => ({table_name: 'orders', primary_key: 'id'}),
+      get: () => ({table_name: 'orders', primary_key: 'id', active_partition_version: 1}),
+      find: () => ({table_name: 'orders', primary_key: 'id', active_partition_version: 1}),
       filter: () => currentPartitions,
     },
   });
@@ -683,6 +725,7 @@ test('QueryGroup - updates subscriptions on partition change', async (t) => {
   await group.updatePartitionSubscriptions(
     async (partitionId, queryId, handler) => {
       subscriptions.set(partitionId, {queryId, handler});
+      return {acknowledged: true, success: true, subscribed: true};
     },
     async (partitionId) => {
       subscriptions.delete(partitionId);
@@ -694,14 +737,20 @@ test('QueryGroup - updates subscriptions on partition change', async (t) => {
 
   // Simulate merge - p1 and p2 become p3
   currentPartitions = [
-    {partition_id: 'p3', table_name: 'orders', partition_key_start: null,
+    {
+      partition_id: 'p3',
+      table_name: 'orders',
+      partition_key_start: null,
       partition_key_end: null,
+      partition_version: 1,
+      state: 'NORMAL',
     },
   ];
 
   await group.updatePartitionSubscriptions(
     async (partitionId, queryId, handler) => {
       subscriptions.set(partitionId, {queryId, handler});
+      return {acknowledged: true, success: true, subscribed: true};
     },
     async (partitionId) => {
       subscriptions.delete(partitionId);
@@ -725,7 +774,7 @@ test('LiveQueryManager - resumes from cursor', async (t) => {
   });
 
   manager.initialize({
-    subscribeToPartition: async () => {},
+    subscribeToPartition: async () => ({acknowledged: true, success: true, subscribed: true}),
     unsubscribeFromPartition: async () => {},
   });
 
@@ -766,7 +815,7 @@ test('LiveQueryManager - rejects old cursor', async (t) => {
 
   manager.cursorRetentionMs = 1000; // 1 second retention
   manager.initialize({
-    subscribeToPartition: async () => {},
+    subscribeToPartition: async () => ({acknowledged: true, success: true, subscribed: true}),
     unsubscribeFromPartition: async () => {},
   });
 

@@ -1,6 +1,5 @@
 /**
- * WasmExecutor — implements the FunctionRegistry executor
- * interface for WASM service handler functions. Uses
+ * WasmExecutor — executes WASM service handler functions. Uses
  * ModuleMirror for module loading and enforces ResourceBudget
  * CPU/memory limits per invocation.
  *
@@ -12,7 +11,6 @@
  */
 
 import {
-  WASM_SERVICE_EXECUTOR_TYPE,
   WASM_SERVICE_ERROR_MSG,
   DEFAULT_RESOURCE_BUDGET,
 } from './wasm-service-constants.js';
@@ -46,9 +44,8 @@ function resolveFunctionId(func) {
 }
 
 /**
- * WasmExecutor registers with FunctionRegistry as the
- * `wasm_service` executor type and handles WASM module
- * instantiation with resource budget enforcement.
+ * WasmExecutor handles WASM module instantiation and execution
+ * with resource budget enforcement.
  */
 class WasmExecutor {
   /**
@@ -73,18 +70,6 @@ class WasmExecutor {
     this.serviceDefinitionId = options.serviceDefinitionId || null;
     this.replicaId = options.replicaId || null;
     this.runtimeKind = options.runtimeKind || RUNTIME_KIND.WASM_COMPONENT;
-  }
-
-  /**
-   * Register this executor with a FunctionRegistry instance.
-   *
-   * @param {Object} functionRegistry - The FunctionRegistry
-   *   to register with.
-   */
-  register(functionRegistry) {
-    functionRegistry.registerExecutor(
-      WASM_SERVICE_EXECUTOR_TYPE, this,
-    );
   }
 
   /**

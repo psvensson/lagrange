@@ -187,6 +187,7 @@ describe('wasm-service-models', () => {
         serviceId: 'svc-1',
         serviceName: 'test',
         handlerFunctionId: 'func-1',
+        runtimeKind: RUNTIME_KIND.WASM_COMPONENT,
       });
       assert.ok(SD_COL.SERVICE_ID in row);
       assert.ok(SD_COL.SERVICE_NAME in row);
@@ -214,6 +215,7 @@ describe('wasm-service-models', () => {
         serviceId: 'svc-1',
         serviceName: 'test',
         handlerFunctionId: 'func-1',
+        runtimeKind: RUNTIME_KIND.WASM_COMPONENT,
         resourceBudget: {cpuTimeLimitMs: 2000},
       });
       assert.equal(typeof row[SD_COL.RESOURCE_BUDGET], 'string');
@@ -226,6 +228,7 @@ describe('wasm-service-models', () => {
         serviceId: 'svc-1',
         serviceName: 'test',
         handlerFunctionId: 'func-1',
+        runtimeKind: RUNTIME_KIND.WASM_COMPONENT,
       });
       assert.equal(
         row[SD_COL.READ_CONSISTENCY],
@@ -264,6 +267,7 @@ describe('wasm-service-models', () => {
         [SD_COL.PROTOCOL]: 'websocket',
         [SD_COL.RESOURCE_BUDGET]: '{}',
         [SD_COL.SAFETY_INTERVAL_MS]: 500,
+        [SD_COL.RUNTIME_KIND]: RUNTIME_KIND.WASM_COMPONENT,
         [SD_COL.STATUS]: 'active',
         [SD_COL.CREATED_AT]: 1000,
         [SD_COL.UPDATED_AT]: 1000,
@@ -275,7 +279,7 @@ describe('wasm-service-models', () => {
       );
     });
 
-    it('should default runtime fields to null for legacy rows', () => {
+    it('should reject rows missing explicit runtime_kind without legacy inference', () => {
       const row = {
         [SD_COL.SERVICE_ID]: 'svc-legacy',
         [SD_COL.SERVICE_NAME]: 'legacy-svc',
@@ -290,22 +294,30 @@ describe('wasm-service-models', () => {
         [SD_COL.CREATED_AT]: 1000,
         [SD_COL.UPDATED_AT]: 1000,
       };
-      const def = deserializeServiceDefinition(row);
-      assert.equal(def.runtimeKind, RUNTIME_KIND.WASM_COMPONENT);
-      assert.equal(def.runtimeRef, 'func-1');
-      assert.equal(def.runtimeConfig, null);
+      assert.throws(
+        () => deserializeServiceDefinition(row),
+        /runtime_kind/u,
+      );
     });
 
-    it('should serialize null runtime fields when not provided', () => {
+    it('should reject definitions missing explicit runtimeKind and not back-write handlerFunctionId', () => {
+      assert.throws(
+        () => serializeServiceDefinition({
+          serviceId: 'svc-1',
+          serviceName: 'test',
+          handlerFunctionId: 'func-1',
+        }),
+        /runtimeKind/u,
+      );
       const row = serializeServiceDefinition({
         serviceId: 'svc-1',
         serviceName: 'test',
-        handlerFunctionId: 'func-1',
+        runtimeKind: RUNTIME_KIND.WASM_COMPONENT,
+        runtimeRef: 'module-ref-1',
       });
-      assert.equal(
-        row[SD_COL.RUNTIME_KIND], RUNTIME_KIND.WASM_COMPONENT,
-      );
-      assert.equal(row[SD_COL.RUNTIME_REF], 'func-1');
+      assert.equal(row[SD_COL.RUNTIME_KIND], RUNTIME_KIND.WASM_COMPONENT);
+      assert.equal(row[SD_COL.RUNTIME_REF], 'module-ref-1');
+      assert.equal(row[SD_COL.HANDLER_FUNCTION_ID], null);
       assert.equal(row[SD_COL.RUNTIME_CONFIG], null);
     });
 

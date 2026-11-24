@@ -23,10 +23,6 @@ import {
   serializeServiceDefinition,
   deserializeServiceDefinition,
 } from '../../src/wasm-service/wasm-service-models.js';
-import {
-  applyRuntimeDefaults,
-  applyLegacyDefaults,
-} from '../../src/wasm-service/runtime-legacy-mapping.js';
 import {PREPARE_STATUS} from '../../src/runtime/runtime-driver.js';
 
 // --- Test constants ---
@@ -60,8 +56,7 @@ describe('WASM API compatibility with runtime abstraction', () => {
         assert.equal(restored.runtimeConfig, TEST_RUNTIME_CONFIG);
       });
 
-    it('should infer wasm_component for legacy definitions ' +
-      'without runtime_kind', () => {
+    it('should reject legacy rows without explicit runtime_kind', () => {
       const legacyRow = {
         [SD_COL.SERVICE_ID]: TEST_SERVICE_ID,
         [SD_COL.SERVICE_NAME]: TEST_SERVICE_NAME,
@@ -76,15 +71,14 @@ describe('WASM API compatibility with runtime abstraction', () => {
         [SD_COL.CREATED_AT]: 1000,
         [SD_COL.UPDATED_AT]: 1000,
       };
-      const restored = deserializeServiceDefinition(legacyRow);
-      assert.equal(
-        restored.runtimeKind, RUNTIME_KIND.WASM_COMPONENT,
+      assert.throws(
+        () => deserializeServiceDefinition(legacyRow),
+        /runtime_kind/u,
       );
-      assert.equal(restored.runtimeRef, TEST_HANDLER_ID);
     });
 
-    it('should preserve legacy handlerFunctionId when writing ' +
-      'runtime-aware definitions', () => {
+    it('should not back-write handlerFunctionId when writing ' +
+      'runtime-aware definitions without one', () => {
       const def = {
         serviceId: TEST_SERVICE_ID,
         serviceName: TEST_SERVICE_NAME,
@@ -92,9 +86,9 @@ describe('WASM API compatibility with runtime abstraction', () => {
         runtimeRef: TEST_HANDLER_ID,
       };
       const row = serializeServiceDefinition(def);
-      assert.equal(
-        row[SD_COL.HANDLER_FUNCTION_ID], TEST_HANDLER_ID,
-      );
+      assert.equal(row[SD_COL.HANDLER_FUNCTION_ID], null);
+      assert.equal(row[SD_COL.RUNTIME_KIND], RUNTIME_KIND.WASM_COMPONENT);
+      assert.equal(row[SD_COL.RUNTIME_REF], TEST_HANDLER_ID);
     });
   });
 
@@ -176,62 +170,5 @@ describe('WASM API compatibility with runtime abstraction', () => {
       assert.equal(wasmResult.status, PREPARE_STATUS.READY);
       assert.deepEqual(preparedReplicas, [wasmDef]);
     });
-  });
-
-  // --- 4. Legacy mapping integration ---
-
-  describe('legacy mapping integration', () => {
-    it('should map legacy WASM row to driver-compatible definition',
-      () => {
-        const legacyDef = {
-          serviceId: TEST_SERVICE_ID,
-          serviceName: TEST_SERVICE_NAME,
-          handlerFunctionId: TEST_HANDLER_ID,
-          runtimeKind: null,
-          runtimeRef: null,
-          runtimeConfig: null,
-        };
-        const mapped = applyRuntimeDefaults(legacyDef);
-        assert.equal(
-          mapped.runtimeKind, RUNTIME_KIND.WASM_COMPONENT,
-        );
-        assert.equal(mapped.runtimeRef, TEST_HANDLER_ID);
-
-        const wasmDriver = new WasmComponentDriver();
-        const validation =
-          wasmDriver.validateDescriptor(mapped);
-        assert.equal(validation.valid, true);
-      });
-
-    it('should map runtime-aware definition to ' +
-      'legacy-compatible row', () => {
-      const def = {
-        serviceId: TEST_SERVICE_ID,
-        serviceName: TEST_SERVICE_NAME,
-        runtimeKind: RUNTIME_KIND.WASM_COMPONENT,
-        runtimeRef: TEST_HANDLER_ID,
-        runtimeConfig: null,
-      };
-      const compat = applyLegacyDefaults(def);
-      assert.equal(compat.handlerFunctionId, TEST_HANDLER_ID);
-
-      const row = serializeServiceDefinition(compat);
-      assert.equal(
-        row[SD_COL.HANDLER_FUNCTION_ID], TEST_HANDLER_ID,
-      );
-    });
-
-    it('should handle native_js definitions without legacy handler',
-      () => {
-        const def = {
-          serviceId: 'svc-native-compat',
-          serviceName: 'native-compat',
-          runtimeKind: RUNTIME_KIND.NATIVE_JS,
-          runtimeRef: TEST_NATIVE_REF,
-          runtimeConfig: null,
-        };
-        const compat = applyLegacyDefaults(def);
-        assert.equal(compat.handlerFunctionId, null);
-      });
   });
 });

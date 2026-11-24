@@ -31,11 +31,6 @@ import {
 } from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {
-  validateIncomingMessage,
-  validateOutgoingMessage,
-} from '../../src/admin/admin-cli-compat.js';
-import {ADMIN_MESSAGE_TYPE} from '../../src/admin/admin-constants.js';
-import {
   guardMutation,
   MUTATION_GUARD_MODE,
   MUTATION_GUARD_ERROR_CODE,
@@ -129,28 +124,6 @@ describe('admin adapter-only contract', () => {
       assert.equal(result.success, false);
       assert.equal(result.code, ADAPTER_ERROR_CODE.UNKNOWN_ACTION);
       assert.equal(result.error, ADAPTER_ERROR_MSG.UNKNOWN_ACTION);
-    });
-  });
-
-  describe('CLI compat validates envelopes only', () => {
-    it('validates incoming query envelope without execution', () => {
-      const result = validateIncomingMessage({
-        type: ADMIN_MESSAGE_TYPE.QUERY,
-        queryId: 'q-1',
-        sql: 'DELETE FROM nodes',
-      });
-      assert.equal(result.valid, true);
-      // Validation only — no SQL was executed
-      assert.equal(result.messageType, ADMIN_MESSAGE_TYPE.QUERY);
-    });
-
-    it('validates outgoing envelope without producing data', () => {
-      const result = validateOutgoingMessage({
-        type: ADMIN_MESSAGE_TYPE.QUERY_RESULT,
-        queryId: 'q-1',
-        timestamp: Date.now(),
-      });
-      assert.equal(result.valid, true);
     });
   });
 

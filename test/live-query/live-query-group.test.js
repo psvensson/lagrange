@@ -6,6 +6,12 @@
 import Database from 'better-sqlite3';
 
 import {LIVE_QUERY_EVENT, LIVE_QUERY_OPERATION} from '../../src/live-query/live-query-constants.js';
+import {
+  executeSnapshotQuery,
+  extractEventVersion,
+  isPartitionVisibleForRouting,
+  resolveActivePartitionVersion,
+} from '../../src/live-query/live-query-group-helpers.js';
 import {QueryGroup} from '../../src/live-query/live-query-group.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {renderTableDefinitionSql} from '../../src/query/sql-table-definition.js';
@@ -127,10 +133,20 @@ test('aliased and unaliased QueryGroup preserve COLLATE NOCASE across initial sn
   unaliasedGroup.addClient({id: 'c-unaliased', send: (msg) => unaliasedEvents.push(JSON.parse(msg))});
 
   const aliasedSnapshot = await aliasedGroup.initialize({
-    subscribeToPartition: async () => ({streamVersion: 1}),
+    subscribeToPartition: async () => ({
+      acknowledged: true,
+      success: true,
+      subscribed: true,
+      versionContext: {streamVersion: 1},
+    }),
   });
   const unaliasedSnapshot = await unaliasedGroup.initialize({
-    subscribeToPartition: async () => ({streamVersion: 1}),
+    subscribeToPartition: async () => ({
+      acknowledged: true,
+      success: true,
+      subscribed: true,
+      versionContext: {streamVersion: 1},
+    }),
   });
 
   t.same(
@@ -250,6 +266,7 @@ test('self-join QueryGroup with two aliases of the same table registers, initial
   const initialRows = await group.initialize({
     subscribeToPartition: async (partitionId) => {
       subscribedPartitions.push(partitionId);
+      return {acknowledged: true, success: true, subscribed: true};
     },
     options: {attachAfterVersion: 1},
   });
@@ -285,4 +302,61 @@ test('self-join QueryGroup with two aliases of the same table registers, initial
     [{id: 1, name: 'alice', score: 77}],
     'refreshed self-join rows reflect the updated score',
   );
+});
+
+test('Q08 & Q12: partition visibility, event version, and snapshot result enforce canonical contracts', async (t) => {
+  // Q08: strict partition visibility without default version=1 / state=NORMAL
+  t.equal(resolveActivePartitionVersion(null), null);
+  t.equal(resolveActivePartitionVersion({table_name: 'users'}), null);
+  t.equal(resolveActivePartitionVersion({activePartitionVersion: 1}), null);
+  t.equal(resolveActivePartitionVersion({active_partition_version: 2}), 2);
+
+  t.equal(
+    isPartitionVisibleForRouting({partition_id: 'p1'}, 1),
+    false,
+    'missing partition_version and state must not default to visible',
+  );
+  t.equal(
+    isPartitionVisibleForRouting({partition_id: 'p1', partition_version: 1}, 1),
+    false,
+    'missing state must not default to NORMAL',
+  );
+  t.equal(
+    isPartitionVisibleForRouting({partition_id: 'p1', state: 'NORMAL'}, 1),
+    false,
+    'missing partition_version must not default to 1',
+  );
+  t.equal(
+    isPartitionVisibleForRouting({partition_id: 'p1', partitionVersion: 1, state: 'NORMAL'}, 1),
+    false,
+    'camelCase partitionVersion alias is not admitted',
+  );
+  t.equal(
+    isPartitionVisibleForRouting({partition_id: 'p1', partition_version: 1, state: 'NORMAL'}, null),
+    false,
+    'absent active partition version hides partitions',
+  );
+  t.equal(
+    isPartitionVisibleForRouting({partition_id: 'p1', partition_version: 1, state: 'NORMAL'}, 1),
+    true,
+    'canonical partition_version and NORMAL state are visible',
+  );
+
+  // Q12: canonical event version and snapshot rows contract
+  t.equal(extractEventVersion({logIndex: 5, sequenceNumber: 9}), 5);
+  t.equal(extractEventVersion({sequenceNumber: 9}), 9);
+  t.equal(extractEventVersion({appliedIndex: 7}), null);
+  t.equal(extractEventVersion({version: 3}), null);
+
+  await t.rejects(
+    () => executeSnapshotQuery({executeQuery: async () => ({results: []})}, 'SELECT 1', []),
+    /snapshot/iu,
+    'legacy {results} shape without rows array is rejected',
+  );
+  const ok = await executeSnapshotQuery(
+    {executeQuery: async () => ({rows: [{id: 1}]})},
+    'SELECT 1',
+    [],
+  );
+  t.same(ok.rows, [{id: 1}]);
 });
