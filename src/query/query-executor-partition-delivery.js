@@ -59,6 +59,29 @@ const {
 } = QUERY_EXECUTOR_SHARED;
 
 const LOCAL_NUM_PLANNING_REFRESH_MAX_ATTEMPTS = 30;
+const EXECUTE_ON_PARTITION_BOOLEAN_ARGS_ERR =
+  'executeOnPartition requires boolean preferLeader and allowBroadcast before deliveryOptions';
+
+function isBooleanOrOmitted(value) {
+  return value === undefined || typeof value === 'boolean';
+}
+
+function assertExecuteOnPartitionBooleanFlags(forRead, preferLeader, preferSameLatencyGroup) {
+  if (
+    !isBooleanOrOmitted(forRead) ||
+    !isBooleanOrOmitted(preferLeader) ||
+    !isBooleanOrOmitted(preferSameLatencyGroup)
+  ) {
+    throw new TypeError(EXECUTE_ON_PARTITION_BOOLEAN_ARGS_ERR);
+  }
+}
+
+function shouldRequireCanonicalLeader(executionOptions) {
+  return executionOptions?.requireLeader === true ||
+    executionOptions?.strictRouteCurrency === true ||
+    executionOptions?.readAuthority?.leaderMode ===
+      CONTROL_PLANE_READ_LEADER_MODE.REQUIRED;
+}
 
 class QueryExecutorPartitionDelivery extends QueryExecutorBase {
   async executeOnPartition(
@@ -70,6 +93,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
     preferSameLatencyGroup,
     deliveryOptions = {},
   ) {
+    assertExecuteOnPartitionBooleanFlags(forRead, preferLeader, preferSameLatencyGroup);
     // One entryId for every delivery of a write (the caller's, or minted
     // once): a re-delivery is never a fresh entry.
     const executionOptions = withWriteEntryIdentity(deliveryOptions, forRead);
@@ -87,10 +111,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
       this.defaultRoutingReadinessDimension;
     const allowReadinessAuthoritativeRefresh =
       this.shouldAllowRoutingAuthoritativeRefresh(executionOptions);
-    const requireCanonicalLeader =
-      executionOptions?.requireLeader === true ||
-      executionOptions?.readAuthority?.leaderMode ===
-        CONTROL_PLANE_READ_LEADER_MODE.REQUIRED;
+    const requireCanonicalLeader = shouldRequireCanonicalLeader(executionOptions);
     const isLeaderPinnedDelivery =
       !forRead || Boolean(executionOptions?.transactionIdentity);
     const attemptBudget = createPartitionAttemptBudget({

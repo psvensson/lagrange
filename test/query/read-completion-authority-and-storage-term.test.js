@@ -107,17 +107,10 @@ function createDeferred() {
 
 function buildLeaderWitness({nodeId, replicaId, term, leaderRead}) {
   return Object.freeze({
-    appliedIndex: 12,
-    commitIndex: 12,
-    currentTermApplied: true,
+    appliedIndex: 12, commitIndex: 12, currentTermApplied: true,
     ...(leaderRead ? {leaderRead} : {}),
-    observedAtMs: Date.now(),
-    partitionId: PARTITION,
-    role: RAFT_ROLE.LEADER,
-    servingNodeId: nodeId,
-    servingReplicaId: replicaId,
-    state: 'observed',
-    term,
+    observedAtMs: Date.now(), partitionId: PARTITION, role: RAFT_ROLE.LEADER,
+    servingNodeId: nodeId, servingReplicaId: replicaId, state: 'observed', term,
   });
 }
 
@@ -129,11 +122,7 @@ function seedDurableStoreTerm(dataDir, partitionId, replicaId, term, commit = 1)
   const store = new RaftRsDurableStore(db);
   try {
     store.persistReady(partitionId, {
-      hardState: {
-        commit: String(commit),
-        term: String(term),
-        vote: '1',
-      },
+      hardState: {commit: String(commit), term: String(term), vote: '1'},
       mustSync: true,
     });
   } finally {
@@ -144,28 +133,19 @@ function seedDurableStoreTerm(dataDir, partitionId, replicaId, term, commit = 1)
 
 const DELIVERY_MODES = Object.freeze([
   Object.freeze({
-    kind: 'direct',
-    label: 'direct (!readDelivery)',
-    useReadDelivery: false,
-    useRedirect: false,
+    kind: 'direct', label: 'direct (!readDelivery)', useReadDelivery: false, useRedirect: false,
   }),
   Object.freeze({
-    kind: 'redirected-direct',
-    label: 'redirected (!readDelivery)',
-    useReadDelivery: false,
-    useRedirect: true,
+    kind: 'redirected-direct', label: 'redirected (!readDelivery)',
+    useReadDelivery: false, useRedirect: true,
   }),
   Object.freeze({
-    kind: 'redirected-recovery',
-    label: 'redirected (readDelivery.redirect)',
-    useReadDelivery: true,
-    useRedirect: true,
+    kind: 'redirected-recovery', label: 'redirected (readDelivery.redirect)',
+    useReadDelivery: true, useRedirect: true,
   }),
   Object.freeze({
-    kind: 'retained-recovery',
-    label: 'retained (readDelivery.select after probe)',
-    useReadDelivery: true,
-    useRedirect: false,
+    kind: 'retained-recovery', label: 'retained (readDelivery.select after probe)',
+    useReadDelivery: true, useRedirect: false,
   }),
 ]);
 
@@ -194,30 +174,21 @@ function createHeldModeHarness(mode, {
   ]);
   const cache = new SystemTableCache();
   cache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.INSERT, {
-    leader_node_id: 'node-a',
-    partition_id: PARTITION,
-    table_id: TABLE,
+    leader_node_id: 'node-a', partition_id: PARTITION, table_id: TABLE,
   });
   for (const svc of services) {
     cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
-      address: svc.address,
-      node_id: svc.nodeId,
-      partition_id: PARTITION,
-      replica_id: svc.replicaId,
-      service_id: svc.replicaId,
-      service_type: SERVICE_TYPE.PARTITION,
-      status: SERVICE_STATUS.ACTIVE,
+      address: svc.address, node_id: svc.nodeId, partition_id: PARTITION,
+      replica_id: svc.replicaId, service_id: svc.replicaId,
+      service_type: SERVICE_TYPE.PARTITION, status: SERVICE_STATUS.ACTIVE,
     });
   }
   const localReplica = {
     partitionId: PARTITION,
     raft: {
       observeCurrentAuthority: () => ({
-        groupId: PARTITION,
-        outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
-        replicaIdentity: selfReplicaId,
-        role: localRole,
-        term: localTerm,
+        groupId: PARTITION, outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+        replicaIdentity: selfReplicaId, role: localRole, term: localTerm,
       }),
     },
     replicaId: selfReplicaId,
@@ -243,10 +214,8 @@ function createHeldModeHarness(mode, {
         if (localRole === RAFT_ROLE.LEADER) {
           return buildDeliveryEnvelope({acknowledged: true}, {
             readAuthorityWitness: buildLeaderWitness({
-              leaderRead: request.leaderRead,
-              nodeId: 'node-a',
-              replicaId: selfReplicaId,
-              term: localTerm,
+              leaderRead: request.leaderRead, nodeId: 'node-a',
+              replicaId: selfReplicaId, term: localTerm,
             }),
             rowSetComplete: true,
             rows: [{operation_id: OPERATION, workflow_step: `local-leader-term-${localTerm}`}],
@@ -254,21 +223,15 @@ function createHeldModeHarness(mode, {
           });
         }
         return buildDeliveryEnvelope({acknowledged: true}, {
-          error: REASON.NOT_LEADER,
-          failureCode: REASON.NOT_LEADER,
-          leaderAddressRefusal: 'no_known_leader',
-          partitionId: PARTITION,
-          success: false,
+          error: REASON.NOT_LEADER, failureCode: REASON.NOT_LEADER,
+          leaderAddressRefusal: 'no_known_leader', partitionId: PARTITION, success: false,
         });
       }
       if (mode.useRedirect && address.startsWith('node-b/')) {
         return buildDeliveryEnvelope({acknowledged: true}, {
-          error: REASON.NOT_LEADER,
-          failureCode: REASON.NOT_LEADER,
-          leaderAddress: `node-c/partition/${PARTITION}`,
-          partitionId: PARTITION,
-          redirect: QUERY_RESPONSE_TYPE.LEADER_REDIRECT,
-          success: false,
+          error: REASON.NOT_LEADER, failureCode: REASON.NOT_LEADER,
+          leaderAddress: `node-c/partition/${PARTITION}`, partitionId: PARTITION,
+          redirect: QUERY_RESPONSE_TYPE.LEADER_REDIRECT, success: false,
         });
       }
       if (address.startsWith(`${heldNodeId}/`)) {
@@ -278,10 +241,8 @@ function createHeldModeHarness(mode, {
           await releaseHeldTarget.promise;
           return buildDeliveryEnvelope({acknowledged: true}, {
             readAuthorityWitness: buildLeaderWitness({
-              leaderRead: request.leaderRead,
-              nodeId: heldNodeId,
-              replicaId: heldReplicaId,
-              term: targetResponseTerm,
+              leaderRead: request.leaderRead, nodeId: heldNodeId,
+              replicaId: heldReplicaId, term: targetResponseTerm,
             }),
             rowSetComplete: true,
             rows: [{operation_id: OPERATION, workflow_step: `held-term-${targetResponseTerm}`}],
@@ -290,11 +251,7 @@ function createHeldModeHarness(mode, {
         }
         if (typeof onSecondTargetDelivery === 'function') {
           return onSecondTargetDelivery({
-            address,
-            buildLeaderWitness,
-            heldNodeId,
-            heldReplicaId,
-            request,
+            address, buildLeaderWitness, heldNodeId, heldReplicaId, request,
           });
         }
       }
@@ -303,11 +260,7 @@ function createHeldModeHarness(mode, {
         if (typeof onSecondTargetDelivery === 'function') {
           await releasePeerC.promise;
           return onSecondTargetDelivery({
-            address,
-            buildLeaderWitness,
-            heldNodeId: 'node-c',
-            heldReplicaId: peerCReplicaId,
-            request,
+            address, buildLeaderWitness, heldNodeId: 'node-c', heldReplicaId: peerCReplicaId, request,
           });
         }
         await releasePeerC.promise;
@@ -322,10 +275,7 @@ function createHeldModeHarness(mode, {
       projectedDimensions: {controlPlaneRecoveryEligible: true},
     }),
     getLocalPartitionReplicas: () => [localReplica],
-    messageRouter,
-    nodeId: 'node-a',
-    nowFn: () => clock.now(),
-    systemCache: cache,
+    messageRouter, nodeId: 'node-a', nowFn: () => clock.now(), systemCache: cache,
   });
   executor.readRetryAttempts = maxAttempts;
   executor.leaderRetryDelayMs = 0;
@@ -333,51 +283,34 @@ function createHeldModeHarness(mode, {
   function startRead(extraOptions = {}) {
     const baseOptions = mode.useReadDelivery ? {
       readAuthority: {
-        authoritativeReadMode: READ_MODE.OWNER_RPC_REQUIRED,
-        leaderMode: LEADER_MODE.REQUIRED,
+        authoritativeReadMode: READ_MODE.OWNER_RPC_REQUIRED, leaderMode: LEADER_MODE.REQUIRED,
       },
       routingReadinessDimension: DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
       timeoutMs: READ_BUDGET_MS,
     } : {
       readAuthority: {
-        authoritativeReadMode: READ_MODE.OWNER_RPC_REQUIRED,
-        leaderMode: LEADER_MODE.REQUIRED,
+        authoritativeReadMode: READ_MODE.OWNER_RPC_REQUIRED, leaderMode: LEADER_MODE.REQUIRED,
       },
       requireLeader: true,
       routingReadinessDimension: DIMENSION.SERVE_ELIGIBLE,
       timeoutMs: READ_BUDGET_MS,
     };
     return executor.executeOnPartition(
-      PARTITION,
-      READ_SQL,
-      [OPERATION],
-      true,
-      true,
-      false,
-      {...baseOptions, ...extraOptions},
+      PARTITION, READ_SQL, [OPERATION], true, true, false, {...baseOptions, ...extraOptions},
     );
   }
 
   async function awaitHeldState() {
     await heldTargetEntered.promise;
     if (mode.kind === 'retained-recovery') {
-      // Advance virtual clock past probeMs so readDelivery marks node-b as probed
-      // and retains its in-flight completion while starting node-c.
       clock.advance(PROBE_INTERVAL_MS + 1);
       await peerCEntered.promise;
     }
   }
 
   return {
-    awaitHeldState,
-    cache,
-    clock,
-    executor,
-    heldNodeId,
-    heldReplicaId,
-    peerIdentities,
-    releaseHeldTarget,
-    releasePeerC,
+    awaitHeldState, cache, clock, executor, heldNodeId, heldReplicaId,
+    peerIdentities, releaseHeldTarget, releasePeerC,
     setLocalAuthority(nextRole, nextTerm) {
       localRole = nextRole;
       localTerm = nextTerm;
@@ -392,10 +325,8 @@ test('Review §3: all 6 held-response cases across Direct, Redirected, and Retai
     await t.test(`[${mode.label}] 1. floor 5, term-6 response held, local term advances to 8 -> reject 6`,
       async (t) => {
         const h = createHeldModeHarness(mode, {
-          initialLocalRole: RAFT_ROLE.FOLLOWER,
-          initialLocalTerm: 5,
-          maxAttempts: 1,
-          targetResponseTerm: 6,
+          initialLocalRole: RAFT_ROLE.FOLLOWER, initialLocalTerm: 5,
+          maxAttempts: 1, targetResponseTerm: 6,
         });
         const pending = h.startRead();
         await h.awaitHeldState();
@@ -411,10 +342,8 @@ test('Review §3: all 6 held-response cases across Direct, Redirected, and Retai
     await t.test(`[${mode.label}] 2. floor 5, term-6 response held, local FOLLOWER -> LEADER at term 8 -> reject 6`,
       async (t) => {
         const h = createHeldModeHarness(mode, {
-          initialLocalRole: RAFT_ROLE.FOLLOWER,
-          initialLocalTerm: 5,
-          maxAttempts: 1,
-          targetResponseTerm: 6,
+          initialLocalRole: RAFT_ROLE.FOLLOWER, initialLocalTerm: 5,
+          maxAttempts: 1, targetResponseTerm: 6,
         });
         const pending = h.startRead();
         await h.awaitHeldState();
@@ -431,24 +360,17 @@ test('Review §3: all 6 held-response cases across Direct, Redirected, and Retai
       async (t) => {
         let followUpCalls = 0;
         const h = createHeldModeHarness(mode, {
-          initialLocalRole: RAFT_ROLE.FOLLOWER,
-          initialLocalTerm: 5,
-          maxAttempts: 3,
-          targetResponseTerm: 6,
+          initialLocalRole: RAFT_ROLE.FOLLOWER, initialLocalTerm: 5,
+          maxAttempts: 3, targetResponseTerm: 6,
           onSecondTargetDelivery({
-            buildLeaderWitness: makeWitness,
-            heldNodeId,
-            heldReplicaId,
-            request,
+            buildLeaderWitness: makeWitness, heldNodeId, heldReplicaId, request,
           }) {
             followUpCalls += 1;
             const followTerm = followUpCalls === 1 ? 7 : 8;
             return buildDeliveryEnvelope({acknowledged: true}, {
               readAuthorityWitness: makeWitness({
-                leaderRead: request.leaderRead,
-                nodeId: heldNodeId,
-                replicaId: heldReplicaId,
-                term: followTerm,
+                leaderRead: request.leaderRead, nodeId: heldNodeId,
+                replicaId: heldReplicaId, term: followTerm,
               }),
               rowSetComplete: true,
               rows: [{operation_id: OPERATION, workflow_step: `follow-term-${followTerm}`}],
@@ -458,7 +380,6 @@ test('Review §3: all 6 held-response cases across Direct, Redirected, and Retai
         });
         const pending = h.startRead();
         await h.awaitHeldState();
-        // Raise floor to 8 while first response (term 6) is held.
         h.setLocalAuthority(RAFT_ROLE.FOLLOWER, 8);
         h.releaseHeldTarget.resolve();
         h.releasePeerC.resolve();
@@ -473,18 +394,14 @@ test('Review §3: all 6 held-response cases across Direct, Redirected, and Retai
     await t.test(`[${mode.label}] 4a. term is sufficient (6 >= 5), but peer incarnation changes during flight -> reject obsolete reply`,
       async (t) => {
         const h = createHeldModeHarness(mode, {
-          initialLocalRole: RAFT_ROLE.FOLLOWER,
-          initialLocalTerm: 5,
-          maxAttempts: 1,
-          targetResponseTerm: 6,
+          initialLocalRole: RAFT_ROLE.FOLLOWER, initialLocalTerm: 5,
+          maxAttempts: 1, targetResponseTerm: 6,
         });
         const pending = h.startRead();
         await h.awaitHeldState();
-        // Peer restarts / reconnects with new bootIncarnation & connectionId while reply is held.
         h.peerIdentities.set(h.heldNodeId, {
           bootIncarnation: `boot-${h.heldNodeId}-restarted-2`,
-          connectionId: `conn-${h.heldNodeId}-2`,
-          nodeId: h.heldNodeId,
+          connectionId: `conn-${h.heldNodeId}-2`, nodeId: h.heldNodeId,
         });
         h.releaseHeldTarget.resolve();
         h.releasePeerC.resolve();
@@ -496,14 +413,11 @@ test('Review §3: all 6 held-response cases across Direct, Redirected, and Retai
     await t.test(`[${mode.label}] 4b. term is sufficient (6 >= 5), but route replica identity changes during flight -> reject obsolete reply`,
       async (t) => {
         const h = createHeldModeHarness(mode, {
-          initialLocalRole: RAFT_ROLE.FOLLOWER,
-          initialLocalTerm: 5,
-          maxAttempts: 1,
-          targetResponseTerm: 6,
+          initialLocalRole: RAFT_ROLE.FOLLOWER, initialLocalTerm: 5,
+          maxAttempts: 1, targetResponseTerm: 6,
         });
         const pending = h.startRead();
         await h.awaitHeldState();
-        // Withdraw the answering replica's SERVICES row while reply is in flight.
         const existingRow = h.cache.get(TABLES.SERVICES, h.heldReplicaId);
         h.cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.DELETE, existingRow);
         h.releaseHeldTarget.resolve();
@@ -516,14 +430,11 @@ test('Review §3: all 6 held-response cases across Direct, Redirected, and Retai
     await t.test(`[${mode.label}] 5a. authority remains valid, but original deadline expires while reply is held -> reject late completion`,
       async (t) => {
         const h = createHeldModeHarness(mode, {
-          initialLocalRole: RAFT_ROLE.FOLLOWER,
-          initialLocalTerm: 5,
-          maxAttempts: 1,
-          targetResponseTerm: 6,
+          initialLocalRole: RAFT_ROLE.FOLLOWER, initialLocalTerm: 5,
+          maxAttempts: 1, targetResponseTerm: 6,
         });
         const pending = h.startRead();
         await h.awaitHeldState();
-        // Advance clock past the original execution deadline while reply is held.
         h.clock.advance(READ_BUDGET_MS + 100);
         h.releaseHeldTarget.resolve();
         h.releasePeerC.resolve();
@@ -536,15 +447,12 @@ test('Review §3: all 6 held-response cases across Direct, Redirected, and Retai
     await t.test(`[${mode.label}] 5b. authority remains valid, but AbortSignal aborts while reply is held -> reject late completion`,
       async (t) => {
         const h = createHeldModeHarness(mode, {
-          initialLocalRole: RAFT_ROLE.FOLLOWER,
-          initialLocalTerm: 5,
-          maxAttempts: 1,
-          targetResponseTerm: 6,
+          initialLocalRole: RAFT_ROLE.FOLLOWER, initialLocalTerm: 5,
+          maxAttempts: 1, targetResponseTerm: 6,
         });
         const abortController = new AbortController();
         const settled = h.startRead({signal: abortController.signal}).then(
-          (value) => ({ok: true, value}),
-          (error) => ({error, ok: false}),
+          (value) => ({ok: true, value}), (error) => ({error, ok: false}),
         );
         await h.awaitHeldState();
         abortController.abort(new Error('caller_aborted_in_flight'));
@@ -558,10 +466,8 @@ test('Review §3: all 6 held-response cases across Direct, Redirected, and Retai
     await t.test(`[${mode.label}] 6. valid companion (no invalidating transition) -> completes with sealed receipt`,
       async (t) => {
         const h = createHeldModeHarness(mode, {
-          initialLocalRole: RAFT_ROLE.FOLLOWER,
-          initialLocalTerm: 5,
-          maxAttempts: 1,
-          targetResponseTerm: 6,
+          initialLocalRole: RAFT_ROLE.FOLLOWER, initialLocalTerm: 5,
+          maxAttempts: 1, targetResponseTerm: 6,
         });
         const pending = h.startRead();
         await h.awaitHeldState();
@@ -584,17 +490,13 @@ test('Review §3 deliberate mutation controls: unsealed envelopes, unissued tick
   const abortController = new AbortController();
   const currentFloor = 5;
   const candidate = {
-    address: `node-b/partition/${PARTITION}`,
-    nodeId: 'node-b',
-    replicaId: `${PARTITION}-r2`,
+    address: `node-b/partition/${PARTITION}`, nodeId: 'node-b', replicaId: `${PARTITION}-r2`,
   };
   const routingSnapshot = {
     canonicalLeaderNodeId: 'node-a',
     routableServices: [{
-      address: candidate.address,
-      node_id: candidate.nodeId,
-      replica_id: candidate.replicaId,
-      service_id: candidate.replicaId,
+      address: candidate.address, node_id: candidate.nodeId,
+      replica_id: candidate.replicaId, service_id: candidate.replicaId,
     }],
   };
   const fakeExecutor = {
@@ -602,11 +504,8 @@ test('Review §3 deliberate mutation controls: unsealed envelopes, unissued tick
       partitionId: PARTITION,
       raft: {
         observeCurrentAuthority: () => ({
-          groupId: PARTITION,
-          outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
-          replicaIdentity: `${PARTITION}-r1`,
-          role: RAFT_ROLE.FOLLOWER,
-          term: currentFloor,
+          groupId: PARTITION, outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+          replicaIdentity: `${PARTITION}-r1`, role: RAFT_ROLE.FOLLOWER, term: currentFloor,
         }),
       },
       replicaId: `${PARTITION}-r1`,
@@ -614,39 +513,30 @@ test('Review §3 deliberate mutation controls: unsealed envelopes, unissued tick
     getPartitionRecord: () => ({leader_claim_raft_term: currentFloor}),
     messageRouter: {
       getCurrentPrimaryConnectionBootIncarnation: () => ({
-        bootIncarnation: 'boot-b-1',
-        connectionId: 'conn-b-1',
-        nodeId: 'node-b',
+        bootIncarnation: 'boot-b-1', connectionId: 'conn-b-1', nodeId: 'node-b',
       }),
       nodeId: 'node-a',
     },
-    nodeId: 'node-a',
-    nowFn: () => clock.now(),
-    throwIfCancelled: () => {},
+    nodeId: 'node-a', nowFn: () => clock.now(), throwIfCancelled: () => {},
   };
 
   function makeInvocation(deadlineOffsetMs = 1000) {
     return createInvocationTermFloorTracker(fakeExecutor, PARTITION, {
       buildSuccessResult: (answer) => ({
-        partitionId: PARTITION,
-        readAuthorityWitness: answer.readAuthorityWitness,
-        rows: answer.rows,
-        success: true,
+        partitionId: PARTITION, readAuthorityWitness: answer.readAuthorityWitness,
+        rows: answer.rows, success: true,
       }),
       candidateEligibility: {
         redirectCandidate: (addr) => (addr === candidate.address ? candidate : null),
       },
       executionOptions: {
-        deadlineMs: clock.now() + deadlineOffsetMs,
-        signal: abortController.signal,
+        deadlineMs: clock.now() + deadlineOffsetMs, signal: abortController.signal,
       },
       forRead: true,
       isSuccessfulResponse: (env) => Boolean(env?.answer?.success ?? env?.success),
       requireCanonicalLeader: true,
       resolveCandidates: () => ({
-        candidates: [candidate],
-        routingSnapshot,
-        selfPublishedLeaderTermFloor: currentFloor,
+        candidates: [candidate], routingSnapshot, selfPublishedLeaderTermFloor: currentFloor,
       }),
     });
   }
@@ -1042,10 +932,7 @@ async (t) => {
       const dataDir = createTempDir(t, 'lagrange-term-errors-');
       const replicaId = `${PARTITION}-r1`;
       const mismatched = observePersistedPartitionTerm({
-        dataDir,
-        dbPath: path.join(dataDir, 'wrong-file.db'),
-        partitionId: PARTITION,
-        replicaId,
+        dataDir, dbPath: path.join(dataDir, 'wrong-file.db'), partitionId: PARTITION, replicaId,
       });
       t.equal(mismatched.state, PERSISTED_TERM_STATE.UNAVAILABLE);
       t.equal(mismatched.reason, PERSISTED_TERM_UNAVAILABLE_REASON.INVALID_IDENTITY);
@@ -1057,9 +944,7 @@ async (t) => {
       rawDb.exec('CREATE TABLE unrelated (id INTEGER PRIMARY KEY)');
       rawDb.close();
       const missingTable = observePersistedPartitionTerm({
-        dataDir,
-        partitionId: PARTITION,
-        replicaId,
+        dataDir, partitionId: PARTITION, replicaId,
       });
       t.equal(missingTable.state, PERSISTED_TERM_STATE.UNAVAILABLE);
       t.equal(missingTable.reason, PERSISTED_TERM_UNAVAILABLE_REASON.HARD_STATE_ABSENT);
@@ -1069,13 +954,49 @@ async (t) => {
       const corruptDbPath = getPartitionDbPath(dataDir, PARTITION, corruptReplicaId);
       fs.writeFileSync(corruptDbPath, 'not-a-valid-sqlite-database-header-bytes');
       const corruptOutcome = observePersistedPartitionTerm({
-        dataDir,
-        partitionId: PARTITION,
-        replicaId: corruptReplicaId,
+        dataDir, partitionId: PARTITION, replicaId: corruptReplicaId,
       });
       t.equal(corruptOutcome.state, PERSISTED_TERM_STATE.UNAVAILABLE);
       t.equal(corruptOutcome.reason, PERSISTED_TERM_UNAVAILABLE_REASON.READ_FAILED);
       t.equal(corruptOutcome.term, null);
+
+      // Non-ENOENT fs.statSync errors (EACCES, EIO, ENOTDIR) both cold and warm -> READ_FAILED.
+      const statReplicaId = `${PARTITION}-r-stat`;
+      seedDurableStoreTerm(dataDir, PARTITION, statReplicaId, 7, 1);
+      const originalStatSync = fs.statSync;
+      t.teardown(() => {
+        fs.statSync = originalStatSync;
+      });
+      const statId = {dataDir, partitionId: PARTITION, replicaId: statReplicaId};
+      for (const code of ['EACCES', 'EIO', 'ENOTDIR']) {
+        resetPersistedTermReaders(`cold_stat_${code}`);
+        fs.statSync = () => {
+          throw Object.assign(new Error(`simulated statSync ${code}`), {code});
+        };
+        const coldOut = observePersistedPartitionTerm(statId);
+        t.equal(coldOut.state, PERSISTED_TERM_STATE.UNAVAILABLE, `cold statSync ${code} unavailable`);
+        t.equal(coldOut.reason, PERSISTED_TERM_UNAVAILABLE_REASON.READ_FAILED);
+        t.equal(coldOut.term, null);
+        t.ok(Object.isFrozen(coldOut));
+
+        fs.statSync = originalStatSync;
+        const warmSeed = observePersistedPartitionTerm(statId);
+        t.equal(warmSeed.state, PERSISTED_TERM_STATE.OBSERVED);
+        t.equal(warmSeed.term, 7);
+        const warmReader = getRetainedPersistedTermReader(statId);
+        t.equal(warmReader?.db?.open, true, `warm cached reader open before ${code}`);
+
+        fs.statSync = () => {
+          throw Object.assign(new Error(`simulated warm statSync ${code}`), {code});
+        };
+        const warmOut = observePersistedPartitionTerm(statId);
+        t.equal(warmOut.state, PERSISTED_TERM_STATE.UNAVAILABLE, `warm statSync ${code} unavailable`);
+        t.equal(warmOut.reason, PERSISTED_TERM_UNAVAILABLE_REASON.READ_FAILED);
+        t.equal(warmOut.term, null);
+        t.equal(warmReader.db.open, false, `warm statSync ${code} retires and closes cached reader`);
+        t.equal(getRetainedPersistedTermReader(statId), null);
+      }
+      fs.statSync = originalStatSync;
     });
 
   await t.test('5. a live authority owner unavailable answer is never overridden by a disk fallback',
@@ -1201,18 +1122,29 @@ async (t) => {
       });
 
       const writeDeadlineMs = clock.now() + 250;
+      const writeSql = 'UPDATE sys_ledger SET workflow_step = ? WHERE operation_id = ?';
+      await t.rejects(
+        executor.executeOnPartition(
+          PARTITION, writeSql, ['bad-pos-args', OPERATION],
+          'entry-id-misplaced', {deadlineMs: writeDeadlineMs},
+        ),
+        TypeError,
+        'executeOnPartition(partitionId, sql, params, entryId, {deadlineMs}) throws TypeError',
+      );
+      await t.rejects(
+        executor.executeOnPartition(
+          PARTITION, writeSql, ['bad-pos-args', OPERATION], false, {deadlineMs: writeDeadlineMs},
+        ),
+        TypeError,
+        'executeOnPartition(partitionId, sql, params, false, {deadlineMs}) throws TypeError',
+      );
       const writePromise = executor.executeOnPartition(
-        PARTITION,
-        'UPDATE sys_ledger SET workflow_step = ? WHERE operation_id = ?',
-        ['committed-write', OPERATION],
-        false,
-        {
-          deadlineMs: writeDeadlineMs,
-          timeoutMs: 250,
-        },
+        PARTITION, writeSql, ['committed-write', OPERATION], false, false, false,
+        {deadlineMs: writeDeadlineMs, preserveCommittedWritePastDeadline: true, timeoutMs: 250},
       );
       await writeEntered.promise;
       clock.advance(500);
+      t.ok(clock.now() > writeDeadlineMs, 'effective execution budget expired before reply');
       releaseWriteReply.resolve();
       const writeOutcome = await writePromise;
       t.equal(writeOutcome.success, true,
@@ -1228,17 +1160,13 @@ async (t) => {
       let localTerm = 5;
       let claimTerm = 5;
       const candidate = {
-        address: `node-b/partition/${PARTITION}`,
-        nodeId: 'node-b',
-        replicaId: `${PARTITION}-r2`,
+        address: `node-b/partition/${PARTITION}`, nodeId: 'node-b', replicaId: `${PARTITION}-r2`,
       };
       const routingSnapshot = {
         canonicalLeaderNodeId: 'node-a',
         routableServices: [{
-          address: candidate.address,
-          node_id: candidate.nodeId,
-          replica_id: candidate.replicaId,
-          service_id: candidate.replicaId,
+          address: candidate.address, node_id: candidate.nodeId,
+          replica_id: candidate.replicaId, service_id: candidate.replicaId,
         }],
       };
       const fakeExecutor = {
@@ -1246,11 +1174,8 @@ async (t) => {
           partitionId: PARTITION,
           raft: {
             observeCurrentAuthority: () => ({
-              groupId: PARTITION,
-              outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
-              replicaIdentity: `${PARTITION}-r1`,
-              role: localRole,
-              term: localTerm,
+              groupId: PARTITION, outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
+              replicaIdentity: `${PARTITION}-r1`, role: localRole, term: localTerm,
             }),
           },
           replicaId: `${PARTITION}-r1`,
@@ -1258,23 +1183,17 @@ async (t) => {
         getPartitionRecord: () => ({leader_claim_raft_term: claimTerm}),
         messageRouter: {
           getCurrentPrimaryConnectionBootIncarnation: () => ({
-            bootIncarnation: 'boot-b-1',
-            connectionId: 'conn-b-1',
-            nodeId: 'node-b',
+            bootIncarnation: 'boot-b-1', connectionId: 'conn-b-1', nodeId: 'node-b',
           }),
           nodeId: 'node-a',
         },
-        nodeId: 'node-a',
-        nowFn: () => clock.now(),
-        throwIfCancelled: () => {},
+        nodeId: 'node-a', nowFn: () => clock.now(), throwIfCancelled: () => {},
       };
 
       const invocation = createInvocationTermFloorTracker(fakeExecutor, PARTITION, {
         buildSuccessResult: (answer) => ({
-          partitionId: PARTITION,
-          readAuthorityWitness: answer.readAuthorityWitness,
-          rows: answer.rows,
-          success: true,
+          partitionId: PARTITION, readAuthorityWitness: answer.readAuthorityWitness,
+          rows: answer.rows, success: true,
         }),
         executionOptions: {deadlineMs: clock.now() + 2000},
         forRead: true,
@@ -1282,38 +1201,27 @@ async (t) => {
         requireCanonicalLeader: false,
       });
 
-      // Seed cached latestRoutes with pre-computed selfPublishedLeaderTermFloor = 5 and NO resolveCandidates callback.
       invocation.observe({
-        candidates: [candidate],
-        routingSnapshot,
-        selfPublishedLeaderTermFloor: 5,
+        candidates: [candidate], routingSnapshot, selfPublishedLeaderTermFloor: 5,
       });
       t.equal(invocation.current(), 5);
-
       const ticket = invocation.issueTicket({
-        address: candidate.address,
-        request: {},
-        serviceInfo: candidate,
+        address: candidate.address, request: {}, serviceInfo: candidate,
       });
 
-      // While reply is held, local replica transitions FOLLOWER -> LEADER at term 8.
       localRole = RAFT_ROLE.LEADER;
       localTerm = 8;
       claimTerm = 8;
 
       const staleTerm6Delivery = buildDeliveryEnvelope({acknowledged: true}, {
         readAuthorityWitness: buildLeaderWitness({
-          nodeId: 'node-b',
-          replicaId: candidate.replicaId,
-          term: 6,
+          nodeId: 'node-b', replicaId: candidate.replicaId, term: 6,
         }),
         rows: [{operation_id: OPERATION, workflow_step: 'stale-term-6'}],
         success: true,
       });
       const completion = invocation.completeDelivery({
-        delivery: staleTerm6Delivery,
-        strictRouteCurrency: false,
-        ticket,
+        delivery: staleTerm6Delivery, strictRouteCurrency: false, ticket,
       });
       t.equal(invocation.current(), 8,
         'completeDelivery refreshes active self-leader term floor to 8 even when reusing cached latestRoutes');
@@ -1326,14 +1234,10 @@ async (t) => {
     async (t) => {
       const clock = new VirtualTimeSource({startMs: 40_000});
       const candidateB = {
-        address: `node-b/partition/${PARTITION}`,
-        nodeId: 'node-b',
-        replicaId: `${PARTITION}-r2`,
+        address: `node-b/partition/${PARTITION}`, nodeId: 'node-b', replicaId: `${PARTITION}-r2`,
       };
       const candidateC = {
-        address: `node-c/partition/${PARTITION}`,
-        nodeId: 'node-c',
-        replicaId: `${PARTITION}-r3`,
+        address: `node-c/partition/${PARTITION}`, nodeId: 'node-c', replicaId: `${PARTITION}-r3`,
       };
       let currentCandidates = [candidateB, candidateC];
       const redirectEntered = createDeferred();
@@ -1356,31 +1260,22 @@ async (t) => {
             return buildDeliveryEnvelope({acknowledged: true}, {rows: [], success: true});
           },
           getCurrentPrimaryConnectionBootIncarnation: (nodeId) => ({
-            bootIncarnation: `boot-${nodeId}-1`,
-            connectionId: `conn-${nodeId}-1`,
-            nodeId,
+            bootIncarnation: `boot-${nodeId}-1`, connectionId: `conn-${nodeId}-1`, nodeId,
           }),
-          nodeId: 'node-a',
-          timeSource: clock,
+          nodeId: 'node-a', timeSource: clock,
         },
-        nodeId: 'node-a',
-        nowFn: () => clock.now(),
-        partitionReadShutdownController: new AbortController(),
-        throwIfCancelled: () => {},
+        nodeId: 'node-a', nowFn: () => clock.now(),
+        partitionReadShutdownController: new AbortController(), throwIfCancelled: () => {},
       };
 
       const candidateEligibility = {
-        redirectCandidate: (addr) =>
-          currentCandidates.find((c) => c.address === addr) || null,
+        redirectCandidate: (addr) => currentCandidates.find((c) => c.address === addr) || null,
       };
       const invocation = createInvocationTermFloorTracker(fakeExecutor, PARTITION, {
         buildSuccessResult: (answer) => ({
-          partitionId: PARTITION,
-          rows: answer.rows,
-          success: true,
+          partitionId: PARTITION, rows: answer.rows, success: true,
         }),
-        candidateEligibility,
-        executionOptions: {deadlineMs: clock.now() + 2000},
+        candidateEligibility, executionOptions: {deadlineMs: clock.now() + 2000},
         forRead: true,
         isSuccessfulResponse: (env) => Boolean(env?.answer?.success ?? env?.success),
         requireCanonicalLeader: true,
@@ -1389,10 +1284,8 @@ async (t) => {
           routingSnapshot: {
             canonicalLeaderNodeId: 'node-a',
             routableServices: currentCandidates.map((c) => ({
-              address: c.address,
-              node_id: c.nodeId,
-              replica_id: c.replicaId,
-              service_id: c.replicaId,
+              address: c.address, node_id: c.nodeId,
+              replica_id: c.replicaId, service_id: c.replicaId,
             })),
           },
           selfPublishedLeaderTermFloor: 5,
@@ -1403,15 +1296,12 @@ async (t) => {
       const readDelivery = createRecoveryReadDelivery(fakeExecutor, {});
       readDelivery.bindTicketIssuer((spec) => invocation.issueTicket(spec));
       const originTicket = invocation.issueTicket({
-        address: candidateB.address,
-        request: {sql: READ_SQL},
-        serviceInfo: candidateB,
+        address: candidateB.address, request: {sql: READ_SQL}, serviceInfo: candidateB,
       });
 
       const recordedFailures = [];
       const redirectPromise = executePartitionLeaderRedirectAttempt({
-        activeTicket: originTicket,
-        address: candidateB.address,
+        activeTicket: originTicket, address: candidateB.address,
         attemptBudget: {reportDeadlineSpentBeforeAttempt: () => {}},
         attemptedAddresses: new Set([candidateB.address]),
         buildDeadlineSpentFailureResult: () => ({
@@ -1420,38 +1310,30 @@ async (t) => {
         buildLastFailureResult: () => ({success: false}),
         buildRequest: ({address: targetAddress}) => ({address: targetAddress, sql: READ_SQL}),
         buildRouterDeliveryOptions: () => ({}),
-        candidateEligibility,
-        candidateIndex: 0,
-        candidateQueue: currentCandidates,
+        candidateEligibility, candidateIndex: 0, candidateQueue: currentCandidates,
         candidateState: {
           handleRedirectTransportNoHandler: async () => {},
           requestRetryCurrentAddress: () => {},
         },
         executionOptions: {deadlineMs: clock.now() + 2000},
-        executor: fakeExecutor,
-        forRead: true,
-        invocation,
-        markRecoverySubmission: () => {},
-        onRedirectSubmissionState: () => {},
-        onRedirectTargetSelected: () => {},
-        params: [OPERATION],
-        partitionId: PARTITION,
+        executor: fakeExecutor, forRead: true, invocation,
+        markRecoverySubmission: () => {}, onRedirectSubmissionState: () => {},
+        onRedirectTargetSelected: () => {}, params: [OPERATION], partitionId: PARTITION,
         readDelivery,
         recordCandidateFailure: (msg, resp, nodeId, addr) => {
           recordedFailures.push({addr, msg, nodeId, resp});
         },
         response: {
           leaderAddress: candidateC.address,
-          responseType: QUERY_RESPONSE_TYPE.LEADER_REDIRECT,
-          success: false,
+          responseType: QUERY_RESPONSE_TYPE.LEADER_REDIRECT, success: false,
         },
-        serviceInfo: candidateB,
-        sql: READ_SQL,
-        unknownOutcome: {observeAnswer: () => 'none', observeTransport: () => {}, recordDelivery: () => {}},
+        serviceInfo: candidateB, sql: READ_SQL,
+        unknownOutcome: {
+          observeAnswer: () => 'none', observeTransport: () => {}, recordDelivery: () => {},
+        },
       });
       await redirectEntered.promise;
 
-      // Withdraw candidateC while redirect is in flight and reconcile readDelivery -> aborts in-flight redirect.
       currentCandidates = [candidateB];
       readDelivery.reconcile(currentCandidates);
 
@@ -1489,4 +1371,107 @@ async (t) => {
       t.equal(readerBBefore.db.open, true, 'dataDirB term reader for PARTITION remains open');
       t.equal(getRetainedPersistedTermReader(idB)?.viewId, readerBBefore.viewId);
     });
+
+  await t.test('5. P1 queued write survives peer connection replacement A -> B while ' +
+    'authority-bound read (strictRouteCurrency: true) is refused as READ_ROUTE_SUPERSEDED',
+  async (t) => {
+    const clock = new VirtualTimeSource({startMs: 60_000});
+    const cache = new SystemTableCache();
+    cache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.INSERT, {
+      leader_node_id: 'node-b', partition_id: PARTITION, table_id: TABLE,
+    });
+    cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
+      address: `node-b/partition/${PARTITION}`, node_id: 'node-b', partition_id: PARTITION,
+      replica_id: `${PARTITION}-r2`, service_id: `${PARTITION}-r2`,
+      service_type: SERVICE_TYPE.PARTITION, status: SERVICE_STATUS.ACTIVE,
+    });
+    const sockA = {id: 'sock-a'};
+    const sockB = {id: 'sock-b'};
+    const nodeConnections = new Map([
+      ['node-b', {
+        authenticated: true, bootIncarnation: 'boot-b-1', connectionId: 'conn-b-1',
+        generation: 1, socket: sockA, state: 'connected', ws: sockA,
+      }],
+    ]);
+    const writeQueued = createDeferred();
+    const releaseWriteOnB = createDeferred();
+    const readQueued = createDeferred();
+    const releaseReadOnB = createDeferred();
+    let isWritePhase = true;
+    const executor = new QueryExecutor({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      getLocalPartitionReplicas: () => [],
+      messageRouter: {
+        deliver: async (_address, request) => {
+          if (isWritePhase) {
+            writeQueued.resolve();
+            await releaseWriteOnB.promise;
+            return buildDeliveryEnvelope({acknowledged: true}, {
+              changes: 1, lastInsertRowid: 42, servedByGeneration: 2, success: true,
+            });
+          }
+          readQueued.resolve();
+          await releaseReadOnB.promise;
+          return buildDeliveryEnvelope({acknowledged: true}, {
+            readAuthorityWitness: buildLeaderWitness({
+              leaderRead: request.leaderRead, nodeId: 'node-b',
+              replicaId: `${PARTITION}-r2`, term: 6,
+            }),
+            rowSetComplete: true,
+            rows: [{operation_id: OPERATION, workflow_step: 'read-after-conn-replace'}],
+            success: true,
+          });
+        },
+        getCurrentPrimaryConnectionBootIncarnation: (nodeId) => {
+          const conn = nodeConnections.get(nodeId);
+          return conn ? {
+            bootIncarnation: conn.bootIncarnation, connectionId: conn.connectionId,
+            generation: conn.generation, nodeId, socket: conn.socket,
+          } : null;
+        },
+        nodeConnections, nodeId: 'node-a', timeSource: clock,
+      },
+      nodeId: 'node-a', nowFn: () => clock.now(),
+      sleepFn: async (ms) => clock.advance(ms), systemCache: cache,
+    });
+    executor.readRetryAttempts = 1;
+
+    const writeDeadlineMs = clock.now() + 200;
+    const writePromise = executor.executeOnPartition(
+      PARTITION, 'UPDATE sys_ledger SET workflow_step = ? WHERE operation_id = ?',
+      ['queued-write-conn-b', OPERATION], false, false, false,
+      {deadlineMs: writeDeadlineMs, preserveCommittedWritePastDeadline: true, timeoutMs: 200},
+    );
+    await writeQueued.promise;
+
+    nodeConnections.set('node-b', {
+      authenticated: true, bootIncarnation: 'boot-b-2', connectionId: 'conn-b-2',
+      generation: 2, socket: sockB, state: 'connected', ws: sockB,
+    });
+    clock.advance(250);
+    t.ok(clock.now() > writeDeadlineMs, 'remaining budget spent before write completes on B');
+    releaseWriteOnB.resolve();
+    const writeResult = await writePromise;
+    t.equal(writeResult.success, true,
+      'committed write response from connection B succeeds after A -> B replacement');
+    t.equal(writeResult.changes, 1);
+    t.not(writeResult.failureCode, READ_ROUTE_SUPERSEDED_CODE);
+
+    isWritePhase = false;
+    const readPromise = executor.executeOnPartition(
+      PARTITION, READ_SQL, [OPERATION], true, true, false,
+      {strictRouteCurrency: true, timeoutMs: 500},
+    );
+    await readQueued.promise;
+    const sockC = {id: 'sock-c'};
+    nodeConnections.set('node-b', {
+      authenticated: true, bootIncarnation: 'boot-b-3', connectionId: 'conn-b-3',
+      generation: 3, socket: sockC, state: 'connected', ws: sockC,
+    });
+    releaseReadOnB.resolve();
+    const readResult = await readPromise;
+    t.equal(readResult.success, false,
+      'authority-bound read across peer connection replacement is refused');
+    t.equal(readResult.failureCode, READ_ROUTE_SUPERSEDED_CODE);
+  });
 });
