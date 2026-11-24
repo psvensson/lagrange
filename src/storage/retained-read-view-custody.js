@@ -429,6 +429,12 @@ function resolveExactReplicaDbPath(identity) {
   return resolveCandidatePaths(identity, partitionId, replicaId);
 }
 
+function isPathWithinDataDir(dbPath, normalizedDataDir) {
+  if (!normalizedDataDir) return true;
+  return dbPath === normalizedDataDir ||
+    dbPath.startsWith(`${normalizedDataDir}${path.sep}`);
+}
+
 function statDbFileIdentity(dbPath) {
   const dbStat = fs.statSync(dbPath, {bigint: true, throwIfNoEntry: false});
   if (!dbStat) {
@@ -582,14 +588,9 @@ function createPersistedPartitionTermObserver(options = {}) {
       }
     }
     if (!ensureReaderCapacity()) {
-      return {
-        entry: null,
-        unavailableReason: PERSISTED_TERM_UNAVAILABLE_REASON.CAPACITY_EXHAUSTED,
-      };
+      return {entry: null, unavailableReason: PERSISTED_TERM_UNAVAILABLE_REASON.CAPACITY_EXHAUSTED};
     }
-    return {
-      entry: openAndRegisterReader(normalizedDbPath, fileStat, partitionId, replicaId),
-    };
+    return {entry: openAndRegisterReader(normalizedDbPath, fileStat, partitionId, replicaId)};
   }
 
   function invalidatePath(dbPath, reason = DEFAULT_TERM_READER_RETIRE_REASON) {
@@ -603,9 +604,14 @@ function createPersistedPartitionTermObserver(options = {}) {
   }
 
   function invalidatePartition(dataDir, partitionId, reason = DEFAULT_TERM_READER_RETIRE_REASON) {
+    const normalizedDataDir = normalizeCustodyDbPath(dataDir);
     let allClosed = true;
     for (const entry of [...activeReaders.values(), ...unclosedReaders.values()]) {
-      if (entry.partitionId === partitionId && !settleReaderClosure(entry, reason)) {
+      if (entry.partitionId !== partitionId ||
+          !isPathWithinDataDir(entry.dbPath, normalizedDataDir)) {
+        continue;
+      }
+      if (!settleReaderClosure(entry, reason)) {
         allClosed = false;
       }
     }

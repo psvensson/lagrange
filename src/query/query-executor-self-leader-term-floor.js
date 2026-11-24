@@ -408,14 +408,16 @@ function createInvocationTermFloorTracker(executor, partitionId, rawOptions = {}
   let termFloor = null;
   let latestRoutes = null;
 
-  function observe(resolution) {
+  function observe(resolution, refreshActiveFloor = false) {
     if (resolution) {
       latestRoutes = resolution;
     }
     const resolvedFloor = positiveSafeTerm(resolution?.selfPublishedLeaderTermFloor);
     if (resolvedFloor !== null) {
       termFloor = mergeSelfLeaderTermFloor(termFloor, resolvedFloor);
-      return termFloor;
+      if (!refreshActiveFloor) {
+        return termFloor;
+      }
     }
     if (termFloor !== null && resolution?.routingSnapshot) {
       termFloor = mergeSelfLeaderTermFloor(
@@ -429,12 +431,12 @@ function createInvocationTermFloorTracker(executor, partitionId, rawOptions = {}
   function resolveRoutes() {
     if (typeof resolveCandidates !== 'function') {
       if (latestRoutes?.routingSnapshot) {
-        observe(latestRoutes);
+        observe(latestRoutes, true);
       }
       return latestRoutes || {candidates: [], routingSnapshot: null};
     }
     const resolved = resolveCandidates();
-    observe(resolved);
+    observe(resolved, false);
     return resolved;
   }
 
@@ -509,7 +511,7 @@ function createInvocationTermFloorTracker(executor, partitionId, rawOptions = {}
   function refreshObservationsForCompletion() {
     if (!strictRouteCurrency) {
       if (termFloor !== null && latestRoutes?.routingSnapshot) {
-        observe(latestRoutes);
+        observe(latestRoutes, true);
       }
       return latestRoutes;
     }
@@ -563,7 +565,7 @@ function createInvocationTermFloorTracker(executor, partitionId, rawOptions = {}
       return false;
     }
     if (succeeded) {
-      return true;
+      return Boolean(forRead);
     }
     return Boolean(reading?.redirect) && Boolean(reading?.leaderAddress);
   }
@@ -624,7 +626,7 @@ function createInvocationTermFloorTracker(executor, partitionId, rawOptions = {}
 
   function finalizeAcceptedResult(result) {
     throwIfAborted();
-    if (isDeadlineExpired()) {
+    if (forRead && isDeadlineExpired()) {
       throw buildTypedAuthorityError(
         DEADLINE_EXPIRED_COMPLETION_MSG,
         DEADLINE_EXPIRED_COMPLETION_CODE,

@@ -183,9 +183,9 @@ function createRecoveryReadDelivery(executor, options = {}) {
       }, routerOptions);
       signal.throwIfAborted();
       pending.delete(address);
-      if (result.error) throw result.error;
       return {
         delivery: result.delivery,
+        error: result.error ?? null,
         ticket: result.ticket,
       };
     },
@@ -356,10 +356,15 @@ async function executePartitionLeaderRedirectAttempt(context) {
     };
   }
   const redirectDelivery = redirectOutcome.delivery;
-  unknownOutcome.observeTransport(deliveryTransportOf(redirectDelivery));
+  if (redirectDelivery) {
+    unknownOutcome.observeTransport(deliveryTransportOf(redirectDelivery));
+  }
   onRedirectSubmissionState(false);
   const redirectCompletion = invocation.completeDelivery({
-    delivery: redirectDelivery, redirectedFromAddress, ticket: redirectOutcome.ticket,
+    delivery: redirectDelivery,
+    error: redirectOutcome.error ?? null,
+    redirectedFromAddress,
+    ticket: redirectOutcome.ticket,
   });
   if (redirectCompletion.state === READ_COMPLETION_STATE.DEADLINE_EXPIRED) {
     attemptBudget.reportDeadlineSpentBeforeAttempt();
