@@ -62,6 +62,16 @@ import {registerPeerIdentityReservationOwner} from
   './raft-rs-membership-administration.js';
 import {reportRaftRsRuntimeFault} from './raft-rs-runtime-fault-log.js';
 import {
+  RAFT_AUTHORITY_CLOCK_UNSETTLED_REASON,
+  RAFT_CLOCK_OBLIGATION_STATE,
+  READ_CLOCK_OBLIGATION_TOKEN,
+  createPortClockObligationController,
+  hasMultiMemberConfState,
+  isPortScheduling,
+  readPortClockObligation,
+  reconcilePortClockObligation,
+} from './raft-rs-current-authority.js';
+import {
   CORE_OK,
   CORE_REFUSED,
   createRuntimeDispatcher,
@@ -168,17 +178,10 @@ function unwrapCoreOkResultObject(result) {
 function unwrapSettledTurnAnswer(turn) {
   let unwrapped;
   if (!turn.settled) {
-    unwrapped = buildUnwrappedTurn(
-      false,
-      TIMING_TURN_OUTCOME.PENDING,
-      TIMING_TURN_REASON.PENDING,
-    );
+    unwrapped = buildUnwrappedTurn(false, TIMING_TURN_OUTCOME.PENDING, TIMING_TURN_REASON.PENDING);
   } else if (!isRecordObject(turn.result)) {
     unwrapped = buildUnwrappedTurn(
-      false,
-      TIMING_TURN_OUTCOME.UNAVAILABLE,
-      TIMING_TURN_REASON.MISSING_RESULT,
-    );
+      false, TIMING_TURN_OUTCOME.UNAVAILABLE, TIMING_TURN_REASON.MISSING_RESULT);
   } else if (turn.result.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
     unwrapped = buildUnwrappedTurn(
       false,
@@ -195,30 +198,15 @@ function unwrapOutcomeTurnAnswer(turn) {
   let unwrapped;
   if (turn.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
     unwrapped = buildUnwrappedTurn(
-      false,
-      turn.outcome,
-      normalizeNonEmptyString(turn.reason, TIMING_TURN_REASON.REFUSED),
-    );
+      false, turn.outcome, normalizeNonEmptyString(turn.reason, TIMING_TURN_REASON.REFUSED));
   } else if (isRecordObject(turn.result)) {
     unwrapped = buildUnwrappedTurn(
-      true,
-      turn.outcome,
-      normalizeNonEmptyString(turn.reason, TIMING_CONFIGURED),
-      turn.result,
-    );
+      true, turn.outcome, normalizeNonEmptyString(turn.reason, TIMING_CONFIGURED), turn.result);
   } else if (!Object.hasOwn(turn, TURN_RESULT_FIELD) && isDirectConfigureTickReport(turn)) {
     unwrapped = buildUnwrappedTurn(
-      true,
-      turn.outcome,
-      normalizeNonEmptyString(turn.reason, TIMING_CONFIGURED),
-      turn,
-    );
+      true, turn.outcome, normalizeNonEmptyString(turn.reason, TIMING_CONFIGURED), turn);
   } else {
-    unwrapped = buildUnwrappedTurn(
-      false,
-      turn.outcome,
-      TIMING_TURN_REASON.MISSING_RESULT,
-    );
+    unwrapped = buildUnwrappedTurn(false, turn.outcome, TIMING_TURN_REASON.MISSING_RESULT);
   }
   return unwrapped;
 }
@@ -227,10 +215,7 @@ function unwrapConfigureTickTurn(turn) {
   let unwrapped;
   if (!isRecordObject(turn)) {
     unwrapped = buildUnwrappedTurn(
-      false,
-      TIMING_TURN_OUTCOME.UNAVAILABLE,
-      TIMING_TURN_REASON.UNAVAILABLE,
-    );
+      false, TIMING_TURN_OUTCOME.UNAVAILABLE, TIMING_TURN_REASON.UNAVAILABLE);
   } else if (typeof turn.settled === 'boolean') {
     unwrapped = unwrapSettledTurnAnswer(turn);
   } else if (typeof turn.outcome === 'string') {
@@ -244,10 +229,7 @@ function unwrapConfigureTickTurn(turn) {
     );
   } else {
     unwrapped = buildUnwrappedTurn(
-      false,
-      TIMING_TURN_OUTCOME.UNAVAILABLE,
-      TIMING_TURN_REASON.INVALID_REPORT,
-    );
+      false, TIMING_TURN_OUTCOME.UNAVAILABLE, TIMING_TURN_REASON.INVALID_REPORT);
   }
   return unwrapped;
 }
@@ -402,10 +384,58 @@ function closeDispatcher(dispatcher, lifecycle) {
     dispatcher.close({enterCore: false});
 }
 
+function subscribePortEvent(listeners, eventName, listener) {
+  const normalizedEventName = EVENT_ALIAS[eventName] || eventName;
+  if (!EVENTS.has(normalizedEventName)) {
+    throw new Error(`unknown raft-rs port event ${eventName}`);
+  }
+  if (typeof listener !== 'function') {
+    throw new TypeError('raft-rs port listener must be a function');
+  }
+  const eventListeners = listeners.get(normalizedEventName) || new Set();
+  eventListeners.add(listener);
+  listeners.set(normalizedEventName, eventListeners);
+  return Object.freeze(() => eventListeners.delete(listener));
+}
+
+function readCommittedLearnerActionFromPort(execute, groupId, readRequest) {
+  const normalized = normalizeCommittedLearnerRead(readRequest, groupId);
+  if (normalized.refusal) return normalized.refusal;
+  const answered = execute({
+    type: RUNTIME_COMMAND.READ_COMMITTED_MEMBERSHIP,
+    purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.LEARNER_ACTION,
+    query: normalized.query,
+  });
+  const bounded = (result) => result?.kind ? result : unavailableLearnerAction();
+  return turnChainValue(continueTurn(answered,
+    (result) => settledTurn(bounded(result))));
+}
+
+function isCommittedOrRefusedMembershipAnswer(committed) {
+  const kind = committed?.kind;
+  return kind === COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED ||
+    kind === COMMITTED_MEMBERSHIP_ANSWER_KIND.REFUSED;
+}
+
+function applyConfigureTickToClock(clockController, dispatcher, tickIntervalMs, nextTiming) {
+  const command = typeof nextTiming === 'number' ?
+    {tickIntervalMs: nextTiming} : (nextTiming || {});
+  const report = dispatcher.configureTiming(command);
+  if (report?.appliedToExistingCore === true) {
+    const nextMs = Number.isFinite(command?.tickIntervalMs) && command.tickIntervalMs > 0 ?
+      command.tickIntervalMs : tickIntervalMs;
+    clockController.updateTickIntervalMs(nextMs, {
+      rearmTimer: command?.rearmTimer === true,
+    });
+  }
+  return settledTurn(formatConfigureTickReport(report));
+}
+
 function finalizePortOpen({
   port,
   lifecycle,
   dispatcher,
+  clockController,
   identityRecordPending,
   identityRecorded,
   dispatch,
@@ -413,12 +443,14 @@ function finalizePortOpen({
   startScheduling,
 }) {
   registerRuntimeLifecycle(port, lifecycle);
+  clockController.reconcile();
   // The release of a pending identity record is its acknowledgement alone:
   // resolved, the gate may open; rejected (the fact never became durable),
   // nothing is released and the host closes the port.
   if (identityRecordPending && dispatcher !== null) {
     Promise.resolve(identityRecorded).then(
-      () => turnChainValue(dispatch(() => dispatcher.recordIdentity())),
+      () => turnChainValue(dispatch(() => dispatcher.recordIdentity())).finally(
+        () => clockController.reconcile()),
       () => undefined).catch(() => undefined);
   }
   if (deferElection !== true && lifecycle.active) {
@@ -480,7 +512,9 @@ function createRaftRsOperationPort(request) {
     db: database, groupId, peerId, replicaIdentity,
   });
   const listeners = new Map();
+  let clockController = null;
   const emit = (eventName, ...args) => {
+    clockController?.reconcile();
     for (const listener of listeners.get(eventName) || []) {
       listener(...args.map((value) => deepFreeze(value)));
     }
@@ -493,7 +527,6 @@ function createRaftRsOperationPort(request) {
   const timers = resolveTimeSource(
     request[RAFT_OPERATION_PORT_REQUEST.SUBSTRATE] || {});
   let tickIntervalMs = tickIntervalOf(timing);
-  let timer = null;
   let closed = false;
   const lifecycleIncarnation = lifecycle.incarnation;
   const dispatcherOptions = lifecycle.active ? {
@@ -564,10 +597,7 @@ function createRaftRsOperationPort(request) {
     createRuntimeDispatcher(dispatcherOptions);
 
   // Every entry into the runtime: admitted by the lifecycle owner, refused
-  // once the port is closed, and contained (containRuntimeThrow). It answers
-  // the runtime's turn, and each port operation hands its caller that turn
-  // as is (raft-rs-turn-answer.js): {settled: true, result} when the work
-  // completed within the call, {settled: false, pending} when it waits.
+  // once the port is closed, and contained (containRuntimeThrow).
   function dispatch(work) {
     return lifecycle.execute(() => {
       if (closed || dispatcher === null) {
@@ -581,61 +611,56 @@ function createRaftRsOperationPort(request) {
   // campaign, transfer, probe) is consensus protocol work for formation
   // attribution; status and membership reads stay with their caller.
   function protocolTurn(work) {
-    return runRaftProtocolActivity(() => dispatch(work));
+    return runRaftProtocolActivity(() => {
+      const turn = dispatch(work);
+      if (turn.settled) {
+        clockController?.reconcile();
+        return turn;
+      }
+      return pendingTurn(turn.pending.finally(() => {
+        clockController?.reconcile();
+      }));
+    });
   }
   const execute = (command) => dispatch(() => dispatcher.execute(command));
   const executeTurn = (command) =>
     protocolTurn(() => dispatcher.execute(command));
   const enqueueStep = (envelope) =>
     protocolTurn(() => settledTurn(dispatcher.enqueueStep(envelope)));
-  function clearTickTimer() {
-    if (timer !== null) {
-      timers.clearInterval(timer);
-      timer = null;
-    }
-  }
-  const stopScheduling = () => {
-    clearTickTimer();
-    return coreOk('scheduling-stopped');
-  };
+  const readSettledStatus = () =>
+    closed || dispatcher === null ?
+      null :
+      dispatcher.execute({type: RUNTIME_COMMAND.READ_STATUS}).result;
+  clockController = createPortClockObligationController({
+    deferElection: request[RAFT_OPERATION_PORT_REQUEST.DEFER_ELECTION],
+    joiningExistingGroup,
+    bootstrapPeerIds,
+    lifecycle,
+    timers,
+    getTickIntervalMs: () => tickIntervalMs,
+    setTickIntervalMs: (nextMs) => {
+      tickIntervalMs = nextMs;
+    },
+    runScheduledTick: () => executeTurn({type: 'tick'}),
+    readSettledStatus,
+    emit,
+  });
+  const stopScheduling = () =>
+    coreOk('scheduling-stopped', clockController.requestStopScheduling());
   // A group whose own history was proven lost - by the local-log guard, or
   // at its opening by the open-time rule - is held for a reseed by its
   // lifecycle owner (durable, survives a restart) and its ticks stop.
   function holdForReseed() {
-    clearTickTimer();
+    clockController.markHeldForReseed();
     return lifecycle.holdForReseed();
   }
-  // The scheduled tick is a contained port operation: it answers typed and
-  // never throws into its timer.
-  const scheduleTicks = () => {
-    stopScheduling();
-    timer = timers.setInterval(() => executeTurn({type: 'tick'}),
-      tickIntervalMs);
-    timer.unref?.();
+  const startScheduling = (options) => {
+    clockController.onClockArmed(options?.onClockArmed);
+    return dispatch(() =>
+      settledTurn(coreOk('scheduling-started', clockController.requestStartScheduling())));
   };
-  // Scheduling ticks the group from the moment it is asked for, whether or
-  // not the participation gate is open: the gate (O1) is enforced where a
-  // tick could campaign - the runtime owner enters the core with a gated
-  // group's tick only while its core is not promotable (a learner), which
-  // raft-rs never campaigns - so a gated replica's election timer, and the
-  // check-quorum lease it bounds, keeps running instead of freezing.
-  const startScheduling = () => dispatch(() => {
-    scheduleTicks();
-    return settledTurn(coreOk('scheduling-started'));
-  });
-  const subscribe = (eventName, listener) => {
-    const normalizedEventName = EVENT_ALIAS[eventName] || eventName;
-    if (!EVENTS.has(normalizedEventName)) {
-      throw new Error(`unknown raft-rs port event ${eventName}`);
-    }
-    if (typeof listener !== 'function') {
-      throw new TypeError('raft-rs port listener must be a function');
-    }
-    const eventListeners = listeners.get(normalizedEventName) || new Set();
-    eventListeners.add(listener);
-    listeners.set(normalizedEventName, eventListeners);
-    return Object.freeze(() => eventListeners.delete(listener));
-  };
+  const subscribe = (eventName, listener) =>
+    subscribePortEvent(listeners, eventName, listener);
   const port = createRaftOperationPort({
     subscribe,
     step: enqueueStep,
@@ -669,7 +694,10 @@ function createRaftRsOperationPort(request) {
     probePeerProgress: (replicaIdentity) => executeTurn({
       type: RUNTIME_COMMAND.PROBE_PEER_PROGRESS, replicaIdentity,
     }),
-    tick: () => executeTurn({type: 'tick'}),
+    tick: () => {
+      clockController.recordManualTick();
+      return executeTurn({type: 'tick'});
+    },
     campaign: () => executeTurn({type: 'campaign'}),
     // A status read never waits (the runtime's readStatusNow): returns the
     // owner's last settled immutable observation without entering the core.
@@ -682,15 +710,8 @@ function createRaftRsOperationPort(request) {
     // COMMITTED_MEMBERSHIP_READ_PURPOSE; a bootstrap read by default).
     [RAFT_OPERATION.READ_COMMITTED_MEMBERSHIP]: (readRequest) => {
       if (readRequest?.purpose === COMMITTED_MEMBERSHIP_READ_PURPOSE.LEARNER_ACTION) {
-        const normalized = normalizeCommittedLearnerRead(readRequest, groupId);
-        if (normalized.refusal) return normalized.refusal;
-        const answered = execute({type: RUNTIME_COMMAND.READ_COMMITTED_MEMBERSHIP,
-          purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.LEARNER_ACTION, query: normalized.query});
-        const bounded = (result) => result?.kind ? result : unavailableLearnerAction();
-        return turnChainValue(continueTurn(answered,
-          (result) => settledTurn(bounded(result))));
+        return readCommittedLearnerActionFromPort(execute, groupId, readRequest);
       }
-      // A bootstrap/witness read answers at once from the settled observation.
       const answered = execute({
         type: RUNTIME_COMMAND.READ_COMMITTED_MEMBERSHIP,
         purpose: readRequest?.purpose ??
@@ -700,11 +721,9 @@ function createRaftRsOperationPort(request) {
         includeRole: readRequest?.includeRole === true,
       });
       const committed = answered.settled ? answered.result : null;
-      if (committed?.kind !== COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED &&
-          committed?.kind !== COMMITTED_MEMBERSHIP_ANSWER_KIND.REFUSED) {
-        return committedMembershipRefusal(COMMITTED_MEMBERSHIP_REFUSAL.HELD);
-      }
-      return committed;
+      return isCommittedOrRefusedMembershipAnswer(committed) ?
+        committed :
+        committedMembershipRefusal(COMMITTED_MEMBERSHIP_REFUSAL.HELD);
     },
     [RAFT_OPERATION.PROPOSE_MEMBERSHIP_TRANSITION]: (request, admitExecution) =>
       protocolTurn(() => {
@@ -715,23 +734,11 @@ function createRaftRsOperationPort(request) {
             transition: normalized.command,
           });
       }),
-    configureTick: (nextTiming) => dispatch(() => {
-      const command = typeof nextTiming === 'number' ?
-        {tickIntervalMs: nextTiming} : (nextTiming || {});
-      const wasScheduling = timer !== null;
-      const report = dispatcher.configureTiming(command);
-      if (
-        report?.appliedToExistingCore === true &&
-        Number.isFinite(command?.tickIntervalMs) &&
-        command.tickIntervalMs > 0
-      ) {
-        tickIntervalMs = command.tickIntervalMs;
-        if (wasScheduling) {
-          scheduleTicks();
-        }
-      }
-      return settledTurn(formatConfigureTickReport(report));
-    }),
+    configureTick: (nextTiming) =>
+      nextTiming === READ_CLOCK_OBLIGATION_TOKEN ?
+        settledTurn(clockController.readSnapshot()) :
+        dispatch(() =>
+          applyConfigureTickToClock(clockController, dispatcher, tickIntervalMs, nextTiming)),
     startScheduling,
     stopScheduling,
     close,
@@ -751,7 +758,7 @@ function createRaftRsOperationPort(request) {
       return coreOk(ALREADY_CLOSED);
     }
     closed = true;
-    stopScheduling();
+    clockController.close();
     listeners.clear();
     const result = closeDispatcher(dispatcher, lifecycle);
     unregisterRuntimeLifecycle(port, lifecycle);
@@ -762,6 +769,7 @@ function createRaftRsOperationPort(request) {
     port,
     lifecycle,
     dispatcher,
+    clockController,
     identityRecordPending,
     identityRecorded,
     dispatch,
@@ -774,8 +782,14 @@ function createRaftRsOperationPort(request) {
 // audit), so the binding verdict a dry run reports is passed through here: a
 // digest and load check that returns a state and never dispatches.
 export {
+  RAFT_AUTHORITY_CLOCK_UNSETTLED_REASON,
+  RAFT_CLOCK_OBLIGATION_STATE,
   applyPortRaftTimingConfig,
   createRaftRsOperationPort,
+  hasMultiMemberConfState,
+  isPortScheduling,
+  readPortClockObligation,
   readPortEffectiveRaftTiming,
+  reconcilePortClockObligation,
   verifyRaftRsBinding,
 };

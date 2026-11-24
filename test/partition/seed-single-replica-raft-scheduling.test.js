@@ -35,6 +35,7 @@ import {
   createCommittedMembershipHarness,
   createJoinOperation,
   metadataCache,
+  requestAdmission,
   serviceRow,
   statusOf,
   waitFor,
@@ -69,8 +70,16 @@ import {
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
 import {
+  RAFT_AUTHORITY_OBSERVATION,
+  RAFT_EVENT,
   RAFT_LEADERSHIP_TRANSFER_SUCCESSOR,
+  RAFT_OPERATION_OUTCOME,
 } from '../../src/raft/raft-operation-port-constants.js';
+import {
+  RAFT_AUTHORITY_CLOCK_UNSETTLED_REASON,
+  isPortScheduling,
+  readPortClockObligation,
+} from '../../src/raft/raft-rs-operation-port.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 
 setTestPortBase(26500);
@@ -418,6 +427,54 @@ function deriveJoinerElectionBudgetMs(services) {
   return Math.max(CONVERGENCE_BUDGET_MS, maxJoinerElectionMaxMs * 2);
 }
 
+function hasElectedJoinerQuorumLeader(r2, r3) {
+  const joinerLeader = [r2, r3].find((svc) =>
+    svc.isLeader && statusOf(svc).term > 1);
+  if (!joinerLeader) {
+    return false;
+  }
+  const otherJoiner = joinerLeader === r2 ? r3 : r2;
+  return statusOf(otherJoiner).leaderId === joinerLeader.replicaId;
+}
+
+function hasHealedFounderConverged(seed, r2, r3) {
+  const currentLeader = [r2, r3].find((svc) =>
+    svc.isLeader && statusOf(svc).term > 1);
+  if (!currentLeader) {
+    return false;
+  }
+  const leaderTerm = statusOf(currentLeader).term;
+  return (
+    !seed.isLeader &&
+    statusOf(seed).term === leaderTerm &&
+    statusOf(seed).leaderId === currentLeader.replicaId &&
+    statusOf(seed).appliedIndex >= statusOf(currentLeader).commitIndex
+  );
+}
+
+function resolveCheckQuorumBoundMs(service) {
+  return service.effectiveRaftTiming()?.effective?.effectiveElectionMaxMs || 300;
+}
+
+function selectJoinerLeader(r2, r3) {
+  return r2.isLeader ? r2 : r3;
+}
+
+function assertLeaderReadResult(readResult, expectedSeqs, expectedTerm) {
+  assert.equal(readResult.success, true);
+  assert.deepEqual(readRemoteSeqs(readResult), expectedSeqs);
+  assert.equal(readResult.readAuthorityWitness?.role, LEADER_ROLE);
+  assert.equal(readResult.readAuthorityWitness?.term, expectedTerm);
+}
+
+function assertRefusedIsolatedLeaderRead(readResult) {
+  assert.equal(readResult.success, false);
+  assert.equal(readResult.failureCode, OWNER_FACT_UNAVAILABLE_REASON.NOT_LEADER);
+  assert.equal(readResult.rows, undefined);
+  assert.equal(readResult.rowSet, undefined);
+  assert.notEqual(readResult.readAuthorityWitness?.role, LEADER_ROLE);
+}
+
 test('single-replica deferred founder starts ticks on committed RF2/RF3 ' +
   'growth before handoff, demotes on pre-handoff isolation, and heals cleanly',
 async () => {
@@ -458,6 +515,14 @@ async () => {
       'solo term-1 founder must not start periodic ticks at startElection');
     assert.equal(seed.isSoloReplicaGroup(), true,
       'founder must still report solo replica group before ConfChange growth');
+    assert.equal(readPortClockObligation(seed.raft)?.clockRequired, false,
+      'solo term-1 founder must start with clockRequired === false');
+    assert.equal(seed.isScheduling(), false,
+      'solo term-1 founder must not arm periodic timer while RF1');
+    assert.equal(isPortScheduling(seed.raft), false,
+      'port isPortScheduling must be false while in solo-founder deferral');
+    assert.equal(seed.raft.observeCurrentAuthority().clockRequired, false,
+      'observeCurrentAuthority must report clockRequired === false while RF1');
 
     // Grow RF1 -> RF2 via production ConfChange admission: ticks must start
     // immediately while the founder is still leader in term 1 before handoff.
@@ -470,6 +535,16 @@ async () => {
       'committed RF2 growth must clear solo-group state');
     assert.equal(seed.deferredFounderSchedulingPending, false,
       'committed RF1 -> RF2 growth must clear deferredFounderSchedulingPending');
+    assert.equal(readPortClockObligation(seed.raft)?.clockRequired, true,
+      'committed RF1 -> RF2 transition must make clockRequired === true');
+    assert.equal(seed.isScheduling(), true,
+      'committed RF1 -> RF2 transition must arm periodic scheduler immediately');
+    assert.equal(isPortScheduling(seed.raft), true,
+      'port isPortScheduling must be true immediately after RF1 -> RF2');
+    assert.equal(seed.raft.observeCurrentAuthority().clockRequired, true,
+      'observeCurrentAuthority must report clockRequired === true after RF2');
+    assert.equal(seed.raft.observeCurrentAuthority().clockArmed, true,
+      'observeCurrentAuthority must report clockArmed === true after RF2');
     assert.equal(startedTimerPayloads.length, 1,
       'committed RF1 -> RF2 growth must start the founder Raft tick timer once');
 
@@ -482,40 +557,33 @@ async () => {
       'founder term must still be 1 prior to isolation');
     assert.equal(seed.deferredFounderSchedulingPending, false,
       'RF3 founder must keep deferredFounderSchedulingPending cleared');
+    assert.equal(readPortClockObligation(seed.raft)?.clockRequired, true,
+      'RF3 founder must keep clockRequired === true');
+    assert.equal(seed.isScheduling(), true,
+      'RF3 founder must keep periodic scheduling active');
     assert.equal(startedTimerPayloads.length, 1,
       'RF3 growth must not re-start the founder Raft tick timer twice');
 
     await resumeFixtureParticipantGroupAdmission([seed, r2, r3], waitForAsync);
     await commitRemoteSeq(seed, INITIAL_SEQ, 'pre-isolation-seq-1');
     const preIsolationRead = await readLeaderQualified(seed);
-    assert.equal(preIsolationRead.success, true,
-      'term-1 RF3 leader must serve leader-qualified read before isolation');
-    assert.deepEqual(readRemoteSeqs(preIsolationRead), [INITIAL_SEQ]);
-    assert.equal(preIsolationRead.readAuthorityWitness?.role, LEADER_ROLE);
-    assert.equal(preIsolationRead.readAuthorityWitness?.term, 1);
+    assertLeaderReadResult(preIsolationRead, [INITIAL_SEQ], 1);
 
     // Isolate the founder BEFORE its first leadership handoff while keeping
     // its local handleRemoteQuery receiver reachable.
     harness.network.cut(addressOf(SEED_REPLICA), statusOf(seed).peerId);
 
     const joinerElectionBudgetMs = deriveJoinerElectionBudgetMs([r2, r3]);
-    const joinerElectionOk = await waitFor(() => {
-      const joinerLeader = [r2, r3].find((svc) =>
-        svc.isLeader && statusOf(svc).term > 1);
-      if (!joinerLeader) {
-        return false;
-      }
-      const otherJoiner = joinerLeader === r2 ? r3 : r2;
-      return statusOf(otherJoiner).leaderId === joinerLeader.replicaId;
-    }, joinerElectionBudgetMs);
+    const joinerElectionOk = await waitFor(
+      () => hasElectedJoinerQuorumLeader(r2, r3),
+      joinerElectionBudgetMs,
+    );
     assert.equal(joinerElectionOk, true,
       'surviving joiner quorum {r2, r3} must elect a term >= 2 leader');
 
     // Advance beyond the founder's effective check_quorum election bound and
     // verify active ticks demote the isolated term-1 leader.
-    const checkQuorumBoundMs =
-      seed.effectiveRaftTiming()?.effective?.effectiveElectionMaxMs ?? 300;
-    await delay(checkQuorumBoundMs + CHECK_QUORUM_MIN_WAIT_MS);
+    await delay(resolveCheckQuorumBoundMs(seed) + CHECK_QUORUM_MIN_WAIT_MS);
     const seedDemoted = await waitFor(() =>
       !seed.isLeader &&
       seed.role !== LEADER_ROLE &&
@@ -537,15 +605,7 @@ async () => {
 
     const isolatedLeaderRead = await readLeaderQualified(
       seed, LEADER_REQUIRED_READ);
-    assert.equal(isolatedLeaderRead.success, false,
-      'leader-qualified read on isolated founder must fail closed');
-    assert.equal(
-      isolatedLeaderRead.failureCode,
-      OWNER_FACT_UNAVAILABLE_REASON.NOT_LEADER,
-    );
-    assert.equal(isolatedLeaderRead.rows, undefined);
-    assert.equal(isolatedLeaderRead.rowSet, undefined);
-    assert.notEqual(isolatedLeaderRead.readAuthorityWitness?.role, LEADER_ROLE);
+    assertRefusedIsolatedLeaderRead(isolatedLeaderRead);
 
     const isolatedOwnerFactRead = await readLeaderQualified(
       seed,
@@ -555,50 +615,30 @@ async () => {
         term: 1,
       }),
     );
-    assert.equal(isolatedOwnerFactRead.success, false,
-      'owner-fact leader read on isolated founder must fail closed');
-    assert.equal(
-      isolatedOwnerFactRead.failureCode,
-      OWNER_FACT_UNAVAILABLE_REASON.NOT_LEADER,
-    );
-    assert.equal(isolatedOwnerFactRead.rows, undefined);
-    assert.equal(isolatedOwnerFactRead.rowSet, undefined);
+    assertRefusedIsolatedLeaderRead(isolatedOwnerFactRead);
 
     // Heal connectivity and prove useful recovery: seed converges to the
     // joiner leader's term and the healed RF3 group serves writes and reads.
     harness.network.heal();
 
-    const healedConvergenceOk = await waitFor(() => {
-      const currentLeader = [r2, r3].find((svc) =>
-        svc.isLeader && statusOf(svc).term > 1);
-      if (!currentLeader) {
-        return false;
-      }
-      const leaderTerm = statusOf(currentLeader).term;
-      return (
-        !seed.isLeader &&
-        statusOf(seed).term === leaderTerm &&
-        statusOf(seed).leaderId === currentLeader.replicaId &&
-        statusOf(seed).appliedIndex >= statusOf(currentLeader).commitIndex
-      );
-    }, CONVERGENCE_BUDGET_MS);
+    const healedConvergenceOk = await waitFor(
+      () => hasHealedFounderConverged(seed, r2, r3),
+      CONVERGENCE_BUDGET_MS,
+    );
     assert.equal(healedConvergenceOk, true,
       'healed founder must converge to the new term and leader');
 
-    const currentLeader = r2.isLeader ? r2 : r3;
+    const currentLeader = selectJoinerLeader(r2, r3);
     const healedTerm = statusOf(currentLeader).term;
     await resumeFixtureParticipantGroupAdmission([seed, r2, r3], waitForAsync);
     await commitRemoteSeq(currentLeader, HEALED_SEQ, 'healed-seq-2');
 
     const healedLeaderRead = await readLeaderQualified(currentLeader);
-    assert.equal(healedLeaderRead.success, true,
-      'healed RF3 leader must serve leader-qualified reads cleanly');
-    assert.deepEqual(
-      readRemoteSeqs(healedLeaderRead),
+    assertLeaderReadResult(
+      healedLeaderRead,
       [INITIAL_SEQ, HEALED_SEQ],
+      healedTerm,
     );
-    assert.equal(healedLeaderRead.readAuthorityWitness?.role, LEADER_ROLE);
-    assert.equal(healedLeaderRead.readAuthorityWitness?.term, healedTerm);
 
     const healedSeedRedirect = await readLeaderQualified(seed);
     assert.equal(healedSeedRedirect.success, false);
@@ -627,6 +667,373 @@ async () => {
       readRemoteSeqs(seedFollowerRead),
       [INITIAL_SEQ, HEALED_SEQ],
     );
+  } finally {
+    await harness.dispose();
+  }
+});
+
+test('reconstructing an existing RF3 replica from durable SQLite storage ' +
+  'starts with clockRequired === true and active scheduling without a new ' +
+  'membership-change event', async () => {
+  configure();
+  const harness = createCommittedMembershipHarness('seed-rf3-reconstruct-p1');
+  try {
+    const seed = harness.build(SEED_REPLICA, {
+      replicaIds: [SEED_REPLICA[0]],
+      peerAddresses: [addressOf(SEED_REPLICA)],
+      cache: metadataCache(harness.partitionId, [SEED_REPLICA]),
+      deferElection: true,
+    });
+    await seed.initialize();
+    assert.equal(await waitFor(() => statusOf(seed).appliedIndex > 0), true);
+    seed.startElection();
+    assert.equal(readPortClockObligation(seed.raft)?.clockRequired, false);
+    assert.equal(seed.isScheduling(), false);
+
+    await addJoiner(harness, JOINER_TWO, [SEED_REPLICA]);
+    await addJoiner(harness, JOINER_THREE, [SEED_REPLICA, JOINER_TWO]);
+    const r2 = harness.services.get(JOINER_TWO[0]);
+    const r3 = harness.services.get(JOINER_THREE[0]);
+    await resumeFixtureParticipantGroupAdmission([seed, r2, r3], waitForAsync);
+    await commitRemoteSeq(seed, INITIAL_SEQ, 'rf3-reconstruct-seq-1');
+
+    const oldSeedPort = seed.raft;
+    await seed.shutdown();
+    assert.equal(isPortScheduling(oldSeedPort), false,
+      'shutting down RF3 founder must clear its periodic scheduler');
+    assert.equal(readPortClockObligation(oldSeedPort)?.clockRequired, false,
+      'closed port must end its clock obligation');
+
+    // Reopen seed from the same durable SQLite storage (keeping its original
+    // single-founder replicaIds array so only durable SQLite ConfState proves
+    // it is already an RF3 member).
+    const allMembers = [SEED_REPLICA, JOINER_TWO, JOINER_THREE];
+    const reopenedSeed = harness.build(SEED_REPLICA, {
+      replicaIds: [SEED_REPLICA[0]],
+      peerAddresses: [addressOf(SEED_REPLICA)],
+      cache: metadataCache(harness.partitionId, allMembers),
+      deferElection: true,
+    });
+    await reopenedSeed.initialize();
+
+    let membershipEventsAfterOpen = 0;
+    let confChangeEventsAfterOpen = 0;
+    reopenedSeed.raft.subscribe(RAFT_EVENT.MEMBERSHIP_CHANGED, () => {
+      membershipEventsAfterOpen += 1;
+    });
+    reopenedSeed.raft.subscribe(RAFT_EVENT.CONF_CHANGE_APPLIED, () => {
+      confChangeEventsAfterOpen += 1;
+    });
+
+    assert.equal(
+      readPortClockObligation(reopenedSeed.raft)?.clockRequired,
+      true,
+      'reconstructed RF3 replica must start with clockRequired === true ' +
+      'from durable SQLite storage before any new membership event',
+    );
+    assert.equal(
+      reopenedSeed.raft.observeCurrentAuthority().clockRequired,
+      true,
+      'observeCurrentAuthority on reconstructed RF3 replica must report ' +
+      'clockRequired === true immediately',
+    );
+
+    reopenedSeed.startElection();
+    assert.equal(membershipEventsAfterOpen, 0,
+      'reconstructed RF3 scheduling must not depend on MEMBERSHIP_CHANGED');
+    assert.equal(confChangeEventsAfterOpen, 0,
+      'reconstructed RF3 scheduling must not depend on CONF_CHANGE_APPLIED');
+    assert.equal(reopenedSeed.deferredFounderSchedulingPending, false,
+      'reconstructed RF3 replica must not enter solo-founder deferral');
+    assert.equal(
+      readPortClockObligation(reopenedSeed.raft)?.clockRequired,
+      true,
+      'reconstructed RF3 replica must retain clockRequired === true',
+    );
+    assert.equal(reopenedSeed.isScheduling(), true,
+      'reconstructed RF3 replica must arm periodic scheduling immediately');
+    assert.equal(isPortScheduling(reopenedSeed.raft), true,
+      'reconstructed RF3 port must report isPortScheduling === true');
+    assert.equal(
+      reopenedSeed.raft.observeCurrentAuthority().clockArmed,
+      true,
+      'reconstructed RF3 authority observation must report clockArmed === true',
+    );
+
+    const convergedAfterReopen = await waitFor(() => {
+      const activeLeader = [reopenedSeed, r2, r3].find((svc) => svc.isLeader);
+      if (!activeLeader) {
+        return false;
+      }
+      return (
+        statusOf(reopenedSeed).leaderId === activeLeader.replicaId &&
+        statusOf(reopenedSeed).appliedIndex >= statusOf(activeLeader).commitIndex
+      );
+    }, deriveJoinerElectionBudgetMs([reopenedSeed, r2, r3]));
+    assert.equal(convergedAfterReopen, true,
+      'reconstructed RF3 replica must actively tick and converge with quorum');
+  } finally {
+    await harness.dispose();
+  }
+});
+
+const RAFT_TICK_TIMER_MAX_DELAY_MS = 500;
+
+function createFailableTimeSource(baseTimeSource) {
+  const activeTimers = new Set();
+  let failSetInterval = false;
+  let failedAttempts = 0;
+  const wrapped = {
+    now: () => baseTimeSource.now(),
+    setTimeout: (...args) => baseTimeSource.setTimeout(...args),
+    clearTimeout: (handle) => baseTimeSource.clearTimeout(handle),
+    setInterval: (callback, delayMs, ...args) => {
+      const isRaftTickTimer =
+        Number.isFinite(delayMs) && delayMs <= RAFT_TICK_TIMER_MAX_DELAY_MS;
+      if (isRaftTickTimer && failSetInterval) {
+        failedAttempts += 1;
+        throw new Error('injected timer registration failure');
+      }
+      const handle = baseTimeSource.setInterval(callback, delayMs, ...args);
+      if (isRaftTickTimer) {
+        activeTimers.add(handle);
+      }
+      return handle;
+    },
+    clearInterval: (handle) => {
+      activeTimers.delete(handle);
+      return baseTimeSource.clearInterval(handle);
+    },
+    setFailSetInterval: (nextValue) => {
+      failSetInterval = nextValue === true;
+    },
+    getFailedAttempts: () => failedAttempts,
+    getActiveTimerCount: () => activeTimers.size,
+  };
+  return wrapped;
+}
+
+test('deliberate regression control: failed or suppressed required clock ' +
+  'with tickBacklog === 0 fails closed in observeCurrentAuthority and ' +
+  'leader-qualified read receivers', async () => {
+  configure();
+  const harness = createCommittedMembershipHarness('seed-clock-fail-closed-p1');
+  try {
+    const seed = harness.build(SEED_REPLICA, {
+      replicaIds: [SEED_REPLICA[0]],
+      peerAddresses: [addressOf(SEED_REPLICA)],
+      cache: metadataCache(harness.partitionId, [SEED_REPLICA]),
+      deferElection: true,
+    });
+    const failableClock = createFailableTimeSource(seed.timeSource);
+    seed.providedTimeSource = failableClock;
+    seed.timeSource = failableClock;
+
+    await seed.initialize();
+    assert.equal(await waitFor(() => statusOf(seed).appliedIndex > 0), true);
+    seed.startElection();
+
+    // While RF1 solo founder in term 1, clockRequired is false and leader
+    // authority is settled.
+    await resumeFixtureParticipantGroupAdmission([seed], waitForAsync);
+    await commitRemoteSeq(seed, INITIAL_SEQ, 'clock-control-seq-1');
+    const soloAuth = seed.raft.observeCurrentAuthority();
+    assert.equal(soloAuth.clockRequired, false);
+    assert.equal(soloAuth.clockArmed, false);
+    assert.equal(soloAuth.tickBacklog, 0);
+    assert.equal(soloAuth.role, LEADER_ROLE);
+
+    // Inject timer-registration failure right before committed RF1 -> RF2
+    // growth so the automatic clock transition fails to register its timer.
+    failableClock.setFailSetInterval(true);
+    await addJoiner(harness, JOINER_TWO, [SEED_REPLICA]);
+    assert.equal(failableClock.getFailedAttempts() >= 1, true,
+      'automatic RF1 -> RF2 clock arming must have attempted setInterval');
+    assert.equal(statusOf(seed).role, LEADER_ROLE,
+      'raw core status still reports leader in term 1');
+    assert.equal(statusOf(seed).term, 1);
+    assert.equal(readPortClockObligation(seed.raft)?.clockRequired, true,
+      'clockRequired must be true after committed RF1 -> RF2 growth');
+    assert.equal(seed.isScheduling(), false,
+      'clock must report unarmed when setInterval failed');
+
+    const failedClockAuth = seed.raft.observeCurrentAuthority();
+    assert.equal(failedClockAuth.tickBacklog, 0,
+      'premise: tickBacklog is 0 when required timer failed to arm');
+    assert.equal(failedClockAuth.clockRequired, true);
+    assert.equal(failedClockAuth.clockArmed, false);
+    assert.equal(
+      failedClockAuth.role,
+      RAFT_AUTHORITY_OBSERVATION.NOT_SETTLED,
+      'observeCurrentAuthority must refuse settled LEADER when required ' +
+      'clock failed to arm even with tickBacklog === 0',
+    );
+    assert.equal(
+      failedClockAuth.unsettledReason,
+      RAFT_AUTHORITY_CLOCK_UNSETTLED_REASON.REQUIRED_CLOCK_STOPPED,
+    );
+    assert.equal(failedClockAuth.currentTermApplied, false);
+
+    const failedLeaderRead = await readLeaderQualified(
+      seed,
+      LEADER_REQUIRED_READ,
+    );
+    assert.equal(failedLeaderRead.success, false,
+      'leader-qualified read must fail closed when required clock is unarmed');
+    assert.equal(
+      failedLeaderRead.failureCode,
+      OWNER_FACT_UNAVAILABLE_REASON.NOT_LEADER,
+    );
+    assert.equal(failedLeaderRead.rows, undefined);
+    assert.equal(failedLeaderRead.rowSet, undefined);
+    assert.equal(
+      failedLeaderRead.readAuthorityWitness?.role,
+      RAFT_AUTHORITY_OBSERVATION.NOT_SETTLED,
+    );
+
+    const failedOwnerFactRead = await readLeaderQualified(
+      seed,
+      leaderReadRequestOf({
+        partitionId: harness.partitionId,
+        index: INITIAL_SEQ,
+        term: 1,
+      }),
+    );
+    assert.equal(failedOwnerFactRead.success, false,
+      'owner-fact leader read must fail closed when required clock is unarmed');
+    assert.equal(
+      failedOwnerFactRead.failureCode,
+      OWNER_FACT_UNAVAILABLE_REASON.NOT_LEADER,
+    );
+    assert.equal(failedOwnerFactRead.rows, undefined);
+    assert.equal(failedOwnerFactRead.rowSet, undefined);
+
+    // Valid companion control: restore timer registration, arm scheduling,
+    // and prove the exact same leader now reports settled LEADER and serves.
+    failableClock.setFailSetInterval(false);
+    const rearmed = await turnChainValue(seed.raft.startScheduling());
+    assert.equal(rearmed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
+    assert.equal(seed.isScheduling(), true);
+    const healthyAuth = seed.raft.observeCurrentAuthority();
+    assert.equal(healthyAuth.clockRequired, true);
+    assert.equal(healthyAuth.clockArmed, true);
+    assert.equal(healthyAuth.tickBacklog, 0);
+    assert.equal(healthyAuth.role, LEADER_ROLE);
+    assert.equal(healthyAuth.unsettledReason, null);
+    const healthyRead = await readLeaderQualified(seed, LEADER_REQUIRED_READ);
+    assert.equal(healthyRead.success, true,
+      'valid companion: once required clock is armed, leader read succeeds');
+    assert.deepEqual(readRemoteSeqs(healthyRead), [INITIAL_SEQ]);
+
+    // Deliberately suppress/stop scheduling on the grown leader (tickBacklog=0)
+    // and verify observeCurrentAuthority and leader reads fail closed again.
+    seed.raft.stopScheduling();
+    assert.equal(seed.isScheduling(), false);
+    const stoppedClockAuth = seed.raft.observeCurrentAuthority();
+    assert.equal(stoppedClockAuth.tickBacklog, 0);
+    assert.equal(stoppedClockAuth.clockRequired, true);
+    assert.equal(stoppedClockAuth.clockArmed, false);
+    assert.equal(
+      stoppedClockAuth.role,
+      RAFT_AUTHORITY_OBSERVATION.NOT_SETTLED,
+    );
+    assert.equal(
+      stoppedClockAuth.unsettledReason,
+      RAFT_AUTHORITY_CLOCK_UNSETTLED_REASON.REQUIRED_CLOCK_STOPPED,
+    );
+    const stoppedLeaderRead = await readLeaderQualified(
+      seed,
+      LEADER_REQUIRED_READ,
+    );
+    assert.equal(stoppedLeaderRead.success, false,
+      'leader-qualified read must fail closed when required clock is stopped');
+    assert.equal(
+      stoppedLeaderRead.failureCode,
+      OWNER_FACT_UNAVAILABLE_REASON.NOT_LEADER,
+    );
+    assert.equal(stoppedLeaderRead.rows, undefined);
+    assert.equal(stoppedLeaderRead.rowSet, undefined);
+  } finally {
+    await harness.dispose();
+  }
+});
+
+test('close and shutdown cleanly end clock obligation and prevent orphaned ' +
+  'timers even when a membership transition races with closure', async () => {
+  configure();
+  const harness = createCommittedMembershipHarness('seed-clock-close-race-p1');
+  try {
+    const seed = harness.build(SEED_REPLICA, {
+      replicaIds: [SEED_REPLICA[0]],
+      peerAddresses: [addressOf(SEED_REPLICA)],
+      cache: metadataCache(harness.partitionId, [SEED_REPLICA]),
+      deferElection: true,
+    });
+    const trackedClock = createFailableTimeSource(seed.timeSource);
+    seed.providedTimeSource = trackedClock;
+    seed.timeSource = trackedClock;
+
+    await seed.initialize();
+    assert.equal(await waitFor(() => statusOf(seed).appliedIndex > 0), true);
+    seed.startElection();
+    assert.equal(trackedClock.getActiveTimerCount(), 0);
+
+    // Subscribe a listener that closes the port mid-transition as soon as
+    // MEMBERSHIP_CHANGED fires on RF1 -> RF2 growth.
+    const port = seed.raft;
+    let closedDuringTransition = false;
+    port.subscribe(RAFT_EVENT.MEMBERSHIP_CHANGED, () => {
+      if (!closedDuringTransition) {
+        closedDuringTransition = true;
+        port.close();
+      }
+    });
+
+    const rows = [serviceRow(harness.partitionId, SEED_REPLICA)];
+    const {operation} = await createJoinOperation(harness, {
+      target: JOINER_TWO,
+      rows,
+      leaderHint: SEED_REPLICA[1],
+    });
+    const targetCache = metadataCache(
+      harness.partitionId,
+      [SEED_REPLICA, JOINER_TWO],
+      {leaderNodeId: SEED_REPLICA[1]},
+    );
+    await buildTargetFromOperation(harness, {
+      target: JOINER_TWO,
+      operation,
+      cache: targetCache,
+    });
+    harness.caches.get(SEED_REPLICA[0]).applySystemTableChange(
+      TABLES.SERVICES,
+      CDC_OPERATION.INSERT,
+      serviceRow(harness.partitionId, JOINER_TWO),
+    );
+    await requestAdmission(harness, JOINER_TWO).catch(() => undefined);
+    assert.equal(closedDuringTransition, true,
+      'transition listener must have raced port.close() during RF1 -> RF2');
+    assert.equal(trackedClock.getActiveTimerCount(), 0,
+      'close() racing with transition must leave 0 active interval timers');
+    assert.equal(isPortScheduling(port), false,
+      'closed port must report isPortScheduling === false');
+    assert.equal(readPortClockObligation(port)?.clockRequired, false,
+      'closed port must end its clock obligation');
+
+    const startAfterClose = await turnChainValue(port.startScheduling());
+    assert.equal(startAfterClose.outcome, RAFT_OPERATION_OUTCOME.CORE_REFUSED);
+    assert.equal(trackedClock.getActiveTimerCount(), 0,
+      'startScheduling after close must not arm any timer');
+
+    const configureAfterClose = await turnChainValue(
+      port.configureTick({tickIntervalMs: 10, rearmTimer: true}),
+    );
+    assert.equal(
+      configureAfterClose.outcome,
+      RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+    );
+    assert.equal(trackedClock.getActiveTimerCount(), 0,
+      'configureTick after close must not arm any timer');
   } finally {
     await harness.dispose();
   }
