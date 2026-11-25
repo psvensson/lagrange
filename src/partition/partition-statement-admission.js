@@ -1,35 +1,12 @@
 // The statement-admission owner: the single owner of what caller-supplied SQL
 // text may be prepared on a partition's shared SQLite connection (TX1 design
-// revision 10, section 3.3; owner rowid conditions 1-5). Every site that
-// prepares caller-supplied text routes through it:
-// - executeQuery (the query wire and every internal caller), sessionless and
-//   legacy sessionId-only session statements alike, and executeLocalQuery
-//   (the unreplicated bootstrap path);
-// - the CDC bootstrap direct path's head check, and the local system-table
-//   read (its raw-prepare fallback);
-// - the committed SQL apply, where an offending committed statement is
-//   recorded STATEMENT_FAILED `partition_write_statement_refused`, a function
-//   of the command bytes and the replicated schema, identical on every
-//   replica.
+// revision 10, section 3.3; owner rowid conditions 1-5).
 // The kind rule is a pure function of the SQLite-lexed head: nothing it
-// refuses is ever prepared (preparing a flag PRAGMA already sets the flag).
-// Only WITH is prepared before its kind is known, and a WITH statement can
-// change no connection state at prepare. Single-quoted names are read as
-// SQLite reads them (partition-statement-admission-names.js). Text rules then
-// refuse, before any prepare and on every path: a table-valued pragma
-// function or a connection-state function (reads included; pragma_optimize
-// runs ANALYZE on the replica that steps it), and for writes an OR ROLLBACK
-// conflict clause and a target other than the partition's own table. On
-// writes the rowid rules R1-R3 then apply
-// (partition-statement-admission-rowid-rules.js), the ceiling R3 also after
-// the statement, inside a savepoint that rolls the statement back.
-// A legacy session statement (staged on the shared connection until the
-// cutover) gets the sessionless admission: a PRAGMA or TEMP DDL set there
-// would outlive the session and change what later committed statements do on
-// this replica only (owner condition 4). A participant session statement is
-// classified by the staging classifier (partition-transaction-determinism.js),
-// which asks this owner's lexer, name and rowid rules as its first layers.
-// The partition's own storage initialization stays explicit and separate.
+// refuses is ever prepared. Single-quoted names are read as SQLite reads them
+// (partition-statement-admission-names.js). Text rules refuse table-valued
+// pragma/connection-state functions, OR ROLLBACK conflict clauses, and writes
+// to foreign tables. Rowid rules R1-R3 (partition-statement-admission-rowid-rules.js)
+// apply on writes, with R3 also checked post-statement inside a savepoint.
 import {preparePartitionReadStatement} from './partition-read-statement-owner.js';
 import {asciiLower, lexPartitionStatement} from './partition-statement-admission-lexer.js';
 import {
@@ -71,6 +48,17 @@ import {
 } from './partition-statement-admission-names.js';
 import {committedStatementResult} from
   './partition-committed-statement-outcome-constants.js';
+import {
+  isKnownSystemTable,
+  isTableCdcObligationRecorded,
+} from '../cache/cdc-table-policy.js';
+import {
+  decodeTypedParams,
+  encodeTypedRowSet,
+} from '../query/sql-value-codec.js';
+
+const MIN_SAFE_BIGINT = BigInt(Number.MIN_SAFE_INTEGER);
+const MAX_SAFE_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
 
 const ALLOCATING_HEADS = new Set([KEYWORD.INSERT, KEYWORD.REPLACE,
   KEYWORD.WITH]);
@@ -116,6 +104,74 @@ function mainVerb(lexed) {
   }
   return lexed.tokens.find((token, index) => index > 0 && token.depth === 0 &&
     MAIN_VERBS.has(token.upper))?.upper ?? null;
+}
+
+const QUALIFIED_TARGET_ADVANCE = 3;
+const DIRECT_MUTATION_KIND_BY_VERB = Object.freeze({
+  [KEYWORD.DELETE]: PARTITION_SERVICE_OPERATION.DELETE,
+  [KEYWORD.UPDATE]: PARTITION_SERVICE_OPERATION.UPDATE,
+  [KEYWORD.REPLACE]: PARTITION_SERVICE_OPERATION.UPSERT,
+});
+
+function isInsertOrReplaceAt(tokens, verbIndex) {
+  return (
+    tokens[verbIndex + 1]?.upper === KEYWORD.OR &&
+    tokens[verbIndex + 2]?.upper === KEYWORD.REPLACE
+  );
+}
+
+function lexedMutationOperationType(lexed) {
+  const verbIndex = dmlVerbIndex(lexed);
+  if (verbIndex < 0) return null;
+  const tokens = lexed.tokens;
+  const verb = tokens[verbIndex]?.upper ?? null;
+  if (Object.hasOwn(DIRECT_MUTATION_KIND_BY_VERB, verb)) {
+    return DIRECT_MUTATION_KIND_BY_VERB[verb];
+  }
+  if (verb !== KEYWORD.INSERT) return null;
+  return isInsertOrReplaceAt(tokens, verbIndex) || hasDoUpdateClause(tokens) ?
+    PARTITION_SERVICE_OPERATION.UPSERT :
+    PARTITION_SERVICE_OPERATION.INSERT;
+}
+
+function extractLexedSqlMutationType(sql) {
+  return typeof sql === 'string' && sql.length > 0 ?
+    lexedMutationOperationType(lexPartitionStatement(sql)) :
+    null;
+}
+
+function dmlTargetTokenIndex(tokens, verb) {
+  const keyword = tokens[verb].upper;
+  const afterVerb = tokens[verb + 1]?.upper === KEYWORD.OR ?
+    verb + QUALIFIED_TARGET_ADVANCE :
+    verb + 1;
+  if (keyword === KEYWORD.UPDATE) return afterVerb;
+  if (keyword === KEYWORD.DELETE) {
+    return tokens[verb + 1]?.upper === KEYWORD.FROM ? verb + 2 : -1;
+  }
+  return tokens[afterVerb]?.upper === KEYWORD.INTO ? afterVerb + 1 : -1;
+}
+
+function extractMainSchemaTargetName(tokens, at) {
+  if (at < 0) return null;
+  const qualified = tokens[at + 1]?.text === CHAR.DOT;
+  if (qualified && tokens[at]?.identifier !== asciiLower(KEYWORD.MAIN)) {
+    return null;
+  }
+  const targetToken = tokens[qualified ? at + 2 : at];
+  return typeof targetToken?.identifier === 'string' &&
+      targetToken.identifier.length > 0 ?
+    targetToken.value :
+    null;
+}
+
+function extractLexedDmlTargetTableName(sql) {
+  if (typeof sql !== 'string' || sql.length === 0) return null;
+  const lexed = resolveNamePositions(lexPartitionStatement(sql));
+  const verb = dmlVerbIndex(lexed);
+  return verb < 0 ?
+    null :
+    extractMainSchemaTargetName(lexed.tokens, dmlTargetTokenIndex(lexed.tokens, verb));
 }
 
 function refusal(refusalLayer) {
@@ -250,8 +306,6 @@ function matchIndexDdl(lexed) {
     matchDropIndex(lexed.tokens) : null;
 }
 
-const QUALIFIED_TARGET_ADVANCE = 3;
-
 function matchDatasetTableTarget(tokens, at) {
   if (tokens[at + 1]?.text === CHAR.DOT) {
     const schema = tokens[at]?.identifier;
@@ -360,8 +414,32 @@ function hasTopLevelReturning(lexed) {
     lexed.tokens.some((token) => token.depth === 0 && token.upper === KEYWORD.RETURNING);
 }
 
-function partitionCapturesCommittedWriteRows(service, path) {
-  return path === PATH.COMMITTED && Boolean(service?.db);
+function hasActiveMirrorCapture(service) {
+  return Boolean(
+    service.splitReplication ||
+    service.mergeReplication ||
+    service.captureDurableMirrorEffects,
+  );
+}
+
+function tableNeedsCapturedWriteRows(tableName) {
+  return (
+    tableName !== null &&
+    (isTableCdcObligationRecorded(tableName) || !isKnownSystemTable(tableName))
+  );
+}
+
+function partitionCapturesCommittedWriteRows(
+  service,
+  path,
+  tableName = ownTableName(service),
+) {
+  if (path !== PATH.COMMITTED || !service?.db) return false;
+  return (
+    hasActiveMirrorCapture(service) ||
+    tableNeedsCapturedWriteRows(tableName) ||
+    (service.cdcSubscribers?.size ?? 0) > 0
+  );
 }
 
 function returningSqlOf(sql, lexed) {
@@ -415,7 +493,9 @@ function admitWrite(service, lexed, params, statement, path, sql) {
   const returningPrepared = prepareReturningWrite(
     service, lexed, sql, path,
   );
+  const mutationKind = lexedMutationOperationType(lexed);
   return {admitted: true, kind: KIND.WRITE, statement, returningPrepared,
+    mutationKind,
     ceilingChecked: allocating,
     protectFormationRow, ownShape,
     retainsInsertRowid: INSERTING_VERBS.has(mainVerb(lexed)) &&
@@ -491,16 +571,76 @@ function statementRefusalError(refused) {
   return error;
 }
 
-function executeAdmittedWriteStatement(service, admission, params) {
-  if (!admission.returningPrepared) {
-    return admission.statement.run(...params);
+function normalizeCapturedRowValue(value, coerceSafeBigIntToNumber) {
+  if (
+    coerceSafeBigIntToNumber &&
+    typeof value === 'bigint' &&
+    value >= MIN_SAFE_BIGINT &&
+    value <= MAX_SAFE_BIGINT
+  ) {
+    return Number(value);
   }
-  const affectedRows = admission.returningPrepared.all(...params);
+  return value;
+}
+
+function materializeCapturedWriteRows(
+  columns,
+  rawRows,
+  coerceSafeBigIntToNumber,
+) {
+  return Object.freeze(
+    rawRows.map((values) => {
+      const row = {};
+      for (let index = 0; index < columns.length; index += 1) {
+        row[columns[index]] = normalizeCapturedRowValue(
+          values[index],
+          coerceSafeBigIntToNumber,
+        );
+      }
+      return Object.freeze(row);
+    }),
+  );
+}
+
+function executeAdmittedWriteStatement(service, admission, params) {
+  const mutationPatch =
+    typeof admission.mutationKind === 'string' ?
+      {mutationKind: admission.mutationKind} :
+      {};
+  if (!admission.returningPrepared) {
+    const info = admission.statement.run(...params);
+    return typeof admission.mutationKind === 'string' ?
+      {...info, ...mutationPatch} :
+      info;
+  }
+  const stmt = admission.returningPrepared;
+  stmt.raw?.(true);
+  stmt.safeIntegers?.(true);
+  let rawRows;
+  let columns;
+  try {
+    rawRows = stmt.all(...params);
+    columns = stmt.columns().map((column) => column.name);
+  } finally {
+    stmt.raw?.(false);
+    stmt.safeIntegers?.(false);
+  }
+  const typedEffects = encodeTypedRowSet(columns, rawRows);
+  const tableName = ownTableName(service);
+  const coerceSafeBigIntToNumber =
+    tableName !== null && isTableCdcObligationRecorded(tableName);
+  const affectedRows = materializeCapturedWriteRows(
+    columns,
+    rawRows,
+    coerceSafeBigIntToNumber,
+  );
   const meta = prepareByKind(service.db, WRITE_EXECUTION_META_SQL, KIND.READ).get();
   return {
-    changes: affectedRows.length,
+    changes: rawRows.length,
     lastInsertRowid: meta.lastInsertRowid,
-    affectedRows: Object.freeze(affectedRows.map((row) => ({...row}))),
+    ...mutationPatch,
+    typedEffects,
+    affectedRows,
   };
 }
 
@@ -560,7 +700,9 @@ function runAdmittedPartitionStatement(service, admission, params = []) {
 function runCommittedPartitionStatement(service, command) {
   assertTransactionSchemaWriteEnforced(service.db, service.tableName,
     readPartitionWriteOrigin(service.db) !== null);
-  const params = command.params || [];
+  const params = command.typedParams ?
+    decodeTypedParams(command.typedParams) :
+    (command.params || []);
   const path = command.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE ?
     PATH.MIGRATION : PATH.COMMITTED;
   const admission = admitPartitionStatement(service, command.sql, params, path, {
@@ -573,9 +715,18 @@ function runCommittedPartitionStatement(service, command) {
   }
   const result = committedStatementResult(outcome.info,
     {retainsInsertRowid: admission.retainsInsertRowid === true});
-  return Array.isArray(outcome.info?.affectedRows) ?
-    {...result, affectedRows: outcome.info.affectedRows} :
-    result;
+  return {
+    ...result,
+    ...(typeof outcome.info?.mutationKind === 'string' ?
+      {mutationKind: outcome.info.mutationKind} :
+      {}),
+    ...(outcome.info?.typedEffects ?
+      {typedEffects: outcome.info.typedEffects} :
+      {}),
+    ...(Array.isArray(outcome.info?.affectedRows) ?
+      {affectedRows: outcome.info.affectedRows} :
+      {}),
+  };
 }
 
 /**
@@ -619,6 +770,8 @@ function readAdmittedPartitionRows(service, sql, params = []) {
 export {
   admitPartitionStatement,
   classifyPartitionStatementHead,
+  extractLexedDmlTargetTableName,
+  extractLexedSqlMutationType,
   partitionStatementRefusalAnswer,
   readAdmittedPartitionRows,
   runAdmittedPartitionStatement,

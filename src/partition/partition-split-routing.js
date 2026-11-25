@@ -23,6 +23,10 @@ import {
   extractUpdateDataFromSQL,
   hasSqlParameterPlaceholders,
 } from './partition-sql-parser.js';
+import {
+  extractLexedDmlTargetTableName,
+  extractLexedSqlMutationType,
+} from './partition-statement-admission.js';
 
 
 const SPLIT_ROUTING_LITERAL = Object.freeze({
@@ -44,9 +48,13 @@ const SPLIT_MIRROR_IDENTITY_FIELD = Object.freeze({
   IDEMPOTENCY_KEY: 'idempotencyKey',
 });
 const SPLIT_SNAPSHOT_MAX_BIND_VARIABLES = 32_766;
-const SQL_TARGET_TABLE_PATTERN =
-  /^\s*(?:INSERT(?:\s+OR\s+\w+)?\s+INTO|REPLACE\s+INTO|UPDATE(?:\s+OR\s+\w+)?|DELETE\s+FROM)\s+(?:main\s*\.\s*)?["'`]?([A-Za-z_][A-Za-z0-9_]*)["'`]?/iu;
 const SQL_SELECT_SUBQUERY_PATTERN = /\bSELECT\b/iu;
+const SPLIT_DML_MUTATION_KINDS = Object.freeze(new Set([
+  PARTITION_SERVICE_OPERATION.INSERT,
+  PARTITION_SERVICE_OPERATION.UPSERT,
+  PARTITION_SERVICE_OPERATION.UPDATE,
+  PARTITION_SERVICE_OPERATION.DELETE,
+]));
 
 function copyNonEmptyStringField(target, field, value) {
   if (typeof value === SPLIT_ROUTING_LITERAL.STRING && value.length > 0) {
@@ -90,33 +98,19 @@ function hasOwnedProperty(record, propertyName) {
 }
 
 function resolveSplitOperationType(entry) {
-  const operationType = entry?.type || PARTITION_SERVICE_OPERATION.QUERY;
-  if (
-    (operationType !== PARTITION_SERVICE_OPERATION.QUERY &&
-      operationType !== PARTITION_SERVICE_OPERATION.WRITE) ||
-    !entry?.sql
-  ) {
-    return operationType;
+  if (SPLIT_DML_MUTATION_KINDS.has(entry?.mutationKind)) {
+    return entry.mutationKind;
   }
-
-  const sqlUpper = entry.sql.trim().toUpperCase();
-  if (
-    sqlUpper.startsWith(SQL.INSERT_OR_REPLACE_INTO.toUpperCase()) ||
-    sqlUpper.startsWith(SPLIT_ROUTING_SQL.REPLACE)
-  ) {
-    return PARTITION_SERVICE_OPERATION.UPSERT;
+  if (SPLIT_DML_MUTATION_KINDS.has(entry?.type)) {
+    return entry.type;
   }
-  if (sqlUpper.startsWith(PARTITION_SERVICE_OPERATION.INSERT)) {
-    return PARTITION_SERVICE_OPERATION.INSERT;
+  if (typeof entry?.sql === SPLIT_ROUTING_LITERAL.STRING) {
+    const admittedKind = extractLexedSqlMutationType(entry.sql);
+    if (admittedKind !== null) {
+      return admittedKind;
+    }
   }
-  if (sqlUpper.startsWith(PARTITION_SERVICE_OPERATION.UPDATE)) {
-    return PARTITION_SERVICE_OPERATION.UPDATE;
-  }
-  if (sqlUpper.startsWith(PARTITION_SERVICE_OPERATION.DELETE)) {
-    return PARTITION_SERVICE_OPERATION.DELETE;
-  }
-
-  return operationType;
+  return entry?.type || PARTITION_SERVICE_OPERATION.QUERY;
 }
 
 function extractRoutingKeyFromSql(entry, primaryKeyColumn, tableName) {
@@ -217,8 +211,7 @@ function resolveSplitEntryTableName(entry, options = {}) {
   if (entry?.tableName) {
     return entry.tableName;
   }
-  const match = String(entry?.sql || '').match(SQL_TARGET_TABLE_PATTERN);
-  return match?.[1] || null;
+  return extractLexedDmlTargetTableName(entry?.sql);
 }
 
 function buildProjectedDeleteBatches(
@@ -369,7 +362,8 @@ function buildProjectedChildBatches(
       primaryKeyColumn,
       tableName,
     );
-  } else if (operationType === PARTITION_SERVICE_OPERATION.UPDATE) {
+  }
+  if (operationType === PARTITION_SERVICE_OPERATION.UPDATE) {
     return buildProjectedUpdateBatches(
       entry,
       partitionRows,
@@ -377,7 +371,13 @@ function buildProjectedChildBatches(
       tableName,
     );
   }
-  return buildProjectedUpsertBatches(partitionRows, tableName);
+  if (
+    operationType === PARTITION_SERVICE_OPERATION.INSERT ||
+    operationType === PARTITION_SERVICE_OPERATION.UPSERT
+  ) {
+    return buildProjectedUpsertBatches(partitionRows, tableName);
+  }
+  throw new Error(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_ROUTING_FAILED);
 }
 
 async function routeProjectedSplitChildWrites(

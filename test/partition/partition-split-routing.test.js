@@ -1,9 +1,19 @@
 import {test} from '../../src/test-helpers/tap.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import Database from 'better-sqlite3';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   PARTITION_DESCRIPTOR_EPOCH_ERROR_MSG,
   PARTITION_TRANSITION_METADATA_FIELD,
 } from '../../src/partition/partition-constants.js';
+import {
+  loadDurableDeltasBehindWatermark,
+} from '../../src/partition/partition-mirror-replay-cursor.js';
+import {PartitionService} from '../../src/partition/partition-service.js';
 import {
   PARTITION_SERVICE_ERROR_MSG,
 } from '../../src/partition/partition-service-constants.js';
@@ -12,6 +22,10 @@ import {
   replaySplitEntry,
   routeSplitSnapshotBatch,
 } from '../../src/partition/partition-split-routing.js';
+import {withFoundingStamp} from './partition-founding-stamp.js';
+import {
+  resumeFixtureParticipantAdmission,
+} from '../test-helpers/participant-transaction-fixture.js';
 
 const TABLE_NAME = 'users';
 const PRIMARY_KEY_COLUMN = 'id';
@@ -507,5 +521,240 @@ test('split routing projects multi-child INSERT, UPDATE, and DELETE mutations to
     } finally {
       leftDb.close();
       rightDb.close();
+    }
+  });
+
+const EXACT_ITEMS_TABLE = 'exact_items';
+const EXACT_ITEMS_SCHEMA = Object.freeze({
+  tableName: EXACT_ITEMS_TABLE,
+  columns: [
+    {name: 'id', type: 'TEXT', primaryKey: true},
+    {name: 'big_int', type: 'INTEGER'},
+    {name: 'raw_blob', type: 'BLOB'},
+    {name: 'ratio', type: 'REAL'},
+    {name: 'untyped_val', type: 'ANY'},
+  ],
+});
+
+async function openUserPartition(partitionId, dbPath) {
+  const service = new PartitionService(withFoundingStamp({
+    partitionId,
+    tableId: EXACT_ITEMS_TABLE,
+    tableName: EXACT_ITEMS_TABLE,
+    replicaId: `${partitionId}-r1`,
+    replicaIds: [`${partitionId}-r1`],
+    nodeId: 'split-routing-test-node',
+    systemTableCache: new SystemTableCache(),
+    dbPath,
+    schema: EXACT_ITEMS_SCHEMA,
+  }));
+  await service.initialize();
+  await resumeFixtureParticipantAdmission(service);
+  return service;
+}
+
+test('split routing end-to-end across source executeQuery, durable restart, and child PartitionService execution preserves exact 64-bit BigInt, BLOB, storage classes, and comment/CTE DELETEs',
+  async (t) => {
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+    ConfigurationManager.getInstance().initialize({
+      node: {id: 'split-routing-test-node'},
+    });
+    LoggingService.getInstance().initialize({level: 'error'});
+
+    const tempDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'split-routing-exact-e2e-'),
+    );
+    const sourceDbPath = path.join(tempDir, 'source.sqlite');
+    const leftDbPath = path.join(tempDir, 'left.sqlite');
+    const rightDbPath = path.join(tempDir, 'right.sqlite');
+
+    let sourcePartition = null;
+    let recoveredSource = null;
+    let leftChild = null;
+    let rightChild = null;
+
+    const exactPos = 9007199254740993n;
+    const exactNeg = -9007199254740993n;
+    const updatedPos = 9007199254740995n;
+    const updatedNeg = -9007199254740995n;
+    const blobA = Buffer.from([0xde, 0xad, 0xbe, 0xef]);
+    const blobB = Buffer.from([0x01, 0x02, 0x03, 0x04]);
+    const blobC = Buffer.from([0x10, 0x20, 0x30]);
+    const blobY = Buffer.from([0xfe, 0xed, 0xfa, 0xce]);
+    const blobZ = Buffer.from([0xca, 0xfe, 0xba, 0xbe]);
+    const updatedBlobC = Buffer.from([0xaa, 0xbb, 0xcc]);
+    const updatedBlobW = Buffer.from([0xdd, 0xee, 0xff]);
+
+    try {
+      sourcePartition = await openUserPartition('exact-items-source', sourceDbPath);
+      leftChild = await openUserPartition(LEFT_PARTITION_ID, leftDbPath);
+      rightChild = await openUserPartition(RIGHT_PARTITION_ID, rightDbPath);
+
+      const barrierInsert = await sourcePartition.executeQuery(
+        `INSERT INTO ${EXACT_ITEMS_TABLE} (id, big_int, raw_blob, ratio, untyped_val) ` +
+        'VALUES (?, ?, ?, ?, ?)',
+        ['0-barrier', 1n, Buffer.from([0x00]), 1.0, 1n],
+        {entryId: 'entry-barrier'},
+      );
+      t.equal(barrierInsert.success, true);
+      const watermarkIndex = barrierInsert.logIndex;
+
+      // 1. Multi-row INSERT via executeQuery (type: 'QUERY') spanning both children
+      const multiInsert = await sourcePartition.executeQuery(
+        `INSERT INTO ${EXACT_ITEMS_TABLE} (id, big_int, raw_blob, ratio, untyped_val) ` +
+        'VALUES (?, ?, ?, ?, ?), (?, ?, ?, ?, ?), (?, ?, ?, ?, ?), ' +
+        '(?, ?, ?, ?, ?), (?, ?, ?, ?, ?), (?, ?, ?, ?, ?)',
+        [
+          'a', exactPos, blobA, 1.25, 42n,
+          'b', exactPos, blobB, 2.5, 43n,
+          'c', exactPos, blobC, 3.75, 44n,
+          'w', exactNeg, blobY, -3.75, -44n,
+          'y', exactNeg, blobY, -2.5, -43n,
+          'z', exactNeg, blobZ, -1.25, -42n,
+        ],
+        {entryId: 'entry-multi-insert'},
+      );
+      t.equal(multiInsert.success, true);
+      t.equal(multiInsert.changes, 6);
+
+      // 2. Multi-row UPDATE via executeQuery updating 64-bit integer and BLOB across both children
+      const multiUpdate = await sourcePartition.executeQuery(
+        `UPDATE ${EXACT_ITEMS_TABLE} ` +
+        'SET big_int = CASE id WHEN ? THEN ? ELSE ? END, ' +
+        'raw_blob = CASE id WHEN ? THEN ? ELSE ? END, ' +
+        'untyped_val = CASE id WHEN ? THEN ? ELSE ? END ' +
+        'WHERE id IN (?, ?)',
+        [
+          'c', updatedPos, updatedNeg,
+          'c', updatedBlobC, updatedBlobW,
+          'c', updatedPos, updatedNeg,
+          'c', 'w',
+        ],
+        {entryId: 'entry-multi-update'},
+      );
+      t.equal(multiUpdate.success, true);
+      t.equal(multiUpdate.changes, 2);
+
+      // 3. Comment-prefixed DELETE via executeQuery spanning both children
+      const commentDelete = await sourcePartition.executeQuery(
+        `/* cleanup */ DELETE FROM ${EXACT_ITEMS_TABLE} WHERE id IN (?, ?)`,
+        ['a', 'z'],
+        {entryId: 'entry-comment-delete'},
+      );
+      t.equal(commentDelete.success, true);
+      t.equal(commentDelete.changes, 2);
+
+      // 4. CTE-prefixed WITH ... DELETE via executeQuery spanning both children
+      const cteDelete = await sourcePartition.executeQuery(
+        '-- remove doomed keys\nWITH doomed(id) AS (VALUES (?), (?)) ' +
+        `DELETE FROM ${EXACT_ITEMS_TABLE} WHERE id IN (SELECT id FROM doomed)`,
+        ['b', 'y'],
+        {entryId: 'entry-cte-delete'},
+      );
+      t.equal(cteDelete.success, true);
+      t.equal(cteDelete.changes, 2);
+
+      // Shut down and restart source partition to test durable recovery
+      await sourcePartition.shutdown();
+      sourcePartition = null;
+      recoveredSource = await openUserPartition('exact-items-source', sourceDbPath);
+
+      const deltas = loadDurableDeltasBehindWatermark(
+        recoveredSource,
+        watermarkIndex,
+      );
+      t.equal(deltas.length, 4);
+      t.same(
+        deltas.map((d) => d.mutationKind),
+        ['INSERT', 'UPDATE', 'DELETE', 'DELETE'],
+        'durable deltas preserve canonical mutationKind across restart',
+      );
+
+      const metadata = createMetadata(PENDING_VERSION);
+      const queryExecutor = {
+        async executeOnPartition(
+          partitionId,
+          sql,
+          params,
+          _isRead,
+          _waitForCommit,
+          _isTransaction,
+          deliveryOptions,
+        ) {
+          const target =
+            partitionId === LEFT_PARTITION_ID ? leftChild : rightChild;
+          return target.executeQuery(sql, params, deliveryOptions);
+        },
+      };
+
+      for (const delta of deltas) {
+        await replaySplitEntry(delta, metadata, {
+          queryExecutor,
+          descriptorEpochEvidence: createDescriptorEvidence(
+            {
+              active_partition_version: ACTIVE_VERSION,
+              pending_partition_version: PENDING_VERSION,
+            },
+            PENDING_VERSION,
+          ),
+        });
+      }
+
+      const inspectChildRows = (db) =>
+        db
+          .prepare(
+            'SELECT id, big_int, raw_blob, ratio, untyped_val, ' +
+            'typeof(big_int) AS big_int_type, ' +
+            'typeof(raw_blob) AS raw_blob_type, ' +
+            'typeof(ratio) AS ratio_type, ' +
+            'typeof(untyped_val) AS untyped_val_type ' +
+            `FROM ${EXACT_ITEMS_TABLE} ORDER BY id`,
+          )
+          .safeIntegers(true)
+          .all();
+
+      const leftRows = inspectChildRows(leftChild.db);
+      const rightRows = inspectChildRows(rightChild.db);
+
+      t.equal(
+        leftRows.length,
+        1,
+        'comment and CTE DELETEs removed a and b from left child (never upserted)',
+      );
+      t.equal(leftRows[0].id, 'c');
+      t.equal(leftRows[0].big_int, updatedPos);
+      t.ok(Buffer.isBuffer(leftRows[0].raw_blob));
+      t.equal(Buffer.compare(leftRows[0].raw_blob, updatedBlobC), 0);
+      t.equal(leftRows[0].ratio, 3.75);
+      t.equal(leftRows[0].untyped_val, updatedPos);
+      t.equal(leftRows[0].big_int_type, 'integer');
+      t.equal(leftRows[0].raw_blob_type, 'blob');
+      t.equal(leftRows[0].ratio_type, 'real');
+      t.equal(leftRows[0].untyped_val_type, 'integer');
+
+      t.equal(
+        rightRows.length,
+        1,
+        'comment and CTE DELETEs removed y and z from right child (never upserted)',
+      );
+      t.equal(rightRows[0].id, 'w');
+      t.equal(rightRows[0].big_int, updatedNeg);
+      t.ok(Buffer.isBuffer(rightRows[0].raw_blob));
+      t.equal(Buffer.compare(rightRows[0].raw_blob, updatedBlobW), 0);
+      t.equal(rightRows[0].ratio, -3.75);
+      t.equal(rightRows[0].untyped_val, updatedNeg);
+      t.equal(rightRows[0].big_int_type, 'integer');
+      t.equal(rightRows[0].raw_blob_type, 'blob');
+      t.equal(rightRows[0].ratio_type, 'real');
+      t.equal(rightRows[0].untyped_val_type, 'integer');
+    } finally {
+      if (sourcePartition) await sourcePartition.shutdown();
+      if (recoveredSource) await recoveredSource.shutdown();
+      if (leftChild) await leftChild.shutdown();
+      if (rightChild) await rightChild.shutdown();
+      fs.rmSync(tempDir, {recursive: true, force: true});
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
     }
   });

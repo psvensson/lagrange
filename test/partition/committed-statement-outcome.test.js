@@ -65,6 +65,8 @@ import {
   PARTITION_SETTLED_REPLAY,
 } from '../../src/partition/partition-committed-statement-outcome-constants.js';
 import {
+  partitionOwesDurableMirrorEffects,
+  pruneSettledMirrorOutcomeEffects,
   readCommittedStatementOutcome,
 } from '../../src/partition/partition-committed-statement-outcome.js';
 import {
@@ -1023,11 +1025,32 @@ test('durable split effects: committed writes retain canonical affectedRows and 
 {timeout: TEST_TIMEOUT_MS}, async () => {
   await withPartition('split-durable-effects', async ({open}) => {
     const partition = await open();
+    assert.equal(
+      partitionOwesDurableMirrorEffects(partition),
+      false,
+      'system table partition without active mirror obligations does not owe mirror effects',
+    );
     const seedA = await insert(partition, '\tA\t', 'node-left', 'entry-seed-left');
     const seedZ = await insert(partition, 'Z', 'node-right', 'entry-seed-right');
     assert.equal(seedA.success, true);
     assert.equal(seedZ.success, true);
+    assert.equal(
+      partition.db
+        .prepare(
+          'SELECT 1 AS present FROM sqlite_master ' +
+          'WHERE type = \'table\' AND name = \'_partition_statement_outcome_effects\'',
+        )
+        .get(),
+      undefined,
+      'ordinary system table writes do not create _partition_statement_outcome_effects',
+    );
     const watermarkIndex = seedZ.logIndex;
+    partition.captureDurableMirrorEffects = true;
+    assert.equal(
+      partitionOwesDurableMirrorEffects(partition),
+      true,
+      'mirror-capturing partition owes durable mirror effects',
+    );
 
     const deleteTrim = await partition.applyWrite({
       type: PARTITION_SERVICE_OPERATION.DELETE,
@@ -1066,6 +1089,7 @@ test('durable split effects: committed writes retain canonical affectedRows and 
       recovered.getCommittedEntryKey({entryId: 'entry-delete-trim'}),
     );
     assert.equal(deleteOutcome.changes, 1);
+    assert.equal(deleteOutcome.mutationKind, PARTITION_SERVICE_OPERATION.DELETE);
     assert.equal(deleteOutcome.affectedRows?.length, 1);
     assert.equal(deleteOutcome.affectedRows[0].group_id, '\tA\t');
 
@@ -1080,12 +1104,14 @@ test('durable split effects: committed writes retain canonical affectedRows and 
     assert.equal(deltas.length, 3);
     assert.equal(deltas[0].entryId, 'entry-delete-trim');
     assert.equal(deltas[0].changes, 1);
+    assert.equal(deltas[0].mutationKind, PARTITION_SERVICE_OPERATION.DELETE);
     assert.equal(deltas[0].affectedRows?.[0]?.group_id, '\tA\t');
     assert.equal(deltas[1].entryId, 'entry-noop-trim');
     assert.equal(deltas[1].changes, 0);
     assert.deepEqual(deltas[1].affectedRows, []);
     assert.equal(deltas[2].entryId, 'entry-multi-child-insert');
     assert.equal(deltas[2].changes, 2);
+    assert.equal(deltas[2].mutationKind, PARTITION_SERVICE_OPERATION.INSERT);
     assert.equal(deltas[2].affectedRows?.length, 2);
 
     const mirrored = [];
@@ -1118,6 +1144,28 @@ test('durable split effects: committed writes retain canonical affectedRows and 
       ],
       'post-restart recovery mirrors trim(?), skips the zero-row no-op, and ' +
       'projects the multi-child mutation to both children',
+    );
+
+    const prunedFirstTwo = pruneSettledMirrorOutcomeEffects(
+      recovered,
+      noOpDeleteTrim.logIndex,
+    );
+    assert.equal(prunedFirstTwo, 2, 'prunes settled mirror effects through watermark');
+    assert.equal(
+      readCommittedStatementOutcome(
+        recovered,
+        recovered.getCommittedEntryKey({entryId: 'entry-delete-trim'}),
+      ).affectedRows,
+      undefined,
+      'pruned entry outcome retains settled status but drops mirror effect payload',
+    );
+    assert.equal(
+      readCommittedStatementOutcome(
+        recovered,
+        recovered.getCommittedEntryKey({entryId: 'entry-multi-child-insert'}),
+      ).affectedRows?.length,
+      2,
+      'unsettled mirror effects above watermark remain intact',
     );
   });
 });

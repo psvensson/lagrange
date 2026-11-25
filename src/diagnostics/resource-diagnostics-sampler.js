@@ -16,10 +16,6 @@ const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
 const EVENT_LOOP_DELAY_RESOLUTION_MS = 10;
 const NANOS_PER_MILLISECOND = 1_000_000;
-const processEventLoopDelayHistogram = monitorEventLoopDelay({
-  resolution: EVENT_LOOP_DELAY_RESOLUTION_MS,
-});
-processEventLoopDelayHistogram.enable();
 
 const RESOURCE_DIAGNOSTICS_DEFAULT = Object.freeze({
   HISTORY_LIMIT: 180,
@@ -142,9 +138,7 @@ class ResourceDiagnosticsSampler {
       monitorEventLoopDelay({resolution: EVENT_LOOP_DELAY_RESOLUTION_MS});
     this.eventLoopDelayHistogram?.enable();
     this.eventLoopDelayProvider = options.eventLoopDelayProvider ??
-      (() => readIntervalEventLoopDelayMs(
-        this.eventLoopDelayHistogram || processEventLoopDelayHistogram,
-      ));
+      (() => readIntervalEventLoopDelayMs(this.eventLoopDelayHistogram));
 
     this.nextSampleId = 0;
     this.samples = [];
@@ -460,42 +454,28 @@ class ResourceDiagnosticsSampler {
       typeof loggingService.getDiagnosticsStats === LOCAL_STR_FUNCTION) {
       stats.logging = loggingService.getDiagnosticsStats();
     }
-
     const logsTableService = LogsTableService.instance;
-    if (logsTableService &&
-      typeof logsTableService.getStats === LOCAL_STR_FUNCTION) {
+    if (typeof logsTableService?.getStats === LOCAL_STR_FUNCTION) {
       stats.logsTable = logsTableService.getStats();
     }
-
-    const owner = this.owner;
-    if (!owner || typeof owner !== LOCAL_STR_OBJECT) {
-      return stats;
-    }
-
-    for (const component of RESOURCE_DIAGNOSTICS_OWNER_COMPONENT) {
-      const componentRef = owner[component.field];
-      if (!componentRef || typeof componentRef.getStats !== LOCAL_STR_FUNCTION) {
-        continue;
+    if (this.owner && typeof this.owner === LOCAL_STR_OBJECT) {
+      for (const component of RESOURCE_DIAGNOSTICS_OWNER_COMPONENT) {
+        const componentRef = this.owner[component.field];
+        if (!componentRef || typeof componentRef.getStats !== LOCAL_STR_FUNCTION) {
+          continue;
+        }
+        const componentStats = componentRef.getStats();
+        if (componentStats && typeof componentStats === LOCAL_STR_OBJECT) {
+          stats[component.name] = componentStats;
+        }
       }
-      // A component's stats are a synchronous snapshot on every owner that
-      // carries getStats.
-      const componentStats = componentRef.getStats();
-      if (!componentStats || typeof componentStats !== LOCAL_STR_OBJECT) {
-        continue;
+      if (typeof this.owner.serviceLifecycleManager?.getMetrics === LOCAL_STR_FUNCTION) {
+        stats.serviceLifecycleManager = this.owner.serviceLifecycleManager.getMetrics();
       }
-      stats[component.name] = componentStats;
+      if (typeof this.owner.serviceReconciler?.getStats === LOCAL_STR_FUNCTION) {
+        stats.serviceReconciler = this.owner.serviceReconciler.getStats();
+      }
     }
-
-    if (owner.serviceLifecycleManager &&
-      typeof owner.serviceLifecycleManager.getMetrics === LOCAL_STR_FUNCTION) {
-      stats.serviceLifecycleManager = owner.serviceLifecycleManager.getMetrics();
-    }
-
-    if (owner.serviceReconciler &&
-      typeof owner.serviceReconciler.getStats === LOCAL_STR_FUNCTION) {
-      stats.serviceReconciler = owner.serviceReconciler.getStats();
-    }
-
     return stats;
   }
 

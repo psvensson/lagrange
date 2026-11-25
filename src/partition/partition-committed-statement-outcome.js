@@ -1,49 +1,10 @@
 // The terminal outcome of every committed statement: the one owner of what a
 // committed statement's result is, for the partition's committed-entry
-// application.
-//
-// A committed entry is applied inside the SQLite transaction that also
-// advances the rs-raft applied state. Its statement ends in exactly one of
-// these named outcomes (PARTITION_COMMITTED_COMMAND_OUTCOME):
-//
-// - APPLIED: the statement ran. Its outcome row is written in the same
-//   transaction.
-// - STATEMENT_FAILED: the statement failed deterministically (a constraint,
-//   schema or binding error every replica reproduces from the same command
-//   over the same state). The entry is consumed, its outcome row carries the
-//   failure's code and message, and the proposer's write is reported as that
-//   failure.
-// - STATEMENT_ENVIRONMENT_FAILED: the failure is the host's environment
-//   (busy, locked, I/O, full, out of memory...). It is not the statement's
-//   outcome and is never consumed: the application fails closed, the
-//   transaction rolls back (so no outcome row exists) and the committed entry
-//   is delivered again when the host recovers. Consuming it would let one
-//   replica skip an entry every other replica applies.
-//
-// The outcome row (PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL) is the
-// authority for an entry key the partition has already settled: a retry of
-// the same entry key - in process, on another replica, or after a restart -
-// is never executed again. It resolves from the row: an APPLIED row as the
-// applied statement's own result again (the affected-row count and last
-// insert rowid the row retained, named by PARTITION_SETTLED_REPLAY - a replay
-// never reports an applied write as zero rows), a STATEMENT_FAILED row as the
-// original failure, each with `replayOfLogIndex`. There is no in-memory replay state: a retry is
-// answered from the row before it is proposed, and one that was proposed
-// anyway (its original not yet applied here when it was proposed) is answered
-// from the row when it is applied - the same answer either way.
-//
-// The nullable insert-result contract (TX1 owner ruling 2026-10-11, design
-// revision 10, 0.0.14): an APPLIED statement's result carries
-// `lastInsertRowid` only when the inserted row's identity is established by
-// the statement itself - an INSERT or REPLACE with no DO UPDATE clause that
-// changed at least one row. It is null for every ON CONFLICT DO UPDATE (a
-// mixed batch of inserted and updated rows included), every statement that
-// changed no row, and every UPDATE, DELETE and DDL statement, because the
-// connection's last insert rowid is then connection state (a rolled-back c'
-// validation, the self-check's ceiling plant, an rs-raft log append) and
-// differs between replicas. The row and the answer are the same on every
-// replica; a consumer (the query owner) reads null as "no inserted-row
-// identity", never as a row id. committedStatementResult applies it.
+// application (APPLIED, STATEMENT_FAILED, or STATEMENT_ENVIRONMENT_FAILED).
+// The outcome row (PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL) is the authority
+// for a settled entry key: a retry resolves from the row without re-executing.
+// Nullable insert-result contract (TX1 0.0.14): lastInsertRowid is retained
+// only for INSERT/REPLACE without DO UPDATE that changed >= 1 row.
 
 import {sqliteConnectionState} from '../storage/sqlite-connection-state.js';
 import {
@@ -82,7 +43,10 @@ import {
   LOCKING_READ_ERROR_CODE,
   LOCKING_READ_SQL_STATE,
 } from '../query/sql-locking-read-constants.js';
+import {TABLES} from '../constants/tables.js';
+import {decodeTypedRowSet} from '../query/sql-value-codec.js';
 
+const SYSTEM_TABLE_NAMES_SET = Object.freeze(new Set(Object.values(TABLES)));
 const NO_COMMITTED_STATEMENT_KEY = null;
 const COLUMN_LIST_SEPARATOR = ', ';
 const FORMAT_UNSUPPORTED_REMEDY =
@@ -90,21 +54,39 @@ const FORMAT_UNSUPPORTED_REMEDY =
 const OWNER_IDENTITY_RULE = 'an owner result is recorded with exactly its command digest';
 const STATEMENT_OUTCOME_EFFECTS_TABLE = '_partition_statement_outcome_effects';
 const STATEMENT_OUTCOME_EFFECTS_SQL = Object.freeze({
-  CREATE_TABLE: `
-    CREATE TABLE IF NOT EXISTS _partition_statement_outcome_effects (
-      entry_key TEXT PRIMARY KEY,
-      affected_rows_json TEXT NOT NULL
-    )
-  `,
+  CREATE_TABLE:
+    'CREATE TABLE IF NOT EXISTS _partition_statement_outcome_effects (' +
+    'entry_key TEXT PRIMARY KEY, log_index INTEGER NOT NULL, ' +
+    'mutation_kind TEXT, typed_effects_json TEXT NOT NULL)',
+  CREATE_LOG_INDEX_IDX:
+    'CREATE INDEX IF NOT EXISTS idx_partition_statement_outcome_effects_log_index ' +
+    'ON _partition_statement_outcome_effects (log_index)',
   TABLE_EXISTS:
     'SELECT 1 AS present FROM sqlite_master WHERE type = \'table\' AND name = ?',
   INSERT:
     'INSERT INTO _partition_statement_outcome_effects ' +
-    '(entry_key, affected_rows_json) VALUES (?, ?)',
+    '(entry_key, log_index, mutation_kind, typed_effects_json) VALUES (?, ?, ?, ?)',
   SELECT_BY_ENTRY_KEY:
-    'SELECT affected_rows_json FROM _partition_statement_outcome_effects ' +
-    'WHERE entry_key = ?',
+    'SELECT mutation_kind, typed_effects_json ' +
+    'FROM _partition_statement_outcome_effects WHERE entry_key = ?',
+  DELETE_THROUGH_LOG_INDEX:
+    'DELETE FROM _partition_statement_outcome_effects WHERE log_index <= ?',
+  DELETE_ALL:
+    'DELETE FROM _partition_statement_outcome_effects',
 });
+
+function partitionOwesDurableMirrorEffects(
+  service,
+  tableName = service?.tableName,
+) {
+  if (!service?.db) return false;
+  if (service.splitReplication || service.mergeReplication ||
+      service.captureDurableMirrorEffects) {
+    return true;
+  }
+  return typeof tableName === 'string' && tableName.length > 0 &&
+    !SYSTEM_TABLE_NAMES_SET.has(tableName);
+}
 
 // The same identity is used by apply, replay answers and cold observation.
 // The one key is the command's entryId; a command without one (not a
@@ -232,11 +214,6 @@ function createCommittedStatementOutcomeTable(db, partitionId = null) {
   if (format.outcome === PARTITION_COMMITTED_STATEMENT_FORMAT.ABSENT) {
     db.exec(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.CREATE_TABLE);
   }
-  db.exec(STATEMENT_OUTCOME_EFFECTS_SQL.CREATE_TABLE);
-  sqliteConnectionState(db).forgetFact(
-    STATEMENT_OUTCOME_EFFECTS_TABLE,
-    STATEMENT_OUTCOME_EFFECTS_TABLE,
-  );
 }
 
 const UNSETTLED_RECORD = Object.freeze({
@@ -254,15 +231,38 @@ function capturedRowEffectsTableExistsIn(db) {
   );
 }
 
-function persistCapturedRowEffectsIn(service, state, entryKey, affectedRows) {
+function persistCapturedRowEffectsIn(
+  service,
+  state,
+  entryKey,
+  logIndex,
+  mutationKind,
+  typedEffects,
+) {
   if (!capturedRowEffectsTableExistsIn(service.db)) {
     service.db.exec(STATEMENT_OUTCOME_EFFECTS_SQL.CREATE_TABLE);
+    service.db.exec(STATEMENT_OUTCOME_EFFECTS_SQL.CREATE_LOG_INDEX_IDX);
     state.forgetFact(STATEMENT_OUTCOME_EFFECTS_TABLE, STATEMENT_OUTCOME_EFFECTS_TABLE);
   }
   state.runNonApplication(
     STATEMENT_OUTCOME_EFFECTS_SQL.INSERT,
     entryKey,
-    JSON.stringify(affectedRows),
+    logIndex,
+    typeof mutationKind === 'string' ? mutationKind : null,
+    JSON.stringify(typedEffects),
+  );
+}
+
+function materializeDecodedTypedEffects(typedEffects) {
+  const {columns, rows} = decodeTypedRowSet(typedEffects);
+  return Object.freeze(
+    rows.map((values) => {
+      const row = {};
+      for (let index = 0; index < columns.length; index += 1) {
+        row[columns[index]] = values[index];
+      }
+      return Object.freeze(row);
+    }),
   );
 }
 
@@ -273,13 +273,33 @@ function readCapturedRowEffectsIn(db, entryKey) {
   const row = sqliteConnectionState(db)
     .statement(STATEMENT_OUTCOME_EFFECTS_SQL.SELECT_BY_ENTRY_KEY)
     .get(entryKey);
-  if (typeof row?.affected_rows_json !== 'string') {
+  if (typeof row?.typed_effects_json !== 'string') {
     return null;
   }
-  const parsed = JSON.parse(row.affected_rows_json);
-  return Array.isArray(parsed) ?
-    Object.freeze(parsed.map((item) => Object.freeze({...item}))) :
-    null;
+  return {
+    mutationKind:
+      typeof row.mutation_kind === 'string' ? row.mutation_kind : null,
+    affectedRows: materializeDecodedTypedEffects(
+      JSON.parse(row.typed_effects_json),
+    ),
+  };
+}
+
+function pruneSettledMirrorOutcomeEffects(service, settledThroughLogIndex) {
+  if (
+    !service?.db?.open ||
+    service.db.inTransaction === true ||
+    !Number.isSafeInteger(settledThroughLogIndex) ||
+    settledThroughLogIndex <= 0 ||
+    !capturedRowEffectsTableExistsIn(service.db)
+  ) {
+    return 0;
+  }
+  const info = sqliteConnectionState(service.db).runNonApplication(
+    STATEMENT_OUTCOME_EFFECTS_SQL.DELETE_THROUGH_LOG_INDEX,
+    settledThroughLogIndex,
+  );
+  return Number(info?.changes) || 0;
 }
 
 function readCommittedStatementOutcomeIn(db, entryKey) {
@@ -289,7 +309,7 @@ function readCommittedStatementOutcomeIn(db, entryKey) {
   if (row === undefined) {
     return UNSETTLED_RECORD;
   }
-  const affectedRows = readCapturedRowEffectsIn(db, entryKey);
+  const capturedEffects = readCapturedRowEffectsIn(db, entryKey);
   return Object.freeze({
     state: PARTITION_COMMITTED_STATEMENT_RECORD_STATE.SETTLED,
     outcome: row.outcome,
@@ -299,7 +319,14 @@ function readCommittedStatementOutcomeIn(db, entryKey) {
     failureMessage: row.failure_message,
     changes: row.changes,
     lastInsertRowid: row.last_insert_rowid,
-    ...(affectedRows === null ? {} : {affectedRows}),
+    ...(capturedEffects === null ?
+      {} :
+      {
+        affectedRows: capturedEffects.affectedRows,
+        ...(capturedEffects.mutationKind === null ?
+          {} :
+          {mutationKind: capturedEffects.mutationKind}),
+      }),
     ...(row.owner_result_text === null ? {} : {ownerResultText: row.owner_result_text,
       commandDigest: row.command_digest}),
   });
@@ -376,18 +403,12 @@ function answered(answer) {
 }
 
 /**
- * The one request prelude of an owner command (placement, formation) on its
- * partition, in its one order: leadership; the committed-command admission;
- * the exact settled replay (a settled E0 answers its ORIGINAL receipt, also
- * under a cutover pause - reading an existing outcome is not a new write);
- * the cutover pause; the join of the same command already pending. A record
- * or a pending write of anything else under the entry key is the collision.
+ * Request prelude of an owner command (placement, formation) on its partition:
+ * leadership, committed-command admission, exact settled replay, cutover pause,
+ * and join of an identical pending command.
  * @param {Object} service - The partition.
- * @param {Object} request - {command, commandDigest, origin, kernel:
- *   {leadershipRefusalOf, pausedAnswerOf} (the write kernel's answers),
- *   answerSettled(recorded), answerCollision()}.
- * @return {Object} Frozen {state} (a PARTITION_OWNER_COMMAND_PRELUDE) and,
- *   when ANSWERED, {answer}.
+ * @param {Object} request - Prelude request context.
+ * @return {Object} Frozen {state} and, when ANSWERED, {answer}.
  */
 function ownerCommandPrelude(service, request) {
   const {command, commandDigest, origin, kernel} = request;
@@ -443,14 +464,9 @@ function assertOwnerIdentity(entryKey, ownerResultText, commandDigest) {
 }
 
 /**
- * Record an entry key's terminal outcome, inside the application
- * transaction.
+ * Record an entry key's terminal outcome inside the application transaction.
  * @param {Object} service - The partition (its `db`).
- * @param {Object} outcome - {entryKey, outcome, index, term, error, result,
- *   ownerResultText, commandDigest}; `error` only for STATEMENT_FAILED,
- *   `result` (the statement's retained {changes, lastInsertRowid},
- *   committedStatementResult) only for APPLIED; an owner command records its
- *   typed result with its committedCommandDigest, both or neither.
+ * @param {Object} outcome - Outcome record fields.
  */
 function recordCommittedStatementOutcome(service, {entryKey, outcome, index,
   term, error = null, result = null, ownerResultText = null, commandDigest = null}) {
@@ -464,8 +480,15 @@ function recordCommittedStatementOutcome(service, {entryKey, outcome, index,
     result === null ? null : result.changes,
     result === null ? null : result.lastInsertRowid,
     ownerResultText, commandDigest);
-  if (Array.isArray(result?.affectedRows)) {
-    persistCapturedRowEffectsIn(service, state, entryKey, result.affectedRows);
+  if (result?.typedEffects && partitionOwesDurableMirrorEffects(service)) {
+    persistCapturedRowEffectsIn(
+      service,
+      state,
+      entryKey,
+      index,
+      result.mutationKind,
+      result.typedEffects,
+    );
   }
 }
 
@@ -736,6 +759,8 @@ export {
   detectCommittedStatementOutcomeFormat,
   isCommittedStatementKeyed,
   ownerCommandPrelude,
+  partitionOwesDurableMirrorEffects,
+  pruneSettledMirrorOutcomeEffects,
   readCommittedStatementCensusIn,
   readSettledOwnerCommandIn,
   answerSettledStatement,

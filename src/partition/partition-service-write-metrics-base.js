@@ -212,7 +212,13 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
       if (!admission.admitted) {
         return partitionStatementRefusalAnswer(this, sql, admission);
       }
-      if (admission.kind !== PARTITION_STATEMENT_KIND.READ) return this.proposeWrite(operation);
+      if (admission.kind !== PARTITION_STATEMENT_KIND.READ) {
+        return this.proposeWrite(
+          typeof admission.mutationKind === 'string' ?
+            {...operation, mutationKind: admission.mutationKind} :
+            operation,
+        );
+      }
       return (options.appliedPositionRead === true ? executeReadAtAppliedPosition :
         executeAdmittedReadQuery)(this, admission, params, options);
     } catch (error) {

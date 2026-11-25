@@ -116,7 +116,14 @@ function resolveObservationSampleIdentity(observation) {
   return Number.isFinite(sampledAtMs) ? `${TIMESTAMP_ID_PREFIX}${sampledAtMs}` : null;
 }
 
-function hasLivePressureSensor(observation) {
+function isFiniteMetric(val) {
+  return val !== null &&
+    val !== undefined &&
+    typeof val !== 'boolean' &&
+    Number.isFinite(Number(val));
+}
+
+function hasPrimaryLoadSensor(observation) {
   if (!observation || typeof observation !== 'object') return false;
   const directSensors = [
     observation.singleCoreCpuPercent,
@@ -126,18 +133,22 @@ function hasLivePressureSensor(observation) {
     observation.initQueueDelayMs,
     observation.transferQueueDelayMs,
   ];
-  if (directSensors.some((val) => Number.isFinite(Number(val)))) {
+  if (directSensors.some(isFiniteMetric)) {
     return true;
   }
-  return Number.isFinite(Number(observation.stageDurationMs)) &&
+  if (isFiniteMetric(observation.cpuUsagePercent) &&
+      isFiniteMetric(observation.availableMemoryBytes)) {
+    return true;
+  }
+  return isFiniteMetric(observation.stageDurationMs) &&
     Number(observation.stageDurationMs) > 0 &&
-    Number.isFinite(Number(observation.operationBytes));
+    isFiniteMetric(observation.operationBytes);
 }
 
 function isObservationCompleteForGrowth(observation) {
   if (!observation || typeof observation !== 'object') return false;
   if (observation.pressureSensorsComplete === false) return false;
-  return hasLivePressureSensor(observation);
+  return hasPrimaryLoadSensor(observation);
 }
 
 function clampInteger(value, minValue, maxValue, defaultValue) {
@@ -294,25 +305,29 @@ function isObservationWithinHealthyGrowthBand(observation, thresholds) {
   ];
   let hasMeasuredLoadSignal = false;
   for (const [rawVal, maxHealthy] of checks) {
-    const val = Number(rawVal);
-    if (Number.isFinite(val)) {
+    if (isFiniteMetric(rawVal)) {
       hasMeasuredLoadSignal = true;
-      if (val > maxHealthy) return false;
+      if (Number(rawVal) > maxHealthy) return false;
     }
   }
   const singleCoreCpu = Number(observation.singleCoreCpuPercent);
   const eventLoopDelayMs = Number(observation.eventLoopDelayMs);
-  if (Number.isFinite(singleCoreCpu)) {
+  if (isFiniteMetric(observation.singleCoreCpuPercent)) {
     hasMeasuredLoadSignal = true;
     if (
       singleCoreCpu > thresholds.healthySingleCoreCpuPercent &&
-      (!Number.isFinite(eventLoopDelayMs) ||
+      (!isFiniteMetric(observation.eventLoopDelayMs) ||
         eventLoopDelayMs > thresholds.healthyEventLoopDelayMs / 2)
     ) {
       return false;
     }
+  } else if (isFiniteMetric(observation.cpuUsagePercent)) {
+    hasMeasuredLoadSignal = true;
+    if (Number(observation.cpuUsagePercent) > thresholds.healthySingleCoreCpuPercent) {
+      return false;
+    }
   }
-  if (!hasMeasuredLoadSignal && !Number.isFinite(Number(observation.stageDurationMs))) {
+  if (!hasMeasuredLoadSignal && !isFiniteMetric(observation.stageDurationMs)) {
     return false;
   }
   return observation.backpressured !== true;

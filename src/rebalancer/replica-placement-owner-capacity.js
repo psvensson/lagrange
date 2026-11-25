@@ -26,9 +26,11 @@ import {formationWaitingReasonOf, orderPlacementCandidates} from
 const COPY_MOVE_TYPES = Object.freeze(new Set([OperationType.ADD, OperationType.REPLACE]));
 const TARGET_CAPACITY_SCORE_WEIGHT = 1_000;
 const PERCENT_DIVISOR = 100;
+const BYTES_PER_MIB = 1024 * 1024;
 const ROLE_SOURCE = 'source';
 const ROLE_TARGET = 'target';
 const HARD_MEMORY_REASON = 'HARD_MEMORY_LIMIT_REACHED';
+const PLACEMENT_OWNER_UNAVAILABLE_REASON = 'placement_owner_unavailable';
 
 function buildTargetCapacityRanker(budgetSnapshot, eligibleNodeIds = []) {
   if (!budgetSnapshot) return null;
@@ -342,15 +344,24 @@ function evaluatePassBudgetsForController(state, {
   });
 }
 
+function hasExplicitFiniteMetric(rawValue) {
+  return rawValue !== null &&
+    rawValue !== undefined &&
+    typeof rawValue !== 'boolean' &&
+    Number.isFinite(Number(rawValue));
+}
+
 function readNodeRowAvailableMemoryBytes(nodeRow) {
-  if (!nodeRow) return undefined;
-  const totalBytes = Number(nodeRow.memory_total_bytes);
+  if (!nodeRow ||
+      !hasExplicitFiniteMetric(nodeRow.memory_mb) ||
+      !hasExplicitFiniteMetric(nodeRow.memory_usage_percent)) {
+    return undefined;
+  }
+  const memoryMb = Number(nodeRow.memory_mb);
   const usagePct = Number(nodeRow.memory_usage_percent);
-  const hasMemoryStats =
-    Number.isFinite(totalBytes) && totalBytes > 0 && Number.isFinite(usagePct);
-  return hasMemoryStats ?
-    Math.max(0, Math.floor(totalBytes * (1 - (usagePct / PERCENT_DIVISOR)))) :
-    undefined;
+  if (memoryMb <= 0 || usagePct < 0) return undefined;
+  const totalBytes = memoryMb * BYTES_PER_MIB;
+  return Math.max(0, Math.floor(totalBytes * (1 - (usagePct / PERCENT_DIVISOR))));
 }
 
 function resolveLocalDiagnosticsSampleStamp(latest, nowMs) {
@@ -381,16 +392,19 @@ function readLocalDiagnosticsObservation(resourceDiagnosticsSampler, nodeRow, no
 }
 
 function readRemoteHeartbeatObservation(nodeRow) {
-  if (!nodeRow) return null;
+  if (!nodeRow || !hasExplicitFiniteMetric(nodeRow[COLUMN.LAST_HEARTBEAT])) return null;
   const sampledAtMs = Number(nodeRow[COLUMN.LAST_HEARTBEAT]);
-  if (!Number.isFinite(sampledAtMs)) return null;
   const availableMemoryBytes = readNodeRowAvailableMemoryBytes(nodeRow);
   const cpuUsagePercent = Number(nodeRow.cpu_usage_percent);
-  const hasCpuUsage = Number.isFinite(cpuUsagePercent) && cpuUsagePercent >= 0;
+  const hasCpuUsage =
+    hasExplicitFiniteMetric(nodeRow.cpu_usage_percent) && cpuUsagePercent >= 0;
+  const pressureSensorsComplete = hasCpuUsage && availableMemoryBytes !== undefined;
   return {
     sampledAtMs,
+    sampleId: sampledAtMs,
+    congestionEpochId: sampledAtMs,
     bootIncarnation: nodeRow[COLUMN.BOOT_INCARNATION],
-    pressureSensorsComplete: false,
+    pressureSensorsComplete,
     ...(availableMemoryBytes !== undefined ? {availableMemoryBytes} : {}),
     ...(hasCpuUsage ? {cpuUsagePercent} : {}),
   };
@@ -498,19 +512,6 @@ function readOwnerStorageExclusionsForMove(owner, readyNodeInput, targetNodeId, 
   return excluded;
 }
 
-function resolveStaticOrStoredControllerCopyLimits(controller, move, excludedReason) {
-  return Object.freeze({
-    kSrc: isFunction(controller?.getSourceBudget) ?
-      controller.getSourceBudget(move.copySourceNodeId) :
-      PLACEMENT_COPY_CAPACITY.K_SRC,
-    kTgt: isFunction(controller?.getTargetBudget) ?
-      controller.getTargetBudget(move.targetNodeId) :
-      PLACEMENT_COPY_CAPACITY.K_TGT,
-    hardAdmissionAllowed: excludedReason === null,
-    reason: excludedReason,
-  });
-}
-
 function resolveOwnerMoveCopyLimits(owner, move, nowMs) {
   if (!move || !COPY_MOVE_TYPES.has(move.type)) {
     return Object.freeze({
@@ -520,23 +521,26 @@ function resolveOwnerMoveCopyLimits(owner, move, nowMs) {
       reason: null,
     });
   }
+  const controller = owner?.adaptiveBudgetController;
+  if (!isFunction(controller?.resolveMoveCopyLimits)) {
+    return Object.freeze({
+      kSrc: null,
+      kTgt: null,
+      hardAdmissionAllowed: false,
+      reason: PLACEMENT_OWNER_UNAVAILABLE_REASON,
+    });
+  }
   const readyNodeInput = readOwnerReadyNodeInput(owner, nowMs);
   const storageExcludedTargets = readOwnerStorageExclusionsForMove(
     owner, readyNodeInput, move.targetNodeId, nowMs,
   );
-  const controller = owner?.adaptiveBudgetController;
-  if (isFunction(controller?.resolveMoveCopyLimits)) {
-    return controller.resolveMoveCopyLimits({
-      copySourceNodeId: move.copySourceNodeId,
-      targetNodeId: move.targetNodeId,
-      nodeInput: readyNodeInput,
-      storageExcludedTargets,
-      nowMs,
-    });
-  }
-  return resolveStaticOrStoredControllerCopyLimits(
-    controller, move, storageExcludedTargets.get(move.targetNodeId) ?? null,
-  );
+  return controller.resolveMoveCopyLimits({
+    copySourceNodeId: move.copySourceNodeId,
+    targetNodeId: move.targetNodeId,
+    nodeInput: readyNodeInput,
+    storageExcludedTargets,
+    nowMs,
+  });
 }
 
 export {

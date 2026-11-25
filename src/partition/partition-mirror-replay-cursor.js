@@ -25,6 +25,7 @@ import {
   PARTITION_COMMITTED_COMMAND_OUTCOME,
   PARTITION_SERVICE_OPERATION,
 } from './partition-service-constants.js';
+import {decodeTypedParams} from '../query/sql-value-codec.js';
 
 /**
  * Resolve the current Raft log barrier index for a snapshot about to be
@@ -132,7 +133,13 @@ function appendAppliedDeltaAtLogIndex(service, command, logIndex, deltas) {
   }
   deltas.push({
     ...command,
+    ...(command?.typedParams ?
+      {params: decodeTypedParams(command.typedParams)} :
+      {}),
     logIndex,
+    ...(typeof recorded.mutationKind === 'string' ?
+      {mutationKind: recorded.mutationKind} :
+      {}),
     ...(Number.isInteger(recorded.changes) ?
       {changes: recorded.changes} :
       {}),
