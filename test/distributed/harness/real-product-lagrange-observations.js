@@ -71,6 +71,7 @@ const NO_SUCH_CONTAINER_PATTERN = /\bNo such (?:container|object)\b/u;
 const INSPECT_TIMEOUT_MS = DEFAULT_INSPECT_TIMEOUT_MS;
 const DEFAULT_HTTP_PROBE_TIMEOUT_MS = DEFAULT_INSPECT_TIMEOUT_MS;
 const CONTROL_SNAPSHOT_SERVE_LANE_TIMEOUT_MS = 5000;
+const PROBE_CREATE_TABLE_TIMEOUT_MS = 30000;
 const BOOT_PROVENANCE_TIMEOUT_MS = DEFAULT_INSPECT_TIMEOUT_MS;
 const BOOT_PROVENANCE_MAX_BYTES = 4096;
 const EXITED_CONTAINER_LOG_TAIL_LINES = 80;
@@ -836,7 +837,10 @@ function probeWriteReadback(ctx, sql, campaignId, visibility) {
     const token = `${campaignId}-${id}`;
     await sql.statement(
       `CREATE TABLE IF NOT EXISTS ${PROBE_TABLE} (id BIGINT PRIMARY KEY, token TEXT)`,
-      probeCallOptions(ctx, pollContext, null),
+      {
+        ...probeCallOptions(ctx, pollContext, PROBE_CREATE_TABLE_TIMEOUT_MS),
+        maxProbeTimeoutMs: PROBE_CREATE_TABLE_TIMEOUT_MS,
+      },
     );
     const insert = await sql.statement(
       `INSERT INTO ${PROBE_TABLE} (id, token) VALUES (${id}, '${token}')`,
