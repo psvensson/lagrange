@@ -8,6 +8,7 @@ import {CDC_OPERATION, COLUMN, SQL} from '../constants/index.js';
 import {
   extractDeleteDataFromSQL as extractDeleteDataFromSQLImpl,
   extractInsertDataFromSQL as extractInsertDataFromSQLImpl,
+  hasSqlParameterPlaceholders,
   parseValue as parseValueImpl,
   parseValuesFromSQL as parseValuesFromSQLImpl,
   extractUpdateDataFromSQL as extractUpdateDataFromSQLImpl,
@@ -24,7 +25,6 @@ import {
   PARTITION_SERVICE_EVENT,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_OPERATION,
-  PARTITION_SERVICE_SQL_FRAGMENT,
   PARTITION_SERVICE_TYPE,
   PARTITION_SERVICE_VALUE,
 } from './partition-service-constants.js';
@@ -42,11 +42,37 @@ const PARTITION_CDC_EVENT_BUILD_STATE = Object.freeze({
 const PARTITION_CDC_EVENT_SKIP_REASON = Object.freeze({
   NO_OP_WRITE: 'no_op_write',
   UNSUPPORTED_OPERATION: 'unsupported_operation',
+  INCOMPLETE_ROW_PAYLOAD: 'incomplete_row_payload',
 });
 
 const PARTITION_CDC_GENERATOR_LITERAL = Object.freeze({
   SUPPRESSING_CDC_EVENT_FOR_NO_OP_WRITE: 'Suppressing CDC event for no-op write',
+  REFUSING_INCOMPLETE_ROW_PAYLOAD:
+    'Refusing to build CDC event with incomplete row payload',
+  OBJECT_TYPE: 'object',
 });
+
+function isPlainRecordObject(value) {
+  if (!value || Array.isArray(value) ||
+      typeof value !== PARTITION_CDC_GENERATOR_LITERAL.OBJECT_TYPE) {
+    return false;
+  }
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+/**
+ * Validate that extracted CDC row data carries at least one non-HLC row column.
+ * @param {string} _tableName - Target table name.
+ * @param {Object} data - Candidate CDC row payload.
+ * @return {boolean}
+ */
+function hasValidPartitionCdcRowPayload(_tableName, data) {
+  if (!isPlainRecordObject(data)) return false;
+  return Object.keys(data).some(
+    (key) => key !== COLUMN.UPDATED_AT_HLC && data[key] !== undefined,
+  );
+}
 
 function stampOriginHlc(data, originHlc) {
   if (!data || typeof data !== 'object' ||
@@ -269,11 +295,20 @@ class PartitionCDCGenerator {
     if (envelopeResult.state !== PARTITION_CDC_EVENT_BUILD_STATE.BUILT) {
       return envelopeResult;
     }
-
-    return Object.freeze({
-      ...envelopeResult,
-      cdcEvent: this.hydrateEventEnvelope(entry, envelopeResult, options),
-    });
+    const cdcEvent = this.hydrateEventEnvelope(entry, envelopeResult, options);
+    if (!hasValidPartitionCdcRowPayload(cdcEvent.tableName, cdcEvent.data)) {
+      this.logger.error(PARTITION_CDC_GENERATOR_LITERAL.REFUSING_INCOMPLETE_ROW_PAYLOAD, {
+        tableName: cdcEvent.tableName,
+        operationType: cdcEvent.operation,
+        extractedKeys: Object.keys(cdcEvent.data || {}),
+      });
+      return Object.freeze({
+        state: PARTITION_CDC_EVENT_BUILD_STATE.SKIPPED,
+        reasonCode: PARTITION_CDC_EVENT_SKIP_REASON.INCOMPLETE_ROW_PAYLOAD,
+        entryType: envelopeResult.entryType,
+      });
+    }
+    return Object.freeze({...envelopeResult, cdcEvent});
   }
 
   /**
@@ -358,9 +393,7 @@ class PartitionCDCGenerator {
     if (entry.type === PARTITION_SERVICE_OPERATION.QUERY && entry.sql) {
       // For parameterized queries (SQL with ? placeholders), build data from params
       const hasParams = entry.params && entry.params.length > 0;
-      const hasPlaceholders = entry.sql.includes(
-        PARTITION_SERVICE_SQL_FRAGMENT.QUESTION_MARK,
-      );
+      const hasPlaceholders = hasSqlParameterPlaceholders(entry.sql);
 
       if (hasParams && hasPlaceholders && Object.keys(cdcData).length === 0) {
         cdcData = this.extractDataFromParameterizedSQL(
@@ -693,7 +726,9 @@ class PartitionCDCGenerator {
 }
 
 export {
+  hasValidPartitionCdcRowPayload,
   hydratePartitionCdcEvent,
   PARTITION_CDC_EVENT_BUILD_STATE,
+  PARTITION_CDC_EVENT_SKIP_REASON,
   PartitionCDCGenerator,
 };

@@ -166,12 +166,7 @@ class DynamicConfigService extends EventEmitter {
    * Requirements: 30.2, 30.9
    * @param {string} updatedBy - Identity of who is seeding (e.g., 'system').
    * @param {Object} [options={}] - Seeding options.
-   * @param {boolean} [options.skipExistingCheck=false] - Legacy compatibility
-   *   flag. Seeding now uses idempotent insert-if-absent writes, so per-key
-   *   existence reads are no longer required.
-   * @param {boolean} [options.useDirectCdcMutations=false] - Legacy
-   *   compatibility flag. Seeding always writes through the control-plane
-   *   gateway owner.
+   * @param {number} [options.nowMs] - Explicit timestamp override in ms.
    * @return {Promise<Object>} Seeding result.
    */
   async seedConfiguration(updatedBy = CONFIG_SEED_SOURCE.SYSTEM, _options = {}) {

@@ -21,6 +21,7 @@
 // request's result budget. A statement that fails is refused and stages
 // nothing; a replay that no longer runs dooms the session.
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {sqliteConnectionState} from '../storage/sqlite-connection-state.js';
 import {executionEnvelopeOf} from './partition-transaction-execution-envelope.js';
 import {collectBoundedTypedRowSet, QUERY_RESULT_REQUEST_FIELD} from
   '../query/query-result-budget.js';
@@ -81,7 +82,6 @@ const {
 } = PARTITION_SERVICE_SHARED;
 
 const TEXT_ENCODING = 'utf8';
-const PRAGMA_SCHEMA_VERSION = 'schema_version';
 const ZERO = 0;
 const ONE = 1;
 const EMPTY_ARRAY_BRACKET_BYTES = 2;
@@ -297,11 +297,17 @@ function getStagingReplayStats(service) {
 }
 
 function readSchemaVersion(db) {
-  try {
-    return Number(db?.pragma?.(PRAGMA_SCHEMA_VERSION, {simple: true})) || ZERO;
-  } catch (_err) {
+  if (!db || db.open !== true) {
     return ZERO;
   }
+  return sqliteConnectionState(db).schemaVersion();
+}
+
+function readValidationState(db) {
+  return {
+    generation: readPartitionWriteGeneration(db),
+    schemaVersion: readSchemaVersion(db),
+  };
 }
 
 // What a session write's or read's refusal carries.
@@ -350,10 +356,12 @@ function replayOneStagedOperation(
   }
 }
 
-function replayStagedOperations(service, session) {
+function replayStagedOperations(service, session, validationState = null) {
   const stats = replayStatsOf(service);
-  const currentGen = readPartitionWriteGeneration(service.db);
-  const currentSchema = readSchemaVersion(service.db);
+  const currentGen = validationState !== null ?
+    validationState.generation : readPartitionWriteGeneration(service.db);
+  const currentSchema = validationState !== null ?
+    validationState.schemaVersion : readSchemaVersion(service.db);
   const canFastReplay =
     currentGen === session.lastValidatedGeneration &&
     currentSchema === session.lastValidatedSchemaVersion &&
@@ -375,14 +383,15 @@ function replayStagedOperations(service, session) {
  * @param {Object} service - The partition (its leader).
  * @param {Object} session - The staging session.
  * @param {Function} run - The statement, run after the replay.
+ * @param {Object|null} [validationState] - Pre-read `{generation, schemaVersion}`.
  * @return {{ran: *}|{failure: *}} What `run` returned, or what failed.
  */
-function validateOverReplay(service, session, run) {
+function validateOverReplay(service, session, run, validationState = null) {
   let ran;
   let stopped = VALIDATION_COMPLETE;
   try {
     service.db.transaction(() => {
-      replayStagedOperations(service, session);
+      replayStagedOperations(service, session, validationState);
       ran = run();
       throw VALIDATION_COMPLETE;
     })();
@@ -412,7 +421,7 @@ function validateDirectDisjointWrite(service, session, run) {
   return {failure: stopped};
 }
 
-function canDirectValidateDisjoint(service, session, rowKeyCheck) {
+function canDirectValidateDisjoint(session, rowKeyCheck, validationState) {
   if (session.operations.length === ZERO ||
       session.hasUnscopedWrite === true ||
       rowKeyCheck.scoped !== true ||
@@ -420,11 +429,9 @@ function canDirectValidateDisjoint(service, session, rowKeyCheck) {
       rowKeyCheck.rowKey === null) {
     return false;
   }
-  const currentGen = readPartitionWriteGeneration(service.db);
-  const currentSchema = readSchemaVersion(service.db);
-  return currentGen === session.lastValidatedGeneration &&
+  return validationState.generation === session.lastValidatedGeneration &&
     (session.lastValidatedSchemaVersion === null ||
-      currentSchema === session.lastValidatedSchemaVersion);
+      validationState.schemaVersion === session.lastValidatedSchemaVersion);
 }
 
 // A replay that no longer runs (committed state changed under the staged
@@ -490,7 +497,7 @@ function computeIncrementalStagedBytes(session, operationBytes) {
 }
 
 function appendValidatedOperationToSession(
-  service, session, operation, operationText, nextBytes, classifiedStmt,
+  service, session, operation, operationText, nextBytes, classifiedStmt, validationState,
 ) {
   session.operations.push(operation);
   if (Array.isArray(session.encodedOperations)) {
@@ -500,8 +507,8 @@ function appendValidatedOperationToSession(
   if (Array.isArray(session.compiledOperations)) {
     session.compiledOperations.push(classifiedStmt);
   }
-  session.lastValidatedGeneration = readPartitionWriteGeneration(service.db);
-  session.lastValidatedSchemaVersion = readSchemaVersion(service.db);
+  session.lastValidatedGeneration = validationState.generation;
+  session.lastValidatedSchemaVersion = validationState.schemaVersion;
   session.bytes = nextBytes;
 }
 
@@ -549,9 +556,10 @@ function stageWrite(service, session, request, params) {
     }
     return runStaged(service, operation);
   };
-  const outcome = canDirectValidateDisjoint(service, session, rowKeyCheck) ?
+  const validationState = readValidationState(service.db);
+  const outcome = canDirectValidateDisjoint(session, rowKeyCheck, validationState) ?
     validateDirectDisjointWrite(service, session, runWithSequentialLockCheck) :
-    validateOverReplay(service, session, runWithSequentialLockCheck);
+    validateOverReplay(service, session, runWithSequentialLockCheck, validationState);
   if (outcome.failure !== undefined) {
     revertSessionRowKeyCheck(service, session, rowKeyCheck);
     if (outcome.failure?.stagingLockConflict === true) {
@@ -560,7 +568,8 @@ function stageWrite(service, session, request, params) {
     return failedValidation(service, session, outcome.failure);
   }
   appendValidatedOperationToSession(
-    service, session, operation, operationText, nextBytes, classified.statement);
+    service, session, operation, operationText, nextBytes,
+    classified.statement, validationState);
   return {success: true, provisional: true, changes: outcome.ran.changes,
     lastInsertRowid: outcome.ran.lastInsertRowid};
 }

@@ -152,3 +152,51 @@ test('rs-raft peer delivery records DELIVERED only on the transport owner decisi
     t.equal((await settle(outcomes.NO_HANDLER)).observation?.phase,
       RUNTIME_PHASE.SEND_NO_HANDLER, 'a missing handler keeps its named phase');
   });
+
+test('rs-raft peer delivery dispatches distinct peers concurrently while preserving per-peer FIFO and failure isolation',
+  async (t) => {
+    const delivered = buildDeliveryEnvelope({acknowledged: true});
+    const syncGroup = groupWith(() => delivered);
+    const syncTurn = sendMessages(syncGroup, [
+      {to: 2, from: 1, index: 1},
+      {to: 3, from: 1, index: 1},
+    ]);
+    t.equal(syncTurn.settled, true, 'multi-peer synchronous delivery settles immediately');
+    t.equal(syncGroup.peerDelivery.get('2')?.outcome, PEER_DELIVERY_OUTCOME.DELIVERED);
+    t.equal(syncGroup.peerDelivery.get('3')?.outcome, PEER_DELIVERY_OUTCOME.DELIVERED);
+
+    const dispatched = [];
+    const gates = new Map();
+    const group = groupWith((_address, envelope) => {
+      const key = `${envelope.to}#${envelope.message.index}`;
+      dispatched.push(key);
+      const deferred = Promise.withResolvers();
+      gates.set(key, deferred);
+      return deferred.promise;
+    });
+    const turn = sendMessages(group, [
+      {to: 2, from: 1, index: 1},
+      {to: 2, from: 1, index: 2},
+      {to: 3, from: 1, index: 1},
+      {to: 3, from: 1, index: 2},
+    ]);
+    t.equal(turn.settled, false, 'pending multi-peer turn returns pending');
+    t.same(dispatched, ['2#1', '3#1'],
+      'head messages for distinct peers start concurrently before either settles, while per-peer tails queue');
+
+    // Peer 3 completes first message -> 3#2 dispatches immediately while peer 2 is still blocked on 2#1.
+    gates.get('3#1').resolve(delivered);
+    await Promise.resolve();
+    await Promise.resolve();
+    t.same(dispatched, ['2#1', '3#1', '3#2'],
+      'peer 3 advances its FIFO queue independently of slow peer 2');
+
+    // Failing 2#1 drops 2#2 and marks peer 2 failed without disturbing peer 3.
+    gates.get('2#1').resolve(ROUTER_FACTS.FAILED_CLAIM);
+    gates.get('3#2').resolve(delivered);
+    await turnChainValue(turn);
+    t.same(dispatched, ['2#1', '3#1', '3#2'],
+      'failed peer drops remaining queued messages for that peer in this batch');
+    t.equal(group.peerDelivery.get('2')?.outcome, PEER_DELIVERY_OUTCOME.FAILED);
+    t.equal(group.peerDelivery.get('3')?.outcome, PEER_DELIVERY_OUTCOME.DELIVERED);
+  });

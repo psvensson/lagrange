@@ -15,11 +15,14 @@ import {
 import {
   NOV_2026_HISTORY_RECONCILIATION_SPECS,
   buildCanonicalHistoryTransactionsFromWorkload,
+  buildLab3NodeProgressionEntryFromReceipt,
   createComparisonHistoryRecord,
   normalizeTransactions,
   parseComparisonHistoryNdjson,
   reconcileNov2026ComparisonHistoryToDisk,
+  validateVersionedProgressionRecord,
 } from '../oltp-comparison-history-store.js';
+import {deriveRunMetrics} from '../raw-observation-metrics.js';
 import {
   arrayFilter,
   arrayIncludes,
@@ -775,5 +778,170 @@ describe('readiness summary and canonical history outcome accounting', () => {
     } finally {
       await fs.rm(tmpDir, {recursive: true, force: true});
     }
+  });
+
+  it('extracts and strictly validates lab 3-node progression entries from bound receipts', async () => {
+    const baseReceipt = {
+      commit: 'a23d0dfc00170dd5e317aa0463b3e8f66c981e41',
+      passed: true,
+      formation: {elapsedMs: 133507},
+      semanticGate: {status: 'passed', passedCount: 33},
+      extraJoinerDurability: {passed: true},
+      workload: {
+        metrics: {
+          window: {scheduledMs: 20000, drainMs: 118394.976237},
+          accounting: {
+            offered: 100,
+            issued: 100,
+            unissued: 0,
+            attempts: 140,
+            committed: 97,
+            conflicts: 43,
+            conflictExhausted: 3,
+            terminalFailures: {
+              product_error: 0,
+              correctness_failure: 0,
+              transport_failure: 0,
+              harness_fault: 0,
+            },
+            unresolved: 0,
+            ambiguousCommits: 0,
+          },
+          latency: {
+            count: 97,
+            p50: 40640.058131,
+            p95: 96546.786549,
+            p99: 98678.84007,
+          },
+        },
+      },
+    };
+    const built = buildLab3NodeProgressionEntryFromReceipt(baseReceipt);
+    assert.equal(built.formationSec, 133.51);
+    assert.equal(built.extraJoinerDurabilityPassed, true);
+    assert.equal(built.workload.opsPerSec, 0.819);
+    assert.deepEqual(built.workload.latencyMs, {
+      samples: 97,
+      p50: 40640.058,
+      p95: 96546.787,
+      p99: 98678.84,
+    });
+
+    // Rejects passed: true when any required field is zeroed or missing:
+    for (const [label, mutate, expected] of [
+      ['zero formationSec', (r) => {
+        r.formation = {elapsedMs: 0};
+      }, /formationSec <= 0/u],
+      ['zero issued', (r) => {
+        r.workload.metrics.accounting.issued = 0;
+        r.workload.metrics.accounting.committed = 0;
+        r.workload.opsPerSec = 1;
+      }, /issued <= 0/u],
+      ['zero committed', (r) => {
+        r.workload.metrics.accounting.committed = 0;
+        r.workload.opsPerSec = 1;
+      }, /committed <= 0/u],
+      ['zero opsPerSec', (r) => {
+        r.workload.opsPerSec = 0;
+      }, /opsPerSec <= 0/u],
+      ['null latencyMs', (r) => {
+        r.workload.metrics.latency = null;
+      }, /null or invalid latencyMs/u],
+      ['extraJoinerDurabilityPassed !== true', (r) => {
+        r.extraJoinerDurability.passed = false;
+      }, /extraJoinerDurabilityPassed === true/u],
+    ]) {
+      const broken = JSON.parse(JSON.stringify(baseReceipt));
+      mutate(broken);
+      assert.throws(() => buildLab3NodeProgressionEntryFromReceipt(broken), expected, label);
+    }
+
+    const progressionText = await fs.readFile(
+      'data/tidb-comparison/versioned-progression-20261123-20261124.json',
+      'utf8',
+    );
+    const progression = JSON.parse(progressionText);
+    assert.equal(validateVersionedProgressionRecord(progression), progression);
+    assert.throws(
+      () => validateVersionedProgressionRecord({
+        lab3NodeProgression: [{...built, formationSec: 0}],
+      }),
+      /formationSec <= 0/u,
+    );
+  });
+
+  it('separates single-txn execution time from end-to-end request latency and aligns ' +
+    'derivePartsSec intervals with dataset-reset events', () => {
+    const run = {
+      runId: 'metrics-alignment-check',
+      plan: {offeredRatePerSec: 5, repetition: 1},
+      execution: {
+        startedAt: '2026-11-24T20:24:45.000Z',
+        endedAt: '2026-11-24T20:36:11.000Z',
+      },
+      deployment: {readiness: {observedAt: '2026-11-24T20:28:42.000Z'}},
+      harnessEvents: [
+        {kind: 'dataset-reset', caseId: 'visibility', at: '2026-11-24T20:29:52.000Z'},
+        {kind: 'dataset-reset', caseId: 'payment', at: '2026-11-24T20:29:55.000Z'},
+        {kind: 'dataset-reset', caseId: 'order-status', at: '2026-11-24T20:30:01.000Z'},
+        {kind: 'dataset-reset', caseId: 'delivery', at: '2026-11-24T20:30:11.000Z'},
+        {kind: 'dataset-reset', caseId: 'stock-level', at: '2026-11-24T20:30:17.000Z'},
+        {kind: 'dataset-reset', caseId: 'failure-atomicity', at: '2026-11-24T20:30:22.000Z'},
+        {kind: 'dataset-reset', caseId: 'retryable-conflict', at: '2026-11-24T20:30:27.000Z'},
+        {kind: 'dataset-reset', caseId: 'durability', at: '2026-11-24T20:30:31.000Z'},
+      ],
+      observations: {
+        runStatus: 'completed',
+        window: {
+          scheduledMs: 20000,
+          drainMs: 241960,
+          drainOverrunMs: 221960,
+          startedAt: '2026-11-24T20:32:09.000Z',
+          endedAt: '2026-11-24T20:36:11.000Z',
+        },
+        warmup: {
+          records: [{issuedAtMs: 1000, completedAtMs: 22000}],
+        },
+        accounting: {
+          offered: 2,
+          issued: 2,
+          unissued: 0,
+          attempts: 5,
+          committed: 2,
+          conflicts: 3,
+          conflictExhausted: 0,
+          terminalFailures: {
+            product_error: 0,
+            correctness_failure: 0,
+            transport_failure: 0,
+            harness_fault: 0,
+          },
+          unresolved: 0,
+        },
+        requests: [
+          {outcome: 'committed', executionElapsedMs: 14496, latencyMs: 143043},
+          {outcome: 'committed', executionElapsedMs: 3212, latencyMs: 222242},
+        ],
+      },
+    };
+    const metrics = deriveRunMetrics(run);
+    assert.equal(metrics.timingsSec.maxSingleTxnExecutionSec, 14.496);
+    assert.equal(metrics.timingsSec.maxSingleTxnSec, 14.496);
+    assert.equal(metrics.timingsSec.maxSingleRequestSec, 222.242);
+    assert.deepEqual(metrics.timingsSec.partsSec, {
+      loadAndCases1To2Sec: 70,
+      case3PaymentSec: 3,
+      case4OrderStatusSec: 6,
+      case5DeliverySec: 10,
+      case6StockLevelSec: 6,
+      case7FailureAtomicitySec: 5,
+      case8RetryableConflictSec: 5,
+      case9aDurabilityPreRestartSec: 4,
+      case9bDurabilityRestartReloadSec: 77,
+    });
+
+    const badOrder = structuredClone(run);
+    badOrder.harnessEvents[0].caseId = 'new-order-contention';
+    assert.equal(deriveRunMetrics(badOrder).timingsSec.partsSec, null);
   });
 });

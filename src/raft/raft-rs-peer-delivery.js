@@ -202,9 +202,45 @@ function deliverToPeer(group, message, failedPeers) {
   return DELIVERY_RECORDED;
 }
 
+function deliverPeerQueue(group, peerKey, queue, failedPeers, queueIndex = 0) {
+  let idx = queueIndex;
+  while (idx < queue.length) {
+    if (failedPeers.has(peerKey)) {
+      return DELIVERY_RECORDED;
+    }
+    const delivered = deliverToPeer(group, queue[idx], failedPeers);
+    if (delivered.settled) {
+      idx += 1;
+      continue;
+    }
+    return continueTurn(delivered, () =>
+      deliverPeerQueue(group, peerKey, queue, failedPeers, idx + 1));
+  }
+  return DELIVERY_RECORDED;
+}
+
+function groupMessagesByPeer(messages, index, failedPeers) {
+  const queuesByPeer = new Map();
+  for (let i = index; i < messages.length; i += 1) {
+    const message = messages[i];
+    const peerKey = String(message.to);
+    if (failedPeers.has(peerKey)) {
+      continue;
+    }
+    let queue = queuesByPeer.get(peerKey);
+    if (queue === undefined) {
+      queue = [];
+      queuesByPeer.set(peerKey, queue);
+    }
+    queue.push(message);
+  }
+  return queuesByPeer;
+}
+
 /**
- * Deliver a Ready's messages in order, each peer's outcome recorded against
- * it.
+ * Deliver a Ready's messages concurrently across distinct peers while
+ * preserving strict FIFO order within each peer queue, with each peer's
+ * outcome recorded against it.
  * @param {Object} group - The runtime group.
  * @param {Array<Object>} messages - The messages to deliver.
  * @param {number} [index] - The first message to deliver.
@@ -217,11 +253,26 @@ function sendMessages(group, messages, index = 0, failedPeers = new Set()) {
   if (index >= messages.length) {
     return DELIVERY_RECORDED;
   }
-  const message = messages[index];
-  const delivered = failedPeers.has(String(message.to)) ? DELIVERY_RECORDED :
-    deliverToPeer(group, message, failedPeers);
-  return continueTurn(delivered, () =>
-    sendMessages(group, messages, index + 1, failedPeers));
+  if (messages.length - index === 1) {
+    const message = messages[index];
+    return failedPeers.has(String(message.to)) ?
+      DELIVERY_RECORDED :
+      deliverToPeer(group, message, failedPeers);
+  }
+  const queuesByPeer = groupMessagesByPeer(messages, index, failedPeers);
+  const pending = [];
+  for (const [peerKey, queue] of queuesByPeer.entries()) {
+    const turn = deliverPeerQueue(group, peerKey, queue, failedPeers);
+    if (!turn.settled) {
+      pending.push(turn.pending);
+    }
+  }
+  if (pending.length === 0) {
+    return DELIVERY_RECORDED;
+  }
+  return pendingTurn(pending.length === 1 ?
+    pending[0] :
+    Promise.all(pending).then(() => null));
 }
 
 export {recordInboundStepRefusal, sendMessages};

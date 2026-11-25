@@ -858,3 +858,45 @@ test('Opportunity 4: session wait receipt history is bounded to at most 8 retain
     assert.deepEqual(waiterSession.waitReceipts, allReceipts.slice(24, 32));
   });
 });
+
+test('Finding 5B: read-pinned session whose readRowKeys were invalidated by an earlier commit fails fast instead of waiting behind active holder', async () => {
+  await onLeader(async (leader, proposed) => {
+    setupRowKeyLeader(leader, 3000);
+    const seedTx = identityOf('fa'.repeat(16), {sessionId: 'sess-f5b-seed'});
+    assert.equal((await send(leader, beginMessage(seedTx))).success, true);
+    assert.equal((await leader.handleRemoteQuery(queryMessage(seedTx, INSERT_SQL, ['rk-d', 'v0']))).success, true);
+    await commitParticipantTx(leader, proposed, seedTx);
+
+    // Reader A snapshots rk-d at gen 1.
+    const readerA = identityOf('fb'.repeat(16), {sessionId: 'sess-f5b-reader'});
+    assert.equal((await send(leader, beginMessage(readerA))).success, true);
+    const readA = await leader.handleRemoteQuery(queryMessage(readerA, SELECT_SQL, ['rk-d']));
+    assert.equal(readA.success, true);
+
+    // Writer B commits a new version of rk-d (gen 1 -> gen 2), invalidating reader A's snapshot.
+    const writerB = identityOf('fc'.repeat(16), {sessionId: 'sess-f5b-writer'});
+    assert.equal((await send(leader, beginMessage(writerB))).success, true);
+    assert.equal((await leader.handleRemoteQuery(queryMessage(writerB, UPDATE_SQL, ['v1', 'rk-d']))).success, true);
+    await commitParticipantTx(leader, proposed, writerB);
+
+    // Active holder C holds rk-d while reader A attempts to update rk-d.
+    const holderC = identityOf('fd'.repeat(16), {sessionId: 'sess-f5b-holder'});
+    assert.equal((await send(leader, beginMessage(holderC))).success, true);
+    assert.equal((await leader.handleRemoteQuery(queryMessage(holderC, UPDATE_SQL, ['v2', 'rk-d']))).success, true);
+
+    const startedMs = Date.now();
+    const res = await leader.handleRemoteQuery(queryMessage(readerA, UPDATE_SQL, ['stale', 'rk-d']));
+    const elapsedMs = Date.now() - startedMs;
+    assert.equal(res.success, false);
+    assert.equal(res.failureCode, CODE.ALREADY_ACTIVE);
+    assert.equal(elapsedMs < scaleByMachineFactor(400), true,
+      `stale read-pinned session must fail fast instead of blocking conflictSettleWaitMs=3000 (took ${elapsedMs}ms)`);
+
+    const readerSession = findParticipantSession(leader, readerA);
+    assert.equal(readerSession.lastWaitReceipt.state, ROW_KEY_WAIT_RECEIPT_STATE.TERMINAL);
+    assert.equal(readerSession.lastWaitReceipt.terminalReason, 'rebase_refused');
+    assert.equal((await rollbackParticipantTx(leader, readerA)).success, true);
+    await commitParticipantTx(leader, proposed, holderC);
+    assert.equal(readRowValue(leader, 'rk-d'), 'v2');
+  });
+});

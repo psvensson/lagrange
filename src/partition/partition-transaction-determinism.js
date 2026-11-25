@@ -30,6 +30,7 @@
 // The leader's self-check (runDeterminismSelfCheck) classifies nine fixed
 // probes on the running binary, each refused at exactly its layer (the
 // ceiling probe at implicit_key on a table without a declared primary key).
+import {sqliteConnectionState} from '../storage/sqlite-connection-state.js';
 import {lexPartitionStatement} from './partition-statement-admission-lexer.js';
 import {
   dmlVerbIndex,
@@ -71,7 +72,6 @@ const ALLOCATING_VERBS = new Set([KEYWORD.INSERT, KEYWORD.REPLACE]);
 const SESSION_HEADS = new Set([...WRITE_VERBS, KEYWORD.SELECT, KEYWORD.WITH]);
 // The private value that ends the ceiling probe's sentinel transaction.
 const PROBE_COMPLETE = Object.freeze({probeComplete: true});
-const PRAGMA_SCHEMA_VERSION = 'schema_version';
 const PLAN_KEY_SEP = '\0';
 const ZERO = 0;
 const ONE = 1;
@@ -92,11 +92,10 @@ function compiledPlanStoreOf(connection) {
 }
 
 function readSchemaVersionOf(connection) {
-  try {
-    return Number(connection?.pragma?.(PRAGMA_SCHEMA_VERSION, {simple: true})) || ZERO;
-  } catch (_err) {
+  if (!connection || connection.open !== true) {
     return ZERO;
   }
+  return sqliteConnectionState(connection).schemaVersion();
 }
 
 function getDeterminismClassifierStats(connection) {

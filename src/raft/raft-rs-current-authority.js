@@ -5,8 +5,8 @@
 //    permitted state owned by the Raft operation-port / runtime lifecycle
 //    contract.
 // 2. Leaving that state - via committed membership installation
-//    (voters + learners > 1 or joint outgoing voters), observing term > 1,
-//    role !== LEADER, gateOpen === false, or reconstructing/reopening an
+//    (voters + learners + learnersNext > 1 or joint outgoing voters),
+//    observing term > 1, role !== LEADER, gateOpen === false, or reconstructing/reopening an
 //    RF2/RF3 replica from durable storage - creates a mandatory clock
 //    obligation (clockRequired: true) and automatically arms the periodic
 //    scheduler once scheduling has been requested on the replica.
@@ -90,8 +90,10 @@ function hasMultiMemberConfState(confState) {
   }
   const voterCount = arrayLength(confState.voters);
   const outgoingCount = arrayLength(confState.votersOutgoing);
+  const learnerCount = arrayLength(confState.learners);
+  const nextLearnerCount = arrayLength(confState.learnersNext);
   return (
-    voterCount > SINGLE_REPLICA_COUNT ||
+    voterCount + learnerCount + nextLearnerCount > SINGLE_REPLICA_COUNT ||
     outgoingCount > ZERO_COUNT
   );
 }
@@ -102,9 +104,13 @@ function isSoloSingleVoterConfState(confState) {
   }
   const voterCount = arrayLength(confState.voters);
   const outgoingCount = arrayLength(confState.votersOutgoing);
+  const learnerCount = arrayLength(confState.learners);
+  const nextLearnerCount = arrayLength(confState.learnersNext);
   return (
     voterCount === SINGLE_REPLICA_COUNT &&
-    outgoingCount === ZERO_COUNT
+    outgoingCount === ZERO_COUNT &&
+    learnerCount === ZERO_COUNT &&
+    nextLearnerCount === ZERO_COUNT
   );
 }
 

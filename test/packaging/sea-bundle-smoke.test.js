@@ -1,5 +1,6 @@
 import {basename, dirname, join} from 'path';
-import {fileURLToPath} from 'url';
+import {fileURLToPath, pathToFileURL} from 'url';
+import {createRequire} from 'module';
 import {spawn} from 'child_process';
 import {Worker} from 'worker_threads';
 import os from 'os';
@@ -283,3 +284,148 @@ test('SEA bundle smoke test', {timeout: SEA_BUNDLE_SMOKE_TIMEOUT_MS}, async (t) 
     'bundled lifecycle route contains its command owner and pg closure',
   );
 });
+
+const MERGE_WITNESS_TIMEOUT_MS = 30000;
+const coordinatorMergeProcessPath =
+  join(projectRoot, 'src/query/distributed/coordinator-merge-process.js');
+const sqlValueCodecPath = join(projectRoot, 'src/query/sql-value-codec.js');
+
+function runNodeScript(args, {cwd = projectRoot, env = {}, timeoutMs = 15000} = {}) {
+  return new Promise((resolve, reject) => {
+    const childEnv = {...process.env, ...env};
+    const nodeOptions = isolatedCensusNodeOptions(process.env);
+    if (nodeOptions) childEnv.NODE_OPTIONS = nodeOptions;
+    else delete childEnv.NODE_OPTIONS;
+    const child = spawn(process.execPath, args, {
+      cwd,
+      env: childEnv,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    let spawnError;
+    child.stdout.on('data', (chunk) => {
+      stdout += String(chunk);
+    });
+    child.stderr.on('data', (chunk) => {
+      stderr += String(chunk);
+    });
+    child.once('error', (error) => {
+      spawnError = error;
+    });
+    const timer = setTimeout(() => child.kill('SIGKILL'), timeoutMs);
+    child.once('close', (exitCode, signal) => {
+      clearTimeout(timer);
+      if (spawnError) reject(spawnError);
+      else if (signal) reject(new Error(`process terminated by ${signal}`));
+      else resolve({exitCode, stderr, stdout});
+    });
+  });
+}
+
+test(
+  'CoordinatorMergeProcessPool executes in SEA_BUILD=true against isolated bundle',
+  {timeout: SEA_BUNDLE_SMOKE_TIMEOUT_MS},
+  async (t) => {
+    if (!fs.existsSync(mainBundle) || !fs.existsSync(distNodeModules)) {
+      const build = await runEntrypoint(buildEntrypoint, {
+        timeoutMs: SEA_BUNDLE_SMOKE_TIMEOUT_MS,
+      });
+      t.equal(build.exitCode, 0, 'build script exits cleanly before merge witness');
+    }
+
+    const tmpDir = fs.mkdtempSync(join(os.tmpdir(), 'lagrange-sea-merge-worker-'));
+    t.teardown(() => fs.rmSync(tmpDir, {recursive: true, force: true}));
+    const isolatedBundle = layOutBundleWithoutBinding(tmpDir);
+
+    const req = createRequire(isolatedBundle);
+    const Database = req('better-sqlite3');
+    const fragmentFixtures = [
+      {file: join(tmpDir, 'frag-0.sqlite'), id: 1, name: 'alpha'},
+      {file: join(tmpDir, 'frag-1.sqlite'), id: 2, name: 'beta'},
+    ];
+    for (const fixture of fragmentFixtures) {
+      const db = new Database(fixture.file);
+      db.exec('CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT)');
+      db.prepare('INSERT INTO items (id, name) VALUES (?, ?)').run(fixture.id, fixture.name);
+      db.close();
+    }
+
+    const witnessPath = join(tmpDir, 'witness.mjs');
+    const witnessScript = [
+      'import {createRequire} from "node:module";',
+      'const [, , bundlePath, workDir, poolUrl, codecUrl, ...fragPaths] = process.argv;',
+      'process.argv[1] = bundlePath;',
+      'globalThis.__filename = bundlePath;',
+      'globalThis.__dirname = workDir;',
+      'const {CoordinatorMergeProcessPool} = await import(poolUrl);',
+      'const {encodeTypedRowSet} = await import(codecUrl);',
+      'const Database = createRequire(bundlePath)("better-sqlite3");',
+      'const fragments = fragPaths.map((fragPath) => {',
+      '  const db = new Database(fragPath, {readonly: true});',
+      '  const rows = db.prepare("SELECT id, name FROM items ORDER BY id")',
+      '    .safeIntegers(true).raw(true).all();',
+      '  db.close();',
+      '  return {rowSet: encodeTypedRowSet(["id", "name"], rows)};',
+      '});',
+      'const pool = new CoordinatorMergeProcessPool({maxWorkers: 1});',
+      'let workerScript = null;',
+      'try {',
+      '  const merged = await pool.execute({',
+      '    tables: [{',
+      '      tableName: "items",',
+      '      schema: {columns: [{name: "id", type: "INTEGER"}, {name: "name", type: "TEXT"}]},',
+      '      declaredColumns: ["id", "name"],',
+      '      fragments,',
+      '    }],',
+      '    sql: "SELECT id, name FROM items ORDER BY id",',
+      '    params: [],',
+      '    expectedColumns: ["id", "name"],',
+      '  });',
+      '  workerScript = pool.idleWorkers[0]?.spawnargs?.[1] ?? null;',
+      '  const rows = merged.rows.map((row) => ({id: String(row.id), name: row.name}));',
+      '  process.stdout.write(JSON.stringify({',
+      '    seaBuild: process.env.SEA_BUILD,',
+      '    workerScript,',
+      '    rows,',
+      '  }));',
+      '} finally {',
+      '  pool.shutdown();',
+      '}',
+    ].join('\n');
+    fs.writeFileSync(witnessPath, witnessScript, 'utf8');
+
+    const result = await runNodeScript(
+      [
+        witnessPath,
+        isolatedBundle,
+        tmpDir,
+        pathToFileURL(coordinatorMergeProcessPath).href,
+        pathToFileURL(sqlValueCodecPath).href,
+        ...fragmentFixtures.map((fixture) => fixture.file),
+      ],
+      {
+        cwd: tmpDir,
+        env: {SEA_BUILD: 'true'},
+        timeoutMs: MERGE_WITNESS_TIMEOUT_MS,
+      },
+    );
+
+    t.equal(result.exitCode, 0, `merge witness exits cleanly: ${result.stderr}`);
+    const outcome = JSON.parse(result.stdout.trim());
+    t.equal(outcome.seaBuild, 'true', 'witness ran under SEA_BUILD=true');
+    t.equal(
+      outcome.workerScript,
+      isolatedBundle,
+      'CoordinatorMergeProcessPool resolves worker script to isolated index.bundle.cjs',
+    );
+    t.same(
+      outcome.rows,
+      [
+        {id: '1', name: 'alpha'},
+        {id: '2', name: 'beta'},
+      ],
+      'isolated SEA merge worker returns merged rows from real SQLite fragments',
+    );
+  },
+);

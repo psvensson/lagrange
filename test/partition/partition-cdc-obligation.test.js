@@ -45,6 +45,17 @@ import {
 } from '../../src/partition/partition-cdc-obligation-ledger.js';
 import {getSchemaByTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {TABLES} from '../../src/constants/index.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {
+  PARTITION_CDC_EVENT_BUILD_STATE,
+  PARTITION_CDC_EVENT_SKIP_REASON,
+  PartitionCDCGenerator,
+  hasValidPartitionCdcRowPayload,
+} from '../../src/partition/partition-cdc-generator.js';
+import {
+  captureCommittedOperationCdc,
+  recordCommittedStatementCdc,
+} from '../../src/partition/partition-cdc-obligation.js';
 import {readPartitionWriteGeneration} from
   '../../src/partition/partition-participant-transaction-store.js';
 import {
@@ -1104,3 +1115,189 @@ test('TX1 CDC O21: the recording decision is identical on every replica of a thr
     [TABLES.MESSAGE_GROUPS]: expected(POLICY_WRITES)},
   'every replica records the same ledger rows whatever its subscribers');
 });
+
+test('CDC regression: config literal with ?, trailing comments, parameterized write, and missing-params refusal',
+  async () => {
+    const cache = new SystemTableCache();
+    const configSchema = {
+      columns: [
+        {name: 'config_key', type: 'TEXT', primaryKey: true},
+        {name: 'config_value', type: 'TEXT'},
+      ],
+    };
+    const {leader} = await startLeader({
+      tableName: TABLES.CONFIG,
+      schema: configSchema,
+      systemTableCache: cache,
+    });
+    const silentLogger = {debug() {}, info() {}, warn() {}, error() {}};
+    try {
+      // 1. Literal INSERT containing '?' inside string value
+      const literalSql =
+        'INSERT INTO config (config_key, config_value) VALUES (\'probe.key\', \'why?\')';
+      const generator = new PartitionCDCGenerator({
+        partitionId: PARTITION_ID,
+        replicaId: REPLICAS[0],
+        tableName: TABLES.CONFIG,
+        db: leader.db,
+        logger: silentLogger,
+      });
+      const builtLiteral = generator.buildEvent({
+        type: 'QUERY',
+        sql: literalSql,
+        params: [],
+        timestamp: '10-0-cfg',
+        changes: 1,
+      });
+      assert.equal(builtLiteral.state, PARTITION_CDC_EVENT_BUILD_STATE.BUILT);
+      assert.equal(builtLiteral.cdcEvent.data.config_key, 'probe.key');
+      assert.equal(builtLiteral.cdcEvent.data.config_value, 'why?');
+
+      const literalCommand = {
+        ...committedQueryOf('cfg-literal-q', literalSql),
+        timestamp: new HLCTimestamp(10, 0, 'cfg-test').toString(),
+      };
+      assert.equal(applyCommitted(leader, literalCommand), null);
+      await settleTicks();
+
+      const literalObligation = readCdcObligation(leader.db, 'entry:cfg-literal-q');
+      assert.ok(literalObligation, 'obligation recorded for literal INSERT with ?');
+      assert.deepEqual(
+        {
+          config_key: JSON.parse(literalObligation.eventJson).data.config_key,
+          config_value: JSON.parse(literalObligation.eventJson).data.config_value,
+        },
+        {config_key: 'probe.key', config_value: 'why?'},
+      );
+      const cachedLiteral = cache.get(TABLES.CONFIG, 'probe.key');
+      assert.equal(cachedLiteral?.config_key, 'probe.key');
+      assert.equal(cachedLiteral?.config_value, 'why?');
+
+      // 2. Trailing single-line comment (-- why?) and block comment (/* why? */)
+      const lineCommentSql =
+        'INSERT INTO config (config_key, config_value) ' +
+        'VALUES (\'probe.comment.line\', \'ok\') -- why?';
+      const blockCommentSql =
+        'INSERT INTO config (config_key, config_value) ' +
+        'VALUES (\'probe.comment.block\', \'ok\') /* why? */';
+      assert.equal(applyCommitted(leader, {
+        ...committedQueryOf('cfg-line-comment', lineCommentSql),
+        timestamp: new HLCTimestamp(11, 0, 'cfg-test').toString(),
+      }), null);
+      assert.equal(applyCommitted(leader, {
+        ...committedQueryOf('cfg-block-comment', blockCommentSql),
+        timestamp: new HLCTimestamp(12, 0, 'cfg-test').toString(),
+      }), null);
+      await settleTicks();
+
+      assert.equal(cache.get(TABLES.CONFIG, 'probe.comment.line')?.config_value, 'ok');
+      assert.equal(cache.get(TABLES.CONFIG, 'probe.comment.block')?.config_value, 'ok');
+
+      // 3. Parameterized single-row write
+      const paramCommand = {
+        ...committedQueryOf(
+          'cfg-param-q',
+          'INSERT INTO config (config_key, config_value) VALUES (?, ?)',
+        ),
+        params: ['probe.param', 'why?'],
+        timestamp: new HLCTimestamp(13, 0, 'cfg-test').toString(),
+      };
+      assert.equal(applyCommitted(leader, paramCommand), null);
+      await settleTicks();
+
+      const paramObligation = readCdcObligation(leader.db, 'entry:cfg-param-q');
+      assert.ok(paramObligation, 'obligation recorded for parameterized INSERT');
+      assert.equal(JSON.parse(paramObligation.eventJson).data.config_value, 'why?');
+      assert.equal(cache.get(TABLES.CONFIG, 'probe.param')?.config_value, 'why?');
+
+      // 4. Unquoted placeholder with missing params is rejected before recording an obligation
+      assert.equal(
+        hasValidPartitionCdcRowPayload(TABLES.CONFIG, {updated_at_hlc: '14-0-cfg'}),
+        false,
+      );
+      assert.equal(
+        hasValidPartitionCdcRowPayload(TABLES.CONFIG, {}),
+        false,
+      );
+
+      const errorLogs = [];
+      const rejectingGenerator = new PartitionCDCGenerator({
+        partitionId: PARTITION_ID,
+        replicaId: REPLICAS[0],
+        tableName: TABLES.CONFIG,
+        db: leader.db,
+        logger: {
+          debug() {},
+          info() {},
+          warn() {},
+          error: (msg, meta) => errorLogs.push({msg, meta}),
+        },
+      });
+      const rejectedBuild = rejectingGenerator.buildEvent({
+        type: 'QUERY',
+        sql: 'INSERT INTO config (config_key, config_value) VALUES (?, ?)',
+        params: [],
+        timestamp: '14-0-cfg',
+        changes: 1,
+      });
+      assert.equal(rejectedBuild.state, PARTITION_CDC_EVENT_BUILD_STATE.SKIPPED);
+      assert.equal(
+        rejectedBuild.reasonCode,
+        PARTITION_CDC_EVENT_SKIP_REASON.INCOMPLETE_ROW_PAYLOAD,
+      );
+      assert.equal(errorLogs.length, 1);
+
+      const beforeCounts = countCdcObligations(leader.db);
+      assert.throws(
+        () => recordCommittedStatementCdc(
+          leader,
+          {
+            command: {
+              ...committedQueryOf(
+                'cfg-missing-params',
+                'INSERT INTO config (config_key, config_value) VALUES (?, ?)',
+              ),
+              params: [],
+              timestamp: new HLCTimestamp(14, 0, 'cfg-test').toString(),
+            },
+            index: 99,
+            term: 1,
+            afterCommit() {},
+          },
+          {entryKey: 'entry:cfg-missing-params', result: {changes: 1}},
+        ),
+        /Committed CDC obligation for table config is missing required row payload identity/,
+      );
+
+      assert.throws(
+        () => captureCommittedOperationCdc(
+          leader,
+          {
+            command: {
+              ...identityOf('cfg-missing-op'),
+              entryId: 'cfg-missing-op:decision',
+              timestamp: new HLCTimestamp(15, 0, 'cfg-test').toString(),
+              proposedBy: REPLICAS[0],
+            },
+            index: 100,
+            term: 1,
+          },
+          {
+            operation: {
+              entryId: 'op-missing-params',
+              sql: 'INSERT INTO config (config_key, config_value) VALUES (?, ?)',
+              params: [],
+            },
+            result: {changes: 1},
+            ordinal: 0,
+          },
+        ),
+        /Committed CDC obligation for table config is missing required row payload identity/,
+      );
+      assert.deepEqual(countCdcObligations(leader.db), beforeCounts);
+      assert.equal(readCdcObligation(leader.db, 'entry:cfg-missing-params'), null);
+      assert.equal(cache.get(TABLES.CONFIG, '?'), undefined);
+    } finally {
+      await shutdownAll(leader);
+    }
+  });

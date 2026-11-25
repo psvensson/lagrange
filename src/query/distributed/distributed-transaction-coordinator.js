@@ -262,7 +262,7 @@ class DistributedTransactionCoordinator {
    */
   async begin(sessionId, options = {}) {
     const expectedTransactionId = options.expectedTransactionId ??
-      this.getTransaction(sessionId)?.transactionId;
+      this.transactionsBySession.get(sessionId)?.transactionId;
     const beginState = {closed: false};
     let activeBegins = this.inFlightBeginsBySession.get(sessionId);
     if (!activeBegins) {
@@ -438,7 +438,7 @@ class DistributedTransactionCoordinator {
    * @return {Promise<Object>} Enlistment result.
    */
   async enlistParticipants(sessionId, partitionIds,
-    expectedTransactionId = this.getTransaction(sessionId)?.transactionId) {
+    expectedTransactionId = this.transactionsBySession.get(sessionId)?.transactionId) {
     return this.runTransactionOperation(
       sessionId,
       () => {
@@ -536,7 +536,7 @@ class DistributedTransactionCoordinator {
    */
   async commit(sessionId, options = {}) {
     const expectedTransactionId = options.expectedTransactionId ??
-      this.getTransaction(sessionId)?.transactionId ?? null;
+      this.transactionsBySession.get(sessionId)?.transactionId ?? null;
     return this.runTransactionOperation(
       sessionId,
       () => this.commitOwned(sessionId, expectedTransactionId),
@@ -582,7 +582,7 @@ class DistributedTransactionCoordinator {
     }
     const capturedTransactionId = hasExpectedTransactionId ?
       options.expectedTransactionId :
-      this.getTransaction(sessionId)?.transactionId ?? null;
+      this.transactionsBySession.get(sessionId)?.transactionId ?? null;
     return this.runTransactionOperation(
       sessionId,
       () => this.rollbackOwned(
@@ -590,7 +590,7 @@ class DistributedTransactionCoordinator {
         hasExpectedTransactionId ?
           options.expectedTransactionId :
           capturedTransactionId ??
-            this.getTransaction(sessionId)?.transactionId ?? null,
+            this.transactionsBySession.get(sessionId)?.transactionId ?? null,
       ),
     );
   }
@@ -758,26 +758,22 @@ class DistributedTransactionCoordinator {
   }
 
   getOrderedParticipantIds(tx) {
-    const ids = new Set(getOrderedParticipantIds.call(this, tx));
-    if (tx?.readOnlyParticipants instanceof Map) {
-      for (const partitionId of tx.readOnlyParticipants.keys()) {
-        ids.add(partitionId);
-      }
+    if (!(tx?.readOnlyParticipants instanceof Map) || tx.readOnlyParticipants.size === 0) {
+      return getOrderedParticipantIds.call(this, tx);
     }
+    const ids = new Set(tx.participants.keys());
+    for (const partitionId of tx.readOnlyParticipants.keys()) ids.add(partitionId);
     return Array.from(ids).sort();
   }
 
   getOrderedParticipantDetails(tx) {
-    const details = new Map(
-      getOrderedParticipantDetails.call(this, tx)
-        .map((entry) => [entry.partitionId, entry]),
-    );
-    if (tx?.readOnlyParticipants instanceof Map) {
-      for (const [partitionId, participant] of tx.readOnlyParticipants.entries()) {
-        if (!details.has(partitionId)) {
-          details.set(partitionId, {...participant});
-        }
-      }
+    if (!(tx?.readOnlyParticipants instanceof Map) || tx.readOnlyParticipants.size === 0) {
+      return getOrderedParticipantDetails.call(this, tx);
+    }
+    const details = new Map();
+    for (const [partitionId, p] of tx.participants.entries()) details.set(partitionId, {...p});
+    for (const [partitionId, p] of tx.readOnlyParticipants.entries()) {
+      if (!details.has(partitionId)) details.set(partitionId, {...p});
     }
     return Array.from(details.values())
       .sort((left, right) => left.partitionId.localeCompare(right.partitionId));

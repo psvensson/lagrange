@@ -13,7 +13,7 @@
     },
     {
       "path": "data/tidb-comparison/invalidations.ndjson",
-      "sha256": "sha256:454765469cea50f7edda0d7bd9efd731b6101ff8c06a2397265adcc6f5a4c521"
+      "sha256": "sha256:688afc8c2a4b8ded5191d95d3c9965bf245c5659d2f0db1c58420d2563229ed7"
     }
   ],
   "cells": [
@@ -4439,17 +4439,19 @@
               "warmupSec": 21,
               "workloadDrainSec": 241.96,
               "postVerifySec": 35.88,
+              "maxSingleTxnExecutionSec": 14.496,
+              "maxSingleTxnSec": 14.496,
               "maxSingleRequestSec": 222.242,
               "partsSec": {
-                "newOrderContentionSec": 69.54,
-                "visibilitySec": 3.04,
-                "paymentSec": 5.64,
-                "orderStatusSec": 10.37,
-                "deliverySec": 6.39,
-                "stockLevelSec": 4.74,
-                "failureAtomicitySec": 4.93,
-                "retryableConflictSec": 4.23,
-                "durabilityRestartSec": 76.78
+                "loadAndCases1To2Sec": 69.54,
+                "case3PaymentSec": 3.04,
+                "case4OrderStatusSec": 5.64,
+                "case5DeliverySec": 10.37,
+                "case6StockLevelSec": 6.39,
+                "case7FailureAtomicitySec": 4.74,
+                "case8RetryableConflictSec": 4.93,
+                "case9aDurabilityPreRestartSec": 4.23,
+                "case9bDurabilityRestartReloadSec": 76.78
               }
             }
           }
@@ -5263,17 +5265,19 @@
               "warmupSec": 1.81,
               "workloadDrainSec": 19.81,
               "postVerifySec": 11.46,
+              "maxSingleTxnExecutionSec": 0.051,
+              "maxSingleTxnSec": 0.051,
               "maxSingleRequestSec": 0.052,
               "partsSec": {
-                "newOrderContentionSec": 4.74,
-                "visibilitySec": 1.38,
-                "paymentSec": 1.42,
-                "orderStatusSec": 1.42,
-                "deliverySec": 1.45,
-                "stockLevelSec": 1.41,
-                "failureAtomicitySec": 1.38,
-                "retryableConflictSec": 1.46,
-                "durabilityRestartSec": 15.7
+                "loadAndCases1To2Sec": 4.74,
+                "case3PaymentSec": 1.38,
+                "case4OrderStatusSec": 1.42,
+                "case5DeliverySec": 1.42,
+                "case6StockLevelSec": 1.45,
+                "case7FailureAtomicitySec": 1.41,
+                "case8RetryableConflictSec": 1.38,
+                "case9aDurabilityPreRestartSec": 1.46,
+                "case9bDurabilityRestartReloadSec": 15.7
               }
             }
           }
@@ -7470,17 +7474,19 @@
               "warmupSec": 1.81,
               "workloadDrainSec": 19.81,
               "postVerifySec": 5.58,
+              "maxSingleTxnExecutionSec": 0.044,
+              "maxSingleTxnSec": 0.044,
               "maxSingleRequestSec": 0.045,
               "partsSec": {
-                "newOrderContentionSec": 4.22,
-                "visibilitySec": 1.34,
-                "paymentSec": 1.4,
-                "orderStatusSec": 1.43,
-                "deliverySec": 1.36,
-                "stockLevelSec": 1.37,
-                "failureAtomicitySec": 1.37,
-                "retryableConflictSec": 1.35,
-                "durabilityRestartSec": 6.63
+                "loadAndCases1To2Sec": 4.22,
+                "case3PaymentSec": 1.34,
+                "case4OrderStatusSec": 1.4,
+                "case5DeliverySec": 1.43,
+                "case6StockLevelSec": 1.36,
+                "case7FailureAtomicitySec": 1.37,
+                "case8RetryableConflictSec": 1.37,
+                "case9aDurabilityPreRestartSec": 1.35,
+                "case9bDurabilityRestartReloadSec": 6.63
               }
             }
           }
@@ -9563,17 +9569,19 @@
               "warmupSec": 1.82,
               "workloadDrainSec": 19.81,
               "postVerifySec": 11.93,
+              "maxSingleTxnExecutionSec": 0.109,
+              "maxSingleTxnSec": 0.109,
               "maxSingleRequestSec": 0.11,
               "partsSec": {
-                "newOrderContentionSec": 5.35,
-                "visibilitySec": 2.5,
-                "paymentSec": 2.59,
-                "orderStatusSec": 2.65,
-                "deliverySec": 2.58,
-                "stockLevelSec": 2.46,
-                "failureAtomicitySec": 2.42,
-                "retryableConflictSec": 2.24,
-                "durabilityRestartSec": 20.8
+                "loadAndCases1To2Sec": 5.35,
+                "case3PaymentSec": 2.5,
+                "case4OrderStatusSec": 2.59,
+                "case5DeliverySec": 2.65,
+                "case6StockLevelSec": 2.58,
+                "case7FailureAtomicitySec": 2.46,
+                "case8RetryableConflictSec": 2.42,
+                "case9aDurabilityPreRestartSec": 2.24,
+                "case9bDurabilityRestartReloadSec": 20.8
               }
             }
           }

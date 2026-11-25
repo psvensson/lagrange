@@ -395,6 +395,7 @@ for (const heldReadFails of [false, true]) {
           nodeIds: cohort.nodeIds, epoch: cohort.epoch});
         return {resolvedReplicaCount: cohort.nodeIds.length,
           routableReplicaCount: cohort.nodeIds.length,
+          committedReplicaCount: cohort.nodeIds.length,
           fullReplicaCountConverged: true,
           contractState: OWNER_CONTRACT_STATE.READY,
           nextAction: 'proceed', epoch: cohort.epoch};
@@ -524,6 +525,7 @@ for (const recreateOwner of [false, true]) {
         return {
           resolvedReplicaCount: recreateOwner ? 2 : 3,
           routableReplicaCount: recreateOwner ? 2 : 3,
+          committedReplicaCount: recreateOwner ? 2 : 3,
           fullReplicaCountConverged: !recreateOwner,
           contractState: recreateOwner ? OWNER_CONTRACT_STATE.UNDER_REPLICATED :
             OWNER_CONTRACT_STATE.READY,
@@ -733,6 +735,7 @@ test('durable schema recovery preserves NOT NULL DEFAULT metadata identity',
         return {
           resolvedReplicaCount: 1,
           routableReplicaCount: 1,
+          committedReplicaCount: 1,
           fullReplicaCountConverged: false,
           contractState: OWNER_CONTRACT_STATE.PENDING,
           nextAction: 'retry',
@@ -789,6 +792,7 @@ test('durable schema recovery preserves COLLATE and CHECK metadata identity',
         return {
           resolvedReplicaCount: 1,
           routableReplicaCount: 1,
+          committedReplicaCount: 1,
           fullReplicaCountConverged: false,
           contractState: OWNER_CONTRACT_STATE.PENDING,
           nextAction: 'retry',
@@ -889,6 +893,7 @@ test('client deadline returns a stable job and retry survives stale worker ' +
   releaseStaleWorker({
     resolvedReplicaCount: 3,
     routableReplicaCount: 3,
+    committedReplicaCount: 3,
     fullReplicaCountConverged: true,
     contractState: 'ready',
     nextAction: 'proceed',
@@ -938,6 +943,7 @@ test('pending durable schema work renews its lease and self-retries until ' +
         return {
           resolvedReplicaCount: 1,
           routableReplicaCount: 1,
+          committedReplicaCount: 1,
           fullReplicaCountConverged: false,
           contractState: OWNER_CONTRACT_STATE.PENDING,
           nextAction: 'retry',
@@ -951,6 +957,7 @@ test('pending durable schema work renews its lease and self-retries until ' +
       return {
         resolvedReplicaCount: 3,
         routableReplicaCount: 3,
+        committedReplicaCount: 3,
         fullReplicaCountConverged: true,
         contractState: OWNER_CONTRACT_STATE.READY,
         nextAction: 'proceed',

@@ -38,7 +38,11 @@ import {
 } from './partition-service-raft-write-commit.js';
 import {PARTITION_SPLIT_MIRROR_ORIGIN} from './partition-constants.js';
 import {operationOutcomeKeyOf} from './partition-participant-transaction-bytes.js';
-import {PARTITION_CDC_EVENT_BUILD_STATE} from './partition-cdc-generator.js';
+import {
+  PARTITION_CDC_EVENT_BUILD_STATE,
+  PARTITION_CDC_EVENT_SKIP_REASON,
+  hasValidPartitionCdcRowPayload,
+} from './partition-cdc-generator.js';
 import {
   PARTITION_CDC_COMMAND_TYPES,
   PARTITION_CDC_OBLIGATION_FAILURE_CODE as CODE,
@@ -145,6 +149,29 @@ function operationEntryOf(command, operation, result) {
   };
 }
 
+function assertBuiltCdcObligationValid(service, built) {
+  if (built.state === PARTITION_CDC_EVENT_BUILD_STATE.SKIPPED) {
+    if (built.reasonCode === PARTITION_CDC_EVENT_SKIP_REASON.INCOMPLETE_ROW_PAYLOAD) {
+      throw new Error(
+        `Committed CDC obligation for table ${service.tableName} is missing required row payload identity`,
+      );
+    }
+    return false;
+  }
+  if (built.state !== PARTITION_CDC_EVENT_BUILD_STATE.BUILT) {
+    return false;
+  }
+  if (!hasValidPartitionCdcRowPayload(
+    built.cdcEvent?.tableName,
+    built.cdcEvent?.data,
+  )) {
+    throw new Error(
+      `Committed CDC obligation for table ${service.tableName} is missing required row payload identity`,
+    );
+  }
+  return true;
+}
+
 /**
  * Capture one operation before a later operation can replace its row version.
  * This is synchronous application work; no subscriber or after-commit effect
@@ -169,7 +196,7 @@ function captureCommittedOperationCdc(service, committed, {operation, result, or
   const built = service.syncCDCGeneratorDependencies().buildEvent(
     operationEntryOf(command, operation, result),
     {suppressNoOpWrite: true, sourceReplica: command.proposedBy});
-  if (built.state !== PARTITION_CDC_EVENT_BUILD_STATE.BUILT) {
+  if (!assertBuiltCdcObligationValid(service, built)) {
     return null;
   }
   const sourceScope = eventCdcSourceScope(service);
@@ -215,7 +242,7 @@ function recordCommittedStatementCdc(service, committed, {entryKey, result}) {
   const built = service.syncCDCGeneratorDependencies().buildEvent(
     {...command, changes: result.changes},
     {suppressNoOpWrite: true, sourceReplica: command.proposedBy});
-  if (built.state !== PARTITION_CDC_EVENT_BUILD_STATE.BUILT) return 0;
+  if (!assertBuiltCdcObligationValid(service, built)) return 0;
   const sourceScope = eventCdcSourceScope(service);
   return recordCommittedOperationCdc(service, committed, [{eventKey: entryKey,
     logIndex: index, term, ordinal: 0, entryId: command.entryId,

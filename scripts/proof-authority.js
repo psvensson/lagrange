@@ -31,8 +31,9 @@ import {CONVERGENCE_PROBES_SHARD_PATH} from './checks/test-primary-classificatio
 import {isTestCensusPath} from './checks/test-primary-classification.js';
 import {computeReleaseProofIdentity} from './release-proof-identity.js';
 import {
-  EXECUTION_PROBLEM, RETRY_POLICY, describeCheckout, executionReportProblems,
-  readExecutionReport,
+  EXECUTION_PROBLEM, RETRY_POLICY, citesContractProof, describeCheckout,
+  executionReportProblems, hasProducerIdentity, readExecutionReport,
+  receiptExecutionStructureProblems, receiptIdentityProblems,
 } from './test-execution-report.js';
 
 import {
@@ -87,6 +88,9 @@ const RECEIPT_SUBJECT_SHA_MISMATCH = 'receipt subject SHA mismatch';
 const RECEIPT_NOT_A_PASS = 'receipt does not record a pass';
 const RECEIPT_NOT_IMMUTABLE = 'receipt is not immutable-SHA reusable';
 const RECEIPT_TIME_INVALID = 'receipt completion time is invalid';
+const RECEIPT_PRODUCER_MISSING = 'receipt producer is missing';
+const RECEIPT_CORPUS_INCOMPLETE = 'receipt execution does not cover the subject corpus';
+const SUBJECT_CORPUS_UNREADABLE = 'subject-corpus-unreadable';
 const SUBJECT_NOT_FULL_SHA = 'subject is not a full commit SHA';
 const SUBJECT_NOT_COMMIT = 'proof subject is not an available commit object';
 
@@ -116,7 +120,7 @@ const RESOLUTION = Object.freeze({
 });
 const IDENTITY_REF_SEGMENT = 'identity';
 const COMMAND_INDEX = 'index';
-const RECEIPT_IDENTITY_MISMATCH = 'receipt identity does not match this tree';
+const RECEIPT_IDENTITY_MISMATCH = 'receipt identity does not match subject identity';
 const IDENTITY_NEEDS_CHECKOUT =
   'release proof identity needs the subject commit checked out in a clean tree';
 
@@ -304,13 +308,36 @@ function passOutcome(proofId, outcome) {
     contractFor(proofId)?.retryPolicy === RETRY_POLICY.ADMIT_QUALIFIED;
 }
 
-function receiptProblems({proofId, sha, objectType, parsed, identity = null}) {
+function receiptExecutionProblems({receipt, contract, subject, remote, cwd, git}) {
+  const structure = receiptExecutionStructureProblems({
+    execution: receipt?.execution,
+    outcome: receipt?.outcome,
+    contract,
+  });
+  if (structure.length > 0 || !contract || !validSha(subject)) return structure;
+  const summary = receipt.execution.summary;
+  const problems = reusedProofProblems({
+    report: summary, sha: subject, contract, remote, cwd, git,
+  }).map((entry) => `${entry.code} (${entry.detail})`);
+  if (!citesContractProof(summary, contract) && cwd) {
+    const corpus = subjectCorpusFiles({sha: subject, cwd, git});
+    if (!corpus.ok) problems.push(corpus.reason || SUBJECT_CORPUS_UNREADABLE);
+    else if (summary.planned < corpus.files.length ||
+        summary.executed < corpus.files.length) {
+      problems.push(RECEIPT_CORPUS_INCOMPLETE);
+    }
+  }
+  return problems;
+}
+
+function receiptProblems({
+  proofId, sha, objectType, parsed, identity = null,
+  remote = DEFAULT_REMOTE, cwd = undefined, git = runGit,
+}) {
   if (objectType !== OBJECT_TYPE_TAG) return [PROOF_REF_NOT_TAG];
   if (!parsed.ok) return [parsed.because];
   const {headers, receipt} = parsed;
-  // An exact lookup binds the receipt to the requested commit; an identity
-  // lookup binds it to the commit the receipt names and to this tree's
-  // identity, which must be the one the receipt recorded.
+  const contract = contractFor(proofId);
   const subject = identity ? text(receipt?.subjectSha) : sha;
   const expectedTag = receiptTagName(proofId, subject);
   const problems = [];
@@ -325,22 +352,22 @@ function receiptProblems({proofId, sha, objectType, parsed, identity = null}) {
   if (!receipt?.completedAt || Number.isNaN(Date.parse(receipt.completedAt))) {
     problems.push(RECEIPT_TIME_INVALID);
   }
-  // A receipt reached through an identity ref proves this tree when it
-  // carries the same identity, or when it carries none: receipts recorded
-  // before identities were carried are bound by the ref alone, which
-  // `index` publishes only from a checkout of the receipt's own subject -
-  // the same trust the exact ref already has.
-  if (identity && receipt?.identity &&
-      (receipt.identity.algorithm !== identity.algorithm ||
-        receipt.identity.digest !== identity.digest)) {
-    problems.push(RECEIPT_IDENTITY_MISMATCH);
-  }
+  if (!hasProducerIdentity(receipt?.producer)) problems.push(RECEIPT_PRODUCER_MISSING);
+  problems.push(...receiptIdentityProblems({
+    contract, receipt, identity, mismatchMessage: RECEIPT_IDENTITY_MISMATCH,
+  }));
+  problems.push(...receiptExecutionProblems({receipt, contract, subject, remote, cwd, git}));
   return problems;
 }
 
-function evaluateReceipt({proofId, sha, objectSha, objectType, objectBody, identity = null}) {
+function evaluateReceipt({
+  proofId, sha, objectSha, objectType, objectBody, identity = null,
+  remote = DEFAULT_REMOTE, cwd = undefined, git = runGit,
+}) {
   const parsed = parseAnnotatedTag(objectBody);
-  const problems = receiptProblems({proofId, sha, objectType, parsed, identity});
+  const problems = receiptProblems({
+    proofId, sha, objectType, parsed, identity, remote, cwd, git,
+  });
   if (problems.length === 0) {
     return {
       outcome: OUTCOME.PROVEN,
@@ -397,48 +424,8 @@ function resolveProof({proofId, sha, remote = DEFAULT_REMOTE, cwd = process.cwd(
 function identityCataloguedProof({proofId, sha, remote, cwd, git}) {
   const identity = checkedOutIdentity({sha, cwd, git});
   if (!identity) return {outcome: OUTCOME.UNPROVEN, proofId, subjectSha: sha};
-  return remoteIdentityProof({proofId, sha, remote, cwd, git, identity});
-}
-
-function remoteIdentityProof({proofId, sha, remote, cwd, git, identity}) {
-  const ref = identityRef(proofId, identity.digest);
-  const listed = git(['ls-remote', '--refs', remote, ref], {cwd});
-  if (listed.status !== 0) {
-    return unavailableProof(`proof store lookup failed: ${gitFailure(listed)}`);
-  }
-  return matchedIdentityProof({proofId, sha, remote, cwd, git, identity, ref, listed});
-}
-
-function matchedIdentityProof({proofId, sha, remote, cwd, git, identity, ref, listed}) {
-  const match = parseLsRemote(listed.stdout, ref);
-  if (match.kind === PARSE_KIND_ABSENT) {
-    return {outcome: OUTCOME.UNPROVEN, proofId, subjectSha: sha, identity};
-  }
-  if (match.kind !== PARSE_KIND_PRESENT) return unavailableProof(match.because);
-  return fetchedIdentityProof({proofId, sha, remote, cwd, git, identity, ref,
-    objectSha: match.objectSha});
-}
-
-function fetchedIdentityProof({proofId, sha, remote, cwd, git, identity, ref, objectSha}) {
-  const fetched = git(['fetch', '--quiet', '--no-tags', remote, ref], {cwd});
-  if (fetched.status !== 0) {
-    return unavailableProof(`proof object fetch failed: ${gitFailure(fetched)}`);
-  }
-  return materializedIdentityProof({proofId, sha, cwd, git, identity, objectSha});
-}
-
-function materializedIdentityProof({proofId, sha, cwd, git, identity, objectSha}) {
-  const typed = git(['cat-file', '-t', objectSha], {cwd});
-  if (typed.status !== 0) {
-    return unavailableProof(`proof object type unavailable: ${gitFailure(typed)}`);
-  }
-  const body = git(['cat-file', '-p', objectSha], {cwd});
-  if (body.status !== 0) {
-    return unavailableProof(`proof object unavailable: ${gitFailure(body)}`);
-  }
-  return evaluateReceipt({
-    proofId, sha, objectSha, objectType: text(typed.stdout),
-    objectBody: body.stdout, identity,
+  return remoteProof({
+    proofId, sha, ref: identityRef(proofId, identity.digest), remote, cwd, git, identity,
   });
 }
 
@@ -449,38 +436,29 @@ function cataloguedProof({proofId, sha, remote, cwd, git}) {
   } catch (error) {
     return {outcome: OUTCOME.UNAVAILABLE, because: error.message};
   }
-  return remoteCataloguedProof({proofId, sha, ref, remote, cwd, git});
+  return remoteProof({proofId, sha, ref, remote, cwd, git});
 }
 
-function remoteCataloguedProof({proofId, sha, ref, remote, cwd, git}) {
+function remoteProof({proofId, sha, ref, remote, cwd, git, identity = null}) {
   const listed = git(['ls-remote', '--refs', remote, ref], {cwd});
   if (listed.status !== 0) {
     return unavailableProof(`proof store lookup failed: ${gitFailure(listed)}`);
   }
-  return matchedCataloguedProof({proofId, sha, ref, remote, cwd, git, listed});
-}
-
-function matchedCataloguedProof({proofId, sha, ref, remote, cwd, git, listed}) {
   const match = parseLsRemote(listed.stdout, ref);
   if (match.kind === PARSE_KIND_ABSENT) {
-    return {outcome: OUTCOME.UNPROVEN, proofId, subjectSha: sha};
+    return {outcome: OUTCOME.UNPROVEN, proofId, subjectSha: sha, ...(identity ? {identity} : {})};
   }
-  if (match.kind !== PARSE_KIND_PRESENT) {
-    return unavailableProof(match.because);
-  }
-  return verifiedProofObject({proofId, sha, remote, cwd, git, objectSha: match.objectSha});
-}
-
-function verifiedProofObject({proofId, sha, remote, cwd, git, objectSha}) {
-  const ref = proofRef(proofId, sha);
+  if (match.kind !== PARSE_KIND_PRESENT) return unavailableProof(match.because);
   const fetched = git(['fetch', '--quiet', '--no-tags', remote, ref], {cwd});
   if (fetched.status !== 0) {
     return unavailableProof(`proof object fetch failed: ${gitFailure(fetched)}`);
   }
-  return materializedProofObject({proofId, sha, cwd, git, objectSha});
+  return materializedProofObject({
+    proofId, sha, remote, cwd, git, objectSha: match.objectSha, identity,
+  });
 }
 
-function materializedProofObject({proofId, sha, cwd, git, objectSha}) {
+function materializedProofObject({proofId, sha, remote, cwd, git, objectSha, identity = null}) {
   const typed = git(['cat-file', '-t', objectSha], {cwd});
   if (typed.status !== 0) {
     return unavailableProof(`proof object type unavailable: ${gitFailure(typed)}`);
@@ -495,6 +473,10 @@ function materializedProofObject({proofId, sha, cwd, git, objectSha}) {
     objectSha,
     objectType: text(typed.stdout),
     objectBody: body.stdout,
+    identity,
+    remote,
+    cwd,
+    git,
   });
 }
 
@@ -584,7 +566,6 @@ const GIT_SHOW_COMMAND = 'show';
 const POSIX_SLASH = '/';
 const [TEST_TREE_ROOT] = CONVERGENCE_PROBES_SHARD_PATH.split(POSIX_SLASH);
 const SHARD_COMMENT_PREFIX = '#';
-const SUBJECT_CORPUS_UNREADABLE = 'subject-corpus-unreadable';
 
 function readConvergenceProbes({sha, entries, cwd, git}) {
   if (!entries.includes(CONVERGENCE_PROBES_SHARD_PATH)) {
@@ -612,15 +593,9 @@ function subjectCorpusFiles({sha, cwd, git = runGit}) {
   };
 }
 
-function citesWholeCorpus(report, contract) {
-  return Array.isArray(report?.reusedProofs) &&
-    contract.citableProofs.includes(PROOF.CORPUS_FULL) &&
-    report.reusedProofs.some((cited) => cited?.proofId === PROOF.CORPUS_FULL);
-}
-
 function requiredCorpusFiles({sha, contract, report, cwd, git}) {
   if (!report || typeof report !== 'object' || Array.isArray(report) ||
-      citesWholeCorpus(report, contract)) {
+      citesContractProof(report, contract)) {
     return {ok: true, files: []};
   }
   return subjectCorpusFiles({sha, cwd, git});
@@ -672,13 +647,21 @@ function validatedExecution({proofId, sha, contract, report, remote, cwd, git}) 
       ...reusedProofProblems({report, sha, contract, remote, cwd, git})] :
     checked.problems;
   if (problems.length > 0) throw new ProofRecordRefused(proofId, sha, problems);
-  return {
+  const execution = {
     reportDigest: createHash(REPORT_DIGEST.ALGORITHM).update(JSON.stringify(report))
       .digest(REPORT_DIGEST.ENCODING),
     producer: {...report.producer},
     summary: checked.summary,
     ...(checked.qualification.length > 0 ? {qualification: checked.qualification} : {}),
   };
+  const outcome = checked.qualification.length > 0 ?
+    RECEIPT_OUTCOME_QUALIFIED : RECEIPT_OUTCOME_PASSED;
+  const structure = receiptExecutionStructureProblems({execution, outcome, contract});
+  if (structure.length > 0) {
+    throw new ProofRecordRefused(proofId, sha,
+      structure.map((detail) => ({code: EXECUTION_PROBLEM.REPORT_PARTIAL, detail})));
+  }
+  return execution;
 }
 
 // Publish the identity ref for a receipt object. First receipt for an

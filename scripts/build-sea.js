@@ -12,7 +12,7 @@
  */
 
 import * as esbuild from 'esbuild';
-import {spawnSync} from 'node:child_process';
+import {fork, spawnSync} from 'node:child_process';
 import {hostname, tmpdir} from 'node:os';
 import {fileURLToPath} from 'url';
 import {dirname, join} from 'path';
@@ -23,6 +23,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'fs';
 
@@ -262,9 +263,206 @@ const SMOKE_TEMP_PREFIX = 'lagrange-sea-bundle-smoke-';
 const SMOKE_UTF8 = 'utf8';
 const SMOKE_CLI_BUNDLE = 'admin-cli.bundle.cjs';
 const SMOKE_MAIN_BUNDLE = 'index.bundle.cjs';
+const SMOKE_NODE_MODULES_DIR = 'node_modules';
+const SMOKE_DIR_SYMLINK_TYPE = 'dir';
 const SMOKE_VERIFIED_MSG = '  \u2713 smoke-tested SEA CJS bundles (--help, --dry-run)';
+const MERGE_SMOKE_TEMP_PREFIX = 'lagrange-sea-merge-smoke-';
+const MERGE_WORKER_FLAG = '--lagrange-coordinator-merge-worker';
+const MERGE_SEA_BUILD_TRUE = 'true';
+const MERGE_IPC_STDIO = ['ignore', 'pipe', 'pipe', 'ipc'];
+const MERGE_EVENT_MESSAGE = 'message';
+const MERGE_EVENT_ERROR = 'error';
+const MERGE_EVENT_EXIT = 'exit';
+const MERGE_EVENT_DATA = 'data';
+const MERGE_IPC_INIT_SESSION = 'INIT_SESSION';
+const MERGE_IPC_INIT_ACK = 'INIT_ACK';
+const MERGE_IPC_INGEST_CHUNK = 'INGEST_CHUNK';
+const MERGE_IPC_INGEST_ACK = 'INGEST_ACK';
+const MERGE_IPC_EXECUTE_MERGE = 'EXECUTE_MERGE';
+const MERGE_IPC_MERGE_RESULT = 'MERGE_RESULT';
+const MERGE_CODEC_VERSION = 1;
+const MERGE_TABLE_NAME = 'items';
+const MERGE_COL_ID = 'id';
+const MERGE_COL_NAME = 'name';
+const MERGE_COL_TYPE_INTEGER = 'INTEGER';
+const MERGE_COL_TYPE_TEXT = 'TEXT';
+const MERGE_ROW_CLASSES = 'it';
+const MERGE_ROW_ID_ONE = '1';
+const MERGE_ROW_ID_TWO = '2';
+const MERGE_ROW_NAME_ALPHA = 'alpha';
+const MERGE_ROW_NAME_BETA = 'beta';
+const MERGE_QUERY_SQL = 'SELECT id, name FROM items ORDER BY id';
+const MERGE_EMPTY_CLASSES = '';
+const MERGE_TIMEOUT_MS = 15000;
+const MERGE_SIGNAL_SIGKILL = 'SIGKILL';
+const MERGE_EXPECTED_ROW_COUNT = 2;
+const MERGE_ROW_ID_INDEX = 1;
+const MERGE_ROW_NAME_INDEX = 2;
+const MERGE_EXIT_TIMEOUT_ERROR_MSG = 'Timed out waiting for isolated SEA merge worker exit';
+const MERGE_VERIFIED_MSG =
+  '  \u2713 smoke-tested isolated SEA merge worker (--lagrange-coordinator-merge-worker)';
 
-function verifySeaBundles(distDir) {
+function sendMergeIpcStep(child, payload, expectedType) {
+  return new Promise((resolve, reject) => {
+    let timer = null;
+    let onMessage = null;
+    let onError = null;
+    let onExit = null;
+    const cleanup = () => {
+      if (timer !== null) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      child.removeListener(MERGE_EVENT_MESSAGE, onMessage);
+      child.removeListener(MERGE_EVENT_ERROR, onError);
+      child.removeListener(MERGE_EVENT_EXIT, onExit);
+    };
+    onMessage = (message) => {
+      cleanup();
+      if (message?.type !== expectedType) {
+        reject(new Error(
+          `Expected ${expectedType} from isolated SEA merge worker, got ${JSON.stringify(message)}`,
+        ));
+        return;
+      }
+      resolve(message);
+    };
+    onError = (error) => {
+      cleanup();
+      reject(error);
+    };
+    onExit = (code, signal) => {
+      cleanup();
+      reject(new Error(
+        `Isolated SEA merge worker exited before ${expectedType}: code=${code} signal=${signal}`,
+      ));
+    };
+    timer = setTimeout(() => {
+      cleanup();
+      reject(new Error(`Timed out waiting for ${expectedType} from isolated SEA merge worker`));
+    }, MERGE_TIMEOUT_MS);
+
+    child.on(MERGE_EVENT_MESSAGE, onMessage);
+    child.once(MERGE_EVENT_ERROR, onError);
+    child.once(MERGE_EVENT_EXIT, onExit);
+    child.send(payload);
+  });
+}
+
+function awaitMergeWorkerCleanExit(child) {
+  return new Promise((resolve, reject) => {
+    if (child.exitCode !== null) {
+      if (child.exitCode === 0) resolve();
+      else reject(new Error(`Isolated SEA merge worker exited with code ${child.exitCode}`));
+      return;
+    }
+    let timer = null;
+    let onExit = null;
+    onExit = (code, signal) => {
+      if (timer !== null) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      if (code === 0 && signal === null) {
+        resolve();
+        return;
+      }
+      reject(new Error(
+        `Isolated SEA merge worker exited uncleanly: code=${code} signal=${signal}`,
+      ));
+    };
+    timer = setTimeout(() => {
+      child.removeListener(MERGE_EVENT_EXIT, onExit);
+      reject(new Error(MERGE_EXIT_TIMEOUT_ERROR_MSG));
+    }, MERGE_TIMEOUT_MS);
+    child.once(MERGE_EVENT_EXIT, onExit);
+    child.disconnect();
+  });
+}
+
+async function verifyIsolatedMergeWorkerBundle(distDir) {
+  const tempMergeDir = mkdtempSync(join(tmpdir(), MERGE_SMOKE_TEMP_PREFIX));
+  const isolatedBundle = join(tempMergeDir, SMOKE_MAIN_BUNDLE);
+  cpSync(join(distDir, SMOKE_MAIN_BUNDLE), isolatedBundle);
+  symlinkSync(
+    join(distDir, SMOKE_NODE_MODULES_DIR),
+    join(tempMergeDir, SMOKE_NODE_MODULES_DIR),
+    SMOKE_DIR_SYMLINK_TYPE,
+  );
+  const child = fork(isolatedBundle, [MERGE_WORKER_FLAG], {
+    cwd: tempMergeDir,
+    env: {...process.env, SEA_BUILD: MERGE_SEA_BUILD_TRUE},
+    stdio: MERGE_IPC_STDIO,
+  });
+  let stderr = MERGE_EMPTY_CLASSES;
+  child.stderr?.on(MERGE_EVENT_DATA, (chunk) => {
+    stderr += String(chunk);
+  });
+  try {
+    await sendMergeIpcStep(child, {
+      type: MERGE_IPC_INIT_SESSION,
+      sessionOptions: {},
+      tables: [{
+        tableName: MERGE_TABLE_NAME,
+        schema: {
+          columns: [
+            {name: MERGE_COL_ID, type: MERGE_COL_TYPE_INTEGER},
+            {name: MERGE_COL_NAME, type: MERGE_COL_TYPE_TEXT},
+          ],
+        },
+        declaredColumns: [MERGE_COL_ID, MERGE_COL_NAME],
+      }],
+    }, MERGE_IPC_INIT_ACK);
+
+    await sendMergeIpcStep(child, {
+      type: MERGE_IPC_INGEST_CHUNK,
+      tableName: MERGE_TABLE_NAME,
+      columns: [MERGE_COL_ID, MERGE_COL_NAME],
+      encodedRows: [
+        [MERGE_ROW_CLASSES, MERGE_ROW_ID_ONE, MERGE_ROW_NAME_ALPHA],
+        [MERGE_ROW_CLASSES, MERGE_ROW_ID_TWO, MERGE_ROW_NAME_BETA],
+      ],
+      byteLength: 0,
+      executionEnvelope: null,
+    }, MERGE_IPC_INGEST_ACK);
+
+    const mergeResult = await sendMergeIpcStep(child, {
+      type: MERGE_IPC_EXECUTE_MERGE,
+      sql: MERGE_QUERY_SQL,
+      typedParams: {v: MERGE_CODEC_VERSION, classes: MERGE_EMPTY_CLASSES, cells: []},
+      expectedColumns: [MERGE_COL_ID, MERGE_COL_NAME],
+      notifyExecutionStarted: false,
+    }, MERGE_IPC_MERGE_RESULT);
+
+    const rows = mergeResult.rowSet?.rows;
+    const validRows = Array.isArray(rows) &&
+      rows.length === MERGE_EXPECTED_ROW_COUNT &&
+      rows[0]?.[MERGE_ROW_ID_INDEX] === MERGE_ROW_ID_ONE &&
+      rows[0]?.[MERGE_ROW_NAME_INDEX] === MERGE_ROW_NAME_ALPHA &&
+      rows[1]?.[MERGE_ROW_ID_INDEX] === MERGE_ROW_ID_TWO &&
+      rows[1]?.[MERGE_ROW_NAME_INDEX] === MERGE_ROW_NAME_BETA;
+    if (!validRows) {
+      throw new Error(
+        `Isolated SEA merge worker returned unexpected rows: ${JSON.stringify(mergeResult)}`,
+      );
+    }
+
+    await awaitMergeWorkerCleanExit(child);
+    console.log(MERGE_VERIFIED_MSG);
+  } catch (error) {
+    if (stderr.length > 0) {
+      error.message = `${error.message} (stderr: ${stderr.trim()})`;
+    }
+    throw error;
+  } finally {
+    if (child.exitCode === null && !child.killed) {
+      child.kill(MERGE_SIGNAL_SIGKILL);
+    }
+    rmSync(tempMergeDir, {recursive: true, force: true});
+  }
+}
+
+async function verifySeaBundles(distDir) {
   const cliResult = spawnSync(
     process.execPath,
     [join(distDir, SMOKE_CLI_BUNDLE), SMOKE_HELP_FLAG],
@@ -293,6 +491,7 @@ function verifySeaBundles(distDir) {
     rmSync(tempDataDir, {recursive: true, force: true});
   }
   console.log(SMOKE_VERIFIED_MSG);
+  await verifyIsolatedMergeWorkerBundle(distDir);
 }
 
 /**
@@ -322,7 +521,7 @@ async function main() {
     stageRuntimePackages();
     writeFileSync(join(distDir, RUNTIME_BUILD_MANIFEST),
       JSON.stringify(await measureRuntimeContent(projectRoot)) + LOCAL_STR_NEWLINE);
-    verifySeaBundles(distDir);
+    await verifySeaBundles(distDir);
 
     console.log(LOCAL_STR_BUILD_COMPLETE);
     console.log(LOCAL_STR_BUNDLES_CREATED_IN_DIST);

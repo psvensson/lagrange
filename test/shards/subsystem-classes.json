@@ -12,7 +12,7 @@
     "distributed-harness": 226,
     "examples-e2e": 8,
     "pgwire-compat": 25,
-    "placement-rebalance": 311,
+    "placement-rebalance": 312,
     "query-sql": 225,
     "release-packaging": 15,
     "runtime-primitives": 24,
@@ -25,10 +25,10 @@
     "transport-messaging": 123,
     "wasm-toolchain": 73
   },
-  "censusSize": 2819,
-  "digest": "fnv1a32-030d0503",
+  "censusSize": 2820,
+  "digest": "fnv1a32-caae678b",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-89264d50",
+  "observationDigest": "fnv1a32-87d02846",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2213,6 +2213,7 @@
     "test/rebalancer/replica-placement-owner-blocked-release.test.js": "placement-rebalance",
     "test/rebalancer/replica-placement-owner-clearing-triggers.test.js": "placement-rebalance",
     "test/rebalancer/replica-placement-owner-core.test.js": "placement-rebalance",
+    "test/rebalancer/replica-placement-owner-incremental-signatures.test.js": "placement-rebalance",
     "test/rebalancer/replica-placement-policy.property.test.js": "placement-rebalance",
     "test/rebalancer/replica-removal-deferral-dispatch-reconcile.test.js": "placement-rebalance",
     "test/rebalancer/replica-retirement-terminal-actuals-coherence.test.js": "placement-rebalance",
@@ -9974,6 +9975,7 @@
         "data/tidb-comparison/invalidations.ndjson",
         "data/tidb-comparison/progress-summary.json",
         "data/tidb-comparison/raw-observations.ndjson",
+        "data/tidb-comparison/versioned-progression-20261123-20261124.json",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "test/distributed/config/local.json",
@@ -14158,7 +14160,12 @@
     "test/packaging/sea-bundle-smoke.test.js": {
       "files": [
         "scripts/build-sea.js",
-        "src/index.js"
+        "src/index.js",
+        "src/query/distributed/coordinator-merge-process.js",
+        "src/query/sql-value-codec.js"
+      ],
+      "env": [
+        "SEA_BUILD"
       ]
     },
     "test/packaging/service-cli-pg-runtime-dependency.test.js": {
@@ -24228,6 +24235,15 @@
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
+    "test/rebalancer/replica-placement-owner-incremental-signatures.test.js": {
+      "files": [
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js"
+      ]
+    },
     "test/rebalancer/replica-placement-policy.property.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
@@ -25452,6 +25468,7 @@
         "docs/development/solver-runbook.md",
         "docs/dockerhub-overview.md",
         "package.json",
+        "scripts/build-executables.sh",
         "scripts/checks/run-golden-capability-guard-scenarios.js",
         "scripts/lab/harness.js",
         "scripts/lab/probe.js",

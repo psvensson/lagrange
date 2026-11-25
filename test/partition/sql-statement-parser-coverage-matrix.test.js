@@ -21,8 +21,13 @@ import {
 import {
   extractDataFromParameterizedSQL,
   extractInsertDataFromSQL,
+  hasSqlParameterPlaceholders,
 } from '../../src/partition/partition-sql-parser.js';
-import {PartitionCDCGenerator} from '../../src/partition/partition-cdc-generator.js';
+import {
+  PARTITION_CDC_EVENT_BUILD_STATE,
+  PARTITION_CDC_EVENT_SKIP_REASON,
+  PartitionCDCGenerator,
+} from '../../src/partition/partition-cdc-generator.js';
 import {CDCSqlBuilder} from '../../src/cdc/cdc-sql-builder.js';
 import {
   CDCRoutedMutationReadiness,
@@ -172,3 +177,78 @@ test('sqlite-store operation prefix patterns cover every variant', async (t) => 
     );
   }
 });
+
+test('every INSERT variant handles ? in string literals and comments without misclassifying as placeholders',
+  async (t) => {
+    const generator = new PartitionCDCGenerator({
+      partitionId: 'matrix-p1',
+      replicaId: 'matrix-r1',
+      tableName: 'some_table',
+      logger: silentLogger,
+    });
+
+    for (const variant of INSERT_VARIANTS) {
+      const literalWithQuestionAndComments =
+        `${variant.prefix} some_table (id, label, weight) /* why? */ ` +
+        'VALUES (\'row-1\', \'why?\', 3) -- trailing why?';
+      t.equal(
+        hasSqlParameterPlaceholders(literalWithQuestionAndComments),
+        false,
+        `${variant.name}: ? inside string literal/comments is not a placeholder`,
+      );
+      t.same(
+        extractInsertDataFromSQL(
+          literalWithQuestionAndComments,
+          'some_table',
+          null,
+          silentLogger,
+        ),
+        {id: 'row-1', label: 'why?', weight: 3},
+        `${variant.name}: literal extraction preserves ? inside string literal`,
+      );
+
+      const builtLiteral = generator.buildEvent({
+        type: 'QUERY',
+        sql: literalWithQuestionAndComments,
+        params: [],
+        timestamp: '10',
+        changes: 1,
+      });
+      t.equal(builtLiteral.state, PARTITION_CDC_EVENT_BUILD_STATE.BUILT);
+      t.equal(builtLiteral.cdcEvent.data.id, 'row-1');
+      t.equal(builtLiteral.cdcEvent.data.label, 'why?');
+
+      const paramWithComments =
+        `${variant.prefix} some_table (id, label, weight) /* why? */ VALUES (?, ?, ?) -- why?`;
+      t.equal(hasSqlParameterPlaceholders(paramWithComments), true);
+      t.same(
+        extractParamInsertData({
+          sql: paramWithComments,
+          params: ['row-1', 'why?', 3],
+          tableName: 'some_table',
+          logger: silentLogger,
+          fetchInsertRow: (_t, _k, _v, extracted) => extracted,
+        }),
+        {id: 'row-1', label: 'why?', weight: 3},
+        `${variant.name}: parameterized extraction tolerates ? in comments`,
+      );
+
+      const missingParamsResult = generator.buildEvent({
+        type: 'QUERY',
+        sql: paramSql(variant.prefix),
+        params: [],
+        timestamp: '10',
+        changes: 1,
+      });
+      t.equal(
+        missingParamsResult.state,
+        PARTITION_CDC_EVENT_BUILD_STATE.SKIPPED,
+        `${variant.name}: unquoted ? with empty params must be skipped`,
+      );
+      t.equal(
+        missingParamsResult.reasonCode,
+        PARTITION_CDC_EVENT_SKIP_REASON.INCOMPLETE_ROW_PAYLOAD,
+        `${variant.name}: missing params skips as INCOMPLETE_ROW_PAYLOAD`,
+      );
+    }
+  });

@@ -580,3 +580,123 @@ test('abortTimedOutTransaction freezes and records ROLLBACK before status transi
     assert.equal(finalRow.decision, 'ROLLBACK');
     assert.equal(finalRow.status, 'ROLLED_BACK');
   });
+
+test('Optimization 5C: zero-participant COMMIT persists COMMITTED atomically with decision',
+  async (t) => {
+    const gateway = createTransactionPersistenceGateway();
+    t.after(() => gateway.db.close());
+    const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      controlPlaneSystemTableGateway: gateway,
+      logger,
+      autoStartDistributedTransactionRecovery: false,
+    });
+    t.after(() => engine.shutdown());
+    const coordinator = engine.transactionCoordinator;
+    const rollbacks = [];
+    coordinator.beginParticipant = async () => {};
+    coordinator.rollbackParticipant = async (_s, partitionId) => rollbacks.push(partitionId);
+
+    const begun = await coordinator.begin('ro-atomic');
+    assert.equal(begun.success, true);
+    await coordinator.executeReadStatement(
+      'ro-atomic',
+      begun.transactionId,
+      async ({enlist}) => enlist(['p-ro']),
+    );
+    const committed = await coordinator.commit('ro-atomic');
+    assert.equal(committed.success, true);
+    assert.deepEqual(rollbacks, ['p-ro']);
+
+    const txMutations = gateway.mutations.filter((m) => m.tableName === 'sql_transactions');
+    assert.equal(txMutations.length, 3,
+      'zero-participant COMMIT performs INSERT + FREEZE + atomic DECIDE/COMMITTED (no 4th update)');
+    assert.equal(txMutations[2].data.decision, 'COMMIT');
+    assert.equal(txMutations[2].data.status, 'COMMITTED');
+    const breakdown = coordinator.getLastTransactionBreakdown(begun.transactionId);
+    assert.equal(breakdown.metadataSubmissionsByPurpose.decisionAndCommitting, 1);
+    assert.equal(breakdown.metadataSubmissionsByPurpose.settlement, 0);
+  });
+
+test('Optimization 5C: executeWriteStatement overlaps participant ACTIVE upsert with executeWrite and COMMIT overlaps read-only release with COMMITTED status',
+  async (t) => {
+    const gateway = createTransactionPersistenceGateway();
+    t.after(() => gateway.db.close());
+    const engine = new SQLQueryEngine({
+      controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+      controlPlaneSystemTableGateway: gateway,
+      logger,
+      autoStartDistributedTransactionRecovery: false,
+    });
+    t.after(() => engine.shutdown());
+    const coordinator = engine.transactionCoordinator;
+
+    const activePersistStarted = deferred();
+    const releaseActivePersist = deferred();
+    const baseSubmit = gateway.submitMutation.bind(gateway);
+    gateway.submitMutation = async (mutation, options) => {
+      if (mutation.tableName === 'sql_transaction_participants' &&
+          mutation.data?.status === undefined &&
+          mutation.row?.status === 'ACTIVE') {
+        activePersistStarted.resolve();
+        await releaseActivePersist.promise;
+      }
+      return baseSubmit(mutation, options);
+    };
+
+    coordinator.beginParticipant = async () => {};
+    coordinator.prepareParticipant = async (_s, partitionId) => ({
+      preparedDigest: `digest-${partitionId}`.padEnd(64, '0'),
+      prepareIndex: 1,
+      prepareTerm: 1,
+    });
+    coordinator.commitParticipant = async () => {};
+
+    const roReleaseStarted = deferred();
+    const releaseRoRollback = deferred();
+    const roRollbacks = [];
+    coordinator.rollbackParticipant = async (_s, partitionId) => {
+      roRollbacks.push(partitionId);
+      roReleaseStarted.resolve();
+      await releaseRoRollback.promise;
+    };
+
+    const begun = await coordinator.begin('overlap-tx');
+    await coordinator.executeReadStatement(
+      'overlap-tx',
+      begun.transactionId,
+      async ({enlist}) => enlist(['p-ro']),
+    );
+
+    let sawActiveInFlightDuringWrite = false;
+    let writeOutcomeBeforePersistReleased = 0;
+    const writePromise = coordinator.executeWriteStatement(
+      'overlap-tx',
+      {operationId: 'op-overlap-1', sql: 'UPDATE t SET v = 1 WHERE id = 1', partitionIds: ['p-rw']},
+      async () => {
+        await activePersistStarted.promise;
+        sawActiveInFlightDuringWrite = true;
+        writeOutcomeBeforePersistReleased = gateway.rows('sql_write_operations').length;
+        return {success: true, affectedRows: 1};
+      },
+    );
+    await activePersistStarted.promise;
+    releaseActivePersist.resolve();
+    const written = await writePromise;
+    assert.equal(written.success, true);
+    assert.equal(sawActiveInFlightDuringWrite, true,
+      'upsertParticipant(ACTIVE) must start concurrently with executeWrite');
+    assert.equal(writeOutcomeBeforePersistReleased, 0,
+      'sql_write_operations persistence waits until concurrent upsertParticipant(ACTIVE) and executeWrite settle');
+    assert.equal(gateway.rows('sql_write_operations')[0].status, 'SUCCEEDED');
+
+    // Mixed read+write COMMIT must persist status='COMMITTED' concurrently while p-ro rollback RPC is blocked.
+    const commitPromise = coordinator.commit('overlap-tx');
+    await roReleaseStarted.promise;
+    assert.equal(gateway.rows('sql_transactions')[0].status, 'COMMITTED',
+      'COMMITTED status update must overlap with releaseReadOnlyParticipants without waiting for p-ro RPC');
+    releaseRoRollback.resolve();
+    const committed = await commitPromise;
+    assert.equal(committed.success, true);
+    assert.deepEqual(roRollbacks, ['p-ro']);
+  });

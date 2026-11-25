@@ -34,6 +34,7 @@ import {
   configure,
   createCommittedMembershipHarness,
   createJoinOperation,
+  membershipOf,
   metadataCache,
   requestAdmission,
   serviceRow,
@@ -73,6 +74,7 @@ import {
   RAFT_AUTHORITY_OBSERVATION,
   RAFT_EVENT,
   RAFT_LEADERSHIP_TRANSFER_SUCCESSOR,
+  RAFT_MEMBERSHIP_ADMISSION_OUTCOME,
   RAFT_OPERATION_OUTCOME,
 } from '../../src/raft/raft-operation-port-constants.js';
 import {
@@ -81,6 +83,12 @@ import {
   readPortClockObligation,
   readPortEffectiveRaftTiming,
 } from '../../src/raft/raft-rs-operation-port.js';
+import {
+  RAFT_CLOCK_OBLIGATION_STATE,
+} from '../../src/raft/raft-rs-current-authority.js';
+import {
+  admitPartitionRaftLearner,
+} from '../../src/partition/partition-service-raft-membership-administration.js';
 import {turnChainValue} from '../../src/raft/raft-rs-turn-answer.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 
@@ -1231,5 +1239,138 @@ test('Finding 3 Witness: passive effectiveRaftTiming / readPortEffectiveRaftTimi
     assert.equal(cadenceOnlyTimer.dueAt, 1076 + 30);
   } finally {
     await partition.shutdown();
+  }
+});
+
+async function buildLearnerJoiner(harness, target, existingMembers) {
+  const leaderMember = harness.leaderMember();
+  const rows = existingMembers.map((member) =>
+    serviceRow(harness.partitionId, member));
+  const {operation, error} = await createJoinOperation(harness, {
+    target,
+    rows,
+    leaderHint: leaderMember[1],
+  });
+  assert.equal(error, undefined, `createJoinOperation failed: ${error?.message}`);
+  const targetCache = metadataCache(
+    harness.partitionId,
+    [...existingMembers, target],
+    {leaderNodeId: leaderMember[1]},
+  );
+  const {service} = await buildTargetFromOperation(harness, {
+    target,
+    operation,
+    cache: targetCache,
+  });
+  return service;
+}
+
+test('Bug 3B Witness: adding committed learners to a 1-voter deferred founder ' +
+  'exits DEFERRED_SOLO_FOUNDER, arms heartbeats, and converges a 2nd learner confChange',
+async () => {
+  configure();
+  const harness = createCommittedMembershipHarness('seed-learner-clock-p1');
+  try {
+    const seed = harness.build(SEED_REPLICA, {
+      replicaIds: [SEED_REPLICA[0]],
+      peerAddresses: [addressOf(SEED_REPLICA)],
+      cache: metadataCache(harness.partitionId, [SEED_REPLICA]),
+      deferElection: true,
+    });
+    await seed.initialize();
+    assert.equal(await waitFor(() => statusOf(seed).appliedIndex > 0), true);
+    seed.startElection();
+
+    assert.equal(seed.deferredFounderSchedulingPending, true);
+    assert.equal(readPortClockObligation(seed.raft)?.clockRequired, false);
+    assert.equal(
+      readPortClockObligation(seed.raft)?.clockMode,
+      RAFT_CLOCK_OBLIGATION_STATE.DEFERRED_SOLO_FOUNDER,
+    );
+    assert.equal(seed.isScheduling(), false);
+
+    // Build and admit 1st learner while founder remains a 1-voter leader.
+    const learnerOne = await buildLearnerJoiner(harness, JOINER_TWO, [SEED_REPLICA]);
+    const admissionOne = admitPartitionRaftLearner(seed, {
+      replicaIdentity: JOINER_TWO[0],
+      nodeId: JOINER_TWO[1],
+    });
+    const settledOne = admissionOne.settled ? await admissionOne.settled : admissionOne;
+    assert.equal(
+      settledOne.outcome,
+      RAFT_MEMBERSHIP_ADMISSION_OUTCOME.PROPOSED,
+      JSON.stringify(settledOne),
+    );
+
+    const learnerOnePeerId = statusOf(learnerOne).peerId;
+    assert.equal(await waitFor(() =>
+      statusOf(seed).confState.learners.map(String).includes(String(learnerOnePeerId)) &&
+      statusOf(learnerOne).commitIndex === statusOf(seed).commitIndex), true,
+    'first learner must commit into learners while founder remains 1-voter');
+
+    assert.equal(seed.isLeader, true);
+    assert.equal(statusOf(seed).term, 1);
+    assert.equal(seed.deferredFounderSchedulingPending, false,
+      'adding a learner must exit solo-founder deferral');
+    assert.equal(readPortClockObligation(seed.raft)?.clockRequired, true,
+      'adding a learner to a 1-voter founder must make clockRequired === true');
+    assert.equal(
+      readPortClockObligation(seed.raft)?.clockMode,
+      RAFT_CLOCK_OBLIGATION_STATE.ARMED,
+    );
+    assert.equal(seed.isScheduling(), true,
+      '1-voter founder with a learner must arm periodic heartbeat scheduling');
+    assert.equal(isPortScheduling(seed.raft), true);
+    const authAfterLearnerOne = seed.raft.observeCurrentAuthority();
+    assert.equal(authAfterLearnerOne.clockRequired, true);
+    assert.equal(authAfterLearnerOne.clockArmed, true);
+    assert.equal(authAfterLearnerOne.deferredSoloFounder, false);
+
+    // Admit 2nd learner while founder still has voters.length === 1. Drop the
+    // immediate post-commit update to learnerOne once to simulate a transient
+    // delivery ACK timeout; periodic heartbeats from the armed clock must
+    // still recover learnerOne and converge all members to the 3-member ConfState.
+    const learnerTwo = await buildLearnerJoiner(
+      harness, JOINER_THREE, [SEED_REPLICA, JOINER_TWO],
+    );
+    const commitAfterLearnerOne = statusOf(seed).commitIndex;
+    let droppedCommitAdvance = false;
+    harness.network.rewriteTo(addressOf(JOINER_TWO), (message) => {
+      const noEntries = !Array.isArray(message?.entries) || message.entries.length === 0;
+      if (!droppedCommitAdvance &&
+          Number(message?.commit) > commitAfterLearnerOne && noEntries) {
+        droppedCommitAdvance = true;
+        harness.network.rewriteTo(addressOf(JOINER_TWO), null);
+        return null;
+      }
+      return message;
+    });
+    const admissionTwo = admitPartitionRaftLearner(seed, {
+      replicaIdentity: JOINER_THREE[0],
+      nodeId: JOINER_THREE[1],
+    });
+    const settledTwo = admissionTwo.settled ? await admissionTwo.settled : admissionTwo;
+    assert.equal(
+      settledTwo.outcome,
+      RAFT_MEMBERSHIP_ADMISSION_OUTCOME.PROPOSED,
+      JSON.stringify(settledTwo),
+    );
+
+    const expectedLearners = [
+      String(learnerOnePeerId),
+      String(statusOf(learnerTwo).peerId),
+    ].sort();
+    assert.equal(await waitFor(() =>
+      JSON.stringify(membershipOf(statusOf(seed).confState).learners) ===
+        JSON.stringify(expectedLearners) &&
+      statusOf(learnerOne).configurationKey === statusOf(seed).configurationKey &&
+      statusOf(learnerTwo).configurationKey === statusOf(seed).configurationKey &&
+      statusOf(learnerOne).commitIndex === statusOf(seed).commitIndex &&
+      statusOf(learnerTwo).commitIndex === statusOf(seed).commitIndex), true,
+    'all 1-voter + 2-learner members must converge to the exact 3-member configurationKey');
+    assert.equal(droppedCommitAdvance, true,
+      'test must exercise heartbeat recovery after dropping one commit-advance packet');
+  } finally {
+    await harness.dispose();
   }
 });

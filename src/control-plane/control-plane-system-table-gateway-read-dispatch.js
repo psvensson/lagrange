@@ -35,6 +35,13 @@ function enforceCompleteObservationAuthority(options) {
   };
 }
 
+function buildReadRequestKeyOptions(mergedOptions, readIntent) {
+  return {
+    ...readIntent,
+    ...mergedOptions,
+  };
+}
+
 const controlPlaneSystemTableGatewayReadDispatchMethods = {
   async readRows(tableName, sql, params = [], options = {}) {
     const cdcIntegrationService = this.resolveCdcIntegrationService();
@@ -93,7 +100,7 @@ const controlPlaneSystemTableGatewayReadDispatchMethods = {
       tableName,
       sql,
       params,
-      mergedOptions,
+      buildReadRequestKeyOptions(mergedOptions, readIntent),
     );
     const telemetryContext = {
       startedAtMs: this.now(),

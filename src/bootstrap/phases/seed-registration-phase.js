@@ -546,8 +546,6 @@ class SeedRegistrationPhase {
       const result = await dynamicConfigService.seedConfiguration(
         CONFIG_SEED_SOURCE.SYSTEM,
         {
-          skipExistingCheck: true,
-          useDirectCdcMutations: true,
           nowMs: resolveHostedNodeClock(d)(),
         },
       );

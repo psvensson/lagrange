@@ -21,6 +21,7 @@ import {
   extractDeleteDataFromSQL,
   extractInsertDataFromSQL,
   extractUpdateDataFromSQL,
+  hasSqlParameterPlaceholders,
 } from './partition-sql-parser.js';
 
 
@@ -107,7 +108,7 @@ function extractRoutingKeyFromSql(entry, primaryKeyColumn, tableName) {
     const params = Array.isArray(entry.params) ? entry.params : [];
     if (
       params.length > 0 &&
-      entry.sql.includes(PARTITION_SERVICE_SQL_FRAGMENT.QUESTION_MARK)
+      hasSqlParameterPlaceholders(entry.sql)
     ) {
       extracted = extractDataFromParameterizedSQL(
         entry.sql,

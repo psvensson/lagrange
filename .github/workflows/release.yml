@@ -266,7 +266,7 @@ jobs:
 
       - name: Build release artifacts
         run: |
-          npm run build:all
+          npm run build:sea
           helm package charts/lagrange-node --destination dist/
           VERSION="${{ steps.release.outputs.version }}"
           cd dist

@@ -1382,10 +1382,12 @@ test('concurrent membershipGenerationIndex advance right after RESUME invalidate
 
 test('external control-partition release pausing sql_transactions-p1 on DRAIN_PENDING ' +
   'wakes local participantReleaseRecovery to reopen autonomously once drain settles, ' +
-  'and hasMultiMemberConfState decides by committed voting membership', async () => {
+  'and hasMultiMemberConfState counts committed learners with voters', async () => {
   assert.equal(hasMultiMemberConfState({voters: ['1'], learners: [], votersOutgoing: []}), false);
-  assert.equal(hasMultiMemberConfState({voters: ['1'], learners: ['2'], votersOutgoing: []}), false,
-    'single voting founder with a non-voting learner remains single-voter quorum');
+  assert.equal(hasMultiMemberConfState({voters: ['1'], learners: ['2'], votersOutgoing: []}), true,
+    'single voting founder with a committed learner exits solo deferral to clock heartbeats');
+  assert.equal(hasMultiMemberConfState(
+    {voters: ['1'], learners: [], learnersNext: ['2'], votersOutgoing: []}), true);
   assert.equal(hasMultiMemberConfState({voters: ['1', '2'], learners: [], votersOutgoing: []}), true);
   assert.equal(hasMultiMemberConfState({voters: ['1'], learners: [], votersOutgoing: ['1']}), true);
 

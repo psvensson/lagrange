@@ -87,7 +87,10 @@ import {printRatchetTighteningHint} from './metric-check-helpers.js';
 // 2026-11-24 (Wave 8 & 44-finding deletion audit): tightened 1305 -> 1300 on
 // the checker hint after deleting dead legacy modules and de-exporting
 // internal symbols.
-const BASELINE_UNUSED_EXPORT_COUNT = 1300;
+// 2026-11-25 (post-0.4.2 review remediation): tightened 1300 -> 1298 on the
+// checker hint after consuming countSqlParameterPlaceholders and
+// extractUpdateWhereColumns in parameterized CDC extraction.
+const BASELINE_UNUSED_EXPORT_COUNT = 1298;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;
 const SELF_REFERENCE = 'scripts/check-unused-exports.js';

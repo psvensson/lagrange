@@ -1281,6 +1281,140 @@ async function reconcileNov2026ComparisonHistoryToDisk(options = {}) {
   });
 }
 
+function round3(value) {
+  return numberIsFinite(value) ? Number(numberToFixed(value, 3)) : null;
+}
+
+function extractReceiptFormationSec(receipt) {
+  if (numberIsFinite(receipt.formation?.elapsedMs)) {
+    return Number(numberToFixed(receipt.formation.elapsedMs / 1000, 2));
+  }
+  if (numberIsFinite(receipt.formation?.elapsedSec)) {
+    return Number(numberToFixed(receipt.formation.elapsedSec, 2));
+  }
+  return null;
+}
+
+function extractReceiptLatencyMs(workload) {
+  const rawLat = workload?.metrics?.latency ?? workload?.latencyMs ?? null;
+  if (!isPlainObject(rawLat)) return null;
+  const samples = rawLat.samples ?? rawLat.count ?? null;
+  if (!numberIsInteger(samples) || samples <= 0) return null;
+  if (!posFinite(rawLat.p50) || !posFinite(rawLat.p95) || !posFinite(rawLat.p99)) return null;
+  return Object.freeze({
+    samples,
+    p50: round3(rawLat.p50),
+    p95: round3(rawLat.p95),
+    p99: round3(rawLat.p99),
+  });
+}
+
+function extractReceiptOpsPerSec(workload, accounting) {
+  const direct = workload?.opsPerSec ?? workload?.metrics?.committedPerSec;
+  if (numberIsFinite(direct)) return round3(direct);
+  const committed = accounting?.committed;
+  if (!numberIsInteger(committed) || committed <= 0) return 0;
+  const win = workload?.metrics?.window;
+  if (!isPlainObject(win)) return null;
+  const scheduledMs = numberIsFinite(win.scheduledMs) ? win.scheduledMs : 0;
+  const drainMs = numberIsFinite(win.drainMs) ? win.drainMs : 0;
+  const windowMs = Math.max(scheduledMs, drainMs);
+  return windowMs > 0 ? round3(committed / (windowMs / 1000)) : null;
+}
+
+function extractReceiptWorkload(workload) {
+  if (!isPlainObject(workload)) return null;
+  const accounting = workload.metrics?.accounting ?? workload.accounting ?? null;
+  if (!isPlainObject(accounting)) {
+    return Object.freeze({
+      opsPerSec: numberIsFinite(workload.opsPerSec) ? round3(workload.opsPerSec) : null,
+      accounting: null,
+      latencyMs: extractReceiptLatencyMs(workload),
+    });
+  }
+  return Object.freeze({
+    opsPerSec: extractReceiptOpsPerSec(workload, accounting),
+    accounting: Object.freeze({...accounting}),
+    latencyMs: extractReceiptLatencyMs(workload),
+  });
+}
+
+function validateLab3NodeProgressionEntry(entry) {
+  if (!isPlainObject(entry)) throw new Error('Progression entry must be an object');
+  if (!optStr(entry.commit, '')) throw new Error('Progression entry missing commit');
+  if (!optStr(entry.view, '')) throw new Error('Progression entry missing view');
+  if (typeof entry.passed !== 'boolean') {
+    throw new Error(`Progression entry ${entry.commit} missing boolean passed`);
+  }
+  if (entry.formationSec !== null && entry.formationSec !== undefined &&
+      (!numberIsFinite(entry.formationSec) || entry.formationSec < 0)) {
+    throw new Error(`Progression entry ${entry.commit} has invalid formationSec`);
+  }
+  if (!entry.passed) return entry;
+  if (!posFinite(entry.formationSec)) {
+    throw new Error(`Passing progression entry ${entry.commit} has formationSec <= 0`);
+  }
+  if (!isPlainObject(entry.semanticGate) || entry.semanticGate.status !== 'passed' ||
+      !posFinite(entry.semanticGate.passedCount)) {
+    throw new Error(`Passing progression entry ${entry.commit} did not pass semanticGate`);
+  }
+  if (entry.extraJoinerDurabilityPassed !== true) {
+    throw new Error(
+      `Passing progression entry ${entry.commit} requires extraJoinerDurabilityPassed === true`,
+    );
+  }
+  const wl = entry.workload;
+  if (!isPlainObject(wl) || !posFinite(wl.opsPerSec)) {
+    throw new Error(`Passing progression entry ${entry.commit} has opsPerSec <= 0`);
+  }
+  const acc = wl.accounting;
+  if (!isPlainObject(acc) || !posFinite(acc.issued) || !posFinite(acc.committed)) {
+    throw new Error(`Passing progression entry ${entry.commit} has issued <= 0 or committed <= 0`);
+  }
+  if (!validLat(wl.latencyMs) || !posFinite(wl.latencyMs.samples)) {
+    throw new Error(`Passing progression entry ${entry.commit} has null or invalid latencyMs`);
+  }
+  return entry;
+}
+
+function buildLab3NodeProgressionEntryFromReceipt(receipt, metadata = {}) {
+  if (!isPlainObject(receipt)) throw new Error('Receipt must be an object');
+  const commit = optStr(metadata.commit ?? receipt.commit, '');
+  const view = optStr(metadata.view ?? receipt.view, 'tv-dator-3node-smoke');
+  const passed = receipt.passed;
+  const formationSec = extractReceiptFormationSec(receipt);
+  const semanticGate = isPlainObject(receipt.semanticGate) ?
+    Object.freeze({
+      status: receipt.semanticGate.status ?? null,
+      passedCount: receipt.semanticGate.passedCount ?? 0,
+    }) : null;
+  const extraJoinerDurabilityPassed = typeof receipt.extraJoinerDurability?.passed === 'boolean' ?
+    receipt.extraJoinerDurability.passed : null;
+  const workload = extractReceiptWorkload(receipt.workload);
+  const entry = {
+    commit,
+    view,
+    passed,
+    formationSec,
+    semanticGate,
+    extraJoinerDurabilityPassed,
+    workload,
+    ...(optStr(metadata.failureStage, '') ? {failureStage: optStr(metadata.failureStage, '')} : {}),
+    ...(optStr(metadata.note, '') ? {note: optStr(metadata.note, '')} : {}),
+  };
+  return Object.freeze(validateLab3NodeProgressionEntry(entry));
+}
+
+function validateVersionedProgressionRecord(progression) {
+  if (!isPlainObject(progression)) throw new Error('Versioned progression must be an object');
+  const entries = progression.lab3NodeProgression ?? progression.lab3NodeRuns;
+  if (!Array.isArray(entries) || entries.length === 0) {
+    throw new Error('Versioned progression missing non-empty lab3NodeRuns/lab3NodeProgression');
+  }
+  for (const entry of entries) validateLab3NodeProgressionEntry(entry);
+  return progression;
+}
+
 export {
   DEFAULT_COMPARISON_HISTORY_NDJSON_PATH,
   DEFAULT_COMPARISON_PROGRESS_SUMMARY_PATH,
@@ -1289,6 +1423,7 @@ export {
   buildCanonicalHistoryTransactionsFromWorkload,
   buildComparisonCombinationKey,
   buildComparisonProgressSummary,
+  buildLab3NodeProgressionEntryFromReceipt,
   createComparisonHistoryRecord,
   normalizeTransactions,
   parseComparisonHistoryNdjson,
@@ -1296,4 +1431,5 @@ export {
   recordComparisonResultToDisk,
   summarizeBenchmarkWithdrawal,
   validateComparisonHistoryRecord,
+  validateVersionedProgressionRecord,
 };

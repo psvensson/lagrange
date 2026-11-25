@@ -453,6 +453,7 @@ test('TableCreationService - forwards timeout budget to fresh initial ' +
         resolvedReplicaCount: 3,
         minimumRoutableReplicaCount: 2,
         routableReplicaCount: 2,
+        committedReplicaCount: 2,
       };
     },
   });
@@ -850,6 +851,7 @@ test('TableCreationService - CREATE TABLE with a converged cohort answers ' +
     resolvedReplicaCount: 3,
     minimumRoutableReplicaCount: 2,
     routableReplicaCount: 3,
+    committedReplicaCount: 3,
   });
 
   const result = await service.executeCreateTableProvisioning(
@@ -883,6 +885,7 @@ test('TableCreationService - CREATE TABLE ignores a legacy visibility field ' +
       resolvedReplicaCount: 3,
       minimumRoutableReplicaCount: 2,
       routableReplicaCount: 3,
+      committedReplicaCount: 3,
     }, {visibilityState: legacy});
 
     const result = await service.executeCreateTableProvisioning(
@@ -914,6 +917,7 @@ test('TableCreationService - CREATE TABLE stays pending when only the minimum ro
           resolvedReplicaCount: 3,
           minimumRoutableReplicaCount: 2,
           routableReplicaCount: 2,
+          committedReplicaCount: 2,
         };
       },
     });
@@ -1046,6 +1050,18 @@ async (t) => {
         committedReplicaCount: 0,
         fullReplicaCountConverged: false,
         contractState: OWNER_CONTRACT_STATE.UNDER_REPLICATED,
+        nextAction: OWNER_CONTRACT_NEXT_ACTION.PROCEED,
+      },
+    },
+    {
+      label: 'omitted committedReplicaCount must not be inferred from routableReplicaCount',
+      payload: {
+        requestedReplicaCount: 3,
+        resolvedReplicaCount: 3,
+        minimumRoutableReplicaCount: 2,
+        routableReplicaCount: 3,
+        fullReplicaCountConverged: true,
+        contractState: OWNER_CONTRACT_STATE.READY,
         nextAction: OWNER_CONTRACT_NEXT_ACTION.PROCEED,
       },
     },

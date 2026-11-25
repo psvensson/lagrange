@@ -73,8 +73,9 @@ async function enlistReadOnlyParticipants(coordinator, tx, sessionId, requested)
     newlyEnlisted};
 }
 
-async function promoteReadOnlyParticipants(coordinator, tx, requested) {
-  if (!(tx.readOnlyParticipants instanceof Map)) return;
+function collectPromotedActiveParticipants(tx, requested) {
+  if (!(tx.readOnlyParticipants instanceof Map)) return [];
+  const promoted = [];
   for (const partitionId of requested) {
     const volatileParticipant = tx.readOnlyParticipants.get(partitionId);
     if (!volatileParticipant) continue;
@@ -85,14 +86,10 @@ async function promoteReadOnlyParticipants(coordinator, tx, requested) {
       volatileParticipant.status === PARTICIPANT_STATUS.ACTIVE
     ) {
       participant.status = PARTICIPANT_STATUS.ACTIVE;
-      await coordinator.workflowCoordinator.upsertParticipant(tx.workflowId, {
-        ...participant,
-        status: PARTICIPANT_STATUS.ACTIVE,
-        lastError: null,
-        updatedAt: coordinator.now(),
-      });
+      promoted.push(participant);
     }
   }
+  return promoted;
 }
 
 function shouldAdvanceFrozenSetToPreparing(coordinator, tx, participantCount, options) {
@@ -138,6 +135,7 @@ const distributedTransactionParticipantSetMethods = {
     if (!prior) throw incompleteParticipantSet();
     const text = participantSetTextOf(tx.transactionId,
       [...prior.map((pair) => pair[1]), ...partitionIds]);
+    let pairs = prior;
     if (text === tx.participantSetText) {
       if (tx?.telemetry) {
         tx.telemetry.skippedParticipantSetMutations =
@@ -146,10 +144,11 @@ const distributedTransactionParticipantSetMethods = {
     } else {
       await this.persistAdmittedParticipantSet(tx, {...tx, participantSetText: text});
       tx.participantSetText = text;
+      pairs = readParticipantSet(tx.transactionId, text);
     }
     // An admitted identity must survive even if BEGIN or progress persistence
     // fails. Its durable manifest precedes every possible participant request.
-    for (const [participantId, partitionId] of readParticipantSet(tx.transactionId, text)) {
+    for (const [participantId, partitionId] of pairs) {
       if (!tx.participants.has(partitionId)) {
         tx.participants.set(partitionId, {workflowId: tx.workflowId,
           transactionId: tx.transactionId, participantId, participantKey: partitionId,
@@ -181,6 +180,7 @@ const distributedTransactionParticipantSetMethods = {
     sessionId,
     partitionIds,
     enlistmentMode = PARTICIPANT_ENLISTMENT_MODE.AUTHORITATIVE,
+    options = {},
   ) {
     const tx = this.transactionsBySession.get(sessionId);
     if (!tx) {
@@ -198,18 +198,33 @@ const distributedTransactionParticipantSetMethods = {
       return enlistReadOnlyParticipants(this, tx, sessionId, requested);
     }
     await this.retainParticipantSet(tx, requested);
-    await promoteReadOnlyParticipants(this, tx, requested);
+    const activeUpserts = collectPromotedActiveParticipants(tx, requested);
     const newlyEnlisted = requested.filter((partitionId) =>
       tx.participants.get(partitionId)?.status !== PARTICIPANT_STATUS.ACTIVE);
     await Promise.all(newlyEnlisted.map(async (partitionId) => {
       const participant = tx.participants.get(partitionId);
       await this.beginParticipant(sessionId, partitionId, participantIdentityOf(tx, partitionId));
-      await this.workflowCoordinator.upsertParticipant(tx.workflowId, {
-        ...participant, status: PARTICIPANT_STATUS.ACTIVE, lastError: null,
-        updatedAt: this.now()});
+      activeUpserts.push(participant);
     }));
+    const persistActiveParticipants = () => Promise.all(
+      activeUpserts.map((participant) =>
+        this.workflowCoordinator.upsertParticipant(tx.workflowId, {
+          ...participant, status: PARTICIPANT_STATUS.ACTIVE, lastError: null,
+          updatedAt: this.now(),
+        })),
+    );
+    if (options?.deferActivePersistence !== true) {
+      await persistActiveParticipants();
+    }
     tx.updatedAt = this.now();
-    return {success: true, participants: this.getOrderedParticipantIds(tx), newlyEnlisted};
+    return {
+      success: true,
+      participants: this.getOrderedParticipantIds(tx),
+      newlyEnlisted,
+      ...(options?.deferActivePersistence === true ?
+        {persistActiveParticipants} :
+        {}),
+    };
   },
 };
 

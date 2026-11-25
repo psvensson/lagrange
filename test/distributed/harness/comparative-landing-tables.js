@@ -114,20 +114,21 @@ const PHASE_SPEED_HEADERS = Object.freeze([
   '3. Warmup (10 txns) (s)',
   '4. Measured Workload (100 txns) (s)',
   '5. Final Verify & Teardown (s)',
-  'Max Single-Txn (s)',
+  'Max Single-Txn Execution (excl. queue, incl. retries) (s)',
+  'Max End-to-End Request Latency (incl. open-loop queue & retries) (s)',
 ]);
 
 const PART_SPEED_HEADERS = Object.freeze([
   'System / Configuration',
-  'Part 1: Load & New-Order Contention (s)',
-  'Part 2: Visibility (s)',
-  'Part 3: Payment (s)',
-  'Part 4: Order-Status (s)',
-  'Part 5: Delivery (s)',
-  'Part 6: Stock-Level (s)',
-  'Part 7: Failure-Atomicity (s)',
-  'Part 8: Retryable-Conflict (s)',
-  'Part 9: Durability Restart & Reload (s)',
+  'Part 1: Load + Cases 1-2 (New-Order & Visibility + Reset) (s)',
+  'Part 2: Case 3 (Payment + Reset) (s)',
+  'Part 3: Case 4 (Order-Status + Reset) (s)',
+  'Part 4: Case 5 (Delivery + Reset) (s)',
+  'Part 5: Case 6 (Stock-Level + Reset) (s)',
+  'Part 6: Case 7 (Failure-Atomicity + Reset) (s)',
+  'Part 7: Case 8 (Retryable-Conflict + Reset) (s)',
+  'Part 8: Case 9a (Durability Pre-Restart Setup & Reset) (s)',
+  'Part 9: Case 9b (Durability Restart, Recovery & Workload Reload) (s)',
   'Part 10: Warmup (10 txns) (s)',
   'Part 11: Measured Workload (100 txns) (s)',
 ]);
@@ -143,7 +144,7 @@ function buildPhaseSpeedRow(target, claimKey) {
   if (!t) {
     return {
       status: cell.status,
-      values: [target.label, '-', '-', '-', '-', '-', '-', '-'],
+      values: [target.label, '-', '-', '-', '-', '-', '-', '-', '-'],
     };
   }
   return {
@@ -156,6 +157,7 @@ function buildPhaseSpeedRow(target, claimKey) {
       fmtSec(t.warmupSec),
       fmtSec(t.workloadDrainSec),
       fmtSec(t.postVerifySec),
+      fmtSec(t.maxSingleTxnExecutionSec, 3),
       fmtSec(t.maxSingleRequestSec, 3),
     ],
   };
@@ -176,15 +178,15 @@ function buildPartSpeedRow(target, claimKey) {
     status: cell.status,
     values: [
       target.label,
-      fmtSec(p.newOrderContentionSec),
-      fmtSec(p.visibilitySec),
-      fmtSec(p.paymentSec),
-      fmtSec(p.orderStatusSec),
-      fmtSec(p.deliverySec),
-      fmtSec(p.stockLevelSec),
-      fmtSec(p.failureAtomicitySec),
-      fmtSec(p.retryableConflictSec),
-      fmtSec(p.durabilityRestartSec),
+      fmtSec(p.loadAndCases1To2Sec),
+      fmtSec(p.case3PaymentSec),
+      fmtSec(p.case4OrderStatusSec),
+      fmtSec(p.case5DeliverySec),
+      fmtSec(p.case6StockLevelSec),
+      fmtSec(p.case7FailureAtomicitySec),
+      fmtSec(p.case8RetryableConflictSec),
+      fmtSec(p.case9aDurabilityPreRestartSec),
+      fmtSec(p.case9bDurabilityRestartReloadSec),
       fmtSec(t.warmupSec),
       fmtSec(t.workloadDrainSec),
     ],

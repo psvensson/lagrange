@@ -18,7 +18,16 @@ const numberToFixed = Function.call.bind(Number.prototype.toFixed);
 const METRIC_DIGITS = 3;
 const SEC_DIGITS = 2;
 const MS_PER_SEC = 1000;
-const EXPECTED_RESET_COUNT = 8;
+const EXPECTED_RESET_CASE_IDS = Object.freeze([
+  'visibility',
+  'payment',
+  'order-status',
+  'delivery',
+  'stock-level',
+  'failure-atomicity',
+  'retryable-conflict',
+  'durability',
+]);
 const COMPLETED_STATUS = 'completed';
 const DATASET_RESET_KIND = 'dataset-reset';
 const QUANTILES = Object.freeze(['p50', 'p95', 'p99']);
@@ -50,24 +59,46 @@ function deriveWarmupSec(observations) {
   return minStart <= maxEnd ? round((maxEnd - minStart) / MS_PER_SEC, SEC_DIGITS) : null;
 }
 
+function deriveMaxRequestFieldSec(requests, field) {
+  if (!Array.isArray(requests)) return null;
+  let maxMs = -1;
+  for (const r of requests) {
+    const val = r?.[field];
+    if (numberIsFinite(val) && val >= 0 && val > maxMs) maxMs = val;
+  }
+  return maxMs >= 0 ? round(maxMs / MS_PER_SEC, METRIC_DIGITS) : null;
+}
+
+function hasExpectedResetSequence(resets) {
+  if (resets.length !== EXPECTED_RESET_CASE_IDS.length) return false;
+  for (let i = 0; i < EXPECTED_RESET_CASE_IDS.length; i += 1) {
+    if (resets[i]?.caseId !== EXPECTED_RESET_CASE_IDS[i]) return false;
+  }
+  return true;
+}
+
+// Each dataset-reset event is emitted after its case finishes (Case 1 shares
+// the initial dataset with Case 2; durability emits its reset after pre-restart
+// setup/commit and right before the node restart).
 function derivePartsSec(run, tReadyMs, tMeasureStartMs, warmupSec) {
   const resets = arrayFilter(run.harnessEvents || [], (e) => e?.kind === DATASET_RESET_KIND);
-  if (resets.length !== EXPECTED_RESET_COUNT || tReadyMs === null || tMeasureStartMs === null) {
+  if (!hasExpectedResetSequence(resets) || tReadyMs === null || tMeasureStartMs === null) {
     return null;
   }
   const times = arrayMap(resets, (e) => parseIsoMs(e.at));
   if (arrayIncludes(times, null)) return null;
   const gateEndMs = tMeasureStartMs - ((warmupSec ?? 0) * MS_PER_SEC);
   return {
-    newOrderContentionSec: diffSec(tReadyMs, times[0]),
-    visibilitySec: diffSec(times[0], times[1]),
-    paymentSec: diffSec(times[1], times[2]),
-    orderStatusSec: diffSec(times[2], times[3]),
-    deliverySec: diffSec(times[3], times[4]),
-    stockLevelSec: diffSec(times[4], times[5]),
-    failureAtomicitySec: diffSec(times[5], times[6]),
-    retryableConflictSec: diffSec(times[6], times[7]),
-    durabilityRestartSec: round(Math.max(0, (gateEndMs - times[7]) / MS_PER_SEC), SEC_DIGITS),
+    loadAndCases1To2Sec: diffSec(tReadyMs, times[0]),
+    case3PaymentSec: diffSec(times[0], times[1]),
+    case4OrderStatusSec: diffSec(times[1], times[2]),
+    case5DeliverySec: diffSec(times[2], times[3]),
+    case6StockLevelSec: diffSec(times[3], times[4]),
+    case7FailureAtomicitySec: diffSec(times[4], times[5]),
+    case8RetryableConflictSec: diffSec(times[5], times[6]),
+    case9aDurabilityPreRestartSec: diffSec(times[6], times[7]),
+    case9bDurabilityRestartReloadSec: round(Math.max(0, (gateEndMs - times[7]) / MS_PER_SEC),
+      SEC_DIGITS),
   };
 }
 
@@ -90,9 +121,12 @@ function deriveRunTimingsSec(run, latencies) {
   const drainMs = window?.[WINDOW_FIELD.DRAIN_MS];
   const workloadDrainSec = numberIsFinite(drainMs) && drainMs >= 0 ?
     round(drainMs / MS_PER_SEC, SEC_DIGITS) : null;
+  const requests = observations[OBSERVATIONS_FIELD.REQUESTS];
+  const maxSingleTxnExecutionSec = deriveMaxRequestFieldSec(requests, 'executionElapsedMs');
   const maxLatencyMs = latencies?.maxLatencyMs;
-  const maxSingleRequestSec = numberIsFinite(maxLatencyMs) && maxLatencyMs >= 0 ?
-    round(maxLatencyMs / MS_PER_SEC, METRIC_DIGITS) : null;
+  const maxSingleRequestSec = deriveMaxRequestFieldSec(requests, 'latencyMs') ??
+    (numberIsFinite(maxLatencyMs) && maxLatencyMs >= 0 ?
+      round(maxLatencyMs / MS_PER_SEC, METRIC_DIGITS) : null);
   return {
     totalScenarioSec: diffSec(tStartMs, tEndMs),
     clusterReadySec: diffSec(tStartMs, tReadyMs),
@@ -100,6 +134,8 @@ function deriveRunTimingsSec(run, latencies) {
     warmupSec,
     workloadDrainSec,
     postVerifySec: diffSec(tMeasureEndMs, tEndMs),
+    maxSingleTxnExecutionSec,
+    maxSingleTxnSec: maxSingleTxnExecutionSec,
     maxSingleRequestSec,
     partsSec: derivePartsSec(run, tReadyMs, tMeasureStartMs, warmupSec),
   };

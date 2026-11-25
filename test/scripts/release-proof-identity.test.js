@@ -4,6 +4,7 @@
 // receipts - and change on any other byte.
 
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -11,8 +12,9 @@ import {test} from 'node:test';
 
 import {
   OUTCOME, PROOF, RESOLUTION, buildReceipt, buildTagBody, identityRef, indexProof,
-  proofRef, recordProof, resolveProof,
+  proofRef, recordProof, resolveProof, subjectCorpusFiles,
 } from '../../scripts/proof-authority.js';
+import {executionReportProblems} from '../../scripts/test-execution-report.js';
 import {
   VERSION_AUTHORITIES, computeReleaseProofIdentity,
 } from '../../scripts/release-proof-identity.js';
@@ -159,30 +161,68 @@ test('index backfills the identity ref of a receipt recorded without one', () =>
   'indexing again keeps the existing identity ref');
 });
 
-// A receipt from before identities were carried: minted the way recordProof
-// mints, without the identity field, and published on its exact ref only.
-function recordLegacyReceipt(source, sha) {
-  const receipt = buildReceipt({
-    proofId: PROOF.RELEASE_FULL, sha, completedAt: '2026-09-11T18:00:00.000Z',
-    producer: {kind: 'test-fixture', id: 'legacy-run'},
+function completeExecution(source, sha) {
+  const report = checkoutExecutionReport(source);
+  const tree = git(source, 'rev-parse', `${sha}^{tree}`);
+  const corpus = subjectCorpusFiles({sha, cwd: source});
+  assert.equal(corpus.ok, true);
+  const identity = computeReleaseProofIdentity(source);
+  const checked = executionReportProblems(report, {
+    sha, tree, identity: {algorithm: identity.algorithm, digest: identity.digest},
+    requiredFiles: corpus.files,
   });
-  assert.equal(receipt.identity, undefined, 'a legacy receipt carries no identity');
+  assert.deepEqual(checked.problems, []);
+  return {
+    reportDigest: createHash('sha256').update(JSON.stringify(report)).digest('hex'),
+    producer: {...report.producer},
+    summary: checked.summary,
+  };
+}
+
+function plantReleaseTag(source, sha, receipt) {
   const objectSha = execGit(['mktag'], {
     cwd: source, encoding: 'utf8',
     input: buildTagBody({proofId: PROOF.RELEASE_FULL, sha, receipt,
       now: Date.parse('2026-09-11T18:00:00.000Z')}),
   }).trim();
-  git(source, 'update-ref', 'refs/tmp/legacy', objectSha);
-  git(source, 'push', '--quiet', 'origin', `refs/tmp/legacy:${proofRef(PROOF.RELEASE_FULL, sha)}`);
-  git(source, 'update-ref', '-d', 'refs/tmp/legacy');
+  git(source, 'update-ref', 'refs/tmp/planted', objectSha);
+  git(source, 'push', '--quiet', 'origin', `refs/tmp/planted:${proofRef(PROOF.RELEASE_FULL, sha)}`);
+  git(source, 'update-ref', '-d', 'refs/tmp/planted');
   return objectSha;
 }
 
-test('index binds a legacy receipt (no identity field) by the ref it publishes', () => {
+test('receipts for identity-reusable contracts without receipt.identity are rejected even on exact-sha checks', () => {
   const {source, rcSha} = fixture();
-  recordLegacyReceipt(source, rcSha);
+  const receipt = buildReceipt({
+    proofId: PROOF.RELEASE_FULL, sha: rcSha, completedAt: '2026-09-11T18:00:00.000Z',
+    producer: {kind: 'test-fixture', id: 'missing-identity-run'},
+    execution: completeExecution(source, rcSha),
+  });
+  assert.equal(receipt.identity, undefined, 'fixture receipt carries no identity');
+  plantReleaseTag(source, rcSha, receipt);
+
   const exact = resolveProof({proofId: PROOF.RELEASE_FULL, sha: rcSha, cwd: source});
-  assert.equal(exact.outcome, OUTCOME.PROVEN, 'the legacy receipt proves its own commit');
+  assert.equal(exact.outcome, OUTCOME.UNAVAILABLE,
+    'missing receipt.identity fails closed even on exact-sha lookup');
+  assert.match(exact.because, /receipt identity is required for identity-reusable contract/u);
+  assert.throws(() => indexProof({proofId: PROOF.RELEASE_FULL, sha: rcSha, cwd: source}),
+    /no exact receipt to index/u);
+});
+
+test('receipts with complete execution and valid identity resolve and index cleanly', () => {
+  const {source, rcSha} = fixture();
+  const identity = computeReleaseProofIdentity(source);
+  const receipt = buildReceipt({
+    proofId: PROOF.RELEASE_FULL, sha: rcSha, completedAt: '2026-09-11T18:00:00.000Z',
+    producer: {kind: 'test-fixture', id: 'complete-run'},
+    identity: {algorithm: identity.algorithm, digest: identity.digest},
+    execution: completeExecution(source, rcSha),
+  });
+  plantReleaseTag(source, rcSha, receipt);
+
+  const exact = resolveProof({proofId: PROOF.RELEASE_FULL, sha: rcSha, cwd: source});
+  assert.equal(exact.outcome, OUTCOME.PROVEN, exact.because);
+  assert.equal(exact.resolution, RESOLUTION.EXACT_SHA);
 
   const indexed = indexProof({proofId: PROOF.RELEASE_FULL, sha: rcSha, cwd: source});
   assert.equal(indexed.indexed, true);

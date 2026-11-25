@@ -23,10 +23,19 @@ echo "✓ Node.js version: $(node -v)"
 # Ensure dist directory exists
 mkdir -p "$DIST_DIR"
 
-# Step 1: Bundle JavaScript
+# Step 1: Verify pre-built bundles (owned by npm run build:bundle)
 echo ""
-echo "Step 1: Bundling JavaScript..."
-node "$SCRIPT_DIR/build-sea.js"
+echo "Step 1: Verifying pre-built bundles..."
+for bundle_artifact in \
+  "$DIST_DIR/index.bundle.cjs" \
+  "$DIST_DIR/admin-cli.bundle.cjs" \
+  "$DIST_DIR/runtime-content-manifest.json"; do
+  if [ ! -f "$bundle_artifact" ] || [ ! -s "$bundle_artifact" ]; then
+    echo "Error: pre-built bundle artifacts not found in $DIST_DIR. Run 'npm run build:bundle' first."
+    exit 1
+  fi
+done
+echo "  ✓ Pre-built bundle artifacts verified"
 
 # Step 2: Generate SEA blobs
 echo ""

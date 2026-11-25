@@ -707,10 +707,11 @@ test('DynamicConfigService seedConfiguration from env vars',
     delete process.env.NODE_HEARTBEAT_INTERVAL_MS;
   });
 
-test('DynamicConfigService seedConfiguration bootstrap fast path skips reads',
+test('DynamicConfigService seedConfiguration writes via gateway with explicit nowMs without per-key reads',
   async (t) => {
     const mockCDC = createMockCDCService();
     const gatewayWrites = [];
+    const nowMs = 1700000123456;
     const service = new DynamicConfigService({
       cdcIntegrationService: mockCDC,
       controlPlaneSystemTableGateway: {
@@ -723,10 +724,7 @@ test('DynamicConfigService seedConfiguration bootstrap fast path skips reads',
     });
     await service.initialize();
 
-    const result = await service.seedConfiguration('system', {
-      skipExistingCheck: true,
-      useDirectCdcMutations: true,
-    });
+    const result = await service.seedConfiguration('system', {nowMs});
 
     t.equal(
       result.seeded.length,
@@ -739,9 +737,15 @@ test('DynamicConfigService seedConfiguration bootstrap fast path skips reads',
       Object.keys(CONFIG_DEFINITIONS).length,
       'should write through the control-plane gateway for each definition',
     );
+    t.ok(
+      gatewayWrites.every(
+        ({row}) => row.created_at === nowMs && row.updated_at === nowMs,
+      ),
+      'should apply explicit nowMs timestamp to seeded rows',
+    );
   });
 
-test('DynamicConfigService seedConfiguration fast path remains idempotent',
+test('DynamicConfigService seedConfiguration remains idempotent across replays',
   async (t) => {
     const mockCDC = createMockCDCService();
     const service = new DynamicConfigService({
@@ -755,13 +759,9 @@ test('DynamicConfigService seedConfiguration fast path remains idempotent',
     });
     await service.initialize();
 
-    await service.seedConfiguration('system', {
-      skipExistingCheck: true,
-      useDirectCdcMutations: true,
-    });
+    await service.seedConfiguration('system', {nowMs: 1700000000000});
     const secondResult = await service.seedConfiguration('system', {
-      skipExistingCheck: true,
-      useDirectCdcMutations: true,
+      nowMs: 1700000001000,
     });
 
     t.equal(

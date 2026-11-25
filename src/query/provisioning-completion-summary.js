@@ -52,48 +52,22 @@ function isProvisioningWritableMinimumSatisfied(summary) {
   );
 }
 
-function resolveCommittedReplicaObservation(
-  normalized,
-  hasObservedResultObject,
-  routableReplicaCount,
-  hasObservedRoutableCount,
-) {
-  const hasExplicit =
-    hasObservedResultObject &&
-    normalized.committedReplicaCount !== undefined;
-  if (!hasExplicit) {
-    return {
-      hasObservedCommittedCount: hasObservedRoutableCount,
-      committedReplicaCount: routableReplicaCount,
-    };
-  }
-  const validExplicit = isNonNegativeInteger(normalized.committedReplicaCount);
-  return {
-    hasObservedCommittedCount: validExplicit,
-    committedReplicaCount: validExplicit ?
-      normalized.committedReplicaCount :
-      0,
-  };
-}
-
 function resolveObservedReplicaCounts(normalized, hasObservedResultObject) {
   const hasObservedRoutableCount =
     hasObservedResultObject &&
     isNonNegativeInteger(normalized.routableReplicaCount);
-  const routableReplicaCount = hasObservedRoutableCount ?
-    normalized.routableReplicaCount :
-    0;
-  const committed = resolveCommittedReplicaObservation(
-    normalized,
-    hasObservedResultObject,
-    routableReplicaCount,
-    hasObservedRoutableCount,
-  );
+  const hasObservedCommittedCount =
+    hasObservedResultObject &&
+    isNonNegativeInteger(normalized.committedReplicaCount);
   return {
     hasObservedReplicaCounts:
-      hasObservedRoutableCount && committed.hasObservedCommittedCount,
-    routableReplicaCount,
-    committedReplicaCount: committed.committedReplicaCount,
+      hasObservedRoutableCount && hasObservedCommittedCount,
+    routableReplicaCount: hasObservedRoutableCount ?
+      normalized.routableReplicaCount :
+      0,
+    committedReplicaCount: hasObservedCommittedCount ?
+      normalized.committedReplicaCount :
+      0,
   };
 }
 

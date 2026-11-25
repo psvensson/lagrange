@@ -40,6 +40,7 @@ const stringReplace = Function.call.bind(String.prototype.replace);
 const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 const stringEndsWith = Function.call.bind(String.prototype.endsWith);
 const stringSplit = Function.call.bind(String.prototype.split);
+const stringTrim = Function.call.bind(String.prototype.trim);
 
 const TEXT_ENCODING = 'utf8';
 const NUL = '\0';
@@ -87,7 +88,7 @@ const ECMA_VERSION_LATEST = 'latest';
 const SPACE = ' ';
 const REPORT_HEADER = Object.freeze({
   KNIP_ISSUES: 'Knip issues',
-  UNREACHABLE_ADDED_SRC: 'Unreachable newly added src modules',
+  NEWLY_UNREACHABLE_SRC: 'Newly unreachable src modules',
   UNUSED_TRACKED_FILES: 'Unused tracked files',
 });
 const GIT_DIFF_ADDED_ARGS = Object.freeze([
@@ -103,6 +104,24 @@ const GIT_DIFF_CACHED_ADDED_ARGS = Object.freeze([
   '--diff-filter=A',
   '-z',
 ]);
+const GIT_REV_PARSE_HEAD_ARGS = Object.freeze([
+  'rev-parse',
+  '--verify',
+  '--quiet',
+  'HEAD',
+]);
+const GIT_LS_TREE_BASE_ARGS = Object.freeze([
+  'ls-tree',
+  '-r',
+  '--name-only',
+  '-z',
+]);
+const GIT_DIFF_NAME_ONLY_ARGS = Object.freeze([
+  'diff',
+  '--name-only',
+  '-z',
+]);
+const GIT_SHOW_CMD = 'show';
 const AST_TYPE = Object.freeze({
   CALL_EXPRESSION: 'CallExpression',
   EXPORT_ALL: 'ExportAllDeclaration',
@@ -289,11 +308,71 @@ function addedTrackedPaths(tracked, explicitBase) {
   return added;
 }
 
-function unreachableAddedSrcModules(tracked, explicitBase = null) {
+function resolveBaseCommit(explicitBase, root) {
+  const range = resolvedCheckRange(explicitBase, process.env, root);
+  if (range.base) return range.base;
+  try {
+    const head = stringTrim(
+      execGit([...GIT_REV_PARSE_HEAD_ARGS], {cwd: root, encoding: TEXT_ENCODING}),
+    );
+    return head || null;
+  } catch {
+    return null;
+  }
+}
+
+function trackedPathsAtCommit(base, root) {
+  const out = execGit([...GIT_LS_TREE_BASE_ARGS, base], {cwd: root, encoding: TEXT_ENCODING});
+  return new Set(arrayFilter(stringSplit(out, NUL), Boolean));
+}
+
+function changedPathsSinceBase(base, root) {
+  const out = execGit([...GIT_DIFF_NAME_ONLY_ARGS, base], {cwd: root, encoding: TEXT_ENCODING});
+  return new Set(arrayFilter(stringSplit(out, NUL), Boolean));
+}
+
+function readTextAtCommit(base, relativePath, root) {
+  try {
+    return execGit([GIT_SHOW_CMD, `${base}:${relativePath}`], {
+      cwd: root,
+      encoding: TEXT_ENCODING,
+    });
+  } catch {
+    return '';
+  }
+}
+
+function newlyUnreachableSrcModules(tracked, explicitBase = null) {
+  const diskSpecifiers = new Map();
+  const currentUnreachable = unreachableSrcModules(tracked, {
+    getSpecifiers: (text, file) => {
+      const specifiers = executableModuleSpecifiers(text, file);
+      diskSpecifiers.set(file, specifiers);
+      return specifiers;
+    },
+  });
+  if (currentUnreachable.length === 0) return [];
+  const root = process.cwd();
+  const base = resolveBaseCommit(explicitBase, root);
+  if (!base) return currentUnreachable;
+  const baseTracked = trackedPathsAtCommit(base, root);
+  const changed = changedPathsSinceBase(base, root);
+  const baseUnreachable = new Set(unreachableSrcModules(baseTracked, {
+    readFile: (file) => (
+      changed.has(file) ? readTextAtCommit(base, file, root) : readText(file)
+    ),
+    getSpecifiers: (text, file) => {
+      if (!changed.has(file) && diskSpecifiers.has(file)) {
+        return diskSpecifiers.get(file);
+      }
+      return executableModuleSpecifiers(text, file);
+    },
+  }));
   const added = addedTrackedPaths(tracked, explicitBase);
-  if (added.size === 0) return [];
-  const unreachable = unreachableSrcModules(tracked);
-  return arrayFilter(unreachable, (file) => added.has(file));
+  return arrayFilter(
+    currentUnreachable,
+    (file) => added.has(file) || !baseUnreachable.has(file),
+  );
 }
 
 function reportList(header, items, formatItem = (item) => item) {
@@ -311,16 +390,16 @@ function unusedFilesGate(argv = []) {
   const issues = Array.isArray(report.issues) ? report.issues : [];
   const trackedUnusedFiles = arrayFilter(files, (file) => tracked.has(file));
   const untrackedUnusedFiles = arrayFilter(files, (file) => !tracked.has(file));
-  const unreachableAddedSrc = unreachableAddedSrcModules(tracked, resolveExplicitBase(argv));
+  const newlyUnreachableSrc = newlyUnreachableSrcModules(tracked, resolveExplicitBase(argv));
   for (const file of untrackedUnusedFiles) {
     console.warn(`push-gate: ignoring untracked unused file ${file}`);
   }
   const hasFailures = trackedUnusedFiles.length > 0 ||
     issues.length > 0 ||
-    unreachableAddedSrc.length > 0;
+    newlyUnreachableSrc.length > 0;
   if (!hasFailures) return 0;
   reportList(REPORT_HEADER.UNUSED_TRACKED_FILES, trackedUnusedFiles);
-  reportList(REPORT_HEADER.UNREACHABLE_ADDED_SRC, unreachableAddedSrc);
+  reportList(REPORT_HEADER.NEWLY_UNREACHABLE_SRC, newlyUnreachableSrc);
   reportList(REPORT_HEADER.KNIP_ISSUES, issues, (issue) => JSON.stringify(issue));
   return 1;
 }
@@ -353,8 +432,8 @@ function collectNestedStrings(value, out) {
   }
 }
 
-function readJsonOrNull(relativePath) {
-  const text = readText(relativePath);
+function readJsonOrNull(relativePath, readFile = readText) {
+  const text = readFile(relativePath);
   if (!text) return null;
   try {
     return JSON.parse(text);
@@ -374,8 +453,8 @@ function mentionedSrcModules(text, tracked) {
   return found;
 }
 
-function dockerfileRuntimeEntrypoints(tracked) {
-  const text = readText(DOCKERFILE);
+function dockerfileRuntimeEntrypoints(tracked, readFile = readText) {
+  const text = readFile(DOCKERFILE);
   if (!text) return [];
   const unfolded = stringReplace(text, DOCKER_LINE_CONTINUATION, SPACE);
   const found = [];
@@ -398,7 +477,7 @@ function packageScriptEntrypoints(pkg, tracked) {
   return found;
 }
 
-function productionEntrypoints(tracked) {
+function productionEntrypoints(tracked, readFile = readText) {
   const roots = [];
   const addCandidate = (rawPath) => {
     const normalized = normalizeEntryCandidate(rawPath);
@@ -407,7 +486,7 @@ function productionEntrypoints(tracked) {
       roots.push(normalized);
     }
   };
-  const pkg = readJsonOrNull(PACKAGE_JSON);
+  const pkg = readJsonOrNull(PACKAGE_JSON, readFile);
   if (pkg) {
     addCandidate(pkg.main);
     const extra = [];
@@ -416,8 +495,8 @@ function productionEntrypoints(tracked) {
     arrayForEach(extra, addCandidate);
     arrayForEach(packageScriptEntrypoints(pkg, tracked), addCandidate);
   }
-  arrayForEach(dockerfileRuntimeEntrypoints(tracked), addCandidate);
-  const knip = readJsonOrNull(KNIP_JSON);
+  arrayForEach(dockerfileRuntimeEntrypoints(tracked, readFile), addCandidate);
+  const knip = readJsonOrNull(KNIP_JSON, readFile);
   if (knip && Array.isArray(knip.entry)) {
     for (const entry of knip.entry) {
       if (typeof entry === 'string' && stringEndsWith(entry, PRODUCTION_ENTRY_SUFFIX)) {
@@ -578,9 +657,14 @@ function resolveProductionModulePath(basePath, tracked) {
   return null;
 }
 
-function importedProductionModules(text, from, tracked) {
+function importedProductionModules(
+  text,
+  from,
+  tracked,
+  getSpecifiers = executableModuleSpecifiers,
+) {
   const found = [];
-  for (const rawSpecifier of executableModuleSpecifiers(text, from)) {
+  for (const rawSpecifier of getSpecifiers(text, from)) {
     const specifier = stringReplace(rawSpecifier, SPECIFIER_QUERY_OR_HASH, '');
     let basePath = null;
     if (stringStartsWith(specifier, RELATIVE_SPECIFIER_PREFIX) ||
@@ -603,9 +687,13 @@ function importedProductionModules(text, from, tracked) {
  * production entries, src/index.js, src/main.js, Dockerfile ENTRYPOINT/CMD,
  * or executable scripts/**) reaches via executable module/worker edges.
  * @param {Set<string>} tracked tracked paths of the tree
+ * @param {Object} [options] optional file reader and specifier extractor
  * @returns {string[]} unreachable src module paths, sorted
  */
-function unreachableSrcModules(tracked) {
+function unreachableSrcModules(tracked, {
+  readFile = readText,
+  getSpecifiers = executableModuleSpecifiers,
+} = {}) {
   const srcModules = arrayFilter(
     [...tracked],
     (file) => stringStartsWith(file, SRC_DIR) &&
@@ -619,11 +707,11 @@ function unreachableSrcModules(tracked) {
     reachable.add(file);
     queue.push(file);
   };
-  arrayForEach(productionEntrypoints(tracked), admit);
+  arrayForEach(productionEntrypoints(tracked, readFile), admit);
   for (let cursor = 0; cursor < queue.length; cursor += 1) {
     const file = queue[cursor];
-    const text = readText(file);
-    arrayForEach(importedProductionModules(text, file, tracked), admit);
+    const text = readFile(file);
+    arrayForEach(importedProductionModules(text, file, tracked, getSpecifiers), admit);
   }
   return arrayFilter(srcModules, (file) => !reachable.has(file)).sort();
 }
@@ -643,7 +731,7 @@ function main(argv) {
   if (arrayIncludes(argv, ARG_UNREACHABLE_SRC)) {
     const tracked = trackedPaths();
     const unreachable = arrayIncludes(argv, ARG_ADDED) ?
-      unreachableAddedSrcModules(tracked, resolveExplicitBase(argv)) :
+      newlyUnreachableSrcModules(tracked, resolveExplicitBase(argv)) :
       unreachableSrcModules(tracked);
     return runReachabilityProbe(unreachable, argv);
   }

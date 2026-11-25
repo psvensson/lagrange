@@ -23,10 +23,42 @@ const SYSTEM_METADATA_WRITE_WAIT = Object.freeze({
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_UNKNOWN_OWNER = 'unknown-owner';
 const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_UPSERT = 'upsert';
 const LOCAL_STR_INSERT = 'insert';
 const LOCAL_STR_UPDATE = 'update';
 const LOCAL_STR_DELETE = 'delete';
+const CACHE_COALESCING_KEY_PREFIX_PK = 'pk:';
+const CACHE_COALESCING_KEY_TYPE_NULL = 'null';
+const CACHE_COALESCING_KEY_TYPE_STRING = 'str';
+const CACHE_COALESCING_KEY_SEPARATOR = ':';
+const CACHE_COALESCING_KEY_LIST_ALL = 'list:all';
+
+function formatPrimaryKeyCacheCoalescingKey(primaryKeyValue) {
+  if (primaryKeyValue === undefined || primaryKeyValue === null) {
+    return `${CACHE_COALESCING_KEY_PREFIX_PK}${CACHE_COALESCING_KEY_TYPE_NULL}`;
+  }
+  if (typeof primaryKeyValue === LOCAL_STR_STRING) {
+    return (
+      `${CACHE_COALESCING_KEY_PREFIX_PK}${CACHE_COALESCING_KEY_TYPE_STRING}` +
+      `${CACHE_COALESCING_KEY_SEPARATOR}${JSON.stringify(primaryKeyValue)}`
+    );
+  }
+  return (
+    `${CACHE_COALESCING_KEY_PREFIX_PK}${typeof primaryKeyValue}` +
+    `${CACHE_COALESCING_KEY_SEPARATOR}${String(primaryKeyValue)}`
+  );
+}
+
+function withDefaultCacheCoalescingKey(options, coalescingKey) {
+  if (options?.allowCoalescing === false || options?.coalescingKey) {
+    return options;
+  }
+  return {
+    ...options,
+    coalescingKey,
+  };
+}
 
 function unwrapRowReadResult(result) {
   if (Array.isArray(result)) {
@@ -251,6 +283,10 @@ class SystemMetadataOwnerBase {
 
   async readCachedByPrimaryKey(primaryKeyValue, options = {}) {
     const tableName = this.getTableName();
+    const cacheOptions = withDefaultCacheCoalescingKey(
+      options,
+      formatPrimaryKeyCacheCoalescingKey(primaryKeyValue),
+    );
     const result = await this.executeCacheRead((systemTableCache) => {
       if (!systemTableCache) {
         return [];
@@ -265,18 +301,22 @@ class SystemMetadataOwnerBase {
       return (systemTableCache.getAll(tableName) || []).filter((row) => {
         return row?.[this.getPrimaryKeyField()] === primaryKeyValue;
       });
-    }, options);
+    }, cacheOptions);
     return unwrapRowReadResult(result);
   }
 
   async listCachedRows(options = {}) {
     const tableName = this.getTableName();
+    const cacheOptions = withDefaultCacheCoalescingKey(
+      options,
+      CACHE_COALESCING_KEY_LIST_ALL,
+    );
     return this.executeCacheRead((systemTableCache) => {
       if (typeof systemTableCache?.getAll !== LOCAL_STR_FUNCTION) {
         return [];
       }
       return systemTableCache.getAll(tableName) || [];
-    }, options);
+    }, cacheOptions);
   }
 
   async filterCachedRows(cachePredicate, options = {}) {

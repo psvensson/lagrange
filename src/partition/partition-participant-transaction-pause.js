@@ -152,19 +152,19 @@ async function readParticipantReleaseFactsAssessment(handler, service,
           status.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
         return participantReleaseFactsAssessment(refusal);
       }
+      const refusalPaused = participantCutoverPauseOf(service) !== null;
       const refusalGeneration = replicaGenerationOf(handler, service, status);
       if (!participantReleaseGenerationValid(refusalGeneration)) {
         return participantReleaseFactsAssessment(refusal);
       }
       return participantReleaseFactsAssessment(refusal,
-        releaseFactsContext(build, refusalGeneration,
-          participantCutoverPauseOf(service) !== null, status));
+        releaseFactsContext(build, refusalGeneration, refusalPaused, status));
     }
+    const paused = participantCutoverPauseOf(service) !== null;
     const generation = replicaGenerationOf(handler, service, status);
     if (!participantReleaseGenerationValid(generation)) {
       return participantReleaseFactsAssessment(unavailable(FACT.GENERATION));
     }
-    const paused = participantCutoverPauseOf(service) !== null;
     const context = releaseFactsContext(build, generation, paused, status);
     const refused = membershipAssessment(membership, status, context,
       requireMembershipGeneration);

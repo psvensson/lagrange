@@ -172,6 +172,13 @@ function waitForConflictingRowKeyHolderToSettle(
       hasRowKeyWaitForCycle(service, session, rowKey, cyclePolicy)) {
     return Promise.resolve({waited: false, settled: false});
   }
+  if (session?.phase === PHASE.ACTIVE) {
+    const currentGen = readPartitionWriteGeneration(service.db);
+    if (currentGen !== session.generationBase &&
+        !canSessionTolerateCommittedGenerations(service, session, currentGen)) {
+      return Promise.resolve({waited: false, settled: false, rebaseRefused: true});
+    }
+  }
   return enqueueBoundedRowKeyWaiter(
     service, session, rowKey, resolveBoundedSettleWaitMs(service, timeoutMs));
 }
@@ -363,14 +370,11 @@ function classifyPartitionPrepareReservation(
 
 function findMinActiveGenerationBase(service) {
   let minGen = Infinity;
-  for (const session of SESSIONS.get(service)?.values() ?? []) {
-    if (typeof session.generationBase === 'number' && session.generationBase < minGen) {
-      minGen = session.generationBase;
-    }
+  for (const s of SESSIONS.get(service)?.values() ?? []) {
+    if (typeof s.generationBase === 'number') minGen = Math.min(minGen, s.generationBase);
   }
-  for (const entry of PREPARED_PARTICIPANT_ROW_KEYS.get(service)?.values() ?? []) {
-    const base = typeof entry.generationBase === 'number' ? entry.generationBase : 0;
-    if (base < minGen) minGen = base;
+  for (const e of PREPARED_PARTICIPANT_ROW_KEYS.get(service)?.values() ?? []) {
+    minGen = Math.min(minGen, typeof e.generationBase === 'number' ? e.generationBase : 0);
   }
   return minGen;
 }
@@ -433,11 +437,7 @@ function evictExcessRowKeys(service, scopedGens, committedGenMap) {
 }
 
 function pruneEntriesBelowMinGen(scopedGens, committedGenMap, minGen) {
-  if (scopedGens) {
-    for (const gen of [...scopedGens]) {
-      if (gen <= minGen) scopedGens.delete(gen);
-    }
-  }
+  if (scopedGens) for (const gen of [...scopedGens]) if (gen <= minGen) scopedGens.delete(gen);
   deleteCommittedRowKeysAtOrBelow(committedGenMap, minGen);
 }
 
@@ -504,23 +504,27 @@ function isScopedPreparedEntry(entry) {
   return Boolean(entry && !entry.hasUnscopedWrite && entry.rowKeys.size > 0);
 }
 
-function recordCommittedParticipantRowKeys(service, participantId, generation) {
-  if (!service || !participantId) return;
-  const preparedMap = PREPARED_PARTICIPANT_ROW_KEYS.get(service);
-  const entry = preparedMap?.get(participantId);
-  preparedMap?.delete(participantId);
-  const scoped = isScopedPreparedEntry(entry);
+function recordGenerationFootprintAndNotify(service, generation, scoped, rowKeys) {
   if (service.db?.open === true) {
-    const fp = scoped ? {scoped: true, hasUnscopedWrite: false, rowKeys: entry.rowKeys} : null;
+    const fp = scoped ? {scoped: true, hasUnscopedWrite: false, rowKeys} : null;
     recordPartitionWriteGenerationFootprint(service.db, generation, fp);
   }
   if (scoped) {
     perServiceSet(SCOPED_COMMIT_GENERATIONS, service).add(generation);
     const committedGenMap = perServiceMap(COMMITTED_ROW_KEY_GENERATIONS, service);
-    for (const rk of entry.rowKeys) committedGenMap.set(rk, generation);
+    for (const rk of rowKeys) committedGenMap.set(rk, generation);
   }
   pruneRetainedRowKeyHistory(service);
   notifyRowKeySettlementWaiters(service);
+}
+
+function recordCommittedParticipantRowKeys(service, participantId, generation) {
+  if (!service || !participantId) return;
+  const preparedMap = PREPARED_PARTICIPANT_ROW_KEYS.get(service);
+  const entry = preparedMap?.get(participantId);
+  preparedMap?.delete(participantId);
+  recordGenerationFootprintAndNotify(
+    service, generation, isScopedPreparedEntry(entry), entry?.rowKeys);
 }
 
 function areIntermediateGenerationsScoped(service, fromGen, toGen) {
@@ -560,34 +564,38 @@ function isSessionSchemaCurrent(service, session) {
     resolveTablePkMetadata(service).schemaVersion === session.schemaVersionBase;
 }
 
-function isScopedRowKeySession(service, session) {
-  return isRowKeyConcurrencyEnabled(service) && Boolean(session) &&
-    session.hasUnscopedWrite !== true && session.hasUnscopedRead !== true &&
-    session.touchedRowKeys instanceof Set && session.touchedRowKeys.size > 0 &&
-    isSessionSchemaCurrent(service, session);
-}
-
-function canAdvanceRowKeySessionGeneration(service, session, targetGeneration) {
-  hydrateDurablePreparedAndCommittedState(service);
-  if (!isScopedRowKeySession(service, session) ||
-      !areIntermediateGenerationsScoped(service, session.generationBase, targetGeneration) ||
-      hasPreparedConflictForSession(service, session)) {
-    return false;
-  }
-  return hasUnmodifiedRowKeySet(service, session, session.touchedRowKeys) &&
-    hasUnmodifiedRowKeySet(service, session, session.readRowKeys);
-}
-
-function canRebaseEmptyWaitingSession(service, session, targetGeneration) {
+function canSessionTolerateCommittedGenerations(service, session, targetGeneration) {
   if (!session || session.hasUnscopedRead === true || !isSessionSchemaCurrent(service, session)) {
     return false;
   }
+  const hasOps = Array.isArray(session.operations) && session.operations.length > 0;
+  if (hasOps && session.hasUnscopedWrite === true) return false;
+  const hasTouchedKeys = session.touchedRowKeys instanceof Set && session.touchedRowKeys.size > 0;
+  if (!hasOps && !hasTouchedKeys && (session.readKeyCount ?? 0) === 0) return true;
+  if (!isRowKeyConcurrencyEnabled(service)) return false;
   hydrateDurablePreparedAndCommittedState(service);
-  if (hasPreparedConflictForSession(service, session)) return false;
-  if ((session.readKeyCount ?? 0) === 0) return true;
-  return isRowKeyConcurrencyEnabled(service) &&
-    areIntermediateGenerationsScoped(service, session.generationBase, targetGeneration) &&
-    hasUnmodifiedRowKeySet(service, session, session.readRowKeys);
+  if (!areIntermediateGenerationsScoped(service, session.generationBase, targetGeneration) ||
+      !hasUnmodifiedRowKeySet(service, session, session.readRowKeys)) {
+    return false;
+  }
+  return !hasTouchedKeys || hasUnmodifiedRowKeySet(service, session, session.touchedRowKeys);
+}
+
+function canAdvanceRowKeySessionGeneration(service, session, targetGeneration) {
+  if (session?.hasUnscopedWrite === true ||
+      !(session?.touchedRowKeys instanceof Set) || session.touchedRowKeys.size === 0 ||
+      !canSessionTolerateCommittedGenerations(service, session, targetGeneration)) {
+    return false;
+  }
+  return !hasPreparedConflictForSession(service, session);
+}
+
+function canRebaseEmptyWaitingSession(service, session, targetGeneration) {
+  if (!canSessionTolerateCommittedGenerations(service, session, targetGeneration)) {
+    return false;
+  }
+  hydrateDurablePreparedAndCommittedState(service);
+  return !hasPreparedConflictForSession(service, session);
 }
 
 function buildDurablePreparedRowFootprint(service, row) {
@@ -636,20 +644,10 @@ function recordCommittedAutocommitRowKeys(service, command, generation) {
   const params = Array.isArray(command.params) ? command.params : [];
   const operationsFootprint =
     extractOperationsRowKeyFootprint(service, [{sql: command.sql, params}]);
-  if (service.db?.open === true) {
-    recordPartitionWriteGenerationFootprint(service.db, generation, operationsFootprint);
-  }
-  if (!operationsFootprint.scoped || operationsFootprint.hasUnscopedWrite ||
-      operationsFootprint.rowKeys.size === 0) {
-    pruneRetainedRowKeyHistory(service);
-    notifyRowKeySettlementWaiters(service);
-    return;
-  }
-  perServiceSet(SCOPED_COMMIT_GENERATIONS, service).add(generation);
-  const committedGenMap = perServiceMap(COMMITTED_ROW_KEY_GENERATIONS, service);
-  for (const rk of operationsFootprint.rowKeys) committedGenMap.set(rk, generation);
-  pruneRetainedRowKeyHistory(service);
-  notifyRowKeySettlementWaiters(service);
+  const scoped = Boolean(operationsFootprint.scoped &&
+    !operationsFootprint.hasUnscopedWrite && operationsFootprint.rowKeys.size > 0);
+  recordGenerationFootprintAndNotify(
+    service, generation, scoped, operationsFootprint.rowKeys);
 }
 
 function resetParticipantRowKeyHistory(service) {

@@ -835,12 +835,12 @@
       "commit": "dcbf6e2661cd011e68541f3f2f7f45d70c2415e0",
       "view": "tv-dator-3node-smoke",
       "passed": false,
-      "formationSec": 0,
+      "formationSec": 143.41,
       "semanticGate": {
         "status": "passed",
         "passedCount": 33
       },
-      "extraJoinerDurabilityPassed": false,
+      "extraJoinerDurabilityPassed": true,
       "workload": {
         "opsPerSec": 0,
         "accounting": {
@@ -861,28 +861,30 @@
           "ambiguousCommits": 0
         },
         "latencyMs": null
-      }
+      },
+      "failureStage": "workload",
+      "note": "Semantic gate (33/33) and extra-joiner durability passed; workload phase failed with warmup-failed / workload_unissued_requests:0/100."
     },
     {
       "commit": "55c78e6dcf91b4a853034dfa291a835a984f27d9",
       "view": "tv-dator-3node-smoke",
       "passed": true,
-      "formationSec": 0,
+      "formationSec": 140.45,
       "semanticGate": {
         "status": "passed",
         "passedCount": 33
       },
-      "extraJoinerDurabilityPassed": false,
+      "extraJoinerDurabilityPassed": true,
       "workload": {
-        "opsPerSec": 0,
+        "opsPerSec": 0.817,
         "accounting": {
           "offered": 100,
-          "issued": 0,
-          "unissued": 100,
-          "attempts": 0,
-          "committed": 0,
-          "conflicts": 0,
-          "conflictExhausted": 0,
+          "issued": 100,
+          "unissued": 0,
+          "attempts": 134,
+          "committed": 99,
+          "conflicts": 35,
+          "conflictExhausted": 1,
           "terminalFailures": {
             "product_error": 0,
             "correctness_failure": 0,
@@ -892,29 +894,34 @@
           "unresolved": 0,
           "ambiguousCommits": 0
         },
-        "latencyMs": null
+        "latencyMs": {
+          "samples": 99,
+          "p50": 46625.808,
+          "p95": 98632.626,
+          "p99": 101536.023
+        }
       }
     },
     {
       "commit": "a23d0dfc00170dd5e317aa0463b3e8f66c981e41",
       "view": "tv-dator-3node-smoke",
       "passed": true,
-      "formationSec": 0,
+      "formationSec": 133.51,
       "semanticGate": {
         "status": "passed",
         "passedCount": 33
       },
-      "extraJoinerDurabilityPassed": false,
+      "extraJoinerDurabilityPassed": true,
       "workload": {
-        "opsPerSec": 0,
+        "opsPerSec": 0.819,
         "accounting": {
           "offered": 100,
-          "issued": 0,
-          "unissued": 100,
-          "attempts": 0,
-          "committed": 0,
-          "conflicts": 0,
-          "conflictExhausted": 0,
+          "issued": 100,
+          "unissued": 0,
+          "attempts": 140,
+          "committed": 97,
+          "conflicts": 43,
+          "conflictExhausted": 3,
           "terminalFailures": {
             "product_error": 0,
             "correctness_failure": 0,
@@ -924,7 +931,12 @@
           "unresolved": 0,
           "ambiguousCommits": 0
         },
-        "latencyMs": null
+        "latencyMs": {
+          "samples": 97,
+          "p50": 40640.058,
+          "p95": 96546.787,
+          "p99": 98678.84
+        }
       }
     }
   ]

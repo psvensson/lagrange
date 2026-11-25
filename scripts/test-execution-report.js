@@ -40,6 +40,14 @@ const EXECUTION_REPORT_PATH = 'test-output/reports/execution-report.json';
 const UTF8 = 'utf8';
 const NEWLINE = '\n';
 const FULL_SHA = /^[0-9a-f]{40}$/u;
+const HEX_DIGEST = /^[0-9a-f]{64}$/u;
+const SUMMARY_TOTAL_KEYS = Object.freeze([
+  'planned', 'executed', 'assertions', 'runs', 'passedOnRetry',
+]);
+const RECEIPT_OUTCOME = Object.freeze({
+  PASSED: 'passed',
+  QUALIFIED: 'passed-qualified',
+});
 
 const SECTION_KIND = Object.freeze({START: 'start', END: 'end'});
 const GIT_REV_PARSE = 'rev-parse';
@@ -86,6 +94,27 @@ const EXECUTION_PROBLEM = Object.freeze({
   PASSED_ON_RETRY: 'execution-report-passed-on-retry',
   REUSED_PROOF_UNPROVEN: 'execution-report-reused-proof-unproven',
   REUSED_PROOF_NOT_CITABLE: 'execution-report-reused-proof-not-citable',
+});
+
+// Structural validation messages for a proof receipt's execution payload.
+const RECEIPT_STRUCTURE_PROBLEM = Object.freeze({
+  EXECUTION_MISSING: 'receipt execution is missing',
+  EXECUTION_DIGEST_INVALID: 'receipt execution is missing a valid reportDigest',
+  EXECUTION_PRODUCER_MISSING: 'receipt execution is missing producer identity',
+  QUALIFICATION_NOT_ARRAY: 'receipt execution qualification must be an array',
+  SUMMARY_MISSING: 'receipt execution summary is missing',
+  SUMMARY_TOTALS_MISSING: 'receipt execution summary is missing required execution totals',
+  SUMMARY_COMMANDS_MISSING: 'receipt execution summary has no recorded passing commands',
+  SUMMARY_REUSED_PROOFS_MISSING: 'receipt execution summary is missing reusedProofs list',
+  SUMMARY_EMPTY_PLAN: 'receipt execution summary has no planned tests or reused proofs',
+  SUMMARY_INCOMPLETE_RUN: 'receipt execution does not record a complete passing run',
+  RETRY_REFUSED_BY_CONTRACT: 'contract does not allow retry-qualified tests',
+  QUALIFIED_OUTCOME_MISMATCH: 'retry-qualified execution requires outcome passed-qualified',
+  QUALIFICATION_COUNT_MISMATCH: 'receipt qualification count does not match passedOnRetry',
+  QUALIFICATION_ENTRY_INCOMPLETE: 'receipt qualification entry is incomplete',
+  UNQUALIFIED_OUTCOME_MISMATCH: 'unqualified execution requires outcome passed',
+  UNQUALIFIED_CARRIES_ENTRIES: 'unqualified receipt must not carry qualification entries',
+  IDENTITY_REQUIRED: 'receipt identity is required for identity-reusable contract',
 });
 
 // --- writing (runner and producers) ----------------------------------------
@@ -258,11 +287,31 @@ function isList(value) {
   return Array.isArray(value);
 }
 
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isNonEmptyString(value) {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function isHexDigest(value) {
+  return typeof value === 'string' && HEX_DIGEST.test(value);
+}
+
+function hasProducerIdentity(producer) {
+  return isPlainObject(producer) && isNonEmptyString(producer.kind) &&
+    isNonEmptyString(producer.id);
+}
+
 function partialFields(report) {
   const missing = [];
-  if (!report.candidate || typeof report.candidate !== 'object') missing.push(REPORT_FIELD.CANDIDATE);
-  if (!report.producer?.kind || !report.producer?.id) missing.push(REPORT_FIELD.PRODUCER);
-  if (!isList(report.commands) || report.commands.length === 0) missing.push(REPORT_FIELD.COMMANDS);
+  if (!isPlainObject(report.candidate)) missing.push(REPORT_FIELD.CANDIDATE);
+  if (!hasProducerIdentity(report.producer)) missing.push(REPORT_FIELD.PRODUCER);
+  if (!isList(report.commands) || report.commands.length === 0 ||
+      !report.commands.every((command) => isNonEmptyString(command?.label))) {
+    missing.push(REPORT_FIELD.COMMANDS);
+  }
   if (!isList(report.planned)) missing.push(REPORT_FIELD.PLANNED);
   if (!isList(report.runs)) missing.push(REPORT_FIELD.RUNS);
   if (!isList(report.reusedProofs)) missing.push(REPORT_FIELD.REUSED_PROOFS);
@@ -463,6 +512,126 @@ function executionReportProblems(report, {sha, tree, identity = null,
   };
 }
 
+function isNonNegativeInteger(value) {
+  return Number.isInteger(value) && value >= 0;
+}
+
+function validSummaryCommand(command) {
+  return isPlainObject(command) && isNonEmptyString(command.label) &&
+    command.exitStatus === 0;
+}
+
+function validQualificationEntry(entry) {
+  return isPlainObject(entry) && isNonEmptyString(entry.file) &&
+    Array.isArray(entry.attempts) && entry.attempts.length > 1;
+}
+
+function citesContractProof(summary, contract) {
+  return Array.isArray(summary?.reusedProofs) &&
+    Array.isArray(contract?.citableProofs) &&
+    summary.reusedProofs.some((cited) => contract.citableProofs.includes(cited?.proofId));
+}
+
+function summaryStructureProblems(summary, contract) {
+  if (!isPlainObject(summary)) {
+    return [RECEIPT_STRUCTURE_PROBLEM.SUMMARY_MISSING];
+  }
+  const problems = [];
+  const hasTotals = SUMMARY_TOTAL_KEYS.every((key) => isNonNegativeInteger(summary[key]));
+  if (!hasTotals) {
+    problems.push(RECEIPT_STRUCTURE_PROBLEM.SUMMARY_TOTALS_MISSING);
+  }
+  if (!Array.isArray(summary.commands) || summary.commands.length === 0 ||
+      !summary.commands.every(validSummaryCommand)) {
+    problems.push(RECEIPT_STRUCTURE_PROBLEM.SUMMARY_COMMANDS_MISSING);
+  }
+  if (!Array.isArray(summary.reusedProofs)) {
+    problems.push(RECEIPT_STRUCTURE_PROBLEM.SUMMARY_REUSED_PROOFS_MISSING);
+  } else if (hasTotals && summary.planned === 0 && summary.reusedProofs.length === 0) {
+    problems.push(RECEIPT_STRUCTURE_PROBLEM.SUMMARY_EMPTY_PLAN);
+  } else if (hasTotals && contract && !citesContractProof(summary, contract) &&
+      (summary.planned <= 0 || summary.executed < summary.planned ||
+        summary.runs <= 0 || summary.assertions <= 0)) {
+    problems.push(RECEIPT_STRUCTURE_PROBLEM.SUMMARY_INCOMPLETE_RUN);
+  }
+  return problems;
+}
+
+function qualificationStructureProblems({summary, qualification, outcome, contract}) {
+  if (!contract || !isPlainObject(summary) || !isNonNegativeInteger(summary.passedOnRetry)) {
+    return [];
+  }
+  const problems = [];
+  if (contract.retryPolicy === RETRY_POLICY.REFUSE && summary.passedOnRetry > 0) {
+    problems.push(RECEIPT_STRUCTURE_PROBLEM.RETRY_REFUSED_BY_CONTRACT);
+  }
+  if (summary.passedOnRetry > 0) {
+    if (outcome !== RECEIPT_OUTCOME.QUALIFIED) {
+      problems.push(RECEIPT_STRUCTURE_PROBLEM.QUALIFIED_OUTCOME_MISMATCH);
+    }
+    if (!Array.isArray(qualification) || qualification.length !== summary.passedOnRetry) {
+      problems.push(RECEIPT_STRUCTURE_PROBLEM.QUALIFICATION_COUNT_MISMATCH);
+    } else if (!qualification.every(validQualificationEntry)) {
+      problems.push(RECEIPT_STRUCTURE_PROBLEM.QUALIFICATION_ENTRY_INCOMPLETE);
+    }
+  } else {
+    if (outcome !== RECEIPT_OUTCOME.PASSED) {
+      problems.push(RECEIPT_STRUCTURE_PROBLEM.UNQUALIFIED_OUTCOME_MISMATCH);
+    }
+    if (Array.isArray(qualification) && qualification.length > 0) {
+      problems.push(RECEIPT_STRUCTURE_PROBLEM.UNQUALIFIED_CARRIES_ENTRIES);
+    }
+  }
+  return problems;
+}
+
+function receiptIdentityProblems({contract, receipt, identity, mismatchMessage}) {
+  const carried = receipt?.identity;
+  if (contract?.identityReuse) {
+    if (!isNonEmptyString(carried?.algorithm) || !isHexDigest(carried?.digest)) {
+      return [RECEIPT_STRUCTURE_PROBLEM.IDENTITY_REQUIRED];
+    }
+    if (identity && (carried.algorithm !== identity.algorithm ||
+        carried.digest !== identity.digest)) {
+      return [mismatchMessage];
+    }
+  } else if (identity && carried && (carried.algorithm !== identity.algorithm ||
+      carried.digest !== identity.digest)) {
+    return [mismatchMessage];
+  }
+  return [];
+}
+
+/**
+ * Validate the structural integrity of a proof receipt's `execution` payload
+ * and its agreement with the receipt's `outcome` and contract retry policy.
+ * @param {{execution: Object|null|undefined, outcome?: string, contract?: Object|null}} [input]
+ * @return {string[]}
+ */
+function receiptExecutionStructureProblems({execution, outcome, contract} = {}) {
+  if (!isPlainObject(execution)) {
+    return [RECEIPT_STRUCTURE_PROBLEM.EXECUTION_MISSING];
+  }
+  const problems = [];
+  if (!isHexDigest(execution.reportDigest)) {
+    problems.push(RECEIPT_STRUCTURE_PROBLEM.EXECUTION_DIGEST_INVALID);
+  }
+  if (!hasProducerIdentity(execution.producer)) {
+    problems.push(RECEIPT_STRUCTURE_PROBLEM.EXECUTION_PRODUCER_MISSING);
+  }
+  problems.push(...summaryStructureProblems(execution.summary, contract));
+  if (execution.qualification !== undefined && !Array.isArray(execution.qualification)) {
+    problems.push(RECEIPT_STRUCTURE_PROBLEM.QUALIFICATION_NOT_ARRAY);
+  }
+  problems.push(...qualificationStructureProblems({
+    summary: execution.summary,
+    qualification: execution.qualification,
+    outcome,
+    contract,
+  }));
+  return problems;
+}
+
 export {
   EXECUTION_PROBLEM,
   EXECUTION_REPORT_PATH,
@@ -473,11 +642,17 @@ export {
   SECTION_KIND,
   appendExecutionSection,
   buildExecutionReport,
+  citesContractProof,
   describeCheckout,
   executionReportProblems,
   fileResultRecord,
+  hasProducerIdentity,
+  isHexDigest,
+  isNonEmptyString,
   openExecutionSections,
   readExecutionReport,
   readExecutionRuns,
+  receiptExecutionStructureProblems,
+  receiptIdentityProblems,
   writeExecutionReport,
 };

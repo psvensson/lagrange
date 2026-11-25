@@ -41,7 +41,7 @@ Network delay is a controlled impairment of actual traffic and must be verified 
 - `unsupported`: the configuration cannot express this claim
 - `not-measured`: no observation exists
 
-Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 31 entries; 10 of them name the defect ids behind the withdrawal and 10 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 33 of 76 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
+Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 32 entries; 10 of them name the defect ids behind the withdrawal and 11 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 33 of 78 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
 
 ## Related pages
 
@@ -54,4 +54,4 @@ Every comparative result published before 2026-11-01 was withdrawn; the records 
 
 - `data/tidb-comparison/raw-observations.ndjson` sha256:da4fcfeaf2bad9e542f5218beaf2c2101a9094da9a92896c9287b7ce915bcad3
 - `data/tidb-comparison/forensic/raw-observations-86e795c44.ndjson` sha256:79698d1b6cd709d227c9712e75c3471243ee99f473212c495ad15c6c1e96f32e
-- `data/tidb-comparison/invalidations.ndjson` sha256:454765469cea50f7edda0d7bd9efd731b6101ff8c06a2397265adcc6f5a4c521
+- `data/tidb-comparison/invalidations.ndjson` sha256:688afc8c2a4b8ded5191d95d3c9965bf245c5659d2f0db1c58420d2563229ed7

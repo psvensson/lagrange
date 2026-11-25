@@ -23,6 +23,7 @@
 // exactly as SQL does, and nothing uncommitted outlives the transaction.
 
 const CONNECTION_STATE = Symbol('sqliteConnectionState');
+const SCHEMA_VERSION_SQL = 'SELECT schema_version AS sv FROM pragma_schema_version';
 
 /**
  * The statements and committed facts of one SQLite connection.
@@ -147,6 +148,18 @@ class SqliteConnectionState {
   getNonApplicationChanges() {
     this.#observeConnection();
     return this.#nonApplicationChanges;
+  }
+
+  /**
+   * Read the connection's current `pragma_schema_version` via a retained
+   * prepared statement instead of recompiling a fresh `PRAGMA` query.
+   * @return {number} Current schema version, or 0 when closed.
+   */
+  schemaVersion() {
+    if (!this.#observeConnection()) {
+      return 0;
+    }
+    return this.statement(SCHEMA_VERSION_SQL).get()?.sv ?? 0;
   }
 
   /**

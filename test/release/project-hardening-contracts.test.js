@@ -425,7 +425,22 @@ describe('project hardening contracts', () => {
     assert.match(releaseText, /git cat-file -t/u);
     assert.match(releaseText, /git merge-base --is-ancestor/u);
     assert.match(releaseText, /refs\/remotes\/origin\/main/u);
-    assert.match(releaseText, /npm run build:all/u);
+    assert.equal(
+      (releaseText.match(/\bnpm run build:bundle\b/gu) || []).length,
+      1,
+      'release.yml invokes npm run build:bundle once',
+    );
+    assert.match(releaseText, /\bnpm run build:sea\b/u);
+    assert.doesNotMatch(releaseText, /\bnpm run build:all\b/u);
+    const buildExecutablesText = await readFile('scripts/build-executables.sh', UTF8);
+    assert.doesNotMatch(
+      buildExecutablesText,
+      /build-sea\.js/u,
+      'build-executables.sh must not re-invoke build-sea.js',
+    );
+    assert.match(buildExecutablesText, /index\.bundle\.cjs/u);
+    assert.match(buildExecutablesText, /admin-cli\.bundle\.cjs/u);
+    assert.match(buildExecutablesText, /runtime-content-manifest\.json/u);
     assert.match(releaseText, /helm package charts\/lagrange-node/u);
     assert.match(releaseText, /SHA256SUMS/u);
     assert.match(

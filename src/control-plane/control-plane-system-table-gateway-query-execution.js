@@ -253,6 +253,17 @@ function buildImplicitReadRequestKey(tableName, sql, params, options) {
   });
 }
 
+function hasUnkeyedProjectionClosure(options) {
+  return Boolean(options?.readFromCache || options?.cachePredicate);
+}
+
+function hasInlineBootstrapSnapshot(options) {
+  return Boolean(
+    options?.readBootstrapSnapshot ||
+    Array.isArray(options?.bootstrapSnapshotRows),
+  );
+}
+
 const controlPlaneSystemTableGatewayQueryExecutionMethods = {
   admitReadPressure(tableName, options = {}) {
     return this.getPressureGovernor().admit(buildPressureAdmissionRequest(
@@ -272,7 +283,11 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
     if (explicitKey) {
       return buildExplicitReadRequestKey(tableName, explicitKey, options);
     }
-    if (options?.allowCoalescing === false) {
+    if (
+      options?.allowCoalescing === false ||
+      hasUnkeyedProjectionClosure(options) ||
+      hasInlineBootstrapSnapshot(options)
+    ) {
       return null;
     }
     return buildImplicitReadRequestKey(

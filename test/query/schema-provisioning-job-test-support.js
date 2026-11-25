@@ -128,6 +128,7 @@ function createService(gateway, provisionCalls, overrides = {}) {
       return {
         resolvedReplicaCount: 3,
         routableReplicaCount: 3,
+        committedReplicaCount: 3,
         fullReplicaCountConverged: true,
         contractState: 'ready',
         nextAction: 'proceed',

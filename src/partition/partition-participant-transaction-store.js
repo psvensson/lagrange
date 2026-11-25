@@ -49,12 +49,12 @@ import {
 const ONE_ROW = 1;
 const ZERO = 0;
 const EMPTY_JSON_ARRAY_TEXT = '[]';
-const PRAGMA_SCHEMA_VERSION = 'schema_version';
 const BINARY_COLLATION = 'BINARY';
 const DOUBLE_QUOTE = '"';
 const ESCAPED_DOUBLE_QUOTE = '""';
 const EVENT_KIND_PARTICIPANT = 'participant';
 const EVENT_KIND_STATEMENT = 'statement';
+const GENERATION_TABLE_FACT = 'partition-generation-table-exists';
 const FOOTPRINT_MEMO_KEY = Symbol('participantTableFootprintMemo');
 const EMPTY_FOOTPRINT_METADATA = Object.freeze({
   pkCols: Object.freeze([]),
@@ -140,9 +140,14 @@ function readPartitionWriteGeneration(db) {
 
 function readOptionalPartitionWriteGeneration(db) {
   if (!db || db.open === false) return null;
-  const present = sqliteConnectionState(db)
-    .statement(SQL.GENERATION_TABLE_EXISTS)
-    .get(SQL.GENERATION_TABLE);
+  const connState = sqliteConnectionState(db);
+  const schemaVersion = connState.schemaVersion();
+  const present = connState.schemaVersionedFact(
+    GENERATION_TABLE_FACT,
+    SQL.GENERATION_TABLE,
+    schemaVersion,
+    () => Boolean(connState.statement(SQL.GENERATION_TABLE_EXISTS).get(SQL.GENERATION_TABLE)),
+  );
   if (!present) return null;
   const gen = readPartitionWriteGeneration(db);
   return Number.isSafeInteger(gen) ? gen : null;
@@ -668,12 +673,7 @@ function readTableFootprintMetadata(db, tableName) {
   if (!db || db.open !== true || !tableName) {
     return EMPTY_FOOTPRINT_METADATA;
   }
-  let schemaVersion = ZERO;
-  try {
-    schemaVersion = Number(db.pragma(PRAGMA_SCHEMA_VERSION, {simple: true})) || ZERO;
-  } catch {
-    schemaVersion = ZERO;
-  }
+  const schemaVersion = sqliteConnectionState(db).schemaVersion();
   let byTable = db[FOOTPRINT_MEMO_KEY];
   if (!byTable) {
     byTable = new Map();

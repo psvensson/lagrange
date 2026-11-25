@@ -134,8 +134,11 @@ async function runOneConflictWaitStep(service, payload, participantAnswer, origi
   if (!waitOutcome.settled) {
     return {
       done: true,
-      answer: finishTerminalRowKeyWaitReevaluation(
-        service, session, activeReceipt, null, participantAnswer),
+      answer: waitOutcome.rebaseRefused === true ?
+        finishRebaseRefusedRowKeyWaitReevaluation(
+          service, session, activeReceipt, participantAnswer) :
+        finishTerminalRowKeyWaitReevaluation(
+          service, session, activeReceipt, null, participantAnswer),
     };
   }
   return reevaluateWaitingRowKeyQuery(

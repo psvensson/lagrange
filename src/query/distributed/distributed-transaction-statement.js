@@ -15,6 +15,7 @@ import {resolveNowMs} from './distributed-transaction-telemetry.js';
 
 const LOCAL_STR_TYPED_CANCELLED = 'typed_transaction_cancelled';
 const ROW_KEY_WAIT_CYCLE_DETECTED = 'ROW_KEY_WAIT_CYCLE_DETECTED';
+const SETTLED_STATUS_REJECTED = 'rejected';
 
 function settledCycleRollbacksOf(coordinator) {
   if (coordinator.settledCycleRollbacksBySession === undefined) {
@@ -126,7 +127,7 @@ const distributedTransactionStatementMethods = {
    * @return {Promise<Object>}
    */
   async executeWriteStatement(sessionId, operation, executeWrite,
-    expectedTransactionId = this.getTransaction(sessionId)?.transactionId) {
+    expectedTransactionId = this.transactionsBySession.get(sessionId)?.transactionId) {
     return this.runTransactionOperation(sessionId, async () => {
       const admission = admitExpectedTransaction(this, sessionId,
         expectedTransactionId);
@@ -137,16 +138,34 @@ const distributedTransactionStatementMethods = {
       const enlistResult = await this.enlistParticipantsOwned(
         sessionId,
         operation.partitionIds,
+        PARTICIPANT_ENLISTMENT_MODE.AUTHORITATIVE,
+        {deferActivePersistence: true},
       );
       if (enlistResult.success !== true) {
         return enlistResult;
       }
+      // Retain sql_transaction_participants ACTIVE state concurrently with
+      // partition QUERY execution; beginParticipant already established the
+      // partition session, so both only need to finish before outcome bookkeeping.
+      const persistActivePromise = enlistResult.persistActiveParticipants ?
+        enlistResult.persistActiveParticipants() :
+        Promise.resolve();
       await this.recordWriteOperation(sessionId, operation, {
         deferPersistence: true,
       });
       const tx = this.transactionsBySession.get(sessionId);
-      const result = await executeWrite(tx ?
-        statementTransactionIdentityOf(tx) : null);
+      const [persistSettled, writeSettled] = await Promise.allSettled([
+        persistActivePromise,
+        Promise.resolve().then(() =>
+          executeWrite(tx ? statementTransactionIdentityOf(tx) : null)),
+      ]);
+      if (persistSettled.status === SETTLED_STATUS_REJECTED) {
+        throw persistSettled.reason;
+      }
+      if (writeSettled.status === SETTLED_STATUS_REJECTED) {
+        throw writeSettled.reason;
+      }
+      const result = writeSettled.value;
       await this.markWriteOperationResult(
         sessionId,
         operation.operationId,

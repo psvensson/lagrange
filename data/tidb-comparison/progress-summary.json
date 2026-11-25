@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "totalRecords": 76,
+  "totalRecords": 78,
   "totalCombinations": 53,
   "entries": [
     {
@@ -2363,7 +2363,7 @@
       }
     },
     {
-      "recordSha256": "c2b582b1badbf88d6522840a2f071bcc8d3f05717a938a5e4a93cab1a6cc0c53",
+      "recordSha256": "ddd8d9c0c1a723eb88b92c894f5856ecf5e8bde5969242eb146458e24e8b7f3a",
       "combinationSha256": "1d1773b5eec8e382610087d0b124170342e5335258084cdbedfa57beda54514b",
       "recordedAt": "2026-11-24T18:16:14.464Z",
       "framework": {
@@ -2400,7 +2400,7 @@
         "artifactKind": "lab-tv-dator-receipt-json",
         "sourcePath": "/mnt/data/peter/projects/lagrange-takeover-20261121/lab/lab-bench-55c78e6dc/tv-dator-3node-smoke/receipt.json"
       },
-      "recordsForCombination": 1,
+      "recordsForCombination": 2,
       "admission": {
         "status": "invalid-measurement",
         "reasons": [
@@ -2457,7 +2457,7 @@
       }
     },
     {
-      "recordSha256": "f1a3930965ce3abe18f1a35a812d869c53437ce4b29a75aec5dfb03c95ade409",
+      "recordSha256": "8043e58d98f7eb16da8e32c82e367e896f7784effd2a541e5e338684dc4b65d4",
       "combinationSha256": "f22c3c94d81bb31d074d73d831b9e5770c06c2baaaf0047e3d74b6bf85038754",
       "recordedAt": "2026-11-24T19:57:43.996Z",
       "framework": {
@@ -2494,7 +2494,7 @@
         "artifactKind": "lab-tv-dator-receipt-json",
         "sourcePath": "/mnt/data/peter/projects/lagrange-takeover-20261121/lab/lab-bench-a23d0dfc0/tv-dator-3node-smoke/receipt.json"
       },
-      "recordsForCombination": 1,
+      "recordsForCombination": 2,
       "admission": {
         "status": "invalid-measurement",
         "reasons": [
@@ -2552,12 +2552,12 @@
     }
   ],
   "withdrawal": {
-    "ledgerEntries": 31,
+    "ledgerEntries": 32,
     "entriesWithDefectIds": 10,
-    "entriesWithRecordIds": 10,
-    "historyRecords": 76,
+    "entriesWithRecordIds": 11,
+    "historyRecords": 78,
     "historyRecordsWithoutEntry": 33,
     "admissionRule": "forensic-record-not-admissible"
   },
-  "summarySha256": "cde933af7af4e6566063219847732dd9c8f84332ee553a91401b9bb399400cfa"
+  "summarySha256": "5bb113c02dd1c0dd9af2d564a2d9d50de5ef3aed6bb4b934012a5ba966c2ec74"
 }

@@ -10,7 +10,10 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   CONTROL_PLANE_MUTATION_MERGE_POLICY,
   CONTROL_PLANE_READ_LEADER_MODE,
+  ControlPlaneSystemTableGateway,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {CDC_OPERATION} from '../../src/constants/index.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
@@ -651,4 +654,98 @@ test('A system metadata owner write whose retry budget is spent names its ' +
     tableName: TABLES.NODES,
     operation: 'update',
   }, 'scope names the owner, its table and the operation');
+});
+
+test('Bug 3C Witness: SystemMetadataOwnerBase cached key, list, and filter reads never ' +
+  'coalesce across distinct queries through ControlPlaneSystemTableGateway', async (t) => {
+  const systemTableCache = new SystemTableCache();
+  const opLogs = {
+    operation_id: 'pl-logs-p1-738-0',
+    partition_id: 'logs-p1',
+    entity_type: 'partition',
+    entity_id: 'logs-p1',
+  };
+  const opBindings = {
+    operation_id: 'pl-service_bindings-p1-1019-0',
+    partition_id: 'service_bindings-p1',
+    entity_type: 'partition',
+    entity_id: 'service_bindings-p1',
+  };
+  systemTableCache.applySystemTableChange(
+    TABLES.REPLICA_OPERATIONS, CDC_OPERATION.INSERT, opLogs,
+  );
+  systemTableCache.applySystemTableChange(
+    TABLES.REPLICA_OPERATIONS, CDC_OPERATION.INSERT, opBindings,
+  );
+  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
+    service_id: 'svc-node-1',
+    node_id: 'node-1',
+  });
+  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
+    service_id: 'svc-node-2',
+    node_id: 'node-2',
+  });
+
+  const gateway = new ControlPlaneSystemTableGateway({
+    nodeId: 'node-1',
+    systemTableCache,
+    pressureGovernor: {
+      configure() {},
+      async admit() {
+        await Promise.resolve();
+        return {action: 'allow', reason: 'test-allow'};
+      },
+    },
+  });
+  const opsOwner = new ReplicaOperationsOwner({
+    controlPlaneSystemTableGateway: gateway,
+    systemTableCache,
+  });
+  const servicesOwner = new ServicesOwner({
+    controlPlaneSystemTableGateway: gateway,
+    systemTableCache,
+  });
+
+  const [readLogsOp, readBindingsOp, listOps] = await Promise.all([
+    opsOwner.getReplicaOperationFromCache('pl-logs-p1-738-0'),
+    opsOwner.getReplicaOperationFromCache('pl-service_bindings-p1-1019-0'),
+    opsOwner.listReplicaOperationsFromCache(),
+  ]);
+
+  t.equal(
+    readLogsOp?.operation_id,
+    'pl-logs-p1-738-0',
+    'first keyed cache read should return logs-p1 operation',
+  );
+  t.equal(
+    readBindingsOp?.operation_id,
+    'pl-service_bindings-p1-1019-0',
+    'concurrent second keyed cache read must return service_bindings-p1 operation',
+  );
+  t.same(
+    listOps.rows.map((row) => row.operation_id).sort(),
+    ['pl-logs-p1-738-0', 'pl-service_bindings-p1-1019-0'],
+    'concurrent listCachedRows must return all rows without colliding with keyed reads',
+  );
+
+  const [node1Services, node2Services] = await Promise.all([
+    servicesOwner.listServicesForNodeFromCache('node-1'),
+    servicesOwner.listServicesForNodeFromCache('node-2'),
+  ]);
+  t.same(node1Services.rows.map((row) => row.service_id), ['svc-node-1']);
+  t.same(node2Services.rows.map((row) => row.service_id), ['svc-node-2']);
+
+  // Verify explicit allowCoalescing: false prevents joining an identical keyed read.
+  t.equal(gateway.getStats().metrics.readSingleFlightJoinCount, 0);
+  const [noCoalesceA, noCoalesceB] = await Promise.all([
+    opsOwner.getReplicaOperationFromCache('pl-logs-p1-738-0'),
+    opsOwner.getReplicaOperationFromCache('pl-logs-p1-738-0', {allowCoalescing: false}),
+  ]);
+  t.equal(noCoalesceA?.operation_id, 'pl-logs-p1-738-0');
+  t.equal(noCoalesceB?.operation_id, 'pl-logs-p1-738-0');
+  t.equal(
+    gateway.getStats().metrics.readSingleFlightJoinCount,
+    0,
+    'allowCoalescing: false must bypass default primary-key coalescing',
+  );
 });

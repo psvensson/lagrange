@@ -4,13 +4,15 @@
 
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {trackSyncSection} from '../diagnostics/event-loop-gap-watchdog.js';
-import {extractConjunctiveWhereColumns} from './partition-sql-parser.js';
+import {
+  extractDataFromParameterizedSQL,
+  extractUpdateWhereColumns,
+} from './partition-sql-parser.js';
 import {admitCdcRowFetchLog} from './partition-cdc-log-throttle.js';
 import {
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_LOG_MSG,
-  PARTITION_SERVICE_SQL_FRAGMENT,
-  PARTITION_SERVICE_VALUE,
+  PARTITION_SERVICE_OPERATION,
 } from './partition-service-constants.js';
 
 const CDC_SYNC_SECTION = Object.freeze({
@@ -35,46 +37,20 @@ export function extractParamInsertData({
   logger,
   fetchInsertRow,
 }) {
-  const columnsMatch = sql.match(
-    /INSERT\s+(?:OR\s+(?:REPLACE|IGNORE)\s+)?INTO\s+\w+\s*\(([^)]+)\)/i,
+  const data = extractDataFromParameterizedSQL(
+    sql,
+    params,
+    tableName,
+    PARTITION_SERVICE_OPERATION.INSERT,
+    logger,
   );
-  if (!columnsMatch) {
-    logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_PARAM_INSERT_COLUMNS_FAILED, {
-      sql: sql.substring(
-        0,
-        PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
-      ),
-    });
+  const columns = Object.keys(data);
+  if (columns.length === 0) {
     return {};
   }
 
-  const columns = columnsMatch[1].split(
-    PARTITION_SERVICE_SQL_FRAGMENT.COMMA,
-  ).map((c) => c.trim());
-  if (columns.length !== params.length) {
-    logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARAM_INSERT_MISMATCH, {
-      columns: columns.length,
-      params: params.length,
-    });
-    return {};
-  }
-
-  const data = {};
-  for (let i = 0; i < columns.length; i++) {
-    data[columns[i]] = params[i];
-  }
-
-  logger.debug(PARTITION_SERVICE_LOG_MSG.EXTRACTED_PARAM_INSERT, {
-    tableName,
-    dataKeys: Object.keys(data),
-  });
-
-  return fetchInsertRow(
-    tableName,
-    columns[0],
-    data[columns[0]],
-    data,
-  );
+  const keyColumn = columns[0];
+  return fetchInsertRow(tableName, keyColumn, data[keyColumn], data);
 }
 
 /**
@@ -94,64 +70,23 @@ export function extractParamUpdateData({
   logger,
   fetchUpdatedRow,
 }) {
-  const setMatch = sql.match(/\bSET\s+([\s\S]+?)\s+\bWHERE\b/i);
-  const whereMatch = sql.match(/\bWHERE\s+([\s\S]+)$/i);
-
-  if (!setMatch) {
-    logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_PARAM_UPDATE_SET_FAILED, {
-      sql: sql.substring(
-        0,
-        PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
-      ),
-    });
-    return {};
-  }
-
-  const setColumns = setMatch[1].split(
-    PARTITION_SERVICE_SQL_FRAGMENT.COMMA,
-  ).map((part) => {
-    const match = part.trim().match(/^(\w+)\s*=/);
-    return match ? match[1] : null;
-  }).filter(Boolean);
-
-  const whereColumns = whereMatch ?
-    extractConjunctiveWhereColumns(whereMatch[1]) :
-    [];
-
-  const allColumns = [...setColumns, ...whereColumns];
-  if (allColumns.length !== params.length) {
-    logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARAM_UPDATE_MISMATCH, {
-      columns: allColumns.length,
-      params: params.length,
-    });
-    return {};
-  }
-
-  const data = {};
-  let paramIndex = 0;
-  for (const column of setColumns) {
-    data[column] = params[paramIndex];
-    paramIndex += 1;
-  }
-  for (const column of whereColumns) {
-    const value = params[paramIndex];
-    paramIndex += 1;
-    if (!Object.prototype.hasOwnProperty.call(data, column)) {
-      data[column] = value;
-    }
-  }
-
-  logger.debug(PARTITION_SERVICE_LOG_MSG.EXTRACTED_PARAM_UPDATE, {
+  const data = extractDataFromParameterizedSQL(
+    sql,
+    params,
     tableName,
-    dataKeys: Object.keys(data),
-  });
+    PARTITION_SERVICE_OPERATION.UPDATE,
+    logger,
+  );
+  if (Object.keys(data).length === 0) {
+    return {};
+  }
 
+  const whereColumns = extractUpdateWhereColumns(sql);
   const whereClause = {};
-  for (let i = 0; i < whereColumns.length; i++) {
-    const col = whereColumns[i];
-    whereClause[col] = Object.prototype.hasOwnProperty.call(data, col) ?
-      data[col] :
-      params[setColumns.length + i];
+  for (const col of whereColumns) {
+    if (Object.prototype.hasOwnProperty.call(data, col)) {
+      whereClause[col] = data[col];
+    }
   }
 
   const authoritativeRow = fetchUpdatedRow(tableName, whereClause);
@@ -177,40 +112,13 @@ export function extractParamDeleteData({
   tableName,
   logger,
 }) {
-  const whereMatch = sql.match(/\bWHERE\s+([\s\S]+)$/i);
-  if (!whereMatch) {
-    logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_PARAM_DELETE_WHERE_FAILED, {
-      sql: sql.substring(
-        0,
-        PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
-      ),
-    });
-    return {};
-  }
-
-  const whereContent = whereMatch[1].trim();
-  const whereColumns = extractConjunctiveWhereColumns(whereContent);
-
-  if (whereColumns.length !== params.length) {
-    logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARAM_DELETE_MISMATCH, {
-      columns: whereColumns.length,
-      params: params.length,
-      whereContent,
-    });
-    return {};
-  }
-
-  const data = {};
-  for (let i = 0; i < whereColumns.length; i++) {
-    data[whereColumns[i]] = params[i];
-  }
-
-  logger.debug(PARTITION_SERVICE_LOG_MSG.EXTRACTED_PARAM_DELETE, {
+  return extractDataFromParameterizedSQL(
+    sql,
+    params,
     tableName,
-    dataKeys: Object.keys(data),
-  });
-
-  return data;
+    PARTITION_SERVICE_OPERATION.DELETE,
+    logger,
+  );
 }
 
 /**

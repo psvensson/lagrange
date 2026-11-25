@@ -8,16 +8,27 @@ import {ReplicaHandler} from '../../src/node/replica-handler-class.js';
 import {askParticipantRelease} from '../../src/node/participant-release-client.js';
 import {RAFT_EVENT} from '../../src/raft/raft-operation-port-constants.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
-import {participantReleaseAdmissionOf, readParticipantReleaseFacts} from
-  '../../src/partition/partition-participant-transaction-pause.js';
+import {
+  participantCutoverPauseOf,
+  participantReleaseAdmissionOf,
+  readParticipantReleaseFacts,
+  readParticipantReleaseObservationAssessment,
+} from '../../src/partition/partition-participant-transaction-pause.js';
+import {
+  releaseIdentityOf,
+} from '../../src/partition/partition-participant-release-contract.js';
 import {readCommittedStatementOutcome} from
   '../../src/partition/partition-committed-statement-outcome.js';
-import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from
-  '../../src/raft/raft-committed-membership-constants.js';
+import {
+  COMMITTED_MEMBERSHIP_ANSWER_KIND,
+  COMMITTED_MEMBERSHIP_READ_PURPOSE,
+} from '../../src/raft/raft-committed-membership-constants.js';
 import {
   PARTICIPANT_CUTOVER_BOUND as BOUND,
   PARTICIPANT_CUTOVER_OUTCOME as OUTCOME,
+  PARTICIPANT_RELEASE_ACTION as RELEASE_ACTION,
   PARTICIPANT_RELEASE_ADMISSION as ADMISSION,
+  PARTICIPANT_RELEASE_RESULT_FIELD,
   PARTICIPANT_RELEASE_TYPE,
 } from '../../src/partition/partition-participant-transaction-cutover-constants.js';
 import {TRANSPORT_DELIVERY_OUTCOME_REASON_CODE} from
@@ -28,6 +39,7 @@ import {REPLICA_HANDLER_ERROR_MSG} from '../../src/node/replica-handler-constant
 import {createInProcessMockTransport} from '../test-helpers/replica-handler-identity-fixture.js';
 import {
   awaitProposal,
+  changeFixtureParticipantMembership,
   cleanOwnedParticipantFixture,
   clearFixtureSingletons,
   deferFixtureParticipantMembership as deferObservationMembership,
@@ -35,6 +47,7 @@ import {
   fixtureParticipantObservationListenerCount as releaseListenerCount,
   fixtureParticipantObservationRequest as currentObservationRequest,
   resetFixtureSingletons,
+  resumeFixtureParticipantAdmission,
   scriptedFixtureTimeSource as scriptedTimeSource,
   sendRegisteredFixtureParticipantMessage as sendRegisteredMessage,
   sendRegisteredFixtureParticipantObservation as sendRegisteredObservation,
@@ -926,4 +939,74 @@ test('an applied-progress wake reflected by the first facts read needs no forced
         'fresh-first-read assertion and membership custody failed');
     }
     if (failure !== null) throw failure;
+  }));
+
+test('release facts and observation refusal snapshot admissionGeneration after pause invalidation',
+  () => withRegisteredObservationOwner(async ({handler, leader, transport, clock}) => {
+    // startLeader opens admission (G1); advancing membership leaves ADMISSIONS
+    // OPEN on stale proof until participantCutoverPauseOf invalidates it.
+    assert.equal(participantReleaseAdmissionOf(leader).state, ADMISSION.OPEN);
+    const generationBeforeInspect = participantReleaseAdmissionOf(leader).generation;
+    changeFixtureParticipantMembership(leader, 'tx1-v3-r2');
+
+    const facts = await readParticipantReleaseFacts(handler, leader);
+    assert.equal(facts.outcome, OUTCOME.OBSERVED, JSON.stringify(facts));
+    assert.equal(facts.paused, true);
+    const generationAfterInspect = participantReleaseAdmissionOf(leader).generation;
+    assert.ok(generationAfterInspect > generationBeforeInspect,
+      'invalidating OPEN admission must advance admissionGeneration');
+    assert.equal(facts.generation.admissionGeneration, generationAfterInspect,
+      'observed facts must carry the post-invalidation admissionGeneration, not stale G1');
+
+    const release = releaseIdentityOf({
+      partitionId: leader.partitionId,
+      targetBuildDigest: facts.buildDigest,
+      configurationKey: facts.membership.configurationKey,
+      membershipGenerationIndex: facts.membership.membershipGenerationIndex,
+    });
+    const deadlineAtMs = clock.now() + 30000;
+    const pauseResponse = await sendRegisteredMessage(handler, transport, {
+      type: PARTICIPANT_RELEASE_TYPE,
+      partitionId: leader.partitionId,
+      replicaId: leader.replicaId,
+      release,
+      attempt: {
+        leaderReplicaId: facts.leaderReplicaId,
+        leaderLifecycleIncarnation: facts.generation.lifecycleIncarnation,
+        term: facts.membership.term,
+        deadlineAtMs,
+      },
+      target: facts.generation,
+      action: RELEASE_ACTION.PAUSE,
+      deadlineAtMs,
+    });
+    const pauseAnswer = pauseResponse[PARTICIPANT_RELEASE_RESULT_FIELD];
+    assert.equal(pauseAnswer.outcome, OUTCOME.OBSERVED,
+      `PAUSE using inspected facts must not fail STALE: ${JSON.stringify(pauseAnswer)}`);
+
+    // Now test the refusal branch (readParticipantReleaseObservationAssessment when
+    // committed membership refuses while OPEN admission invalidates).
+    await resumeFixtureParticipantAdmission(leader);
+    assert.equal(participantReleaseAdmissionOf(leader).state, ADMISSION.OPEN);
+    assert.equal(participantCutoverPauseOf(leader), null);
+    const generationBeforeRefusal = participantReleaseAdmissionOf(leader).generation;
+    changeFixtureParticipantMembership(leader, 'tx1-v3-r3');
+
+    const originalHandler = leader.controllablePort.committedMembershipHandler;
+    leader.controllablePort.committedMembershipHandler = () => ({
+      kind: COMMITTED_MEMBERSHIP_ANSWER_KIND.UNAVAILABLE,
+      reason: 'injected-membership-refusal',
+    });
+    try {
+      const assessment = await readParticipantReleaseObservationAssessment(handler, leader);
+      assert.equal(assessment.answer.outcome, OUTCOME.UNAVAILABLE);
+      assert.equal(assessment.context?.paused, true);
+      const generationAfterRefusal = participantReleaseAdmissionOf(leader).generation;
+      assert.ok(generationAfterRefusal > generationBeforeRefusal);
+      assert.equal(assessment.context?.generation?.admissionGeneration,
+        generationAfterRefusal,
+        'refusal context must carry the post-invalidation admissionGeneration');
+    } finally {
+      leader.controllablePort.committedMembershipHandler = originalHandler;
+    }
   }));

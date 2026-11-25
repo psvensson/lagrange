@@ -2,14 +2,16 @@
 // (proof-receipt-bound-to-validated-execution). A passing durable receipt may
 // only be minted from a validated execution report of the exact candidate:
 // every test below hands recordProof one deliberately broken report and
-// proves the receipt is refused with its typed problem and that no proof ref
+// the receipt is refused with its typed problem and that no proof ref
 // reached the remote. The positive case mints from a complete report; the
-// reuse case proves a receipt minted before reports existed still resolves.
+// consumption cases prove receipts missing execution evidence, carrying partial
+// cone summaries, or failing corpus coverage fail closed.
 //
 // A file of its own, beside test/scripts/proof-authority-falsifiers.test.js:
 // that file's bytes are bound by
 // test/manifests/proof-authority-falsifiers.receipt.json.
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -331,26 +333,109 @@ test('positive: a complete report of the exact candidate mints a receipt bound t
   assert.notEqual(remoteRef(context.source, PROOF.RELEASE_FULL, context.sha), '');
 });
 
-test('reuse: a receipt minted before reports existed still resolves', () => {
-  const context = fixture();
-  const receipt = buildReceipt({proofId: PROOF.CORPUS_FULL, sha: context.sha,
-    completedAt: RECORDED_AT, producer: {kind: 'test-fixture', id: 'legacy-run'}});
+function plantReceipt(context, proofId, receipt) {
   const objectSha = execGit(['mktag'], {cwd: context.source, encoding: 'utf8',
-    input: buildTagBody({proofId: PROOF.CORPUS_FULL, sha: context.sha,
-      receipt: {schema: receipt.schema, proofId: receipt.proofId,
-        subjectSha: receipt.subjectSha, outcome: 'passed', reuse: receipt.reuse,
-        completedAt: receipt.completedAt, producer: receipt.producer}, now: NOW})}).trim();
-  git(context.source, 'update-ref', 'refs/tmp/legacy', objectSha);
+    input: buildTagBody({proofId, sha: context.sha, receipt, now: NOW})}).trim();
+  git(context.source, 'update-ref', 'refs/tmp/planted', objectSha);
   git(context.source, 'push', '--quiet', 'origin',
-    `refs/tmp/legacy:${proofRef(PROOF.CORPUS_FULL, context.sha)}`);
-  const resolved = resolveProof({proofId: PROOF.CORPUS_FULL, sha: context.sha,
-    cwd: context.source});
-  assert.equal(resolved.outcome, OUTCOME.PROVEN, resolved.because);
-  assert.equal(resolved.objectSha, objectSha);
-  // A reused receipt answers a later record with a valid report unchanged.
-  const again = record(context, validExecutionReport(context));
-  assert.equal(again.reused, true);
-  assert.equal(again.objectSha, objectSha);
+    `refs/tmp/planted:${proofRef(proofId, context.sha)}`);
+  git(context.source, 'update-ref', '-d', 'refs/tmp/planted');
+  return objectSha;
+}
+
+function validExecutionPayload(context, overrides = {}) {
+  const report = validExecutionReport(context);
+  return {
+    reportDigest: createHash('sha256').update(JSON.stringify(report)).digest('hex'),
+    producer: {...report.producer},
+    summary: {
+      planned: 2,
+      executed: 2,
+      assertions: 6,
+      runs: 1,
+      commands: [{label: 'corpus', exitStatus: 0}],
+      reusedProofs: [],
+      passedOnRetry: 0,
+    },
+    ...overrides,
+  };
+}
+
+test('check rejects receipts missing execution, reportDigest, producer, or carrying 312-file cone summaries', () => {
+  const baseProducer = {kind: 'test-fixture', id: 'legacy-run'};
+  for (const [label, receiptOverrides, expectedPattern] of [
+    ['missing execution', {execution: undefined}, /receipt execution is missing/u],
+    ['missing reportDigest', {execution: validExecutionPayload(fixture(), {reportDigest: undefined})},
+      /reportDigest/u],
+    ['missing execution.producer', {execution: validExecutionPayload(fixture(), {producer: undefined})},
+      /producer identity/u],
+    ['missing receipt.producer', {producer: undefined}, /receipt producer is missing/u],
+    ['partial 312-file changed-cone summary', {
+      execution: {summary: {files: 312, pass: 312, fail: 0, assertions: 15577}, qualification: []},
+    }, /reportDigest.*producer identity.*execution totals.*passing commands.*reusedProofs/u],
+  ]) {
+    const context = fixture();
+    const baseReceipt = {
+      schema: 'lagrange-proof-receipt/v1',
+      proofId: PROOF.CORPUS_FULL,
+      subjectSha: context.sha,
+      outcome: 'passed',
+      reuse: 'immutable-sha',
+      completedAt: RECORDED_AT,
+      producer: baseProducer,
+      execution: validExecutionPayload(context),
+      ...receiptOverrides,
+    };
+    if (receiptOverrides.execution === undefined) delete baseReceipt.execution;
+    if (receiptOverrides.producer === undefined) delete baseReceipt.producer;
+    plantReceipt(context, PROOF.CORPUS_FULL, baseReceipt);
+    const resolved = resolveProof({
+      proofId: PROOF.CORPUS_FULL, sha: context.sha, cwd: context.source,
+    });
+    assert.equal(resolved.outcome, OUTCOME.UNAVAILABLE, `${label} must fail closed`);
+    assert.match(resolved.because, expectedPattern, label);
+    assert.throws(() => record(context, validExecutionReport(context)), /proof store unavailable/u,
+      `${label} must not be silently replaced`);
+  }
+
+  // CLI `check` also rejects a partial 312-file cone receipt with exit code 2 (UNAVAILABLE).
+  const cliContext = fixture();
+  const coneReceipt = buildReceipt({
+    proofId: PROOF.CORPUS_FULL, sha: cliContext.sha, completedAt: RECORDED_AT,
+    producer: baseProducer,
+    execution: {summary: {files: 312, pass: 312, fail: 0, assertions: 15577}, qualification: []},
+  });
+  plantReceipt(cliContext, PROOF.CORPUS_FULL, coneReceipt);
+  const cliResult = spawnSync(process.execPath,
+    [AUTHORITY, 'check', PROOF.CORPUS_FULL, cliContext.sha, '--json'],
+    {cwd: cliContext.source, encoding: 'utf8', env: gitProcessEnvironment()});
+  assert.equal(cliResult.status, 2);
+  const parsedCli = JSON.parse(cliResult.stdout);
+  assert.equal(parsedCli.outcome, OUTCOME.UNAVAILABLE);
+});
+
+test('check rejects receipts whose execution summary does not cover subjectCorpusFiles', () => {
+  const context = fixture();
+  for (const file of [REPORT_FILE_A, REPORT_FILE_B, 'test/c.test.js']) {
+    const target = path.join(context.source, file);
+    fs.mkdirSync(path.dirname(target), {recursive: true});
+    fs.writeFileSync(target, '// corpus test\n');
+  }
+  git(context.source, 'add', 'test');
+  git(context.source, 'commit', '--quiet', '-m', 'three corpus tests');
+  git(context.source, 'push', '--quiet', 'origin', 'HEAD:main');
+  const sha = git(context.source, 'rev-parse', 'HEAD');
+  const tree = git(context.source, 'rev-parse', 'HEAD^{tree}');
+  const subjectContext = {...context, sha, tree};
+  const receipt = buildReceipt({
+    proofId: PROOF.CORPUS_FULL, sha, completedAt: RECORDED_AT,
+    producer: {kind: 'test-fixture', id: 'cone-run'},
+    execution: validExecutionPayload(subjectContext),
+  });
+  plantReceipt(subjectContext, PROOF.CORPUS_FULL, receipt);
+  const resolved = resolveProof({proofId: PROOF.CORPUS_FULL, sha, cwd: subjectContext.source});
+  assert.equal(resolved.outcome, OUTCOME.UNAVAILABLE);
+  assert.match(resolved.because, /does not cover the subject corpus/u);
 });
 
 test('cli: record without --report is refused with its typed problem', () => {

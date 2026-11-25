@@ -272,3 +272,48 @@ test('--unreachable-src --added flags only newly added unreachable src modules i
       'newly added unreachable src module must be flagged even when referenced by tests/JSON');
     assert.equal(addedResult.count, 1);
   });
+
+test('--unreachable-src --added flags existing src modules that lose their last production import while kept by tests',
+  () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'src-reachability-orphaned-'));
+    const gitEnv = {
+      ...process.env,
+      GIT_AUTHOR_NAME: 'test',
+      GIT_AUTHOR_EMAIL: 'test@example.com',
+      GIT_COMMITTER_NAME: 'test',
+      GIT_COMMITTER_EMAIL: 'test@example.com',
+    };
+    const commitAll = (message) => {
+      execGit(['add', '-A'], {cwd: root, env: gitEnv});
+      execGit(['commit', '--quiet', '-m', message], {cwd: root, env: gitEnv});
+    };
+    execGit(['init', '--quiet'], {cwd: root, env: gitEnv});
+    write(root, 'package.json', JSON.stringify({main: 'src/index.js'}));
+    write(root, 'src/index.js', 'import \'./existing-live.js\';\nexport const live = 1;\n');
+    write(root, 'src/existing-live.js', 'export const existingLive = 1;\n');
+    write(root, 'test/existing-live.test.js', 'import \'../src/existing-live.js\';\n');
+    commitAll('base with live src/existing-live.js');
+    const baseSha = execGit(['rev-parse', 'HEAD'], {cwd: root, encoding: 'utf8', env: gitEnv})
+      .trim();
+
+    assert.equal(probeSrc(root, ADDED_FLAG, BASE_FLAG, baseSha, LIST_FLAG).count, 0);
+
+    // Drop the last production import while keeping the test import.
+    write(root, 'src/index.js', 'export const live = 1;\n');
+    commitAll('remove production import of existing-live');
+
+    const orphanedRangeResult = probeSrc(root, ADDED_FLAG, BASE_FLAG, baseSha, LIST_FLAG);
+    assert.deepEqual(orphanedRangeResult.listed, ['src/existing-live.js'],
+      'existing src module losing its last production import must fail the range check');
+    assert.equal(orphanedRangeResult.count, 1);
+
+    // Also verify uncommitted working-tree removal against HEAD (no --base).
+    write(root, 'src/index.js', 'import \'./existing-live.js\';\nexport const live = 1;\n');
+    commitAll('restore production import');
+    assert.equal(probeSrc(root, ADDED_FLAG, LIST_FLAG).count, 0);
+    write(root, 'src/index.js', 'export const live = 1;\n');
+    const uncommittedResult = probeSrc(root, ADDED_FLAG, LIST_FLAG);
+    assert.deepEqual(uncommittedResult.listed, ['src/existing-live.js'],
+      'uncommitted removal of last production import must fail against HEAD');
+    assert.equal(uncommittedResult.count, 1);
+  });

@@ -55,6 +55,7 @@ const {
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_FUNCTION = 'function';
 const DECISION_COMMIT = 'COMMIT';
+const EMPTY_PARTICIPANT_SET_TEXT = '[]';
 const SQL_TRANSACTION_COALESCING_PREFIX = 'sql-transaction:';
 const SQL_TRANSACTION_PARTICIPANT_COALESCING_PREFIX =
   'sql-transaction-participant:';
@@ -197,9 +198,12 @@ function resolveParticipantRowPersistPurpose(record) {
 }
 
 function resolveDecisionProgressStatus(record) {
-  return record?.decision === DECISION_COMMIT ?
-    TRANSACTION_STATUS.COMMITTING :
-    TRANSACTION_STATUS.ROLLING_BACK;
+  if (record?.decision === DECISION_COMMIT) {
+    return record?.participantSetText === EMPTY_PARTICIPANT_SET_TEXT ?
+      TRANSACTION_STATUS.COMMITTED :
+      TRANSACTION_STATUS.COMMITTING;
+  }
+  return TRANSACTION_STATUS.ROLLING_BACK;
 }
 
 function shouldIncludePreparingStatusInFreeze(record) {
@@ -443,7 +447,8 @@ const sqlQueryEngineTransactionPersistenceMethods = {
 
   /**
    * Record a transaction's decision once and advance its progress status
-   * (`COMMITTING` for `COMMIT`, `ROLLING_BACK` for `ROLLBACK`) atomically:
+   * (`COMMITTED` for zero-participant `COMMIT`, `COMMITTING` for non-empty
+   * `COMMIT`, `ROLLING_BACK` for `ROLLBACK`) atomically:
    * the UPDATE is guarded on `decision IS NULL`; a guarded write that changes
    * no row found a decision already recorded (typed
    * TRANSACTION_DECISION_RECORDED).

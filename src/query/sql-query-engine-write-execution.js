@@ -159,8 +159,12 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
     }, queryOptions);
   }
 
-  resolveWriteTransactionOwnership(sessionId, writePlan) {
-    if (this.transactionCoordinator.getTransaction(sessionId)) {
+  resolveWriteTransactionOwnership(
+    sessionId,
+    writePlan,
+    activeTransaction = this.transactionCoordinator.getTransaction(sessionId),
+  ) {
+    if (activeTransaction) {
       return WRITE_TRANSACTION_OWNERSHIP.EXPLICIT;
     }
     const tableName = writePlan?.ast?.table || null;
@@ -212,6 +216,7 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
     const ownership = this.resolveWriteTransactionOwnership(
       sessionId,
       writePlan,
+      transactionState,
     );
     switch (ownership) {
     case WRITE_TRANSACTION_OWNERSHIP.EXPLICIT:
