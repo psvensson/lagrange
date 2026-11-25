@@ -55,7 +55,7 @@
   "targets": [
     {
       "targetId": "lagrange",
-      "label": "Lagrange 0.4.0 (3 nodes)",
+      "label": "Lagrange 0.4.2 (3 nodes)",
       "advertisedLabel": "Lagrange",
       "category": "distributed-native",
       "detailPageMd": "tidb-comparison-progress.md",
@@ -714,7 +714,7 @@
     },
     {
       "targetId": "lagrange-5node-rf3",
-      "label": "Lagrange 0.4.0 (5 nodes, RF=3 configured)",
+      "label": "Lagrange 0.4.2 (5 nodes, RF=3 configured)",
       "advertisedLabel": "Lagrange (5-Node RF=3)",
       "category": "distributed-native-scaleout",
       "detailPageMd": "scaleout-3to5-node-rf3-progress.md",
@@ -6748,7 +6748,7 @@
       "rows": [
         {
           "rowId": "fixed/lagrange",
-          "label": "Fixed workload: Lagrange 0.4.0",
+          "label": "Fixed workload: Lagrange 0.4.2",
           "cells": {
             "3-node": {
               "claimKey": "lagrange/scaleout/fixed-3node",
@@ -7188,7 +7188,7 @@
         },
         {
           "rowId": "prop/lagrange",
-          "label": "Proportional growth: Lagrange 0.4.0",
+          "label": "Proportional growth: Lagrange 0.4.2",
           "cells": {
             "3-node": {
               "claimKey": "lagrange/scaleout/prop-3node",
@@ -7628,7 +7628,7 @@
         },
         {
           "rowId": "hot/lagrange",
-          "label": "Hot contention: Lagrange 0.4.0",
+          "label": "Hot contention: Lagrange 0.4.2",
           "cells": {
             "3-node": {
               "claimKey": "lagrange/scaleout/hot-3node",
@@ -12235,6 +12235,265 @@
         "scenarioC"
       ],
       "rows": [
+        {
+          "rowId": "v0.4.2-3node-smoke",
+          "label": "v0.4.2, 3 nodes (Scenario A smoke)",
+          "cells": {
+            "scenarioA": {
+              "claimKey": "lagrange/scenarioA/smoke",
+              "claimKind": "throughput",
+              "status": "valid-observed",
+              "reasons": [
+                "smoke-profile-no-capacity-claim"
+              ],
+              "defectIds": [
+                "D33",
+                "D34",
+                "D35",
+                "D37",
+                "D38",
+                "D39",
+                "D40",
+                "D41"
+              ],
+              "evidence": {
+                "runIds": [
+                  "bench-gcp-lagrange-smoke-a23d0dfc0-20261124-r001"
+                ],
+                "rawObservationsDigests": [
+                  "sha256:89dfbd2b4eabe9dd81ac955c3d9abcd1d0242b91a71df19fc73aaa4942278f87"
+                ],
+                "invalidatedRunIds": [
+                  "bench-live-20261101-b-r6-r001",
+                  "bench-live-20261101-b-r7-r001",
+                  "bench-live-20261101-b-r8-r001",
+                  "bench-live-20261101-b-r9-r001",
+                  "bench-lab-20261116T0206Z-r001",
+                  "bench-lab-20261116T0431Z-r001",
+                  "bench-lab-20261116T0744Z-r001",
+                  "bench-gcp-lagrange-smoke-234f478e0-20261123-r001",
+                  "bench-gcp-lagrange-smoke-357783544-20261123-r001",
+                  "bench-gcp-lagrange-smoke-09e4e64ea-v2-20261123-r001",
+                  "bench-lab-lagrange-smoke-9265a47d2-20261123-r001",
+                  "bench-lab-lagrange-smoke-wifi-9265a47d2-20261123-r001",
+                  "bench-gcp-lagrange-smoke-480cf0f29-20261123-r001",
+                  "bench-gcp-lagrange-smoke-480cf0f29-r2-20261123-r001",
+                  "bench-gcp-lagrange-smoke-3908f1e59-20261123-r001",
+                  "bench-gcp-lagrange-smoke-b1e097b09-20261124-r001",
+                  "bench-gcp-3sys-smoke-887007107-20261124-r001",
+                  "bench-gcp-lagrange-smoke-887007107-r2-20261124-r001",
+                  "bench-gcp-3sys-smoke-44eeb290a-20261124-r001",
+                  "bench-gcp-lagrange-smoke-77fe9bc52-20261124-r001",
+                  "bench-gcp-lagrange-smoke-dcbf6e266-20261124-r001",
+                  "bench-gcp-lagrange-smoke-55c78e6dc-20261124-r001"
+                ],
+                "forensic": [],
+                "semanticProofIds": [
+                  "failureAtomicity:terminal_logical_request_must_not_leave_partial_transaction_effects",
+                  "forbidden:dirty_read",
+                  "forbidden:duplicate_success_effect",
+                  "forbidden:lost_successful_write",
+                  "forbidden:partial_commit",
+                  "forbidden:read_only_transaction_mutation",
+                  "isolation:atomicCommitRequired",
+                  "isolation:dirtyReadsForbidden",
+                  "isolation:lostSuccessfulWriteForbidden",
+                  "isolation:readYourOwnWritesRequired",
+                  "isolation:successfulCommitDurable",
+                  "isolation:successfulEffectsExactlyOnce",
+                  "outcome:retryableConflictSqlState:40001",
+                  "transaction:delivery:customer_balance_increases_by_selected_line_total",
+                  "transaction:delivery:customer_delivery_count_advances_once_per_delivered_order",
+                  "transaction:delivery:selected_new_order_is_removed_once_per_serviced_district",
+                  "transaction:delivery:selected_order_carrier_is_set_once",
+                  "transaction:delivery:selected_order_lines_are_marked_delivered",
+                  "transaction:new_order:district_next_order_id_advances_once",
+                  "transaction:new_order:one_new_order_row_created_for_allocated_order_id",
+                  "transaction:new_order:one_order_line_created_per_input_line",
+                  "transaction:new_order:one_order_row_created_for_allocated_order_id",
+                  "transaction:new_order:stock_effects_applied_once_per_input_line",
+                  "transaction:order_status:database_state_is_unchanged",
+                  "transaction:order_status:latest_customer_order_is_returned_when_present",
+                  "transaction:order_status:returned_lines_belong_to_returned_order",
+                  "transaction:payment:customer_balance_decreases_by_payment_amount",
+                  "transaction:payment:customer_payment_counters_advance_once",
+                  "transaction:payment:district_ytd_increases_by_payment_amount",
+                  "transaction:payment:one_history_row_created_for_logical_payment",
+                  "transaction:payment:warehouse_ytd_increases_by_payment_amount",
+                  "transaction:stock_level:database_state_is_unchanged",
+                  "transaction:stock_level:reported_low_stock_count_uses_canonical_recent_order_window"
+                ]
+              },
+              "metrics": {
+                "profileClass": "smoke",
+                "sufficiencyRuleId": "comparative-capacity-sufficiency-v1",
+                "accounting": {
+                  "offered": 100,
+                  "issued": 100,
+                  "unissued": 0,
+                  "attempts": 122,
+                  "committed": 97,
+                  "conflicts": 25,
+                  "conflictExhausted": 3,
+                  "terminalFailures": {
+                    "product_error": 0,
+                    "correctness_failure": 0,
+                    "transport_failure": 0,
+                    "harness_fault": 0
+                  },
+                  "unresolved": 0,
+                  "ambiguousCommits": 0
+                },
+                "runs": [
+                  {
+                    "runId": "bench-gcp-lagrange-smoke-a23d0dfc0-20261124-r001",
+                    "runStatus": "completed",
+                    "offeredRatePerSec": 5,
+                    "repetition": 1,
+                    "accounting": {
+                      "offered": 100,
+                      "issued": 100,
+                      "unissued": 0,
+                      "attempts": 122,
+                      "committed": 97,
+                      "conflicts": 25,
+                      "conflictExhausted": 3,
+                      "terminalFailures": {
+                        "product_error": 0,
+                        "correctness_failure": 0,
+                        "transport_failure": 0,
+                        "harness_fault": 0
+                      },
+                      "unresolved": 0,
+                      "ambiguousCommits": 0
+                    },
+                    "drainOverrunMs": 221963.788,
+                    "maxLatencyMs": 222242.261,
+                    "timingsSec": {
+                      "totalScenarioSec": 721.37,
+                      "clusterReadySec": 236.86,
+                      "semanticGateTotalSec": 185.66,
+                      "warmupSec": 21,
+                      "workloadDrainSec": 241.96,
+                      "postVerifySec": 35.88,
+                      "maxSingleRequestSec": 222.242,
+                      "partsSec": {
+                        "newOrderContentionSec": 69.54,
+                        "visibilitySec": 3.04,
+                        "paymentSec": 5.64,
+                        "orderStatusSec": 10.37,
+                        "deliverySec": 6.39,
+                        "stockLevelSec": 4.74,
+                        "failureAtomicitySec": 4.93,
+                        "retryableConflictSec": 4.23,
+                        "durabilityRestartSec": 76.78
+                      }
+                    }
+                  }
+                ],
+                "setupFailures": [],
+                "capacity": null
+              }
+            },
+            "scenarioB": {
+              "claimKey": "lagrange/scenarioB/one-remote-stage",
+              "claimKind": "decision-throughput",
+              "status": "blocked",
+              "reasons": [
+                "closed-loop-throughput",
+                "compiled-risk-service-missing",
+                "constant-phase-or-byte",
+                "dataset-unverified",
+                "emulated-product",
+                "invalidated:inv-0003",
+                "invalidated:inv-0006",
+                "label-hash-identity",
+                "non-canonical-workload"
+              ],
+              "defectIds": [
+                "D06",
+                "D08",
+                "D09",
+                "D15",
+                "D17"
+              ],
+              "evidence": {
+                "runIds": [],
+                "rawObservationsDigests": [],
+                "forensic": [
+                  {
+                    "file": "data/tidb-comparison/raw-observations.ndjson",
+                    "receiptId": "receipt-lagrange-one-remote-stage",
+                    "rawObservationsDigest": "sha256:cae53591cbb9a99b727ef90ac2ad71e00e5e3266881570fc8bccc4fa78ed1ed3",
+                    "invalidationIds": [
+                      "inv-0003"
+                    ]
+                  },
+                  {
+                    "file": "data/tidb-comparison/forensic/raw-observations-86e795c44.ndjson",
+                    "receiptId": "receipt-lagrange-one-remote-stage",
+                    "rawObservationsDigest": "sha256:8e026b041b6e49a0a1d8271e0c914a7cd6edbc7f401d5e453af4212d332527bc",
+                    "invalidationIds": [
+                      "inv-0006"
+                    ]
+                  }
+                ]
+              },
+              "metrics": null
+            },
+            "scenarioC": {
+              "claimKey": "lagrange/scenarioC/fresh-0ms",
+              "claimKind": "freshness",
+              "status": "invalid-measurement",
+              "reasons": [
+                "closed-loop-throughput",
+                "constant-phase-or-byte",
+                "dataset-unverified",
+                "emulated-product",
+                "forensic-record-not-admissible",
+                "freshness-not-observed",
+                "invalidated:inv-0003",
+                "invalidated:inv-0004",
+                "invalidated:inv-0006",
+                "label-hash-identity",
+                "non-canonical-workload"
+              ],
+              "defectIds": [
+                "D06",
+                "D08",
+                "D09",
+                "D10",
+                "D15",
+                "D17",
+                "D24"
+              ],
+              "evidence": {
+                "runIds": [],
+                "rawObservationsDigests": [],
+                "forensic": [
+                  {
+                    "file": "data/tidb-comparison/raw-observations.ndjson",
+                    "receiptId": "receipt-lagrange-scen-c-0ms",
+                    "rawObservationsDigest": "sha256:ef623881df1eb52cd248e7f063fe45411355ca196b3834be78548e0f78f38fae",
+                    "invalidationIds": [
+                      "inv-0003",
+                      "inv-0004"
+                    ]
+                  },
+                  {
+                    "file": "data/tidb-comparison/forensic/raw-observations-86e795c44.ndjson",
+                    "receiptId": "receipt-lagrange-scen-c-0ms",
+                    "rawObservationsDigest": "sha256:b642f60978940bf9f3e910844069ff25bf38d93225eac08d9f12a6b7de9cba62",
+                    "invalidationIds": [
+                      "inv-0006"
+                    ]
+                  }
+                ]
+              },
+              "metrics": null
+            }
+          }
+        },
         {
           "rowId": "v0.4.0-3node",
           "label": "v0.4.0, 3 nodes",

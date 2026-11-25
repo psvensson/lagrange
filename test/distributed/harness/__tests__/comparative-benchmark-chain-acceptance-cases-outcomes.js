@@ -39,7 +39,7 @@ const LAGRANGE = 'lagrange';
 const TIDB = 'tidb-tikv';
 const PG = 'pg-single-primary';
 const LABEL = Object.freeze({
-  [LAGRANGE]: 'Lagrange 0.4.0 (3 nodes)',
+  [LAGRANGE]: 'Lagrange 0.4.2 (3 nodes)',
   [TIDB]: 'TiDB + TiKV v8.5.8',
   [PG]: 'PostgreSQL 17 (single primary)',
 });

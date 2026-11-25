@@ -62,8 +62,8 @@ const PG_SYNC_STANDBYS_LABEL =
 // The 14 advertised configurations. `advertisedLabel` is what earlier pages
 // called the configuration; `label` describes what the deployer starts.
 const ADVERTISED_TARGETS = Object.freeze(arrayMap([
-  [T.LAGRANGE, 'Lagrange 0.4.0 (3 nodes)', 'Lagrange', 'distributed-native', DETAIL.TIDB, 3],
-  [T.LAGRANGE_5, 'Lagrange 0.4.0 (5 nodes, RF=3 configured)', 'Lagrange (5-Node RF=3)',
+  [T.LAGRANGE, 'Lagrange 0.4.2 (3 nodes)', 'Lagrange', 'distributed-native', DETAIL.TIDB, 3],
+  [T.LAGRANGE_5, 'Lagrange 0.4.2 (5 nodes, RF=3 configured)', 'Lagrange (5-Node RF=3)',
     'distributed-native-scaleout', DETAIL.SCALEOUT, 5],
   [T.TIDB, 'TiDB + TiKV v8.5.8', 'TiDB + TiKV', 'distributed-sql', DETAIL.TIDB, 3],
   [T.PG_SINGLE, 'PostgreSQL 17 (single primary)',
@@ -175,7 +175,7 @@ function buildTargetClaims(targetId) {
 }
 
 const SCALEOUT_ITEMS = Object.freeze([
-  [T.LAGRANGE, 'Lagrange 0.4.0'],
+  [T.LAGRANGE, 'Lagrange 0.4.2'],
   [T.TIDB, 'TiDB + TiKV v8.5.8'],
   [T.CITUS_SQL, 'Citus 13 (Sharded SQL + App)'],
   [T.YUGABYTE_YSQL, 'YugabyteDB 2024.2 (YSQL + App)'],
@@ -293,6 +293,9 @@ function evolutionRows(targetClaims) {
     {declared: BLOCKED_LAGRANGE_B});
   const scenarioCols = (a, b, c) => ({scenarioA: a, scenarioB: b, scenarioC: c});
   return [
+    milestone('v0.4.2-3node-smoke', 'v0.4.2, 3 nodes (Scenario A smoke)',
+      scenarioCols(l3['scenarioA/smoke'], l3['scenarioB/one-remote-stage'],
+        l3['scenarioC/fresh-0ms'])),
     milestone('v0.4.0-3node', 'v0.4.0, 3 nodes', scenarioCols(l3.scenarioA,
       l3['scenarioB/one-remote-stage'], l3['scenarioC/fresh-0ms'])),
     milestone('v0.4.0-4node', 'v0.4.0, 4 nodes', scenarioCols(l4.scenarioA, l4B,
