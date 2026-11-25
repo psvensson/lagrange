@@ -197,7 +197,11 @@ function buildMaterializedRowObject(columns, rawRow, alreadyPresented, options) 
   const obj = {};
   for (let c = 0; c < columns.length; c += 1) {
     const value = rawRow[c] === undefined ? null : rawRow[c];
-    obj[columns[c]] = alreadyPresented ? value : presentSqlValue(value, options);
+    defineOwnDataProperty(
+      obj,
+      columns[c],
+      alreadyPresented ? value : presentSqlValue(value, options),
+    );
   }
   return obj;
 }

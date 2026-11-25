@@ -15,6 +15,7 @@ import {
 } from './partition-committed-statement-outcome-constants.js';
 import {
   committedStatementEntryKey,
+  pruneSettledMirrorOutcomeEffects,
   readCommittedStatementOutcome,
 } from './partition-committed-statement-outcome.js';
 import {
@@ -156,6 +157,7 @@ function loadDurableDeltasBehindWatermark(service, watermarkIndex) {
   if (!service?.db?.open) {
     return [];
   }
+  pruneSettledMirrorOutcomeEffects(service, watermarkIndex);
   const deltas = [];
   for (const entry of readPartitionCommittedCommands(service)) {
     const logIndex = Number(entry.index);

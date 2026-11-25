@@ -12,8 +12,12 @@ import {committedStatementEntryKey, createCommittedStatementOutcomeTable} from
   '../../src/partition/partition-committed-statement-outcome.js';
 import {openParticipantTransactionStore} from '../../src/partition/partition-participant-transaction-store.js';
 import {buildPlacementCommand} from '../../src/partition/partition-placement-admission-command.js';
-import {PLACEMENT_ADMIT_TYPE, PLACEMENT_RELEASE_HOLD_TYPE, PLACEMENT_REPAIR_PREPARE_TYPE} from
-  '../../src/partition/partition-placement-admission-constants.js';
+import {
+  PLACEMENT_ADMIT_TYPE,
+  PLACEMENT_RELEASE_HOLD_TYPE,
+  PLACEMENT_REPAIR_PREPARE_TYPE,
+  RETAINED_PLACEMENT_ATTEMPT,
+} from '../../src/partition/partition-placement-admission-constants.js';
 import {requestPlacementRepairPreparation} from '../../src/partition/partition-placement-repair-preparation.js';
 import {LEDGER_PARTITION_ID} from '../../src/partition/partition-placement-admission-decision.js';
 import {applyPlacementCommand} from '../../src/partition/partition-placement-admission.js';
@@ -100,36 +104,18 @@ function createSimpleSystemCache(initialPartitions = [], initialServices = [], i
       }
       return null;
     },
-    getAll(tableName) {
-      return [...(rowsByTable.get(tableName) || [])];
-    },
-    onCacheApplyChange(fn) {
-      listeners.add(fn);
-    },
-    offCacheApplyChange(fn) {
-      listeners.delete(fn);
-    },
+    getAll: (tableName) => [...(rowsByTable.get(tableName) || [])],
+    onCacheApplyChange: (fn) => listeners.add(fn),
+    offCacheApplyChange: (fn) => listeners.delete(fn),
     applySystemTableChange(tableName, operation, row) {
       const list = rowsByTable.get(tableName) || [];
-      if (tableName === TABLES.REPLICA_OPERATIONS) {
-        const idx = list.findIndex((r) => r.operation_id === row.operation_id);
+      if (tableName === TABLES.REPLICA_OPERATIONS || tableName === TABLES.NODES) {
+        const keyField = tableName === TABLES.NODES ? COLUMN.NODE_ID : 'operation_id';
+        const idx = list.findIndex((r) => r[keyField] === row[keyField]);
         if (operation === CDC_OPERATION.DELETE) {
           if (idx >= 0) list.splice(idx, 1);
-        } else if (idx >= 0) {
-          list[idx] = {...row};
-        } else {
-          list.push({...row});
-        }
-        rowsByTable.set(tableName, list);
-      } else if (tableName === TABLES.NODES) {
-        const idx = list.findIndex((r) => r[COLUMN.NODE_ID] === row[COLUMN.NODE_ID]);
-        if (operation === CDC_OPERATION.DELETE) {
-          if (idx >= 0) list.splice(idx, 1);
-        } else if (idx >= 0) {
-          list[idx] = {...row};
-        } else {
-          list.push({...row});
-        }
+        } else if (idx >= 0) list[idx] = {...row};
+        else list.push({...row});
         rowsByTable.set(tableName, list);
       }
       for (const fn of listeners) fn(tableName, operation, row);
@@ -140,60 +126,40 @@ function createSimpleSystemCache(initialPartitions = [], initialServices = [], i
 function createRealSqlLedgerHarness(cache, nodeId = 'n1', nowFn = () => NOW_MS) {
   const db = new Database(':memory:');
   db.exec(generateCreateTableSQL(REPLICA_OPERATIONS_SCHEMA));
-  for (const indexSql of generateCreateIndexSQL(REPLICA_OPERATIONS_SCHEMA)) {
-    db.exec(indexSql);
-  }
+  for (const indexSql of generateCreateIndexSQL(REPLICA_OPERATIONS_SCHEMA)) db.exec(indexSql);
   createCommittedStatementOutcomeTable(db);
   openParticipantTransactionStore(db);
   ensureCdcObligationLedger(db);
   let logIndex = 0;
   const resolvedWrites = new Map();
   const submittedStatements = [];
-  const emitter = new EventEmitter();
-  const service = Object.assign(emitter, {
+  const service = Object.assign(new EventEmitter(), {
     ...leadingLedgerStubFields(),
-    partitionId: LEDGER_PARTITION_ID,
-    tableName: REPLICA_OPERATIONS_SCHEMA.tableName,
-    replicaId: `${LEDGER_PARTITION_ID}-r1`,
-    replicaIds: [`${LEDGER_PARTITION_ID}-r1`],
-    nodeId,
-    db,
-    systemTableCache: cache,
-    timeSource: {now: nowFn},
+    partitionId: LEDGER_PARTITION_ID, tableName: REPLICA_OPERATIONS_SCHEMA.tableName,
+    replicaId: `${LEDGER_PARTITION_ID}-r1`, replicaIds: [`${LEDGER_PARTITION_ID}-r1`],
+    nodeId, db, systemTableCache: cache, timeSource: {now: nowFn},
     hlcClock: {now: () => `${nowFn()}:0:${nodeId}`},
     logger: {debug() {}, info() {}, warn() {}, error() {}},
-    cdcPipelineMetrics: {increment() {}},
-    isLeader: true,
-    isShutdown: false,
-    hasKnownRemoteLeaderWitness: () => false,
-    trackPendingCDCEvent() {},
+    cdcPipelineMetrics: {increment() {}}, isLeader: true, isShutdown: false,
+    hasKnownRemoteLeaderWitness: () => false, trackPendingCDCEvent() {},
     cdcDelivery: {driveCdcObligations: async () => {}},
     getCommittedEntryKey: (command) => committedStatementEntryKey(command),
     syncCDCGeneratorDependencies: () => ({
       buildEvent: ({type, tableName, data, whereClause, entryId, timestamp}) => ({
         state: PARTITION_CDC_EVENT_BUILD_STATE.BUILT,
         cdcEvent: {
-          type,
-          tableName,
-          operation:
-            type === PARTITION_SERVICE_OPERATION.INSERT ?
-              CDC_OPERATION.INSERT :
-              CDC_OPERATION.UPDATE,
-          data,
-          whereClause,
-          entryId,
-          timestamp,
+          type, tableName,
+          operation: type === PARTITION_SERVICE_OPERATION.INSERT ?
+            CDC_OPERATION.INSERT : CDC_OPERATION.UPDATE,
+          data, whereClause, entryId, timestamp,
         },
       }),
     }),
-    resolveCommittedWrite: (entryId, answer) => {
-      resolvedWrites.set(entryId, answer);
-    },
+    resolveCommittedWrite: (entryId, answer) => resolvedWrites.set(entryId, answer),
     rejectCommittedWrite: (_entryId, error) => {
       throw error;
     },
   });
-
   const executeCommand = (type, {entryId, body}) => {
     submittedStatements.push({type, entryId, body});
     const command = buildPlacementCommand(service, {type, entryId, body});
@@ -202,9 +168,7 @@ function createRealSqlLedgerHarness(cache, nodeId = 'n1', nowFn = () => NOW_MS) 
     const afterRollback = [];
     db.transaction(() => {
       applyPlacementCommand(service, {
-        command,
-        index: logIndex,
-        term: 1,
+        command, index: logIndex, term: 1,
         afterCommit: (fn) => afterCommit.push(fn),
         afterRollback: (fn) => afterRollback.push(fn),
       });
@@ -214,11 +178,8 @@ function createRealSqlLedgerHarness(cache, nodeId = 'n1', nowFn = () => NOW_MS) 
     resolvedWrites.delete(command.entryId);
     return answer;
   };
-
   return {
-    db,
-    service,
-    submittedStatements,
+    db, service, submittedStatements,
     admitPlacement: (payload) => executeCommand(PLACEMENT_ADMIT_TYPE, payload),
     releasePlacementHold: (payload) => executeCommand(PLACEMENT_RELEASE_HOLD_TYPE, payload),
   };
@@ -226,10 +187,8 @@ function createRealSqlLedgerHarness(cache, nodeId = 'n1', nowFn = () => NOW_MS) 
 
 function seededPartitionRow(partitionId, leaderNodeId = 'n1') {
   return {
-    [COLUMN.PARTITION_ID]: partitionId,
-    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-    replica_count: 3,
-    [COLUMN.LEADER_NODE_ID]: leaderNodeId,
+    [COLUMN.PARTITION_ID]: partitionId, [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+    replica_count: 3, [COLUMN.LEADER_NODE_ID]: leaderNodeId,
   };
 }
 
@@ -1127,7 +1086,9 @@ test('Finding 3: Distributed Leader vs Follower Active-Owner Admission + Leaders
       }),
       (err) => err.admissionAnswer?.failureCode ===
         PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN &&
-        err.admissionResult?.allowed === false,
+        err.admissionAnswer?.[RETAINED_PLACEMENT_ATTEMPT] === true &&
+        err.admissionResult === undefined,
+      'Uncertain placement attempt (OUTCOME_UNKNOWN) does NOT set admissionResult.allowed=false so provisioning cannot switch to an alternate target while the first attempt may have committed',
     );
     assert.equal(prepareRequestsSeenOnLeaderA.length, 2);
     assert.equal(admittedPayloadsSeen.length, 2);
@@ -1178,6 +1139,48 @@ test('Finding 3: Distributed Leader vs Follower Active-Owner Admission + Leaders
       firstUncertainPayload.body,
       'Retained uncertain attempt replays exact original frozen statement bytes across leadership transition',
     );
+
+    // Verify that when NO active local owner and NO remote ledger route exist,
+    // createPartitionOperationViaPlacementAdmission fails closed with PLACEMENT_LEDGER_LEADER_UNAVAILABLE
+    // before building or retaining any un-authored statement:
+    followerLedgerServiceB.isLeader = false;
+    ownerB.isLeader = false;
+    let routeAvailable = false;
+    const unroutedCache = {
+      ...cache,
+      getAll(tableName) {
+        if (!routeAvailable && (tableName === TABLES.PARTITIONS || tableName === TABLES.SERVICES)) {
+          return [];
+        }
+        return cache.getAll(tableName);
+      },
+    };
+    coordinatorB.systemTableCache = unroutedCache;
+    const unroutedMove = {
+      type: OperationType.ADD,
+      nodeId: 'n3',
+      copySourceNodeId: 'n2',
+      operationIntentId: 'intent-unrouted-must-not-retain',
+    };
+    await assert.rejects(
+      () => coordinatorB.createPartitionOperationViaPlacementAdmission({
+        partitionId: 'config-p1',
+        entityType: 'partition',
+        entityId: 'config-p1',
+        sourceNodeId: 'n2',
+        normalizedMoveType: OperationType.ADD,
+        move: unroutedMove,
+        requestedMove: unroutedMove,
+      }),
+      (err) => err.code === 'PLACEMENT_LEDGER_LEADER_UNAVAILABLE',
+      'Fails closed when neither active local placement owner nor remote ledger route is available',
+    );
+    assert.equal(
+      coordinatorB.uncertainPlacementAdmissionAttempts.size,
+      0,
+      'No un-authored statement is constructed or retained when placement owner authority is unreachable',
+    );
+    routeAvailable = true;
   } finally {
     ledgerA.db.close();
   }
@@ -1190,41 +1193,27 @@ test('Finding 4: Partial-Cohort Schema Provisioning Recovery Under Temporary Mem
     {...nodeRow('n2', 'h2'), [COLUMN.LAST_HEARTBEAT]: nowMs, memory_mb: 2048, memory_usage_percent: 99, cpu_usage_percent: 20},
   ];
   const partitionId = 'tbl-partial-recovery-p1';
-  const existingServices = [
-    {
-      [COLUMN.REPLICA_ID]: `${partitionId}-r1`,
-      [COLUMN.SERVICE_ID]: `${partitionId}-r1`,
-      [COLUMN.PARTITION_ID]: partitionId,
-      [COLUMN.NODE_ID]: 'n1',
-      service_type: 'partition',
-      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-      [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
-      address: `n1/partition/${partitionId}-r1`,
-    },
-  ];
-  const cache = createSimpleSystemCache(
-    [],
-    existingServices,
-    twoNodes,
-  );
+  const existingServices = [{
+    [COLUMN.REPLICA_ID]: `${partitionId}-r1`, [COLUMN.SERVICE_ID]: `${partitionId}-r1`,
+    [COLUMN.PARTITION_ID]: partitionId, [COLUMN.NODE_ID]: 'n1',
+    service_type: 'partition', [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+    [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER, address: `n1/partition/${partitionId}-r1`,
+  }];
+  const cache = createSimpleSystemCache([], existingServices, twoNodes);
   cache.filter = (tableName, pred) => cache.getAll(tableName).filter(pred);
   const ledger = createRealSqlLedgerHarness(cache, 'n1', () => nowMs);
 
   try {
     const nodeAuthority = {
-      subscribe: () => () => {},
-      scheduleRefresh: () => {},
+      subscribe: () => () => {}, scheduleRefresh: () => {},
       answerCommittedNodes: () => ({
-        state: 'ready',
-        epoch: {publicationEpoch: 4},
+        state: 'ready', epoch: {publicationEpoch: 4},
         nodeRows: cache.getAll(TABLES.NODES),
         formation: {state: PLACEMENT_FORMATION_STATE.FORMED, latchEpoch: 4},
       }),
     };
     const readNodeObservation = createControlPlanePlacementNodeObservationReader({
-      localNodeId: 'n1',
-      resourceDiagnosticsSampler: null,
-      systemTableCache: cache,
+      localNodeId: 'n1', resourceDiagnosticsSampler: null, systemTableCache: cache,
     });
     const controller = createAdaptivePlacementBudgetController({
       readNodeObservation,
@@ -1232,14 +1221,9 @@ test('Finding 4: Partial-Cohort Schema Provisioning Recovery Under Temporary Mem
       targetWindow: {initialLimit: 2, minLimit: 1, maxLimit: 4},
     });
     const owner = createReplicaPlacementOwner({
-      nodeId: 'n1',
-      ledgerPartitionService: ledger.service,
-      nodeAuthority,
-      systemTableCache: cache,
-      now: () => nowMs,
-      logger: ledger.service.logger,
-      admitPlacement: ledger.admitPlacement,
-      releasePlacementHold: ledger.releasePlacementHold,
+      nodeId: 'n1', ledgerPartitionService: ledger.service, nodeAuthority,
+      systemTableCache: cache, now: () => nowMs, logger: ledger.service.logger,
+      admitPlacement: ledger.admitPlacement, releasePlacementHold: ledger.releasePlacementHold,
       adaptiveBudgetController: controller,
     });
     ledger.service.rebalancerLeadershipSink = owner;
@@ -1257,37 +1241,28 @@ test('Finding 4: Partial-Cohort Schema Provisioning Recovery Under Temporary Mem
         this.controlPlaneReadinessService = {
           answerCommittedNodes: () => nodeAuthority.answerCommittedNodes(),
         };
-        this.submitPlacementPayload = (payload) =>
-          Promise.resolve(ledger.admitPlacement(payload));
+        this.submitPlacementPayload = (payload) => Promise.resolve(ledger.admitPlacement(payload));
       }
       assertNativePlacementAliasProof() {}
       async checkProvisioningAdmission() {
         return {
-          allowed: true,
-          decisionType: 'admitted',
+          allowed: true, decisionType: 'admitted',
           admissionResult: {allowed: true, decisionType: 'admitted'},
         };
       }
       async createOperation(move, options = {}) {
         return this.createPartitionOperationViaPlacementAdmission({
-          partitionId: move.partitionId,
-          entityType: 'partition',
-          entityId: move.partitionId,
-          sourceNodeId: 'n1',
-          normalizedMoveType: OperationType.ADD,
-          move,
-          requestedMove: move,
+          partitionId: move.partitionId, entityType: 'partition', entityId: move.partitionId,
+          sourceNodeId: 'n1', normalizedMoveType: OperationType.ADD,
+          move, requestedMove: move,
           assertFreshCreationAllowed: options.assertFreshCreationAllowed,
         });
       }
       async executeOperation(operation) {
         existingServices.push({
-          [COLUMN.REPLICA_ID]: operation.replicaId,
-          [COLUMN.SERVICE_ID]: operation.replicaId,
-          [COLUMN.PARTITION_ID]: operation.partitionId,
-          [COLUMN.NODE_ID]: operation.targetNodeId,
-          service_type: 'partition',
-          [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+          [COLUMN.REPLICA_ID]: operation.replicaId, [COLUMN.SERVICE_ID]: operation.replicaId,
+          [COLUMN.PARTITION_ID]: operation.partitionId, [COLUMN.NODE_ID]: operation.targetNodeId,
+          service_type: 'partition', [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
           [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
           address: `${operation.targetNodeId}/partition/${operation.replicaId}`,
         });
@@ -1471,4 +1446,46 @@ test('Finding 5: Real Remote Heartbeat Telemetry (TABLES.NODES Producer Shape On
   assert.equal(snap.targetDecisions.get('n2').action, ACTION.INCREASE);
   assert.equal(snap.targetDecisions.get('n2').reason, REASON.HEALTHY_BUDGET_CONSTRAINED_DEMAND);
   assert.equal(snap.targetBudgetOf('n2'), 3);
+
+  const multiSampleController = createAdaptivePlacementBudgetController({
+    readNodeObservation,
+    targetWindow: {
+      initialLimit: 3, minLimit: 1, maxLimit: 4,
+      minAdjustIntervalMs: 1_000, requiredHealthySamplesAfterDecrease: 2,
+    },
+  });
+  const evalMulti = (occ) => multiSampleController.evaluatePassBudgets({
+    nodeInput,
+    occupancy: {bySource: new Map(), byTarget: new Map([['n2', occ]]), unrecordedSourceCopies: 0},
+    waitingBySource: new Map(), waitingByTarget: new Map([['n2', 2]]), nowMs,
+  });
+  nowMs += 2_000;
+  cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPDATE, {
+    node_id: 'n2', last_heartbeat: nowMs, telemetry_sampled_at: nowMs, telemetry_sample_id: 101,
+    boot_incarnation: 1, memory_mb: 8192, memory_usage_percent: 35, cpu_usage_percent: 96,
+  });
+  let multiSnap = evalMulti(3);
+  assert.equal(multiSnap.targetDecisions.get('n2').action, ACTION.DECREASE);
+  assert.equal(multiSnap.targetBudgetOf('n2'), 2);
+
+  const cachedSampleAtMs = nowMs + 5_000;
+  for (const hbAtMs of [cachedSampleAtMs, cachedSampleAtMs + 5_000]) {
+    nowMs = hbAtMs;
+    cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPDATE, {
+      node_id: 'n2', last_heartbeat: nowMs,
+      telemetry_sampled_at: cachedSampleAtMs, telemetry_sample_id: 102,
+      boot_incarnation: 1, memory_mb: 8192, memory_usage_percent: 35, cpu_usage_percent: 25,
+    });
+    multiSnap = evalMulti(2);
+    assert.equal(multiSnap.targetDecisions.get('n2').action, ACTION.HOLD);
+    assert.equal(multiSnap.targetDecisions.get('n2').reason, REASON.RECOVERY_HYSTERESIS_HOLD);
+  }
+  nowMs = cachedSampleAtMs + 7_000;
+  cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPDATE, {
+    node_id: 'n2', last_heartbeat: nowMs, telemetry_sampled_at: nowMs, telemetry_sample_id: 103,
+    boot_incarnation: 1, memory_mb: 8192, memory_usage_percent: 35, cpu_usage_percent: 24,
+  });
+  multiSnap = evalMulti(2);
+  assert.equal(multiSnap.targetDecisions.get('n2').action, ACTION.INCREASE);
+  assert.equal(multiSnap.targetBudgetOf('n2'), 3);
 });

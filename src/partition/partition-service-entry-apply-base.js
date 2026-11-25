@@ -152,6 +152,26 @@ function committedCommandGate(service, committed) {
   }
 }
 
+function buildSingleStatementLockCheckOperation(command) {
+  return {
+    sql: command.sql,
+    params: command.params || [],
+    ...(command.typedParams ? {typedParams: command.typedParams} : {}),
+  };
+}
+
+function buildAppliedStatementResolutionAnswer(info, identity) {
+  return {
+    success: true,
+    changes: info.changes,
+    lastInsertRowid: info.lastInsertRowid,
+    ...(typeof info.mutationKind === 'string' ? {mutationKind: info.mutationKind} : {}),
+    ...(info.typedEffects ? {typedEffects: info.typedEffects} : {}),
+    ...(Array.isArray(info.affectedRows) ? {affectedRows: info.affectedRows} : {}),
+    ...identity,
+  };
+}
+
 class PartitionServiceEntryApplyBase extends PartitionServiceRaftInitBase {
   /**
    * Handle incoming transport message.
@@ -543,7 +563,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceRaftInitBase {
         return settleCdcOwedRefusal(this, {command, afterCommit}, cdcAdmission.answer);
       }
       const lockConflict = checkOperationsLockingReadConflict(this, {
-        operations: [{sql: command.sql, params: command.params || []}],
+        operations: [buildSingleStatementLockCheckOperation(command)],
         transactionId: command.transactionId ?? null,
         deterministic: true,
       });
@@ -584,13 +604,10 @@ class PartitionServiceEntryApplyBase extends PartitionServiceRaftInitBase {
         afterCommit(() => this.registerMigrationDefaultFromAlterSql(command.sql));
       }
       afterCommit(() => {
-        this.resolveCommittedWrite(command.entryId, {
-          success: true,
-          changes: info.changes,
-          lastInsertRowid: info.lastInsertRowid,
-          ...(Array.isArray(info.affectedRows) ? {affectedRows: info.affectedRows} : {}),
-          ...identity,
-        });
+        this.resolveCommittedWrite(
+          command.entryId,
+          buildAppliedStatementResolutionAnswer(info, identity),
+        );
       });
     }
     scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, () =>

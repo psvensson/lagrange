@@ -132,7 +132,7 @@ documentClass: generated
 - [sql-table-definition.js](sql-table-definition.js) - The one table-definition authority (design coordinator-sqlite-merge S2.7): the CREATE TABLE text a catalog schema... (importers: many)
 - [sql-transaction-control-grammar.js](sql-transaction-control-grammar.js) - The transaction-control statement grammar (BEGIN, START TRANSACTION, COMMIT, END, ROLLBACK, ABORT) the SQL parser... (importers: few)
 - [sql-value-codec-constants.js](sql-value-codec-constants.js) - The names the SQL value codec (src/query/sql-value-codec.js) owns: the storage-class tags of its one typed wire... (importers: few)
-- [sql-value-codec.js](sql-value-codec.js) - The one typed wire encoding of SQL values (coordinator-sqlite-merge design section 2.6, decisions D1 and D3). (importers: many)
+- [sql-value-codec.js](sql-value-codec.js) - The one typed wire encoding of SQL values (coordinator-sqlite-merge design section 2.6, decisions D1 and D3). (importers: hub)
 - [sql-value-presentation.js](sql-value-presentation.js) - Canonical client presentation owner for SQL values decoded from TypedRowSet or produced by CoordinatorMergeSession... (importers: many)
 - [sqlite-identifier.js](sqlite-identifier.js) - No leading comment; first export: renderSqliteIdentifier. (importers: many)
 - [strategy-constants.js](strategy-constants.js) - Constants for join/data-movement strategy selection. (importers: few)

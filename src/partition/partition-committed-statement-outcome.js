@@ -8,26 +8,17 @@
 
 import {sqliteConnectionState} from '../storage/sqlite-connection-state.js';
 import {
-  PARTITION_COMMITTED_COMMAND_ERROR_CODE,
-  PARTITION_COMMITTED_COMMAND_OUTCOME,
-  PARTITION_SERVICE_ERROR_MSG,
-  PARTITION_SERVICE_EVENT,
-  PARTITION_SERVICE_LOG_MSG,
-  PARTITION_SERVICE_VALUE,
+  PARTITION_COMMITTED_COMMAND_ERROR_CODE, PARTITION_COMMITTED_COMMAND_OUTCOME,
+  PARTITION_SERVICE_ERROR_MSG, PARTITION_SERVICE_EVENT,
+  PARTITION_SERVICE_LOG_MSG, PARTITION_SERVICE_VALUE,
 } from './partition-service-constants.js';
 import {
-  PARTITION_COMMITTED_STATEMENT_COLUMNS,
-  PARTITION_COMMITTED_STATEMENT_ERROR_CODE,
-  PARTITION_COMMITTED_STATEMENT_FORMAT,
-  PARTITION_COMMITTED_RECORD_CLASS,
-  PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL,
-  PARTITION_COMMITTED_STATEMENT_RECORD_STATE,
+  PARTITION_COMMITTED_STATEMENT_COLUMNS, PARTITION_COMMITTED_STATEMENT_ERROR_CODE,
+  PARTITION_COMMITTED_STATEMENT_FORMAT, PARTITION_COMMITTED_RECORD_CLASS,
+  PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL, PARTITION_COMMITTED_STATEMENT_RECORD_STATE,
   PARTITION_DETERMINISTIC_STATEMENT_BINDING_ERRORS,
-  PARTITION_DETERMINISTIC_STATEMENT_SQLITE_CODES,
-  PARTITION_OWNER_COMMAND_PRELUDE,
-  PARTITION_SETTLED_COMMAND_STATE,
-  PARTITION_SETTLED_REPLAY,
-  PARTITION_SQLITE_RESULT_CODE,
+  PARTITION_DETERMINISTIC_STATEMENT_SQLITE_CODES, PARTITION_OWNER_COMMAND_PRELUDE,
+  PARTITION_SETTLED_COMMAND_STATE, PARTITION_SETTLED_REPLAY, PARTITION_SQLITE_RESULT_CODE,
 } from './partition-committed-statement-outcome-constants.js';
 import {admitCommittedCommand, committedCommandRefusalResult} from
   './partition-committed-command-admission.js';
@@ -36,17 +27,20 @@ import {RETAINED_STORE_ERROR, retainedStoreError, readRetainedStoreRowsIn,
   retainedStoreTableExistsIn, isStoredInteger, isStoredNullableText,
   isStoredNullableInteger} from './partition-retained-store-observation.js';
 import {
-  PARTITION_STATEMENT_REFUSAL_CODE,
-  refusalLayerFieldOf,
+  PARTITION_STATEMENT_REFUSAL_CODE, refusalLayerFieldOf,
 } from './partition-statement-admission-constants.js';
-import {
-  LOCKING_READ_ERROR_CODE,
-  LOCKING_READ_SQL_STATE,
-} from '../query/sql-locking-read-constants.js';
+import {LOCKING_READ_ERROR_CODE, LOCKING_READ_SQL_STATE} from
+  '../query/sql-locking-read-constants.js';
 import {TABLES} from '../constants/tables.js';
-import {decodeTypedRowSet} from '../query/sql-value-codec.js';
+import {materializeTypedRowSetObjects} from '../query/sql-value-codec.js';
+import {PARTITION_TRANSITION_METADATA_FIELD} from './partition-constants.js';
+import {parseTablePartitionTransition} from './partition-transition-row.js';
 
 const SYSTEM_TABLE_NAMES_SET = Object.freeze(new Set(Object.values(TABLES)));
+const ACTIVE_MIRROR_TRANSITION_STATES = Object.freeze(new Set([
+  'split_backfilling', 'split_catchup', 'split_cutover_active',
+  'merge_backfilling', 'merge_catchup', 'merge_cutover_active',
+]));
 const NO_COMMITTED_STATEMENT_KEY = null;
 const COLUMN_LIST_SEPARATOR = ', ';
 const FORMAT_UNSUPPORTED_REMEDY =
@@ -61,8 +55,7 @@ const STATEMENT_OUTCOME_EFFECTS_SQL = Object.freeze({
   CREATE_LOG_INDEX_IDX:
     'CREATE INDEX IF NOT EXISTS idx_partition_statement_outcome_effects_log_index ' +
     'ON _partition_statement_outcome_effects (log_index)',
-  TABLE_EXISTS:
-    'SELECT 1 AS present FROM sqlite_master WHERE type = \'table\' AND name = ?',
+  TABLE_EXISTS: 'SELECT 1 AS present FROM sqlite_master WHERE type = \'table\' AND name = ?',
   INSERT:
     'INSERT INTO _partition_statement_outcome_effects ' +
     '(entry_key, log_index, mutation_kind, typed_effects_json) VALUES (?, ?, ?, ?)',
@@ -71,21 +64,57 @@ const STATEMENT_OUTCOME_EFFECTS_SQL = Object.freeze({
     'FROM _partition_statement_outcome_effects WHERE entry_key = ?',
   DELETE_THROUGH_LOG_INDEX:
     'DELETE FROM _partition_statement_outcome_effects WHERE log_index <= ?',
-  DELETE_ALL:
-    'DELETE FROM _partition_statement_outcome_effects',
+  DELETE_ALL: 'DELETE FROM _partition_statement_outcome_effects',
 });
 
-function partitionOwesDurableMirrorEffects(
-  service,
-  tableName = service?.tableName,
-) {
-  if (!service?.db) return false;
-  if (service.splitReplication || service.mergeReplication ||
-      service.captureDurableMirrorEffects) {
-    return true;
-  }
+function resolveTableRowForMirrorEffects(service, tableName) {
+  const cache = service?.systemTableCache;
+  if (!cache) return null;
+  const byId = service.tableId ? cache.get(TABLES.TABLES, service.tableId) : null;
+  if (byId) return byId;
+  return (tableName ? cache.get(TABLES.TABLES, tableName) : null) ?? null;
+}
+
+function extractTransitionSourceIds(metadata) {
+  if (!metadata) return null;
+  const single = metadata[PARTITION_TRANSITION_METADATA_FIELD.SOURCE_PARTITION_ID];
+  if (typeof single === 'string' && single.length > 0) return [single];
+  const list = metadata[PARTITION_TRANSITION_METADATA_FIELD.SOURCE_PARTITION_IDS];
+  return Array.isArray(list) && list.length > 0 ? list : null;
+}
+
+function isPartitionNamedAsTransitionTargetOnly(partitionId, tableRow) {
+  if (typeof partitionId !== 'string' || partitionId.length === 0) return false;
+  const parsed = parseTablePartitionTransition(tableRow);
+  const sourceIds = extractTransitionSourceIds(parsed?.metadata);
+  return sourceIds !== null && !sourceIds.includes(partitionId);
+}
+
+function hasActiveVolatileMirrorHandle(service) {
+  return Boolean(
+    service.splitReplication || service.mergeReplication || service.captureDurableMirrorEffects,
+  );
+}
+
+function isUserTableNameEligibleForMirror(tableName) {
   return typeof tableName === 'string' && tableName.length > 0 &&
     !SYSTEM_TABLE_NAMES_SET.has(tableName);
+}
+
+function isTableRowInActiveSourceTransition(service, tableRow) {
+  if (!tableRow) return true;
+  const state = String(tableRow.partition_transition_state ?? '').toLowerCase();
+  if (!ACTIVE_MIRROR_TRANSITION_STATES.has(state)) return false;
+  return !isPartitionNamedAsTransitionTargetOnly(service.partitionId, tableRow);
+}
+
+function partitionOwesDurableMirrorEffects(service, tableName = service?.tableName) {
+  if (!service) return false;
+  if (hasActiveVolatileMirrorHandle(service)) return true;
+  if (!isUserTableNameEligibleForMirror(tableName)) return false;
+  return isTableRowInActiveSourceTransition(
+    service, resolveTableRowForMirrorEffects(service, tableName),
+  );
 }
 
 // The same identity is used by apply, replay answers and cold observation.
@@ -253,19 +282,6 @@ function persistCapturedRowEffectsIn(
   );
 }
 
-function materializeDecodedTypedEffects(typedEffects) {
-  const {columns, rows} = decodeTypedRowSet(typedEffects);
-  return Object.freeze(
-    rows.map((values) => {
-      const row = {};
-      for (let index = 0; index < columns.length; index += 1) {
-        row[columns[index]] = values[index];
-      }
-      return Object.freeze(row);
-    }),
-  );
-}
-
 function readCapturedRowEffectsIn(db, entryKey) {
   if (!capturedRowEffectsTableExistsIn(db)) {
     return null;
@@ -279,7 +295,7 @@ function readCapturedRowEffectsIn(db, entryKey) {
   return {
     mutationKind:
       typeof row.mutation_kind === 'string' ? row.mutation_kind : null,
-    affectedRows: materializeDecodedTypedEffects(
+    affectedRows: materializeTypedRowSetObjects(
       JSON.parse(row.typed_effects_json),
     ),
   };
@@ -463,6 +479,17 @@ function assertOwnerIdentity(entryKey, ownerResultText, commandDigest) {
   throw error;
 }
 
+function reconcileCommittedStatementMirrorEffects(service, state, entryKey, index, result) {
+  if (!result?.typedEffects) return;
+  if (partitionOwesDurableMirrorEffects(service)) {
+    persistCapturedRowEffectsIn(
+      service, state, entryKey, index, result.mutationKind, result.typedEffects,
+    );
+  } else if (capturedRowEffectsTableExistsIn(service.db)) {
+    state.runNonApplication(STATEMENT_OUTCOME_EFFECTS_SQL.DELETE_ALL);
+  }
+}
+
 /**
  * Record an entry key's terminal outcome inside the application transaction.
  * @param {Object} service - The partition (its `db`).
@@ -480,16 +507,7 @@ function recordCommittedStatementOutcome(service, {entryKey, outcome, index,
     result === null ? null : result.changes,
     result === null ? null : result.lastInsertRowid,
     ownerResultText, commandDigest);
-  if (result?.typedEffects && partitionOwesDurableMirrorEffects(service)) {
-    persistCapturedRowEffectsIn(
-      service,
-      state,
-      entryKey,
-      index,
-      result.mutationKind,
-      result.typedEffects,
-    );
-  }
+  reconcileCommittedStatementMirrorEffects(service, state, entryKey, index, result);
 }
 
 /**
@@ -727,50 +745,32 @@ function settleLockingReadRefusedCommittedStatement(service, {
   lockConflict, command, entryKey, index, term, identity, afterCommit,
 }) {
   recordCommittedStatementOutcome(service, {
-    entryKey,
-    outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED,
-    index,
-    term,
-    error: {code: lockConflict.errorCode, message: lockConflict.error},
+    entryKey, outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED,
+    index, term, error: {code: lockConflict.errorCode, message: lockConflict.error},
   });
   afterCommit(() => service.resolveCommittedWrite(command.entryId, {
-    success: false,
-    error: lockConflict.error,
-    failureCode: lockConflict.errorCode,
-    errorCode: lockConflict.errorCode,
-    code: lockConflict.code,
-    sqlState: lockConflict.sqlState,
-    conflict: true,
-    retryable: true,
+    success: false, error: lockConflict.error,
+    failureCode: lockConflict.errorCode, errorCode: lockConflict.errorCode,
+    code: lockConflict.code, sqlState: lockConflict.sqlState,
+    conflict: true, retryable: true,
     ...(lockConflict.rowKey ? {rowKey: lockConflict.rowKey} : {}),
     ...(lockConflict.conflictingTransactionId ?
       {conflictingTransactionId: lockConflict.conflictingTransactionId} : {}),
-    committed: true,
-    outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED,
-    entryId: command.entryId,
-    ...identity,
+    committed: true, outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED,
+    entryId: command.entryId, ...identity,
   }));
   return PARTITION_COMMITTED_COMMAND_OUTCOME.STATEMENT_FAILED;
 }
 
 export {
-  committedStatementEntryKey,
-  committedStatementOutcomeFormatError,
-  detectCommittedStatementOutcomeFormat,
-  isCommittedStatementKeyed,
-  ownerCommandPrelude,
-  partitionOwesDurableMirrorEffects,
-  pruneSettledMirrorOutcomeEffects,
-  readCommittedStatementCensusIn,
-  readSettledOwnerCommandIn,
-  answerSettledStatement,
-  createCommittedStatementOutcomeTable,
-  isDeterministicStatementFailure,
-  readCommittedStatementOutcome,
-  recordCommittedStatementOutcome,
-  settleFailedCommittedStatement,
-  settleLockingReadRefusedCommittedStatement,
-  settleRecordedCommittedStatement,
-  statementEnvironmentFailure,
+  committedStatementEntryKey, committedStatementOutcomeFormatError,
+  detectCommittedStatementOutcomeFormat, isCommittedStatementKeyed,
+  ownerCommandPrelude, partitionOwesDurableMirrorEffects,
+  pruneSettledMirrorOutcomeEffects, readCommittedStatementCensusIn,
+  readSettledOwnerCommandIn, answerSettledStatement,
+  createCommittedStatementOutcomeTable, isDeterministicStatementFailure,
+  readCommittedStatementOutcome, recordCommittedStatementOutcome,
+  settleFailedCommittedStatement, settleLockingReadRefusedCommittedStatement,
+  settleRecordedCommittedStatement, statementEnvironmentFailure,
   trackPendingOwnerCommand,
 };

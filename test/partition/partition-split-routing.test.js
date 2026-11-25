@@ -9,10 +9,22 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   PARTITION_DESCRIPTOR_EPOCH_ERROR_MSG,
   PARTITION_TRANSITION_METADATA_FIELD,
+  PARTITION_TRANSITION_STATE,
 } from '../../src/partition/partition-constants.js';
 import {
   loadDurableDeltasBehindWatermark,
 } from '../../src/partition/partition-mirror-replay-cursor.js';
+import {
+  createDefaultPartitionRequestBuilder,
+} from '../../src/query/query-executor-partition-request-builders.js';
+import {
+  decodeRemoteCdcEventsFromWire,
+  handleRemoteLiveQueryCdcSubscribe,
+} from '../../src/partition/partition-live-query-cdc-remote.js';
+import {
+  acquireDbForUpdateReservation,
+  releaseDbPartitionTransactionReservations,
+} from '../../src/partition/partition-locking-read-store.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {
   PARTITION_SERVICE_ERROR_MSG,
@@ -677,14 +689,22 @@ test('split routing end-to-end across source executeQuery, durable restart, and 
           partitionId,
           sql,
           params,
-          _isRead,
+          isRead,
           _waitForCommit,
           _isTransaction,
           deliveryOptions,
         ) {
           const target =
             partitionId === LEFT_PARTITION_ID ? leftChild : rightChild;
-          return target.executeQuery(sql, params, deliveryOptions);
+          const buildRequest = createDefaultPartitionRequestBuilder({
+            executionOptions: deliveryOptions || {},
+            forRead: Boolean(isRead),
+            params,
+            partitionId,
+            sql,
+          });
+          const serializedRequest = JSON.parse(JSON.stringify(buildRequest()));
+          return target.handleRemoteQuery(serializedRequest);
         },
       };
 
@@ -700,6 +720,31 @@ test('split routing end-to-end across source executeQuery, durable restart, and 
           ),
         });
       }
+
+      // 5. Also verify a small INTEGER (43n) in BLOB-affinity untyped_val across the
+      // real request builder + JSON wire + handleRemoteQuery child delivery path:
+      const smallIntInsert = await recoveredSource.executeQuery(
+        `INSERT INTO ${EXACT_ITEMS_TABLE} (id, big_int, raw_blob, ratio, untyped_val) ` +
+        'VALUES (?, ?, ?, ?, ?)',
+        ['d', 7n, blobA, 0.5, 43n],
+        {entryId: 'entry-small-int-blob-affinity'},
+      );
+      t.equal(smallIntInsert.success, true);
+      const postUpdateDeltas = loadDurableDeltasBehindWatermark(
+        recoveredSource,
+        cteDelete.logIndex,
+      );
+      t.equal(postUpdateDeltas.length, 1);
+      await replaySplitEntry(postUpdateDeltas[0], metadata, {
+        queryExecutor,
+        descriptorEpochEvidence: createDescriptorEvidence(
+          {
+            active_partition_version: ACTIVE_VERSION,
+            pending_partition_version: PENDING_VERSION,
+          },
+          PENDING_VERSION,
+        ),
+      });
 
       const inspectChildRows = (db) =>
         db
@@ -719,8 +764,8 @@ test('split routing end-to-end across source executeQuery, durable restart, and 
 
       t.equal(
         leftRows.length,
-        1,
-        'comment and CTE DELETEs removed a and b from left child (never upserted)',
+        2,
+        'comment and CTE DELETEs removed a and b from left child while c and d remain',
       );
       t.equal(leftRows[0].id, 'c');
       t.equal(leftRows[0].big_int, updatedPos);
@@ -732,6 +777,15 @@ test('split routing end-to-end across source executeQuery, durable restart, and 
       t.equal(leftRows[0].raw_blob_type, 'blob');
       t.equal(leftRows[0].ratio_type, 'real');
       t.equal(leftRows[0].untyped_val_type, 'integer');
+
+      t.equal(leftRows[1].id, 'd');
+      t.equal(leftRows[1].big_int, 7n);
+      t.equal(leftRows[1].untyped_val, 43n);
+      t.equal(
+        leftRows[1].untyped_val_type,
+        'integer',
+        'small INTEGER in BLOB-affinity column stays integer across JSON wire child delivery',
+      );
 
       t.equal(
         rightRows.length,
@@ -753,6 +807,187 @@ test('split routing end-to-end across source executeQuery, durable restart, and 
       if (recoveredSource) await recoveredSource.shutdown();
       if (leftChild) await leftChild.shutdown();
       if (rightChild) await rightChild.shutdown();
+      fs.rmSync(tempDir, {recursive: true, force: true});
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
+  });
+
+test('committed row-lock check with BLOB/BigInt typedParams, remote live-query CDC JSON serialization, __proto__ row materialization, and checkpoint-gated split effect pruning',
+  async (t) => {
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+    ConfigurationManager.getInstance().initialize({
+      node: {id: 'split-routing-review-node'},
+    });
+    LoggingService.getInstance().initialize({level: 'error'});
+
+    const tempDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'split-routing-review-'),
+    );
+    const dbPath = path.join(tempDir, 'review.sqlite');
+    let partition = null;
+
+    try {
+      partition = await openUserPartition('review-items-p1', dbPath);
+      const deadBlob = Buffer.from([0xde, 0xad]);
+      const cafeBlob = Buffer.from([0xca, 0xfe]);
+      const exactBig = 9007199254740993n;
+
+      // 1. Subscribe remote live-query CDC with a real JSON.stringify transport
+      const deliveredWirePayloads = [];
+      partition.transport = {
+        async deliver(_address, payload) {
+          const serialized = JSON.stringify(payload);
+          deliveredWirePayloads.push(JSON.parse(serialized));
+          return {acknowledged: true, success: true};
+        },
+      };
+      const subAck = await handleRemoteLiveQueryCdcSubscribe(partition, {
+        subscriberId: 'sub-json-1',
+        subscriberAddress: 'node-2/service/live-query-cdc',
+        queryId: 'q-1',
+      });
+      t.equal(subAck.success, true);
+
+      // Insert row with ordinary INTEGER (1), large 64-bit BigInt, and BLOB:
+      const ins = await partition.executeQuery(
+        `INSERT INTO ${EXACT_ITEMS_TABLE} (id, big_int, raw_blob, ratio, untyped_val) ` +
+        'VALUES (?, ?, ?, ?, ?)',
+        ['row-1', exactBig, deadBlob, 1.5, 1n],
+        {entryId: 'entry-cdc-and-lock-seed'},
+      );
+      t.equal(ins.success, true);
+      t.equal(
+        typeof ins.affectedRows?.[0]?.untyped_val,
+        'number',
+        'safe integers in affectedRows are canonical JS numbers on user tables',
+      );
+      t.equal(ins.affectedRows?.[0]?.untyped_val, 1);
+
+      await partition.flushPendingCDCEvents?.();
+      t.equal(
+        deliveredWirePayloads.length,
+        1,
+        'remote live-query CDC event serialized through JSON.stringify without throwing on BigInt or Buffer',
+      );
+      const decodedEvents = decodeRemoteCdcEventsFromWire(
+        deliveredWirePayloads[0].events,
+      );
+      t.equal(decodedEvents[0].data.id, 'row-1');
+      t.equal(decodedEvents[0].data.untyped_val, 1);
+      t.equal(decodedEvents[0].data.big_int, exactBig);
+      t.equal(Buffer.compare(decodedEvents[0].data.raw_blob, deadBlob), 0);
+
+      // 2. Acquire a FOR UPDATE lock on row-1 and verify a committed write using a
+      // BLOB parameter (WHERE raw_blob = ?) is refused with LOCK_NOT_AVAILABLE at committed apply:
+      const lockRes = acquireDbForUpdateReservation(partition.db, {
+        partitionId: partition.partitionId,
+        tableName: EXACT_ITEMS_TABLE,
+        rowKey: `${EXACT_ITEMS_TABLE}:${partition.partitionId}:row-1`,
+        transactionId: 'tx-holder-1',
+        sessionId: 'sess-holder-1',
+        acquiredAt: Date.now(),
+        expiresAt: Date.now() + 30_000,
+      });
+      t.equal(lockRes.status, 'acquired');
+
+      const conflictReq = createDefaultPartitionRequestBuilder({
+        executionOptions: {entryId: 'entry-blob-lock-conflict'},
+        forRead: false,
+        params: [deadBlob],
+        partitionId: partition.partitionId,
+        sql: `UPDATE ${EXACT_ITEMS_TABLE} SET ratio = 9.5 WHERE raw_blob = ?`,
+      })();
+      // Verify directly through proposeWrite (committed apply checkOperationsLockingReadConflict)
+      // as well as handleRemoteQuery:
+      const committedConflict = await partition.proposeWrite({
+        type: 'QUERY',
+        sql: `UPDATE ${EXACT_ITEMS_TABLE} SET ratio = 9.5 WHERE raw_blob = ?`,
+        params: [deadBlob],
+        entryId: 'entry-blob-lock-conflict-committed',
+      });
+      t.equal(committedConflict.success, false);
+      t.equal(
+        committedConflict.failureCode,
+        'LOCK_NOT_AVAILABLE',
+        'committed apply decodes typedParams for BLOB predicate and detects FOR UPDATE lock conflict',
+      );
+      const remoteConflict = await partition.handleRemoteQuery(
+        JSON.parse(JSON.stringify(conflictReq)),
+      );
+      t.equal(remoteConflict.success, false);
+      t.equal(remoteConflict.errorCode, 'LOCK_NOT_AVAILABLE');
+
+      releaseDbPartitionTransactionReservations(
+        partition.db,
+        partition.partitionId,
+        'tx-holder-1',
+      );
+
+      // 3. Verify drainage in mirrorCutoverActiveSplitWrite / drainSplitReplicationQueue
+      // does NOT prune _partition_statement_outcome_effects before the durable checkpoint is confirmed:
+      const metadata = {
+        ...createMetadata(PENDING_VERSION),
+        sourcePartitionId: partition.partitionId,
+      };
+      partition.splitReplication = {
+        metadata,
+        phase: PARTITION_TRANSITION_STATE.SPLIT_CATCHUP,
+        pendingEntries: [],
+        flushPromise: null,
+        startedAt: Date.now(),
+        lastError: null,
+        snapshotBarrierIndex: ins.logIndex,
+        replayWatermarkIndex: ins.logIndex,
+        authorized: true,
+        quiescing: false,
+        quiesced: false,
+        activities: new Set(),
+      };
+      partition.replaySplitEntry = async () => {};
+
+      const ins2 = await partition.executeQuery(
+        `INSERT INTO ${EXACT_ITEMS_TABLE} (id, big_int, raw_blob, ratio, untyped_val) ` +
+        'VALUES (?, ?, ?, ?, ?)',
+        ['row-2', 20n, cafeBlob, 2.0, 2n],
+        {entryId: 'entry-pre-delete-seed'},
+      );
+      t.equal(ins2.success, true);
+
+      const multiDel = await partition.executeQuery(
+        `DELETE FROM ${EXACT_ITEMS_TABLE} WHERE id IN (?, ?)`,
+        ['row-1', 'row-2'],
+        {entryId: 'entry-uncheckpointed-delete'},
+      );
+      t.equal(multiDel.success, true);
+
+      // Drain the queue (advancing volatile replayWatermarkIndex to multiDel.logIndex)
+      // WITHOUT confirming a durable CATCHUP_READY checkpoint:
+      await partition.flushSplitReplicationQueue();
+      t.equal(partition.splitReplication.replayWatermarkIndex, multiDel.logIndex);
+
+      // Simulate a crash before CATCHUP_READY is persisted: recovery reloads from the last
+      // durable checkpoint (ins.logIndex) and MUST still find multiDel's effect row!
+      const recoveredDeltas = loadDurableDeltasBehindWatermark(
+        partition,
+        ins.logIndex,
+      );
+      const recoveredDelete = recoveredDeltas.find(
+        (d) => d.entryId === 'entry-uncheckpointed-delete',
+      );
+      t.ok(
+        recoveredDelete,
+        'uncheckpointed DELETE delta is recovered after queue drain when crash precedes durable checkpoint',
+      );
+      t.equal(recoveredDelete.mutationKind, 'DELETE');
+      t.equal(
+        recoveredDelete.affectedRows?.length,
+        2,
+        'outcome effects row was preserved until durable checkpoint confirmation',
+      );
+    } finally {
+      if (partition) await partition.shutdown();
       fs.rmSync(tempDir, {recursive: true, force: true});
       ConfigurationManager.resetInstance();
       LoggingService.resetInstance();

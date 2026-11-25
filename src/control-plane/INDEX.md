@@ -95,7 +95,7 @@ documentClass: generated
 - [failure-class-registry.js](failure-class-registry.js) - Failure-class registry for harness-discovered failures. (importers: few)
 - [heartbeat-service-constants.js](heartbeat-service-constants.js) - Constants for HeartbeatService. (importers: many)
 - [heartbeat-service-lifecycle-methods.js](heartbeat-service-lifecycle-methods.js) - Initialize the heartbeat service. (importers: one)
-- [heartbeat-service-publication-methods.js](heartbeat-service-publication-methods.js) - Send a single heartbeat update. (importers: one)
+- [heartbeat-service-publication-methods.js](heartbeat-service-publication-methods.js) - Birth or refresh this node's endpoint at this process's exact boot incarnation (the endpoint incarnation authority):... (importers: one)
 - [heartbeat-service-reporter-visibility-methods.js](heartbeat-service-reporter-visibility-methods.js) - Normalize reporter heartbeat visibility evidence into one canonical decision so coalescing and verification follow... (importers: one)
 - [heartbeat-service-runtime-state.js](heartbeat-service-runtime-state.js) - Estimate usage-percent slope (percent per minute) with linear regression. (importers: few)
 - [heartbeat-service-write-coalescing.js](heartbeat-service-write-coalescing.js) - No leading comment; first export: buildNodeHeartbeatWriteDecision. (importers: few)

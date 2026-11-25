@@ -178,7 +178,8 @@ async function readPartitionVoterRemovalScope(coordinator, partitionId, move) {
 
 const TRANSIENT_PLACEMENT_ADMISSION_REFUSAL_REASONS = Object.freeze(new Set([
   'HARD_MEMORY_LIMIT_REACHED', 'HARD_STORAGE_LIMIT_REACHED',
-  'TARGET_MEMORY_CONSTRAINED', 'TARGET_STORAGE_CONSTRAINED', 'TARGET_STORAGE_FULL',
+  'TARGET_MEMORY_CONSTRAINED', 'TARGET_STORAGE_CONSTRAINED',
+  PLACEMENT_WAITING_REASON.TARGET_STORAGE_UNKNOWN, 'TARGET_STORAGE_FULL',
   'SOURCE_COPY_CAPACITY_REACHED', 'TARGET_COPY_CAPACITY_REACHED',
   'SOURCE_AT_CAPACITY', 'TARGET_AT_CAPACITY', 'COPY_OCCUPANCY_LIMIT_REACHED',
   'CDC_CAPACITY', 'placement_owner_unavailable', PLACEMENT_ADMISSION_ERROR.OWNER_UNAVAILABLE,
@@ -186,8 +187,11 @@ const TRANSIENT_PLACEMENT_ADMISSION_REFUSAL_REASONS = Object.freeze(new Set([
 ]));
 
 function attachTransientPlacementAdmissionRefusal(error, failureCode, answer, options) {
-  if (!TRANSIENT_PLACEMENT_ADMISSION_REFUSAL_REASONS.has(failureCode) &&
-      !answer?.[RETAINED_PLACEMENT_ATTEMPT]) {
+  if (answer?.[RETAINED_PLACEMENT_ATTEMPT] === true) {
+    error.rebalanceSkipReason = REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING;
+    return;
+  }
+  if (!TRANSIENT_PLACEMENT_ADMISSION_REFUSAL_REASONS.has(failureCode)) {
     return;
   }
   const targetNodeId = options?.targetNodeId || null;
@@ -237,13 +241,6 @@ function isValidResolvedCopyLimits(copyLimits) {
     copyLimits.hardAdmissionAllowed !== false &&
     Number.isInteger(copyLimits.kSrc) &&
     Number.isInteger(copyLimits.kTgt);
-}
-
-function canUseStandaloneCoordinatorBudgetController(coordinator, activeLocalOwner) {
-  if (activeLocalOwner !== null) return true;
-  return !(coordinator.ledgerPartitionServices?.size > 0) &&
-    resolvePlacementLedgerDelivery(coordinator) === null &&
-    Boolean(coordinator.adaptiveBudgetController);
 }
 
 function isSingleOperationPlacementAccepted(answer) {
@@ -523,10 +520,6 @@ const operationCreationSupportMethods = {
       return localLeader.rebalancerLeadershipSink;
     }
     if (this.replicaPlacementOwner?.isLeader === true) return this.replicaPlacementOwner;
-    if (!(this.ledgerPartitionServices?.size > 0) &&
-        resolvePlacementLedgerDelivery(this) === null) {
-      return this.replicaPlacementOwner ?? null;
-    }
     return null;
   },
 
@@ -569,8 +562,8 @@ const operationCreationSupportMethods = {
     }
     const nowMs = this.timeSource ? this.timeSource.now() : Date.now();
     const activeLocalOwner = this.resolveActiveReplicaPlacementOwner();
-    const copyLimits = canUseStandaloneCoordinatorBudgetController(this, activeLocalOwner) ?
-      resolveOwnerMoveCopyLimits(activeLocalOwner || this, placementMove, nowMs) :
+    const copyLimits = activeLocalOwner !== null ?
+      resolveOwnerMoveCopyLimits(activeLocalOwner, placementMove, nowMs) :
       await this.requestRemoteMoveCopyLimits(placementMove, partitionId);
     if (!isValidResolvedCopyLimits(copyLimits)) {
       const reason = typeof copyLimits?.reason === 'string' && copyLimits.reason.length > 0 ?
@@ -701,9 +694,6 @@ const operationCreationSupportMethods = {
     const attachment = this.replicaPlacementOwnerFactory(ledgerPartitionService);
     if (attachment?.owner) {
       this.replicaPlacementOwner = attachment.owner;
-      if (attachment.owner.adaptiveBudgetController) {
-        this.adaptiveBudgetController = attachment.owner.adaptiveBudgetController;
-      }
     }
     return attachment;
   },

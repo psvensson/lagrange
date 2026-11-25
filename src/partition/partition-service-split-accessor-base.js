@@ -6,6 +6,7 @@ import {
   isPartitionLocalServiceStatusRecord,
 } from './partition-local-service-status-contract.js';
 import {partitionSizeRetryOptions} from './partition-service-write-path-helpers.js';
+import {pruneSettledMirrorOutcomeEffects} from './partition-committed-statement-outcome.js';
 import {buildReplayCursorCheckpoint} from './partition-mirror-replay-cursor.js';
 import {
   assertSplitRoutingDescriptorEpochForService,
@@ -137,27 +138,33 @@ async function runSplitBackfillPhase(owner, handle, metadata) {
 async function runSplitCatchupPhase(owner, handle, metadata) {
   if (handle.phase !== PARTITION_TRANSITION_STATE.SPLIT_CATCHUP) return;
   await owner.flushSplitReplicationQueue();
+  const settledWatermark = handle.replayWatermarkIndex;
   const cp = buildReplayCursorCheckpoint(
-    SPLIT_ACK_CHECKPOINT_FIELD, handle.snapshotBarrierIndex, handle.replayWatermarkIndex,
+    SPLIT_ACK_CHECKPOINT_FIELD, handle.snapshotBarrierIndex, settledWatermark,
   );
   const ack = await owner.emitSplitSourceAck(metadata, SPLIT_ACK_STATUS.CATCHUP_READY, cp);
   if (ack?.splitCutoverApplied !== true) {
     throw new Error(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED);
   }
+  pruneSettledMirrorOutcomeEffects(owner, settledWatermark);
   handle.phase = PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE;
 }
 
 async function runSplitCutoverPhase(owner, handle, metadata) {
   if (handle.phase !== PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE) return;
   await owner.flushSplitReplicationQueue();
+  const settledWatermark = handle.replayWatermarkIndex;
   const cp = buildReplayCursorCheckpoint(
-    SPLIT_ACK_CHECKPOINT_FIELD, handle.snapshotBarrierIndex, handle.replayWatermarkIndex,
+    SPLIT_ACK_CHECKPOINT_FIELD, handle.snapshotBarrierIndex, settledWatermark,
   );
   const cleanupAck = await owner.emitSplitSourceAck(
     metadata, SPLIT_ACK_STATUS.CLEANUP_COMPLETED,
     {[SPLIT_ACK_CHECKPOINT_FIELD.SOURCE_MIRROR_REMOVED]: false, ...cp},
   );
   handle.terminal = cleanupAck?.splitSourceRetired === true;
+  if (handle.terminal) {
+    pruneSettledMirrorOutcomeEffects(owner, settledWatermark);
+  }
 }
 
 class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {

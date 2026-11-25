@@ -15,7 +15,7 @@ documentClass: generated
 - [global-index-lifecycle-coordinator.js](global-index-lifecycle-coordinator.js) - Global Secondary Index lifecycle coordinator. (importers: few)
 - [global-index-partition-discovery.js](global-index-partition-discovery.js) - Partition discovery, SQLite database resolution, and base-table schema metadata lookup for Global Secondary Index... (importers: many)
 - [global-index-predicate-matcher.js](global-index-predicate-matcher.js) - Predicate extraction, row-level condition evaluation, and base row projection helpers for Global Secondary Index... (importers: few)
-- [global-index-production-wiring.js](global-index-production-wiring.js) - Production runtime wiring for Global Secondary Index lifecycle coordination. (importers: few)
+- [global-index-production-wiring.js](global-index-production-wiring.js) - Production runtime wiring for Global Secondary Index lifecycle coordination. (importers: many)
 - [global-index-provisioning-lifecycle.js](global-index-provisioning-lifecycle.js) - Provisioning, deferred join/retry completion, and crash-recovery lifecycle helpers for Global Secondary Index creation. (importers: one)
 - [global-index-read-router.js](global-index-read-router.js) - Global Secondary Index query planner, read router, and EXPLAIN DISTRIBUTED diagnostics. (importers: few)
 - [global-index-write-maintenance.js](global-index-write-maintenance.js) - Global Secondary Index synchronous TX1 write maintenance. (importers: few)

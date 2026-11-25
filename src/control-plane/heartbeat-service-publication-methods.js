@@ -1,148 +1,137 @@
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
-  COLUMN,
-  ENDPOINT_STATUS,
-  NODE_STATE,
-  NUM,
-  SERVICE_STATUS,
-  STATE,
-  STRING,
-  TRANSPORT_TYPE,
+  COLUMN, ENDPOINT_STATUS, NODE_STATE, NUM, SERVICE_STATUS, STATE, STRING, TRANSPORT_TYPE,
 } from '../constants/index.js';
 import {assertCritical} from '../utils/assert.js';
 import {
-  CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
-  getControlPlaneNodeStatePublicationProfile,
+  CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE, getControlPlaneNodeStatePublicationProfile,
   isHeartbeatEscalatedControlPlaneNodeStatePublicationMode,
 } from './control-plane-constants.js';
 import {
-  buildStaleNodeIncarnationError,
-  isRetryableControlPlaneError,
+  buildStaleNodeIncarnationError, isRetryableControlPlaneError,
 } from './control-plane-error-classification.js';
 import {
-  CONTROL_PLANE_MUTATION_MERGE_POLICY,
-  CONTROL_PLANE_MUTATION_OUTCOME,
+  CONTROL_PLANE_MUTATION_MERGE_POLICY, CONTROL_PLANE_MUTATION_OUTCOME,
 } from './control-plane-system-table-gateway.js';
+import {OWNER_CONTRACT_NEXT_ACTION, OWNER_CONTRACT_STATE} from './owner-contract-outcome.js';
 import {
-  OWNER_CONTRACT_NEXT_ACTION,
-  OWNER_CONTRACT_STATE,
-} from './owner-contract-outcome.js';
-import {
-  ENDPOINT_INCARNATION_OUTCOME,
-  isEndpointIncarnationOutcomeCompleted,
-  readAuthoritativeEndpointRow,
-  writeEndpointAtIncarnation,
+  ENDPOINT_INCARNATION_OUTCOME, isEndpointIncarnationOutcomeCompleted,
+  readAuthoritativeEndpointRow, writeEndpointAtIncarnation,
 } from './owners/endpoint-incarnation-authority.js';
 import {
-  HEARTBEAT_EVENT,
-  HEARTBEAT_FAILURE_WARN_THRESHOLD,
-  HEARTBEAT_LOG_MSG,
-  HEARTBEAT_QUIET_MODE_BYPASS_REASON,
+  HEARTBEAT_EVENT, HEARTBEAT_FAILURE_WARN_THRESHOLD,
+  HEARTBEAT_LOG_MSG, HEARTBEAT_QUIET_MODE_BYPASS_REASON,
 } from './heartbeat-service-constants.js';
 import {
-  advanceMemoryTrendState,
-  buildNodeHeartbeatWriteDecision,
-  incrementHistogramEntry,
-  isQuietModeActive,
-  normalizeHeartbeatPublicationDiagnostics,
-  normalizeHeartbeatPublicationTimestamp,
-  recordHeartbeatPublicationSuccess,
-  recordHeartbeatPublicationTarget,
-  resolveHeartbeatBudgetFields,
+  advanceMemoryTrendState, buildNodeHeartbeatWriteDecision, incrementHistogramEntry,
+  isQuietModeActive, normalizeHeartbeatPublicationDiagnostics,
+  normalizeHeartbeatPublicationTimestamp, recordHeartbeatPublicationSuccess,
+  recordHeartbeatPublicationTarget, resolveHeartbeatBudgetFields,
   resolveNodeHeartbeatWriteDecision as resolveNodeHeartbeatWriteDecisionHelper,
   shouldUpsertEndpointRow,
 } from './heartbeat-service-write-coalescing.js';
 import {
-  calculateUsageSlopePerMinute,
-  ENDPOINT_ID_PREFIX,
-  ENDPOINT_ID_SUFFIX,
-  HEARTBEAT_PUBLICATION_PATH,
-  HEARTBEAT_REPORTER_VISIBILITY_DECISION,
-  HEARTBEAT_REPORTER_VISIBILITY_STATE,
-  HEARTBEAT_SERVICE_LITERAL,
-  HEARTBEAT_WRITE_DECISION_REASON,
-  HEARTBEAT_WRITE_DECISION_STATE,
-  ONE,
-  ZERO,
+  calculateUsageSlopePerMinute, ENDPOINT_ID_PREFIX, ENDPOINT_ID_SUFFIX,
+  HEARTBEAT_PUBLICATION_PATH, HEARTBEAT_REPORTER_VISIBILITY_DECISION,
+  HEARTBEAT_REPORTER_VISIBILITY_STATE, HEARTBEAT_SERVICE_LITERAL,
+  HEARTBEAT_WRITE_DECISION_REASON, HEARTBEAT_WRITE_DECISION_STATE, ONE, ZERO,
 } from './heartbeat-service-runtime-state.js';
 import {PRESSURE_WORK_CLASS} from './pressure-governor.js';
 import {
-  isNodeLifecyclePublicationCompleted,
-  isNodeLifecyclePublicationDeferred,
-  isTerminalNodeLifecycleSource,
-  NODE_LIFECYCLE_PUBLICATION_OUTCOME,
+  isNodeLifecyclePublicationCompleted, isNodeLifecyclePublicationDeferred,
+  isTerminalNodeLifecycleSource, NODE_LIFECYCLE_PUBLICATION_OUTCOME,
 } from './node-lifecycle-publication.js';
+
+function extractExplicitStatsSampledAt(stats) {
+  if (Number.isFinite(stats?.sampledAtMs)) return Math.floor(stats.sampledAtMs);
+  if (Number.isFinite(stats?.timestamp)) return Math.floor(stats.timestamp);
+  return null;
+}
+
+function resolveTelemetrySampledAtValue(service, stats, existing, now, explicitSampledAt, sameRef) {
+  if (explicitSampledAt !== null) return explicitSampledAt;
+  if (sameRef && Number.isFinite(service.lastPublishedTelemetrySampledAt)) {
+    return service.lastPublishedTelemetrySampledAt;
+  }
+  return stats !== undefined && stats !== null ? now : existing?.telemetry_sampled_at;
+}
+
+function resolveTelemetrySampleIdValue(service, explicitSampleId, sameRef, sampledAt) {
+  if (explicitSampleId !== null) return explicitSampleId;
+  if (sameRef && service.lastPublishedTelemetrySampleId !== undefined) {
+    return service.lastPublishedTelemetrySampleId;
+  }
+  return sampledAt;
+}
+
+function isSameUnstampedStatsRef(service, stats, explicitSampledAt, explicitSampleId) {
+  return Boolean(stats && typeof stats === 'object') &&
+    service.lastHeartbeatStatsRef === stats &&
+    explicitSampledAt === null && explicitSampleId === null;
+}
+
+function buildTelemetrySampleFieldsRecord(sampledAt, sampleId) {
+  const fields = {};
+  if (Number.isFinite(sampledAt)) fields.telemetry_sampled_at = sampledAt;
+  if (sampleId !== undefined && sampleId !== null) fields.telemetry_sample_id = sampleId;
+  return fields;
+}
+
+function resolveHeartbeatTelemetrySampleFields(service, stats, existing, now) {
+  const explicitSampledAt = extractExplicitStatsSampledAt(stats);
+  const explicitSampleId = stats?.sampleId ?? null;
+  const sameRef = isSameUnstampedStatsRef(service, stats, explicitSampledAt, explicitSampleId);
+  const sampledAt = resolveTelemetrySampledAtValue(
+    service, stats, existing, now, explicitSampledAt, sameRef,
+  );
+  const sampleId = resolveTelemetrySampleIdValue(service, explicitSampleId, sameRef, sampledAt);
+  if (stats && typeof stats === 'object') {
+    service.lastHeartbeatStatsRef = stats;
+    service.lastPublishedTelemetrySampledAt = sampledAt;
+    service.lastPublishedTelemetrySampleId = sampleId;
+  }
+  return buildTelemetrySampleFieldsRecord(sampledAt, sampleId);
+}
 
 class HeartbeatServicePublicationMethods {
   shouldTreatEndpointHeartbeatWriteAsDeferred(resultOrError, writeOptions) {
-    if (writeOptions?.deferOnPressure !== true || !resultOrError) {
-      return false;
-    }
-    if (isRetryableControlPlaneError(resultOrError)) {
-      return true;
-    }
-    return resultOrError.success === false &&
-      (
-        resultOrError.deferRetry === true ||
-        resultOrError.contractState === OWNER_CONTRACT_STATE.DEFERRED ||
-        resultOrError.outcome === CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED ||
-        resultOrError.nextAction === OWNER_CONTRACT_NEXT_ACTION.RETRY
-      );
+    if (writeOptions?.deferOnPressure !== true || !resultOrError) return false;
+    if (isRetryableControlPlaneError(resultOrError)) return true;
+    return resultOrError.success === false && (
+      resultOrError.deferRetry === true ||
+      resultOrError.contractState === OWNER_CONTRACT_STATE.DEFERRED ||
+      resultOrError.outcome === CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED ||
+      resultOrError.nextAction === OWNER_CONTRACT_NEXT_ACTION.RETRY
+    );
   }
 
-  /**
-   * Send a single heartbeat update.
-   * @param {Object} [stats] - Node stats.
-   * @param {Array<string>} [capabilities] - Node capabilities.
-   * @param {Object} [options]
-   * @param {boolean} [options.requireDurableVisibility]
-   * @return {Promise<void>}
-   * @private
-   */ async sendHeartbeat(stats, capabilities, options = {}) {
+  async sendHeartbeat(stats, capabilities, options = {}) {
     const now = this.now();
     const memoryMb = Number.isFinite(stats?.memory?.totalBytes) ?
-      Math.round(stats.memory.totalBytes / NUM.BYTES_PER_MIB) :
-      undefined;
+      Math.round(stats.memory.totalBytes / NUM.BYTES_PER_MIB) : undefined;
     const cache = this.systemTableCache;
     const existing = cache.get(SYSTEM_TABLE_NAME.NODES, this.nodeId) || null;
-    // A pre-activation node must never self-promote: while the own row is
-    // JOINING and the LOCAL lifecycle has not reached READY, heartbeats renew
-    // liveness only (CONNECTED, lease untouched), matching the join barrier's
-    // heartbeat-only publication. Once the local lifecycle is READY — the
-    // seed at bootstrap completion, a joiner at barrier-gated join
-    // completion — the heartbeat may publish the READY promotion even if the
-    // row's ACTIVE flip has not yet propagated back through CDC (the seed's
-    // own promotion rides this very heartbeat).
     const withholdReadyPromotion =
       options.allowReadyPromotion !== true &&
       existing?.status === NODE_STATE.JOINING &&
       this.isNodeLifecycleReady?.() !== true;
     const updateRow = {
       node_address: this.nodeAddress || existing?.node_address || STRING.UNKNOWN,
-      cpu_cores: Number.isFinite(stats?.cpu?.count) ?
-        stats.cpu.count :
-        existing?.cpu_cores || 0,
+      cpu_cores: Number.isFinite(stats?.cpu?.count) ? stats.cpu.count : existing?.cpu_cores || 0,
       memory_mb: Number.isFinite(memoryMb) ? memoryMb : existing?.memory_mb || 0,
       disk_gb: Number.isFinite(stats?.diskGb) ? stats.diskGb : existing?.disk_gb || 0,
       cpu_usage_percent: Number.isFinite(stats?.cpu?.usagePercent) ?
-        stats.cpu.usagePercent :
-        existing?.cpu_usage_percent || 0,
+        stats.cpu.usagePercent : existing?.cpu_usage_percent || 0,
       memory_usage_percent: Number.isFinite(stats?.memory?.usagePercent) ?
-        stats.memory.usagePercent :
-        existing?.memory_usage_percent || 0,
+        stats.memory.usagePercent : existing?.memory_usage_percent || 0,
       disk_usage_percent: Number.isFinite(stats?.diskUsagePercent) ?
-        stats.diskUsagePercent :
-        existing?.disk_usage_percent || 0,
-      status: withholdReadyPromotion ?
-        NODE_STATE.JOINING :
-        SERVICE_STATUS.ACTIVE,
-      connection_state: withholdReadyPromotion ?
-        STATE.CONNECTED :
-        STATE.READY,
+        stats.diskUsagePercent : existing?.disk_usage_percent || 0,
+      status: withholdReadyPromotion ? NODE_STATE.JOINING : SERVICE_STATUS.ACTIVE,
+      connection_state: withholdReadyPromotion ? STATE.CONNECTED : STATE.READY,
       capabilities: capabilities ?
-        JSON.stringify(capabilities) :
-        existing?.capabilities || STRING.EMPTY_JSON_ARRAY,
+        JSON.stringify(capabilities) : existing?.capabilities || STRING.EMPTY_JSON_ARRAY,
       last_heartbeat: now,
+      ...resolveHeartbeatTelemetrySampleFields(this, stats, existing, now),
       ...resolveHeartbeatBudgetFields(existing),
     };
     this.recordMemoryTrendSample(updateRow.memory_usage_percent, now);

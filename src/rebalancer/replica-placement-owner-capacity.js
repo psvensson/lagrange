@@ -31,6 +31,8 @@ const ROLE_SOURCE = 'source';
 const ROLE_TARGET = 'target';
 const HARD_MEMORY_REASON = 'HARD_MEMORY_LIMIT_REACHED';
 const PLACEMENT_OWNER_UNAVAILABLE_REASON = 'placement_owner_unavailable';
+const TELEMETRY_SAMPLED_AT_COLUMN = 'telemetry_sampled_at';
+const TELEMETRY_SAMPLE_ID_COLUMN = 'telemetry_sample_id';
 
 function buildTargetCapacityRanker(budgetSnapshot, eligibleNodeIds = []) {
   if (!budgetSnapshot) return null;
@@ -391,9 +393,20 @@ function readLocalDiagnosticsObservation(resourceDiagnosticsSampler, nodeRow, no
   };
 }
 
+function resolveRemoteHeartbeatSampleStamp(nodeRow) {
+  const heartbeatAtMs = Number(nodeRow[COLUMN.LAST_HEARTBEAT]);
+  const explicitSampledAt = nodeRow[TELEMETRY_SAMPLED_AT_COLUMN];
+  const sampledAtMs = hasExplicitFiniteMetric(explicitSampledAt) ?
+    Number(explicitSampledAt) :
+    heartbeatAtMs;
+  const rawSampleId = nodeRow[TELEMETRY_SAMPLE_ID_COLUMN];
+  const sampleId = rawSampleId !== undefined && rawSampleId !== null ? rawSampleId : sampledAtMs;
+  return {sampledAtMs, sampleId};
+}
+
 function readRemoteHeartbeatObservation(nodeRow) {
   if (!nodeRow || !hasExplicitFiniteMetric(nodeRow[COLUMN.LAST_HEARTBEAT])) return null;
-  const sampledAtMs = Number(nodeRow[COLUMN.LAST_HEARTBEAT]);
+  const {sampledAtMs, sampleId} = resolveRemoteHeartbeatSampleStamp(nodeRow);
   const availableMemoryBytes = readNodeRowAvailableMemoryBytes(nodeRow);
   const cpuUsagePercent = Number(nodeRow.cpu_usage_percent);
   const hasCpuUsage =
@@ -401,8 +414,8 @@ function readRemoteHeartbeatObservation(nodeRow) {
   const pressureSensorsComplete = hasCpuUsage && availableMemoryBytes !== undefined;
   return {
     sampledAtMs,
-    sampleId: sampledAtMs,
-    congestionEpochId: sampledAtMs,
+    sampleId,
+    congestionEpochId: sampleId,
     bootIncarnation: nodeRow[COLUMN.BOOT_INCARNATION],
     pressureSensorsComplete,
     ...(availableMemoryBytes !== undefined ? {availableMemoryBytes} : {}),

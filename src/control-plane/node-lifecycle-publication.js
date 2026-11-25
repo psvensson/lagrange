@@ -233,6 +233,18 @@ function resolveTelemetryColumns(telemetry, source) {
   return {...columns, ...resolveStorageBudgetColumns(telemetry, source)};
 }
 
+function extractTelemetrySampleMeta(telemetry) {
+  if (!telemetry || typeof telemetry !== 'object') return {};
+  const meta = {};
+  if (numberIsFinite(telemetry.telemetry_sampled_at)) {
+    meta.telemetry_sampled_at = mathFloor(telemetry.telemetry_sampled_at);
+  }
+  if (telemetry.telemetry_sample_id !== undefined && telemetry.telemetry_sample_id !== null) {
+    meta.telemetry_sample_id = telemetry.telemetry_sample_id;
+  }
+  return meta;
+}
+
 // Only forward liveness progress is written: a request that does not advance
 // the durable heartbeat watermark is either already current or lost a race.
 function presenceOrder(previousValue, nextValue) {
@@ -515,7 +527,7 @@ class NodeLifecyclePublication {
       heartbeatAt,
       bootIncarnation,
       update,
-      expectedRow: {...source, ...update},
+      expectedRow: {...source, ...update, ...extractTelemetrySampleMeta(request.telemetry)},
     };
     if (!isLifecycleWatermarkNewer(
       getNodeHeartbeatWatermark(source),

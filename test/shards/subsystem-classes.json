@@ -28,7 +28,7 @@
   "censusSize": 2826,
   "digest": "fnv1a32-1bd1043a",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-e7d80630",
+  "observationDigest": "fnv1a32-12012908",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -16053,6 +16053,27 @@
         "src/partition/partition-split-merge-manager.js"
       ]
     },
+    "test/partition/partition-split-routing.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-service-construction.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
     "test/partition/partition-statement-admission.test.js": {
       "files": [
         "src/bootstrap/shared/partition-service-construction.js",
@@ -24121,11 +24142,15 @@
     },
     "test/rebalancer/replica-placement-adaptive-budget.test.js": {
       "files": [
+        "src/partition/partition-committed-statement-outcome.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-membership-transition.js",
-        "src/raft/raft-rs-ready-loop-constants.js"
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/rebalancer/rebalance-coordinator-operation-creation-support.js",
+        "src/rebalancer/replica-placement-owner-capacity.js",
+        "src/rebalancer/replica-placement-owner-constants.js"
       ]
     },
     "test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js": {

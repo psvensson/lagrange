@@ -40,7 +40,7 @@ const TARGET_THRESHOLD = 12;
 // 1680 -> 1597 in scripts/baselines/complexity-ratchet-baseline.json after
 // refactoring 165+ functions across test/distributed/ and src/, and promoted
 // test:complexity to a blocking CI structural regression gate.
-const BASELINE_COUNT = 1596;
+const BASELINE_COUNT = 1591;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const WRITE_BASELINE_FLAG = '--write-baseline';

@@ -55,10 +55,8 @@ import {
 import {
   decodeTypedParams,
   encodeTypedRowSet,
+  materializeCapturedRowObjects,
 } from '../query/sql-value-codec.js';
-
-const MIN_SAFE_BIGINT = BigInt(Number.MIN_SAFE_INTEGER);
-const MAX_SAFE_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
 
 const ALLOCATING_HEADS = new Set([KEYWORD.INSERT, KEYWORD.REPLACE,
   KEYWORD.WITH]);
@@ -571,37 +569,6 @@ function statementRefusalError(refused) {
   return error;
 }
 
-function normalizeCapturedRowValue(value, coerceSafeBigIntToNumber) {
-  if (
-    coerceSafeBigIntToNumber &&
-    typeof value === 'bigint' &&
-    value >= MIN_SAFE_BIGINT &&
-    value <= MAX_SAFE_BIGINT
-  ) {
-    return Number(value);
-  }
-  return value;
-}
-
-function materializeCapturedWriteRows(
-  columns,
-  rawRows,
-  coerceSafeBigIntToNumber,
-) {
-  return Object.freeze(
-    rawRows.map((values) => {
-      const row = {};
-      for (let index = 0; index < columns.length; index += 1) {
-        row[columns[index]] = normalizeCapturedRowValue(
-          values[index],
-          coerceSafeBigIntToNumber,
-        );
-      }
-      return Object.freeze(row);
-    }),
-  );
-}
-
 function executeAdmittedWriteStatement(service, admission, params) {
   const mutationPatch =
     typeof admission.mutationKind === 'string' ?
@@ -626,14 +593,9 @@ function executeAdmittedWriteStatement(service, admission, params) {
     stmt.safeIntegers?.(false);
   }
   const typedEffects = encodeTypedRowSet(columns, rawRows);
-  const tableName = ownTableName(service);
-  const coerceSafeBigIntToNumber =
-    tableName !== null && isTableCdcObligationRecorded(tableName);
-  const affectedRows = materializeCapturedWriteRows(
-    columns,
-    rawRows,
-    coerceSafeBigIntToNumber,
-  );
+  const affectedRows = materializeCapturedRowObjects(columns, rawRows, {
+    coerceSafeBigIntToNumber: true,
+  });
   const meta = prepareByKind(service.db, WRITE_EXECUTION_META_SQL, KIND.READ).get();
   return {
     changes: rawRows.length,

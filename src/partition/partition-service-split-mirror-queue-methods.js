@@ -222,10 +222,6 @@ class PartitionServiceSplitMirrorQueueMethods {
           Number(splitReplication.replayWatermarkIndex) || 0,
           entry.logIndex,
         );
-        pruneSettledMirrorOutcomeEffects(
-          this,
-          splitReplication.replayWatermarkIndex,
-        );
       }
     } catch (error) {
       splitReplication.pendingEntries.push(this.cloneSplitEntry(entry));
@@ -302,10 +298,6 @@ class PartitionServiceSplitMirrorQueueMethods {
         splitReplication.replayWatermarkIndex = Math.max(
           Number(splitReplication.replayWatermarkIndex) || 0,
           entry.logIndex,
-        );
-        pruneSettledMirrorOutcomeEffects(
-          this,
-          splitReplication.replayWatermarkIndex,
         );
       }
     }

@@ -34,6 +34,9 @@ import {
   buildMergeSourceParticipantKey,
 } from './merge-ack-constants.js';
 import {
+  pruneSettledMirrorOutcomeEffects,
+} from './partition-committed-statement-outcome.js';
+import {
   buildReplayCursorCheckpoint,
   resolveSnapshotBarrierIndex,
 } from './partition-mirror-replay-cursor.js';
@@ -89,6 +92,7 @@ async function runMergeBackfillPhase(owner, handle, metadata) {
   if (handle.phase !== PARTITION_TRANSITION_STATE.MERGE_BACKFILLING) return;
   handle.snapshotBarrierIndex = resolveSnapshotBarrierIndex(owner);
   handle.replayWatermarkIndex = handle.snapshotBarrierIndex;
+  pruneSettledMirrorOutcomeEffects(owner, handle.snapshotBarrierIndex);
   const snapshot = owner.openSplitSnapshotDatabase();
   try {
     await owner.backfillMergeSnapshot(snapshot, metadata);
@@ -101,18 +105,20 @@ async function runMergeBackfillPhase(owner, handle, metadata) {
 async function runMergeCatchupPhase(owner, handle, metadata) {
   if (handle.phase !== PARTITION_TRANSITION_STATE.MERGE_CATCHUP) return;
   await owner.flushMergeReplicationQueue();
+  const settledWatermark = handle.replayWatermarkIndex;
   const catchupAck = await owner.emitMergeSourceAck(
     metadata,
     MERGE_ACK_STATUS.CATCHUP_READY,
     buildReplayCursorCheckpoint(
       MERGE_ACK_CHECKPOINT_FIELD,
       handle.snapshotBarrierIndex,
-      handle.replayWatermarkIndex,
+      settledWatermark,
     ),
   );
   if (catchupAck?.mergeCutoverApplied !== true) {
     await owner.waitForMergeCutoverActivation(metadata);
   }
+  pruneSettledMirrorOutcomeEffects(owner, settledWatermark);
   handle.phase = PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE;
 }
 
@@ -120,6 +126,7 @@ async function runMergeCutoverPhase(owner, handle, metadata) {
   if (handle.phase !==
       PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE) return;
   await owner.flushMergeReplicationQueue();
+  const settledWatermark = handle.replayWatermarkIndex;
   await owner.emitMergeSourceAck(metadata, MERGE_ACK_STATUS.CUTOVER_APPLIED);
   const mirrorRemoved = await owner.emitMergeSourceAck(
     metadata,
@@ -129,13 +136,16 @@ async function runMergeCutoverPhase(owner, handle, metadata) {
       ...buildReplayCursorCheckpoint(
         MERGE_ACK_CHECKPOINT_FIELD,
         handle.snapshotBarrierIndex,
-        handle.replayWatermarkIndex,
+        settledWatermark,
       ),
     },
   );
   handle.terminal =
     mirrorRemoved?.result === PARTICIPANT_ACK_RESULT.ACCEPTED ||
     mirrorRemoved?.result === PARTICIPANT_ACK_RESULT.DUPLICATE;
+  if (handle.terminal) {
+    pruneSettledMirrorOutcomeEffects(owner, settledWatermark);
+  }
 }
 
 class PartitionServiceMergeReplicationMethods {

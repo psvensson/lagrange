@@ -12,6 +12,7 @@ import {
 import {
   decodeTypedParams,
   encodeTypedParams,
+  materializeTypedRowSetObjects,
 } from '../query/sql-value-codec.js';
 import {PARTITION_CDC_COMMAND_TYPES} from
   './partition-cdc-obligation-constants.js';
@@ -608,7 +609,11 @@ function buildExecutedMirrorEntry(entry, executionResult) {
     ...(mutationKind !== null ? {mutationKind} : {}),
     changes: executionResult.changes,
   };
-  if (Array.isArray(executionResult.affectedRows)) {
+  if (executionResult.typedEffects) {
+    executedEntry.affectedRows = materializeTypedRowSetObjects(
+      executionResult.typedEffects,
+    );
+  } else if (Array.isArray(executionResult.affectedRows)) {
     executedEntry.affectedRows = executionResult.affectedRows;
   }
   const committedLogIndex = Number(

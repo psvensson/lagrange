@@ -102,13 +102,6 @@ const CONTROL_PLANE_SETUP_SUBSYSTEM =
 const CONTROL_PLANE_SETUP_NAME = 'ControlPlaneSetup';
 const TYPEOF_FUNCTION = 'function';
 const NUMERIC_ZERO = 0;
-const CONTROL_PLANE_ADAPTIVE_WINDOW_LIMIT = Object.freeze({
-  MIN_LIMIT: 1,
-  SOURCE_INITIAL_LIMIT: 3,
-  SOURCE_MAX_LIMIT: 5,
-  TARGET_INITIAL_LIMIT: 2,
-  TARGET_MAX_LIMIT: 3,
-});
 const INSTALLABLE_SERVICE_COMPONENT_CACHE_DIR =
   'installable-service-components';
 
@@ -442,20 +435,9 @@ class ControlPlaneSetup {
     });
     const adaptiveBudgetOptions = {
       readNodeObservation,
-      sourceWindow: {
-        initialLimit: CONTROL_PLANE_ADAPTIVE_WINDOW_LIMIT.SOURCE_INITIAL_LIMIT,
-        minLimit: CONTROL_PLANE_ADAPTIVE_WINDOW_LIMIT.MIN_LIMIT,
-        maxLimit: CONTROL_PLANE_ADAPTIVE_WINDOW_LIMIT.SOURCE_MAX_LIMIT,
-      },
-      targetWindow: {
-        initialLimit: CONTROL_PLANE_ADAPTIVE_WINDOW_LIMIT.TARGET_INITIAL_LIMIT,
-        minLimit: CONTROL_PLANE_ADAPTIVE_WINDOW_LIMIT.MIN_LIMIT,
-        maxLimit: CONTROL_PLANE_ADAPTIVE_WINDOW_LIMIT.TARGET_MAX_LIMIT,
-      },
     };
     const adaptiveBudgetController =
       createAdaptivePlacementBudgetController(adaptiveBudgetOptions);
-    rebalanceCoordinator.adaptiveBudgetController = adaptiveBudgetController;
     rebalanceCoordinator.bindReplicaPlacementOwnerFactory(
       ControlPlaneSetup.createReplicaPlacementOwnerFactory({
         nodeId, controlPlaneReadinessService, rebalanceCoordinator,
@@ -750,6 +732,8 @@ class ControlPlaneSetup {
       const stats = await nodeService.getNodeStats();
       await heartbeatService.sendHeartbeat(
         {
+          sampledAtMs: stats.sampledAtMs ?? stats.timestamp,
+          sampleId: stats.sampleId,
           cpu: {
             count: stats.cpu?.count,
             usagePercent: stats.cpu?.usagePercent,

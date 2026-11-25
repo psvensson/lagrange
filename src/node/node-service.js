@@ -378,7 +378,10 @@ class NodeService extends EventEmitter {
   */
   async getNodeStats() {
     const now = this.now();
-    const snapshotAgeMs = this.lastStats ? now - this.lastStats.timestamp : null;
+    const lastSampledAt = this.lastStats ?
+      (this.lastStats.sampledAtMs ?? this.lastStats.timestamp) :
+      null;
+    const snapshotAgeMs = lastSampledAt !== null ? now - lastSampledAt : null;
     if (
       this.lastStats &&
       snapshotAgeMs >= 0 &&

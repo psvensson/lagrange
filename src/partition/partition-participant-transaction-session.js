@@ -264,6 +264,7 @@ function extractOperationsRowKeyFootprint(service, operations) {
     const op = operations[i];
     const fp = extractStatementWriteFootprint({
       sql: op?.sql, params: Array.isArray(op?.params) ? op.params : [],
+      typedParams: op?.typedParams,
       pkCols, allCols, uniqueConstraintCols, hasUnscopedSchemaConstraints,
     });
     if (!fp.scoped || fp.rowKeys.length === 0) {
@@ -641,9 +642,8 @@ function canAdvanceCommittedValidationText(service, validationText, operationsFo
 
 function recordCommittedAutocommitRowKeys(service, command, generation) {
   if (!isRowKeyConcurrencyEnabled(service) || !command?.sql) return;
-  const params = Array.isArray(command.params) ? command.params : [];
   const operationsFootprint =
-    extractOperationsRowKeyFootprint(service, [{sql: command.sql, params}]);
+    extractOperationsRowKeyFootprint(service, [command]);
   const scoped = Boolean(operationsFootprint.scoped &&
     !operationsFootprint.hasUnscopedWrite && operationsFootprint.rowKeys.size > 0);
   recordGenerationFootprintAndNotify(

@@ -14,6 +14,10 @@ import {
   isDeliveredTransportDeliveryOutcome,
   normalizePositiveRetryAfterMs,
 } from '../transport/transport-semantic-outcome.js';
+import {
+  encodeTypedRowSet,
+  materializeTypedRowSetObjects,
+} from '../query/sql-value-codec.js';
 import {PARTITION_SERVICE_MESSAGE_TYPE} from './partition-service-constants.js';
 
 const NO_HANDLER_REASON_CODE = 'no_handler';
@@ -238,12 +242,62 @@ function retireCoveredBatch(
   }
 }
 
+function encodeRemoteCdcEventForWire(event) {
+  const data = event?.data;
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return event;
+  }
+  const columns = Object.keys(data);
+  const values = columns.map((col) => data[col]);
+  if (!values.some((val) => typeof val === 'bigint' || ArrayBuffer.isView(val))) {
+    return event;
+  }
+  const typedData = encodeTypedRowSet(columns, [values]);
+  const wireData = {};
+  const encodedRow = typedData.rows[0] || [];
+  for (let i = 0; i < columns.length; i += 1) {
+    Object.defineProperty(wireData, columns[i], {
+      value: encodedRow[i + 1],
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
+  }
+  return {...event, data: wireData, typedData};
+}
+
+function encodeRemoteCdcEventsForWire(events) {
+  return Array.isArray(events) ? events.map(encodeRemoteCdcEventForWire) : events;
+}
+
+function decodeRemoteCdcEventsFromWire(events) {
+  if (!Array.isArray(events) || !events.some((event) => Boolean(event?.typedData))) {
+    return events;
+  }
+  return events.map((event) => {
+    if (!event?.typedData) return event;
+    const {typedData, ...rest} = event;
+    const [decodedData] = materializeTypedRowSetObjects(typedData, {
+      coerceSafeBigIntToNumber: true,
+    });
+    return {...rest, data: decodedData};
+  });
+}
+
+function decodeRemoteCdcEnvelopePayload(envelope) {
+  const payload = envelope?.payload !== undefined ? envelope.payload : envelope;
+  if (!payload || !Array.isArray(payload.events)) return payload;
+  const decodedEvents = decodeRemoteCdcEventsFromWire(payload.events);
+  return decodedEvents === payload.events ? payload : {...payload, events: decodedEvents};
+}
+
 async function sendBatchToRemote(service, entry, events, resyncRequired) {
   const router = resolvePartitionRouter(service);
   if (!isSubscriberActive(service, entry) || !router) {
     return INACTIVE_SUBSCRIBER_ANSWER;
   }
   try {
+    const wireEvents = encodeRemoteCdcEventsForWire(events);
     const delivery = await router.deliver(entry.subscriberAddress, {
       type: PARTITION_SERVICE_MESSAGE_TYPE.LIVE_QUERY_CDC_EVENT,
       partitionId: service.partitionId,
@@ -251,7 +305,7 @@ async function sendBatchToRemote(service, entry, events, resyncRequired) {
       subscriberId: entry.subscriberId,
       previousDeliveredSeq: entry.lastDeliveredSeq,
       resyncRequired,
-      events,
+      events: wireEvents,
     });
     return normalizeRemoteDeliveryOutcome(service, entry, delivery);
   } catch (error) {
@@ -494,6 +548,9 @@ function clearRemoteLiveQueryCdcSubscribers(service) {
 
 export {
   clearRemoteLiveQueryCdcSubscribers,
+  decodeRemoteCdcEnvelopePayload,
+  decodeRemoteCdcEventsFromWire,
+  encodeRemoteCdcEventsForWire,
   handleRemoteLiveQueryCdcSubscribe,
   handleRemoteLiveQueryCdcUnsubscribe,
 };
