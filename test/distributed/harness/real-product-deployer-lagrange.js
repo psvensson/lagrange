@@ -617,12 +617,17 @@ async function formLagrangeCluster({ctx, rawSshRun, hosts, image, connection, ro
     campaignId, index: 0}));
   await startJoinerNodes({sshRun, opts, hosts, seedHost, image, connection, campaignId, roles});
   ctx.watchedRoles = [...roles];
-  const readyNodes = await settleConcurrentBatch(
-    hosts,
-    (host) => nodeReady(ctx, host),
-    ctx.settleInFlight ?? null,
-  );
-  nodeReadiness.push(...readyNodes);
+  if (hosts.length > 0) {
+    nodeReadiness.push(await nodeReady(ctx, hosts[0]));
+  }
+  if (hosts.length > 1) {
+    const joinerReady = await settleConcurrentBatch(
+      hosts.slice(1),
+      (host) => nodeReady(ctx, host),
+      ctx.settleInFlight ?? null,
+    );
+    nodeReadiness.push(...joinerReady);
+  }
   const inspectedProducts = await inspectProducts({
     sshRun,
     opts,

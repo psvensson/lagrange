@@ -244,54 +244,53 @@ function hasDirectQueueOrStageSensor(observation) {
     isFiniteMetric(observation.operationBytes);
 }
 
-function isEventLoopCongested(observation, thresholds) {
-  if (isHostCpuLightlyLoaded(observation, thresholds)) return false;
+function isEventLoopCongested(observation, thresholds, currentLimit = null, config = null) {
+  if (isHostCpuLightlyLoaded(observation, thresholds)) {
+    const lightCpuFloor = config ?
+      Math.max(config.minLimit, Math.floor(config.initialLimit * config.multiplicativeDecrease)) :
+      PLACEMENT_COPY_CAPACITY.K_TGT;
+    if (!Number.isFinite(currentLimit) || currentLimit <= lightCpuFloor) return false;
+  }
   if (isMetricAtOrAbove(observation.eventLoopDelayMs, thresholds.congestionEventLoopDelayMs)) {
     return true;
   }
   const elu = observation.eventLoopUtilizationPercent;
-  if (!isMetricAtOrAbove(elu, thresholds.congestionEluPercent)) {
-    return false;
-  }
+  if (!isMetricAtOrAbove(elu, thresholds.congestionEluPercent)) return false;
   return !isFiniteMetric(observation.eventLoopDelayMs) ||
     isMetricStrictlyAbove(observation.eventLoopDelayMs, thresholds.healthyEventLoopDelayMs);
 }
 
-function classifyDirectSensorCongestion(observation, thresholds) {
-  if (isEventLoopCongested(observation, thresholds)) {
+function classifyDirectSensorCongestion(obs, thresholds, currentLimit = null, config = null) {
+  if (isEventLoopCongested(obs, thresholds, currentLimit, config)) {
     return REASON.EVENT_LOOP_CONGESTION;
   }
-  if (isMetricAtOrAbove(observation.writeLatencyMs, thresholds.congestionWriteLatencyMs)) {
+  if (isMetricAtOrAbove(obs.writeLatencyMs, thresholds.congestionWriteLatencyMs)) {
     return REASON.STORAGE_WRITE_LATENCY_CONGESTION;
   }
-  if (isMetricAtOrAbove(observation.initQueueDelayMs, thresholds.congestionInitQueueDelayMs)) {
+  if (isMetricAtOrAbove(obs.initQueueDelayMs, thresholds.congestionInitQueueDelayMs)) {
     return REASON.INIT_QUEUE_CONGESTION;
   }
-  if (
-    observation.backpressured === true ||
-    isMetricAtOrAbove(observation.transferQueueDelayMs, thresholds.congestionTransferQueueDelayMs)
-  ) {
+  if (obs.backpressured === true ||
+      isMetricAtOrAbove(obs.transferQueueDelayMs, thresholds.congestionTransferQueueDelayMs)) {
     return REASON.TRANSFER_BACKPRESSURE_CONGESTION;
   }
   return null;
 }
 
-function classifyAttributedCongestion(observation, thresholds) {
-  if (!observation || typeof observation !== 'object') return null;
-  if (observation.congestionAttributed === true) {
-    const explicitReason = observation.congestionReason;
-    return typeof explicitReason === 'string' && explicitReason.length > 0 ?
-      explicitReason :
-      REASON.ATTRIBUTED_RESOURCE_CONGESTION;
+function classifyAttributedCongestion(obs, thresholds, currentLimit = null, config = null) {
+  if (!obs || typeof obs !== 'object') return null;
+  if (obs.congestionAttributed === true) {
+    const explicit = obs.congestionReason;
+    return typeof explicit === 'string' && explicit.length > 0 ?
+      explicit : REASON.ATTRIBUTED_RESOURCE_CONGESTION;
   }
-  const direct = classifyDirectSensorCongestion(observation, thresholds);
+  const direct = classifyDirectSensorCongestion(obs, thresholds, currentLimit, config);
   if (direct !== null) return direct;
-  if (isSingleCoreCpuQueueCongested(observation, thresholds)) {
+  if (isSingleCoreCpuQueueCongested(obs, thresholds)) {
     return REASON.SINGLE_THREAD_CPU_QUEUE_CONGESTION;
   }
-  return isSizeNormalizedStageCongested(observation, thresholds) ?
-    REASON.STAGE_THROUGHPUT_DEGRADATION_CONGESTION :
-    null;
+  return isSizeNormalizedStageCongested(obs, thresholds) ?
+    REASON.STAGE_THROUGHPUT_DEGRADATION_CONGESTION : null;
 }
 
 function isHighUtilizationQueueDelayed(rawUtilPercent, maxHealthyPercent, observation, thresholds) {
@@ -573,7 +572,9 @@ function decideAdaptiveResourceWindow(previousState, observation, demand = {}, r
       observationState: freshness.state, nextState: baseState,
     });
   }
-  const congestionReason = classifyAttributedCongestion(observation, config.thresholds);
+  const congestionReason = classifyAttributedCongestion(
+    observation, config.thresholds, baseState.limit, config,
+  );
   if (congestionReason !== null) {
     return applyCongestionDecrease(baseState, observation, nowMs, congestionReason, config);
   }

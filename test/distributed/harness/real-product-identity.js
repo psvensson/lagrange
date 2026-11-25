@@ -43,6 +43,7 @@ import {
   classifyRemoteCommandError,
   errorText,
   inspectContainerCommand,
+  settleConcurrentBatch,
   shellWord,
 } from './real-product-remote-shell.js';
 
@@ -280,19 +281,19 @@ async function inspectedAtIdentityTime({sshRun, opts, role, signal, deadlineAtMs
 
 /** Inspect every role's container, in role order. */
 async function inspectProducts({sshRun, opts, roles, signal, deadlineAtMs, now}) {
-  const products = [];
-  const stores = new Map();
+  const uniqueHosts = [];
   for (const role of roles) {
-    if (!stores.has(role.host)) {
-      stores.set(role.host, await readImageStore({
-        sshRun, opts, host: role.host, signal, deadlineAtMs, now,
-      }));
-    }
-    products.push({...await inspectedAtIdentityTime({
-      sshRun, opts, role, signal, deadlineAtMs, now,
-    }), imageStore: stores.get(role.host)});
+    if (!arrayIncludes(uniqueHosts, role.host)) uniqueHosts.push(role.host);
   }
-  return products;
+  const storeEntries = await settleConcurrentBatch(uniqueHosts, async (host) => [
+    host,
+    await readImageStore({sshRun, opts, host, signal, deadlineAtMs, now}),
+  ]);
+  const stores = new Map(storeEntries);
+  return settleConcurrentBatch(roles, async (role) => ({
+    ...await inspectedAtIdentityTime({sshRun, opts, role, signal, deadlineAtMs, now}),
+    imageStore: stores.get(role.host),
+  }));
 }
 
 /**
