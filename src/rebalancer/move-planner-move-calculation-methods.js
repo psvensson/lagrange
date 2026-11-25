@@ -116,6 +116,24 @@ function countDistinctActiveReplicaNodes(replicas) {
   ).size;
 }
 
+function hasInFlightAddForNode(
+  planner, nodeId, entityAddNodes, globalSystemAddNodes,
+) {
+  if (entityAddNodes.has(nodeId)) {
+    planner.logger.debug(REBALANCER_LOG_MSG.SKIP_ADD_TRANSITIONAL, {
+      entityId: planner.entityId, nodeId,
+    });
+    return true;
+  }
+  if (planner.isSystemPartitionEntity() && globalSystemAddNodes.has(nodeId)) {
+    planner.logger.debug(REBALANCER_LOG_MSG.SKIP_ADD_TRANSITIONAL, {
+      entityId: planner.entityId, nodeId, globalSystemTargetOccupancy: true,
+    });
+    return true;
+  }
+  return false;
+}
+
 function appendUnderRepresentedAddMoves(
   targetMoves,
   nodeId,
@@ -428,19 +446,9 @@ class MovePlannerMoveCalculationMethods {
         if (this.moveStateProvider.hasPendingAddForNode(nodeId)) {
           continue;
         }
-        if (nodesWithAddTransitional.has(nodeId)) {
-          this.logger.debug(REBALANCER_LOG_MSG.SKIP_ADD_TRANSITIONAL, {
-            entityId: this.entityId,
-            nodeId,
-          });
-          continue;
-        }
-        if (nodesWithGlobalSystemAddTransitional.has(nodeId)) {
-          this.logger.debug(REBALANCER_LOG_MSG.SKIP_ADD_TRANSITIONAL, {
-            entityId: this.entityId,
-            nodeId,
-            globalSystemTargetOccupancy: true,
-          });
+        if (hasInFlightAddForNode(
+          this, nodeId, nodesWithAddTransitional, nodesWithGlobalSystemAddTransitional,
+        )) {
           continue;
         }
         appendUnderRepresentedAddMoves(
@@ -753,23 +761,10 @@ class MovePlannerMoveCalculationMethods {
         replaceCandidates.length,
       );
       // Serialize REPLACE on critical control-plane partitions to one in-flight
-      // at a time. The per-partition remove-safety lock (the concurrent-op check
-      // in operation-workflow-remove-safety-evaluator) already lets only ONE
-      // reconfiguration drain at a time on a critical partition; minting more
-      // REPLACEs — each a distinct source/target accumulated across ticks because
-      // a row-only surplus read does not see prior in-flight REPLACEs — only
-      // builds a mutual-defer standoff (observed: 4 concurrent REPLACEs on one
-      // critical partition thrashing ~114s, holding it over target until
-      // convergence times out). Bound minting by the all-phase in-flight REPLACE
-      // count (creation AND drain) so a fresh REPLACE waits for the prior one to
-      // drain, then re-evaluates next tick. The drain phase (replacement
-      // voter-ready, source removing) is the long window that builds the standoff
-      // and is EXCLUDED from the topology-blocking accounting set, so the count is
-      // read from getEntityInFlightOperations (all non-terminal, drain-inclusive),
-      // NOT inFlightAccounting (drain-excluded) — counted once above the
-      // over-creation cap, which consults the same serialized-REPLACE state.
-      // Non-critical partitions and genuine provisioning (count-increasing
-      // ADD) are untouched.
+      // at a time across both creation and drain phases so concurrent REPLACEs do
+      // not build a remove-safety mutual-defer standoff. The count is read from
+      // getEntityInFlightOperations (drain-inclusive) once above the over-creation
+      // cap. Non-critical partitions and count-increasing ADDs are untouched.
       const replaceCountBeforeSpreadCure = serializeCriticalReplace ?
         Math.min(
           naturalReplaceCount,

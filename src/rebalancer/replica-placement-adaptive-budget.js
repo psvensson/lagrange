@@ -295,7 +295,6 @@ function isHighUtilizationQueueDelayed(rawUtilPercent, maxHealthyPercent, observ
 }
 
 function isEventLoopWithinHealthyBand(observation, thresholds) {
-  if (isHostCpuLightlyLoaded(observation, thresholds)) return true;
   if (isFiniteMetric(observation.eventLoopDelayMs) &&
       Number(observation.eventLoopDelayMs) > thresholds.healthyEventLoopDelayMs) {
     return false;

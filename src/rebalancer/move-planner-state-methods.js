@@ -297,6 +297,10 @@ function createMovePlannerStateMethods(deps = {}) {
       return this.classifyPlannerEntityPartition().systemTable;
     }
 
+    includesGlobalSystemPlacementDeferral() {
+      return this.isSystemPartitionEntity() || this.entityType === EntityType.RUNTIME_SERVICE;
+    }
+
     /**
      * Classify this planner's entity from its one partition row read. A
      * non-partition entity is no system, priority or formation partition.
@@ -451,14 +455,12 @@ function createMovePlannerStateMethods(deps = {}) {
       });
       const {nodesWithEntityAddTransitional, replicasInRemoving} =
         buildEntityTransitionSets(inventory, ReplicaStatus, WORKFLOW_STEP);
-      const nodesWithGlobalSystemAddTransitional =
-        buildGlobalSystemAddNodeSet({
-          systemPartition: this.isSystemPartitionEntity(),
-          operations: globalInFlightOperations,
-          isAddPending: isReplicaInventoryAddTransitionalOperation,
-          isSystemPartition: (options) =>
-            classifySystemPartition(options).systemTable,
-        });
+      const nodesWithGlobalSystemAddTransitional = buildGlobalSystemAddNodeSet({
+        systemPartition: this.includesGlobalSystemPlacementDeferral(),
+        operations: globalInFlightOperations,
+        isAddPending: isReplicaInventoryAddTransitionalOperation,
+        isSystemPartition: (options) => classifySystemPartition(options).systemTable,
+      });
 
       return {
         pendingCount: entityInFlightOperations.length,
@@ -605,10 +607,8 @@ function createMovePlannerStateMethods(deps = {}) {
       const readyNodes = Array.isArray(availableNodes) ?
         availableNodes :
         this.moveStateProvider.getAvailableNodes();
-      // The critical minimum never exceeds the desired target: a
-      // ship-not-started service (explicit target 0) is NOT critical
-      // at zero replicas — the min floor forcing adds here was the
-      // third clamp defeating the documented target-0 semantics.
+      // The critical minimum never exceeds the desired target so an explicit
+      // target-0 service is not critical at zero replicas.
       const minReplicas = Math.min(
         policy.minReplicaCount || NUM.THREE,
         this.getPolicyTargetReplicaCount(policy),

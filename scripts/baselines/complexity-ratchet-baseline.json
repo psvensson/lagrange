@@ -757,7 +757,7 @@
   "src/rebalancer/assignment-epoch.js::Method '_validateOptions'#1": 19,
   "src/rebalancer/committed-membership-bootstrap-read.js::Async function 'readCommittedMembershipStamp'#1": 14,
   "src/rebalancer/move-planner-move-calculation-methods.js::Arrow function#1": 13,
-  "src/rebalancer/move-planner-move-calculation-methods.js::Method 'calculateMoves'#1": 95,
+  "src/rebalancer/move-planner-move-calculation-methods.js::Method 'calculateMoves'#1": 94,
   "src/rebalancer/move-planner.js::Async method 'filterNodesByCapacity'#1": 14,
   "src/rebalancer/move-planner.js::Method 'calculatePartitionPlacement'#1": 16,
   "src/rebalancer/node-storage-budget-service.js::Method 'resolveBudget'#1": 17,

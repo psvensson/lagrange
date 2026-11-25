@@ -48,6 +48,8 @@ function createMoveStateProvider(options = {}) {
       );
     },
     getInFlightOperations: () => inFlightOperations,
+    getGlobalTopologyBlockingInFlightOperations: () =>
+      options.globalInFlightOperations ?? inFlightOperations,
     hasPendingMove: (id) => pendingMoves.has(id),
     hasPendingAddForNode: (id) => pendingAddNodes.has(id),
   };
@@ -155,6 +157,77 @@ test('MovePlanner calculateTargetState for runtime_service', async (t) => {
       t.ok(result.targetNodes.includes('n2'));
       t.ok(result.targetNodes.includes('n3'));
     });
+
+  await t.test(
+    'defers nodes receiving in-flight global system partition ADD operations during formation without blocking multi-replica ADD moves',
+    async (t) => {
+      const nodes = [
+        {node_id: 'n1', cpu_usage_percent: 12.5, memory_usage_percent: 25},
+        {node_id: 'n2', cpu_usage_percent: 25, memory_usage_percent: 25},
+        {node_id: 'n3', cpu_usage_percent: 8.3, memory_usage_percent: 20},
+      ];
+      const globalInFlightOperations = [
+        {
+          operation_id: 'op-sys-add-n2',
+          type: 'ADD',
+          partition_id: 'services-p1',
+          entity_type: 'partition',
+          entity_id: 'services-p1',
+          status: 'creating',
+          workflow_step: 'CREATING',
+          target_node_id: 'n2',
+        },
+        {
+          operation_id: 'op-sys-add-n3',
+          type: 'ADD',
+          partition_id: 'partitions-p1',
+          entity_type: 'partition',
+          entity_id: 'partitions-p1',
+          status: 'creating',
+          workflow_step: 'CREATING',
+          target_node_id: 'n3',
+        },
+      ];
+      const planner = new MovePlanner({
+        entityId: 'sys-postgres-wire',
+        entityType: REBALANCER_ENTITY_TYPE.RUNTIME_SERVICE,
+        moveStateProvider: createMoveStateProvider({
+          nodes,
+          inFlightOperations: [],
+          globalInFlightOperations,
+        }),
+      });
+      const singleReplicaPolicy = {
+        ...REBALANCER_DEFAULT_POLICY.RUNTIME_SERVICE,
+        targetReplicaCount: 1,
+      };
+      const singleTarget = await planner.calculateTargetState(
+        [],
+        singleReplicaPolicy,
+      );
+      t.same(
+        singleTarget.targetNodes,
+        ['n1'],
+        'single-replica runtime service prefers seed node n1 without in-flight system partition ADD operations over lower-CPU joiner n3',
+      );
+
+      const threeReplicaPolicy = {
+        ...REBALANCER_DEFAULT_POLICY.RUNTIME_SERVICE,
+        targetReplicaCount: 3,
+      };
+      const threeTarget = await planner.calculateTargetState(
+        [],
+        threeReplicaPolicy,
+      );
+      t.equal(threeTarget.targetNodes.length, 3);
+      const threeMoves = planner.calculateMoves([], threeTarget);
+      t.equal(
+        threeMoves.filter((m) => m.type === REBALANCER_MOVE_TYPE.ADD).length,
+        3,
+        'runtime service ADD moves still include deferred nodes when targetReplicaCount requires them',
+      );
+    },
+  );
 });
 
 // --- calculateMoves ADD/REMOVE/REPLACE for runtime_service ---
