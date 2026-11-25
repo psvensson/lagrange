@@ -117,6 +117,7 @@ import {
 import {
   observeProductsAfterWindow,
 } from '../../../test/distributed/harness/real-product-identity.js';
+import {runtimeBuildProvenance} from '../../../src/diagnostics/runtime-build-provenance.js';
 import {GIT_OUTPUT_BOUND, execGit} from '../../../scripts/checks/git-invocation.js';
 import {discoverFleet, fleetRequirement} from '../../../scripts/lab/probe.js';
 import {loadState, selectNodesByRole} from '../../../scripts/lab/state.js';
@@ -391,18 +392,38 @@ function recordPendingStorageSubdir(pendingStorageByHost, hosts, subDir) {
   }
 }
 
+const SEMVER_IMAGE_TAG_PATTERN = /:(\d+\.\d+\.\d+)$/u;
+
+async function resolveCheckoutLagrangeProvenance(opts, manifest) {
+  if (!manifest.targets.includes(COMPARATIVE_TARGET.LAGRANGE)) {
+    return {lagrangeVersion: opts.lagrangeVersion || null,
+      lagrangeSrcFingerprint: opts.lagrangeSrcFingerprint || null};
+  }
+  const hasSemverTag = SEMVER_IMAGE_TAG_PATTERN.test(String(opts.lagrangeImage || ''));
+  const pkg = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf8'));
+  const buildProv = !hasSemverTag && !opts.lagrangeSrcFingerprint ?
+    await runtimeBuildProvenance() : null;
+  return {
+    lagrangeVersion: opts.lagrangeVersion || (!hasSemverTag ? pkg.version : null),
+    lagrangeSrcFingerprint: opts.lagrangeSrcFingerprint ||
+      buildProv?.content?.shortSourceFingerprint || null,
+  };
+}
+
 async function runPreparedCampaign({opts, manifest, hosts, sshRun, facts, physicalHosts,
   pinned, recordOwner, client, harness, loadGeneratorHost}) {
   const dataIps = hosts.filter((host) => host.role === 'data').map((host) => host.ip);
   // The semantic proof journey runs here, on the controller; PostgreSQL admits
   // the controller's address (as the data host sees it) next to the load generator.
   const controllerIp = (await sshRun(dataIps[0], opts, 'echo "${SSH_CLIENT%% *}"')).trim();
+  const checkoutProvenance = await resolveCheckoutLagrangeProvenance(opts, manifest);
   const deployOpts = {executionTarget: opts.executionTarget,
     lagrangeImage: opts.lagrangeImage, lagrangeImageDigest: opts.lagrangeImageDigest || null,
     storageRoot: opts.storageRoot || null,
-    lagrangeVersion: opts.lagrangeVersion || null, lagrangeRevision: opts.lagrangeRevision || null,
+    lagrangeVersion: checkoutProvenance.lagrangeVersion,
+    lagrangeRevision: opts.lagrangeRevision || null,
     lagrangeImageContent: opts.lagrangeImageContent || null,
-    lagrangeSrcFingerprint: opts.lagrangeSrcFingerprint || null,
+    lagrangeSrcFingerprint: checkoutProvenance.lagrangeSrcFingerprint,
     lagrangeImageByHost: pinned ? Object.fromEntries(Object.entries(pinned).map(
       ([ip, entry]) => [ip, entry.runRef])) : null,
     proofClientIps: controllerIp ? [controllerIp] : []};

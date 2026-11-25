@@ -386,7 +386,7 @@ function readLocalDiagnosticsObservation(resourceDiagnosticsSampler, nodeRow, no
     sampledAtMs,
     ...(sampleId !== null ? {sampleId, congestionEpochId: sampleId} : {}),
     bootIncarnation: nodeRow ? nodeRow[COLUMN.BOOT_INCARNATION] : null,
-    singleCoreCpuPercent: proc.singleCoreCpuPercent,
+    cpuUsagePercent: proc.cpuPercent,
     eventLoopDelayMs: proc.eventLoopDelayMs,
     eventLoopUtilizationPercent: proc.eventLoopUtilizationPercent,
     ...(availableMemoryBytes !== undefined ? {availableMemoryBytes} : {}),

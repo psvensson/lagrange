@@ -375,4 +375,9 @@ test('bootProvenance is preserved after the window and verified against expected
     await assert.rejects(deployers.deployLagrangeCluster(input(wrongSsh.sshRun, {
       opts: {...OPTS, expectedSrcFingerprint: `sha256:${'0'.repeat(64)}`}})),
     (error) => error.code === 'identity_unverified');
+    assert.equal(
+      arraySome(wrongSsh.calls, (call) => /sys-postgres-wire\/scale|FROM partitions/u.test(call.command)),
+      false,
+      'mismatched bootedSrcFingerprint fails closed immediately after nodeReady before formation',
+    );
   });

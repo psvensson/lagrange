@@ -619,18 +619,6 @@ async function formLagrangeCluster({ctx, rawSshRun, hosts, image, connection, ro
   for (let index = 0; index < hosts.length; index += 1) {
     nodeReadiness.push(await nodeReady(ctx, hosts[index]));
   }
-  const membership = await membershipReady(ctx, seedHost, hosts.length);
-  const listener = await publicPgWireReady(ctx, seedHost, roles);
-  formed.listener = listener;
-  const leaders = await leadersReady(ctx, seedHost);
-  const target = {sshRun, opts, from: ctx.clientIp, campaignId,
-    endpoint: {host: listener.host, port: listener.port}, connection};
-  const query = createPsqlQueryReader(target);
-  const sql = {query, statement: createPsqlStatementRunner(target)};
-  const nodeRoles = [...roles];
-  const cluster = await clusterReady(ctx, 'lagrange-system-tables', query, nodeRoles);
-  const visibility = probeVisibility(listener.nodeId, roles);
-  const probe = await probeWriteReadback(ctx, sql, campaignId, visibility);
   const inspectedProducts = await inspectProducts({
     sshRun,
     opts,
@@ -646,6 +634,18 @@ async function formLagrangeCluster({ctx, rawSshRun, hosts, image, connection, ro
       expectedSrcFingerprint: opts.lagrangeSrcFingerprint || opts.expectedSrcFingerprint || null,
       expectedGitCommit: opts.expectedGitCommit || null}});
   assertExpectedLagrangeRevision(products, opts.lagrangeRevision);
+  const membership = await membershipReady(ctx, seedHost, hosts.length);
+  const listener = await publicPgWireReady(ctx, seedHost, roles);
+  formed.listener = listener;
+  const leaders = await leadersReady(ctx, seedHost);
+  const target = {sshRun, opts, from: ctx.clientIp, campaignId,
+    endpoint: {host: listener.host, port: listener.port}, connection};
+  const query = createPsqlQueryReader(target);
+  const sql = {query, statement: createPsqlStatementRunner(target)};
+  const nodeRoles = [...roles];
+  const cluster = await clusterReady(ctx, 'lagrange-system-tables', query, nodeRoles);
+  const visibility = probeVisibility(listener.nodeId, roles);
+  const probe = await probeWriteReadback(ctx, sql, campaignId, visibility);
   const bindRemainingMs = remainingFormationMs(ctx);
   if (bindRemainingMs !== null && bindRemainingMs <= 0) {
     throw toReadinessExhausted(
