@@ -487,22 +487,30 @@ class ResourceDiagnosticsSampler {
    */
   flattenComponentSignals(componentStats) {
     const result = {};
+    let signalCount = 0;
     let truncated = false;
 
     const walk = (value, path, depth) => {
-      if (Object.keys(result).length >=
+      if (signalCount >=
         RESOURCE_DIAGNOSTICS_DEFAULT.MAX_SIGNAL_COUNT) {
         truncated = true;
         return;
       }
 
       if (Number.isFinite(value)) {
+        if (!Object.hasOwn(result, path)) {
+          signalCount += 1;
+        }
         result[path] = value;
         return;
       }
 
       if (Array.isArray(value)) {
-        result[`${path}${SIGNAL_PATH.LENGTH_SUFFIX}`] = value.length;
+        const lengthPath = `${path}${SIGNAL_PATH.LENGTH_SUFFIX}`;
+        if (!Object.hasOwn(result, lengthPath)) {
+          signalCount += 1;
+        }
+        result[lengthPath] = value.length;
         return;
       }
 

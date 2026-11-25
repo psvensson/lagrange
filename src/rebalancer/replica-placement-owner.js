@@ -705,8 +705,8 @@ class ReplicaPlacementOwner {
     const promotedByPartition = promotedVoterReplicaIdsByPartition(census);
     const preliminary = this.evaluateAllPartitions(nodeInput, busyPartitions, new Set(),
       storageExcludedTargets, promotedByPartition);
-    const {waitingBySource, waitingByTarget} = computeCopyWaitingDemand(
-      preliminary.evaluations, nodeInput.formation);
+    const {waitingBySource, waitingByTarget} = computeCopyWaitingDemand(preliminary.evaluations,
+      nodeInput.formation, nodeInput.eligibility.eligibleNodeIds, storageExcludedTargets);
     const budgetSnapshot = this.adaptiveBudgetController ?
       this.adaptiveBudgetController.evaluatePassBudgets({
         nodeInput, occupancy, waitingBySource, waitingByTarget, storageExcludedTargets, nowMs,

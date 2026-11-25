@@ -16,8 +16,11 @@ import {OperationType} from './replica-operation-progress.js';
 import {PRESSURE_STATE} from './storage-capacity-constants.js';
 import {resolveSourceCapacityForClass} from './replica-placement-owner-admission-statement.js';
 import {isFunction} from './replica-placement-owner-collaborators.js';
-import {PLACEMENT_COPY_CAPACITY, PLACEMENT_WAITING_REASON} from
-  './replica-placement-owner-constants.js';
+import {
+  PLACEMENT_COPY_CAPACITY,
+  PLACEMENT_DEFICIT_KIND,
+  PLACEMENT_WAITING_REASON,
+} from './replica-placement-owner-constants.js';
 import {PLACEMENT_DEFICIT_STATE, readPlacementNodeInputs, repairSourceNodeIdsOf} from
   './replica-placement-owner-deficits.js';
 import {formationWaitingReasonOf, orderPlacementCandidates} from
@@ -45,7 +48,53 @@ function buildTargetCapacityRanker(budgetSnapshot, eligibleNodeIds = []) {
     budgetSnapshot.targetRemainingSlots(nodeId);
 }
 
-function computeCopyWaitingDemand(evaluations, formation) {
+function incrementWaitingMapCount(waitingMap, nodeId) {
+  if (typeof nodeId === 'string' && nodeId.length > 0) {
+    waitingMap.set(nodeId, (waitingMap.get(nodeId) ?? 0) + 1);
+  }
+}
+
+function recordLearnerDeficitTargets(
+  waitingByTarget,
+  copySourceNodeId,
+  eligibleNodeIds,
+  storageExcludedTargets,
+) {
+  if (!Array.isArray(eligibleNodeIds) || eligibleNodeIds.length === 0) return false;
+  const targetIds = eligibleNodeIds.filter(
+    (nodeId) => nodeId !== copySourceNodeId && !storageExcludedTargets?.has?.(nodeId),
+  );
+  for (const nodeId of targetIds) {
+    incrementWaitingMapCount(waitingByTarget, nodeId);
+  }
+  return targetIds.length > 0;
+}
+
+function recordTargetWaitingDemand(
+  waitingByTarget,
+  candidate,
+  eligibleNodeIds,
+  storageExcludedTargets,
+) {
+  const isLearnerDeficit =
+    candidate.deficitKind === PLACEMENT_DEFICIT_KIND.LEARNER_DEFICIT;
+  if (isLearnerDeficit && recordLearnerDeficitTargets(
+    waitingByTarget,
+    candidate.move.copySourceNodeId,
+    eligibleNodeIds,
+    storageExcludedTargets,
+  )) {
+    return;
+  }
+  incrementWaitingMapCount(waitingByTarget, candidate.move.targetNodeId);
+}
+
+function computeCopyWaitingDemand(
+  evaluations,
+  formation,
+  eligibleNodeIds = [],
+  storageExcludedTargets = null,
+) {
   const waitingBySource = new Map();
   const waitingByTarget = new Map();
   for (const {isBusy, evaluation} of evaluations) {
@@ -54,13 +103,15 @@ function computeCopyWaitingDemand(evaluations, formation) {
     if (formationWaitingReasonOf(candidate.placementClass, formation) !== null) continue;
     if (!COPY_MOVE_TYPES.has(candidate.move.type)) continue;
     const src = candidate.move.copySourceNodeId;
-    const tgt = candidate.move.targetNodeId;
     if (typeof src === 'string' && src.length > 0) {
       waitingBySource.set(src, (waitingBySource.get(src) ?? 0) + 1);
     }
-    if (typeof tgt === 'string' && tgt.length > 0) {
-      waitingByTarget.set(tgt, (waitingByTarget.get(tgt) ?? 0) + 1);
-    }
+    recordTargetWaitingDemand(
+      waitingByTarget,
+      candidate,
+      eligibleNodeIds,
+      storageExcludedTargets,
+    );
   }
   return {waitingBySource, waitingByTarget};
 }

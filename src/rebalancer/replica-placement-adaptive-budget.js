@@ -255,11 +255,20 @@ function isSingleCoreCpuQueueCongested(observation, thresholds) {
     isMetricStrictlyAbove(observation.transferQueueDelayMs, 0);
 }
 
+function isEventLoopCongested(observation, thresholds) {
+  if (isMetricAtOrAbove(observation.eventLoopDelayMs, thresholds.congestionEventLoopDelayMs)) {
+    return true;
+  }
+  const elu = observation.eventLoopUtilizationPercent;
+  if (!isMetricAtOrAbove(elu, thresholds.congestionEluPercent)) {
+    return false;
+  }
+  return !isFiniteMetric(observation.eventLoopDelayMs) ||
+    isMetricStrictlyAbove(observation.eventLoopDelayMs, thresholds.healthyEventLoopDelayMs);
+}
+
 function classifyDirectSensorCongestion(observation, thresholds) {
-  if (
-    isMetricAtOrAbove(observation.eventLoopDelayMs, thresholds.congestionEventLoopDelayMs) ||
-    isMetricAtOrAbove(observation.eventLoopUtilizationPercent, thresholds.congestionEluPercent)
-  ) {
+  if (isEventLoopCongested(observation, thresholds)) {
     return REASON.EVENT_LOOP_CONGESTION;
   }
   if (isMetricAtOrAbove(observation.writeLatencyMs, thresholds.congestionWriteLatencyMs)) {
@@ -295,10 +304,15 @@ function classifyAttributedCongestion(observation, thresholds) {
     null;
 }
 
+function isHighUtilizationQueueDelayed(rawUtilPercent, maxHealthyPercent, observation, thresholds) {
+  if (Number(rawUtilPercent) <= maxHealthyPercent) return false;
+  if (!isFiniteMetric(observation.eventLoopDelayMs)) return true;
+  return Number(observation.eventLoopDelayMs) > thresholds.healthyEventLoopDelayMs / 2;
+}
+
 function isObservationWithinHealthyGrowthBand(observation, thresholds) {
   const checks = [
     [observation.eventLoopDelayMs, thresholds.healthyEventLoopDelayMs],
-    [observation.eventLoopUtilizationPercent, thresholds.healthyEluPercent],
     [observation.initQueueDelayMs, thresholds.healthyInitQueueDelayMs],
     [observation.writeLatencyMs, thresholds.healthyWriteLatencyMs],
     [observation.transferQueueDelayMs, thresholds.healthyTransferQueueDelayMs],
@@ -310,15 +324,18 @@ function isObservationWithinHealthyGrowthBand(observation, thresholds) {
       if (Number(rawVal) > maxHealthy) return false;
     }
   }
-  const singleCoreCpu = Number(observation.singleCoreCpuPercent);
-  const eventLoopDelayMs = Number(observation.eventLoopDelayMs);
+  if (isFiniteMetric(observation.eventLoopUtilizationPercent)) {
+    hasMeasuredLoadSignal = true;
+    const elu = observation.eventLoopUtilizationPercent;
+    if (isHighUtilizationQueueDelayed(elu, thresholds.healthyEluPercent, observation, thresholds)) {
+      return false;
+    }
+  }
   if (isFiniteMetric(observation.singleCoreCpuPercent)) {
     hasMeasuredLoadSignal = true;
-    if (
-      singleCoreCpu > thresholds.healthySingleCoreCpuPercent &&
-      (!isFiniteMetric(observation.eventLoopDelayMs) ||
-        eventLoopDelayMs > thresholds.healthyEventLoopDelayMs / 2)
-    ) {
+    const cpu = observation.singleCoreCpuPercent;
+    const maxCpu = thresholds.healthySingleCoreCpuPercent;
+    if (isHighUtilizationQueueDelayed(cpu, maxCpu, observation, thresholds)) {
       return false;
     }
   } else if (isFiniteMetric(observation.cpuUsagePercent)) {
@@ -478,15 +495,19 @@ function advanceHealthySampleState(baseState, observation) {
   };
 }
 
-function isDemandSaturatingBudget(demand, limit) {
+function isDemandSaturatingBudget(demand, baseState, config) {
   const occupancy = Math.max(0, Number(demand.occupancy) || 0);
   const waiting = Math.max(0, Number(demand.waitingDemandCount) || 0);
-  return waiting > 0 && occupancy + waiting > limit;
+  if (waiting <= 0) return false;
+  if (occupancy >= baseState.limit) return true;
+  return baseState.lastDecreasedAtMs !== null &&
+    baseState.limit < config.initialLimit &&
+    occupancy + waiting > baseState.limit;
 }
 
 function evaluateHealthyWindowGrowth(baseState, bootReset, observation, demand, nowMs, config) {
   const stateWithSample = advanceHealthySampleState(baseState, observation);
-  if (!isDemandSaturatingBudget(demand, baseState.limit)) {
+  if (!isDemandSaturatingBudget(demand, baseState, config)) {
     return buildWindowDecision({
       limit: baseState.limit, previousLimit: baseState.limit,
       action: bootReset ? ACTION.RESET : ACTION.HOLD,
