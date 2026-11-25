@@ -174,7 +174,7 @@ async function topologyProgressFixture(t) {
       {subscriberId: `topology-progress-${index}`});
   }
   const command = committedQueryOf('topology-progress-source-row',
-    `INSERT INTO ${TABLE} (id, value) VALUES (?, ?)`);
+    `INSERT INTO ${TABLE} (group_id, representative_node_id) VALUES (?, ?)`);
   command.params = ['A', 'retained-source-body'];
   command.timestamp = new HLCTimestamp(1000, 0, 'topology-progress-component').toString();
   assert.equal(applyCommitted(leader, command), null);
@@ -233,8 +233,10 @@ async function startSourceLane(f, {tableName, partitionId, rows}) {
       PARTITION_CDC_OBLIGATION_REASON.DELIVERY_RETRY),
     diagnostics: () => leader.cdcDelivery.getCdcObligationDiagnostics(),
     addRow: (id) => {
+      const pkField = getSystemCachePrimaryKeyField(tableName);
+      const valueField = tableName === TABLE ? 'representative_node_id' : 'value';
       const command = committedQueryOf(`${partitionId}-${id}`,
-        `INSERT INTO ${tableName} (id, value) VALUES (?, ?)`);
+        `INSERT INTO ${tableName} (${pkField}, ${valueField}) VALUES (?, ?)`);
       command.params = [id, `value-${id}`];
       command.timestamp = new HLCTimestamp(1000, 0, `lane-${partitionId}`).toString();
       assert.equal(applyCommitted(leader, command), null);
@@ -288,7 +290,9 @@ async function multiLaneTopologyFixture(t, laneSpecs) {
     sourceAnswer: () => LEAF.NATIVE};
   f.source = createDurableSourceMessageGroupService(SOURCE_GROUP, {
     applyCDCBatch: (events) => {
-      f.sourceBatches.push(events.map((event) => event.data.id));
+      f.sourceBatches.push(events.map(
+        (event) => event.data[getSystemCachePrimaryKeyField(event.tableName)],
+      ));
       return leafAnswer(events, SOURCE_GROUP, f.sourceAnswer(events));
     }});
   const envelope = (call, response) => {
@@ -296,7 +300,9 @@ async function multiLaneTopologyFixture(t, laneSpecs) {
     return leafEnvelope(deliveredEventsOf(call.payload), call.targetGroupId, leaf, hintMs);
   };
   f.router = createHeldMessageRouter((call) => {
-    call.ids = deliveredEventsOf(call.payload).map((event) => event.data.id);
+    call.ids = deliveredEventsOf(call.payload).map(
+      (event) => event.data[getSystemCachePrimaryKeyField(event.tableName)],
+    );
     const response = f.answer(call);
     return response === null ? null : envelope(call, response);
   });

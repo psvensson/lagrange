@@ -441,6 +441,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
       enableTimeouts: false,
     });
     coordinator.initialize();
+    coordinator.isPlacementAdmissionManagedEntityType = () => false;
 
     try {
       const operation = await coordinator.createOperation({
@@ -609,6 +610,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
       enableTimeouts: false,
     });
     coordinator.initialize();
+    coordinator.isPlacementAdmissionManagedEntityType = () => false;
 
     try {
       const operation = await coordinator.createOperation({

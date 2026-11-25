@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 
 const COMPLEXITY_MESSAGE_PATTERN =
@@ -24,6 +25,18 @@ const TYPE_STRING = 'string';
 const TYPE_NUMBER = 'number';
 const TYPE_FUNCTION = 'function';
 const TYPE_OBJECT = 'object';
+const DOT_PREFIX = '.';
+const JS_EXTENSION = '.js';
+const MJS_EXTENSION = '.mjs';
+const CJS_EXTENSION = '.cjs';
+const JS_EXTENSIONS = Object.freeze([
+  JS_EXTENSION,
+  MJS_EXTENSION,
+  CJS_EXTENSION,
+]);
+const DEFAULT_ESLINT_DIR_EXTENSIONS = Object.freeze([JS_EXTENSION]);
+const IGNORED_DIRECTORY_NAMES = new Set(['.git', 'node_modules']);
+const REPO_DEFAULT_ESLINT_DIRS = new Set(['scripts', 'test']);
 
 function normalizeSubjectLabel(rawSubject, fallbackLabel) {
   const candidate = typeof rawSubject === TYPE_STRING ?
@@ -99,49 +112,184 @@ function isParserOrFatalMessage(message) {
     (message.fatal === true || message.ruleId === null);
 }
 
+function normalizeScanFilePath(filePath) {
+  if (typeof filePath !== TYPE_STRING || filePath.trim().length === ZERO_COUNT) {
+    return EMPTY_STRING;
+  }
+  return path.relative(
+    process.cwd(),
+    path.resolve(process.cwd(), filePath),
+  );
+}
+
+function hasSupportedExtension(filePath, extensions = JS_EXTENSIONS) {
+  return extensions.some((ext) => filePath.endsWith(ext));
+}
+
+function walkTargetDirectory(dirPath, extensions, collected) {
+  const entries = fs.readdirSync(dirPath, {withFileTypes: true});
+  for (const entry of entries) {
+    if (entry.name.startsWith(DOT_PREFIX) ||
+        IGNORED_DIRECTORY_NAMES.has(entry.name)) {
+      continue;
+    }
+    const entryPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      walkTargetDirectory(entryPath, extensions, collected);
+    } else if (entry.isFile() && hasSupportedExtension(entry.name, extensions)) {
+      collected.add(normalizeScanFilePath(entryPath));
+    }
+  }
+}
+
+function collectExplicitExpectedFiles(expectedFiles) {
+  const census = new Set();
+  for (const filePath of expectedFiles) {
+    const normalized = normalizeScanFilePath(filePath);
+    if (normalized.length > ZERO_COUNT) {
+      census.add(normalized);
+    }
+  }
+  return census;
+}
+
+function addTargetToCensus({
+  target,
+  analyzer,
+  hasNonDefaultJsExt,
+  census,
+}) {
+  if (typeof target !== TYPE_STRING || target.trim().length === ZERO_COUNT) {
+    return;
+  }
+  const resolvedTarget = path.resolve(process.cwd(), target);
+  const relativeTarget = path.relative(process.cwd(), resolvedTarget);
+  if (!fs.existsSync(resolvedTarget)) {
+    if (relativeTarget.length > ZERO_COUNT) {
+      census.add(relativeTarget);
+    }
+    return;
+  }
+  const stat = fs.statSync(resolvedTarget);
+  if (stat.isFile()) {
+    if (hasSupportedExtension(resolvedTarget, JS_EXTENSIONS)) {
+      census.add(relativeTarget);
+    }
+    return;
+  }
+  if (stat.isDirectory()) {
+    const useDefaultEslintJsOnly =
+      analyzer === DEFAULT_ANALYZER_LABEL &&
+      !hasNonDefaultJsExt &&
+      REPO_DEFAULT_ESLINT_DIRS.has(relativeTarget);
+    const dirExtensions = useDefaultEslintJsOnly ?
+      DEFAULT_ESLINT_DIR_EXTENSIONS :
+      JS_EXTENSIONS;
+    walkTargetDirectory(resolvedTarget, dirExtensions, census);
+  }
+}
+
+function collectExpectedFilesCensus({
+  targets = [],
+  expectedFiles = null,
+  analyzedPaths = new Set(),
+  analyzer = DEFAULT_ANALYZER_LABEL,
+}) {
+  if (Array.isArray(expectedFiles) || expectedFiles instanceof Set) {
+    return collectExplicitExpectedFiles(expectedFiles);
+  }
+  const census = new Set();
+  const safeTargets = Array.isArray(targets) ? targets : [];
+  const hasNonDefaultJsExt = [...analyzedPaths].some(
+    (filePath) =>
+      filePath.endsWith(MJS_EXTENSION) || filePath.endsWith(CJS_EXTENSION),
+  );
+  for (const target of safeTargets) {
+    addTargetToCensus({
+      target,
+      analyzer,
+      hasNonDefaultJsExt,
+      census,
+    });
+  }
+  return census;
+}
+
+function countSkippedExpectedFiles(expectedCensus, analyzedPaths) {
+  let skippedFiles = ZERO_COUNT;
+  for (const expectedPath of expectedCensus) {
+    if (!analyzedPaths.has(expectedPath)) {
+      skippedFiles += 1;
+    }
+  }
+  return skippedFiles;
+}
+
+function recordResultCompleteness(result, analyzedPaths, parserFatalErrors) {
+  const relativeFilePath = normalizeScanFilePath(
+    result?.filePath || EMPTY_STRING,
+  );
+  if (relativeFilePath.length > ZERO_COUNT) {
+    analyzedPaths.add(relativeFilePath);
+  }
+  const messages = Array.isArray(result?.messages) ? result.messages : [];
+  const fatalMessages = messages.filter(isParserOrFatalMessage);
+  for (const message of fatalMessages) {
+    parserFatalErrors.push({
+      filePath: relativeFilePath,
+      line: message.line ?? ZERO_COUNT,
+      column: message.column ?? ZERO_COUNT,
+      message: message.message,
+    });
+  }
+  return fatalMessages.length > ZERO_COUNT ? 1 : ZERO_COUNT;
+}
+
+function isScanComplete(analyzedFiles, failedFiles, skippedFiles) {
+  if (analyzedFiles <= ZERO_COUNT) {
+    return false;
+  }
+  return failedFiles === ZERO_COUNT && skippedFiles === ZERO_COUNT;
+}
+
 export function collectScanCompleteness(
   results,
   {
     ruleId = null,
     targets = [],
+    expectedFiles = null,
     analyzer = DEFAULT_ANALYZER_LABEL,
   } = {},
 ) {
   const safeResults = Array.isArray(results) ? results : [];
+  const safeTargets = Array.isArray(targets) ? [...targets] : [];
   const parserFatalErrors = [];
+  const analyzedPaths = new Set();
   let failedFiles = ZERO_COUNT;
   for (const result of safeResults) {
-    const relativeFilePath = path.relative(
-      process.cwd(),
-      result?.filePath || EMPTY_STRING,
+    failedFiles += recordResultCompleteness(
+      result,
+      analyzedPaths,
+      parserFatalErrors,
     );
-    const fatalMessages = (result?.messages || []).filter(
-      isParserOrFatalMessage,
-    );
-    if (fatalMessages.length > ZERO_COUNT) {
-      failedFiles += 1;
-    }
-    for (const message of fatalMessages) {
-      parserFatalErrors.push({
-        filePath: relativeFilePath,
-        line: message.line ?? ZERO_COUNT,
-        column: message.column ?? ZERO_COUNT,
-        message: message.message,
-      });
-    }
   }
+  const expectedCensus = collectExpectedFilesCensus({
+    targets: safeTargets,
+    expectedFiles,
+    analyzedPaths,
+    analyzer,
+  });
   const analyzedFiles = safeResults.length;
-  const skippedFiles = ZERO_COUNT;
-  const complete = analyzedFiles > ZERO_COUNT && failedFiles === ZERO_COUNT;
+  const skippedFiles = countSkippedExpectedFiles(expectedCensus, analyzedPaths);
   return {
     analyzer,
     ruleId,
-    targets: Array.isArray(targets) ? [...targets] : [],
+    targets: safeTargets,
     analyzedFiles,
     parserFatalErrors,
     failedFiles,
     skippedFiles,
-    complete,
+    complete: isScanComplete(analyzedFiles, failedFiles, skippedFiles),
   };
 }
 
@@ -150,30 +298,44 @@ function formatFatalError(entry) {
     `${COLON_SEPARATOR}${entry.column}${SINGLE_SPACE}${entry.message}`;
 }
 
-export function assertScanCompleteness(
-  completeness,
-  label = DEFAULT_ANALYZER_LABEL,
-) {
-  if (completeness &&
-      completeness.complete === true &&
-      completeness.analyzedFiles > ZERO_COUNT &&
-      completeness.failedFiles === ZERO_COUNT) {
-    return completeness;
+function isVerifiedCompleteScan(completeness) {
+  if (!completeness || completeness.complete !== true) {
+    return false;
   }
-  const analyzedFiles = completeness?.analyzedFiles ?? ZERO_COUNT;
-  const failedFiles = completeness?.failedFiles ?? ZERO_COUNT;
+  return isScanComplete(
+    completeness.analyzedFiles,
+    completeness.failedFiles,
+    completeness.skippedFiles,
+  );
+}
+
+function formatCompletenessFailureSuffix(completeness) {
   const fatalErrors = Array.isArray(completeness?.parserFatalErrors) ?
     completeness.parserFatalErrors :
     [];
   const detailLines = fatalErrors
     .slice(ZERO_COUNT, SCAN_ERROR_DISPLAY_LIMIT)
     .map(formatFatalError);
-  const detailSuffix = detailLines.length > ZERO_COUNT ?
+  return detailLines.length > ZERO_COUNT ?
     `${NEWLINE_SEPARATOR}${detailLines.join(NEWLINE_SEPARATOR)}` :
     EMPTY_STRING;
+}
+
+export function assertScanCompleteness(
+  completeness,
+  label = DEFAULT_ANALYZER_LABEL,
+) {
+  if (isVerifiedCompleteScan(completeness)) {
+    return completeness;
+  }
+  const analyzedFiles = completeness?.analyzedFiles ?? ZERO_COUNT;
+  const failedFiles = completeness?.failedFiles ?? ZERO_COUNT;
+  const skippedFiles = completeness?.skippedFiles ?? ZERO_COUNT;
+  const detailSuffix = formatCompletenessFailureSuffix(completeness);
   throw new Error(
     `Scan completeness check FAILED for ${label}: ` +
-    `analyzedFiles=${analyzedFiles}, failedFiles=${failedFiles}.` +
+    `analyzedFiles=${analyzedFiles}, failedFiles=${failedFiles}, ` +
+    `skippedFiles=${skippedFiles}.` +
     detailSuffix,
   );
 }
@@ -270,6 +432,55 @@ function normalizeBaselineMap(baselineEntries, getKey, getSeverity) {
   return baselineMap;
 }
 
+function classifyViolationAgainstBaseline({
+  violation,
+  identity,
+  subject,
+  severity,
+  baselineMap,
+  newViolations,
+  worsenedViolations,
+  improvedViolations,
+}) {
+  if (!baselineMap.has(identity)) {
+    newViolations.push({
+      ...violation,
+      subject,
+      severity,
+      identity,
+    });
+    return;
+  }
+  const baselineSeverity = baselineMap.get(identity);
+  if (severity > baselineSeverity) {
+    worsenedViolations.push({
+      ...violation,
+      subject,
+      severity,
+      baselineSeverity,
+      identity,
+    });
+  } else if (severity < baselineSeverity) {
+    improvedViolations.push({
+      ...violation,
+      subject,
+      severity,
+      baselineSeverity,
+      identity,
+    });
+  }
+}
+
+function collectRemovedBaselineIdentities(baselineMap, currentMap) {
+  const removedIdentities = [];
+  for (const identity of baselineMap.keys()) {
+    if (!currentMap.has(identity)) {
+      removedIdentities.push(identity);
+    }
+  }
+  return removedIdentities;
+}
+
 export function evaluateIdentitySeverityRatchet({
   violations = [],
   baselineEntries = {},
@@ -297,42 +508,22 @@ export function evaluateIdentitySeverityRatchet({
     const severity = resolveViolationSeverity(violation, getSeverity);
     const subject = resolveViolationSubject(violation);
     currentMap.set(identity, severity);
-    if (!baselineMap.has(identity)) {
-      newViolations.push({
-        ...violation,
-        subject,
-        severity,
-        identity,
-      });
-      continue;
-    }
-    const baselineSeverity = baselineMap.get(identity);
-    if (severity > baselineSeverity) {
-      worsenedViolations.push({
-        ...violation,
-        subject,
-        severity,
-        baselineSeverity,
-        identity,
-      });
-    } else if (severity < baselineSeverity) {
-      improvedViolations.push({
-        ...violation,
-        subject,
-        severity,
-        baselineSeverity,
-        identity,
-      });
-    }
+    classifyViolationAgainstBaseline({
+      violation,
+      identity,
+      subject,
+      severity,
+      baselineMap,
+      newViolations,
+      worsenedViolations,
+      improvedViolations,
+    });
   }
 
-  const removedIdentities = [];
-  for (const identity of baselineMap.keys()) {
-    if (!currentMap.has(identity)) {
-      removedIdentities.push(identity);
-    }
-  }
-
+  const removedIdentities = collectRemovedBaselineIdentities(
+    baselineMap,
+    currentMap,
+  );
   const currentEntries = Object.fromEntries(
     [...currentMap.entries()].sort(([left], [right]) =>
       left.localeCompare(right)),

@@ -25,7 +25,7 @@ import path from 'node:path';
 import {parse as parseJavaScript} from 'espree';
 import {KEYS as VISITOR_KEYS} from 'eslint-visitor-keys';
 
-import {resolvedCheckRange} from './changed-paths.js';
+import {repositoryCheckBase} from './changed-paths.js';
 import {execGit} from './git-invocation.js';
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
@@ -290,7 +290,7 @@ function resolveExplicitBase(argv) {
 
 function addedTrackedPaths(tracked, explicitBase) {
   const root = process.cwd();
-  const range = resolvedCheckRange(explicitBase, process.env, root);
+  const base = explicitBase || repositoryCheckBase(root, process.env);
   const added = new Set();
   const recordDiff = (args) => {
     const out = execGit(args, {cwd: root, encoding: TEXT_ENCODING});
@@ -301,16 +301,16 @@ function addedTrackedPaths(tracked, explicitBase) {
       },
     );
   };
-  if (range.base) {
-    recordDiff([...GIT_DIFF_ADDED_ARGS, `${range.base}..HEAD`]);
+  if (base) {
+    recordDiff([...GIT_DIFF_ADDED_ARGS, `${base}..HEAD`]);
   }
   recordDiff([...GIT_DIFF_CACHED_ADDED_ARGS]);
   return added;
 }
 
 function resolveBaseCommit(explicitBase, root) {
-  const range = resolvedCheckRange(explicitBase, process.env, root);
-  if (range.base) return range.base;
+  const base = explicitBase || repositoryCheckBase(root, process.env);
+  if (base) return base;
   try {
     const head = stringTrim(
       execGit([...GIT_REV_PARSE_HEAD_ARGS], {cwd: root, encoding: TEXT_ENCODING}),

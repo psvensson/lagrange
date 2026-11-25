@@ -2,12 +2,16 @@
 // deployment: source and the installed production dependency closure. A source
 // checkout uses its lock; an npm installation resolves its declared closure.
 // Package bodies are measured, not inferred from versions.
-import {lstat, readFile, readdir, realpath, stat} from 'node:fs/promises';
+import {lstat, readFile, readdir, readlink, realpath, stat} from 'node:fs/promises';
 import {createRequire} from 'node:module';
 import path from 'node:path';
-import {computeContentRecordsFingerprint} from './source-fingerprint.js';
+import {
+  FINGERPRINT_HEX_LENGTH,
+  computeContentRecordsFingerprint,
+} from './source-fingerprint.js';
 
 const SOURCE_DIRECTORY = 'src';
+const SOURCE_RECORD_PREFIX = `${SOURCE_DIRECTORY}/`;
 const PACKAGE_MANIFEST = 'package.json';
 const DEPENDENCY_LOCK = 'package-lock.json';
 const DEPENDENCY_DIRECTORY = 'node_modules';
@@ -225,6 +229,25 @@ async function resolveDirectoryActual(directory, ancestors, layout, resolvedActu
   return actual;
 }
 
+async function readFileRecord(entry, absolute, relativePath) {
+  const content = await readFile(absolute);
+  if (!entry.isSymbolicLink()) return {relativePath, content};
+  return {
+    relativePath,
+    content,
+    shortContent: Buffer.from(await readlink(absolute), TEXT_ENCODING),
+  };
+}
+
+function toShortSourceRecord({relativePath, content, shortContent}) {
+  return {
+    relativePath: relativePath.startsWith(SOURCE_RECORD_PREFIX) ?
+      relativePath.slice(SOURCE_RECORD_PREFIX.length) :
+      relativePath,
+    content: shortContent ?? content,
+  };
+}
+
 async function contentRecords(directory, prefix, ancestors = new Set(),
   layout = CONTENT_LAYOUT.LOCKED, packageRoot = directory, interiorPackages = new Set(),
   resolvedActual = null) {
@@ -246,7 +269,7 @@ async function contentRecords(directory, prefix, ancestors = new Set(),
     } else if (shape.isFile()) {
       // Follow installed symlinks: the running module consumes their body,
       // so hashing only the link text would not identify executable bytes.
-      records.push({relativePath, content: await readFile(absolute)});
+      records.push(await readFileRecord(entry, absolute, relativePath));
       if (isInteriorManifest(entry, directory, packageRoot, layout)) {
         interiorPackages.add(actual);
       }
@@ -300,8 +323,11 @@ async function measureRuntimeContent(root) {
     {relativePath: PACKAGE_MANIFEST, content: await readFile(path.join(root, PACKAGE_MANIFEST))},
   ];
   if (lockBytes !== null) manifests.push({relativePath: DEPENDENCY_LOCK, content: lockBytes});
+  const shortSourceRecords = source.map(toShortSourceRecord);
   return Object.freeze({
     sourceDigest: computeContentRecordsFingerprint(source),
+    shortSourceFingerprint: computeContentRecordsFingerprint(shortSourceRecords)
+      .slice(0, FINGERPRINT_HEX_LENGTH),
     dependencyDigest: computeContentRecordsFingerprint(dependencies),
     manifestDigest: computeContentRecordsFingerprint(manifests),
     dependencyFileCount: dependencies.length,

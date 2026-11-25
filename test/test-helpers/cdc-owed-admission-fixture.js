@@ -7,7 +7,7 @@ import {CDC_TABLE, track} from './participant-transaction-fixture.js';
 const OWED_CAPACITY = PARTITION_CDC_OBLIGATION_BOUND.OWED_MAX_EVENTS;
 const PRESSURE_CODE = PARTITION_WRITE_LEADERSHIP_REFUSAL.CDC_CAPACITY;
 const CDC = Object.freeze({tableName: CDC_TABLE});
-const WRITE_SQL = `INSERT OR REPLACE INTO ${CDC_TABLE} (id, value) VALUES (?, ?)`;
+const WRITE_SQL = `INSERT OR REPLACE INTO ${CDC_TABLE} (group_id, representative_node_id) VALUES (?, ?)`;
 
 function fillDebt(leader, count, followers = []) {
   const replicas = [leader, ...followers];

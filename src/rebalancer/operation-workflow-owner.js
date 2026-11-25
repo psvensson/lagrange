@@ -88,6 +88,10 @@ class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
       });
   }
 
+  get systemTableCache() {
+    return this.repository?.systemTableCache ?? null;
+  }
+
   /** Recover the exact issued learner through the registered native recipient.
    * No ordinary workflow transition or CREATE permission follows from RECORDED.
    */

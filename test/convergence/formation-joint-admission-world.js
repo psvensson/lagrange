@@ -565,12 +565,20 @@ function createRowPartitionAuthority(cache, hostsById, now) {
     resolvePartitionLeader(partitionId) {
       const leaderId =
         cache.get(TABLES.PARTITIONS, partitionId)?.[COLUMN.LEADER_NODE_ID];
-      return leaderId ? Object.freeze({
+      if (!leaderId) return null;
+      const leaderRows = cache.filter(TABLES.SERVICES, (row) =>
+        row[COLUMN.PARTITION_ID] === partitionId &&
+        row[COLUMN.NODE_ID] === leaderId &&
+        row[COLUMN.STATUS] === ReplicaStatus.ACTIVE);
+      const leaderRow = leaderRows.find((row) =>
+        row[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER) || leaderRows[0] || null;
+      return Object.freeze({
         leaderId,
+        replicaId: leaderRow?.[COLUMN.REPLICA_ID] || null,
         term: LEADER_TERM,
         commitIndex: LEADER_COMMIT_INDEX,
         appliedIndex: LEADER_COMMIT_INDEX,
-      }) : null;
+      });
     },
     // A node serves a partition locally where it holds a caught-up voter
     // replica of it; only the leader's answer carries the leader's read

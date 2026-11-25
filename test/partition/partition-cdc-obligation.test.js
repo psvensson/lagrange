@@ -241,7 +241,7 @@ test('TX1 CDC O2: an obligation is identified by transaction, entry and ordinal,
     // A later committed write changes the row; the recorded payload keeps the
     // value as of the decision's commit (no later row version is read back).
     applyCommitted(replica, committedQueryOf('c2-later',
-      `UPDATE ${CDC_TABLE} SET value = 'later' WHERE id = '${ROW.id}'`));
+      `UPDATE ${CDC_TABLE} SET representative_node_id = 'later' WHERE group_id = '${ROW.id}'`));
     const afterLater = readCdcObligation(replica.db, txKey(tx, 0));
     const event = JSON.parse(afterLater.eventJson);
     return {
@@ -250,7 +250,7 @@ test('TX1 CDC O2: an obligation is identified by transaction, entry and ordinal,
       decisionEntryId: decision.entryId, decisionIndex,
       payload: {tableName: event.tableName, operation: event.operation,
         timestamp: event.timestamp, sourcePartition: event.sourcePartition,
-        sourceReplica: event.sourceReplica, value: event.data?.value,
+        sourceReplica: event.sourceReplica, value: event.data?.representative_node_id,
         updatedAtHlc: event.data?.updated_at_hlc},
       sameBytesAfterLaterWrite: recorded.eventJson === afterLater.eventJson,
       eventJson: recorded.eventJson,
@@ -742,7 +742,8 @@ test('TX1 CDC O12: same-row operations retain their own values and distinct cons
         params: [ROW.id, ROW.value],
       }), null);
       const operations = ['first', 'second'].map((value, ordinal) => cdcOperationOf(ROW, {
-        entryId: `c12-update-${ordinal}`, sql: `UPDATE ${CDC_TABLE} SET value = ? WHERE id = ?`,
+        entryId: `c12-update-${ordinal}`,
+        sql: `UPDATE ${CDC_TABLE} SET representative_node_id = ? WHERE group_id = ?`,
         params: [value, ROW.id],
       }));
       const applied = commitHandBuilt(replica, tx, operations);
@@ -752,7 +753,7 @@ test('TX1 CDC O12: same-row operations retain their own values and distinct cons
           entryId: row.entryId, logIndex: row.logIndex, ordinal: row.ordinal};
       });
       assert.deepEqual({prepare: applied.prepareApply, commit: applied.decisionApply,
-        values: events.map((event) => event.data.value),
+        values: events.map((event) => event.data.representative_node_id),
         identities: new Set(events.map(buildEventIdentity)).size},
       {prepare: null, commit: null, values: ['first', 'second'], identities: 2});
     } finally {
@@ -890,10 +891,10 @@ test('TX1 CDC O16: ordinary writes retain an atomic obligation through later wri
       const first = readCdcObligation(replica.db, 'entry:c16-insert');
       const replay = applyCommitted(replica, command);
       applyCommitted(replica, committedQueryOf('c16-later',
-        `UPDATE ${CDC_TABLE} SET value = 'later' WHERE id = '${ROW.id}'`));
+        `UPDATE ${CDC_TABLE} SET representative_node_id = 'later' WHERE group_id = '${ROW.id}'`));
       const retained = readCdcObligation(replica.db, 'entry:c16-insert');
       assert.deepEqual({failed, rolledBack, applied, replay,
-        firstValue: first && JSON.parse(first.eventJson).data.value,
+        firstValue: first && JSON.parse(first.eventJson).data.representative_node_id,
         samePayload: retained !== null && first.eventJson === retained.eventJson,
         generated: replica.cdcPipelineMetrics.getSnapshot()[
           CDC_PIPELINE_METRIC.EVENTS_GENERATED],
@@ -918,7 +919,7 @@ test('TX1 CDC O17: provisional metadata advances formation without acknowledging
       const acknowledging = acknowledgingCdcSubscriber();
       // One subscriber call is handed the entry's two events as one vector.
       await leader.subscribeToCDCWithHandshake(async (events) => {
-        seen.push(...events.map((event) => event.data.id));
+        seen.push(...events.map((event) => event.data.group_id));
         return provisional ? buildProvisionalCdcOutcome(events, 50) : acknowledging(events);
       });
       commitHandBuilt(leader, identityOf('c17'), [cdcOperationOf(ROW), cdcOperationOf(ROW_2)]);
@@ -952,7 +953,7 @@ test('TX1 CDC O18: provisional scanning yields after one page and revisits old d
     const waves = [];
     leader.cdcSubscribers.add(async (events) => {
       waves.push(events.length);
-      seen.push(...events.map((event) => event.data.id));
+      seen.push(...events.map((event) => event.data.group_id));
       return buildProvisionalCdcOutcome(events, 50);
     });
     await leader.cdcDelivery.driveCdcObligations('provisional-page-witness');
@@ -984,7 +985,7 @@ test('TX1 CDC O19: a subscription handshake is registration plus the lane drive 
     await settleTicks();
     assert.deepEqual({
       catchup: Object.hasOwn(answer, 'catchup'),
-      delivered: subscriber.events.map((event) => event.data.id),
+      delivered: subscriber.events.map((event) => event.data.group_id),
       outsideLane: subscriber.events.filter((event) => event.replayOnly === true).length,
       lastDriveReason: leader.cdcDelivery.getCdcObligationDiagnostics().lastDrive.reason,
     }, {catchup: false, delivered: [ROW.id], outsideLane: 0,
@@ -1390,10 +1391,8 @@ test('CDC regression: batch UPSERT, non-PK DELETE via RETURNING, PK payload guar
 
       // 4. DELETE by non-PK predicate captures actual deleted row via RETURNING *
       assert.equal(applyCommitted(leader, {
-        ...committedQueryOf(
-          'cfg-seed-nonpk-del',
-          'INSERT INTO config (config_key, config_value) VALUES (?, ?)',
-        ),
+        ...committedQueryOf('cfg-seed-nonpk-del',
+          'INSERT INTO config (config_key, config_value) VALUES (?, ?)'),
         params: ['probe.del.nonpk', 'old-delete-target'],
         timestamp: new HLCTimestamp(22, 0, 'cfg-test').toString(),
       }), null);
@@ -1401,10 +1400,8 @@ test('CDC regression: batch UPSERT, non-PK DELETE via RETURNING, PK payload guar
       assert.equal(cache.get(TABLES.CONFIG, 'probe.del.nonpk')?.config_value, 'old-delete-target');
 
       assert.equal(applyCommitted(leader, {
-        ...committedQueryOf(
-          'cfg-exec-nonpk-del',
-          'DELETE FROM config WHERE config_value = \'old-delete-target\'',
-        ),
+        ...committedQueryOf('cfg-exec-nonpk-del',
+          'DELETE FROM config WHERE config_value = \'old-delete-target\''),
         timestamp: new HLCTimestamp(23, 0, 'cfg-test').toString(),
       }), null);
       await settleTicks();
@@ -1416,10 +1413,8 @@ test('CDC regression: batch UPSERT, non-PK DELETE via RETURNING, PK payload guar
 
       // 5. Expression WHERE (config_key = lower(?)) on UPDATE and DELETE
       assert.equal(applyCommitted(leader, {
-        ...committedQueryOf(
-          'cfg-seed-expr',
-          'INSERT INTO config (config_key, config_value) VALUES (?, ?)',
-        ),
+        ...committedQueryOf('cfg-seed-expr',
+          'INSERT INTO config (config_key, config_value) VALUES (?, ?)'),
         params: ['probe.expr', 'initial'],
         timestamp: new HLCTimestamp(24, 0, 'cfg-test').toString(),
       }), null);
@@ -1427,10 +1422,8 @@ test('CDC regression: batch UPSERT, non-PK DELETE via RETURNING, PK payload guar
       assert.equal(cache.get(TABLES.CONFIG, 'probe.expr')?.config_value, 'initial');
 
       assert.equal(applyCommitted(leader, {
-        ...committedQueryOf(
-          'cfg-update-expr',
-          'UPDATE config SET config_value = \'updated-via-lower\' WHERE config_key = lower(?)',
-        ),
+        ...committedQueryOf('cfg-update-expr',
+          'UPDATE config SET config_value = \'updated-via-lower\' WHERE config_key = lower(?)'),
         params: ['PROBE.EXPR'],
         timestamp: new HLCTimestamp(25, 0, 'cfg-test').toString(),
       }), null);
@@ -1444,37 +1437,26 @@ test('CDC regression: batch UPSERT, non-PK DELETE via RETURNING, PK payload guar
       assert.equal(cache.get(TABLES.CONFIG, 'PROBE.EXPR'), undefined);
 
       const generator = new PartitionCDCGenerator({
-        partitionId: PARTITION_ID,
-        replicaId: REPLICAS[0],
-        tableName: TABLES.CONFIG,
-        db: leader.db,
-        logger: silentLogger,
+        partitionId: PARTITION_ID, replicaId: REPLICAS[0], tableName: TABLES.CONFIG,
+        db: leader.db, logger: silentLogger,
       });
       const directUpdateExpr = generator.buildEvent({
         type: 'QUERY',
         sql: 'UPDATE config SET config_value = \'updated-via-lower\' WHERE config_key = lower(?)',
-        params: ['PROBE.EXPR'],
-        timestamp: '25-0-cfg',
-        changes: 1,
+        params: ['PROBE.EXPR'], timestamp: '25-0-cfg', changes: 1,
       });
       assert.equal(directUpdateExpr.state, PARTITION_CDC_EVENT_BUILD_STATE.BUILT);
       assert.equal(directUpdateExpr.cdcEvent.data.config_key, 'probe.expr');
 
       const directDeleteExpr = generator.buildEvent({
-        type: 'QUERY',
-        sql: 'DELETE FROM config WHERE config_key = lower(?)',
-        params: ['PROBE.EXPR'],
-        timestamp: '26-0-cfg',
-        changes: 1,
+        type: 'QUERY', sql: 'DELETE FROM config WHERE config_key = lower(?)',
+        params: ['PROBE.EXPR'], timestamp: '26-0-cfg', changes: 1,
       });
       assert.equal(directDeleteExpr.state, PARTITION_CDC_EVENT_BUILD_STATE.BUILT);
       assert.equal(directDeleteExpr.cdcEvent.data.config_key, 'probe.expr');
 
       assert.equal(applyCommitted(leader, {
-        ...committedQueryOf(
-          'cfg-delete-expr',
-          'DELETE FROM config WHERE config_key = lower(?)',
-        ),
+        ...committedQueryOf('cfg-delete-expr', 'DELETE FROM config WHERE config_key = lower(?)'),
         params: ['PROBE.EXPR'],
         timestamp: new HLCTimestamp(26, 0, 'cfg-test').toString(),
       }), null);
@@ -1484,6 +1466,28 @@ test('CDC regression: batch UPSERT, non-PK DELETE via RETURNING, PK payload guar
       assert.ok(deleteExprOb);
       assert.equal(JSON.parse(deleteExprOb.eventJson).data.config_key, 'probe.expr');
       assert.equal(cache.get(TABLES.CONFIG, 'probe.expr'), undefined);
+    } finally {
+      await shutdownAll(leader);
+    }
+  });
+
+test('CDC regression: committed writes to CDC_TABLE (latency_groups) apply cleanly into SystemTableCache without rejection',
+  async () => {
+    const cache = new SystemTableCache();
+    const {leader} = await startCdcLeader({systemTableCache: cache});
+    try {
+      assert.equal(applyCommitted(leader, {
+        ...committedQueryOf('lg-insert-1', CDC_INSERT_SQL),
+        params: [ROW.id, ROW.value],
+        timestamp: new HLCTimestamp(30, 0, 'lg-test').toString(),
+      }), null);
+      await settleTicks();
+
+      const cached = cache.get(TABLES.LATENCY_GROUPS, ROW.id);
+      assert.ok(cached, 'committed write on CDC_TABLE propagates into SystemTableCache');
+      assert.equal(cached.group_id, ROW.id);
+      assert.equal(cached.representative_node_id, ROW.value);
+      assert.equal(cached.state, 'ACTIVE');
     } finally {
       await shutdownAll(leader);
     }

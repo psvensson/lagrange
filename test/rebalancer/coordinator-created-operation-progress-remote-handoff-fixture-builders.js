@@ -610,6 +610,7 @@ export function createRemoteHandoffCoordinator({
     enableTimeouts: false,
   });
   coordinator.initialize();
+  coordinator.isPlacementAdmissionManagedEntityType = () => false;
   return coordinator;
 }
 

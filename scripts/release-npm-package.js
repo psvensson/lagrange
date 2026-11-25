@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import {spawnSync} from 'node:child_process';
+import {spawn, spawnSync} from 'node:child_process';
 import {verifyInstalledRuntime} from './npm-runtime-smoke.js';
 import {refuseUnderProbe} from '../src/test-helpers/probe-guard.js';
 
@@ -8,13 +8,7 @@ import {ACTION, authorizeAction, isAuthorized} from './action-authority.js';
 import {spawnGit} from './checks/git-invocation.js';
 import {createHash} from 'node:crypto';
 import {
-  access,
-  mkdir,
-  mkdtemp,
-  readFile,
-  realpath,
-  rm,
-  writeFile,
+  access, mkdir, mkdtemp, readFile, realpath, rm, writeFile,
 } from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {basename, dirname, join, resolve, sep} from 'node:path';
@@ -67,53 +61,34 @@ const NPM_OUTPUT_EXCERPT_CHARS = 2000;
 const NPM_OUTPUT_LABEL = '; npm said: ';
 const NPM_OUTPUT_EMPTY = '(npm printed nothing)';
 const RELEASE_COMMAND = Object.freeze({
-  VERIFY: 'verify',
-  PUBLISH: 'publish',
-  CHANNEL: 'channel',
+  VERIFY: 'verify', PUBLISH: 'publish', CHANNEL: 'channel',
 });
 // A prerelease semver (a hyphenated suffix after the patch) publishes under
 // `next`; everything else is the release channel and takes `latest`. One
 // decision, read from the version the registry will see, consumed by npm,
 // Docker and the GitHub release alike so no "latest" pointer moves for a
 // prerelease.
-const RELEASE_CHANNEL = Object.freeze({
-  RELEASE: 'release',
-  PRERELEASE: 'prerelease',
-});
-const DIST_TAG = Object.freeze({
-  LATEST: 'latest',
-  NEXT: 'next',
-});
+const RELEASE_CHANNEL = Object.freeze({RELEASE: 'release', PRERELEASE: 'prerelease'});
+const DIST_TAG = Object.freeze({LATEST: 'latest', NEXT: 'next'});
 const PRERELEASE_VERSION = /^\d+\.\d+\.\d+-[0-9A-Za-z.-]+$/u;
 const RELEASE_VERSION = /^\d+\.\d+\.\d+$/u;
 const VERSION_OPTION = 'version';
 const NPM_TAG_OPTION = '--tag';
 const COMMAND_ARGUMENT = Object.freeze({
-  TAR_EXTRACT_GZIP: '-xzf',
-  TAR_DIRECTORY: '-C',
-  NPM_INSTALL: 'install',
-  NPM_NO_AUDIT: '--no-audit',
-  NPM_NO_FUND: '--no-fund',
-  NPM_NO_PACKAGE_LOCK: '--package-lock=false',
-  NPM_CACHE: '--cache',
-  NODE_MODULE_INPUT: '--input-type=module',
-  NODE_EVAL: '--eval',
-  OPTION_PREFIX: '--',
-  SERVICE_SUBCOMMAND: 'service',
-  SERVICE_INIT: 'init',
-  SERVICE_GENERATE: 'generate',
-  SERVICE_BUILD: 'build',
-  SERVICE_SMOKE_DIR: 'service-smoke',
+  TAR_EXTRACT_GZIP: '-xzf', TAR_DIRECTORY: '-C', NPM_INSTALL: 'install',
+  NPM_NO_AUDIT: '--no-audit', NPM_NO_FUND: '--no-fund',
+  NPM_NO_PACKAGE_LOCK: '--package-lock=false', NPM_CACHE: '--cache',
+  NODE_MODULE_INPUT: '--input-type=module', NODE_EVAL: '--eval', OPTION_PREFIX: '--',
+  DRY_RUN: '--dry-run', DATA_DIR: '--data-dir',
+  SERVICE_SUBCOMMAND: 'service', SERVICE_INIT: 'init', SERVICE_GENERATE: 'generate',
+  SERVICE_BUILD: 'build', SERVICE_SMOKE_DIR: 'service-smoke',
 });
 const HTTP = Object.freeze({
-  CACHE_NO_STORE: 'no-store',
-  CACHE_NO_CACHE: 'no-cache',
-  CONTENT_TYPE_JSON: 'application/json',
-  NOT_FOUND: 404,
+  CACHE_NO_STORE: 'no-store', CACHE_NO_CACHE: 'no-cache',
+  CONTENT_TYPE_JSON: 'application/json', NOT_FOUND: 404,
 });
 const INSTALL_PATH_LABEL = Object.freeze({
-  LAGRANGE: 'lagrange bin',
-  ADMIN: 'lagrange-admin bin',
+  LAGRANGE: 'lagrange bin', ADMIN: 'lagrange-admin bin',
 });
 const MANIFEST_ERROR = Object.freeze({
   LOCK_VERSION: 'package-lock.json root version must match package.json',
@@ -136,6 +111,9 @@ const MANIFEST_ERROR = Object.freeze({
   GIT_HEAD: 'candidate tarball must contain a full gitHead',
 });
 const DRY_RUN_ERROR = 'installed lagrange --dry-run did not complete';
+const DRY_RUN_DATA_DIRECTORY = 'data';
+const DRY_RUN_HOST_ID = 'npm-package-verify-host';
+const AMBIENT_HOST_ID_ENV_VARS = Object.freeze(['NODE_HOST_ID', 'LAGRANGE_HOST_ID']);
 const EMBEDDED_DATA_DIRECTORY = 'embedded-data';
 const EMBEDDED_LOG_SUFFIX = '.runtime-smoke.log';
 const PACKAGE_PROBE_ACTION = 'npm packaging or installed consumer verification';
@@ -145,25 +123,16 @@ const CLI_USAGE =
   'or channel --version VERSION';
 
 const RELEASE_OUTCOME = Object.freeze({
-  PACKAGE_VERIFIED: 'PACKAGE_VERIFIED',
-  NAME_AVAILABLE: 'NAME_AVAILABLE',
-  VERSION_ABSENT: 'VERSION_ABSENT',
-  ALREADY_PUBLISHED_MATCH: 'ALREADY_PUBLISHED_MATCH',
-  PUBLISHED_MATCH: 'PUBLISHED_MATCH',
-  OCCUPIED_FOREIGN: 'OCCUPIED_FOREIGN',
+  PACKAGE_VERIFIED: 'PACKAGE_VERIFIED', NAME_AVAILABLE: 'NAME_AVAILABLE',
+  VERSION_ABSENT: 'VERSION_ABSENT', ALREADY_PUBLISHED_MATCH: 'ALREADY_PUBLISHED_MATCH',
+  PUBLISHED_MATCH: 'PUBLISHED_MATCH', OCCUPIED_FOREIGN: 'OCCUPIED_FOREIGN',
   VERSION_CONTENT_CONFLICT: 'VERSION_CONTENT_CONFLICT',
   VERSION_COMMIT_CONFLICT: 'VERSION_COMMIT_CONFLICT',
-  PACKAGE_MANIFEST_INVALID: 'PACKAGE_MANIFEST_INVALID',
-  PACK_FAILED: 'PACK_FAILED',
-  INSTALL_FAILED: 'INSTALL_FAILED',
-  IMPORT_FAILED: 'IMPORT_FAILED',
-  BIN_FAILED: 'BIN_FAILED',
-  CLI_FAILED: 'CLI_FAILED',
-  RUNTIME_FAILED: 'RUNTIME_FAILED',
-  AUTH_UNAVAILABLE: 'AUTH_UNAVAILABLE',
-  OWNERSHIP_DENIED: 'OWNERSHIP_DENIED',
-  REGISTRY_UNAVAILABLE: 'REGISTRY_UNAVAILABLE',
-  PUBLISH_FAILED: 'PUBLISH_FAILED',
+  PACKAGE_MANIFEST_INVALID: 'PACKAGE_MANIFEST_INVALID', PACK_FAILED: 'PACK_FAILED',
+  INSTALL_FAILED: 'INSTALL_FAILED', IMPORT_FAILED: 'IMPORT_FAILED',
+  BIN_FAILED: 'BIN_FAILED', CLI_FAILED: 'CLI_FAILED', RUNTIME_FAILED: 'RUNTIME_FAILED',
+  AUTH_UNAVAILABLE: 'AUTH_UNAVAILABLE', OWNERSHIP_DENIED: 'OWNERSHIP_DENIED',
+  REGISTRY_UNAVAILABLE: 'REGISTRY_UNAVAILABLE', PUBLISH_FAILED: 'PUBLISH_FAILED',
   PARTIAL_RELEASE_CONFLICT: 'PARTIAL_RELEASE_CONFLICT',
   // npm publish exited 0 and the registry still does not hold the version:
   // the one outcome whose only explanation is in npm's own output.
@@ -210,6 +179,32 @@ function runChecked(command, args, options = {}, errorCode = RELEASE_OUTCOME.PAC
     );
   }
   return result.stdout;
+}
+
+function withoutAmbientHostIdentity(env = process.env) {
+  const sanitized = {...env};
+  for (const key of AMBIENT_HOST_ID_ENV_VARS) delete sanitized[key];
+  return sanitized;
+}
+
+function buildInstalledDryRunInvocation(lagrangeBin, temporaryRoot, installDirectory,
+  env = process.env) {
+  return {
+    command: lagrangeBin,
+    args: [COMMAND_ARGUMENT.DRY_RUN, COMMAND_ARGUMENT.DATA_DIR,
+      join(temporaryRoot, DRY_RUN_DATA_DIRECTORY)],
+    options: {
+      cwd: installDirectory,
+      env: {...withoutAmbientHostIdentity(env), NODE_HOST_ID: DRY_RUN_HOST_ID},
+    },
+  };
+}
+
+function launchInstalledRuntimeWithoutAmbientHostIdentity(command, args, options = {},
+  spawnProcess = spawn) {
+  return spawnProcess(command, args, {
+    ...options, env: withoutAmbientHostIdentity(options.env ?? process.env),
+  });
 }
 
 async function readJson(filePath) {
@@ -455,14 +450,15 @@ async function verifyInstalledPackage(packed) {
     if (adminVersionOutput !== `lagrange-admin version ${packed.version}`) {
       throw new NpmReleaseError(RELEASE_OUTCOME.BIN_FAILED, `unexpected lagrange-admin --version output: ${adminVersionOutput}`);
     }
-    const dryRunOutput = runChecked(lagrangeBin, ['--dry-run', '--data-dir', join(temporaryRoot, 'data')],
-      {cwd: installDirectory}, RELEASE_OUTCOME.CLI_FAILED);
+    const dryRun = buildInstalledDryRunInvocation(lagrangeBin, temporaryRoot, installDirectory);
+    const dryRunOutput = runChecked(dryRun.command, dryRun.args, dryRun.options,
+      RELEASE_OUTCOME.CLI_FAILED);
     if (!/Dry run completed/u.test(dryRunOutput)) {
       throw new NpmReleaseError(RELEASE_OUTCOME.CLI_FAILED, DRY_RUN_ERROR);
     }
     try {
-      await verifyInstalledRuntime(installDirectory,
-        join(temporaryRoot, EMBEDDED_DATA_DIRECTORY), packed.tarballPath + EMBEDDED_LOG_SUFFIX);
+      await verifyInstalledRuntime(installDirectory, join(temporaryRoot, EMBEDDED_DATA_DIRECTORY),
+        packed.tarballPath + EMBEDDED_LOG_SUFFIX, launchInstalledRuntimeWithoutAmbientHostIdentity);
     } catch (error) {
       throw new NpmReleaseError(RELEASE_OUTCOME.RUNTIME_FAILED, error.message, error);
     }
@@ -745,20 +741,13 @@ async function main() {
   const {command, options} = parseArguments(process.argv.slice(2));
   if (command === RELEASE_COMMAND.VERIFY) {
     const packed = await buildAndVerifyNpmPackage({
-      gitHead: options['git-head'],
-      outputDirectory: options.output,
-    });
+      gitHead: options['git-head'], outputDirectory: options.output});
     console.log(JSON.stringify({
       outcome: RELEASE_OUTCOME.PACKAGE_VERIFIED,
-      name: packed.name,
-      version: packed.version,
-      filename: packed.filename,
-      tarballPath: packed.tarballPath,
-      size: packed.size,
-      unpackedSize: packed.unpackedSize,
-      entryCount: packed.entryCount,
-      integrity: packed.integrity,
-      gitHead: packed.gitHead,
+      name: packed.name, version: packed.version, filename: packed.filename,
+      tarballPath: packed.tarballPath, size: packed.size,
+      unpackedSize: packed.unpackedSize, entryCount: packed.entryCount,
+      integrity: packed.integrity, gitHead: packed.gitHead,
     }, null, 2));
     return;
   }
@@ -768,23 +757,15 @@ async function main() {
   }
   if (command === RELEASE_COMMAND.PUBLISH && options.tarball) {
     const result = await publishNpmPackage(
-      options.tarball,
-      options['git-head'],
-      options[AUTHORIZE_OPTION],
-    );
+      options.tarball, options['git-head'], options[AUTHORIZE_OPTION]);
     console.log(JSON.stringify({
       outcome: result.outcome,
-      name: result.candidate.manifest.name,
-      version: result.candidate.manifest.version,
-      integrity: result.candidate.integrity,
-      gitHead: result.candidate.gitHead,
+      name: result.candidate.manifest.name, version: result.candidate.manifest.version,
+      integrity: result.candidate.integrity, gitHead: result.candidate.gitHead,
     }, null, 2));
     return;
   }
-  throw new NpmReleaseError(
-    RELEASE_OUTCOME.PACKAGE_MANIFEST_INVALID,
-    CLI_USAGE,
-  );
+  throw new NpmReleaseError(RELEASE_OUTCOME.PACKAGE_MANIFEST_INVALID, CLI_USAGE);
 }
 
 const isMainModule = process.argv[1] &&
@@ -800,18 +781,10 @@ if (isMainModule) {
 }
 
 export {
-  NpmReleaseError,
-  PACKAGE_NAME,
-  RELEASE_OUTCOME,
-  buildAndVerifyNpmPackage,
-  buildNpmPackage,
-  classifyRegistryState,
-  inspectTarball,
-  normalizeRepositoryUrl,
-  describePublishMismatch,
-  publishNpmPackage,
-  releaseChannel,
-  validatePackageStructure,
-  validateWorkspaceManifest,
-  verifyInstalledPackage,
+  DRY_RUN_HOST_ID, NpmReleaseError, PACKAGE_NAME, RELEASE_OUTCOME,
+  buildAndVerifyNpmPackage, buildInstalledDryRunInvocation, buildNpmPackage,
+  classifyRegistryState, describePublishMismatch, inspectTarball,
+  launchInstalledRuntimeWithoutAmbientHostIdentity, normalizeRepositoryUrl,
+  publishNpmPackage, releaseChannel, validatePackageStructure,
+  validateWorkspaceManifest, verifyInstalledPackage, withoutAmbientHostIdentity,
 };

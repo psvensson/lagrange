@@ -23,6 +23,7 @@ afterEach(clearFixtureSingletons);
 
 const USER_PARTITION = 'founder-origin-orders-p1';
 const ORIGINAL_COPY = 'tables-p1';
+const SECOND_COPY = 'services-p1';
 const OTHER_COPY = 'indices-p1';
 const PROBE_COPY = 'config-p1';
 
@@ -63,24 +64,26 @@ function checkCopySlot(coordinator) {
 test('later genesis does not waive the coordinator target-copy count', () =>
   onLedgerLeader(async (leader, proposed) => {
     await commitCopy(leader, proposed, ORIGINAL_COPY);
+    await commitCopy(leader, proposed, SECOND_COPY);
     const row = await commitCopy(leader, proposed, OTHER_COPY);
     commitLaterGenesis(leader, row, WORKFLOW_STEP.CREATING);
     const coordinator = createCoordinatorWithLedger(leader, {registerLocalLeader: false});
     await assert.rejects(() => checkCopySlot(coordinator),
       {reasonCode: PLACEMENT_REFUSAL.TARGET_AT_CAPACITY});
-    assert.equal(ledgerRows(leader).length, 2);
+    assert.equal(ledgerRows(leader).length, 3);
   }));
 
 test('later genesis does not waive the committed placement target-copy count', () =>
   onLedgerLeader(async (leader, proposed) => {
     await commitCopy(leader, proposed, ORIGINAL_COPY);
+    await commitCopy(leader, proposed, SECOND_COPY);
     const row = await commitCopy(leader, proposed, OTHER_COPY);
     commitLaterGenesis(leader, row, WORKFLOW_STEP.CREATING);
     const result = await admit(leader, proposed, 'late-stamp-copy-probe',
       placementStatement({partitionId: PROBE_COPY, target: NODE.B}));
     assert.equal(result.reason, PLACEMENT_REFUSAL.TARGET_AT_CAPACITY);
-    assert.equal(result.occupancy.targetOccupancy, 2);
-    assert.equal(ledgerRows(leader).length, 2);
+    assert.equal(result.occupancy.targetOccupancy, 3);
+    assert.equal(ledgerRows(leader).length, 3);
   }));
 
 test('later genesis on a completed ordinary ADD cannot suppress a native FOUND', () =>

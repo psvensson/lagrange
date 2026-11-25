@@ -123,71 +123,32 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
     return this.cdcSubscribers.size === 0 &&
       !isTableCdcObligationRecorded(tableName);
   }
-  /**
-   * Generate a CDC event for a write operation.
-   * @param {Object} entry - Write entry.
-   * @return {Promise<void>}
-   * @private
-   */
-  async generateCDCEvent(entry) {
-    if (this.isShutdown) {
-      return;
+  stampGeneratedCDCEvents(rawEvents) {
+    const events = Object.freeze(rawEvents.map((cdcEvent) => ({
+      ...cdcEvent, sequenceNumber: this.nextCDCEventSequenceNumber(),
+    })));
+    for (let i = 0; i < events.length; i += 1) {
+      this.cdcPipelineMetrics.increment(CDC_PIPELINE_METRIC.EVENTS_GENERATED);
     }
-    // Snapshot rows are physical state transfer, not new logical mutations.
-    // Source writes applied after the snapshot remain on the ordered split
-    // catch-up/live-mirror path and continue to emit their normal CDC events.
-    if (entry?.splitMirrorOrigin === PARTITION_SPLIT_MIRROR_ORIGIN.SNAPSHOT) {
-      return;
-    }
-    this.logger.debug(PARTITION_SERVICE_LOG_MSG.GENERATE_CDC_EVENT_CALLED, {
-      partitionId: this.partitionId,
-      entryType: entry.type,
-      sql: cdcSqlPreview(entry),
-      subscriberCount: this.cdcSubscribers.size,
-    });
-    const cdcGenerator = this.syncCDCGeneratorDependencies();
-    const envelopeResult = cdcGenerator.resolveEventEnvelope(entry, {
-      suppressNoOpWrite: true,
-    });
-    if (envelopeResult.state !== PARTITION_CDC_EVENT_BUILD_STATE.BUILT) {
-      return;
-    }
-    const tableName = envelopeResult.cdcEventEnvelope.tableName;
-    if (this.cdcEventHasNoAudience(tableName)) {
-      this.logger.debug(PARTITION_SERVICE_LOG_MSG.NO_CDC_SUBSCRIBERS, {
-        partitionId: this.partitionId,
-        tableName,
+    return events;
+  }
+  bufferCDCEventBatchForRetry(events, reason) {
+    for (const cdcEvent of events) this.bufferCDCEventForRetry(cdcEvent, reason);
+  }
+  bufferCDCEventBatchWithoutSubscribers(events, tableName) {
+    for (const cdcEvent of events) this.bufferCDCEventWithoutSubscribers(cdcEvent, tableName);
+  }
+  logGeneratedCDCEvents(events) {
+    for (const cdcEvent of events) {
+      this.logger.debug(PARTITION_SERVICE_LOG_MSG.GENERATED_CDC_EVENT, {
+        partitionId: this.partitionId, operation: cdcEvent.operation,
+        tableName: cdcEvent.tableName, dataKeys: Object.keys(cdcEvent.data),
+        subscriberCount: this.cdcSubscribers.size,
       });
-      return;
     }
-    const cdcEvent = cdcGenerator.hydrateEventEnvelope(entry, envelopeResult, {
-      sequenceNumber: this.nextCDCEventSequenceNumber(),
-    });
-    this.cdcPipelineMetrics.increment(CDC_PIPELINE_METRIC.EVENTS_GENERATED);
-    if (
-      this.cdcSubscribers.size > 0 &&
-      this.cdcEventBuffer.hasEvents()
-    ) {
-      this.bufferCDCEventForRetry(
-        cdcEvent,
-        PARTITION_SERVICE_LITERAL.BUFFERED_BACKLOG_PRESENT,
-      );
-      return;
-    }
-    if (this.cdcSubscribers.size === 0) {
-      this.bufferCDCEventWithoutSubscribers(cdcEvent, tableName);
-      return;
-    }
-    this.logger.debug(PARTITION_SERVICE_LOG_MSG.GENERATED_CDC_EVENT, {
-      partitionId: this.partitionId,
-      operation: cdcEvent.operation,
-      tableName: cdcEvent.tableName,
-      dataKeys: Object.keys(cdcEvent.data),
-      subscriberCount: this.cdcSubscribers.size,
-    });
+  }
+  async deliverCDCEventBatchToSubscribers(events, tableName) {
     const subscriberSnapshot = [...this.cdcSubscribers];
-    // The one subscriber contract: this producer hands a vector of one.
-    const events = Object.freeze([cdcEvent]);
     let deliveredCount = 0;
     let deliveryFailureCount = 0;
     for (const subscriber of subscriberSnapshot) {
@@ -196,31 +157,68 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
         deliveredCount++;
       } catch (error) {
         deliveryFailureCount++;
-        this.cdcPipelineMetrics.increment(
-          CDC_PIPELINE_METRIC.DELIVERY_FAILURES,
-        );
+        this.cdcPipelineMetrics.increment(CDC_PIPELINE_METRIC.DELIVERY_FAILURES);
         this.logger.error(PARTITION_SERVICE_ERROR_MSG.CDC_DELIVERY_FAILED, {
-          partitionId: this.partitionId,
-          tableName: cdcEvent.tableName,
-          operation: cdcEvent.operation,
+          partitionId: this.partitionId, tableName, operation: events[0].operation,
           error: error.message,
         });
       }
     }
+    return {deliveredCount, deliveryFailureCount};
+  }
+  /**
+   * Generate a CDC event for a write operation.
+   * @param {Object} entry - Write entry.
+   * @return {Promise<void>}
+   * @private
+   */
+  async generateCDCEvent(entry) {
+    if (this.isShutdown || entry?.splitMirrorOrigin === PARTITION_SPLIT_MIRROR_ORIGIN.SNAPSHOT) {
+      return;
+    }
+    this.logger.debug(PARTITION_SERVICE_LOG_MSG.GENERATE_CDC_EVENT_CALLED, {
+      partitionId: this.partitionId, entryType: entry.type, sql: cdcSqlPreview(entry),
+      subscriberCount: this.cdcSubscribers.size,
+    });
+    const buildResult = this.syncCDCGeneratorDependencies().buildEvents(entry, {
+      suppressNoOpWrite: true,
+    });
+    if (buildResult.state !== PARTITION_CDC_EVENT_BUILD_STATE.BUILT ||
+        buildResult.cdcEvents.length === 0) {
+      return;
+    }
+    const tableName = buildResult.cdcEvents[0].tableName;
+    if (this.cdcEventHasNoAudience(tableName)) {
+      this.logger.debug(PARTITION_SERVICE_LOG_MSG.NO_CDC_SUBSCRIBERS, {
+        partitionId: this.partitionId, tableName,
+      });
+      return;
+    }
+    const events = this.stampGeneratedCDCEvents(buildResult.cdcEvents);
+    if (this.cdcSubscribers.size > 0 && this.cdcEventBuffer.hasEvents()) {
+      this.bufferCDCEventBatchForRetry(events, PARTITION_SERVICE_LITERAL.BUFFERED_BACKLOG_PRESENT);
+      return;
+    }
+    if (this.cdcSubscribers.size === 0) {
+      this.bufferCDCEventBatchWithoutSubscribers(events, tableName);
+      return;
+    }
+    this.logGeneratedCDCEvents(events);
+    const {deliveredCount, deliveryFailureCount} =
+      await this.deliverCDCEventBatchToSubscribers(events, tableName);
     if (deliveryFailureCount > 0) {
-      this.bufferCDCEventForRetry(
-        cdcEvent,
-        PARTITION_SERVICE_LITERAL.SUBSCRIBER_DELIVERY_FAILED,
+      this.bufferCDCEventBatchForRetry(
+        events, PARTITION_SERVICE_LITERAL.SUBSCRIBER_DELIVERY_FAILED,
       );
       return;
     }
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.CDC_DELIVERY_COMPLETE, {
-      partitionId: this.partitionId,
-      deliveredCount,
-      subscriberCount: this.cdcSubscribers.size,
+      partitionId: this.partitionId, deliveredCount, subscriberCount: this.cdcSubscribers.size,
     });
-    this.cdcPipelineMetrics.increment(CDC_PIPELINE_METRIC.EVENTS_DELIVERED);
-    this.emit(PARTITION_SERVICE_EVENT.CDC_EVENT, cdcEvent);
+    for (const cdcEvent of events) {
+      this.cdcPipelineMetrics.increment(CDC_PIPELINE_METRIC.EVENTS_DELIVERED);
+      this.emit(PARTITION_SERVICE_EVENT.CDC_EVENT, cdcEvent);
+    }
   }
   /**
    * Track fire-and-forget CDC delivery so shutdown can await it.

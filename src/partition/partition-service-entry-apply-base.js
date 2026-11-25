@@ -588,6 +588,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceRaftInitBase {
           success: true,
           changes: info.changes,
           lastInsertRowid: info.lastInsertRowid,
+          ...(Array.isArray(info.affectedRows) ? {affectedRows: info.affectedRows} : {}),
           ...identity,
         });
       });

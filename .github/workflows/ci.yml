@@ -202,18 +202,18 @@ jobs:
             exit 1
           }
 
+      - name: Structural regression ratchets (new or worsened debt fails)
+        run: |
+          npm run test:complexity
+          npm run test:unused:ratchet
+          npm run audit:file-size
+
       # The ordinary proof: fast static over the changed paths, then the
       # safety spine plus whatever this change's subsystems oblige. It fails
       # closed - an unclassifiable change refuses with MODULAR PROOF NOT SAFE
       # and a reason code rather than proving a convenient subset.
       - name: Ordinary proof
         run: npm run check
-
-      - name: Structural regression ratchets (new or worsened debt fails)
-        run: |
-          npm run test:complexity
-          npm run test:unused:ratchet
-          npm run audit:file-size
 
       # The proof writes test-output/proof-scope.json itself, saying which sha
       # it proved and whether it ran the whole corpus; the canary reads it

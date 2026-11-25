@@ -87,13 +87,16 @@ test('F1: a non-leader reaches the leader\'s applier through the partition messa
         await routed(transport, leader, proposed, 'f1-2',
           placementStatement({partitionId: 'indices-p1', target: NODE.B})),
         await routed(transport, leader, proposed, 'f1-3',
+          placementStatement({partitionId: 'services-p1', target: NODE.B})),
+        await routed(transport, leader, proposed, 'f1-4',
           placementStatement({partitionId: 'config-p1', target: NODE.B})),
-        await routed(transport, leader, proposed, 'f1-4', placementStatement({
+        await routed(transport, leader, proposed, 'f1-5', placementStatement({
           partitionId: 'tables-p1', type: OperationType.REPLACE, target: NODE.C,
           sourceReplicaId: 'tables-p1-r1'})),
       ];
       assert.deepEqual(answers.map((answer) => [resultOf(answer).outcome,
         resultOf(answer).reason ?? null]), [
+        [PLACEMENT_OUTCOME.ADMITTED, null],
         [PLACEMENT_OUTCOME.ADMITTED, null],
         [PLACEMENT_OUTCOME.ADMITTED, null],
         [PLACEMENT_OUTCOME.REFUSED, PLACEMENT_REFUSAL.TARGET_AT_CAPACITY],
@@ -102,7 +105,8 @@ test('F1: a non-leader reaches the leader\'s applier through the partition messa
       assert.ok(answers.every((answer) => answer.committed === true &&
         answer.failureCode === undefined));
       assert.deepEqual(transport.hops.map((hop) => hop.type),
-        ['PLACEMENT_ADMIT', 'PLACEMENT_ADMIT', 'PLACEMENT_ADMIT', 'PLACEMENT_ADMIT']);
+        ['PLACEMENT_ADMIT', 'PLACEMENT_ADMIT', 'PLACEMENT_ADMIT', 'PLACEMENT_ADMIT',
+          'PLACEMENT_ADMIT']);
       // Only typed placement commands entered consensus: no SQL statement.
       assert.ok(proposed.every((entry) => entry.type === 'PLACEMENT_ADMIT' &&
         entry.sql === undefined));
@@ -110,11 +114,11 @@ test('F1: a non-leader reaches the leader\'s applier through the partition messa
       // replica is being removed, never admitted past the drain.
       leader.removalServingAdmissionFenced = true;
       const fenced = await routePlacementAdmission(transport, LEADER_ADDRESS,
-        {entryId: 'f1-5', body}, DELIVERY);
+        {entryId: 'f1-6', body}, DELIVERY);
       leader.removalServingAdmissionFenced = false;
       assert.equal(fenced.error,
         PARTITION_SERVICE_ERROR_MSG.SERVING_ADMISSION_FENCED_FOR_REMOVAL);
-      assert.equal(proposed.some((entry) => entry.entryId === 'f1-5'), false);
+      assert.equal(proposed.some((entry) => entry.entryId === 'f1-6'), false);
       // The follower applies the same committed entries to the same rows.
       for (const command of proposed) {
         assert.equal(applyCommitted(follower, command), null);

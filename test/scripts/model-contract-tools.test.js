@@ -222,11 +222,11 @@ tap.test('decision-rule validation retains refusal order and complete coverage',
   const uncovered = 'combination {"signal":"ready"} matches 0 rules; expected exactly 1.';
   const controls = [
     {rule: validRule, errors: []},
-    {rule: null, errors: ['rules[0] must be an object.', uncovered]},
+    {rule: null, errors: ['rules[0] must be object.', uncovered]},
     {rule: {...validRule, id: '', reason: '', invariantRefs: ['undeclared'],
       when: {extra: 'ready'}, outcome: {extra: 'allow'}}, errors: [
-      'rules[0].id must be concrete text.',
-      'rules[0].reason must be concrete text.',
+      'rules[0].id must NOT have fewer than 1 characters.',
+      'rules[0].reason must NOT have fewer than 1 characters.',
       'rules[0].invariantRefs[0] does not match a declared invariant id: undeclared.',
       'rules[0].when.signal is required.',
       'rules[0].when.extra is not a declared input.',
@@ -237,7 +237,7 @@ tap.test('decision-rule validation retains refusal order and complete coverage',
       errors: ['rules[0].when.signal has invalid value invalid.',
         'rules[0].outcome.result has invalid value invalid.', uncovered]},
     {rule: {...validRule, when: null, outcome: null}, errors: [
-      'rules[0].when must be an object.', 'rules[0].outcome must be an object.', uncovered,
+      'rules[0].when must be object.', 'rules[0].outcome must be object.', uncovered,
     ]},
   ];
   for (const control of controls) {

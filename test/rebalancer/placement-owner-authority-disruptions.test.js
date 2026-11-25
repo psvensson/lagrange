@@ -116,6 +116,7 @@ test('P7 retained work across restart: a proposal lost before consensus, the led
 const THREE_CLASSES = Object.freeze({nodes: THREE_NODES, partitions: [
   {partitionId: LEDGER, replicaNodeIds: ['n1', 'n2', 'n3']},
   {partitionId: 'sql_transactions-p1', leaderNodeId: 'n1', replicaNodeIds: ['n1', 'n2']},
+  {partitionId: 'services-p1', leaderNodeId: 'n1', replicaNodeIds: ['n1', 'n2']},
   {partitionId: 'tables-p1', leaderNodeId: 'n1', replicaNodeIds: ['n1', 'n2']},
   {partitionId: 'orders-p1', leaderNodeId: 'n1', replicaNodeIds: ['n1', 'n2']},
 ]});
@@ -165,7 +166,7 @@ test('P11 useful progress after the disruption clears: three deficits of differe
     world.publishNodeRows();
     let cleared = true;
     try {
-      await waitUntil(() => world.ledgerRows(n1).length >= 2,
+      await waitUntil(() => world.ledgerRows(n1).length >= 3,
         'admissions after the authority cleared', PROGRESS_BOUND_MS);
     } catch {
       cleared = false;
@@ -177,8 +178,8 @@ test('P11 useful progress after the disruption clears: three deficits of differe
     t.diagnostic(`snapshot while unavailable: ${JSON.stringify(snapshotWhileUnavailable)}`);
     assert.ok(cleared, 'the node-authority wait resumed on the source change (first wave ' +
       `${JSON.stringify(firstWave)}); ${reportAfterClear}`);
-    assert.deepEqual(firstWave, ['sql_transactions-p1', 'tables-p1'],
-      'class order under the per-target copy capacity (K_TGT = 2 copies into n3); ' +
+    assert.deepEqual(firstWave, ['sql_transactions-p1', 'services-p1', 'tables-p1'],
+      'class order under the per-target copy capacity (K_TGT = 3 copies into n3); ' +
       `${reportAfterClear}`);
     const [priority] = admittedOperations(world, n1, 'sql_transactions-p1');
     const passesBeforeCompletion = n1.probe.passes.length;
@@ -207,11 +208,11 @@ test('P11 useful progress after the disruption clears: three deficits of differe
     t.diagnostic(JSON.stringify(afterCompletion));
     assert.ok(progressed, 'the completion of one copy admits the next deficit within ' +
       `${PROGRESS_BOUND_MS} ms (${JSON.stringify(afterCompletion)}); ${report}`);
-    for (const partitionId of ['sql_transactions-p1', 'tables-p1', 'orders-p1']) {
+    for (const partitionId of ['sql_transactions-p1', 'services-p1', 'tables-p1', 'orders-p1']) {
       assert.equal(admittedOperations(world, n1, partitionId).length, 1,
         `${partitionId}: one admitted operation; ${report}`);
     }
-    assert.equal(world.log.proposals.length, 3, `one proposal per deficit; ${report}`);
+    assert.equal(world.log.proposals.length, 4, `one proposal per deficit; ${report}`);
     for (const node of nodes.slice(1)) {
       assert.equal(node.probe.passes.length, 0, `${node.nodeId} did no placement work; ${report}`);
     }

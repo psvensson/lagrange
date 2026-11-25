@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
 import {COLUMN, TABLES} from '../../src/constants/index.js';
+import {getSystemCachePrimaryKeyField} from '../../src/cache/system-cache-key-descriptor.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {isIssuedBootIncarnation} from '../../src/bootstrap/boot-incarnation-contract.js';
 import {buildPartitionCdcPropagationSubscriber} from
@@ -141,7 +142,7 @@ test('source topology owner presents a range whose source leaf is covered again 
   // would now take both rows.
   f.ready = false;
   const command = committedQueryOf('topology-progress-source-row-later',
-    `INSERT INTO ${CDC_TABLE} (id, value) VALUES (?, ?)`);
+    `INSERT INTO ${CDC_TABLE} (group_id, representative_node_id) VALUES (?, ?)`);
   command.params = ['B', 'later-source-body'];
   command.timestamp = new HLCTimestamp(1001, 0, 'topology-progress-component').toString();
   assert.equal(applyCommitted(f.leader, command), null);
@@ -352,9 +353,10 @@ test('full CDC continuation path across overlapping tables, held recipient, tenu
       await leader.subscribeToCDCWithHandshake(subscriber, {
         subscriberId: `contend-${tableName}`,
       });
+      const pkField = getSystemCachePrimaryKeyField(tableName);
       const command = committedQueryOf(
         `${tableName}-${rowId}`,
-        `INSERT INTO ${tableName} (id, value) VALUES (?, ?)`,
+        `INSERT INTO ${tableName} (${pkField}, value) VALUES (?, ?)`,
       );
       command.params = [rowId, `val-${rowId}`];
       command.timestamp = new HLCTimestamp(1000, 0, `src-${tableName}`).toString();

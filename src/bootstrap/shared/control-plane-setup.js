@@ -55,6 +55,12 @@ import {
   attachReplicaPlacementOwner,
 } from '../../rebalancer/replica-placement-owner.js';
 import {
+  createControlPlanePlacementNodeObservationReader,
+} from '../../rebalancer/replica-placement-owner-capacity.js';
+import {
+  ResourceDiagnosticsSampler,
+} from '../../diagnostics/resource-diagnostics-sampler.js';
+import {
   requireResyncTimerCollaborators,
 } from '../../rebalancer/replica-placement-owner-collaborators.js';
 import {
@@ -415,6 +421,15 @@ class ControlPlaneSetup {
     if (!rebalanceCoordinator.transactionCoordinator) {
       rebalanceCoordinator.transactionCoordinator = transactionCoordinator;
     }
+    const placementDiagnosticsSampler = new ResourceDiagnosticsSampler({
+      nodeId,
+      owner: rebalanceCoordinator,
+    });
+    const readNodeObservation = createControlPlanePlacementNodeObservationReader({
+      localNodeId: nodeId,
+      resourceDiagnosticsSampler: placementDiagnosticsSampler,
+      systemTableCache,
+    });
     rebalanceCoordinator.bindReplicaPlacementOwnerFactory(
       ControlPlaneSetup.createReplicaPlacementOwnerFactory({
         nodeId,
@@ -422,6 +437,7 @@ class ControlPlaneSetup {
         rebalanceCoordinator,
         systemTableCache,
         storageAccountingService,
+        adaptiveBudgetOptions: {readNodeObservation},
       }),
     );
 
@@ -635,7 +651,8 @@ class ControlPlaneSetup {
    */
   static createReplicaPlacementOwnerFactory(options) {
     const {nodeId, controlPlaneReadinessService, rebalanceCoordinator,
-      systemTableCache, storageAccountingService} = options;
+      systemTableCache, storageAccountingService,
+      adaptiveBudgetController, adaptiveBudgetOptions} = options;
     return (ledgerPartitionService) => ControlPlaneSetup.attachReplicaPlacementOwner({
       nodeId,
       ledgerPartitionService,
@@ -647,6 +664,8 @@ class ControlPlaneSetup {
       logger: ledgerPartitionService.logger,
       setIntervalFn: (fn, ms) => ledgerPartitionService.timeSource.setInterval(fn, ms),
       clearIntervalFn: (handle) => ledgerPartitionService.timeSource.clearInterval(handle),
+      adaptiveBudgetController,
+      adaptiveBudgetOptions,
     });
   }
 
@@ -675,6 +694,8 @@ class ControlPlaneSetup {
       resyncIntervalMs: options.resyncIntervalMs,
       setIntervalFn: options.setIntervalFn,
       clearIntervalFn: options.clearIntervalFn,
+      adaptiveBudgetController: options.adaptiveBudgetController,
+      adaptiveBudgetOptions: options.adaptiveBudgetOptions,
     });
   }
 

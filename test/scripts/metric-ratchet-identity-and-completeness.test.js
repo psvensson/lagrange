@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 
@@ -88,7 +90,7 @@ test('collectScanCompleteness and assertScanCompleteness fail on parser fatal er
 
   const fatalCompleteness = collectScanCompleteness(fatalResults, {
     ruleId: RULE_COMPLEXITY,
-    targets: ['src/'],
+    targets: [cleanFile, brokenFile],
     analyzer: ANALYZER_ESLINT,
   });
   assert.equal(fatalCompleteness.analyzedFiles, 2);
@@ -109,11 +111,61 @@ test('collectScanCompleteness and assertScanCompleteness fail on parser fatal er
     /src\/broken\.js:19:7 Parsing error: Unexpected token \}/u,
   );
 
+  // Partial scan against a directory or expected file census must report skippedFiles > 0.
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'scan-completeness-'));
+  try {
+    const fileA = path.join(tmpDir, 'a.js');
+    const fileB = path.join(tmpDir, 'b.mjs');
+    const fileC = path.join(tmpDir, 'c.cjs');
+    fs.writeFileSync(fileA, 'export const a = 1;\n');
+    fs.writeFileSync(fileB, 'export const b = 2;\n');
+    fs.writeFileSync(fileC, 'module.exports = 3;\n');
+
+    const partialDirCompleteness = collectScanCompleteness(
+      [{filePath: fileA, messages: []}],
+      {
+        ruleId: RULE_COMPLEXITY,
+        targets: [tmpDir],
+        analyzer: ANALYZER_ESLINT,
+      },
+    );
+    assert.equal(partialDirCompleteness.analyzedFiles, 1);
+    assert.equal(partialDirCompleteness.failedFiles, 0);
+    assert.equal(partialDirCompleteness.skippedFiles, 2);
+    assert.equal(partialDirCompleteness.complete, false);
+    assert.throws(
+      () => assertScanCompleteness(partialDirCompleteness, RULE_COMPLEXITY),
+      /skippedFiles=2/u,
+    );
+
+    const fullDirCompleteness = collectScanCompleteness(
+      [
+        {filePath: fileA, messages: []},
+        {filePath: fileB, messages: []},
+        {filePath: fileC, messages: []},
+      ],
+      {
+        ruleId: RULE_COMPLEXITY,
+        targets: [tmpDir],
+        analyzer: ANALYZER_ESLINT,
+      },
+    );
+    assert.equal(fullDirCompleteness.analyzedFiles, 3);
+    assert.equal(fullDirCompleteness.skippedFiles, 0);
+    assert.equal(fullDirCompleteness.complete, true);
+    assert.equal(
+      assertScanCompleteness(fullDirCompleteness, RULE_COMPLEXITY),
+      fullDirCompleteness,
+    );
+  } finally {
+    fs.rmSync(tmpDir, {recursive: true, force: true});
+  }
+
   const validCompleteness = collectScanCompleteness(
     [{filePath: cleanFile, messages: []}],
     {
       ruleId: RULE_COMPLEXITY,
-      targets: ['src/'],
+      targets: [cleanFile],
       analyzer: ANALYZER_ESLINT,
     },
   );

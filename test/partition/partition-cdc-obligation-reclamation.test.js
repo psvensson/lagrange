@@ -415,8 +415,8 @@ test('W-D1g: applyCommittedEventsToPartitionState updates cdcIntegrationService.
     applyCommitted(leader, upsertOf(leader, 'g', 1));
     assert.equal(appliedChanges.length, 1);
     assert.equal(appliedChanges[0].tableName, CDC_TABLE);
-    assert.equal(appliedChanges[0].data.id, 'r-1');
-    assert.equal(appliedChanges[0].data.value, 'g-1');
+    assert.equal(appliedChanges[0].data.group_id, 'r-1');
+    assert.equal(appliedChanges[0].data.representative_node_id, 'g-1');
   } finally {
     await shutdownAll(leader);
   }

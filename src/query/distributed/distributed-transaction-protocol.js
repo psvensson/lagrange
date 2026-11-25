@@ -41,6 +41,18 @@ const COMMIT_MISS_RESOLUTION = Object.freeze({
 });
 const PARTICIPANT_COMMIT_OUTCOME_FIELD = 'participantCommitOutcome';
 const SCHEMA_MIGRATION_CUTOVER_SESSION_PREFIX = 'schema-migration-cutover-';
+const SETTLED_STATUS_REJECTED = 'rejected';
+
+async function settleAllOrThrow(promises) {
+  const settled = await Promise.allSettled(promises);
+  const rejected = settled.find(
+    (entry) => entry.status === SETTLED_STATUS_REJECTED,
+  );
+  if (rejected) {
+    throw rejected.reason;
+  }
+  return settled.map((entry) => entry.value);
+}
 
 /**
  * Check whether participant failures include a timeout condition.
@@ -402,7 +414,7 @@ const distributedTransactionProtocolMethods = {
       stageOptions.participantKeys = options.participantKeys;
     }
     const typedFailures = new Map();
-    const runStageForKeys = (keysOption) =>
+    const runStageForKeys = async (keysOption) =>
       this.workflowCoordinator.executeParticipantStage(
         tx.workflowId,
         transientStatus,
@@ -431,7 +443,9 @@ const distributedTransactionProtocolMethods = {
         SCHEMA_MIGRATION_CUTOVER_SESSION_PREFIX,
       );
     const failedParticipants = useConcurrentStage ?
-      (await Promise.all(resolvedKeys.map((key) => runStageForKeys([key])))).flat() :
+      (await settleAllOrThrow(
+        resolvedKeys.map((key) => runStageForKeys([key])),
+      )).flat() :
       await runStageForKeys(null);
     return failedParticipants.map((entry) => ({
       partitionId: entry.participantKey,

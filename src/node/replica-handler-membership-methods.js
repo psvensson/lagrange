@@ -28,6 +28,7 @@ import {
   COMMITTED_MEMBERSHIP_ANSWER_KIND, COMMITTED_MEMBERSHIP_READ_PURPOSE,
 } from '../raft/raft-committed-membership-constants.js';
 import {
+  RAFT_EVENT,
   RAFT_FOUNDING_GROWTH_OUTCOME,
   RAFT_OPERATION_OUTCOME,
 } from '../raft/raft-operation-port-constants.js';
@@ -54,6 +55,8 @@ import {turnChainValue} from '../raft/raft-rs-turn-answer.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const LOCAL_STR_ALREADY_VOTER = 'already_voter';
+const GROWTH_PROMOTE_COMMIT_SETTLE_WAIT_MS = 100;
+const GROWTH_PROMOTE_MAX_CONF_CHANGE_STEPS = 2;
 const REPLICA_MEMBERSHIP_ERROR = Object.freeze({
   REQUIRED_FIELDS:
     'membership request requires partitionId, replicaId and sourceReplicaId',
@@ -195,6 +198,60 @@ function areReplicasCommittedVoters(membership, promoteReplicaIds) {
       .filter(Boolean),
   );
   return promoteReplicaIds.every((id) => voterReplicaIds.has(id));
+}
+
+function waitForNextMembershipChangeOrTimeout(service, timeoutMs) {
+  if (!service?.raft) {
+    return Promise.resolve(false);
+  }
+  return new Promise((resolve) => {
+    let settled = false;
+    let timerId = null;
+    let unsubscribe = () => {};
+    const finish = (changed) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timerId);
+      unsubscribe();
+      resolve(changed);
+    };
+    timerId = setTimeout(() => finish(false), timeoutMs);
+    unsubscribe = service.raft.subscribe(
+      RAFT_EVENT.MEMBERSHIP_CHANGED,
+      () => finish(true),
+    );
+  });
+}
+
+async function readSettledPromotedVoters(
+  service,
+  proposal,
+  promoteReplicaIds,
+) {
+  let afterMembership = await readPartitionCommittedMembership(service);
+  if (areReplicasCommittedVoters(afterMembership, promoteReplicaIds)) {
+    return true;
+  }
+  if (proposal?.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
+    return false;
+  }
+  for (let step = 0; step < GROWTH_PROMOTE_MAX_CONF_CHANGE_STEPS; step += 1) {
+    if (service.raft?.readStatus?.()?.confChangePending !== true) {
+      break;
+    }
+    const changed = await waitForNextMembershipChangeOrTimeout(
+      service,
+      GROWTH_PROMOTE_COMMIT_SETTLE_WAIT_MS,
+    );
+    afterMembership = await readPartitionCommittedMembership(service);
+    if (areReplicasCommittedVoters(afterMembership, promoteReplicaIds)) {
+      return true;
+    }
+    if (!changed) {
+      break;
+    }
+  }
+  return false;
 }
 
 function transitionLocalPromotedLearners(handler, promoteReplicaIds) {
@@ -411,11 +468,9 @@ function assignReplicaHandlerMembershipMethods(ReplicaHandler) {
           expectedBaseConfig: target.fields.expectedBaseConfig,
         },
       ));
-      const afterMembership = await readPartitionCommittedMembership(
+      const committedVotersReached = await readSettledPromotedVoters(
         target.service,
-      );
-      const committedVotersReached = areReplicasCommittedVoters(
-        afterMembership,
+        proposal,
         promoteReplicaIds,
       );
       if (committedVotersReached) {

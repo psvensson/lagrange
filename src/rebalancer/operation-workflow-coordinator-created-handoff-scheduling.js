@@ -211,9 +211,6 @@ function isInitialCoordinatorCreatedRemoteHandoffEligible(operation) {
 }
 
 function isTargetCreateOutcomeHandoffEligible(operation) {
-  const partitionClassification = classifySystemPartition({
-    partitionId: operation?.partitionId || null,
-  });
   const targetCreateOperation =
     TARGET_CREATE_ACTIVE_REMOTE_OWNER_WAKE_OPERATION_TYPES.has(
       operation?.type,
@@ -223,12 +220,7 @@ function isTargetCreateOutcomeHandoffEligible(operation) {
       operation?.entityType,
     ) || TARGET_CREATE_ACTIVE_REMOTE_OWNER_WAKE_WORKFLOW_STEPS;
   const targetCreateInProgress = eligibleSteps.has(operation?.workflowStep);
-  return (
-    targetCreateOperation &&
-    targetCreateInProgress &&
-    partitionClassification.systemTable !== true &&
-    partitionClassification.priorityControlPlane !== true
-  );
+  return targetCreateOperation && targetCreateInProgress;
 }
 
 function shouldRetryCoordinatorCreatedRemoteHandoff(

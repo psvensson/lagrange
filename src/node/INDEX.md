@@ -20,7 +20,7 @@ documentClass: generated
 - [message-group-service-handler-create-admission.js](message-group-service-handler-create-admission.js) - Current CREATE for a message group (FreshMG 6.B slice B1), subordinate to MessageGroupServiceHandler. (importers: one)
 - [message-group-service-handler.js](message-group-service-handler.js) - MessageGroupServiceHandler - Handles CREATE_REPLICA and REMOVE_REPLICA operations for message-group entities. (importers: many)
 - [node-constants.js](node-constants.js) - No leading comment; first export: NODE_LIFECYCLE_SUBSYSTEM. (importers: hub)
-- [node-host-statistics-sampler.js](node-host-statistics-sampler.js) - Sample process-host statistics once per source, clock, and collection interval. (importers: one)
+- [node-host-statistics-sampler.js](node-host-statistics-sampler.js) - Sample process-host statistics once per source, clock, and collection interval. (importers: few)
 - [node-lifecycle-state-machine-constants.js](node-lifecycle-state-machine-constants.js) - No leading comment; first export: NODE_LIFECYCLE_DEFAULT_OPTIONS. (importers: few)
 - [node-lifecycle-state-machine.js](node-lifecycle-state-machine.js) - Node Lifecycle State Machine - Manages explicit node lifecycle states. (importers: hub)
 - [node-readiness-policy.js](node-readiness-policy.js) - Check if a node record is ready based on lease and state fields. (importers: hub)

@@ -121,8 +121,8 @@ test('PartitionService - leader applyCommittedEntry must not raise unhandled rej
   async (t) => {
     const schema = {
       columns: [
-        {name: 'id', type: 'TEXT', primaryKey: true},
-        {name: 'value', type: 'INTEGER'},
+        {name: 'group_id', type: 'TEXT', primaryKey: true},
+        {name: 'updated_at', type: 'INTEGER'},
       ],
     };
 
@@ -161,7 +161,7 @@ test('PartitionService - leader applyCommittedEntry must not raise unhandled rej
     // applies it and records its CDC obligation, which the lane delivers.
     // (Was: a hand-built raw propose without an entryId, which the durable
     // recorder now refuses as an application failure.)
-    await partition.insertData(CDC_TABLE, {id: 'leader-failure-1', value: 7});
+    await partition.insertData(CDC_TABLE, {group_id: 'leader-failure-1', updated_at: 7});
 
     await settlePendingCdcDeliveries(partition);
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -181,8 +181,8 @@ test('PartitionService - buffers CDC event on subscriber failure and replays aft
   async (t) => {
     const schema = {
       columns: [
-        {name: 'id', type: 'TEXT', primaryKey: true},
-        {name: 'value', type: 'INTEGER'},
+        {name: 'group_id', type: 'TEXT', primaryKey: true},
+        {name: 'updated_at', type: 'INTEGER'},
       ],
     };
 
@@ -215,7 +215,7 @@ test('PartitionService - buffers CDC event on subscriber failure and replays aft
       subscriberId: 'cdc-retry-subscriber',
     });
 
-    await partition.insertData(CDC_TABLE, {id: 'retry-1', value: 1});
+    await partition.insertData(CDC_TABLE, {group_id: 'retry-1', updated_at: 1});
     await new Promise((resolve) => setTimeout(resolve, 80));
 
     t.equal(delivered.length, 0,
@@ -243,7 +243,7 @@ test('PartitionService - buffers CDC event on subscriber failure and replays aft
       true,
       'buffered CDC event should replay after subscriber recovers',
     );
-    t.equal(delivered[0].data.id, 'retry-1',
+    t.equal(delivered[0].data.group_id, 'retry-1',
       'replayed event should preserve original payload');
 
     await partition.shutdown();
@@ -796,7 +796,7 @@ test('PartitionService - single replica becomes leader', async (t) => {
 test('PartitionService - unsubscribe from CDC', async (t) => {
   const schema = {
     columns: [
-      {name: 'id', type: 'TEXT', primaryKey: true},
+      {name: 'group_id', type: 'TEXT', primaryKey: true},
     ],
   };
 
@@ -825,12 +825,12 @@ test('PartitionService - unsubscribe from CDC', async (t) => {
   // The subscription's own drive settles first: a write committed while a
   // drive is in flight joins it and is delivered on the owner's retry timer.
   await settlePendingCdcDeliveries(partition);
-  await partition.insertData(CDC_TABLE, {id: 'item-1'});
+  await partition.insertData(CDC_TABLE, {group_id: 'item-1'});
   await settlePendingCdcDeliveries(partition);
   t.equal(cdcEvents.length, 1);
 
   partition.unsubscribeFromCDC(subscriber);
-  await partition.insertData(CDC_TABLE, {id: 'item-2'});
+  await partition.insertData(CDC_TABLE, {group_id: 'item-2'});
   await settlePendingCdcDeliveries(partition);
   t.equal(cdcEvents.length, 1); // No new events after unsubscribe
 

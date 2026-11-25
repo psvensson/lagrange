@@ -2,9 +2,15 @@ import {NUM, STRING} from '../constants/index.js';
 
 const samplesBySource = /* @__PURE__ */ new WeakMap();
 
+const CPU_MEASUREMENT_MODE = Object.freeze({
+  INTERVAL_DELTA: 'interval_delta',
+  CUMULATIVE_BASELINE: 'cumulative_baseline',
+});
+
 function readCachedSample(source, clock, nowMs, maxAgeMs) {
   const samplesByClock = samplesBySource.get(source);
-  const sample = samplesByClock?.get(clock) || null;
+  const entry = samplesByClock?.get(clock) || null;
+  const sample = entry?.sample || null;
   const ageMs = sample ? nowMs - sample.sampledAtMs : null;
   if (sample && ageMs >= 0 && ageMs < maxAgeMs) {
     return sample;
@@ -12,13 +18,43 @@ function readCachedSample(source, clock, nowMs, maxAgeMs) {
   return null;
 }
 
-function storeSample(source, clock, sample) {
+function readPreviousRawTicks(source, clock) {
+  const entry = samplesBySource.get(source)?.get(clock);
+  return entry?.rawTicks || null;
+}
+
+function storeSample(source, clock, sample, rawTicks) {
   let samplesByClock = samplesBySource.get(source);
   if (!samplesByClock) {
     samplesByClock = /* @__PURE__ */ new WeakMap();
     samplesBySource.set(source, samplesByClock);
   }
-  samplesByClock.set(clock, sample);
+  const previous = samplesByClock.get(clock);
+  const retainedTicks = rawTicks || previous?.rawTicks || null;
+  samplesByClock.set(clock, Object.freeze({sample, rawTicks: retainedTicks}));
+}
+
+function computeHostCpuUsage(totalIdle, totalTick, previousTicks, nowMs) {
+  if (
+    previousTicks !== null &&
+    nowMs > previousTicks.sampledAtMs
+  ) {
+    const deltaTick = totalTick - previousTicks.totalTick;
+    const deltaIdle = totalIdle - previousTicks.totalIdle;
+    if (deltaTick > 0 && deltaIdle >= 0 && deltaIdle <= deltaTick) {
+      return {
+        cpuUsagePercent: ((deltaTick - deltaIdle) / deltaTick) * NUM.HUNDRED,
+        cpuMeasurementMode: CPU_MEASUREMENT_MODE.INTERVAL_DELTA,
+      };
+    }
+  }
+  const cumulative = totalTick > 0 ?
+    ((totalTick - totalIdle) / totalTick) * NUM.HUNDRED :
+    0;
+  return {
+    cpuUsagePercent: cumulative,
+    cpuMeasurementMode: CPU_MEASUREMENT_MODE.CUMULATIVE_BASELINE,
+  };
 }
 
 /**
@@ -51,8 +87,13 @@ function sampleNodeHostStatistics(source, clock, nowMs, maxAgeMs) {
     }
     totalIdle += cpu.times.idle;
   }
-  const cpuUsagePercent =
-    ((totalTick - totalIdle) / totalTick) * NUM.HUNDRED;
+  const previousTicks = readPreviousRawTicks(source, clock);
+  const {cpuUsagePercent, cpuMeasurementMode} = computeHostCpuUsage(
+    totalIdle,
+    totalTick,
+    previousTicks,
+    nowMs,
+  );
   const memoryUsagePercent = (usedMemory / totalMemory) * NUM.HUNDRED;
   const sample = Object.freeze({
     sampledAtMs: nowMs,
@@ -60,6 +101,7 @@ function sampleNodeHostStatistics(source, clock, nowMs, maxAgeMs) {
     cpuModel: cpus[0]?.model || STRING.UNKNOWN,
     cpuUsagePercent:
       Math.round(cpuUsagePercent * NUM.HUNDRED) / NUM.HUNDRED,
+    cpuMeasurementMode,
     totalMemory,
     usedMemory,
     freeMemory,
@@ -69,7 +111,16 @@ function sampleNodeHostStatistics(source, clock, nowMs, maxAgeMs) {
     arch: source.arch(),
     hostname: source.hostname(),
   });
-  storeSample(source, clock, sample);
+  const shouldAdvanceBaseline =
+    previousTicks === null || nowMs >= previousTicks.sampledAtMs;
+  storeSample(
+    source,
+    clock,
+    sample,
+    shouldAdvanceBaseline ?
+      Object.freeze({sampledAtMs: nowMs, totalIdle, totalTick}) :
+      null,
+  );
   return sample;
 }
 

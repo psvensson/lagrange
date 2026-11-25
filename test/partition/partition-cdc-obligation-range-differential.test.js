@@ -127,13 +127,13 @@ function planOf(seed) {
 function commitStep(leader, step) {
   if (step.kind === 'entry') {
     addSourceEntry(leader, step.tag, step.rows.map(({id, value}) =>
-      ({sql: `INSERT INTO ${TABLE} (id, value) VALUES (?, ?)`, params: [id, value]})));
+      ({sql: `INSERT INTO ${TABLE} (group_id, representative_node_id) VALUES (?, ?)`, params: [id, value]})));
     return step.rows.length;
   }
   const statement = {
-    insert: {sql: `INSERT INTO ${TABLE} (id, value) VALUES (?, ?)`, params: [step.id, step.value]},
-    update: {sql: `UPDATE ${TABLE} SET value = ? WHERE id = ?`, params: [step.value, step.id]},
-    delete: {sql: `DELETE FROM ${TABLE} WHERE id = ?`, params: [step.id]},
+    insert: {sql: `INSERT INTO ${TABLE} (group_id, representative_node_id) VALUES (?, ?)`, params: [step.id, step.value]},
+    update: {sql: `UPDATE ${TABLE} SET representative_node_id = ? WHERE group_id = ?`, params: [step.value, step.id]},
+    delete: {sql: `DELETE FROM ${TABLE} WHERE group_id = ?`, params: [step.id]},
   }[step.kind];
   commitSourceStatement(leader, {entryId: step.entryId, ...statement});
   return 1;
@@ -267,15 +267,15 @@ for (const family of Object.values(FAMILY)) {
 // lane shares: what a recipient's committed command log must hold for a fixed
 // ledger, through both wire shapes (a one-member CDC command and a CDC_BATCH).
 const LITERAL_STATEMENTS = Object.freeze([
-  {entryId: 'lit-insert-k', sql: `INSERT INTO ${TABLE} (id, value) VALUES (?, ?)`,
+  {entryId: 'lit-insert-k', sql: `INSERT INTO ${TABLE} (group_id, representative_node_id) VALUES (?, ?)`,
     params: ['K', 'first']},
-  {entryId: 'lit-update-k', sql: `UPDATE ${TABLE} SET value = ? WHERE id = ?`,
+  {entryId: 'lit-update-k', sql: `UPDATE ${TABLE} SET representative_node_id = ? WHERE group_id = ?`,
     params: ['second', 'K']},
-  {entryId: 'lit-insert-m', sql: `INSERT INTO ${TABLE} (id, value) VALUES (?, ?)`,
+  {entryId: 'lit-insert-m', sql: `INSERT INTO ${TABLE} (group_id, representative_node_id) VALUES (?, ?)`,
     params: ['M', 'only']},
-  {entryId: 'lit-update-k-again', sql: `UPDATE ${TABLE} SET value = ? WHERE id = ?`,
+  {entryId: 'lit-update-k-again', sql: `UPDATE ${TABLE} SET representative_node_id = ? WHERE group_id = ?`,
     params: ['third', 'K']},
-  {entryId: 'lit-delete-m', sql: `DELETE FROM ${TABLE} WHERE id = ?`, params: ['M']},
+  {entryId: 'lit-delete-m', sql: `DELETE FROM ${TABLE} WHERE group_id = ?`, params: ['M']},
 ]);
 const LITERAL_MEMBERS = Object.freeze([
   {eventKey: 'entry:lit-insert-k', operation: CDC_OPERATION.INSERT, id: 'K', value: 'first'},
@@ -288,8 +288,9 @@ const LITERAL_MEMBERS = Object.freeze([
 
 function literalOf(member) {
   return {eventKey: member.eventKey, operation: member.operation,
-    id: member.data?.id ?? member.oldData?.id ?? member.old_data?.id ?? null,
-    value: member.operation === CDC_OPERATION.DELETE ? undefined : member.data?.value};
+    id: member.data?.group_id ?? member.oldData?.group_id ?? member.old_data?.group_id ?? null,
+    value: member.operation === CDC_OPERATION.DELETE ? undefined :
+      member.data?.representative_node_id};
 }
 
 for (const [shape, heldAtOne, commands] of [

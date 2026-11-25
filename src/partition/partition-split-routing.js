@@ -131,19 +131,24 @@ function extractRoutingKeyFromSql(entry, primaryKeyColumn, tableName) {
   return extracted?.[primaryKeyColumn];
 }
 
+function cloneOptionalObject(value) {
+  return value && typeof value === SPLIT_ROUTING_LITERAL.OBJECT ?
+    {...value} :
+    value;
+}
+
+function cloneAffectedRowsPatch(affectedRows) {
+  if (!Array.isArray(affectedRows)) return {};
+  return {affectedRows: affectedRows.map((row) => ({...row}))};
+}
+
 export function cloneSplitEntry(entry) {
   return {
     ...entry,
     params: Array.isArray(entry?.params) ? [...entry.params] : [],
-    data:
-      entry?.data && typeof entry.data === SPLIT_ROUTING_LITERAL.OBJECT ?
-        {...entry.data} :
-        entry?.data,
-    whereClause:
-      entry?.whereClause &&
-      typeof entry.whereClause === SPLIT_ROUTING_LITERAL.OBJECT ?
-        {...entry.whereClause} :
-        entry?.whereClause,
+    ...cloneAffectedRowsPatch(entry?.affectedRows),
+    data: cloneOptionalObject(entry?.data),
+    whereClause: cloneOptionalObject(entry?.whereClause),
   };
 }
 
@@ -152,7 +157,7 @@ export async function replaySplitEntry(entry, metadata, options = {}) {
   const routingKey = extractSplitRoutingKey(
     entry,
     metadata.primaryKeyColumn,
-    options,
+    {...options, metadata},
   );
   const targetPartitionId = resolveSplitTargetPartitionId(routingKey, metadata);
   await routeSplitMirroredWrite(
@@ -325,11 +330,47 @@ export {
   resolveSplitTargetPartitionId,
 } from './split-key-comparator.js';
 
+function extractAffectedRowRoutingKey(entry, primaryKeyColumn, metadata) {
+  if (!Array.isArray(entry?.affectedRows) || entry.affectedRows.length === 0) {
+    return void 0;
+  }
+  const firstRow = entry.affectedRows[0];
+  if (!hasOwnedProperty(firstRow, primaryKeyColumn)) {
+    throw new Error(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_ROUTING_FAILED);
+  }
+  const firstKey = firstRow[primaryKeyColumn];
+  if (firstKey === null || firstKey === void 0) {
+    throw new Error(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_ROUTING_FAILED);
+  }
+  if (entry.affectedRows.length > 1 && metadata) {
+    const firstTarget = resolveSplitTargetPartitionId(firstKey, metadata);
+    for (let i = 1; i < entry.affectedRows.length; i += 1) {
+      const row = entry.affectedRows[i];
+      if (!hasOwnedProperty(row, primaryKeyColumn)) {
+        throw new Error(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_ROUTING_FAILED);
+      }
+      const nextTarget = resolveSplitTargetPartitionId(row[primaryKeyColumn], metadata);
+      if (nextTarget !== firstTarget) {
+        throw new Error(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_ROUTING_FAILED);
+      }
+    }
+  }
+  return firstKey;
+}
+
 export function extractSplitRoutingKey(
   entry,
   primaryKeyColumn,
   options = {},
 ) {
+  const affectedRowKey = extractAffectedRowRoutingKey(
+    entry,
+    primaryKeyColumn,
+    options.metadata,
+  );
+  if (affectedRowKey !== void 0) {
+    return affectedRowKey;
+  }
   if (entry?.whereClause && hasOwnedProperty(entry.whereClause, primaryKeyColumn)) {
     return entry.whereClause[primaryKeyColumn];
   }

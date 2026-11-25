@@ -226,15 +226,34 @@ function hostCountsOf(replicas, eligibility) {
   return counts;
 }
 
-function findTargetNode(replicas, eligibility, {requireUnusedHost, excludedTargetNodeIds = null}) {
+function rankTargetsByRemainingCapacity(candidates, targetCapacityRanker) {
+  if (!targetCapacityRanker || candidates.length <= 1) {
+    return candidates;
+  }
+  return [...candidates].sort((left, right) => {
+    const diff = targetCapacityRanker(right) - targetCapacityRanker(left);
+    return diff !== 0 ? diff : compareText(left, right);
+  });
+}
+
+function findTargetNode(
+  replicas,
+  eligibility,
+  {requireUnusedHost, excludedTargetNodeIds = null, targetCapacityRanker = null},
+) {
   const usedNodes = new Set(replicas.map((replica) => replica.nodeId));
   const usedHosts = new Set(replicas.map((replica) =>
     eligibility.declaredHosts.get(replica.nodeId)));
   const free = eligibility.eligibleNodeIds.filter((nodeId) =>
     !usedNodes.has(nodeId) && !excludedTargetNodeIds?.has(nodeId));
-  const unusedHost = free.find((nodeId) =>
-    !usedHosts.has(eligibility.hostOfNode.get(nodeId)));
-  return unusedHost ?? (requireUnusedHost ? null : free[0] ?? null);
+  const unusedHostCandidates = rankTargetsByRemainingCapacity(
+    free.filter((nodeId) => !usedHosts.has(eligibility.hostOfNode.get(nodeId))),
+    targetCapacityRanker,
+  );
+  if (unusedHostCandidates.length > 0) return unusedHostCandidates[0];
+  if (requireUnusedHost) return null;
+  const freeRanked = rankTargetsByRemainingCapacity(free, targetCapacityRanker);
+  return freeRanked[0] ?? null;
 }
 
 function mergeExcludedTargetSets(first, second) {
@@ -245,15 +264,18 @@ function mergeExcludedTargetSets(first, second) {
 
 // An eligible node that does not host the partition, on a host it does not
 // use when one exists; excludes storage-unavailable targets and prefers a
-// target not in saturatedTargetNodeIds; ties by node id.
+// target not in saturatedTargetNodeIds; ranks feasible targets by remaining
+// capacity relative to budget and ties deterministically by node id.
 function targetNodeOf(replicas, eligibility, {
   requireUnusedHost,
   saturatedTargetNodeIds = null,
   storageExcludedNodeIds = null,
+  targetCapacityRanker = null,
 }) {
   const nonStorageTarget = findTargetNode(replicas, eligibility, {
     requireUnusedHost,
     excludedTargetNodeIds: storageExcludedNodeIds,
+    targetCapacityRanker,
   });
   if (nonStorageTarget === null || !saturatedTargetNodeIds || saturatedTargetNodeIds.size === 0) {
     return nonStorageTarget;
@@ -264,6 +286,7 @@ function targetNodeOf(replicas, eligibility, {
       storageExcludedNodeIds,
       saturatedTargetNodeIds,
     ),
+    targetCapacityRanker,
   }) ?? nonStorageTarget;
 }
 
@@ -319,6 +342,7 @@ function copyMoveOf(context, deficitKind, type, fields) {
     requireUnusedHost,
     saturatedTargetNodeIds: context.saturatedTargetNodeIds,
     storageExcludedNodeIds,
+    targetCapacityRanker: context.targetCapacityRanker,
   });
   if (target === null) {
     return waitingOf(
@@ -361,7 +385,7 @@ function voterRetirementDeficit(context, kind, replica) {
 }
 
 function failedOrDeadDeficit(context) {
-  const dead = context.replicaRows.find((replica) =>
+  const dead = context.voterRows.find((replica) =>
     !context.live.includes(replica));
   if (context.readyVoters.length >= context.replicationFactor) {
     return voterRetirementDeficit(context, KIND.FAILED_OR_DEAD, dead);
@@ -432,6 +456,40 @@ function underVoterTargetDeficit(context, requiredHosts) {
   return copyMoveOf({...context, live: context.liveReplicas}, kind, OperationType.ADD, {});
 }
 
+function buildDeficitContext({partitionId, replicationFactor, replicaRows,
+  eligibility, saturatedTargetNodeIds, storageExcludedTargets, targetCapacityRanker}) {
+  const voterRows = replicaRows.filter((r) => !isLearnerReplica(r));
+  const learnerRows = replicaRows.filter(isLearnerReplica);
+  const live = retainedReplicasOf(voterRows, eligibility);
+  const liveLearners = retainedReplicasOf(learnerRows, eligibility);
+  const readyVoters = live.filter((replica) =>
+    replica.operationalVoter === true && isOnEligibleHost(replica, eligibility));
+  const distinctHostCount = hostCountsOf(live, eligibility).size;
+  return {
+    voterRows, learnerRows, live, liveLearners,
+    liveReplicas: [...live, ...liveLearners],
+    readyVoters, eligibility, replicationFactor,
+    saturatedTargetNodeIds, storageExcludedTargets, targetCapacityRanker,
+    distinctHostCount,
+    leader: readyVoters.find((replica) => replica.isLeader === true),
+    summary: Object.freeze({partitionId,
+      placementClass: classifyPlacementClass(partitionId),
+      distinctHostCount, voterCount: live.length}),
+  };
+}
+
+function evaluateVoterSpreadOrSurplus(context, requiredHosts) {
+  const {live, readyVoters, distinctHostCount, replicationFactor} = context;
+  if (live.length < replicationFactor) {
+    return underVoterTargetDeficit(context, requiredHosts);
+  }
+  if (distinctHostCount >= requiredHosts && live.length === replicationFactor) return NONE;
+  if (readyVoters.length !== live.length) {
+    return waitingOf(context, KIND.HOST_SPREAD, WAITING.INCUMBENT_AUTHORITY_UNAVAILABLE);
+  }
+  return distinctHostCount < requiredHosts ? spreadDeficit(context) : surplusDeficit(context);
+}
+
 /**
  * The one deficit of a partition and its move, or why it waits.
  * @param {Object} input - {partitionId, replicationFactor, replicaRows:
@@ -440,22 +498,9 @@ function underVoterTargetDeficit(context, requiredHosts) {
  * @return {Object} Frozen {state: NONE} | {state: CANDIDATE, candidate} |
  *   {state: WAITING, waiting}.
  */
-function evaluatePartitionDeficit({partitionId, replicationFactor, replicaRows,
-  eligibility, saturatedTargetNodeIds = null, storageExcludedTargets = null}) {
-  const voterRows = replicaRows.filter((r) => !isLearnerReplica(r));
-  const learnerRows = replicaRows.filter(isLearnerReplica);
-  const live = retainedReplicasOf(voterRows, eligibility);
-  const liveLearners = retainedReplicasOf(learnerRows, eligibility);
-  const readyVoters = live.filter((replica) =>
-    replica.operationalVoter === true && isOnEligibleHost(replica, eligibility));
-  const liveReplicas = [...live, ...liveLearners];
-  const distinctHostCount = hostCountsOf(live, eligibility).size;
-  const context = {replicaRows: voterRows, live, liveLearners, liveReplicas, readyVoters,
-    eligibility, replicationFactor, saturatedTargetNodeIds, storageExcludedTargets,
-    leader: readyVoters.find((replica) => replica.isLeader === true),
-    summary: Object.freeze({partitionId,
-      placementClass: classifyPlacementClass(partitionId),
-      distinctHostCount, voterCount: live.length})};
+function evaluatePartitionDeficit(input) {
+  const context = buildDeficitContext(input);
+  const {voterRows, learnerRows, live, liveLearners, eligibility, replicationFactor} = context;
   const deadLearner = learnerRows.find((r) => !liveLearners.includes(r));
   if (deadLearner !== undefined) return learnerRetirementDeficit(context, deadLearner);
   if (live.length < voterRows.length) return failedOrDeadDeficit(context);
@@ -465,16 +510,8 @@ function evaluatePartitionDeficit({partitionId, replicationFactor, replicaRows,
   const eligibleHostCount = eligibility.eligibleHostIds.size;
   const voterTarget = resolveVoterTarget(replicationFactor, eligibleHostCount);
   const requiredHosts = Math.min(replicationFactor, eligibleHostCount);
-  const promotion = growthPromotionDeficit(context, voterTarget);
-  if (promotion !== null) return promotion;
-  if (live.length < replicationFactor) {
-    return underVoterTargetDeficit(context, requiredHosts);
-  }
-  if (distinctHostCount >= requiredHosts && live.length === replicationFactor) return NONE;
-  if (readyVoters.length !== live.length) {
-    return waitingOf(context, KIND.HOST_SPREAD, WAITING.INCUMBENT_AUTHORITY_UNAVAILABLE);
-  }
-  return distinctHostCount < requiredHosts ? spreadDeficit(context) : surplusDeficit(context);
+  return growthPromotionDeficit(context, voterTarget) ??
+    evaluateVoterSpreadOrSurplus(context, requiredHosts);
 }
 
 /**

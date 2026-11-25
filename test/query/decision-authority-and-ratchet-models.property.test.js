@@ -196,10 +196,9 @@ test('decideCreateTableAction and metadata decoders enforce single-interpretatio
         } else {
           assert.equal(decision.action, CREATE_TABLE_ACTION.THROW_TABLE_EXISTS);
         }
-      } else if (input.hasPersistenceAuthority) {
-        assert.equal(decision.action, CREATE_TABLE_ACTION.CREATE_PERSISTED);
       } else {
-        assert.equal(decision.action, CREATE_TABLE_ACTION.CREATE_EPHEMERAL);
+        assert.equal(decision.action, CREATE_TABLE_ACTION.CREATE_PERSISTED);
+        assert.equal(CREATE_TABLE_ACTION.CREATE_EPHEMERAL, undefined);
       }
     }),
     {numRuns: PROPERTY_RUNS},

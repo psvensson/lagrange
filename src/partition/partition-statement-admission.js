@@ -366,7 +366,8 @@ function partitionCapturesCommittedWriteRows(service, path, tableName) {
     return false;
   }
   return (tableName !== null && isTableCdcObligationRecorded(tableName)) ||
-    (service.cdcSubscribers?.size ?? 0) > 0;
+    (service.cdcSubscribers?.size ?? 0) > 0 ||
+    Boolean(service.splitReplication);
 }
 
 function returningSqlOf(sql, lexed) {
@@ -443,7 +444,8 @@ function textRuleRefusal(service, lexed, options = {}) {
 }
 
 function prepareByKind(db, sql, kind) {
-  return kind === KIND.READ || kind === KIND.WRITE ?
+  return (kind === KIND.READ || kind === KIND.WRITE) &&
+      (!db?.open || db.prepare === db.constructor?.prototype?.prepare) ?
     preparePartitionReadStatement(db, sql) :
     db.prepare(sql);
 }

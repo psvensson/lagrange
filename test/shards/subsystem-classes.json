@@ -12,7 +12,7 @@
     "distributed-harness": 226,
     "examples-e2e": 8,
     "pgwire-compat": 25,
-    "placement-rebalance": 312,
+    "placement-rebalance": 313,
     "query-sql": 226,
     "release-packaging": 15,
     "runtime-primitives": 24,
@@ -25,10 +25,10 @@
     "transport-messaging": 123,
     "wasm-toolchain": 73
   },
-  "censusSize": 2825,
-  "digest": "fnv1a32-4cd38bb6",
+  "censusSize": 2826,
+  "digest": "fnv1a32-1bd1043a",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-68361ae4",
+  "observationDigest": "fnv1a32-d6a957be",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2209,6 +2209,7 @@
     "test/rebalancer/replica-operation-step-policy.test.js": "placement-rebalance",
     "test/rebalancer/replica-operation-terminal-cas.test.js": "placement-rebalance",
     "test/rebalancer/replica-operations-single-writer.test.js": "placement-rebalance",
+    "test/rebalancer/replica-placement-adaptive-budget.test.js": "placement-rebalance",
     "test/rebalancer/replica-placement-cure-policy.test.js": "placement-rebalance",
     "test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js": "placement-rebalance",
     "test/rebalancer/replica-placement-owner-blocked-attempt.test.js": "placement-rebalance",
@@ -7676,7 +7677,8 @@
     },
     "test/diagnostics/resource-diagnostics-sampler.test.js": {
       "files": [
-        "src/diagnostics/resource-diagnostics-sampler.js"
+        "src/diagnostics/resource-diagnostics-sampler.js",
+        "src/node/node-host-statistics-sampler.js"
       ]
     },
     "test/diagnostics/runtime-content-fingerprint.test.js": {
@@ -17446,7 +17448,9 @@
     },
     "test/query/decision-authority-and-ratchet-models.property.test.js": {
       "directories": [
-        "src"
+        "scripts",
+        "src",
+        "test"
       ]
     },
     "test/query/deferred-hash.test.js": {
@@ -24096,6 +24100,15 @@
         "src/workflow/durable-workflow-coordinator.js"
       ]
     },
+    "test/rebalancer/replica-placement-adaptive-budget.test.js": {
+      "files": [
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js"
+      ]
+    },
     "test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js": {
       "files": [
         "src/bootstrap/shared/partition-service-construction.js",
@@ -26058,7 +26071,6 @@
         "test/shards/primary-classes.json"
       ],
       "directories": [
-        "data",
         "scripts",
         "scripts/checks",
         "solve",
@@ -28094,7 +28106,9 @@
     },
     "test/scripts/metric-ratchet-identity-and-completeness.test.js": {
       "directories": [
-        "src"
+        "scripts",
+        "src",
+        "test"
       ]
     },
     "test/scripts/metric-report-inputs.test.js": {
@@ -28618,7 +28632,6 @@
         "src/public-api.js"
       ],
       "directories": [
-        "data",
         "src",
         "wit"
       ]

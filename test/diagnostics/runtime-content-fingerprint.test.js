@@ -6,13 +6,23 @@ import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 import {measureRuntimeContent} from '../../src/diagnostics/runtime-content-fingerprint.js';
+import {
+  FINGERPRINT_HEX_LENGTH,
+  computeContentRecordsFingerprint,
+  computeSourceFingerprint,
+} from '../../src/diagnostics/source-fingerprint.js';
+import {resolveBootSourceProvenance} from '../../src/entrypoint-runtime-provenance.js';
 
 const OWNER_URL = new URL('../../src/diagnostics/runtime-content-fingerprint.js', import.meta.url);
 const CHILD_TIMEOUT_MS = 10000;
 const MISSING = 'oe-provenance-missing-package';
+const SHORT_HEX_PATTERN = /^[0-9a-f]{16}$/u;
 // Captured from unmodified 5c30388e498cb1578dc7ba7199bf2de51266d77b, before repair.
 const PREDECESSOR_LOCK_FACTS = Object.freeze({
   sourceDigest: '4a3da447ee305a347c8748563600506dc05ad6257ff34a2bcfe8b6328956ae6d',
+  shortSourceFingerprint: computeContentRecordsFingerprint([
+    {relativePath: 'index.js', content: Buffer.from('runtime();')},
+  ]).slice(0, FINGERPRINT_HEX_LENGTH),
   dependencyDigest: '20d71872ec4e188967656651c2f2b087169888ab340595c2534a3508eef47ed6',
   manifestDigest: '40739d838ec3850613734c89f1c9343c5ed5aef40c47a3fd0f58136c1e7bee7c',
   dependencyFileCount: 3,
@@ -314,4 +324,29 @@ test('measureRuntimeContent refuses symlink-preserving modes with conflicting le
         assert.match(result.stderr, /symlink-preserving runtime/);
       }
     }
+  });
+
+test('measureRuntimeContent shortSourceFingerprint matches computeSourceFingerprint and resolveBootSourceProvenance projects bootedSrcFingerprint unconditionally',
+  async (t) => {
+    const {root} = fixture(t);
+    fs.mkdirSync(path.join(root, 'src/nested'), {recursive: true});
+    fs.writeFileSync(path.join(root, 'src/nested/helper.js'), 'export const value = 42;\n');
+    const measured = await measureRuntimeContent(root);
+    const directFingerprint = await computeSourceFingerprint(path.join(root, 'src'));
+    assert.equal(measured.shortSourceFingerprint, directFingerprint);
+    assert.match(measured.shortSourceFingerprint, SHORT_HEX_PATTERN);
+
+    const withoutExpected = await resolveBootSourceProvenance({});
+    assert.equal(withoutExpected.expectedSrcFingerprint, null);
+    assert.match(withoutExpected.bootedSrcFingerprint ?? '', SHORT_HEX_PATTERN);
+    assert.equal(
+      withoutExpected.bootedSrcFingerprint,
+      withoutExpected.runtimeBuild?.content?.shortSourceFingerprint,
+    );
+    assert.equal(withoutExpected.srcFingerprintMatches, null);
+
+    const withMatchingExpected = await resolveBootSourceProvenance({
+      SRC_FINGERPRINT: withoutExpected.bootedSrcFingerprint,
+    });
+    assert.equal(withMatchingExpected.srcFingerprintMatches, true);
   });

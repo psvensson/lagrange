@@ -69,6 +69,7 @@ import {countCdcObligations} from
   '../../src/partition/partition-cdc-obligation-ledger.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
 import {
+  CDC_SCHEMA,
   CDC_TABLE,
   resumeFixtureParticipantAdmission,
   resumeFixtureParticipantGroupAdmission,
@@ -80,8 +81,10 @@ const DB_FILE = 'partition.sqlite';
 // A CDC-carrying table: the witnesses below also measure the committed
 // write's CDC obligation, which only a propagated table owes (decision D2).
 const TABLE_NAME = CDC_TABLE;
-const INSERT_SQL = `INSERT INTO ${TABLE_NAME} (id, value) VALUES (?, ?)`;
-const SELECT_ROW_SQL = `SELECT id, value FROM ${TABLE_NAME} WHERE id = ?`;
+const INSERT_SQL =
+  `INSERT INTO ${TABLE_NAME} (group_id, representative_node_id) VALUES (?, ?)`;
+const SELECT_ROW_SQL =
+  `SELECT group_id AS id, representative_node_id AS value FROM ${TABLE_NAME} WHERE group_id = ?`;
 // A schema error on the partition's own table (a write to any other table is
 // refused by the statement-admission owner before SQLite reads it).
 const MISSING_COLUMN_INSERT_SQL =
@@ -122,10 +125,7 @@ function partitionOptions(partitionId, dbPath) {
     nodeId: 'statement-outcome-node',
     systemTableCache: new SystemTableCache(),
     dbPath,
-    schema: {columns: [
-      {name: 'id', type: 'TEXT', primaryKey: true},
-      {name: 'value', type: 'TEXT'},
-    ]},
+    schema: CDC_SCHEMA,
   };
 }
 
@@ -511,7 +511,7 @@ test('F-p: a write of an SQL command type without its statement is refused ' +
 // B5: every malformed command shape the verifier drove through the write path
 // (applyWrite, and a FORWARD_WRITE through the production transport handler)
 // is refused by the admission owner before it is proposed.
-const INADMISSIBLE_SQL = `INSERT INTO ${TABLE_NAME} (id, value) ` +
+const INADMISSIBLE_SQL = `INSERT INTO ${TABLE_NAME} (group_id, representative_node_id) ` +
   'VALUES (\'inadmissible\', \'v\')';
 const B5_SHAPES = Object.freeze([
   {name: 'unknown-type', code: 'COMMAND_TYPE_UNKNOWN',

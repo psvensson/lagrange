@@ -85,36 +85,43 @@ async function admitRuntimeServices(leader, proposed, targets) {
 
 test('pending runtime-service starts occupy no source budget; genuine partition ' +
   'copies of the same source do', () => onLedgerLeader(async (leader, proposed) => {
-  // K_src (3) pending runtime-service starts, on targets other than node-b.
-  await admitRuntimeServices(leader, proposed, [NODE.C, NODE.D, NODE.A]);
+  // K_src (6) pending runtime-service starts, on targets other than node-b.
+  await admitRuntimeServices(leader, proposed, [
+    NODE.C, NODE.D, NODE.A, NODE.C, NODE.D, NODE.A,
+  ]);
   const first = await admitOnLeader(leader, proposed, 'copy-0',
     placementStatement({partitionId: 'tables-p1', target: NODE.B}));
   assert.deepEqual(resultOf(first.answer).outcome, PLACEMENT_OUTCOME.ADMITTED,
     JSON.stringify(resultOf(first.answer)));
-  // Two more genuine copies from node-a fill its K_src with copies only.
-  for (const [index, [partitionId, target]] of [['indices-p1', NODE.C],
-    ['config-p1', NODE.D]].entries()) {
+  // Five more genuine copies from node-a fill its K_src with copies only.
+  for (const [index, [partitionId, target]] of [
+    ['indices-p1', NODE.C],
+    ['config-p1', NODE.D],
+    ['services-p1', NODE.B],
+    ['partitions-p1', NODE.C],
+    ['nodes-p1', NODE.D],
+  ].entries()) {
     const admitted = await admitOnLeader(leader, proposed, `copy-${index + 1}`,
       placementStatement({partitionId, target}));
     assert.equal(resultOf(admitted.answer).outcome, PLACEMENT_OUTCOME.ADMITTED,
       JSON.stringify(resultOf(admitted.answer)));
   }
-  const full = await admitOnLeader(leader, proposed, 'copy-3',
-    placementStatement({partitionId: 'services-p1', target: NODE.D}));
+  const full = await admitOnLeader(leader, proposed, 'copy-6',
+    placementStatement({partitionId: 'logs-p1', target: NODE.D}));
   assert.equal(resultOf(full.answer).reason, PLACEMENT_REFUSAL.SOURCE_AT_CAPACITY);
-  // The occupancy names the three copies; the runtime-service starts are absent.
-  assert.equal(resultOf(full.answer).occupancy.sourceOccupancy, 3);
+  // The occupancy names the six copies; the runtime-service starts are absent.
+  assert.equal(resultOf(full.answer).occupancy.sourceOccupancy, 6);
   // Another source is unaffected by the runtime-service starts.
-  const otherSource = await admitOnLeader(leader, proposed, 'copy-4',
-    placementStatement({partitionId: 'partitions-p1', target: NODE.C, source: NODE.B}));
+  const otherSource = await admitOnLeader(leader, proposed, 'copy-7',
+    placementStatement({partitionId: 'metrics-p1', target: NODE.C, source: NODE.B}));
   assert.equal(resultOf(otherSource.answer).outcome, PLACEMENT_OUTCOME.ADMITTED,
     JSON.stringify(resultOf(otherSource.answer)));
 }));
 
 test('pending runtime-service starts on a target occupy no target budget; genuine ' +
   'copies to it do', () => onLedgerLeader(async (leader, proposed) => {
-  // K_tgt (2) pending runtime-service starts on node-b.
-  await admitRuntimeServices(leader, proposed, [NODE.B, NODE.B]);
+  // K_tgt (3) pending runtime-service starts on node-b.
+  await admitRuntimeServices(leader, proposed, [NODE.B, NODE.B, NODE.B]);
   const first = await admitOnLeader(leader, proposed, 'copy-0',
     placementStatement({partitionId: 'tables-p1', target: NODE.B}));
   assert.equal(resultOf(first.answer).outcome, PLACEMENT_OUTCOME.ADMITTED,
@@ -122,12 +129,15 @@ test('pending runtime-service starts on a target occupy no target budget; genuin
   const second = await admitOnLeader(leader, proposed, 'copy-1',
     placementStatement({partitionId: 'indices-p1', target: NODE.B}));
   assert.equal(resultOf(second.answer).outcome, PLACEMENT_OUTCOME.ADMITTED);
-  const full = await admitOnLeader(leader, proposed, 'copy-2',
+  const third = await admitOnLeader(leader, proposed, 'copy-2',
+    placementStatement({partitionId: 'services-p1', target: NODE.B}));
+  assert.equal(resultOf(third.answer).outcome, PLACEMENT_OUTCOME.ADMITTED);
+  const full = await admitOnLeader(leader, proposed, 'copy-3',
     placementStatement({partitionId: 'config-p1', target: NODE.B}));
   assert.equal(resultOf(full.answer).reason, PLACEMENT_REFUSAL.TARGET_AT_CAPACITY);
   assert.deepEqual(resultOf(full.answer).occupancy, {copySourceNodeId: NODE.A,
-    sourceOccupancy: 2, sourceLimit: 3, targetNodeId: NODE.B, targetOccupancy: 2,
-    targetLimit: 2});
+    sourceOccupancy: 3, sourceLimit: 6, targetNodeId: NODE.B, targetOccupancy: 3,
+    targetLimit: 3});
 }));
 
 test('a partition copy without a recorded copy source occupies every source; a ' +
@@ -143,16 +153,23 @@ test('a partition copy without a recorded copy source occupies every source; a '
     assert.equal(commitLedgerStatement(leader, 'unrecord-source',
       'UPDATE replica_operations SET copy_source_node_id = NULL WHERE operation_id = ?',
       [copyId]), null);
-    const otherSource = await admitOnLeader(leader, proposed, 'copy-1',
-      placementStatement({partitionId: 'indices-p1', target: NODE.D, source: NODE.D}));
-    assert.equal(resultOf(otherSource.answer).outcome, PLACEMENT_OUTCOME.ADMITTED);
-    const probe = await admitOnLeader(leader, proposed, 'copy-2',
+    for (const [index, [partitionId, target]] of [
+      ['indices-p1', NODE.D],
+      ['services-p1', NODE.C],
+      ['partitions-p1', NODE.B],
+      ['nodes-p1', NODE.D],
+    ].entries()) {
+      const otherSource = await admitOnLeader(leader, proposed, `copy-${index + 1}`,
+        placementStatement({partitionId, target, source: NODE.D}));
+      assert.equal(resultOf(otherSource.answer).outcome, PLACEMENT_OUTCOME.ADMITTED);
+    }
+    const probe = await admitOnLeader(leader, proposed, 'copy-5',
       placementStatement({partitionId: 'config-p1', target: NODE.A, source: NODE.D,
         repairWaitingOn: [NODE.D]}));
-    // node-d: its own copy plus the unrecorded copy (2) reach K_src - 1; the
+    // node-d: its four copies plus the unrecorded copy (5) reach K_src - 1; the
     // two runtime-service starts are not counted.
     assert.equal(resultOf(probe.answer).reason, PLACEMENT_REFUSAL.SOURCE_AT_CAPACITY);
-    assert.equal(resultOf(probe.answer).occupancy.sourceOccupancy, 2);
+    assert.equal(resultOf(probe.answer).occupancy.sourceOccupancy, 5);
   }));
 
 test('the engaged ledger hold waits on genuine partition copies only, never on ' +

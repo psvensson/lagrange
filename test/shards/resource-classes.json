@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2799,
+    "ordinary": 2800,
     "cpu-heavy": 0,
     "external-toolchain": 23,
     "exclusive": 3
   },
-  "censusSize": 2825,
-  "digest": "fnv1a32-6e5baaf5",
+  "censusSize": 2826,
+  "digest": "fnv1a32-cb5f3b78",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -2189,6 +2189,7 @@
     "test/rebalancer/replica-operation-step-policy.test.js": "ordinary",
     "test/rebalancer/replica-operation-terminal-cas.test.js": "ordinary",
     "test/rebalancer/replica-operations-single-writer.test.js": "ordinary",
+    "test/rebalancer/replica-placement-adaptive-budget.test.js": "ordinary",
     "test/rebalancer/replica-placement-cure-policy.test.js": "ordinary",
     "test/rebalancer/replica-placement-owner-attempts-exact-settlement.test.js": "ordinary",
     "test/rebalancer/replica-placement-owner-blocked-attempt.test.js": "ordinary",

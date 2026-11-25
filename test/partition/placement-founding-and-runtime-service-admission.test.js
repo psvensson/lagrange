@@ -411,6 +411,16 @@ describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEM
         });
         assert.ok(op2.operationId.startsWith('pl-items_user-p1-'));
 
+        const op3 = await coordinator.createOperation({
+          type: OperationType.ADD,
+          entityType: UNIFIED_SERVICE_TYPE.PARTITION,
+          entityId: 'shipments_user-p1',
+          partitionId: 'shipments_user-p1',
+          nodeId: NODE.B,
+          copySourceNodeId: NODE.D,
+        });
+        assert.ok(op3.operationId.startsWith('pl-shipments_user-p1-'));
+
         await assert.rejects(
           () => coordinator.createOperation({
             type: OperationType.ADD,
@@ -418,13 +428,13 @@ describe('WP-F: RUNTIME_SERVICE, PARTITION & FOUND production routing via PLACEM
             entityId: 'payments_user-p1',
             partitionId: 'payments_user-p1',
             nodeId: NODE.B,
-            copySourceNodeId: NODE.D,
+            copySourceNodeId: NODE.A,
           }),
           (error) =>
             error.failureCode === PLACEMENT_REFUSAL.TARGET_AT_CAPACITY,
         );
 
-        assert.equal(ledgerRows(leader).length, 2);
+        assert.equal(ledgerRows(leader).length, 3);
         assert.ok(proposed.every(
           (cmd) => cmd.body?.transitionKind ===
             PLACEMENT_TRANSITION_KIND.PLACEMENT,

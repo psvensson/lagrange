@@ -30,6 +30,10 @@ import {
 } from '../../src/partition/partition-service-constants.js';
 import {QUERY_OPERATION} from '../../src/query/query-constants.js';
 import {TABLES} from '../../src/constants/index.js';
+import {
+  getSystemCachePrimaryKeyField,
+  hasSystemCacheKeyDescriptor,
+} from '../../src/cache/system-cache-key-descriptor.js';
 import {readCommittedStatementOutcome} from
   '../../src/partition/partition-committed-statement-outcome.js';
 import {releaseIdentityOf, releaseMemberIds} from
@@ -73,7 +77,19 @@ const INSERT_SQL = 'INSERT INTO test_table (id, value) VALUES (?, ?)';
 // Known doubles smell: it names a real system table (latency_groups) over the
 // fixture's own two-column schema, not that table's schema.
 const CDC_TABLE = TABLES.LATENCY_GROUPS;
-const CDC_INSERT_SQL = `INSERT INTO ${CDC_TABLE} (id, value) VALUES (?, ?)`;
+const CDC_INSERT_SQL =
+  `INSERT INTO ${CDC_TABLE} (group_id, representative_node_id) VALUES (?, ?)`;
+const CDC_SCHEMA = Object.freeze({
+  tableName: CDC_TABLE,
+  columns: [
+    {name: 'group_id', type: 'TEXT', primaryKey: true},
+    {name: 'representative_node_id', type: 'TEXT'},
+    {name: 'coordinator_node_id', type: 'TEXT'},
+    {name: 'state', type: 'TEXT', notNull: true, defaultValue: '\'ACTIVE\''},
+    {name: 'created_at', type: 'INTEGER', notNull: true, defaultValue: 0},
+    {name: 'updated_at', type: 'INTEGER', notNull: true, defaultValue: 0},
+  ],
+});
 const ROW = Object.freeze({id: 'row-1', value: 'value-1'});
 const ROW_2 = Object.freeze({id: 'row-2', value: 'value-2'});
 const OTHER_ROW = Object.freeze({id: 'row-9', value: 'other'});
@@ -391,12 +407,33 @@ function fixtureReplicaNodeId(extra) {
   return extra.nodeId ?? 'test-node';
 }
 
+function defaultFixtureSchemaOf(tableName) {
+  if (tableName === CDC_TABLE) {
+    return CDC_SCHEMA;
+  }
+  if (hasSystemCacheKeyDescriptor(tableName)) {
+    return {
+      columns: [
+        {name: getSystemCachePrimaryKeyField(tableName), type: 'TEXT', primaryKey: true},
+        {name: 'value', type: 'TEXT'},
+      ],
+    };
+  }
+  return {
+    columns: [
+      {name: 'id', type: 'TEXT', primaryKey: true},
+      {name: 'value', type: 'TEXT'},
+    ],
+  };
+}
+
 function createReplica(replicaId, extra = {}, partitionId = PARTITION_ID) {
   const replicaIds = extra.replicaIds ?? [...REPLICAS];
+  const tableName = extra.tableName ?? TABLE;
   return createControllablePartitionService({
     partitionId,
-    tableId: extra.tableName ?? TABLE,
-    tableName: extra.tableName ?? TABLE,
+    tableId: tableName,
+    tableName,
     replicaId,
     replicaIds,
     nodeId: fixtureReplicaNodeId(extra),
@@ -406,10 +443,7 @@ function createReplica(replicaId, extra = {}, partitionId = PARTITION_ID) {
     systemTableCache: extra.systemTableCache ?? {
       getAll: () => [], get: () => null, filter: () => [],
     },
-    schema: extra.schema ?? {columns: [
-      {name: 'id', type: 'TEXT', primaryKey: true},
-      {name: 'value', type: 'TEXT'},
-    ]},
+    schema: extra.schema ?? defaultFixtureSchemaOf(tableName),
     dbPath: extra.dbPath ?? ':memory:',
     ...(extra.transport ? {transport: extra.transport} : {}),
     ...(extra.timeSource ? {timeSource: extra.timeSource} : {}),
@@ -1169,6 +1203,7 @@ export {
   UNKNOWN_FIELDS,
   EPOCH,
   CDC_INSERT_SQL,
+  CDC_SCHEMA,
   CDC_TABLE,
   INSERT_SQL,
   OTHER_ROW,

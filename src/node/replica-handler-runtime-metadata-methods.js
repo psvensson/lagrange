@@ -82,8 +82,9 @@ function assignReplicaHandlerRuntimeMetadataMethods(
             throw error;
           }
           lastError = error;
-          metadataHydrationCount +=
+          const hydratedRows =
             await this.hydrateMetadataFromAuthority(partitionId);
+          metadataHydrationCount += hydratedRows;
           if (!metadataWaitLogged) {
             this.logger.info(
               REPLICA_HANDLER_LOG_MSG.WAITING_METADATA_PROPAGATION,
@@ -96,6 +97,9 @@ function assignReplicaHandlerRuntimeMetadataMethods(
               },
             );
             metadataWaitLogged = true;
+          }
+          if (hydratedRows > 0 && Date.now() <= deadline) {
+            continue;
           }
         }
         await new Promise((resolve) => {

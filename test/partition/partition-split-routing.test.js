@@ -5,6 +5,10 @@ import {
   PARTITION_TRANSITION_METADATA_FIELD,
 } from '../../src/partition/partition-constants.js';
 import {
+  PARTITION_SERVICE_ERROR_MSG,
+} from '../../src/partition/partition-service-constants.js';
+import {
+  cloneSplitEntry,
   replaySplitEntry,
   routeSplitSnapshotBatch,
 } from '../../src/partition/partition-split-routing.js';
@@ -257,4 +261,60 @@ test('split snapshot batching stays within SQLite bind limits for wide tables',
     } finally {
       database.close();
     }
+  });
+
+test('split routing uses canonical SQLite affectedRows for trim(?) and refuses unexecuted function expressions',
+  async (t) => {
+    const routed = [];
+    const queryExecutor = {
+      async executeOnPartition(partitionId, sql, params) {
+        routed.push({partitionId, sql, params});
+        return {success: true};
+      },
+    };
+    const metadata = {
+      primaryKeyColumn: PRIMARY_KEY_COLUMN,
+      splitKey: 'A',
+      targetPartitionIds: [LEFT_PARTITION_ID, RIGHT_PARTITION_ID],
+      [PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_VERSION]:
+        PENDING_VERSION,
+    };
+    const options = {
+      tableName: 'items',
+      queryExecutor,
+      descriptorEpochEvidence: createDescriptorEvidence(
+        {
+          active_partition_version: ACTIVE_VERSION,
+          pending_partition_version: PENDING_VERSION,
+        },
+        PENDING_VERSION,
+      ),
+    };
+
+    const rawEntry = {
+      sql: 'DELETE FROM items WHERE id = trim(?)',
+      params: ['\tA\t'],
+      affectedRows: [{id: '\tA\t'}],
+    };
+    const cloned = cloneSplitEntry(rawEntry);
+    await replaySplitEntry(cloned, metadata, options);
+
+    t.same(
+      routed.map((entry) => entry.partitionId),
+      [LEFT_PARTITION_ID],
+      'canonical affectedRows key "\\tA\\t" (< "A") routes to the left child',
+    );
+
+    await t.rejects(
+      replaySplitEntry(
+        {
+          sql: 'DELETE FROM items WHERE id = trim(?)',
+          params: ['\tA\t'],
+        },
+        metadata,
+        options,
+      ),
+      {message: PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_ROUTING_FAILED},
+      'without canonical affectedRows, trim(?) refuses instead of misrouting via JS .trim()',
+    );
   });

@@ -551,6 +551,9 @@ function buildPartitionWriteSideEffectPlan(entry, executionResult) {
   const executedEntry = {
     ...entry,
     changes: executionResult.changes,
+    ...(Array.isArray(executionResult.affectedRows) ?
+      {affectedRows: executionResult.affectedRows} :
+      {}),
   };
   // The durable Raft log index this write committed at: the split/merge
   // mirror replay cursor advances its persisted watermark from this, so

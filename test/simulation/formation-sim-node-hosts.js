@@ -30,6 +30,9 @@ import {
 import {
   isControlPlanePublicationsWriteLeader,
 } from '../../src/control-plane/control-plane-publications-leadership.js';
+import {
+  leaderReadRequestOf,
+} from '../../src/control-plane/control-plane-owner-fact-read-contract.js';
 import {assembleHeartbeatService} from '../../src/control-plane/heartbeat-service.js';
 import {TablePolicyService} from '../../src/policy/table-policy-service.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
@@ -69,29 +72,29 @@ const INITIAL_SYSTEM_PARTITION_IDS = Object.freeze(
   Object.values(INITIAL_PARTITION_IDS),
 );
 
+function clampIntegerFloor(value, floor) {
+  return Number.isSafeInteger(value) && value >= floor ? value : floor;
+}
+
 function buildLeaderReadAuthorityWitness(
   partitionId,
   servingNodeId,
   observedAtMs,
   leader,
+  options = {},
 ) {
   return Object.freeze({
     state: WITNESS_STATE_OBSERVED,
     partitionId,
     role: RAFT_ROLE.LEADER,
     servingNodeId,
-    servingReplicaId: `${partitionId}-${servingNodeId}`,
+    servingReplicaId: leader?.replicaId || `${partitionId}-${servingNodeId}`,
     observedAtMs,
-    term: Number.isSafeInteger(leader?.term) && leader.term >= DEFAULT_LEADER_TERM ?
-      leader.term : DEFAULT_LEADER_TERM,
-    appliedIndex:
-      Number.isSafeInteger(leader?.appliedIndex) &&
-      leader.appliedIndex >= DEFAULT_COMMITTED_INDEX ?
-        leader.appliedIndex : DEFAULT_COMMITTED_INDEX,
-    commitIndex:
-      Number.isSafeInteger(leader?.commitIndex) &&
-      leader.commitIndex >= DEFAULT_COMMITTED_INDEX ?
-        leader.commitIndex : DEFAULT_COMMITTED_INDEX,
+    term: clampIntegerFloor(leader?.term, DEFAULT_LEADER_TERM),
+    appliedIndex: clampIntegerFloor(leader?.appliedIndex, DEFAULT_COMMITTED_INDEX),
+    commitIndex: clampIntegerFloor(leader?.commitIndex, DEFAULT_COMMITTED_INDEX),
+    currentTermApplied: leader?.currentTermApplied ?? true,
+    leaderRead: leaderReadRequestOf(options?.ownerFactFloor),
   });
 }
 
@@ -102,14 +105,14 @@ function createLocalPartitionService(
   now,
   partitionAuthority,
 ) {
-  const buildRemoteReadAuthorityWitness = () => {
+  const buildRemoteReadAuthorityWitness = (options = {}) => {
     const leader = partitionAuthority.resolvePartitionLeader(partitionId);
     if (leader?.leaderId !== nodeId) return null;
-    return buildLeaderReadAuthorityWitness(partitionId, nodeId, now(), leader);
+    return buildLeaderReadAuthorityWitness(partitionId, nodeId, now(), leader, options);
   };
-  const executeLocalQuery = async (sql, params = []) => {
-    const result = await localEngine.executeQuery(sql, params);
-    const witness = buildRemoteReadAuthorityWitness();
+  const executeLocalQuery = async (sql, params = [], options = {}) => {
+    const result = await localEngine.executeQuery(sql, params, options);
+    const witness = buildRemoteReadAuthorityWitness(options);
     if (!result?.success || !witness) return result;
     return {...result, readAuthorityWitness: witness};
   };
@@ -158,6 +161,7 @@ function formatPartitionExecutionSuccess({
   targetNodeId,
   leader,
   partitionAuthority,
+  options,
 }) {
   const witness = leader?.leaderId === targetNodeId ?
     buildLeaderReadAuthorityWitness(
@@ -165,6 +169,7 @@ function formatPartitionExecutionSuccess({
       targetNodeId,
       partitionAuthority.resolveNodeNow(targetNodeId),
       leader,
+      options,
     ) :
     null;
   return {
@@ -183,6 +188,8 @@ function createPartitionQueryExecutor(nodeId, localEngine, partitionAuthority) {
       params = [],
       _isReadOnly = true,
       preferLeader = true,
+      _hlc = null,
+      options = {},
     ) {
       const leader = partitionAuthority.resolvePartitionLeader(partitionId);
       const targetNodeId = resolveTargetReplicaNodeId(
@@ -204,7 +211,7 @@ function createPartitionQueryExecutor(nodeId, localEngine, partitionAuthority) {
       if (!targetEngine) {
         return buildPartitionExecutionFailure(TARGET_ENGINE_UNAVAILABLE_ERROR);
       }
-      const result = await targetEngine.executeQuery(statement, params);
+      const result = await targetEngine.executeQuery(statement, params, options);
       if (!result?.success) {
         return {...result, rowSetComplete: false};
       }
@@ -214,6 +221,7 @@ function createPartitionQueryExecutor(nodeId, localEngine, partitionAuthority) {
         targetNodeId,
         leader,
         partitionAuthority,
+        options,
       });
     },
   });

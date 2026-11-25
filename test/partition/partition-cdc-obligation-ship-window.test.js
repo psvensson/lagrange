@@ -88,7 +88,7 @@ test('the window never passes ACK_BATCH_MAX_EVENTS and no range of ordinary entr
 test('a lone owed row, and a run the byte bound cut, do not widen the window', async (t) => {
   const big = 'x'.repeat(BOUND.SHIP_MAX_BYTES / 2);
   const insert = (id) => ({entryId: `bytes-${id}`,
-    sql: `INSERT INTO ${TABLE} (id, value) VALUES (?, ?)`, params: [id, big]});
+    sql: `INSERT INTO ${TABLE} (group_id, representative_node_id) VALUES (?, ?)`, params: [id, big]});
   const f = await fixture(t, {rows: [], subscribers: 1,
     statements: [insert('b0'), insert('b1'), insert('b2')]});
   const model = installRecipientModel(f);
@@ -321,7 +321,7 @@ function poisonRow(f, model, kind, raw) {
     f.poisoned = true;
     f.propagate = (index, events, context, groupId) => {
       if (f.poisoned && events.some((event) => event.eventKey === raw.eventKey)) {
-        model.waves.push({index, ids: events.map((event) => event.data.id),
+        model.waves.push({index, ids: events.map((event) => event.data.group_id),
           keys: events.map((event) => event.eventKey), rows: events.length, poisoned: true});
         throw new Error('recipient model: this member can never be applied');
       }

@@ -96,7 +96,7 @@ function populateOversizedEntry(
         eventJson: JSON.stringify({
           tableName: TABLE,
           operation: CDC_OPERATION.INSERT,
-          data: {id, value: ONE_KIB_VALUE},
+          data: {group_id: id, representative_node_id: ONE_KIB_VALUE},
           sourcePartition: leader.partitionId,
           timestamp,
         }),

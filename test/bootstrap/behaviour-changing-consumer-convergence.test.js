@@ -48,7 +48,7 @@ import {ManagedMergeWorkflow} from '../../src/partition/managed-merge-workflow.j
 import {MANAGED_MERGE_ERROR_MSG} from '../../src/partition/partition-constants.js';
 import {QUERY_ERROR_MSG} from '../../src/query/query-constants.js';
 import {
-  defineTableCreationExistingTableReconciliation,
+  EXISTING_TABLE_RECONCILIATION_METHODS,
 } from '../../src/query/table-creation-service-existing-table-reconciliation.js';
 import {
   TABLE_CREATION_SERVICE_LITERAL,
@@ -225,7 +225,10 @@ function makeMergeContext(leftInfo, capture) {
  */
 function makeReconciliationInstance(partitionRow, capture) {
   class ReconciliationHost {}
-  defineTableCreationExistingTableReconciliation(ReconciliationHost);
+  Object.assign(
+    ReconciliationHost.prototype,
+    EXISTING_TABLE_RECONCILIATION_METHODS,
+  );
   const instance = new ReconciliationHost();
   instance.findExistingPartitionRecord = async () => partitionRow;
   instance.provisionInitialPartition = async (options) => {

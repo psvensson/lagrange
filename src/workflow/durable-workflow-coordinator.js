@@ -316,14 +316,33 @@ class DurableWorkflowCoordinator {
   }
 
   /**
+   * Persist a stage participant transition and roll back in-memory fields if
+   * the durable write rejects before a newer update supersedes the entry.
+   * @private
+   */
+  async persistStageParticipantState(
+    workflow, participantKey, participant, attemptedStatus, rollbackState,
+  ) {
+    try {
+      await this.persistParticipant(participant);
+    } catch (error) {
+      if (workflow.participants.get(participantKey) === participant &&
+          participant.status === attemptedStatus) {
+        rollbackState();
+      }
+      throw error;
+    }
+  }
+
+  /**
    * Execute one participant stage with durable participant updates.
    * @param {string} workflowId - Workflow ID.
    * @param {string} transientStatus - Status while the stage is running.
    * @param {string} successStatus - Status on success.
    * @param {Function} operation - Participant operation callback.
    * @param {Object} [options] - Stage options.
-   * @param {string} [options.failureStatus] - Status on failure.
    * @param {string[]} [options.participantKeys] - Participant order.
+   * @param {string} [options.failureStatus] - Status on failure.
    * @return {Promise<Object[]>} Failed participant records.
    */
   async executeParticipantStage(
@@ -371,11 +390,15 @@ class DurableWorkflowCoordinator {
       }
 
       const participant = {...currentParticipant};
+      const transientUpdatedAt = this.now();
       workflow.participants.set(participantKey, participant);
       participant.status = transientStatus;
-      participant.updatedAt = this.now();
+      participant.updatedAt = transientUpdatedAt;
       participant.lastError = null;
-      await this.persistParticipant(participant);
+      await this.persistStageParticipantState(
+        workflow, participantKey, participant, transientStatus,
+        () => workflow.participants.set(participantKey, currentParticipant),
+      );
 
       try {
         await operation(participantKey, participant);
@@ -392,7 +415,14 @@ class DurableWorkflowCoordinator {
           error: error.message,
         });
       }
-      await this.persistParticipant(participant);
+      await this.persistStageParticipantState(
+        workflow, participantKey, participant, participant.status,
+        () => {
+          participant.status = transientStatus;
+          participant.updatedAt = transientUpdatedAt;
+          participant.lastError = null;
+        },
+      );
     }
 
     return failedParticipants;

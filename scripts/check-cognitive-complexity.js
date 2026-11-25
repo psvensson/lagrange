@@ -14,11 +14,15 @@ import * as sonarjsNamespace from 'eslint-plugin-sonarjs';
 import {LegacyESLint} from 'eslint/use-at-your-own-risk';
 
 import {
+  assertScanCompleteness,
   collectRuleViolations,
+  collectScanCompleteness,
   printRatchetTighteningHint,
 } from './metric-check-helpers.js';
 
 const LOCAL_STR_SCRIPTS_CHECK_COGNITIVE_COMPLEXITY_JS = 'scripts/check-cognitive-complexity.js';
+const ANALYZER_ESLINT = 'eslint';
+const LOCAL_STR_TEST_GITKEEP = 'test/.gitkeep';
 
 const TARGET_THRESHOLD = 20;
 // Re-anchored 2026-07-02 for the 0.1.0 release gate (was 144, measured 184
@@ -80,6 +84,7 @@ const ESLINT_OVERRIDE_CONFIG = {
     es2022: true,
   },
   plugins: [SONAR_PLUGIN_NAME],
+  ignorePatterns: [LOCAL_STR_TEST_GITKEEP],
   rules: {
     [SONAR_RULE_ID]: ['error', TARGET_THRESHOLD],
   },
@@ -114,6 +119,12 @@ const measurement = beginMetricMeasurement('cognitive', {
   targets: lintTargets, reportPath: reportRelativePath,
 });
 const results = await eslint.lintFiles(lintTargets);
+const scanCompleteness = collectScanCompleteness(results, {
+  ruleId: SONAR_RULE_ID,
+  targets: lintTargets,
+  analyzer: ANALYZER_ESLINT,
+});
+assertScanCompleteness(scanCompleteness, SONAR_RULE_ID);
 const violations = collectRuleViolations(results, SONAR_RULE_ID);
 const count = violations.length;
 
@@ -123,6 +134,7 @@ finishMetricMeasurement(measurement, {
   scoped,
   targets: lintTargets,
   count,
+  scanCompleteness,
   violations,
 });
 

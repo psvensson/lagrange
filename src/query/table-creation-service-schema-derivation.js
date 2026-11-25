@@ -141,64 +141,6 @@ function buildColumnMetadata(col) {
   };
 }
 
-function extractColumnNames(columnsOrAst) {
-  return resolveDerivationColumns(columnsOrAst).map((col) => col.name);
-}
-
-function findPrimaryKeyColumn(columnsOrAst, primaryKey = null) {
-  if (Array.isArray(primaryKey) && primaryKey.length > 0) {
-    return primaryKey[0];
-  }
-  const columns = resolveDerivationColumns(columnsOrAst);
-  const pkColumn = columns.find((col) => col.primaryKey);
-  return pkColumn ? pkColumn.name : null;
-}
-
-function extractNotNullColumns(columnsOrAst) {
-  return resolveDerivationColumns(columnsOrAst)
-    .filter((col) => col.notNull === true || col.nullable === false)
-    .map((col) => col.name);
-}
-
-function extractColumnTypes(columnsOrAst) {
-  return Object.fromEntries(
-    resolveDerivationColumns(columnsOrAst).map((col) => [
-      col.name,
-      normalizeDataType(col.dataType ?? col.type ?? null),
-    ]),
-  );
-}
-
-function extractColumnDefaults(columnsOrAst) {
-  return Object.fromEntries(
-    resolveDerivationColumns(columnsOrAst).map((col) => [
-      col.name,
-      deriveDefaultSqlLiteral(col.defaultValue),
-    ]),
-  );
-}
-
-function extractColumnCollations(columnsOrAst) {
-  return Object.fromEntries(
-    resolveDerivationColumns(columnsOrAst).map((col) => [
-      col.name,
-      normalizeColumnCollation(col.collation),
-    ]),
-  );
-}
-
-function extractUniqueColumns(columnsOrAst) {
-  return resolveDerivationColumns(columnsOrAst)
-    .filter((col) => Boolean(col.unique))
-    .map((col) => col.name);
-}
-
-function extractColumnCheckConstraints(columnsOrAst) {
-  return resolveDerivationColumns(columnsOrAst)
-    .filter((col) => Boolean(col.checkSql))
-    .map((col) => ({name: col.name, checkSql: col.checkSql}));
-}
-
 /**
  * Refuse a partition-key column whose collation is not BINARY: partition
  * routing orders keys by BINARY comparison, so another collation would route
@@ -245,14 +187,5 @@ export {
   buildColumnMetadata,
   buildSchemaDefinition,
   derivePartitionKey,
-  extractColumnCheckConstraints,
-  extractColumnCollations,
-  extractColumnDefaults,
-  extractColumnNames,
-  extractColumnTypes,
-  extractNotNullColumns,
-  extractTableConstraints,
-  extractUniqueColumns,
-  findPrimaryKeyColumn,
   normalizeDataType,
 };

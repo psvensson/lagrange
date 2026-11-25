@@ -50,9 +50,9 @@ function createPropertyPartition(partitionId, tableName) {
     dbPath: ':memory:',
     schema: {
       columns: [
-        {name: 'id', type: 'INTEGER', primaryKey: true},
-        {name: 'name', type: 'TEXT'},
-        {name: 'value', type: 'INTEGER'},
+        {name: 'group_id', type: 'TEXT', primaryKey: true},
+        {name: 'representative_node_id', type: 'TEXT'},
+        {name: 'created_at', type: 'INTEGER'},
       ],
     },
   }));
@@ -90,9 +90,9 @@ const tableNameArbitrary = fc.constant(CDC_TABLE);
  * Generate random data for insert/update operations.
  */
 const dataArbitrary = fc.record({
-  id: fc.integer({min: 1, max: 10000}),
-  name: fc.string({minLength: 1, maxLength: 50}).filter((s) => !s.includes('\'')),
-  value: fc.integer({min: 0, max: 1000000}),
+  group_id: fc.integer({min: 1, max: 10000}).map((n) => `group-${n}`),
+  representative_node_id: fc.string({minLength: 1, maxLength: 50}).filter((s) => !s.includes('\'')),
+  created_at: fc.integer({min: 0, max: 1000000}),
 });
 
 /**
@@ -189,7 +189,11 @@ test('Property 6: CDC event generated for UPDATE operations', async (t) => {
           cdcEvents.length = 0;
 
           // Perform UPDATE
-          await partition.updateData(tableName, {id: data.id}, {value: newValue});
+          await partition.updateData(
+            tableName,
+            {group_id: data.group_id},
+            {created_at: newValue},
+          );
 
           // Verify CDC event was generated
           await settlePendingCdcDeliveries(partition);
@@ -251,7 +255,7 @@ test('Property 6: CDC event generated for DELETE operations', async (t) => {
           cdcEvents.length = 0;
 
           // Perform DELETE
-          await partition.deleteData(tableName, {id: data.id});
+          await partition.deleteData(tableName, {group_id: data.group_id});
 
           // Verify CDC event was generated
           await settlePendingCdcDeliveries(partition);

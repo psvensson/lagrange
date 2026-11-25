@@ -492,7 +492,6 @@
   "src/debug/trace-collector.js::Function 'matchesFilter'#1": 16,
   "src/diagnostics/causal-graph-builder.js::Function 'buildWaits'#1": 15,
   "src/diagnostics/control-plane-quiescence-snapshot.js::Function 'buildControlPlaneQuiescenceDecisionSnapshot'#1": 21,
-  "src/diagnostics/resource-diagnostics-sampler.js::Method 'buildCompactReport'#1": 13,
   "src/diagnostics/resource-diagnostics-sampler.js::Method 'collectComponentStats'#1": 16,
   "src/diagnostics/topology-convergence-edge-resolvers.js::Function 'buildPublicationActiveGateHandoffSource'#1": 17,
   "src/diagnostics/topology-convergence-edge-resolvers.js::Function 'normalizeActiveGateSnapshotCauseEvidence'#1": 13,

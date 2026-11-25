@@ -8,6 +8,7 @@ const PORT_COUNT = 3;
 const LOOPBACK = '127.0.0.1';
 const LOG_LEVEL = 'error';
 const NODE_ID = '550e8400-e29b-41d4-a716-446655440037';
+const HOST_ID = 'npm-runtime-smoke-host';
 const ERROR_EVENT = 'error';
 const CLEANUP_FAILURE = 'cleanup failure';
 const config = JSON.parse(process.argv[CONFIG_ARGUMENT]);
@@ -39,7 +40,7 @@ try {
   await releasePorts();
   runtime = createEmbeddedLagrange({configuration: {
     logging: {level: LOG_LEVEL, prettyPrint: false},
-    node: {id: NODE_ID, restApiPort: ports[0], wsPort: ports[2]},
+    node: {id: NODE_ID, hostId: HOST_ID, restApiPort: ports[0], wsPort: ports[2]},
     admin: {websocketPort: ports[1]},
     storage: {dataDir: config.dataDir},
     worker: {maxThreads: 2, minThreads: 2},

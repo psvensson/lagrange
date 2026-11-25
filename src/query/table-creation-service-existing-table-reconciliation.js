@@ -239,20 +239,6 @@ const EXISTING_TABLE_RECONCILIATION_METHODS = Object.freeze({
   },
 });
 
-function defineTableCreationExistingTableReconciliation(serviceClass) {
-  Object.defineProperty(
-    serviceClass.prototype,
-    'reconcileExistingInitialPartition',
-    {
-      configurable: true,
-      value:
-        EXISTING_TABLE_RECONCILIATION_METHODS.reconcileExistingInitialPartition,
-      writable: true,
-    },
-  );
-}
-
 export {
   EXISTING_TABLE_RECONCILIATION_METHODS,
-  defineTableCreationExistingTableReconciliation,
 };
