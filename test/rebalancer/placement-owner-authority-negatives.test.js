@@ -17,7 +17,8 @@ import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from '../../src/partition/partition-
 import {OperationType} from '../../src/rebalancer/replica-operation-progress.js';
 import {buildPlacementAdmissionStatement} from
   '../../src/rebalancer/replica-placement-owner-admission-statement.js';
-import {PLACEMENT_CLASS} from '../../src/rebalancer/replica-placement-owner-constants.js';
+import {PLACEMENT_CLASS, PLACEMENT_COPY_CAPACITY} from
+  '../../src/rebalancer/replica-placement-owner-constants.js';
 import {
   LEDGER, THREE_NODES, admittedOperations, ownerOf, startThreeNodeLedger, transferReport,
   waitUntil, withPlacementWorld,
@@ -128,7 +129,8 @@ test('P10(ii) a remote proposer following the cache route to a node whose core d
     move: {type: OperationType.ADD, targetNodeId: 'n3', replicaId: null, sourceReplicaId: null,
       copySourceNodeId: 'n1'}},
   {sourceNodeId: 'n1', repairWaitingSourceNodeIds: new Set(), formationLatchEpoch: 3,
-    membershipPublicationEpoch: null, positions: {}});
+    membershipPublicationEpoch: null, positions: {},
+    kSrc: PLACEMENT_COPY_CAPACITY.K_SRC, kTgt: PLACEMENT_COPY_CAPACITY.K_TGT});
   const submit = async (entryId) => {
     try {
       return await n3.coordinator.submitPlacementPayload({entryId, body: statement}, 2_000);

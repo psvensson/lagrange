@@ -10,13 +10,15 @@
 // occupancy of the census, the saturated targets, whether a copy candidate
 // fits, the occupancy after an admission, and a node's storage exclusion.
 import {COLUMN, TABLES} from '../constants/index.js';
+import {SERVE_ELIGIBILITY_STATE} from '../control-plane/serve-eligibility-record-decision.js';
 import {isOccupyingCopy} from '../partition/partition-placement-admission-decision.js';
 import {OperationType} from './replica-operation-progress.js';
 import {PRESSURE_STATE} from './storage-capacity-constants.js';
 import {resolveSourceCapacityForClass} from './replica-placement-owner-admission-statement.js';
+import {isFunction} from './replica-placement-owner-collaborators.js';
 import {PLACEMENT_COPY_CAPACITY, PLACEMENT_WAITING_REASON} from
   './replica-placement-owner-constants.js';
-import {PLACEMENT_DEFICIT_STATE, repairSourceNodeIdsOf} from
+import {PLACEMENT_DEFICIT_STATE, readPlacementNodeInputs, repairSourceNodeIdsOf} from
   './replica-placement-owner-deficits.js';
 import {formationWaitingReasonOf, orderPlacementCandidates} from
   './replica-placement-owner-order.js';
@@ -340,16 +342,41 @@ function evaluatePassBudgetsForController(state, {
   });
 }
 
+function readNodeRowAvailableMemoryBytes(nodeRow) {
+  if (!nodeRow) return undefined;
+  const totalBytes = Number(nodeRow.memory_total_bytes);
+  const usagePct = Number(nodeRow.memory_usage_percent);
+  const hasMemoryStats =
+    Number.isFinite(totalBytes) && totalBytes > 0 && Number.isFinite(usagePct);
+  return hasMemoryStats ?
+    Math.max(0, Math.floor(totalBytes * (1 - (usagePct / PERCENT_DIVISOR)))) :
+    undefined;
+}
+
+function resolveLocalDiagnosticsSampleStamp(latest, nowMs) {
+  const reportTimestamp = Number(latest?.timestamp);
+  const sampledAtMs = Number.isFinite(reportTimestamp) && reportTimestamp > 0 ?
+    reportTimestamp :
+    nowMs;
+  const rawSampleId = latest?.sampleId;
+  const sampleId = Number.isSafeInteger(rawSampleId) ? rawSampleId : null;
+  return {sampledAtMs, sampleId};
+}
+
 function readLocalDiagnosticsObservation(resourceDiagnosticsSampler, nodeRow, nowMs) {
   const report = resourceDiagnosticsSampler.getSharedReport();
   const proc = report?.latest ? report.latest.process : null;
   if (!proc) return null;
+  const {sampledAtMs, sampleId} = resolveLocalDiagnosticsSampleStamp(report.latest, nowMs);
+  const availableMemoryBytes = readNodeRowAvailableMemoryBytes(nodeRow);
   return {
-    sampledAtMs: nowMs,
+    sampledAtMs,
+    ...(sampleId !== null ? {sampleId, congestionEpochId: sampleId} : {}),
     bootIncarnation: nodeRow ? nodeRow[COLUMN.BOOT_INCARNATION] : null,
     singleCoreCpuPercent: proc.singleCoreCpuPercent,
     eventLoopDelayMs: proc.eventLoopDelayMs,
     eventLoopUtilizationPercent: proc.eventLoopUtilizationPercent,
+    ...(availableMemoryBytes !== undefined ? {availableMemoryBytes} : {}),
   };
 }
 
@@ -357,17 +384,15 @@ function readRemoteHeartbeatObservation(nodeRow) {
   if (!nodeRow) return null;
   const sampledAtMs = Number(nodeRow[COLUMN.LAST_HEARTBEAT]);
   if (!Number.isFinite(sampledAtMs)) return null;
-  const totalBytes = Number(nodeRow.memory_total_bytes);
-  const usagePct = Number(nodeRow.memory_usage_percent);
-  const hasMemoryStats =
-    Number.isFinite(totalBytes) && totalBytes > 0 && Number.isFinite(usagePct);
-  const availableMemoryBytes = hasMemoryStats ?
-    Math.max(0, Math.floor(totalBytes * (1 - (usagePct / PERCENT_DIVISOR)))) :
-    undefined;
+  const availableMemoryBytes = readNodeRowAvailableMemoryBytes(nodeRow);
+  const cpuUsagePercent = Number(nodeRow.cpu_usage_percent);
+  const hasCpuUsage = Number.isFinite(cpuUsagePercent) && cpuUsagePercent >= 0;
   return {
     sampledAtMs,
     bootIncarnation: nodeRow[COLUMN.BOOT_INCARNATION],
+    pressureSensorsComplete: false,
     ...(availableMemoryBytes !== undefined ? {availableMemoryBytes} : {}),
+    ...(hasCpuUsage ? {cpuUsagePercent} : {}),
   };
 }
 
@@ -376,15 +401,142 @@ function createControlPlanePlacementNodeObservationReader({
   resourceDiagnosticsSampler,
   systemTableCache,
 }) {
-  return (targetNodeId, _role, nowMs) => {
-    const nodeRow = systemTableCache ?
+  return (targetNodeId, _role, nowMs, nodeRowOverride = null) => {
+    const nodeRow = nodeRowOverride ?? (systemTableCache ?
       systemTableCache.get(TABLES.NODES, targetNodeId) :
-      null;
+      null);
     if (targetNodeId === localNodeId && resourceDiagnosticsSampler) {
       return readLocalDiagnosticsObservation(resourceDiagnosticsSampler, nodeRow, nowMs);
     }
     return readRemoteHeartbeatObservation(nodeRow);
   };
+}
+
+function isNonEmptyNodeId(nodeId) {
+  return typeof nodeId === 'string' && nodeId.length > 0;
+}
+
+function pickExcludedTargetOrSourceValue(
+  targetNodeId, hardExcludedTargets, sourceDecision, targetDecision,
+) {
+  if (targetDecision && targetDecision.hardAdmissionAllowed === false) {
+    return hardExcludedTargets.get(targetNodeId) || targetDecision.reason || null;
+  }
+  return sourceDecision && sourceDecision.hardAdmissionAllowed === false ?
+    (sourceDecision.reason || null) :
+    null;
+}
+
+function summarizeMoveCopyDecisions(
+  state, targetNodeId, hardExcludedTargets, sourceDecision, targetDecision,
+) {
+  const sourceAllowed = sourceDecision ? sourceDecision.hardAdmissionAllowed : true;
+  const targetAllowed = targetDecision ? targetDecision.hardAdmissionAllowed : true;
+  return Object.freeze({
+    kSrc: sourceDecision ? sourceDecision.limit : state.sourceConfig.initialLimit,
+    kTgt: targetDecision ? targetDecision.limit : state.targetConfig.initialLimit,
+    hardAdmissionAllowed: sourceAllowed && targetAllowed,
+    reason: pickExcludedTargetOrSourceValue(
+      targetNodeId, hardExcludedTargets, sourceDecision, targetDecision,
+    ),
+    sourceDecision,
+    targetDecision,
+  });
+}
+
+function resolveMoveCopyLimitsForController(state, {
+  copySourceNodeId,
+  targetNodeId,
+  nodeInput = null,
+  occupancy = null,
+  storageExcludedTargets = new Map(),
+  nowMs = 0,
+}) {
+  const {nodeBoots, declaredHosts, nodesPerHost} = normalizePassEligibility(nodeInput);
+  const hardExcludedTargets = new Map(storageExcludedTargets);
+  const ctx = {
+    ...state,
+    occupancy,
+    waitingBySource: new Map(),
+    waitingByTarget: new Map(),
+    storageExcludedTargets,
+    hardExcludedTargets,
+    nodeBoots,
+    declaredHosts,
+    nodesPerHost,
+    nowMs,
+  };
+  const sourceDecision = isNonEmptyNodeId(copySourceNodeId) ?
+    evaluateSourceNodeDecision({...ctx, nodeId: copySourceNodeId}) :
+    null;
+  const targetDecision = isNonEmptyNodeId(targetNodeId) ?
+    evaluateTargetNodeDecision({...ctx, nodeId: targetNodeId}) :
+    null;
+  return summarizeMoveCopyDecisions(
+    state, targetNodeId, hardExcludedTargets, sourceDecision, targetDecision,
+  );
+}
+
+function readOwnerReadyNodeInput(owner, nowMs) {
+  const nodeInput = owner?.nodeAuthority ?
+    readPlacementNodeInputs(owner.nodeAuthority, nowMs) :
+    null;
+  return nodeInput?.state === SERVE_ELIGIBILITY_STATE.READY ? nodeInput : null;
+}
+
+function readOwnerStorageExclusionsForMove(owner, readyNodeInput, targetNodeId, nowMs) {
+  const excluded = readyNodeInput && isFunction(owner?.readStorageExcludedTargets) ?
+    owner.readStorageExcludedTargets(readyNodeInput, nowMs) :
+    new Map();
+  if (!excluded.has(targetNodeId) && owner?.storageAccountingService &&
+      typeof targetNodeId === 'string') {
+    const reason = classifyNodeStorageExclusion(
+      owner.storageAccountingService.getCapacitySemanticIdentity(targetNodeId, nowMs),
+    );
+    if (reason !== null) excluded.set(targetNodeId, reason);
+  }
+  return excluded;
+}
+
+function resolveStaticOrStoredControllerCopyLimits(controller, move, excludedReason) {
+  return Object.freeze({
+    kSrc: isFunction(controller?.getSourceBudget) ?
+      controller.getSourceBudget(move.copySourceNodeId) :
+      PLACEMENT_COPY_CAPACITY.K_SRC,
+    kTgt: isFunction(controller?.getTargetBudget) ?
+      controller.getTargetBudget(move.targetNodeId) :
+      PLACEMENT_COPY_CAPACITY.K_TGT,
+    hardAdmissionAllowed: excludedReason === null,
+    reason: excludedReason,
+  });
+}
+
+function resolveOwnerMoveCopyLimits(owner, move, nowMs) {
+  if (!move || !COPY_MOVE_TYPES.has(move.type)) {
+    return Object.freeze({
+      kSrc: PLACEMENT_COPY_CAPACITY.K_SRC,
+      kTgt: PLACEMENT_COPY_CAPACITY.K_TGT,
+      hardAdmissionAllowed: true,
+      reason: null,
+    });
+  }
+  const readyNodeInput = readOwnerReadyNodeInput(owner, nowMs);
+  const storageExcludedTargets = readOwnerStorageExclusionsForMove(
+    owner, readyNodeInput, move.targetNodeId, nowMs,
+  );
+  const controller = owner?.adaptiveBudgetController;
+  if (isFunction(controller?.resolveMoveCopyLimits)) {
+    return controller.resolveMoveCopyLimits({
+      copySourceNodeId: move.copySourceNodeId,
+      targetNodeId: move.targetNodeId,
+      nodeInput: readyNodeInput,
+      storageExcludedTargets,
+      nowMs,
+    });
+  }
+  return resolveStaticOrStoredControllerCopyLimits(
+    controller, move, storageExcludedTargets.get(move.targetNodeId) ?? null,
+  );
 }
 
 export {
@@ -396,7 +548,10 @@ export {
   createControlPlanePlacementNodeObservationReader,
   evaluatePassBudgetsForController,
   isCopyWithinCapacity,
+  readRemoteHeartbeatObservation,
   recordAdmittedCopyOccupancy,
+  resolveMoveCopyLimitsForController,
+  resolveOwnerMoveCopyLimits,
   saturatedTargetsOf,
   sourceLimitOf,
   summarizeCopyOccupancy,

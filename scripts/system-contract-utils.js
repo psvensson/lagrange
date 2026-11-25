@@ -3,9 +3,18 @@ import path from 'node:path';
 
 const ENCODING_UTF8 = 'utf8';
 const EMPTY_TEXT = '';
+const CONCRETE_TEXT_KEYWORD = 'concreteText';
+const JSON_SCHEMA_STRING_TYPE = 'string';
+const JSON_SCHEMA_BOOLEAN_TYPE = 'boolean';
+const CONCRETE_TEXT_ERROR_MESSAGE = 'must be concrete text';
 const PLACEHOLDER_EXACT_PATTERN =
-  /^(?:tbd|placeholder|example|unknown|fill[- ]?me)$/iu;
+  /^(?:tbd|todo|placeholder|example|unknown|fill[- ]?me)$/iu;
 const PLACEHOLDER_MARKER_PATTERN = /<[^>]+>/u;
+const CONCRETE_TEXT_SCHEMA = Object.freeze({
+  type: JSON_SCHEMA_STRING_TYPE,
+  minLength: 1,
+  [CONCRETE_TEXT_KEYWORD]: true,
+});
 
 function isObjectRecord(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -19,6 +28,31 @@ function hasConcreteText(value) {
   return trimmed.length > 0 &&
     !PLACEHOLDER_EXACT_PATTERN.test(trimmed) &&
     !PLACEHOLDER_MARKER_PATTERN.test(trimmed);
+}
+
+function isConcreteText(value) {
+  return hasConcreteText(value);
+}
+
+function registerConcreteTextKeyword(ajvInstance) {
+  ajvInstance.addKeyword({
+    keyword: CONCRETE_TEXT_KEYWORD,
+    type: JSON_SCHEMA_STRING_TYPE,
+    schemaType: JSON_SCHEMA_BOOLEAN_TYPE,
+    error: {
+      message: CONCRETE_TEXT_ERROR_MESSAGE,
+    },
+    validate(schema, data, parentSchema) {
+      if (!schema) {
+        return true;
+      }
+      if (parentSchema?.minLength >= 1 && data.length === 0) {
+        return true;
+      }
+      return isConcreteText(data);
+    },
+  });
+  return ajvInstance;
 }
 
 function readTextFile(filePath) {
@@ -137,8 +171,11 @@ function renderValidationResult(result) {
 }
 
 export {
+  CONCRETE_TEXT_KEYWORD,
+  CONCRETE_TEXT_SCHEMA,
   EMPTY_TEXT,
   hasConcreteText,
+  isConcreteText,
   isObjectRecord,
   listFiles,
   mainResultToExitCode,
@@ -146,6 +183,7 @@ export {
   pathExists,
   readJsonFile,
   readTextFile,
+  registerConcreteTextKeyword,
   relativeToCwd,
   renderValidationResult,
   requireConcreteArray,

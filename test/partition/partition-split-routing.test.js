@@ -318,3 +318,194 @@ test('split routing uses canonical SQLite affectedRows for trim(?) and refuses u
       'without canonical affectedRows, trim(?) refuses instead of misrouting via JS .trim()',
     );
   });
+
+test('split routing settles zero-row mutations (changes: 0, affectedRows: []) as a no-op',
+  async (t) => {
+    const routed = [];
+    const queryExecutor = {
+      async executeOnPartition(partitionId, sql, params) {
+        routed.push({partitionId, sql, params});
+        return {success: true};
+      },
+    };
+    const metadata = createMetadata(PENDING_VERSION);
+    const options = {
+      tableName: 'items',
+      queryExecutor,
+      descriptorEpochEvidence: createDescriptorEvidence(
+        {
+          active_partition_version: ACTIVE_VERSION,
+          pending_partition_version: PENDING_VERSION,
+        },
+        PENDING_VERSION,
+      ),
+    };
+
+    await replaySplitEntry(
+      cloneSplitEntry({
+        sql: 'DELETE FROM items WHERE id = trim(?)',
+        params: ['\tA\t'],
+        changes: 0,
+        affectedRows: [],
+      }),
+      metadata,
+      options,
+    );
+
+    await replaySplitEntry(
+      cloneSplitEntry({
+        sql: 'UPDATE items SET name = ? WHERE id = trim(?)',
+        params: ['none', 'missing'],
+        changes: 0,
+      }),
+      metadata,
+      options,
+    );
+
+    t.same(
+      routed,
+      [],
+      'zero-row mutations require no child writes and must not fall back to SQL expression parsing',
+    );
+  });
+
+test('split routing projects multi-child INSERT, UPDATE, and DELETE mutations to both children with partial-retry idempotency',
+  async (t) => {
+    const leftDb = new Database(':memory:');
+    const rightDb = new Database(':memory:');
+    const createTableSql =
+      'CREATE TABLE items (id TEXT PRIMARY KEY, name TEXT, score INTEGER)';
+    leftDb.exec(createTableSql);
+    rightDb.exec(createTableSql);
+
+    const routed = [];
+    let failRightOnce = false;
+    const queryExecutor = {
+      async executeOnPartition(
+        partitionId,
+        sql,
+        params,
+        _isRead,
+        _waitForCommit,
+        _isTransaction,
+        deliveryOptions,
+      ) {
+        if (partitionId === RIGHT_PARTITION_ID && failRightOnce) {
+          failRightOnce = false;
+          return {success: false, error: 'transient right child failure'};
+        }
+        routed.push({partitionId, sql, params, deliveryOptions});
+        const targetDb =
+          partitionId === LEFT_PARTITION_ID ? leftDb : rightDb;
+        targetDb.prepare(sql).run(...params);
+        return {success: true};
+      },
+    };
+    const metadata = createMetadata(PENDING_VERSION);
+    const options = {
+      tableName: 'items',
+      queryExecutor,
+      descriptorEpochEvidence: createDescriptorEvidence(
+        {
+          active_partition_version: ACTIVE_VERSION,
+          pending_partition_version: PENDING_VERSION,
+        },
+        PENDING_VERSION,
+      ),
+    };
+
+    try {
+      // 1. Multi-child INSERT ... SELECT affecting 2 rows on left and 1 on right
+      const insertEntry = cloneSplitEntry({
+        type: 'WRITE',
+        sql: 'INSERT INTO items (id, name, score) SELECT id, name, score FROM staging',
+        params: [],
+        entryId: 'multi-insert-1',
+        changes: 3,
+        affectedRows: [
+          {id: 'a', name: 'Ada', score: 10},
+          {id: 'b', name: 'Bob', score: 20},
+          {id: 'z', name: 'Zoe', score: 30},
+        ],
+      });
+      failRightOnce = true;
+      await t.rejects(
+        replaySplitEntry(insertEntry, metadata, options),
+        {message: 'transient right child failure'},
+      );
+      t.equal(
+        routed.length,
+        1,
+        'left child succeeded before right child failed',
+      );
+      // Retry with cloned entry preserves settledTargetPartitionIds so left child is not re-sent
+      const retriedInsertEntry = cloneSplitEntry(insertEntry);
+      await replaySplitEntry(retriedInsertEntry, metadata, options);
+      t.equal(
+        routed.length,
+        2,
+        'retry dispatches only the remaining unsettled right child',
+      );
+
+      // 2. Multi-child UPDATE affecting rows in both children
+      await replaySplitEntry(
+        cloneSplitEntry({
+          type: 'UPDATE',
+          sql: 'UPDATE items SET score = score + 5 WHERE score >= ?',
+          params: [10],
+          entryId: 'multi-update-1',
+          changes: 3,
+          affectedRows: [
+            {id: 'a', name: 'Ada', score: 15},
+            {id: 'b', name: 'Bob', score: 25},
+            {id: 'z', name: 'Zoe', score: 35},
+          ],
+        }),
+        metadata,
+        options,
+      );
+
+      t.same(
+        leftDb.prepare('SELECT id, name, score FROM items ORDER BY id').all(),
+        [
+          {id: 'a', name: 'Ada', score: 15},
+          {id: 'b', name: 'Bob', score: 25},
+        ],
+      );
+      t.same(
+        rightDb.prepare('SELECT id, name, score FROM items ORDER BY id').all(),
+        [
+          {id: 'z', name: 'Zoe', score: 35},
+        ],
+      );
+
+      // 3. Multi-child DELETE affecting rows in both children
+      await replaySplitEntry(
+        cloneSplitEntry({
+          type: 'DELETE',
+          sql: 'DELETE FROM items WHERE id = trim(?) OR id = trim(?)',
+          params: [' a ', ' z '],
+          entryId: 'multi-delete-1',
+          changes: 2,
+          affectedRows: [
+            {id: 'a', name: 'Ada', score: 15},
+            {id: 'z', name: 'Zoe', score: 35},
+          ],
+        }),
+        metadata,
+        options,
+      );
+
+      t.same(
+        leftDb.prepare('SELECT id, name, score FROM items ORDER BY id').all(),
+        [{id: 'b', name: 'Bob', score: 25}],
+      );
+      t.same(
+        rightDb.prepare('SELECT id, name, score FROM items ORDER BY id').all(),
+        [],
+      );
+    } finally {
+      leftDb.close();
+      rightDb.close();
+    }
+  });

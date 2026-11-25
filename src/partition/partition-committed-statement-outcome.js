@@ -88,6 +88,23 @@ const COLUMN_LIST_SEPARATOR = ', ';
 const FORMAT_UNSUPPORTED_REMEDY =
   'format is refused, never migrated; re-found the data directory';
 const OWNER_IDENTITY_RULE = 'an owner result is recorded with exactly its command digest';
+const STATEMENT_OUTCOME_EFFECTS_TABLE = '_partition_statement_outcome_effects';
+const STATEMENT_OUTCOME_EFFECTS_SQL = Object.freeze({
+  CREATE_TABLE: `
+    CREATE TABLE IF NOT EXISTS _partition_statement_outcome_effects (
+      entry_key TEXT PRIMARY KEY,
+      affected_rows_json TEXT NOT NULL
+    )
+  `,
+  TABLE_EXISTS:
+    'SELECT 1 AS present FROM sqlite_master WHERE type = \'table\' AND name = ?',
+  INSERT:
+    'INSERT INTO _partition_statement_outcome_effects ' +
+    '(entry_key, affected_rows_json) VALUES (?, ?)',
+  SELECT_BY_ENTRY_KEY:
+    'SELECT affected_rows_json FROM _partition_statement_outcome_effects ' +
+    'WHERE entry_key = ?',
+});
 
 // The same identity is used by apply, replay answers and cold observation.
 // The one key is the command's entryId; a command without one (not a
@@ -221,6 +238,28 @@ const UNSETTLED_RECORD = Object.freeze({
   state: PARTITION_COMMITTED_STATEMENT_RECORD_STATE.UNSETTLED,
 });
 
+function capturedRowEffectsTableExistsIn(db) {
+  return sqliteConnectionState(db)
+    .statement(STATEMENT_OUTCOME_EFFECTS_SQL.TABLE_EXISTS)
+    .get(STATEMENT_OUTCOME_EFFECTS_TABLE) !== undefined;
+}
+
+function readCapturedRowEffectsIn(db, entryKey) {
+  if (!capturedRowEffectsTableExistsIn(db)) {
+    return null;
+  }
+  const row = sqliteConnectionState(db)
+    .statement(STATEMENT_OUTCOME_EFFECTS_SQL.SELECT_BY_ENTRY_KEY)
+    .get(entryKey);
+  if (typeof row?.affected_rows_json !== 'string') {
+    return null;
+  }
+  const parsed = JSON.parse(row.affected_rows_json);
+  return Array.isArray(parsed) ?
+    Object.freeze(parsed.map((item) => Object.freeze({...item}))) :
+    null;
+}
+
 function readCommittedStatementOutcomeIn(db, entryKey) {
   const row = sqliteConnectionState(db)
     .statement(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.SELECT_BY_ENTRY_KEY)
@@ -228,6 +267,7 @@ function readCommittedStatementOutcomeIn(db, entryKey) {
   if (row === undefined) {
     return UNSETTLED_RECORD;
   }
+  const affectedRows = readCapturedRowEffectsIn(db, entryKey);
   return Object.freeze({
     state: PARTITION_COMMITTED_STATEMENT_RECORD_STATE.SETTLED,
     outcome: row.outcome,
@@ -237,6 +277,7 @@ function readCommittedStatementOutcomeIn(db, entryKey) {
     failureMessage: row.failure_message,
     changes: row.changes,
     lastInsertRowid: row.last_insert_rowid,
+    ...(affectedRows === null ? {} : {affectedRows}),
     ...(row.owner_result_text === null ? {} : {ownerResultText: row.owner_result_text,
       commandDigest: row.command_digest}),
   });
@@ -392,8 +433,8 @@ function assertOwnerIdentity(entryKey, ownerResultText, commandDigest) {
 function recordCommittedStatementOutcome(service, {entryKey, outcome, index,
   term, error = null, result = null, ownerResultText = null, commandDigest = null}) {
   assertOwnerIdentity(entryKey, ownerResultText, commandDigest);
-  const insert = sqliteConnectionState(service.db)
-    .statement(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.INSERT);
+  const state = sqliteConnectionState(service.db);
+  const insert = state.statement(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.INSERT);
   insert.run(
     entryKey, outcome, index, term,
     error === null ? null : failureCodeOf(error),
@@ -401,6 +442,16 @@ function recordCommittedStatementOutcome(service, {entryKey, outcome, index,
     result === null ? null : result.changes,
     result === null ? null : result.lastInsertRowid,
     ownerResultText, commandDigest);
+  if (Array.isArray(result?.affectedRows)) {
+    if (!capturedRowEffectsTableExistsIn(service.db)) {
+      service.db.exec(STATEMENT_OUTCOME_EFFECTS_SQL.CREATE_TABLE);
+    }
+    state.runNonApplication(
+      STATEMENT_OUTCOME_EFFECTS_SQL.INSERT,
+      entryKey,
+      JSON.stringify(result.affectedRows),
+    );
+  }
 }
 
 /**

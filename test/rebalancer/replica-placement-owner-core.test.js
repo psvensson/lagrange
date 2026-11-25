@@ -316,7 +316,8 @@ test('the repair reservation is level-triggered and travels in the statement as 
     placementClass: PLACEMENT_CLASS.SYSTEM, repair: false,
     move: {type: OperationType.ADD, targetNodeId: 'n2', copySourceNodeId: 'n1'}},
   {sourceNodeId: 'n1', repairWaitingSourceNodeIds: new Set(['n1']), formationLatchEpoch: 3,
-    membershipPublicationEpoch: null, positions: {nodesEpoch: 9}});
+    membershipPublicationEpoch: null, positions: {nodesEpoch: 9},
+    kSrc: PLACEMENT_COPY_CAPACITY.K_SRC, kTgt: PLACEMENT_COPY_CAPACITY.K_TGT});
   assert.equal(statement.kSrcForClass, kSrc - 1);
   assert.equal(statement.kTgt, PLACEMENT_COPY_CAPACITY.K_TGT);
 });
@@ -326,7 +327,8 @@ test('the canonical statement refuses what its kind cannot carry', () => {
     placementClass: PLACEMENT_CLASS.SYSTEM, repair: false,
     move: {type: OperationType.ADD, targetNodeId: 'n2', copySourceNodeId: 'n1'}},
   {sourceNodeId: 'n1', repairWaitingSourceNodeIds: new Set(), formationLatchEpoch: 3,
-    membershipPublicationEpoch: 5, positions: {}});
+    membershipPublicationEpoch: 5, positions: {},
+    kSrc: PLACEMENT_COPY_CAPACITY.K_SRC, kTgt: PLACEMENT_COPY_CAPACITY.K_TGT});
   assert.deepEqual(canonicalPlacementStatement(JSON.parse(JSON.stringify(valid))),
     {validity: PLACEMENT_STATEMENT_VALIDITY.VALID, statement: valid});
   const invalid = {validity: PLACEMENT_STATEMENT_VALIDITY.INVALID};
@@ -345,6 +347,12 @@ test('the canonical statement refuses what its kind cannot carry', () => {
     placementClass: PLACEMENT_CLASS.SYSTEM, repair: false,
     move: {type: OperationType.ADD, targetNodeId: 'n2', copySourceNodeId: 'n1'}},
   {sourceNodeId: 'n1', repairWaitingSourceNodeIds: new Set(), formationLatchEpoch: null,
+    membershipPublicationEpoch: null, positions: {},
+    kSrc: PLACEMENT_COPY_CAPACITY.K_SRC, kTgt: PLACEMENT_COPY_CAPACITY.K_TGT}), /statement_invalid/u);
+  assert.throws(() => buildPlacementAdmissionStatement({partitionId: 'config-p1',
+    placementClass: PLACEMENT_CLASS.SYSTEM, repair: false,
+    move: {type: OperationType.ADD, targetNodeId: 'n2', copySourceNodeId: 'n1'}},
+  {sourceNodeId: 'n1', repairWaitingSourceNodeIds: new Set(), formationLatchEpoch: 3,
     membershipPublicationEpoch: null, positions: {}}), /statement_invalid/u);
   const founding = buildFoundingAdmissionStatement({partitionId: 'tbl-x-p1',
     placementClass: PLACEMENT_CLASS.USER, foundingIntentId: 'job:tbl-x-p1',
@@ -906,6 +914,8 @@ test('P3 & P5: createReplicaPlacementOwner validates required and optional colla
       formationLatchEpoch: 3,
       membershipPublicationEpoch: null,
       positions: {nodesEpoch: 9},
+      kSrc: PLACEMENT_COPY_CAPACITY.K_SRC,
+      kTgt: PLACEMENT_COPY_CAPACITY.K_TGT,
     };
     const built = buildPlacementAdmissionStatement(mutableCandidate, mutableContext);
     const mutableBody = structuredClone(built);

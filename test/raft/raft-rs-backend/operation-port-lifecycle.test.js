@@ -217,3 +217,69 @@ test('a durable Raft record without a matching lifecycle record fails closed',
       cluster.dispose();
     }
   });
+
+test('failed opening cancels recovery timers and releases half-opened state', () => {
+  const cluster = new PartitionNodeCluster({
+    partitionId: 'failed-opening-timer-cleanup',
+    replicaIds: ['cleanup-replica'],
+  });
+  try {
+    const replica = cluster.replica('cleanup-replica');
+    const request = replica.request;
+    const registry = new RaftRsPeerIdentityRegistry(replica.db);
+    const activeTimers = new Set();
+    let nextTimerId = 1;
+    const timers = {
+      now: () => 1000,
+      setTimeout: (_fn, _delayMs) => {
+        const id = nextTimerId++;
+        activeTimers.add(id);
+        return id;
+      },
+      clearTimeout: (id) => {
+        activeTimers.delete(id);
+      },
+    };
+    const peerId = registry.raftPeerIdOf(replica.replicaId);
+    assert.throws(
+      () =>
+        createRuntimeDispatcher({
+          readOpeningHistory: () => 'never-opened',
+          recordOpeningHistory: () => {
+            throw new Error('simulated bootstrap history persistence failure');
+          },
+          holdForReseed: () => undefined,
+          database: replica.db,
+          groupId: 'failed-opening-fresh-group',
+          replicaIdentity: replica.replicaId,
+          peerId,
+          bootstrap: {
+            voters: [peerId],
+            learners: [],
+            joiningExistingGroup: false,
+            identityExisted: false,
+          },
+          timing: request[RAFT_OPERATION_PORT_REQUEST.TIMING],
+          timers,
+          sendToPeer: request[RAFT_OPERATION_PORT_REQUEST.SEND_TO_PEER],
+          resolvePeerAddress: () => cluster.addressOf(replica.replicaId),
+          resolvePeerIdentity: () => ({status: 'reserved', replicaIdentity: replica.replicaId}),
+          applyCommittedEntry:
+            request[RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY],
+          applyTransactionRolledBack: request[
+            RAFT_OPERATION_PORT_REQUEST.APPLY_TRANSACTION_ROLLED_BACK],
+          admitScheduledEntry: (work) => work(),
+          emit: () => undefined,
+        }),
+      (err) => err?.consensus?.outcome === 'HOST_FAILURE' &&
+        err?.consensus?.phase === 'bootstrap-persistence',
+    );
+    assert.equal(
+      activeTimers.size,
+      0,
+      'failed opening must cancel any recovery timer armed during partial initialization',
+    );
+  } finally {
+    cluster.dispose();
+  }
+});

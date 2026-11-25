@@ -332,5 +332,52 @@ tap.test('compiled Ajv schemas enforce strict additionalProperties on statechart
   const statechartErrors = validateStatecharts([statechartFile]).errors;
   t.ok(statechartErrors.some((err) => err.includes('unsupported property extraRootField')));
   t.ok(statechartErrors.some((err) => err.includes('states[0] contains unsupported property extraStateField')));
+
+  t.equal(validateDecisionTableSchema({...validTable, owner: '   '}), false);
+  t.equal(
+    validateDecisionTableSchema({
+      ...validTable,
+      rules: [{...validRule, reason: '<fill-me>'}],
+    }),
+    false,
+  );
+  fs.writeFileSync(
+    tableFile,
+    JSON.stringify({
+      ...validTable,
+      owner: '   ',
+      rules: [{...validRule, reason: '<fill-me>'}],
+    }),
+  );
+  const nonConcreteTableErrors = validateDecisionTables([tableFile]).errors;
+  t.ok(nonConcreteTableErrors.some((err) => err.includes('owner must be concrete text.')));
+  t.ok(nonConcreteTableErrors.some((err) => err.includes('rules[0].reason must be concrete text.')));
+
+  t.equal(validateStatechartSchema({...validStatechart, id: '   '}), false);
+  t.equal(
+    validateStatechartSchema({
+      ...validStatechart,
+      transitions: [
+        {from: 'idle', event: 'finish', to: 'done', evidence: '<fill-me>'},
+      ],
+    }),
+    false,
+  );
+  fs.writeFileSync(
+    statechartFile,
+    JSON.stringify({
+      ...validStatechart,
+      id: '   ',
+      transitions: [
+        {from: 'idle', event: 'finish', to: 'done', evidence: '<fill-me>'},
+      ],
+    }),
+  );
+  const nonConcreteStatechartErrors = validateStatecharts([statechartFile]).errors;
+  t.ok(nonConcreteStatechartErrors.some((err) => err.includes('id must be concrete text.')));
+  t.ok(
+    nonConcreteStatechartErrors.some((err) =>
+      err.includes('transitions[0].evidence must be concrete text.')),
+  );
   t.end();
 });

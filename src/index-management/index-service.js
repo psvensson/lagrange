@@ -357,19 +357,42 @@ class IndexService {
 
   canWriteSystemTable() {
     return Boolean(
+      this.controlPlaneSystemTableGateway?.supportsMutationSubmission?.() ||
       this.controlPlaneSystemTableGateway?.resolveCdcIntegrationService?.() ||
       this.cdcIntegrationService,
     );
   }
 
-  async persistIndexMetadata(metadata) {
+  requirePersistIndexWriteGateway({allowSubmitMutation = false} = {}) {
     const gateway = this.getControlPlaneSystemTableGateway();
-    if (!this.canWriteSystemTable() || !gateway?.insertSystemTableRow) {
+    const hasWriteMethod = Boolean(
+      gateway?.insertSystemTableRow || (allowSubmitMutation && gateway?.submitMutation),
+    );
+    if (!this.canWriteSystemTable() || !hasWriteMethod) {
       throw createUnavailableError(
         GLOBAL_INDEX_ERROR_CODE.DEPENDENCY_UNAVAILABLE,
         PERSIST_INDEX_WRITE_AUTHORITY_UNAVAILABLE_MSG,
       );
     }
+    return gateway;
+  }
+
+  requireDeleteIndexWriteGateway({allowSubmitMutation = false} = {}) {
+    const gateway = this.getControlPlaneSystemTableGateway();
+    const hasDeleteMethod = Boolean(
+      gateway?.deleteSystemTableRow || (allowSubmitMutation && gateway?.submitMutation),
+    );
+    if (!this.canWriteSystemTable() || !hasDeleteMethod) {
+      throw createUnavailableError(
+        GLOBAL_INDEX_ERROR_CODE.DEPENDENCY_UNAVAILABLE,
+        DELETE_INDEX_WRITE_AUTHORITY_UNAVAILABLE_MSG,
+      );
+    }
+    return gateway;
+  }
+
+  async persistIndexMetadata(metadata) {
+    const gateway = this.requirePersistIndexWriteGateway();
     const {indexId, tableId, indexName, columnNames, indexType, unique, createdAt} = metadata;
     await gateway.insertSystemTableRow(
       TABLES.INDICES,
@@ -410,6 +433,7 @@ class IndexService {
    */
   async createIndex(sqlOrAst, options = {}) {
     if (this._isGlobalIndexCreation(sqlOrAst, options)) {
+      this.requirePersistIndexWriteGateway({allowSubmitMutation: true});
       return this._createGlobalIndexEntry(sqlOrAst, options);
     }
     const normalized = await this.normalizeCreateIndexOptions(sqlOrAst);
@@ -433,6 +457,7 @@ class IndexService {
     }
 
     await this.validateIndexCreation({tableId, tableName, columnNames, unique});
+    this.requirePersistIndexWriteGateway();
 
     const indexId = `idx-${uuidv4()}`;
     const createdAt = Date.now();
@@ -553,13 +578,7 @@ class IndexService {
   }
 
   async deleteIndexMetadata(indexMetadata, resolvedTableId, indexName) {
-    const gateway = this.getControlPlaneSystemTableGateway();
-    if (!this.canWriteSystemTable() || !gateway?.deleteSystemTableRow) {
-      throw createUnavailableError(
-        GLOBAL_INDEX_ERROR_CODE.DEPENDENCY_UNAVAILABLE,
-        DELETE_INDEX_WRITE_AUTHORITY_UNAVAILABLE_MSG,
-      );
-    }
+    const gateway = this.requireDeleteIndexWriteGateway();
     const whereClause = {table_id: resolvedTableId, index_name: indexName};
     if (indexMetadata?.indexId) {
       whereClause.index_id = indexMetadata.indexId;
@@ -626,6 +645,7 @@ class IndexService {
       (await this.findIndexByName(indexName));
 
     if (this._isGlobalIndexDrop(indexMetadata, indexName)) {
+      this.requireDeleteIndexWriteGateway({allowSubmitMutation: true});
       return this._dropGlobalIndexEntry(indexName, indexMetadata, tableId, {ifExists});
     }
 
@@ -636,6 +656,7 @@ class IndexService {
       this._throwIndexNotFound(indexName, tableId);
     }
 
+    this.requireDeleteIndexWriteGateway();
     return this._dropLocalIndexEntry(indexName, indexMetadata, tableId);
   }
 
@@ -675,34 +696,21 @@ class IndexService {
     return null;
   }
 
-  /**
-   * Get index metadata by name across all cached tables.
-   * @param {string} indexName - Index name.
-   * @return {Object|null} Index metadata or null.
-   */
   getIndexByName(indexName) {
     if (!indexName) return null;
     for (const tableIndices of this.indexCache.values()) {
-      if (tableIndices.has(indexName)) {
-        return tableIndices.get(indexName);
-      }
+      if (tableIndices.has(indexName)) return tableIndices.get(indexName);
     }
     return null;
   }
 
-  /**
-   * Get all indices for a table.
-   * @param {string} tableId - Table ID or table name.
-   * @return {Array<Object>} Array of index metadata.
-   */
   getIndicesForTable(tableId) {
     const results = [];
     if (this.indexCache.has(tableId)) {
       results.push(...this.indexCache.get(tableId).values());
     }
     if (this.globalIndexCoordinator?.getIndexesForTable) {
-      const globalIndexes = this.globalIndexCoordinator.getIndexesForTable(tableId);
-      for (const gi of globalIndexes) {
+      for (const gi of this.globalIndexCoordinator.getIndexesForTable(tableId)) {
         const name = gi.index_name || gi.indexName;
         if (!results.some((r) => r.indexName === name)) {
           results.push(this._catalogToMetadata(gi));
@@ -712,10 +720,6 @@ class IndexService {
     return results;
   }
 
-  /**
-   * Get all indices in the system.
-   * @return {Array<Object>} Array of all index metadata.
-   */
   getAllIndices() {
     const indices = [];
     for (const tableIndices of this.indexCache.values()) {
@@ -724,22 +728,12 @@ class IndexService {
     return indices;
   }
 
-  /**
-   * Get total index count.
-   * @return {number} Total number of indices.
-   */
   getTotalIndexCount() {
     let count = 0;
-    for (const tableIndices of this.indexCache.values()) {
-      count += tableIndices.size;
-    }
+    for (const tableIndices of this.indexCache.values()) count += tableIndices.size;
     return count;
   }
 
-  /**
-   * Set the system table cache.
-   * @param {Object} cache - System table cache.
-   */
   setSystemTableCache(cache) {
     this.systemTableCache = cache;
     this._attachSystemTableCacheListener();

@@ -81,9 +81,10 @@ function roundToTwo(value) {
     RESOURCE_DIAGNOSTICS_DEFAULT.PERCENT_FACTOR;
 }
 
-function readProcessEventLoopDelayMs() {
-  const meanNs = processEventLoopDelayHistogram.mean;
-  if (!Number.isFinite(meanNs) || meanNs < 0) return 0;
+function readIntervalEventLoopDelayMs(histogram) {
+  const meanNs = histogram.mean;
+  histogram.reset();
+  if (!Number.isFinite(meanNs) || meanNs <= 0) return 0;
   const delayMs = Math.max(
     0,
     (meanNs / NANOS_PER_MILLISECOND) - EVENT_LOOP_DELAY_RESOLUTION_MS,
@@ -136,9 +137,16 @@ class ResourceDiagnosticsSampler {
     this.cpuUsageFn = options.cpuUsageFn ?? (() => process.cpuUsage());
     this.cpusFn = options.cpusFn ?? (() => os.cpus());
     this.eluFn = options.eluFn ?? defaultEluSample;
-    this.eventLoopDelayProvider =
-      options.eventLoopDelayProvider ?? readProcessEventLoopDelayMs;
+    this.eventLoopDelayHistogram = options.eventLoopDelayProvider ?
+      null :
+      monitorEventLoopDelay({resolution: EVENT_LOOP_DELAY_RESOLUTION_MS});
+    this.eventLoopDelayHistogram?.enable();
+    this.eventLoopDelayProvider = options.eventLoopDelayProvider ??
+      (() => readIntervalEventLoopDelayMs(
+        this.eventLoopDelayHistogram || processEventLoopDelayHistogram,
+      ));
 
+    this.nextSampleId = 0;
     this.samples = [];
     this.lastReport = null;
     this.lastReportTimestampMs = null;
@@ -166,6 +174,7 @@ class ResourceDiagnosticsSampler {
     const trend = this.buildTrendReport();
     const report = {
       nodeId: this.nodeId,
+      sampleId: latestSample.sampleId,
       sampleCount: this.samples.length,
       historyLimit: this.historyLimit,
       trendWindowSamples: this.trendWindowSamples,
@@ -273,8 +282,10 @@ class ResourceDiagnosticsSampler {
 
     const componentStats = this.collectComponentStats();
     const componentSignals = this.flattenComponentSignals(componentStats);
+    this.nextSampleId += 1;
 
     const sample = {
+      sampleId: this.nextSampleId,
       timestamp: nowMs,
       uptimeSec: process.uptime(),
       process: {
@@ -329,6 +340,7 @@ class ResourceDiagnosticsSampler {
    */
   buildPublicSample(sample) {
     return {
+      sampleId: sample.sampleId,
       timestamp: sample.timestamp,
       uptimeSec: roundToTwo(sample.uptimeSec),
       process: {

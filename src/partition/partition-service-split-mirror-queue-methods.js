@@ -210,6 +210,12 @@ class PartitionServiceSplitMirrorQueueMethods {
     }
     try {
       await this.replaySplitEntry(entry, splitReplication.metadata);
+      if (Number.isSafeInteger(entry.logIndex) && entry.logIndex > 0) {
+        splitReplication.replayWatermarkIndex = Math.max(
+          Number(splitReplication.replayWatermarkIndex) || 0,
+          entry.logIndex,
+        );
+      }
     } catch (error) {
       splitReplication.pendingEntries.push(this.cloneSplitEntry(entry));
       splitReplication.lastError = error.message;

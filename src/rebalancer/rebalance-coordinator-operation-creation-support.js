@@ -42,6 +42,9 @@ import {
   buildRuntimeServiceAdmissionStatement,
   matchesCommittedSinglePlacementStatement,
 } from './replica-placement-owner-admission-statement.js';
+import {
+  resolveOwnerMoveCopyLimits,
+} from './replica-placement-owner-capacity.js';
 import {classifyPlacementClass, formationWaitingReasonOf} from
   './replica-placement-owner-order.js';
 import {COLLABORATOR, invalidCollaborator} from './replica-placement-owner-collaborators.js';
@@ -518,6 +521,24 @@ const operationCreationSupportMethods = {
     return operation;
   },
 
+  resolveActiveReplicaPlacementOwner() {
+    if (this.replicaPlacementOwner) return this.replicaPlacementOwner;
+    const localLeader = this.resolveActiveLocalLedgerLeaderService();
+    return localLeader?.rebalancerLeadershipSink ?? null;
+  },
+
+  resolveAdaptiveCopyLimitsForMove(placementMove, partitionId) {
+    const nowMs = this.timeSource ? this.timeSource.now() : Date.now();
+    const owner = this.resolveActiveReplicaPlacementOwner();
+    const copyLimits = resolveOwnerMoveCopyLimits(owner || this, placementMove, nowMs);
+    if (copyLimits.hardAdmissionAllowed === false) {
+      throwRuntimeServicePlacementError(partitionId, null, {
+        reason: copyLimits.reason || PLACEMENT_ADMISSION_REFUSED_CODE,
+      });
+    }
+    return copyLimits;
+  },
+
   async createPartitionOperationViaPlacementAdmission(context) {
     const {requestedMove: move, normalizedMoveType, partitionId} = context;
     const requestsPhysicalReplica =
@@ -544,6 +565,7 @@ const operationCreationSupportMethods = {
       }
       placementMove.voterRetirement = scope;
     }
+    const copyLimits = this.resolveAdaptiveCopyLimitsForMove(placementMove, partitionId);
     const placementClass = classifyPlacementClass(partitionId);
     const statement = buildPlacementAdmissionStatement(
       {
@@ -559,6 +581,8 @@ const operationCreationSupportMethods = {
           this.resolveFormationLatchEpochForPlacement(placementClass, partitionId),
         membershipPublicationEpoch: move.membershipPublicationEpoch ?? null,
         positions: move?.positions || {},
+        kSrc: copyLimits.kSrc,
+        kTgt: copyLimits.kTgt,
       },
     );
     return this.commitSingleCreatedPlacementOperation(
@@ -637,7 +661,14 @@ const operationCreationSupportMethods = {
     }
     this.registerLedgerPartitionService(ledgerPartitionService);
     if (this.replicaPlacementOwnerFactory === null) return null;
-    return this.replicaPlacementOwnerFactory(ledgerPartitionService);
+    const attachment = this.replicaPlacementOwnerFactory(ledgerPartitionService);
+    if (attachment?.owner) {
+      this.replicaPlacementOwner = attachment.owner;
+      if (attachment.owner.adaptiveBudgetController) {
+        this.adaptiveBudgetController = attachment.owner.adaptiveBudgetController;
+      }
+    }
+    return attachment;
   },
 
   async releaseBootstrapTopologyDispatchHold(operationId, stamp) {

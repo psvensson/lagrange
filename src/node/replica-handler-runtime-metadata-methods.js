@@ -82,6 +82,7 @@ function assignReplicaHandlerRuntimeMetadataMethods(
             throw error;
           }
           lastError = error;
+          const priorHydratedCount = metadataHydrationCount;
           const hydratedRows =
             await this.hydrateMetadataFromAuthority(partitionId);
           metadataHydrationCount += hydratedRows;
@@ -98,7 +99,7 @@ function assignReplicaHandlerRuntimeMetadataMethods(
             );
             metadataWaitLogged = true;
           }
-          if (hydratedRows > 0 && Date.now() <= deadline) {
+          if (priorHydratedCount === 0 && hydratedRows > 0 && Date.now() <= deadline) {
             continue;
           }
         }

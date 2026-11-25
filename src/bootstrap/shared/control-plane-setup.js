@@ -55,6 +55,9 @@ import {
   attachReplicaPlacementOwner,
 } from '../../rebalancer/replica-placement-owner.js';
 import {
+  createAdaptivePlacementBudgetController,
+} from '../../rebalancer/replica-placement-adaptive-budget.js';
+import {
   createControlPlanePlacementNodeObservationReader,
 } from '../../rebalancer/replica-placement-owner-capacity.js';
 import {
@@ -99,6 +102,13 @@ const CONTROL_PLANE_SETUP_SUBSYSTEM =
 const CONTROL_PLANE_SETUP_NAME = 'ControlPlaneSetup';
 const TYPEOF_FUNCTION = 'function';
 const NUMERIC_ZERO = 0;
+const CONTROL_PLANE_ADAPTIVE_WINDOW_LIMIT = Object.freeze({
+  MIN_LIMIT: 1,
+  SOURCE_INITIAL_LIMIT: 4,
+  SOURCE_MAX_LIMIT: 5,
+  TARGET_INITIAL_LIMIT: 2,
+  TARGET_MAX_LIMIT: 3,
+});
 const INSTALLABLE_SERVICE_COMPONENT_CACHE_DIR =
   'installable-service-components';
 
@@ -430,37 +440,42 @@ class ControlPlaneSetup {
       resourceDiagnosticsSampler: placementDiagnosticsSampler,
       systemTableCache,
     });
+    const adaptiveBudgetOptions = {
+      readNodeObservation,
+      sourceWindow: {
+        initialLimit: CONTROL_PLANE_ADAPTIVE_WINDOW_LIMIT.SOURCE_INITIAL_LIMIT,
+        minLimit: CONTROL_PLANE_ADAPTIVE_WINDOW_LIMIT.MIN_LIMIT,
+        maxLimit: CONTROL_PLANE_ADAPTIVE_WINDOW_LIMIT.SOURCE_MAX_LIMIT,
+      },
+      targetWindow: {
+        initialLimit: CONTROL_PLANE_ADAPTIVE_WINDOW_LIMIT.TARGET_INITIAL_LIMIT,
+        minLimit: CONTROL_PLANE_ADAPTIVE_WINDOW_LIMIT.MIN_LIMIT,
+        maxLimit: CONTROL_PLANE_ADAPTIVE_WINDOW_LIMIT.TARGET_MAX_LIMIT,
+      },
+    };
+    const adaptiveBudgetController =
+      createAdaptivePlacementBudgetController(adaptiveBudgetOptions);
+    rebalanceCoordinator.adaptiveBudgetController = adaptiveBudgetController;
     rebalanceCoordinator.bindReplicaPlacementOwnerFactory(
       ControlPlaneSetup.createReplicaPlacementOwnerFactory({
-        nodeId,
-        controlPlaneReadinessService,
-        rebalanceCoordinator,
-        systemTableCache,
-        storageAccountingService,
-        adaptiveBudgetOptions: {readNodeObservation},
+        nodeId, controlPlaneReadinessService, rebalanceCoordinator,
+        systemTableCache, storageAccountingService,
+        adaptiveBudgetController, adaptiveBudgetOptions,
       }),
     );
 
     const systemMetadataOwners = createSystemMetadataOwners({
-      controlPlaneSystemTableGateway,
-      systemTableCache,
+      controlPlaneSystemTableGateway, systemTableCache,
     });
     const serviceLifecycleCommandOwner =
       createAndWireServiceLifecycleCommandOwner(
-        options,
-        controlPlaneRuntimeBundle,
-        systemMetadataOwners,
+        options, controlPlaneRuntimeBundle, systemMetadataOwners,
       );
     const membershipPublicationRuntimeOwner =
       new MembershipPublicationRuntimeOwner({
-        nodeId,
-        cdcIntegrationService,
-        systemTableCache,
-        messageRouter,
-        controlPlaneSystemTableGateway,
-        systemMetadataOwners,
-        controlPlaneWriteRetryTimeoutMs,
-        controlPlaneWriteRetryBaseDelayMs,
+        nodeId, cdcIntegrationService, systemTableCache, messageRouter,
+        controlPlaneSystemTableGateway, systemMetadataOwners,
+        controlPlaneWriteRetryTimeoutMs, controlPlaneWriteRetryBaseDelayMs,
         controlPlaneWriteRetryMaxDelayMs,
       });
     // FD-upgrade (cutover §5 step 3): the SWIM failure detector runtime, built

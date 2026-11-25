@@ -323,11 +323,24 @@ test('J5 Step 1: Reject CREATE UNIQUE GLOBAL INDEX with UNSUPPORTED_SQL_FEATURE 
       },
     ],
   );
+  const mockCdcService = {
+    async insertSystemTableRow() {
+      return {success: true};
+    },
+    async updateSystemTableRow() {
+      return {success: true};
+    },
+    async deleteSystemTableRow() {
+      return {success: true};
+    },
+  };
   const indexService = new IndexService({
+    cdcIntegrationService: mockCdcService,
     globalIndexCoordinator: cluster.coordinator,
   });
   const engine = new SQLQueryEngine({
     controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    cdcIntegrationService: mockCdcService,
     systemCache: cache,
     indexService,
     messageRouter: createMockMessageRouter(),
@@ -888,11 +901,24 @@ test('J5 Step 10: Public SQL CREATE GLOBAL INDEX & DROP INDEX end-to-end wiring'
       },
     ],
   );
+  const mockCdcService = {
+    async insertSystemTableRow() {
+      return {success: true};
+    },
+    async updateSystemTableRow() {
+      return {success: true};
+    },
+    async deleteSystemTableRow() {
+      return {success: true};
+    },
+  };
   const indexService = new IndexService({
+    cdcIntegrationService: mockCdcService,
     globalIndexCoordinator: cluster.coordinator,
   });
   const engine = new SQLQueryEngine({
     controlPlaneReadinessService: createCommittedServeEligibilityOwner(),
+    cdcIntegrationService: mockCdcService,
     systemCache: cache,
     indexService,
     messageRouter: createMockMessageRouter(),

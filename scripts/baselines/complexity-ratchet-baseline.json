@@ -933,7 +933,7 @@
   "src/rebalancer/replica-placement-owner-admission-statement.js::Function 'matchesCommittedSinglePlacementStatement'#1": 19,
   "src/rebalancer/replica-placement-owner-admission-statement.js::Function 'moveOf'#1": 14,
   "src/rebalancer/replica-placement-owner-deficits.js::Function 'classifyServiceRow'#1": 17,
-  "src/rebalancer/replica-placement-owner.js::Async method 'submitPlacementAttempt'#1": 20,
+  "src/rebalancer/replica-placement-owner.js::Async method 'submitPlacementAttempt'#1": 13,
   "src/rebalancer/replica-status.js::Function 'preserveOperationTargetNodeIncarnations'#1": 16,
   "src/rebalancer/replica-status.js::Function 'resolveTargetNodeIncarnationSnapshot'#1": 21,
   "src/rebalancer/storage-admission-service.js::Async method 'evaluateProvisioning'#1": 16,

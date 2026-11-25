@@ -6,8 +6,11 @@
 // Representative production tests: test/rebalancer/replica-placement-adaptive-budget.test.js, test/rebalancer/replica-placement-owner-core.test.js.
 import {PLACEMENT_COPY_CAPACITY} from
   './replica-placement-owner-constants.js';
-import {evaluatePassBudgetsForController} from
-  './replica-placement-owner-capacity.js';
+import {
+  evaluatePassBudgetsForController,
+  readRemoteHeartbeatObservation,
+  resolveMoveCopyLimitsForController,
+} from './replica-placement-owner-capacity.js';
 
 const PLACEMENT_ADAPTIVE_WINDOW_ACTION = Object.freeze({
   INCREASE: 'INCREASE',
@@ -18,6 +21,7 @@ const PLACEMENT_ADAPTIVE_WINDOW_ACTION = Object.freeze({
 
 const PLACEMENT_ADAPTIVE_OBSERVATION_STATE = Object.freeze({
   FRESH: 'FRESH',
+  INCOMPLETE: 'INCOMPLETE',
   STALE: 'STALE',
   UNAVAILABLE: 'UNAVAILABLE',
 });
@@ -28,6 +32,7 @@ const PLACEMENT_ADAPTIVE_BUDGET_REASON = Object.freeze({
   HARD_MEMORY_LIMIT_REACHED: 'HARD_MEMORY_LIMIT_REACHED',
   HARD_STORAGE_LIMIT_REACHED: 'HARD_STORAGE_LIMIT_REACHED',
   OBSERVATION_UNAVAILABLE: 'OBSERVATION_UNAVAILABLE',
+  OBSERVATION_INCOMPLETE: 'OBSERVATION_INCOMPLETE',
   OBSERVATION_STALE: 'OBSERVATION_STALE',
   OBSERVATION_BOOT_INCARNATION_MISMATCH:
     'OBSERVATION_BOOT_INCARNATION_MISMATCH',
@@ -99,6 +104,41 @@ const MAX_CONFIGURABLE_INTERVAL_MS = 600_000;
 const MAX_CONFIGURABLE_HEALTHY_SAMPLES = 20;
 const ROLE_SOURCE = 'source';
 const ROLE_TARGET = 'target';
+const SAMPLE_ID_PREFIX = 'sample:';
+const TIMESTAMP_ID_PREFIX = 'ts:';
+
+function resolveObservationSampleIdentity(observation) {
+  if (!observation || typeof observation !== 'object') return null;
+  if (observation.sampleId !== undefined && observation.sampleId !== null) {
+    return `${SAMPLE_ID_PREFIX}${observation.sampleId}`;
+  }
+  const sampledAtMs = Number(observation.sampledAtMs);
+  return Number.isFinite(sampledAtMs) ? `${TIMESTAMP_ID_PREFIX}${sampledAtMs}` : null;
+}
+
+function hasLivePressureSensor(observation) {
+  if (!observation || typeof observation !== 'object') return false;
+  const directSensors = [
+    observation.singleCoreCpuPercent,
+    observation.eventLoopDelayMs,
+    observation.eventLoopUtilizationPercent,
+    observation.writeLatencyMs,
+    observation.initQueueDelayMs,
+    observation.transferQueueDelayMs,
+  ];
+  if (directSensors.some((val) => Number.isFinite(Number(val)))) {
+    return true;
+  }
+  return Number.isFinite(Number(observation.stageDurationMs)) &&
+    Number(observation.stageDurationMs) > 0 &&
+    Number.isFinite(Number(observation.operationBytes));
+}
+
+function isObservationCompleteForGrowth(observation) {
+  if (!observation || typeof observation !== 'object') return false;
+  if (observation.pressureSensorsComplete === false) return false;
+  return hasLivePressureSensor(observation);
+}
 
 function clampInteger(value, minValue, maxValue, defaultValue) {
   const num = Number(value);
@@ -141,9 +181,11 @@ function createInitialResourceWindowState(config, bootIncarnation = null) {
   return Object.freeze({
     limit: config.initialLimit,
     bootIncarnation,
+    hardAdmissionAllowed: true,
     lastAdjustedAtMs: null,
     lastDecreasedAtMs: null,
     lastCongestionEpochId: null,
+    lastSampleIdentity: null,
     lastSampledAtMs: null,
     healthySamplesSinceDecrease: config.requiredHealthySamplesAfterDecrease,
   });
@@ -183,12 +225,17 @@ function isMetricStrictlyAbove(rawValue, threshold) {
 }
 
 function isSingleCoreCpuQueueCongested(observation, thresholds) {
-  if (!isMetricAtOrAbove(
-    observation.singleCoreCpuPercent,
-    thresholds.congestionSingleCoreCpuPercent,
-  )) {
+  const cpuPercent = Number.isFinite(Number(observation.singleCoreCpuPercent)) ?
+    Number(observation.singleCoreCpuPercent) :
+    Number(observation.cpuUsagePercent);
+  if (!isMetricAtOrAbove(cpuPercent, thresholds.congestionSingleCoreCpuPercent)) {
     return false;
   }
+  const hasQueueSensor =
+    Number.isFinite(Number(observation.eventLoopDelayMs)) ||
+    Number.isFinite(Number(observation.initQueueDelayMs)) ||
+    Number.isFinite(Number(observation.transferQueueDelayMs));
+  if (!hasQueueSensor) return true;
   return isMetricStrictlyAbove(
     observation.eventLoopDelayMs,
     thresholds.healthyEventLoopDelayMs,
@@ -245,18 +292,27 @@ function isObservationWithinHealthyGrowthBand(observation, thresholds) {
     [observation.writeLatencyMs, thresholds.healthyWriteLatencyMs],
     [observation.transferQueueDelayMs, thresholds.healthyTransferQueueDelayMs],
   ];
+  let hasMeasuredLoadSignal = false;
   for (const [rawVal, maxHealthy] of checks) {
     const val = Number(rawVal);
-    if (Number.isFinite(val) && val > maxHealthy) return false;
+    if (Number.isFinite(val)) {
+      hasMeasuredLoadSignal = true;
+      if (val > maxHealthy) return false;
+    }
   }
   const singleCoreCpu = Number(observation.singleCoreCpuPercent);
   const eventLoopDelayMs = Number(observation.eventLoopDelayMs);
-  if (
-    Number.isFinite(singleCoreCpu) &&
-    singleCoreCpu > thresholds.healthySingleCoreCpuPercent &&
-    Number.isFinite(eventLoopDelayMs) &&
-    eventLoopDelayMs > thresholds.healthyEventLoopDelayMs / 2
-  ) {
+  if (Number.isFinite(singleCoreCpu)) {
+    hasMeasuredLoadSignal = true;
+    if (
+      singleCoreCpu > thresholds.healthySingleCoreCpuPercent &&
+      (!Number.isFinite(eventLoopDelayMs) ||
+        eventLoopDelayMs > thresholds.healthyEventLoopDelayMs / 2)
+    ) {
+      return false;
+    }
+  }
+  if (!hasMeasuredLoadSignal && !Number.isFinite(Number(observation.stageDurationMs))) {
     return false;
   }
   return observation.backpressured !== true;
@@ -300,59 +356,60 @@ function buildWindowDecision({
     reason,
     hardAdmissionAllowed,
     observationState,
-    nextState: Object.freeze({...nextState, limit}),
+    nextState: Object.freeze({...nextState, limit, hardAdmissionAllowed}),
   });
 }
 
-function applyCongestionDecrease(state, observation, nowMs, congestionReason, config) {
-  const episodeId = observation.congestionEpochId ?? observation.sampledAtMs ?? null;
-  const sameEpisode =
-    episodeId !== null && state.lastCongestionEpochId === episodeId;
-  const withinCooldownWithoutNewEpisode =
-    episodeId === null &&
+function hasExplicitDistinctCongestionEpoch(observation) {
+  const epochId = observation?.congestionEpochId;
+  if (epochId === undefined || epochId === null) return false;
+  return epochId !== observation.sampleId && epochId !== observation.sampledAtMs;
+}
+
+function resolveCongestionEpisodeId(observation) {
+  return observation.congestionEpochId ?? observation.sampleId ?? observation.sampledAtMs ?? null;
+}
+
+function isDuplicateCongestionDecrease(state, obs, sampleIdentity, episodeId, nowMs, config) {
+  if (episodeId !== null && state.lastCongestionEpochId === episodeId) return true;
+  if (sampleIdentity !== null && state.lastSampleIdentity === sampleIdentity &&
+      state.lastDecreasedAtMs !== null) {
+    return true;
+  }
+  return !hasExplicitDistinctCongestionEpoch(obs) &&
     Number.isFinite(state.lastDecreasedAtMs) &&
     nowMs - state.lastDecreasedAtMs < config.minAdjustIntervalMs;
-  if (sameEpisode || withinCooldownWithoutNewEpisode) {
+}
+
+function applyCongestionDecrease(state, observation, nowMs, congestionReason, config) {
+  const sampleIdentity = resolveObservationSampleIdentity(observation);
+  const episodeId = resolveCongestionEpisodeId(observation);
+  if (isDuplicateCongestionDecrease(state, observation, sampleIdentity, episodeId, nowMs, config)) {
     return buildWindowDecision({
-      limit: state.limit,
-      previousLimit: state.limit,
-      action: ACTION.HOLD,
-      reason: REASON.CONGESTION_EPISODE_ALREADY_APPLIED,
+      limit: state.limit, previousLimit: state.limit,
+      action: ACTION.HOLD, reason: REASON.CONGESTION_EPISODE_ALREADY_APPLIED,
       nextState: state,
     });
   }
+  const decreasedState = {
+    ...state,
+    lastDecreasedAtMs: nowMs, lastAdjustedAtMs: nowMs,
+    lastCongestionEpochId: episodeId, lastSampleIdentity: sampleIdentity,
+    lastSampledAtMs: observation.sampledAtMs, healthySamplesSinceDecrease: 0,
+  };
   if (state.limit <= config.minLimit) {
     return buildWindowDecision({
-      limit: config.minLimit,
-      previousLimit: state.limit,
-      action: ACTION.HOLD,
-      reason: REASON.AT_MINIMUM_WINDOW_CONGESTED,
-      nextState: {
-        ...state,
-        lastDecreasedAtMs: nowMs,
-        lastAdjustedAtMs: nowMs,
-        lastCongestionEpochId: episodeId,
-        lastSampledAtMs: observation.sampledAtMs,
-        healthySamplesSinceDecrease: 0,
-      },
+      limit: config.minLimit, previousLimit: state.limit,
+      action: ACTION.HOLD, reason: REASON.AT_MINIMUM_WINDOW_CONGESTED,
+      nextState: decreasedState,
     });
   }
   const scaled = Math.floor(state.limit * config.multiplicativeDecrease);
   const nextLimit = Math.max(config.minLimit, Math.min(state.limit - 1, scaled));
   return buildWindowDecision({
-    limit: nextLimit,
-    previousLimit: state.limit,
-    action: ACTION.DECREASE,
-    reason: congestionReason,
-    nextState: {
-      ...state,
-      limit: nextLimit,
-      lastDecreasedAtMs: nowMs,
-      lastAdjustedAtMs: nowMs,
-      lastCongestionEpochId: episodeId,
-      lastSampledAtMs: observation.sampledAtMs,
-      healthySamplesSinceDecrease: 0,
-    },
+    limit: nextLimit, previousLimit: state.limit,
+    action: ACTION.DECREASE, reason: congestionReason,
+    nextState: {...decreasedState, limit: nextLimit},
   });
 }
 
@@ -376,95 +433,84 @@ function evaluateHardResourceGate(baseState, bootReset, observation, demand, con
   const action = bootReset ? ACTION.RESET : ACTION.HOLD;
   if (observation?.storageHardConstrained === true) {
     return buildWindowDecision({
-      limit: baseState.limit,
-      previousLimit: baseState.limit,
-      action,
-      reason: REASON.HARD_STORAGE_LIMIT_REACHED,
-      hardAdmissionAllowed: false,
+      limit: baseState.limit, previousLimit: baseState.limit, action,
+      reason: REASON.HARD_STORAGE_LIMIT_REACHED, hardAdmissionAllowed: false,
       nextState: baseState,
     });
   }
   if (isHardMemoryConstrained(observation, config.thresholds, demand.hostLogicalNodeCount)) {
     return buildWindowDecision({
-      limit: baseState.limit,
-      previousLimit: baseState.limit,
-      action,
-      reason: REASON.HARD_MEMORY_LIMIT_REACHED,
-      hardAdmissionAllowed: false,
+      limit: baseState.limit, previousLimit: baseState.limit, action,
+      reason: REASON.HARD_MEMORY_LIMIT_REACHED, hardAdmissionAllowed: false,
       nextState: baseState,
     });
   }
   return null;
 }
 
-function evaluateHealthyWindowGrowth(
-  baseState,
-  bootReset,
-  observation,
-  demand,
-  nowMs,
-  config,
-) {
-  const isNewSample = observation.sampledAtMs !== baseState.lastSampledAtMs;
-  const nextHealthyCount = isNewSample ?
-    baseState.healthySamplesSinceDecrease + 1 :
-    baseState.healthySamplesSinceDecrease;
-  const stateWithSample = {
+function advanceHealthySampleState(baseState, observation) {
+  const sampleIdentity = resolveObservationSampleIdentity(observation);
+  const isNewSample = sampleIdentity !== null ?
+    sampleIdentity !== baseState.lastSampleIdentity :
+    observation.sampledAtMs !== baseState.lastSampledAtMs;
+  return {
     ...baseState,
+    lastSampleIdentity: sampleIdentity,
     lastSampledAtMs: observation.sampledAtMs,
-    healthySamplesSinceDecrease: nextHealthyCount,
+    healthySamplesSinceDecrease: isNewSample ?
+      baseState.healthySamplesSinceDecrease + 1 :
+      baseState.healthySamplesSinceDecrease,
   };
-  const occupancy = Math.max(0, Number(demand.occupancy) || 0);
-  const waitingDemandCount = Math.max(0, Number(demand.waitingDemandCount) || 0);
-  if (occupancy < baseState.limit || waitingDemandCount <= 0) {
+}
+
+function isDemandSaturatingBudget(demand, limit) {
+  return (Number(demand.occupancy) || 0) >= limit && (Number(demand.waitingDemandCount) || 0) > 0;
+}
+
+function evaluateHealthyWindowGrowth(baseState, bootReset, observation, demand, nowMs, config) {
+  const stateWithSample = advanceHealthySampleState(baseState, observation);
+  if (!isDemandSaturatingBudget(demand, baseState.limit)) {
     return buildWindowDecision({
-      limit: baseState.limit,
-      previousLimit: baseState.limit,
+      limit: baseState.limit, previousLimit: baseState.limit,
       action: bootReset ? ACTION.RESET : ACTION.HOLD,
-      reason: bootReset ?
-        REASON.BOOT_INCARNATION_RESET :
-        REASON.WORKLOAD_IDLE_OR_UNCONSTRAINED,
+      reason: bootReset ? REASON.BOOT_INCARNATION_RESET : REASON.WORKLOAD_IDLE_OR_UNCONSTRAINED,
       nextState: stateWithSample,
     });
   }
-  if (nextHealthyCount < config.requiredHealthySamplesAfterDecrease) {
+  if (stateWithSample.healthySamplesSinceDecrease < config.requiredHealthySamplesAfterDecrease) {
     return buildWindowDecision({
-      limit: baseState.limit,
-      previousLimit: baseState.limit,
-      action: ACTION.HOLD,
-      reason: REASON.RECOVERY_HYSTERESIS_HOLD,
-      nextState: stateWithSample,
+      limit: baseState.limit, previousLimit: baseState.limit,
+      action: ACTION.HOLD, reason: REASON.RECOVERY_HYSTERESIS_HOLD, nextState: stateWithSample,
     });
   }
-  if (
-    Number.isFinite(baseState.lastAdjustedAtMs) &&
-    nowMs - baseState.lastAdjustedAtMs < config.minAdjustIntervalMs
-  ) {
+  if (Number.isFinite(baseState.lastAdjustedAtMs) &&
+      nowMs - baseState.lastAdjustedAtMs < config.minAdjustIntervalMs) {
     return buildWindowDecision({
-      limit: baseState.limit,
-      previousLimit: baseState.limit,
-      action: ACTION.HOLD,
-      reason: REASON.OBSERVATION_COOLDOWN_HOLD,
-      nextState: stateWithSample,
+      limit: baseState.limit, previousLimit: baseState.limit,
+      action: ACTION.HOLD, reason: REASON.OBSERVATION_COOLDOWN_HOLD, nextState: stateWithSample,
     });
   }
   if (baseState.limit >= config.maxLimit) {
     return buildWindowDecision({
-      limit: config.maxLimit,
-      previousLimit: baseState.limit,
-      action: ACTION.HOLD,
-      reason: REASON.AT_MAXIMUM_WINDOW,
-      nextState: stateWithSample,
+      limit: config.maxLimit, previousLimit: baseState.limit,
+      action: ACTION.HOLD, reason: REASON.AT_MAXIMUM_WINDOW, nextState: stateWithSample,
     });
   }
   const increasedLimit = Math.min(config.maxLimit, baseState.limit + config.additiveIncrease);
   return buildWindowDecision({
-    limit: increasedLimit,
-    previousLimit: baseState.limit,
-    action: ACTION.INCREASE,
-    reason: REASON.HEALTHY_BUDGET_CONSTRAINED_DEMAND,
+    limit: increasedLimit, previousLimit: baseState.limit,
+    action: ACTION.INCREASE, reason: REASON.HEALTHY_BUDGET_CONSTRAINED_DEMAND,
     nextState: {...stateWithSample, limit: increasedLimit, lastAdjustedAtMs: nowMs},
   });
+}
+
+function normalizeWindowDecisionInputs(demand, rawConfig) {
+  const config = rawConfig.thresholds ?
+    rawConfig : normalizeWindowConfig(rawConfig, DEFAULTS.SOURCE);
+  const nowMs = Number.isFinite(Number(demand.nowMs)) ? Number(demand.nowMs) : 0;
+  const expectedBoot = Number.isSafeInteger(demand.expectedBootIncarnation) ?
+    demand.expectedBootIncarnation : null;
+  return {config, nowMs, expectedBoot};
 }
 
 /**
@@ -475,19 +521,8 @@ function evaluateHealthyWindowGrowth(
  * @param {Object} [rawConfig]
  * @return {Object} Frozen window decision.
  */
-function decideAdaptiveResourceWindow(
-  previousState,
-  observation,
-  demand = {},
-  rawConfig = {},
-) {
-  const config = rawConfig.thresholds ?
-    rawConfig :
-    normalizeWindowConfig(rawConfig, DEFAULTS.SOURCE);
-  const nowMs = Number.isFinite(Number(demand.nowMs)) ? Number(demand.nowMs) : 0;
-  const expectedBoot = Number.isSafeInteger(demand.expectedBootIncarnation) ?
-    demand.expectedBootIncarnation :
-    null;
+function decideAdaptiveResourceWindow(previousState, observation, demand = {}, rawConfig = {}) {
+  const {config, nowMs, expectedBoot} = normalizeWindowDecisionInputs(demand, rawConfig);
   const {baseState, bootReset} = resolveWindowBaseState(previousState, expectedBoot, config);
   const hardGate = evaluateHardResourceGate(baseState, bootReset, observation, demand, config);
   if (hardGate !== null) return hardGate;
@@ -495,30 +530,35 @@ function decideAdaptiveResourceWindow(
   const freshness = evaluateObservationFreshness(observation, nowMs, expectedBoot, config);
   if (freshness.state !== OBS_STATE.FRESH) {
     return buildWindowDecision({
-      limit: baseState.limit,
-      previousLimit: baseState.limit,
+      limit: baseState.limit, previousLimit: baseState.limit,
       action: bootReset ? ACTION.RESET : ACTION.HOLD,
       reason: bootReset ? REASON.BOOT_INCARNATION_RESET : freshness.reason,
-      observationState: freshness.state,
-      nextState: baseState,
+      observationState: freshness.state, nextState: baseState,
     });
   }
-
   const congestionReason = classifyAttributedCongestion(observation, config.thresholds);
   if (congestionReason !== null) {
     return applyCongestionDecrease(baseState, observation, nowMs, congestionReason, config);
   }
-
-  if (!isObservationWithinHealthyGrowthBand(observation, config.thresholds)) {
+  const sampleStampedState = {
+    ...baseState,
+    lastSampleIdentity: resolveObservationSampleIdentity(observation),
+    lastSampledAtMs: observation.sampledAtMs,
+  };
+  if (!isObservationCompleteForGrowth(observation)) {
     return buildWindowDecision({
-      limit: baseState.limit,
-      previousLimit: baseState.limit,
-      action: ACTION.HOLD,
-      reason: REASON.HYSTERESIS_BAND_HOLD,
-      nextState: {...baseState, lastSampledAtMs: observation.sampledAtMs},
+      limit: baseState.limit, previousLimit: baseState.limit,
+      action: bootReset ? ACTION.RESET : ACTION.HOLD,
+      reason: bootReset ? REASON.BOOT_INCARNATION_RESET : REASON.OBSERVATION_INCOMPLETE,
+      observationState: OBS_STATE.INCOMPLETE, nextState: sampleStampedState,
     });
   }
-
+  if (!isObservationWithinHealthyGrowthBand(observation, config.thresholds)) {
+    return buildWindowDecision({
+      limit: baseState.limit, previousLimit: baseState.limit,
+      action: ACTION.HOLD, reason: REASON.HYSTERESIS_BAND_HOLD, nextState: sampleStampedState,
+    });
+  }
   return evaluateHealthyWindowGrowth(baseState, bootReset, observation, demand, nowMs, config);
 }
 
@@ -553,26 +593,60 @@ function canWindowAdvanceNow(stateEntry, config, nowMs) {
   return nowMs - stateEntry.lastAdjustedAtMs >= config.minAdjustIntervalMs;
 }
 
+function wasNodePreviouslyConstrained(
+  nodeId, existing, sourceStates, targetStates, sourceConfig, targetConfig,
+) {
+  const prevObs = existing?.target || existing?.source || null;
+  if (sourceStates.get(nodeId)?.hardAdmissionAllowed === false ||
+      targetStates.get(nodeId)?.hardAdmissionAllowed === false) {
+    return true;
+  }
+  return isObservationConstrained(prevObs, targetConfig) ||
+    isObservationConstrained(existing?.source || null, sourceConfig);
+}
+
+function canNodeAdvanceAnyWindow(
+  nodeId, stamped, sourceStates, targetStates, sourceConfig, targetConfig, nowMs,
+) {
+  if (!isObservationCompleteForGrowth(stamped)) return false;
+  return canWindowAdvanceNow(sourceStates.get(nodeId), sourceConfig, nowMs) ||
+    canWindowAdvanceNow(targetStates.get(nodeId), targetConfig, nowMs);
+}
+
 function shouldWakeOnObservation({
   nodeId, existing, stamped, nowMs, notify, explicitNotify,
   sourceStates, targetStates, sourceConfig, targetConfig,
 }) {
   if (!notify) return false;
   if (explicitNotify) return true;
-  const prevObs = existing?.target || existing?.source || null;
-  const wasConstrained = isObservationConstrained(prevObs, targetConfig);
+  const wasConstrained = wasNodePreviouslyConstrained(
+    nodeId, existing, sourceStates, targetStates, sourceConfig, targetConfig,
+  );
   const isNowConstrained = isObservationConstrained(stamped, targetConfig);
   if (wasConstrained !== isNowConstrained) return true;
   if (isNowConstrained) {
+    const prevObs = existing?.target || existing?.source || null;
     return prevObs?.congestionEpochId !== stamped?.congestionEpochId;
   }
-  return canWindowAdvanceNow(sourceStates.get(nodeId), sourceConfig, nowMs) ||
-    canWindowAdvanceNow(targetStates.get(nodeId), targetConfig, nowMs);
+  return canNodeAdvanceAnyWindow(
+    nodeId, stamped, sourceStates, targetStates, sourceConfig, targetConfig, nowMs,
+  );
 }
 
 function readWindowLimit(stateMap, nodeId, config) {
   const entry = stateMap.get(nodeId);
   return entry ? entry.limit : config.initialLimit;
+}
+
+function selectPreferredObservation(storedObs, liveObs) {
+  if (!storedObs) return liveObs ?? null;
+  if (!liveObs) return storedObs;
+  const storedTs = Number(storedObs.sampledAtMs);
+  const liveTs = Number(liveObs.sampledAtMs);
+  if (Number.isFinite(liveTs) && (!Number.isFinite(storedTs) || liveTs > storedTs)) {
+    return liveObs;
+  }
+  return storedObs;
 }
 
 function createAdaptivePlacementBudgetController(options = {}) {
@@ -586,20 +660,27 @@ function createAdaptivePlacementBudgetController(options = {}) {
 
   const getObservationFor = (nodeId, role, nowMs) => {
     const stored = observationsByNode.get(nodeId);
-    const roleObs = stored ? stored[role] : null;
-    if (roleObs !== null && roleObs !== undefined) return roleObs;
-    return readNodeObservation ? readNodeObservation(nodeId, role, nowMs) : null;
-  };
-
-  const currentSourceBudgetOf = (nodeId) =>
-    readWindowLimit(sourceStates, nodeId, sourceConfig);
-  const currentTargetBudgetOf = (nodeId) =>
-    readWindowLimit(targetStates, nodeId, targetConfig);
-
-  const notifyListeners = (change) => {
-    for (const listener of [...listeners]) {
-      listener(change);
+    const storedRoleObs = stored ? stored[role] : null;
+    const liveObs = readNodeObservation ? readNodeObservation(nodeId, role, nowMs) : null;
+    const chosen = selectPreferredObservation(storedRoleObs, liveObs);
+    if (chosen && chosen !== storedRoleObs) {
+      const next = observationsByNode.get(nodeId) || {};
+      observationsByNode.set(nodeId, {
+        source: role === ROLE_SOURCE ? chosen : (next.source ?? null),
+        target: role === ROLE_TARGET ? chosen : (next.target ?? null),
+      });
     }
+    return chosen;
+  };
+  const currentSourceBudgetOf = (nodeId) => readWindowLimit(sourceStates, nodeId, sourceConfig);
+  const currentTargetBudgetOf = (nodeId) => readWindowLimit(targetStates, nodeId, targetConfig);
+  const notifyListeners = (change) => {
+    for (const listener of [...listeners]) listener(change);
+  };
+  const stateContext = {
+    sourceStates, targetStates, getObservationFor, sourceConfig, targetConfig,
+    currentSourceBudgetOf, currentTargetBudgetOf,
+    decideWindow: decideAdaptiveResourceWindow,
   };
 
   return Object.freeze({
@@ -616,12 +697,8 @@ function createAdaptivePlacementBudgetController(options = {}) {
       sourceStates.clear();
       targetStates.clear();
     },
-    getSourceBudget(nodeId) {
-      return currentSourceBudgetOf(nodeId);
-    },
-    getTargetBudget(nodeId) {
-      return currentTargetBudgetOf(nodeId);
-    },
+    getSourceBudget: currentSourceBudgetOf,
+    getTargetBudget: currentTargetBudgetOf,
     getSnapshot() {
       return Object.freeze({
         sourceBudgets: Object.freeze(
@@ -633,14 +710,11 @@ function createAdaptivePlacementBudgetController(options = {}) {
       });
     },
     recordObservation(nodeId, observation, optionsOrNowMs = {}) {
-      const {nowMs, resourceRole, notify, explicitNotify} = resolveRecordedObservationArgs(
-        observation,
-        optionsOrNowMs,
-      );
+      const {nowMs, resourceRole, notify, explicitNotify} =
+        resolveRecordedObservationArgs(observation, optionsOrNowMs);
       const existing = observationsByNode.get(nodeId) || {};
       const stamped = observation && typeof observation === 'object' ?
-        {...observation, sampledAtMs: observation.sampledAtMs ?? nowMs} :
-        null;
+        {...observation, sampledAtMs: observation.sampledAtMs ?? nowMs} : null;
       if (resourceRole === ROLE_SOURCE) {
         observationsByNode.set(nodeId, {source: stamped, target: existing.target ?? null});
       } else if (resourceRole === ROLE_TARGET) {
@@ -655,12 +729,18 @@ function createAdaptivePlacementBudgetController(options = {}) {
         notifyListeners({nodeId, resourceRole: resourceRole ?? null, nowMs});
       }
     },
+    observeNodeRow(nodeId, nodeRow, nowMs = 0) {
+      if (typeof nodeId !== 'string' || nodeId.length === 0 || !nodeRow) return;
+      const obs = readNodeObservation ?
+        readNodeObservation(nodeId, null, nowMs, nodeRow) :
+        readRemoteHeartbeatObservation(nodeRow);
+      if (obs) this.recordObservation(nodeId, obs, {nowMs});
+    },
+    resolveMoveCopyLimits(params = {}) {
+      return resolveMoveCopyLimitsForController(stateContext, params);
+    },
     evaluatePassBudgets(params = {}) {
-      return evaluatePassBudgetsForController({
-        sourceStates, targetStates, getObservationFor, sourceConfig, targetConfig,
-        currentSourceBudgetOf, currentTargetBudgetOf,
-        decideWindow: decideAdaptiveResourceWindow,
-      }, params);
+      return evaluatePassBudgetsForController(stateContext, params);
     },
   });
 }

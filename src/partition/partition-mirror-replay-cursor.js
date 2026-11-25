@@ -117,15 +117,29 @@ const MIRRORABLE_LOG_OPERATION_TYPES = Object.freeze(new Set([
  * @param {number|null} watermarkIndex - Persisted replay watermark.
  * @return {Array<Object>}
  */
-function isAppliedStatementAtLogIndex(service, command, logIndex) {
+function appendAppliedDeltaAtLogIndex(service, command, logIndex, deltas) {
   const entryKey = committedStatementEntryKey(command);
   if (!entryKey) {
-    return false;
+    return;
   }
   const recorded = readCommittedStatementOutcome(service, entryKey);
-  return recorded.state === PARTITION_COMMITTED_STATEMENT_RECORD_STATE.SETTLED &&
-    recorded.outcome === PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED &&
-    recorded.logIndex === logIndex;
+  if (
+    recorded.state !== PARTITION_COMMITTED_STATEMENT_RECORD_STATE.SETTLED ||
+    recorded.outcome !== PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED ||
+    recorded.logIndex !== logIndex
+  ) {
+    return;
+  }
+  deltas.push({
+    ...command,
+    logIndex,
+    ...(Number.isInteger(recorded.changes) ?
+      {changes: recorded.changes} :
+      {}),
+    ...(Array.isArray(recorded.affectedRows) ?
+      {affectedRows: recorded.affectedRows.map((row) => ({...row}))} :
+      {}),
+  });
 }
 
 function loadDurableDeltasBehindWatermark(service, watermarkIndex) {
@@ -140,11 +154,10 @@ function loadDurableDeltasBehindWatermark(service, watermarkIndex) {
     const logIndex = Number(entry.index);
     const command = entry.command;
     if (logIndex <= watermarkIndex ||
-      !MIRRORABLE_LOG_OPERATION_TYPES.has(command?.type) ||
-      !isAppliedStatementAtLogIndex(service, command, logIndex)) {
+      !MIRRORABLE_LOG_OPERATION_TYPES.has(command?.type)) {
       continue;
     }
-    deltas.push({...command, logIndex});
+    appendAppliedDeltaAtLogIndex(service, command, logIndex, deltas);
   }
   return deltas;
 }

@@ -16,10 +16,11 @@ import {LEDGER_PARTITION_ID, isOccupyingCopy, readPlacementCensus} from
   '../partition/partition-placement-admission-decision.js';
 import {COPY_MOVE_TYPES, buildPassOrderedCandidates, buildTargetCapacityRanker,
   classifyNodeStorageExclusion, computeCopyWaitingDemand, isCopyWithinCapacity,
-  recordAdmittedCopyOccupancy, saturatedTargetsOf, sourceLimitOf, summarizeCopyOccupancy,
-  targetLimitOf} from './replica-placement-owner-capacity.js';
+  recordAdmittedCopyOccupancy, resolveOwnerMoveCopyLimits, saturatedTargetsOf,
+  sourceLimitOf, summarizeCopyOccupancy, targetLimitOf} from './replica-placement-owner-capacity.js';
 import {createAdaptivePlacementBudgetController} from
   './replica-placement-adaptive-budget.js';
+import {COPY_PHASE_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 import {requestPlacementAdmission, requestPlacementHoldRelease} from '../partition/partition-placement-admission.js';
 import {isWriteOutcomeUnknown, resolveEntryId} from '../partition/partition-write-kernel.js';
 import {RAFT_EVENT} from '../raft/constants.js';
@@ -30,8 +31,8 @@ import {createBlockedPlacementAttempts, deleteUnresolvedPlacementAttempt,
   reconcileReleaseAttempts, redrivenReleaseAttempt} from './replica-placement-owner-attempts.js';
 import {COLLABORATOR, REPLICA_PLACEMENT_OWNER_COLLABORATOR_INVALID, invalidCollaborator, isFunction,
   validateReplicaPlacementOwnerOptions} from './replica-placement-owner-collaborators.js';
-import {PLACEMENT_CLASS, PLACEMENT_CLEARING_TRIGGER, PLACEMENT_DEFICIT_KIND,
-  PLACEMENT_DISPATCH_HOLD, PLACEMENT_OUTCOME, PLACEMENT_TRIGGER} from
+import {PLACEMENT_CLASS, PLACEMENT_CLEARING_TRIGGER, PLACEMENT_COPY_CAPACITY,
+  PLACEMENT_DEFICIT_KIND, PLACEMENT_DISPATCH_HOLD, PLACEMENT_OUTCOME, PLACEMENT_TRIGGER} from
   './replica-placement-owner-constants.js';
 import {PLACEMENT_DEFICIT_STATE, buildPartitionReplicaRows, evaluatePartitionDeficit,
   readPlacementNodeInputs} from './replica-placement-owner-deficits.js';
@@ -50,11 +51,18 @@ const PLACEMENT_RESYNC_INTERVAL_MS = 60_000;
 const ENTRY_KIND_RELEASE = 'release';
 const ENTRY_KIND_ADMIT = 'admit';
 const CACHE_OP_DELETE = 'DELETE';
+const SIGNATURE_SEPARATOR = ':';
 const SKIPPED_PARTITION_STATUSES = Object.freeze(new Set(['splitting', 'merging']));
 const LOG_PASS_FAILED = 'Replica placement pass failed; its triggers wait for the next wake';
 const LOG_CANDIDATE_FAILED = 'Replica placement candidate failed; the pass goes on';
 const OPERATION_SIGNATURE_SQL = Object.freeze({
   BY_ID: 'SELECT workflow_step, status, steps_history FROM replica_operations WHERE operation_id = ?',
+});
+
+const CACHE_TABLE_TRIGGER = Object.freeze({
+  [TABLES.SERVICES]: PLACEMENT_TRIGGER.SERVICES_CHANGED,
+  [TABLES.PARTITIONS]: PLACEMENT_TRIGGER.PARTITIONS_CHANGED,
+  [TABLES.TABLES]: PLACEMENT_TRIGGER.PARTITIONS_CHANGED,
 });
 
 function readLedgerOperationRowById(ledgerService, operationId) {
@@ -65,6 +73,36 @@ function readLedgerOperationRowById(ledgerService, operationId) {
 
 function rowSignatureOf(row) {
   return `${row.workflow_step}:${row.status}:${row.steps_history}`;
+}
+
+function isInFlightCopyStepRow(row) {
+  return Boolean(row && COPY_PHASE_WORKFLOW_STEPS.has(row.workflow_step)) &&
+    !(typeof row.steps_history === 'string' &&
+      row.steps_history.includes(PLACEMENT_DISPATCH_HOLD.LEDGER_AWAITING_COPY_IDLE));
+}
+
+function isOwnInFlightOperationRow(ownEntryIds, row) {
+  if (ownEntryIds.size === 0 || typeof row?.steps_history !== 'string') return false;
+  for (const entryId of ownEntryIds) if (row.steps_history.includes(entryId)) return true;
+  return false;
+}
+
+function isInFlightCopyStepTransition(prevSig, row) {
+  if (prevSig === undefined || !isInFlightCopyStepRow(row)) return false;
+  return COPY_PHASE_WORKFLOW_STEPS.has(prevSig.split(SIGNATURE_SEPARATOR)[0]) &&
+    !prevSig.includes(PLACEMENT_DISPATCH_HOLD.LEDGER_AWAITING_COPY_IDLE);
+}
+
+function shouldWakeOnOperationRowChange(seenSigs, ownIds, row, op) {
+  if (!row) return false;
+  const opId = row[COLUMN.OPERATION_ID];
+  if (typeof opId !== 'string') return true;
+  if (op === CACHE_OP_DELETE) return seenSigs.delete(opId), true;
+  const sig = rowSignatureOf(row);
+  const prevSig = seenSigs.get(opId);
+  if (prevSig === sig) return false;
+  seenSigs.set(opId, sig);
+  return !isOwnInFlightOperationRow(ownIds, row) && !isInFlightCopyStepTransition(prevSig, row);
 }
 
 function shouldStopPlacementPass(candidate, state) {
@@ -213,7 +251,9 @@ class ReplicaPlacementOwner {
       if (entryId && this.ownEntryIds.has(entryId)) return;
       this.notify(PLACEMENT_TRIGGER.LEDGER_COMMIT);
     };
-    const onWriteReleased = () => this.notify(PLACEMENT_TRIGGER.WRITE_PATH_RELEASED);
+    const onWriteReleased = () => {
+      if (this.ownEntryIds.size === 0) this.notify(PLACEMENT_TRIGGER.WRITE_PATH_RELEASED);
+    };
     ledger.on(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, onCommitted);
     ledger.on(PARTITION_SERVICE_EVENT.WRITE_PATH_RELEASED, onWriteReleased);
     this.unsubscribers.push(() => {
@@ -234,15 +274,13 @@ class ReplicaPlacementOwner {
       this.unsubscribers.push(
         this.nodeAuthority.subscribe(() => this.notify(PLACEMENT_TRIGGER.NODES_OR_FORMATION)));
     }
-    const cache = this.systemTableCache;
-    if (cache) {
+    if (this.systemTableCache) {
       const onCache = (tableName, op, row) => this.handleCacheChange(tableName, row, op);
-      cache.onCacheApplyChange(onCache);
-      this.unsubscribers.push(() => cache.offCacheApplyChange(onCache));
+      this.systemTableCache.onCacheApplyChange(onCache);
+      this.unsubscribers.push(() => this.systemTableCache.offCacheApplyChange(onCache));
     }
-    const storage = this.storageAccountingService;
-    if (storage) {
-      this.unsubscribers.push(storage.subscribeCapacitySemanticChanges(() =>
+    if (this.storageAccountingService) {
+      this.unsubscribers.push(this.storageAccountingService.subscribeCapacitySemanticChanges(() =>
         this.notify(PLACEMENT_TRIGGER.TARGET_CAPACITY_CHANGED)));
     }
     if (isFunction(this.adaptiveBudgetController?.subscribe)) {
@@ -263,20 +301,12 @@ class ReplicaPlacementOwner {
 
   handleCacheChange(tableName, row, op = null) {
     if (!this.isLeader) return;
-    if (tableName === TABLES.SERVICES) {
-      this.notify(PLACEMENT_TRIGGER.SERVICES_CHANGED);
-    } else if (tableName === TABLES.PARTITIONS || tableName === TABLES.TABLES) {
-      this.notify(PLACEMENT_TRIGGER.PARTITIONS_CHANGED);
-    } else if (tableName === TABLES.REPLICA_OPERATIONS && row) {
-      const opId = row[COLUMN.OPERATION_ID];
-      if (typeof opId === 'string') {
-        if (op === CACHE_OP_DELETE) this.seenRowSignatures.delete(opId);
-        else {
-          const sig = rowSignatureOf(row);
-          if (this.seenRowSignatures.get(opId) === sig) return;
-          this.seenRowSignatures.set(opId, sig);
-        }
-      }
+    const directTrigger = CACHE_TABLE_TRIGGER[tableName];
+    if (directTrigger) return void this.notify(directTrigger);
+    if (tableName === TABLES.NODES && row && op !== CACHE_OP_DELETE) {
+      this.adaptiveBudgetController?.observeNodeRow(row[COLUMN.NODE_ID], row, this.now());
+    } else if (tableName === TABLES.REPLICA_OPERATIONS &&
+        shouldWakeOnOperationRowChange(this.seenRowSignatures, this.ownEntryIds, row, op)) {
       this.notify(PLACEMENT_TRIGGER.LEDGER_COMMIT);
     }
   }
@@ -355,23 +385,21 @@ class ReplicaPlacementOwner {
     if (typeof operationId !== 'string' || operationId.length === 0) return;
     const cache = this.systemTableCache;
     const row = (isFunction(cache?.getShared) ?
-      cache.getShared(TABLES.REPLICA_OPERATIONS, operationId) :
-      null) ??
+      cache.getShared(TABLES.REPLICA_OPERATIONS, operationId) : null) ??
       readLedgerOperationRowById(this.ledgerPartitionService, operationId);
     if (row) this.seenRowSignatures.set(operationId, rowSignatureOf(row));
   }
 
   // A2: the census after an engaged ledger hold's release; null at stale.
   async submitReleaseIfCopyIdle(census, pass) {
-    const held = census.find((row) =>
-      row.incomplete &&
+    const held = census.find((row) => row.incomplete &&
       row.entityType === UNIFIED_SERVICE_TYPE.PARTITION &&
       row.entityId === LEDGER_PARTITION_ID &&
       row.dispatchHold === PLACEMENT_DISPATCH_HOLD.LEDGER_AWAITING_COPY_IDLE);
     if (!held) return census;
-    const otherCopies = census.filter((row) =>
-      row.operationId !== held.operationId && isOccupyingCopy(row));
-    if (otherCopies.length > 0) return census;
+    if (census.some((row) => row.operationId !== held.operationId && isOccupyingCopy(row))) {
+      return census;
+    }
     await this.submitHoldRelease(held.operationId, pass);
     if (!this.checkpoint(pass, CHECKPOINT.AFTER_HOLD_RELEASE)) return null;
     return readPlacementCensus(this.ledgerPartitionService.db);
@@ -406,19 +434,11 @@ class ReplicaPlacementOwner {
       }
       observePlacementAttemptAnswer(this.ledgerPartitionService?.db, this.blockedAttempts,
         attempt, answer);
-      const touchedOperationIds = new Set();
-      if (typeof body?.operationId === 'string' && body.operationId.length > 0) {
-        touchedOperationIds.add(body.operationId);
-      }
       const result = answer?.[PLACEMENT_RESULT_FIELD];
-      if (typeof result?.operationId === 'string' && result.operationId.length > 0) {
-        touchedOperationIds.add(result.operationId);
-      }
-      if (Array.isArray(result?.operationIds)) {
-        for (const opId of result.operationIds) {
-          if (typeof opId === 'string' && opId.length > 0) touchedOperationIds.add(opId);
-        }
-      }
+      const touchedOperationIds = new Set(
+        [body?.operationId, result?.operationId, ...(Array.isArray(result?.operationIds) ?
+          result.operationIds : [])].filter((id) => typeof id === 'string' && id.length > 0),
+      );
       for (const opId of touchedOperationIds) this.recordTouchedOperationSignature(opId);
       return answer;
     } finally {
@@ -485,8 +505,7 @@ class ReplicaPlacementOwner {
     if (!this.storageAccountingService) return excluded;
     for (const nodeId of nodeInput.eligibility.eligibleNodeIds) {
       const reason = classifyNodeStorageExclusion(
-        this.storageAccountingService.getCapacitySemanticIdentity(nodeId, nowMs),
-      );
+        this.storageAccountingService.getCapacitySemanticIdentity(nodeId, nowMs));
       if (reason !== null) excluded.set(nodeId, reason);
     }
     return excluded;
@@ -515,17 +534,12 @@ class ReplicaPlacementOwner {
       if (!partitionId || SKIPPED_PARTITION_STATUSES.has(status)) continue;
       const isBusy = busyPartitions.has(partitionId);
       const {replicationFactor} = resolveDesiredReplicationFactor(partitionRow);
-      const replicaRows = buildPartitionReplicaRows(
-        servicesByPartition.get(partitionId) || [],
-        partitionRow[COLUMN.LEADER_NODE_ID],
-        isBusy,
-        promotedByPartition.get(partitionId),
-      );
+      const replicaRows = buildPartitionReplicaRows(servicesByPartition.get(partitionId) || [],
+        partitionRow[COLUMN.LEADER_NODE_ID], isBusy, promotedByPartition.get(partitionId));
       inputsByPartition.set(partitionId, {replicationFactor, replicaRows});
       const evaluation = evaluatePartitionDeficit({
-        partitionId, replicationFactor, replicaRows,
-        eligibility: nodeInput.eligibility, saturatedTargetNodeIds, storageExcludedTargets,
-        targetCapacityRanker,
+        partitionId, replicationFactor, replicaRows, eligibility: nodeInput.eligibility,
+        saturatedTargetNodeIds, storageExcludedTargets, targetCapacityRanker,
       });
       evaluations.push({partitionId, isBusy, evaluation});
     }
@@ -573,6 +587,10 @@ class ReplicaPlacementOwner {
     return buildPassOrderedCandidates(evaluations, inputsByPartition, nodeInput.formation);
   }
 
+  resolveAdaptiveCopyLimitsForMove(move, nowMs = this.now()) {
+    return resolveOwnerMoveCopyLimits(this, move, nowMs);
+  }
+
   async proposeOrderedCandidate(rawCandidate, context, progress) {
     const {inputsByPartition, repairWaitingSourceNodeIds, nodeInput,
       busyPartitions, occupancy, saturatedTargets, storageExcludedTargets,
@@ -585,21 +603,18 @@ class ReplicaPlacementOwner {
     if (!(await this.isCandidateAdmissibleNow(candidate, repairWaitingSourceNodeIds,
       occupancy, pass, budgetSnapshot)) ||
         !this.checkpoint(pass, CHECKPOINT.AFTER_ADMISSIBILITY)) return null;
-    const kSrc = COPY_MOVE_TYPES.has(candidate.move.type) ?
-      sourceLimitOf(candidate.move.copySourceNodeId, budgetSnapshot) :
-      undefined;
-    const kTgt = COPY_MOVE_TYPES.has(candidate.move.type) ?
-      targetLimitOf(candidate.move.targetNodeId, budgetSnapshot) :
-      undefined;
+    const isCopy = COPY_MOVE_TYPES.has(candidate.move.type);
+    const kSrc = isCopy ? sourceLimitOf(candidate.move.copySourceNodeId, budgetSnapshot) :
+      PLACEMENT_COPY_CAPACITY.K_SRC;
+    const kTgt = isCopy ? targetLimitOf(candidate.move.targetNodeId, budgetSnapshot) :
+      PLACEMENT_COPY_CAPACITY.K_TGT;
     const answer = await this.submitCandidateAdmission(candidate, () =>
       buildPlacementAdmissionStatement(candidate, {
         sourceNodeId: this.resolveStatementSourceNodeId(candidate, inputsByPartition),
-        repairWaitingSourceNodeIds,
-        formationLatchEpoch: nodeInput.formation.latchEpoch,
+        repairWaitingSourceNodeIds, formationLatchEpoch: nodeInput.formation.latchEpoch,
         membershipPublicationEpoch: null,
         positions: {nodesEpoch: nodeInput.epoch?.publicationEpoch ?? null},
-        ...(kSrc !== undefined ? {kSrc} : {}),
-        ...(kTgt !== undefined ? {kTgt} : {}),
+        kSrc, kTgt,
       }), pass, progress);
     const result = answer?.[PLACEMENT_RESULT_FIELD];
     if (!this.isPassCurrent(pass) || result?.outcome !== PLACEMENT_OUTCOME.ADMITTED) return null;
@@ -647,11 +662,7 @@ class ReplicaPlacementOwner {
       busyPartitions.add(candidate.partitionId);
       state.incompleteCount += 1;
       state.copyCount += recordAdmittedCopyOccupancy(
-        candidate,
-        occupancy,
-        saturatedTargets,
-        context.budgetSnapshot,
-      );
+        candidate, occupancy, saturatedTargets, context.budgetSnapshot);
       if (candidate.placementClass === PLACEMENT_CLASS.LEDGER &&
           !(await this.releaseAdmittedLedgerHold(operationId, state, pass))) break;
       if (this.pendingTriggers.size > 0) break;

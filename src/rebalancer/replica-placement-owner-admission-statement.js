@@ -286,11 +286,9 @@ const CANDIDATE_ALLOWED_KEYS = Object.freeze(new Set([
 ]));
 const CONTEXT_REQUIRED_FIELDS = Object.freeze([
   'sourceNodeId', 'repairWaitingSourceNodeIds', 'formationLatchEpoch',
-  'membershipPublicationEpoch', 'positions',
+  'membershipPublicationEpoch', 'positions', 'kSrc', 'kTgt',
 ]);
-const CONTEXT_ALLOWED_KEYS = Object.freeze(new Set([
-  ...CONTEXT_REQUIRED_FIELDS, 'kSrc', 'kTgt',
-]));
+const CONTEXT_ALLOWED_KEYS = Object.freeze(new Set(CONTEXT_REQUIRED_FIELDS));
 const FOUNDING_FIELDS = Object.freeze([
   'partitionId', 'placementClass', 'foundingIntentId', 'targetNodeIds',
   'sourceNodeId', 'formationLatchEpoch', 'positions',
@@ -373,12 +371,7 @@ function buildPlacementAdmissionStatement(candidate, context) {
       !(contextRecord.repairWaitingSourceNodeIds instanceof Set)) {
     return requireStatement(null);
   }
-  const kSrc = contextRecord.kSrc === undefined ?
-    PLACEMENT_COPY_CAPACITY.K_SRC :
-    contextRecord.kSrc;
-  const kTgt = contextRecord.kTgt === undefined ?
-    PLACEMENT_COPY_CAPACITY.K_TGT :
-    contextRecord.kTgt;
+  const {kSrc, kTgt} = contextRecord;
   const ledger = candidateRecord.placementClass === PLACEMENT_CLASS.LEDGER;
   return requireStatement({
     transitionKind: KIND.PLACEMENT,

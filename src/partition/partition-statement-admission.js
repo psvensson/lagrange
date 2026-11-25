@@ -71,7 +71,6 @@ import {
 } from './partition-statement-admission-names.js';
 import {committedStatementResult} from
   './partition-committed-statement-outcome-constants.js';
-import {isTableCdcObligationRecorded} from '../cache/cdc-table-policy.js';
 
 const ALLOCATING_HEADS = new Set([KEYWORD.INSERT, KEYWORD.REPLACE,
   KEYWORD.WITH]);
@@ -361,13 +360,8 @@ function hasTopLevelReturning(lexed) {
     lexed.tokens.some((token) => token.depth === 0 && token.upper === KEYWORD.RETURNING);
 }
 
-function partitionCapturesCommittedWriteRows(service, path, tableName) {
-  if (path !== PATH.COMMITTED || !service?.db) {
-    return false;
-  }
-  return (tableName !== null && isTableCdcObligationRecorded(tableName)) ||
-    (service.cdcSubscribers?.size ?? 0) > 0 ||
-    Boolean(service.splitReplication);
+function partitionCapturesCommittedWriteRows(service, path) {
+  return path === PATH.COMMITTED && Boolean(service?.db);
 }
 
 function returningSqlOf(sql, lexed) {
@@ -386,8 +380,8 @@ function returningSqlOf(sql, lexed) {
   return `${sql.slice(0, lastToken.start + lastToken.text.length)}${RETURNING_ALL_SUFFIX}`;
 }
 
-function prepareReturningWrite(service, lexed, sql, path, tableName) {
-  if (!partitionCapturesCommittedWriteRows(service, path, tableName) ||
+function prepareReturningWrite(service, lexed, sql, path) {
+  if (!partitionCapturesCommittedWriteRows(service, path) ||
       hasTopLevelReturning(lexed)) {
     return null;
   }
@@ -419,7 +413,7 @@ function admitWrite(service, lexed, params, statement, path, sql) {
     return refusal(LAYER.ROWID_CEILING);
   }
   const returningPrepared = prepareReturningWrite(
-    service, lexed, sql, path, tableName,
+    service, lexed, sql, path,
   );
   return {admitted: true, kind: KIND.WRITE, statement, returningPrepared,
     ceilingChecked: allocating,
@@ -444,8 +438,7 @@ function textRuleRefusal(service, lexed, options = {}) {
 }
 
 function prepareByKind(db, sql, kind) {
-  return (kind === KIND.READ || kind === KIND.WRITE) &&
-      (!db?.open || db.prepare === db.constructor?.prototype?.prepare) ?
+  return kind === KIND.READ || kind === KIND.WRITE ?
     preparePartitionReadStatement(db, sql) :
     db.prepare(sql);
 }

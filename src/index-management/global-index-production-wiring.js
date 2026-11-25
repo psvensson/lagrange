@@ -139,6 +139,16 @@ function buildWhereClauseFromConditions(conditions, allowedColumns = null) {
 
 const DEFAULT_INDEX_TYPE = INDEX_TYPE.BTREE;
 const DEFAULT_GLOBAL_STATE = GLOBAL_INDEX_STATE.CREATING;
+const PERSIST_CATALOG_INSERT_WRITE_AUTHORITY_UNAVAILABLE_MSG =
+  'System-table write authority is unavailable for persisting global index catalog metadata';
+const PERSIST_CATALOG_UPDATE_WRITE_AUTHORITY_UNAVAILABLE_MSG =
+  'System-table write authority is unavailable for updating global index catalog metadata';
+const PERSIST_CATALOG_DELETE_WRITE_AUTHORITY_UNAVAILABLE_MSG =
+  'System-table write authority is unavailable for deleting global index catalog metadata';
+const CATALOG_UPDATE_INDEX_ID_REQUIRED_MSG =
+  'Global index catalog update requires a non-empty indexId';
+const CATALOG_DELETE_RECORD_REQUIRED_MSG =
+  'Global index catalog delete requires a catalog record';
 
 function serializeIndexColumnNames(record) {
   if (Array.isArray(record.column_names)) return JSON.stringify(record.column_names);
@@ -210,19 +220,36 @@ function parseGenerationFromIndexId(indexId) {
   return match ? Number(match[1]) : 1;
 }
 
-async function submitCatalogMutation(gateway, mutation, rowOperationFn) {
+function requireCatalogWriteGateway(indexService, hasRowMethod, unavailableMessage) {
+  const gateway = indexService?.getControlPlaneSystemTableGateway?.();
+  if (!indexService?.canWriteSystemTable?.() ||
+      !gateway ||
+      (!gateway.submitMutation && !hasRowMethod(gateway))) {
+    throw createUnavailableError(
+      GLOBAL_INDEX_ERROR_CODE.DEPENDENCY_UNAVAILABLE,
+      unavailableMessage,
+    );
+  }
+  return gateway;
+}
+
+function assertCatalogMutationResult(res, tableName) {
+  if (res && res.success === false) {
+    const err = new Error(res.error || `Catalog mutation failed on ${tableName}`);
+    if (res.errorCode) err.code = res.errorCode;
+    if (res.failureCode) err.failureCode = res.failureCode;
+    throw err;
+  }
+}
+
+async function submitCatalogMutation(gateway, mutation, rowOperationFn, unavailableMessage) {
   const options = {
     workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
     deliveryPriority: LOCAL_STR_CRITICAL,
   };
   if (gateway?.submitMutation) {
     const res = await gateway.submitMutation(mutation, options);
-    if (res && res.success === false) {
-      const err = new Error(res.error || `Catalog mutation failed on ${mutation.tableName}`);
-      if (res.errorCode) err.code = res.errorCode;
-      if (res.failureCode) err.failureCode = res.failureCode;
-      throw err;
-    }
+    assertCatalogMutationResult(res, mutation.tableName);
     if (gateway.awaitProjectionAt && res?.position) {
       await gateway.awaitProjectionAt(
         res.position,
@@ -232,31 +259,46 @@ async function submitCatalogMutation(gateway, mutation, rowOperationFn) {
     return res;
   }
   if (rowOperationFn) {
-    return rowOperationFn(options);
+    const res = await rowOperationFn(options);
+    assertCatalogMutationResult(res, mutation.tableName);
+    return res;
   }
-  return null;
+  throw createUnavailableError(
+    GLOBAL_INDEX_ERROR_CODE.DEPENDENCY_UNAVAILABLE,
+    unavailableMessage,
+  );
 }
 
 async function persistCatalogInsert(indexService, record) {
+  const gateway = requireCatalogWriteGateway(
+    indexService,
+    (candidate) => Boolean(candidate.insertSystemTableRow),
+    PERSIST_CATALOG_INSERT_WRITE_AUTHORITY_UNAVAILABLE_MSG,
+  );
   const row = toIndicesTableRow(record);
-  if (!indexService.canWriteSystemTable()) return;
-  const gateway = indexService.getControlPlaneSystemTableGateway();
-  if (!gateway) return;
   await submitCatalogMutation(
     gateway,
     {operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT, tableName: TABLES.INDICES, row},
     gateway.insertSystemTableRow ?
       (opts) => gateway.insertSystemTableRow(TABLES.INDICES, row, opts) :
       null,
+    PERSIST_CATALOG_INSERT_WRITE_AUTHORITY_UNAVAILABLE_MSG,
   );
 }
 
 async function persistCatalogUpdate(indexService, indexId, update) {
-  if (!indexId) return;
+  const gateway = requireCatalogWriteGateway(
+    indexService,
+    (candidate) => Boolean(candidate.updateSystemTableRow),
+    PERSIST_CATALOG_UPDATE_WRITE_AUTHORITY_UNAVAILABLE_MSG,
+  );
+  if (!indexId) {
+    throw createUnavailableError(
+      GLOBAL_INDEX_ERROR_CODE.DEPENDENCY_UNAVAILABLE,
+      CATALOG_UPDATE_INDEX_ID_REQUIRED_MSG,
+    );
+  }
   const data = toIndicesUpdateData(update);
-  if (!indexService.canWriteSystemTable()) return;
-  const gateway = indexService.getControlPlaneSystemTableGateway();
-  if (!gateway) return;
   const whereClause = {index_id: indexId};
   await submitCatalogMutation(
     gateway,
@@ -269,19 +311,27 @@ async function persistCatalogUpdate(indexService, indexId, update) {
     gateway.updateSystemTableRow ?
       (opts) => gateway.updateSystemTableRow(TABLES.INDICES, whereClause, data, opts) :
       null,
+    PERSIST_CATALOG_UPDATE_WRITE_AUTHORITY_UNAVAILABLE_MSG,
   );
 }
 
 async function persistCatalogDelete(indexService, record) {
-  if (!record) return;
+  const gateway = requireCatalogWriteGateway(
+    indexService,
+    (candidate) => Boolean(candidate.deleteSystemTableRow),
+    PERSIST_CATALOG_DELETE_WRITE_AUTHORITY_UNAVAILABLE_MSG,
+  );
+  if (!record) {
+    throw createUnavailableError(
+      GLOBAL_INDEX_ERROR_CODE.DEPENDENCY_UNAVAILABLE,
+      CATALOG_DELETE_RECORD_REQUIRED_MSG,
+    );
+  }
   const predicate = {
     index_id: record.index_id,
     table_id: record.table_id,
     index_name: record.index_name,
   };
-  if (!indexService.canWriteSystemTable()) return;
-  const gateway = indexService.getControlPlaneSystemTableGateway();
-  if (!gateway) return;
   await submitCatalogMutation(
     gateway,
     {
@@ -292,6 +342,7 @@ async function persistCatalogDelete(indexService, record) {
     gateway.deleteSystemTableRow ?
       (opts) => gateway.deleteSystemTableRow(TABLES.INDICES, predicate, opts) :
       null,
+    PERSIST_CATALOG_DELETE_WRITE_AUTHORITY_UNAVAILABLE_MSG,
   );
 }
 
@@ -615,6 +666,11 @@ function buildCatalogPersistenceHooks(indexService, getCoordinator = null) {
       syncGlobalIndexesForService(indexService, {includeGatewaySnapshot: true});
     },
     onCatalogInsert: async (record) => {
+      requireCatalogWriteGateway(
+        indexService,
+        (candidate) => Boolean(candidate.insertSystemTableRow),
+        PERSIST_CATALOG_INSERT_WRITE_AUTHORITY_UNAVAILABLE_MSG,
+      );
       await ensureIndexDatasetTableInGateway(indexService, record);
       await persistCatalogInsert(indexService, record);
       syncServiceIndexEntryFromRecord(indexService, record);

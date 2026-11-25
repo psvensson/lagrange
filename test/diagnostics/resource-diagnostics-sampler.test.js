@@ -139,6 +139,8 @@ test('ResourceDiagnosticsSampler exposes singleCoreCpuPercent without dividing b
 
   const report1 = sampler.getSharedReport(500);
   // Host-normalized CPU is 90% / 16 = 5.63%, whereas singleCoreCpuPercent is 90%:
+  t.equal(report1.sampleId, 1);
+  t.equal(report1.latest.sampleId, 1);
   t.equal(report1.latest.process.cpuCount, 16);
   t.equal(report1.latest.process.cpuPercent, 5.63);
   t.equal(report1.latest.process.singleCoreCpuPercent, 90);
@@ -151,12 +153,15 @@ test('ResourceDiagnosticsSampler exposes singleCoreCpuPercent without dividing b
   nowMs += 200;
   const cachedReport = sampler.getSharedReport(500);
   t.equal(cachedReport, report1, 'getSharedReport reuses sample within maxAgeMs');
+  t.equal(cachedReport.latest.sampleId, 1, 'cached report preserves sampleId');
   t.equal(collectCalls, callsAfterFirst);
 
   nowMs += 400;
   cpuUserUs += 300_000;
   const freshReport = sampler.getSharedReport(500);
   t.not(freshReport, report1, 'getSharedReport collects fresh sample after maxAgeMs');
+  t.equal(freshReport.sampleId, 2);
+  t.equal(freshReport.latest.sampleId, 2, 'fresh report increments sampleId');
   t.equal(freshReport.latest.process.singleCoreCpuPercent, 50);
 
   teardown();

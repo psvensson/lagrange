@@ -64,6 +64,18 @@ import {
   PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL,
   PARTITION_SETTLED_REPLAY,
 } from '../../src/partition/partition-committed-statement-outcome-constants.js';
+import {
+  readCommittedStatementOutcome,
+} from '../../src/partition/partition-committed-statement-outcome.js';
+import {
+  loadDurableDeltasBehindWatermark,
+} from '../../src/partition/partition-mirror-replay-cursor.js';
+import {
+  preparePartitionReadStatement,
+} from '../../src/partition/partition-read-statement-owner.js';
+import {
+  replaySplitEntry,
+} from '../../src/partition/partition-split-routing.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {countCdcObligations} from
   '../../src/partition/partition-cdc-obligation-ledger.js';
@@ -205,6 +217,32 @@ function insert(service, id, value, entryId) {
     params: [id, value],
     entryId,
   });
+}
+
+function failInsertEnvironmentally(db) {
+  const throwBusy = () => {
+    throw new Database.SqliteError(
+      ENVIRONMENTAL_SQLITE_MESSAGE, ENVIRONMENTAL_SQLITE_CODE);
+  };
+  const statements = [
+    preparePartitionReadStatement(db, INSERT_SQL),
+    preparePartitionReadStatement(db, `${INSERT_SQL}\nRETURNING *`),
+  ];
+  const originals = statements.map((statement) => ({
+    statement,
+    run: statement.run,
+    all: statement.all,
+  }));
+  for (const {statement} of originals) {
+    statement.run = throwBusy;
+    statement.all = throwBusy;
+  }
+  return () => {
+    for (const {statement, run, all} of originals) {
+      statement.run = run;
+      statement.all = all;
+    }
+  };
 }
 
 async function withPartition(partitionId, body) {
@@ -849,15 +887,9 @@ test('F-i: an environmental SQLite failure is never consumed as a failed ' +
 
     // The host's database answers the statement with an environmental
     // failure (a lock another connection holds), as better-sqlite3 raises it.
-    const prepare = partition.db.prepare.bind(partition.db);
-    partition.db.prepare = (sql) => {
-      if (sql === INSERT_SQL) {
-        throw new Database.SqliteError(
-          ENVIRONMENTAL_SQLITE_MESSAGE, ENVIRONMENTAL_SQLITE_CODE);
-      }
-      return prepare(sql);
-    };
+    const restoreBusy = failInsertEnvironmentally(partition.db);
     const busy = await insert(partition, 'row-1', 'busy', 'entry-busy');
+    restoreBusy();
     const during = durableRecord(dbPath, 'fi-environmental');
 
     assert.equal(busy.success, false,
@@ -944,7 +976,7 @@ test('AD: on a three-replica group, the leader\'s own environmental apply ' +
   });
   await resumeFixtureParticipantGroupAdmission(group.services, group.waitFor);
   const leader = group.services[0];
-  const prepare = leader.db.prepare.bind(leader.db);
+  let restoreBusy = () => {};
   try {
     const setup = await insert(leader, 'row-0', 'setup', 'ad-setup');
     assert.equal(setup.success, true, 'setup: the group serves a write');
@@ -953,15 +985,9 @@ test('AD: on a three-replica group, the leader\'s own environmental apply ' +
     'setup: every replica of the group applied the write');
     // Input: the leader's own database answers the statement with an
     // environmental failure; the followers' databases do not.
-    leader.db.prepare = (sql) => {
-      if (sql === INSERT_SQL) {
-        throw new Database.SqliteError(
-          ENVIRONMENTAL_SQLITE_MESSAGE, ENVIRONMENTAL_SQLITE_CODE);
-      }
-      return prepare(sql);
-    };
+    restoreBusy = failInsertEnvironmentally(leader.db);
     const answer = await insert(leader, 'row-1', 'busy', 'ad-busy');
-    leader.db.prepare = prepare;
+    restoreBusy();
     assert.deepEqual({
       success: answer.success,
       failureCode: answer.failureCode,
@@ -986,8 +1012,112 @@ test('AD: on a three-replica group, the leader\'s own environmental apply ' +
       'rejected write\'s answer, not a proposal refusal: the proposal was ' +
       'accepted and the quorum committed it');
   } finally {
-    leader.db.prepare = prepare;
+    restoreBusy();
     await group.dispose();
     resetEnvironment();
   }
+});
+
+test('durable split effects: committed writes retain canonical affectedRows and ' +
+  'changes across restart for trim(?), zero-row no-ops, and multi-child mutations',
+{timeout: TEST_TIMEOUT_MS}, async () => {
+  await withPartition('split-durable-effects', async ({open}) => {
+    const partition = await open();
+    const seedA = await insert(partition, '\tA\t', 'node-left', 'entry-seed-left');
+    const seedZ = await insert(partition, 'Z', 'node-right', 'entry-seed-right');
+    assert.equal(seedA.success, true);
+    assert.equal(seedZ.success, true);
+    const watermarkIndex = seedZ.logIndex;
+
+    const deleteTrim = await partition.applyWrite({
+      type: PARTITION_SERVICE_OPERATION.DELETE,
+      sql: `DELETE FROM ${TABLE_NAME} WHERE group_id = trim(?)`,
+      params: ['\tA\t'],
+      entryId: 'entry-delete-trim',
+    });
+    assert.equal(deleteTrim.success, true);
+    assert.equal(deleteTrim.changes, 1);
+
+    const noOpDeleteTrim = await partition.applyWrite({
+      type: PARTITION_SERVICE_OPERATION.DELETE,
+      sql: `DELETE FROM ${TABLE_NAME} WHERE group_id = trim(?)`,
+      params: ['\tA\t'],
+      entryId: 'entry-noop-trim',
+    });
+    assert.equal(noOpDeleteTrim.success, true);
+    assert.equal(noOpDeleteTrim.changes, 0);
+
+    const multiChildInsert = await partition.applyWrite({
+      type: PARTITION_SERVICE_OPERATION.INSERT,
+      sql:
+        `INSERT INTO ${TABLE_NAME} (group_id, representative_node_id) ` +
+        'VALUES (?, ?), (?, ?)',
+      params: ['B', 'node-b', 'Y', 'node-y'],
+      entryId: 'entry-multi-child-insert',
+    });
+    assert.equal(multiChildInsert.success, true);
+    assert.equal(multiChildInsert.changes, 2);
+
+    await partition.shutdown();
+
+    const recovered = await open();
+    const deleteOutcome = readCommittedStatementOutcome(
+      recovered,
+      recovered.getCommittedEntryKey({entryId: 'entry-delete-trim'}),
+    );
+    assert.equal(deleteOutcome.changes, 1);
+    assert.equal(deleteOutcome.affectedRows?.length, 1);
+    assert.equal(deleteOutcome.affectedRows[0].group_id, '\tA\t');
+
+    const noOpOutcome = readCommittedStatementOutcome(
+      recovered,
+      recovered.getCommittedEntryKey({entryId: 'entry-noop-trim'}),
+    );
+    assert.equal(noOpOutcome.changes, 0);
+    assert.deepEqual(noOpOutcome.affectedRows, []);
+
+    const deltas = loadDurableDeltasBehindWatermark(recovered, watermarkIndex);
+    assert.equal(deltas.length, 3);
+    assert.equal(deltas[0].entryId, 'entry-delete-trim');
+    assert.equal(deltas[0].changes, 1);
+    assert.equal(deltas[0].affectedRows?.[0]?.group_id, '\tA\t');
+    assert.equal(deltas[1].entryId, 'entry-noop-trim');
+    assert.equal(deltas[1].changes, 0);
+    assert.deepEqual(deltas[1].affectedRows, []);
+    assert.equal(deltas[2].entryId, 'entry-multi-child-insert');
+    assert.equal(deltas[2].changes, 2);
+    assert.equal(deltas[2].affectedRows?.length, 2);
+
+    const mirrored = [];
+    const metadata = {
+      primaryKeyColumn: 'group_id',
+      splitKey: 'M',
+      targetPartitionIds: ['rep-left', 'rep-right'],
+    };
+    const queryExecutor = {
+      async executeOnPartition(partitionId, sql, params, _r, _w, _tx, options) {
+        mirrored.push({partitionId, sql, params, entryId: options?.entryId});
+        return {success: true};
+      },
+    };
+    for (const delta of deltas) {
+      await replaySplitEntry(delta, metadata, {
+        tableName: TABLE_NAME,
+        queryExecutor,
+      });
+    }
+    assert.deepEqual(
+      mirrored.map((item) => ({
+        partitionId: item.partitionId,
+        entryId: item.entryId,
+      })),
+      [
+        {partitionId: 'rep-left', entryId: 'entry-delete-trim'},
+        {partitionId: 'rep-left', entryId: 'entry-multi-child-insert'},
+        {partitionId: 'rep-right', entryId: 'entry-multi-child-insert'},
+      ],
+      'post-restart recovery mirrors trim(?), skips the zero-row no-op, and ' +
+      'projects the multi-child mutation to both children',
+    );
+  });
 });

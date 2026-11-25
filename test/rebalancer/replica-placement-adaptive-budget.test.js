@@ -59,7 +59,21 @@ import {
 } from '../../src/rebalancer/replica-placement-adaptive-budget.js';
 import {
   PLACEMENT_FORMATION_STATE,
+  PLACEMENT_REFUSAL,
 } from '../../src/rebalancer/replica-placement-owner-constants.js';
+import {
+  createControlPlanePlacementNodeObservationReader,
+  readRemoteHeartbeatObservation,
+} from '../../src/rebalancer/replica-placement-owner-capacity.js';
+import {
+  applyRebalanceCoordinatorOperationCreationSupportMethods,
+} from '../../src/rebalancer/rebalance-coordinator-operation-creation-support.js';
+import {
+  ResourceDiagnosticsSampler,
+} from '../../src/diagnostics/resource-diagnostics-sampler.js';
+import {
+  OperationType,
+} from '../../src/rebalancer/replica-operation-progress.js';
 import {
   createReplicaPlacementOwner,
 } from '../../src/rebalancer/replica-placement-owner.js';
@@ -93,14 +107,25 @@ function healthyObs(sampledAtMs = NOW_MS, overrides = {}) {
   };
 }
 
-function createSimpleSystemCache(initialPartitions = [], initialServices = []) {
+function createSimpleSystemCache(initialPartitions = [], initialServices = [], initialNodes = []) {
   const listeners = new Set();
   const rowsByTable = new Map([
     [TABLES.PARTITIONS, [...initialPartitions]],
     [TABLES.SERVICES, [...initialServices]],
+    [TABLES.NODES, [...initialNodes]],
     [TABLES.REPLICA_OPERATIONS, []],
   ]);
   return {
+    get(tableName, primaryKey) {
+      const list = rowsByTable.get(tableName) || [];
+      if (tableName === TABLES.NODES) {
+        return list.find((r) => r[COLUMN.NODE_ID] === primaryKey) ?? null;
+      }
+      if (tableName === TABLES.REPLICA_OPERATIONS) {
+        return list.find((r) => r.operation_id === primaryKey) ?? null;
+      }
+      return null;
+    },
     getAll(tableName) {
       return [...(rowsByTable.get(tableName) || [])];
     },
@@ -114,6 +139,16 @@ function createSimpleSystemCache(initialPartitions = [], initialServices = []) {
       const list = rowsByTable.get(tableName) || [];
       if (tableName === TABLES.REPLICA_OPERATIONS) {
         const idx = list.findIndex((r) => r.operation_id === row.operation_id);
+        if (operation === CDC_OPERATION.DELETE) {
+          if (idx >= 0) list.splice(idx, 1);
+        } else if (idx >= 0) {
+          list[idx] = {...row};
+        } else {
+          list.push({...row});
+        }
+        rowsByTable.set(tableName, list);
+      } else if (tableName === TABLES.NODES) {
+        const idx = list.findIndex((r) => r[COLUMN.NODE_ID] === row[COLUMN.NODE_ID]);
         if (operation === CDC_OPERATION.DELETE) {
           if (idx >= 0) list.splice(idx, 1);
         } else if (idx >= 0) {
@@ -613,6 +648,276 @@ test('Scenario 8: leadership change with uncertain admission reconstructs occupa
     assert.equal(seenPayloads[1].entryId, originalAttempt.entryId);
     assert.deepEqual(seenPayloads[1].body, originalAttempt.body);
     owner2.shutdown();
+  } finally {
+    ledger.db.close();
+  }
+});
+
+test('Review P1 (Items 1, 2, 3, 4): incomplete remote observations hold without growing, cached ResourceDiagnosticsSampler sampleId deduplicates multi-pass decrease within 1s window, fresh coordinator requests respect reduced adaptive kTgt, and TABLES.NODES heartbeat recovery wakes ReplicaPlacementOwner', async () => {
+  let nowMs = NOW_MS;
+  const config = normalizeWindowConfig({
+    initialLimit: 6,
+    minLimit: 1,
+    maxLimit: 8,
+    multiplicativeDecrease: 0.75,
+    minAdjustIntervalMs: 1_000,
+  });
+
+  // 1. Item 2: Missing remote pressure measurements must NOT count as healthy:
+  // An observation with only sampledAtMs, bootIncarnation, and availableMemoryBytes is INCOMPLETE and HOLDS:
+  const memoryOnlyObs = {
+    sampledAtMs: nowMs,
+    bootIncarnation: 1,
+    availableMemoryBytes: 512 * 1024 * 1024,
+  };
+  const incompleteDecision = decideAdaptiveResourceWindow(
+    null,
+    memoryOnlyObs,
+    {occupancy: 6, waitingDemandCount: 4, nowMs, expectedBootIncarnation: 1},
+    config,
+  );
+  assert.equal(incompleteDecision.action, ACTION.HOLD);
+  assert.equal(incompleteDecision.observationState, OBS_STATE.INCOMPLETE);
+  assert.equal(incompleteDecision.reason, REASON.OBSERVATION_INCOMPLETE);
+  assert.equal(incompleteDecision.limit, 6);
+
+  // Remote heartbeat observation with low CPU and plenty of memory holds (INCOMPLETE),
+  // whereas remote heartbeat with high CPU (>= 95%) decreases the window:
+  const remoteHealthyHeartbeat = readRemoteHeartbeatObservation({
+    [COLUMN.NODE_ID]: 'n2',
+    [COLUMN.LAST_HEARTBEAT]: nowMs,
+    [COLUMN.BOOT_INCARNATION]: 1,
+    memory_total_bytes: 1024 * 1024 * 1024,
+    memory_usage_percent: 25,
+    cpu_usage_percent: 20,
+  });
+  assert.equal(remoteHealthyHeartbeat.pressureSensorsComplete, false);
+  assert.equal(remoteHealthyHeartbeat.cpuUsagePercent, 20);
+  const remoteHoldDecision = decideAdaptiveResourceWindow(
+    null,
+    remoteHealthyHeartbeat,
+    {occupancy: 6, waitingDemandCount: 4, nowMs, expectedBootIncarnation: 1},
+    config,
+  );
+  assert.equal(remoteHoldDecision.action, ACTION.HOLD);
+  assert.equal(remoteHoldDecision.observationState, OBS_STATE.INCOMPLETE);
+  assert.equal(remoteHoldDecision.reason, REASON.OBSERVATION_INCOMPLETE);
+  assert.equal(remoteHoldDecision.limit, 6);
+
+  const remoteHighCpuHeartbeat = readRemoteHeartbeatObservation({
+    [COLUMN.NODE_ID]: 'n2',
+    [COLUMN.LAST_HEARTBEAT]: nowMs,
+    [COLUMN.BOOT_INCARNATION]: 1,
+    memory_total_bytes: 1024 * 1024 * 1024,
+    memory_usage_percent: 25,
+    cpu_usage_percent: 98,
+  });
+  const remoteCpuDecreaseDecision = decideAdaptiveResourceWindow(
+    null,
+    remoteHighCpuHeartbeat,
+    {occupancy: 6, waitingDemandCount: 4, nowMs, expectedBootIncarnation: 1},
+    config,
+  );
+  assert.equal(remoteCpuDecreaseDecision.action, ACTION.DECREASE);
+  assert.equal(remoteCpuDecreaseDecision.reason, REASON.SINGLE_THREAD_CPU_QUEUE_CONGESTION);
+  assert.equal(remoteCpuDecreaseDecision.limit, 4);
+
+  // 2. Item 3: 4 placement passes at different millisecond timestamps within one 1000ms
+  // ResourceDiagnosticsSampler.getSharedReport(1000) interval reduce a congested window ONLY ONCE (6 -> 4):
+  const initialNodes = [
+    {
+      ...nodeRow('n1', 'h1'),
+      [COLUMN.LAST_HEARTBEAT]: nowMs,
+      memory_total_bytes: 2 * 1024 * 1024 * 1024,
+      memory_usage_percent: 30,
+    },
+    {
+      ...nodeRow('n2', 'h2'),
+      [COLUMN.LAST_HEARTBEAT]: nowMs,
+      memory_total_bytes: 2 * 1024 * 1024 * 1024,
+      memory_usage_percent: 98, // Hard memory constrained (< 64 MiB free)!
+    },
+    {
+      ...nodeRow('n3', 'h3'),
+      [COLUMN.LAST_HEARTBEAT]: nowMs,
+      memory_total_bytes: 2 * 1024 * 1024 * 1024,
+      memory_usage_percent: 20,
+    },
+  ];
+  const partitions = [
+    seededPartitionRow('services-p1', 'n1'),
+    seededPartitionRow('partitions-p1', 'n1'),
+    seededPartitionRow('tables-p1', 'n1'),
+  ];
+  const services = [
+    ...seededServiceRows('services-p1', 'n1'),
+    ...seededServiceRows('partitions-p1', 'n1'),
+    ...seededServiceRows('tables-p1', 'n1'),
+  ];
+  const cache = createSimpleSystemCache(partitions, services, initialNodes);
+  const ledger = createRealSqlLedgerHarness(cache, 'n1', () => nowMs);
+
+  try {
+    const sampler = new ResourceDiagnosticsSampler({
+      nodeId: 'n1',
+      nowFn: () => nowMs,
+      cpuUsageFn: () => ({user: 900_000, system: 80_000}),
+      cpusFn: () => [{model: 'cpu-0'}],
+      eluFn: () => ({utilization: 0.96}),
+      eventLoopDelayProvider: () => 140,
+    });
+    const readNodeObservation = createControlPlanePlacementNodeObservationReader({
+      localNodeId: 'n1',
+      resourceDiagnosticsSampler: sampler,
+      systemTableCache: cache,
+    });
+    const controller = createAdaptivePlacementBudgetController({
+      readNodeObservation,
+      sourceWindow: {
+        initialLimit: 6,
+        minLimit: 1,
+        maxLimit: 8,
+        multiplicativeDecrease: 0.75,
+        minAdjustIntervalMs: 500,
+      },
+      targetWindow: {
+        initialLimit: 2,
+        minLimit: 1,
+        maxLimit: 4,
+        multiplicativeDecrease: 0.75,
+        minAdjustIntervalMs: 500,
+      },
+    });
+    const nodeInput = {
+      eligibility: {
+        eligibleNodeIds: ['n1', 'n2', 'n3'],
+        nodeBoots: new Map([['n1', 1], ['n2', 1], ['n3', 1]]),
+        declaredHosts: new Map([['n1', 'h1'], ['n2', 'h2'], ['n3', 'h3']]),
+      },
+    };
+    const passLimits = [];
+    for (const offsetMs of [100, 300, 600, 850]) {
+      nowMs = NOW_MS + offsetMs;
+      const snap = controller.evaluatePassBudgets({
+        nodeInput,
+        occupancy: {bySource: new Map([['n1', 4]]), byTarget: new Map(), unrecordedSourceCopies: 0},
+        waitingBySource: new Map([['n1', 3]]),
+        waitingByTarget: new Map(),
+        nowMs,
+      });
+      passLimits.push(snap.sourceBudgetOf('n1'));
+    }
+    assert.deepEqual(
+      passLimits,
+      [4, 4, 4, 4],
+      '4 passes within one 1000ms sampler interval reduce n1 window only once (6 -> 4), never 6 -> 4 -> 3 -> 2 -> 1',
+    );
+
+    // 3. Item 1: When the controller reduces target n3's window to 1 and one committed copy already
+    // occupies n3, a fresh coordinator request via createPartitionOperationViaPlacementAdmission
+    // receives kTgt = 1 from the shared controller and is refused with TARGET_AT_CAPACITY:
+    controller.recordObservation(
+      'n3',
+      healthyObs(nowMs, {writeLatencyMs: 240, congestionEpochId: 'n3-stall-1'}),
+      {nowMs, notifyOnRecovery: false},
+    );
+    const nodeAuthority = {
+      subscribe: () => () => {},
+      scheduleRefresh: () => {},
+      answerCommittedNodes: () => ({
+        state: 'ready',
+        epoch: {publicationEpoch: 4},
+        nodeRows: cache.getAll(TABLES.NODES),
+        formation: {state: PLACEMENT_FORMATION_STATE.FORMED, latchEpoch: 4},
+      }),
+    };
+    const owner = createReplicaPlacementOwner({
+      nodeId: 'n1',
+      ledgerPartitionService: ledger.service,
+      nodeAuthority,
+      systemTableCache: cache,
+      now: () => nowMs,
+      logger: ledger.service.logger,
+      admitPlacement: ledger.admitPlacement,
+      releasePlacementHold: ledger.releasePlacementHold,
+      adaptiveBudgetController: controller,
+    });
+    owner.setLeader(true);
+    await owner.awaitCurrentWorkIdle();
+
+    // Pass 1: n2 is memory-excluded (98% used), n3's target budget was reduced 2 -> 1,
+    // so exactly 1 operation is admitted onto n3 and 0 onto n2:
+    let rows = ledger.db
+      .prepare('SELECT operation_id, partition_id, target_node_id FROM replica_operations ORDER BY rowid')
+      .all();
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].target_node_id, 'n3');
+    assert.equal(controller.getTargetBudget('n3'), 1);
+
+    // Now invoke createPartitionOperationViaPlacementAdmission on a coordinator wired to owner:
+    class TestCoordinator {
+      constructor() {
+        this.nodeId = 'n1';
+        this.timeSource = {now: () => nowMs};
+        this.replicaPlacementOwner = owner;
+        this.adaptiveBudgetController = controller;
+        this.ledgerPartitionServices = new Set([ledger.service]);
+        this.controlPlaneReadinessService = {
+          answerCommittedNodes: () => nodeAuthority.answerCommittedNodes(),
+        };
+        this.submitPlacementPayload = (payload) =>
+          Promise.resolve(ledger.admitPlacement(payload));
+      }
+      assertNativePlacementAliasProof() {}
+    }
+    applyRebalanceCoordinatorOperationCreationSupportMethods(TestCoordinator);
+    const coordinator = new TestCoordinator();
+
+    const rejectedMove = {
+      type: OperationType.ADD,
+      nodeId: 'n3',
+      copySourceNodeId: 'n1',
+    };
+    await assert.rejects(
+      () => coordinator.createPartitionOperationViaPlacementAdmission({
+        partitionId: 'tables-p1',
+        entityType: 'partition',
+        entityId: 'tables-p1',
+        sourceNodeId: 'n1',
+        normalizedMoveType: OperationType.ADD,
+        move: rejectedMove,
+        requestedMove: rejectedMove,
+      }),
+      (err) => err.code === PLACEMENT_REFUSAL.TARGET_AT_CAPACITY &&
+        err.placementResult?.occupancy?.targetLimit === 1 &&
+        err.placementResult?.occupancy?.targetOccupancy === 1,
+      'fresh coordinator request receives adaptive kTgt=1 and is refused with TARGET_AT_CAPACITY',
+    );
+
+    // 4. Item 4: When memory-constrained n2 recovers in a TABLES.NODES heartbeat update
+    // (without ServeEligibilityOwner emitting any eligibility change), handleCacheChange
+    // feeds the heartbeat observation into adaptiveBudgetController, which wakes
+    // ReplicaPlacementOwner (TARGET_CAPACITY_CHANGED) and admits waiting partitions onto n2:
+    nowMs += 1_000;
+    cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPDATE, {
+      ...nodeRow('n2', 'h2'),
+      [COLUMN.LAST_HEARTBEAT]: nowMs,
+      memory_total_bytes: 2 * 1024 * 1024 * 1024,
+      memory_usage_percent: 25,
+      cpu_usage_percent: 15,
+    });
+    await owner.awaitCurrentWorkIdle();
+
+    rows = ledger.db
+      .prepare('SELECT operation_id, partition_id, target_node_id FROM replica_operations ORDER BY rowid')
+      .all();
+    const onN2AfterHeartbeatRecovery = rows.filter((r) => r.target_node_id === 'n2');
+    assert.equal(
+      onN2AfterHeartbeatRecovery.length,
+      2,
+      'TABLES.NODES heartbeat recovery woke ReplicaPlacementOwner and admitted waiting partitions onto n2',
+    );
+    owner.shutdown();
   } finally {
     ledger.db.close();
   }

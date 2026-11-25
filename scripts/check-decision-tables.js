@@ -7,11 +7,13 @@ import {fileURLToPath} from 'node:url';
 import Ajv from 'ajv';
 
 import {
+  CONCRETE_TEXT_SCHEMA,
   hasConcreteText,
   isObjectRecord,
   listFiles,
   mainResultToExitCode,
   readJsonFile,
+  registerConcreteTextKeyword,
   relativeToCwd,
   renderValidationResult,
   uniqueValues,
@@ -31,10 +33,7 @@ const ROOT_FIELD_LABEL = 'decision table';
 const SLASH_SEPARATOR = '/';
 const DOT_SEPARATOR = '.';
 const WILDCARD = '*';
-const NON_EMPTY_STRING_SCHEMA = Object.freeze({
-  type: JSON_SCHEMA_STRING_TYPE,
-  minLength: 1,
-});
+const NON_EMPTY_STRING_SCHEMA = CONCRETE_TEXT_SCHEMA;
 const NAMED_VALUES_RECORD_SCHEMA = Object.freeze({
   type: JSON_SCHEMA_OBJECT_TYPE,
   additionalProperties: false,
@@ -123,7 +122,7 @@ const DECISION_TABLE_JSON_SCHEMA = Object.freeze({
     }),
   }),
 });
-const ajv = new Ajv({allErrors: true, strict: true});
+const ajv = registerConcreteTextKeyword(new Ajv({allErrors: true, strict: true}));
 const validateDecisionTableSchema = ajv.compile(DECISION_TABLE_JSON_SCHEMA);
 const HELP_TEXT = [
   'Usage: npm run model:decision-tables -- [--json] [table.json ...]',

@@ -1,6 +1,7 @@
 import {RETAINED_COPY_POLICY_STATE as POLICY} from
   '../partition/partition-placement-admission-constants.js';
 import {PLACEMENT_REFUSAL} from './replica-placement-owner-constants.js';
+import {resolveOwnerMoveCopyLimits} from './replica-placement-owner-capacity.js';
 import {resolveTargetNodeIncarnationSnapshot} from './replica-status.js';
 // The ordinary placement owner classifies a currently eligible same-ID copy
 // repair. This observes its real node/formation/deficit inputs; it never labels
@@ -67,6 +68,8 @@ function buildCurrentRetainedCopyPolicy(owner, operation) {
   if (!candidate || !retainedTargetMatches(owner, nodeInput, operation)) {
     return unavailableCopyPolicy();
   }
+  const copyLimits = resolveOwnerMoveCopyLimits(owner, candidate.move, owner.now());
+  if (copyLimits.hardAdmissionAllowed === false) return unavailableCopyPolicy();
   const statement = buildPlacementAdmissionStatement({...candidate,
     move: {...candidate.move,
       targetNodeBootIncarnation: operation.targetNodeBootIncarnation,
@@ -76,6 +79,8 @@ function buildCurrentRetainedCopyPolicy(owner, operation) {
     formationLatchEpoch: nodeInput.formation.latchEpoch,
     membershipPublicationEpoch: operation.membershipPublicationEpoch ?? null,
     positions: {nodesEpoch: nodeInput.epoch?.publicationEpoch ?? null},
+    kSrc: copyLimits.kSrc,
+    kTgt: copyLimits.kTgt,
   });
   return {state: POLICY.READY, statement};
 }

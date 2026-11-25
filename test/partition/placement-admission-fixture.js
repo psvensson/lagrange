@@ -13,7 +13,8 @@ import {requestPlacementAdmission} from
   '../../src/partition/partition-placement-admission.js';
 import {buildFoundingAdmissionStatement, buildPlacementAdmissionStatement} from
   '../../src/rebalancer/replica-placement-owner-admission-statement.js';
-import {PLACEMENT_CLASS} from '../../src/rebalancer/replica-placement-owner-constants.js';
+import {PLACEMENT_CLASS, PLACEMENT_COPY_CAPACITY} from
+  '../../src/rebalancer/replica-placement-owner-constants.js';
 import {OperationType, ReplicaStatus, WORKFLOW_STEP_TO_STATUS} from
   '../../src/rebalancer/replica-operation-progress.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
@@ -51,7 +52,8 @@ async function onLedgerLeader(measure, extra = {}) {
  */
 function placementStatement({partitionId, type = OperationType.ADD, target,
   source = NODE.A, placementClass = PLACEMENT_CLASS.SYSTEM, repair = false,
-  sourceReplicaId = null, replicaId = null, repairWaitingOn = [], voterRetirement}) {
+  sourceReplicaId = null, replicaId = null, repairWaitingOn = [], voterRetirement,
+  kSrc = PLACEMENT_COPY_CAPACITY.K_SRC, kTgt = PLACEMENT_COPY_CAPACITY.K_TGT}) {
   const copies = type !== OperationType.REMOVE;
   return buildPlacementAdmissionStatement({partitionId, placementClass, repair,
     move: {type, targetNodeId: target, sourceReplicaId, replicaId,
@@ -59,7 +61,7 @@ function placementStatement({partitionId, type = OperationType.ADD, target,
       ...(voterRetirement === undefined ? {} : {voterRetirement})}},
   {sourceNodeId: NODE.A, repairWaitingSourceNodeIds: new Set(repairWaitingOn),
     formationLatchEpoch: FORMATION_LATCH_EPOCH, membershipPublicationEpoch: 7,
-    positions: {ledgerAppliedIndex: 1, nodesEpoch: 3}});
+    positions: {ledgerAppliedIndex: 1, nodesEpoch: 3}, kSrc, kTgt});
 }
 
 /**

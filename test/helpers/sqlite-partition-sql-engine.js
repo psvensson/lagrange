@@ -11,11 +11,20 @@
 
 import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import Database from 'better-sqlite3';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {CDC_OPERATION, TABLES} from '../../src/constants/index.js';
+import {
+  resolveDeclaredPartitionKeyType,
+} from '../../src/partition/partition-boundary-representation.js';
 import {QUERY_OPERATION} from '../../src/query/query-constants.js';
 import {PARSER_DIALECT} from '../../src/query/pg/pg-compat-constants.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+import {
+  buildSchemaDefinition,
+  derivePartitionKey,
+} from '../../src/query/table-creation-service-schema-derivation.js';
 import {answerParticipantTransactionRequest} from
   '../test-helpers/participant-protocol-double.js';
 import {createTransactionPersistenceGateway} from
@@ -39,47 +48,65 @@ function createSystemCache(table, partitions) {
     table.ddl,
     {dialect: PARSER_DIALECT.POSTGRESQL},
   ).parse();
+  const primaryKeyList = Array.isArray(table.primaryKey) ?
+    table.primaryKey :
+    [table.primaryKey];
+  const canonicalSchema = buildSchemaDefinition(
+    parsedDdl.columns || [],
+    parsedDdl,
+    primaryKeyList,
+  );
+  const partitionKey = derivePartitionKey(primaryKeyList);
   const schemaDefinition = JSON.stringify({
+    ...canonicalSchema,
     tableName: table.name,
-    columns: parsedDdl.columns || [],
+    columns: canonicalSchema.columns.map((col, idx) => ({
+      ...col,
+      ...(parsedDdl.columns?.[idx]?.dataType ?
+        {dataType: parsedDdl.columns[idx].dataType} :
+        {}),
+    })),
     primaryKey: table.primaryKey,
   });
-  const tables = [{
+  const tableRow = {
+    table_id: table.name,
     table_name: table.name,
+    primary_key: partitionKey,
     primaryKey: table.primaryKey,
+    partition_key: partitionKey,
     active_partition_version: 1,
     schema_definition: schemaDefinition,
-  }];
-  const partitionRows = partitions.map((partition) => ({
-    partition_version: 1,
-    state: 'NORMAL',
-    ...partition,
-    table_name: table.name,
-    leader_node_id: FIXTURE_NODE,
-  }));
-  const services = partitionRows.map((partition) => ({
-    service_id: partition.partition_id,
-    service_type: 'partition',
-    partition_id: partition.partition_id,
-    node_id: FIXTURE_NODE,
-    raft_role: 'leader',
-    address: `${FIXTURE_NODE}/partition/${partition.partition_id}`,
-    status: 'active',
-  }));
-  const byType = {partitions: partitionRows, services, tables};
-  return {
-    get(type, key) {
-      return type === 'tables' ?
-        tables.find((entry) => entry.table_name === key) :
-        null;
-    },
-    filter(type, predicate) {
-      return (byType[type] || []).filter(predicate);
-    },
-    getAll(type) {
-      return byType[type] || [];
-    },
   };
+  const defaultPartitionKeyType =
+    resolveDeclaredPartitionKeyType(tableRow, primaryKeyList) || 'TEXT';
+  const cache = new SystemTableCache();
+  cache.applySystemTableChange(TABLES.TABLES, CDC_OPERATION.INSERT, tableRow);
+  for (const partition of partitions) {
+    const partitionRow = {
+      partition_version: 1,
+      state: 'NORMAL',
+      partition_key_type: defaultPartitionKeyType,
+      ...partition,
+      table_id: table.name,
+      table_name: table.name,
+      leader_node_id: FIXTURE_NODE,
+    };
+    cache.applySystemTableChange(
+      TABLES.PARTITIONS,
+      CDC_OPERATION.INSERT,
+      partitionRow,
+    );
+    cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
+      service_id: partitionRow.partition_id,
+      service_type: 'partition',
+      partition_id: partitionRow.partition_id,
+      node_id: FIXTURE_NODE,
+      raft_role: 'leader',
+      address: `${FIXTURE_NODE}/partition/${partitionRow.partition_id}`,
+      status: 'active',
+    });
+  }
+  return cache;
 }
 
 function createPartitionRouter(databases, uncountedPartitions) {
