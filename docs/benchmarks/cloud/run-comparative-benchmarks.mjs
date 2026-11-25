@@ -32,7 +32,16 @@ import {fileURLToPath} from 'node:url';
 import {EXIT_CODES} from '../../../test/distributed/harness/constants.js';
 import {
   DEFAULT_RAW_OBSERVATIONS_NDJSON_PATH,
+  readRawObservationSources,
 } from '../../../test/distributed/harness/raw-observation-store.js';
+import {
+  ADMISSION_REASON,
+} from '../../../test/distributed/harness/benchmark-claim-admission.js';
+import {
+  DEFAULT_INVALIDATIONS_PATH,
+  appendInvalidationEntries,
+  readInvalidationLedger,
+} from '../../../test/distributed/harness/benchmark-invalidation-ledger.js';
 import {
   regenerateAllBenchmarkArtifactsFromAdmitted,
 } from '../../../test/distributed/harness/raw-observation-campaign-specs.js';
@@ -606,6 +615,60 @@ function shouldRegenerateCanonicalBenchmarkArtifacts(opts, summary) {
       path.resolve(REPO_ROOT, DEFAULT_RAW_OBSERVATIONS_NDJSON_PATH);
 }
 
+const INV_ID_PAD = 4;
+
+function supersedePriorCampaignRuns(rootDir, currentCampaignId) {
+  const raw = readRawObservationSources(rootDir);
+  const ledger = readInvalidationLedger(rootDir);
+  const newRuns = raw.runs.filter((e) => e.run?.campaignId === currentCampaignId);
+  if (newRuns.length === 0) return;
+  const newClaimPairs = new Set(newRuns.map((e) => `${e.run.targetId}/${e.run.subkind}`));
+  const coveredRunIds = new Set();
+  for (const entry of raw.runs) {
+    const header = raw.campaignHeaders.get(entry.run?.campaignId);
+    const gitCommit = header?.harness?.gitCommit ?? null;
+    const isCovered = ledger.some((inv) =>
+      inv.scope.file === entry.file &&
+      (inv.scope.campaignGitCommit === null || inv.scope.campaignGitCommit === gitCommit) &&
+      (inv.scope.receiptIds === 'all' || inv.scope.receiptIds.includes(entry.run?.runId)));
+    if (isCovered) coveredRunIds.add(entry.run.runId);
+  }
+  const toSupersedeByCommit = new Map();
+  for (const entry of raw.runs) {
+    const run = entry.run;
+    if (!run || run.campaignId === currentCampaignId || coveredRunIds.has(run.runId)) continue;
+    if (!newClaimPairs.has(`${run.targetId}/${run.subkind}`)) continue;
+    const header = raw.campaignHeaders.get(run.campaignId);
+    const gitCommit = header?.harness?.gitCommit ?? null;
+    const list = toSupersedeByCommit.get(gitCommit) || [];
+    list.push(run.runId);
+    toSupersedeByCommit.set(gitCommit, list);
+  }
+  if (toSupersedeByCommit.size === 0) return;
+  let nextNum = ledger.length + 1;
+  const existingIds = new Set(ledger.map((e) => e.id));
+  const entries = [];
+  for (const [gitCommit, runIds] of toSupersedeByCommit.entries()) {
+    while (existingIds.has(`inv-${String(nextNum).padStart(INV_ID_PAD, '0')}`)) nextNum += 1;
+    const id = `inv-${String(nextNum).padStart(INV_ID_PAD, '0')}`;
+    existingIds.add(id);
+    entries.push({
+      id,
+      recordedAt: new Date().toISOString(),
+      scope: {
+        file: DEFAULT_RAW_OBSERVATIONS_NDJSON_PATH,
+        campaignGitCommit: gitCommit,
+        receiptIds: runIds,
+      },
+      reasons: [ADMISSION_REASON.DUPLICATE_CLAIM],
+      defectIds: [],
+      note: `Superseded by newer campaign ${currentCampaignId} measuring the same target claim(s).`,
+      recordedBy: 'run-comparative-benchmarks',
+    });
+  }
+  appendInvalidationEntries(path.resolve(rootDir, DEFAULT_INVALIDATIONS_PATH), entries);
+}
+
 async function main() {
   const opts = parseCliArgs(process.argv.slice(2), process.env);
   if (opts.help) {
@@ -635,6 +698,7 @@ async function main() {
     executionTarget: opts.executionTarget, rawObservationsPath: opts.rawObservationsPath,
     ...summary}, null, 2)}\n`);
   if (shouldRegenerateCanonicalBenchmarkArtifacts(opts, summary)) {
+    supersedePriorCampaignRuns(REPO_ROOT, summary.campaignId);
     await regenerateAllBenchmarkArtifactsFromAdmitted(REPO_ROOT);
     process.stdout.write('[bench] regenerated comparative benchmark artifacts in ' +
       'data/tidb-comparison and docs/benchmarks\n');

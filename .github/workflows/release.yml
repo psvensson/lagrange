@@ -231,8 +231,8 @@ jobs:
           npm install --global npm@11.7.0
           npm ci
 
-      # npm is the first release channel mutated. If the trusted-publisher
-      # binding is wrong, fail here before SEA/Helm/Docker build work.
+      # npm is the first release channel mutated. Verify both the npm tarball
+      # and the SEA CJS bundle (--dry-run) before mutating npm.
       - name: Build and verify npm package
         run: |
           set -euo pipefail
@@ -241,6 +241,7 @@ jobs:
             --output dist/npm \
             --git-head "${{ steps.release.outputs.tagged_commit }}"
           test -f "dist/npm/lagrange-server-${VERSION}.tgz"
+          npm run build:bundle
 
       - name: Publish npm package
         run: |

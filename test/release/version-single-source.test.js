@@ -1,12 +1,23 @@
 import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync, readdirSync} from 'node:fs';
 import {join} from 'node:path';
 import {CLI_VERSION} from '../../src/cli/cli-constants.js';
 import {
   ENTRYPOINT_APP,
   ENTRYPOINT_VERSION,
 } from '../../src/constants/entrypoint.js';
+
+function listProductionSourceFiles(dir) {
+  const out = [];
+  for (const entry of readdirSync(dir, {withFileTypes: true})) {
+    if (entry.name === 'test-helpers') continue;
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...listProductionSourceFiles(full));
+    else if (entry.isFile() && entry.name.endsWith('.js')) out.push(full);
+  }
+  return out;
+}
 
 // The release version lives in three places that must never drift: package.json
 // (the single source of truth) and the two user-facing `--version` string
@@ -41,5 +52,23 @@ describe('release version single-source', () => {
   it('npm identity is separate from the executable product identity', () => {
     assert.equal(pkg.name, 'lagrange-server');
     assert.equal(ENTRYPOINT_APP.PACKAGE_NAME, 'lagrange');
+  });
+
+  it('every production src/ module using import.meta.url guards it with SEA_BUILD', () => {
+    const srcRoot = join(import.meta.dirname, '..', '..', 'src');
+    for (const filePath of listProductionSourceFiles(srcRoot)) {
+      const source = readFileSync(filePath, 'utf8');
+      if (!source.includes('import.meta.url')) continue;
+      assert.equal(
+        source.includes('process.env.SEA_BUILD'),
+        true,
+        `${filePath} uses import.meta.url without a process.env.SEA_BUILD guard for CJS SEA bundling`,
+      );
+      assert.doesNotMatch(
+        source,
+        /^const\s+\w+\s*=\s*fileURLToPath\([^)]*import\.meta\.url/mu,
+        `${filePath} evaluates fileURLToPath(import.meta.url) eagerly at top-level module scope`,
+      );
+    }
   });
 });

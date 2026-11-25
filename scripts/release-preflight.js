@@ -28,7 +28,11 @@ import {fileURLToPath} from 'node:url';
 import {CLI_VERSION} from '../src/cli/cli-constants.js';
 import {execGit} from './checks/git-invocation.js';
 import {ENTRYPOINT_VERSION} from '../src/constants/entrypoint.js';
-import {extractChangelogSection} from './release-notes.js';
+import {
+  OVERVIEW_MODE,
+  extractChangelogSection,
+  renderReleaseNotes,
+} from './release-notes.js';
 import {OUTCOME as PROOF_OUTCOME, PROOF, resolveProof} from './proof-authority.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -121,9 +125,16 @@ function defaultProofResolver({proofId, sha, remote, root}) {
   return resolveProof({proofId, sha, remote, cwd: root});
 }
 
-function changelogSectionState(changelogText, version) {
+const OVERVIEW_TEMPLATE = 'docs/dockerhub-overview.md';
+
+function changelogSectionState(changelogText, version, root = null) {
   try {
     extractChangelogSection(changelogText, version);
+    const overviewPath = root ? path.join(root, OVERVIEW_TEMPLATE) : null;
+    if (overviewPath && fs.existsSync(overviewPath)) {
+      const template = fs.readFileSync(overviewPath, TEXT_ENCODING);
+      renderReleaseNotes(changelogText, version, {mode: OVERVIEW_MODE, template});
+    }
     return {present: true, problem: VERSION_ABSENT};
   } catch (error) {
     return {present: false, problem: error.message};
@@ -181,7 +192,7 @@ function gatherReleaseFacts({
       chart: readChartVersion(chartText, CHART_VERSION_PATTERN),
       chartApp: readChartVersion(chartText, CHART_APP_VERSION_PATTERN),
     },
-    changelog: changelogSectionState(readText(root, CHANGELOG), version),
+    changelog: changelogSectionState(readText(root, CHANGELOG), version, root),
     localTags: git([...GIT_TAG_LIST_ARGS, tag])
       .split(LINE_SEPARATOR).filter(Boolean),
     remoteTagLines: git([...GIT_LS_REMOTE_TAGS_ARGS, remote, `refs/tags/${tag}`])

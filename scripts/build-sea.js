@@ -12,9 +12,19 @@
  */
 
 import * as esbuild from 'esbuild';
+import {spawnSync} from 'node:child_process';
+import {hostname, tmpdir} from 'node:os';
 import {fileURLToPath} from 'url';
 import {dirname, join} from 'path';
-import {cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync} from 'fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'fs';
 
 import {RAFT_RS_BINDING_LAYOUT} from '../src/raft/raft-rs-core-constants.js';
 import {RUNTIME_BUILD_MANIFEST, measureRuntimeContent} from
@@ -245,6 +255,46 @@ function stageRaftRsBinding() {
   console.log(LOCAL_STR_STAGED_RAFT_RS_BINDING);
 }
 
+const SMOKE_HELP_FLAG = '--help';
+const SMOKE_DRY_RUN_FLAG = '--dry-run';
+const SMOKE_DATA_DIR_FLAG = '--data-dir';
+const SMOKE_TEMP_PREFIX = 'lagrange-sea-bundle-smoke-';
+const SMOKE_UTF8 = 'utf8';
+const SMOKE_CLI_BUNDLE = 'admin-cli.bundle.cjs';
+const SMOKE_MAIN_BUNDLE = 'index.bundle.cjs';
+const SMOKE_VERIFIED_MSG = '  \u2713 smoke-tested SEA CJS bundles (--help, --dry-run)';
+
+function verifySeaBundles(distDir) {
+  const cliResult = spawnSync(
+    process.execPath,
+    [join(distDir, SMOKE_CLI_BUNDLE), SMOKE_HELP_FLAG],
+    {cwd: projectRoot, encoding: SMOKE_UTF8},
+  );
+  if (cliResult.status !== 0) {
+    throw new Error(`SEA CLI bundle smoke test failed: ${cliResult.stderr || cliResult.stdout}`);
+  }
+  const tempDataDir = mkdtempSync(join(tmpdir(), SMOKE_TEMP_PREFIX));
+  try {
+    const mainResult = spawnSync(
+      process.execPath,
+      [join(distDir, SMOKE_MAIN_BUNDLE), SMOKE_DRY_RUN_FLAG, SMOKE_DATA_DIR_FLAG, tempDataDir],
+      {
+        cwd: projectRoot,
+        encoding: SMOKE_UTF8,
+        env: {...process.env, NODE_HOST_ID: hostname()},
+      },
+    );
+    if (mainResult.status !== 0) {
+      throw new Error(
+        `SEA Main bundle --dry-run smoke test failed: ${mainResult.stderr || mainResult.stdout}`,
+      );
+    }
+  } finally {
+    rmSync(tempDataDir, {recursive: true, force: true});
+  }
+  console.log(SMOKE_VERIFIED_MSG);
+}
+
 /**
  * Main build function.
  */
@@ -272,6 +322,7 @@ async function main() {
     stageRuntimePackages();
     writeFileSync(join(distDir, RUNTIME_BUILD_MANIFEST),
       JSON.stringify(await measureRuntimeContent(projectRoot)) + LOCAL_STR_NEWLINE);
+    verifySeaBundles(distDir);
 
     console.log(LOCAL_STR_BUILD_COMPLETE);
     console.log(LOCAL_STR_BUNDLES_CREATED_IN_DIST);

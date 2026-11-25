@@ -28,7 +28,7 @@
   "censusSize": 2819,
   "digest": "fnv1a32-030d0503",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-2109e5a2",
+  "observationDigest": "fnv1a32-89264d50",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -25502,6 +25502,12 @@
     "test/release/version-single-source.test.js": {
       "files": [
         "package.json"
+      ],
+      "directories": [
+        "src"
+      ],
+      "env": [
+        "SEA_BUILD"
       ]
     },
     "test/runtime/call-cell-reduce-coordinator.test.js": {
