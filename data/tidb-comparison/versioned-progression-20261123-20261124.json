@@ -458,6 +458,119 @@
           "latencyMs": null
         }
       ]
+    },
+    {
+      "commit": "dcbf6e2661cd011e68541f3f2f7f45d70c2415e0",
+      "view": "gcp-smoke",
+      "sourceFiles": [
+        "gcp-bench-dcbf6e266/raw-observations-lagrange-smoke.ndjson"
+      ],
+      "targets": [
+        {
+          "targetId": "lagrange",
+          "runId": "bench-gcp-lagrange-smoke-dcbf6e266-20261124-r001",
+          "runStatus": "setup-failed",
+          "readiness": "exhausted",
+          "semanticGate": null,
+          "semanticProofs": 0,
+          "opsPerSec": 0,
+          "accounting": {
+            "offered": 100,
+            "issued": 0,
+            "unissued": 100,
+            "attempts": 0,
+            "committed": 0,
+            "conflicts": 0,
+            "conflictExhausted": 0,
+            "terminalFailures": {
+              "product_error": 0,
+              "correctness_failure": 0,
+              "transport_failure": 0,
+              "harness_fault": 0
+            },
+            "unresolved": 0,
+            "ambiguousCommits": 0
+          },
+          "latencyMs": null
+        }
+      ]
+    },
+    {
+      "commit": "55c78e6dcf91b4a853034dfa291a835a984f27d9",
+      "view": "gcp-smoke",
+      "sourceFiles": [
+        "gcp-bench-55c78e6dc/raw-observations-lagrange-smoke.ndjson"
+      ],
+      "targets": [
+        {
+          "targetId": "lagrange",
+          "runId": "bench-gcp-lagrange-smoke-55c78e6dc-20261124-r001",
+          "runStatus": "setup-failed",
+          "readiness": "exhausted",
+          "semanticGate": null,
+          "semanticProofs": 0,
+          "opsPerSec": 0,
+          "accounting": {
+            "offered": 100,
+            "issued": 0,
+            "unissued": 100,
+            "attempts": 0,
+            "committed": 0,
+            "conflicts": 0,
+            "conflictExhausted": 0,
+            "terminalFailures": {
+              "product_error": 0,
+              "correctness_failure": 0,
+              "transport_failure": 0,
+              "harness_fault": 0
+            },
+            "unresolved": 0,
+            "ambiguousCommits": 0
+          },
+          "latencyMs": null
+        }
+      ]
+    },
+    {
+      "commit": "a23d0dfc00170dd5e317aa0463b3e8f66c981e41",
+      "view": "gcp-smoke",
+      "sourceFiles": [
+        "gcp-bench-a23d0dfc0/raw-observations-lagrange-smoke.ndjson"
+      ],
+      "targets": [
+        {
+          "targetId": "lagrange",
+          "runId": "bench-gcp-lagrange-smoke-a23d0dfc0-20261124-r001",
+          "runStatus": "completed",
+          "readiness": "ready",
+          "semanticGate": "passed",
+          "semanticProofs": 33,
+          "opsPerSec": 0.401,
+          "accounting": {
+            "offered": 100,
+            "issued": 100,
+            "unissued": 0,
+            "attempts": 122,
+            "committed": 97,
+            "conflicts": 25,
+            "conflictExhausted": 3,
+            "terminalFailures": {
+              "product_error": 0,
+              "correctness_failure": 0,
+              "transport_failure": 0,
+              "harness_fault": 0
+            },
+            "unresolved": 0,
+            "ambiguousCommits": 0
+          },
+          "latencyMs": {
+            "samples": 97,
+            "p50": 109275.702,
+            "p95": 214964.776,
+            "p99": 222242.261
+          }
+        }
+      ]
     }
   ],
   "lab3NodeRuns": [
@@ -716,6 +829,102 @@
           "p95": 81423.99,
           "p99": 84379.284
         }
+      }
+    },
+    {
+      "commit": "dcbf6e2661cd011e68541f3f2f7f45d70c2415e0",
+      "view": "tv-dator-3node-smoke",
+      "passed": false,
+      "formationSec": 0,
+      "semanticGate": {
+        "status": "passed",
+        "passedCount": 33
+      },
+      "extraJoinerDurabilityPassed": false,
+      "workload": {
+        "opsPerSec": 0,
+        "accounting": {
+          "offered": 100,
+          "issued": 0,
+          "unissued": 100,
+          "attempts": 0,
+          "committed": 0,
+          "conflicts": 0,
+          "conflictExhausted": 0,
+          "terminalFailures": {
+            "product_error": 0,
+            "correctness_failure": 0,
+            "transport_failure": 0,
+            "harness_fault": 0
+          },
+          "unresolved": 0,
+          "ambiguousCommits": 0
+        },
+        "latencyMs": null
+      }
+    },
+    {
+      "commit": "55c78e6dcf91b4a853034dfa291a835a984f27d9",
+      "view": "tv-dator-3node-smoke",
+      "passed": true,
+      "formationSec": 0,
+      "semanticGate": {
+        "status": "passed",
+        "passedCount": 33
+      },
+      "extraJoinerDurabilityPassed": false,
+      "workload": {
+        "opsPerSec": 0,
+        "accounting": {
+          "offered": 100,
+          "issued": 0,
+          "unissued": 100,
+          "attempts": 0,
+          "committed": 0,
+          "conflicts": 0,
+          "conflictExhausted": 0,
+          "terminalFailures": {
+            "product_error": 0,
+            "correctness_failure": 0,
+            "transport_failure": 0,
+            "harness_fault": 0
+          },
+          "unresolved": 0,
+          "ambiguousCommits": 0
+        },
+        "latencyMs": null
+      }
+    },
+    {
+      "commit": "a23d0dfc00170dd5e317aa0463b3e8f66c981e41",
+      "view": "tv-dator-3node-smoke",
+      "passed": true,
+      "formationSec": 0,
+      "semanticGate": {
+        "status": "passed",
+        "passedCount": 33
+      },
+      "extraJoinerDurabilityPassed": false,
+      "workload": {
+        "opsPerSec": 0,
+        "accounting": {
+          "offered": 100,
+          "issued": 0,
+          "unissued": 100,
+          "attempts": 0,
+          "committed": 0,
+          "conflicts": 0,
+          "conflictExhausted": 0,
+          "terminalFailures": {
+            "product_error": 0,
+            "correctness_failure": 0,
+            "transport_failure": 0,
+            "harness_fault": 0
+          },
+          "unresolved": 0,
+          "ambiguousCommits": 0
+        },
+        "latencyMs": null
       }
     }
   ]

@@ -111,26 +111,26 @@ before dispatching commands through `serviceDispatcher` and SQL/CDC:
 
 **Incoming** (client -> server):
 
-- `query` (`MessageType.QUERY`) — requires `type`, `queryId`, `sql`; optional
+- `query` (`MessageType.QUERY`) - requires `type`, `queryId`, `sql`; optional
   `params`, `tenantId`, `principal`, `traceId`
-- `refresh` (`MessageType.REFRESH`) — requires `type`
-- `live_query_subscribe` (`MessageType.LIVE_QUERY_SUBSCRIBE`) — requires
+- `refresh` (`MessageType.REFRESH`) - requires `type`
+- `live_query_subscribe` (`MessageType.LIVE_QUERY_SUBSCRIBE`) - requires
   `type`, `subscriptionId`, `sql`
-- `live_query_unsubscribe` (`MessageType.LIVE_QUERY_UNSUBSCRIBE`) — requires
+- `live_query_unsubscribe` (`MessageType.LIVE_QUERY_UNSUBSCRIBE`) - requires
   `type`, `subscriptionId`
 
 **Outgoing** (server -> client):
 
-- `query_result` (`MessageType.QUERY_RESULT`) — includes `type`, `queryId`,
+- `query_result` (`MessageType.QUERY_RESULT`) - includes `type`, `queryId`,
   `timestamp`, plus query rows/write metadata or `error` and `errorCode`
-- `cache_dump` (`MessageType.CACHE_DUMP`) — includes `type`, `timestamp`,
+- `cache_dump` (`MessageType.CACHE_DUMP`) - includes `type`, `timestamp`,
   `nodeId`, `data`
-- `cdc_event` (`MessageType.CDC_EVENT`) — includes `type`, `timestamp`,
+- `cdc_event` (`MessageType.CDC_EVENT`) - includes `type`, `timestamp`,
   `table`, `operation`, `record`
-- `live_query_event` (`MessageType.LIVE_QUERY_EVENT`) — includes `type`,
+- `live_query_event` (`MessageType.LIVE_QUERY_EVENT`) - includes `type`,
   `subscriptionId`, `queryId`, `partitions`, plus `eventType`, `data`,
   `oldData`, or `expiresAt`
-- `error` (`MessageType.ERROR`) — includes `type`, `timestamp`, `error`,
+- `error` (`MessageType.ERROR`) - includes `type`, `timestamp`, `error`,
   `errorCode`, and optional `hint` / `details`
 
 Dispatchable messages (`query`, `refresh`) are converted into canonical

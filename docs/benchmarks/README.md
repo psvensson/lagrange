@@ -6,7 +6,7 @@ This page lists every comparative claim the benchmark pages have advertised, one
 
 Scenario definitions and the Scenario A semantic gate are contracts, not results: see the related pages below.
 
-Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 26 entries; 10 of them name the defect ids behind the withdrawal and 9 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 27 of 70 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
+Every comparative result published before 2026-11-01 was withdrawn; the records are retained as forensic evidence. The append-only [invalidation ledger](../../data/tidb-comparison/invalidations.ndjson) has 31 entries; 10 of them name the defect ids behind the withdrawal and 10 of them enumerate the withdrawn records by id (the rest name them by file and campaign commit). 33 of 76 history records are withdrawn without a ledger entry, by the admission rule `forensic-record-not-admissible`: no history record is admissible as a current claim.
 
 ![Comparative benchmarks](comparative-overview.svg)
 
@@ -46,10 +46,10 @@ The named smoke profile scenario-a-smoke-v1: the canonical workload executed end
 
 | Configuration | Scenario A smoke |
 | --- | --- |
-| Lagrange 0.4.0 (3 nodes) | invalid-measurement (duplicate-claim, mixed-campaign) |
-| TiDB + TiKV v8.5.8 | invalid-measurement (duplicate-claim, mixed-campaign) |
-| PostgreSQL 17 (single primary) | invalid-measurement (duplicate-claim, mixed-campaign) |
-| PostgreSQL 17 (primary + 2 streaming standbys, synchronous_standby_names) | invalid-measurement (duplicate-claim, mixed-campaign) |
+| Lagrange 0.4.0 (3 nodes) | valid-observed (smoke-profile-no-capacity-claim): smoke profile: offered 100, issued 100, committed 97, conflict-exhausted 3, product_error 0, correctness_failure 0, transport_failure 0, harness_fault 0, unresolved 0, unissued 0 |
+| TiDB + TiKV v8.5.8 | valid-observed (smoke-profile-no-capacity-claim): smoke profile: offered 100, issued 100, committed 100, conflict-exhausted 0, product_error 0, correctness_failure 0, transport_failure 0, harness_fault 0, unresolved 0, unissued 0 |
+| PostgreSQL 17 (single primary) | valid-observed (smoke-profile-no-capacity-claim): smoke profile: offered 100, issued 100, committed 100, conflict-exhausted 0, product_error 0, correctness_failure 0, transport_failure 0, harness_fault 0, unresolved 0, unissued 0 |
+| PostgreSQL 17 (primary + 2 streaming standbys, synchronous_standby_names) | valid-observed (smoke-profile-no-capacity-claim): smoke profile: offered 100, issued 100, committed 100, conflict-exhausted 0, product_error 0, correctness_failure 0, transport_failure 0, harness_fault 0, unresolved 0, unissued 0 |
 
 ## Per-phase time breakdown
 
@@ -90,6 +90,6 @@ Phase timings are admitted only from observed spans.
 
 ## Sources
 
-- `data/tidb-comparison/raw-observations.ndjson` sha256:77cf4ac96aff465f117587270d3f899ea8ba5c6ce2bebed30c25737dc1e4cc66
+- `data/tidb-comparison/raw-observations.ndjson` sha256:da4fcfeaf2bad9e542f5218beaf2c2101a9094da9a92896c9287b7ce915bcad3
 - `data/tidb-comparison/forensic/raw-observations-86e795c44.ndjson` sha256:79698d1b6cd709d227c9712e75c3471243ee99f473212c495ad15c6c1e96f32e
-- `data/tidb-comparison/invalidations.ndjson` sha256:58fa2ce6b61188c9ccde878db0f19efee0425cb665cbd5317a26708c5bbf898f
+- `data/tidb-comparison/invalidations.ndjson` sha256:454765469cea50f7edda0d7bd9efd731b6101ff8c06a2397265adcc6f5a4c521
