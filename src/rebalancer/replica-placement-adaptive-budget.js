@@ -13,17 +13,11 @@ import {
 } from './replica-placement-owner-capacity.js';
 
 const PLACEMENT_ADAPTIVE_WINDOW_ACTION = Object.freeze({
-  INCREASE: 'INCREASE',
-  DECREASE: 'DECREASE',
-  HOLD: 'HOLD',
-  RESET: 'RESET',
+  INCREASE: 'INCREASE', DECREASE: 'DECREASE', HOLD: 'HOLD', RESET: 'RESET',
 });
 
 const PLACEMENT_ADAPTIVE_OBSERVATION_STATE = Object.freeze({
-  FRESH: 'FRESH',
-  INCOMPLETE: 'INCOMPLETE',
-  STALE: 'STALE',
-  UNAVAILABLE: 'UNAVAILABLE',
+  FRESH: 'FRESH', INCOMPLETE: 'INCOMPLETE', STALE: 'STALE', UNAVAILABLE: 'UNAVAILABLE',
 });
 
 const PLACEMENT_ADAPTIVE_BUDGET_REASON = Object.freeze({
@@ -34,15 +28,13 @@ const PLACEMENT_ADAPTIVE_BUDGET_REASON = Object.freeze({
   OBSERVATION_UNAVAILABLE: 'OBSERVATION_UNAVAILABLE',
   OBSERVATION_INCOMPLETE: 'OBSERVATION_INCOMPLETE',
   OBSERVATION_STALE: 'OBSERVATION_STALE',
-  OBSERVATION_BOOT_INCARNATION_MISMATCH:
-    'OBSERVATION_BOOT_INCARNATION_MISMATCH',
+  OBSERVATION_BOOT_INCARNATION_MISMATCH: 'OBSERVATION_BOOT_INCARNATION_MISMATCH',
   EVENT_LOOP_CONGESTION: 'EVENT_LOOP_CONGESTION',
   SINGLE_THREAD_CPU_QUEUE_CONGESTION: 'SINGLE_THREAD_CPU_QUEUE_CONGESTION',
   INIT_QUEUE_CONGESTION: 'INIT_QUEUE_CONGESTION',
   STORAGE_WRITE_LATENCY_CONGESTION: 'STORAGE_WRITE_LATENCY_CONGESTION',
   TRANSFER_BACKPRESSURE_CONGESTION: 'TRANSFER_BACKPRESSURE_CONGESTION',
-  STAGE_THROUGHPUT_DEGRADATION_CONGESTION:
-    'STAGE_THROUGHPUT_DEGRADATION_CONGESTION',
+  STAGE_THROUGHPUT_DEGRADATION_CONGESTION: 'STAGE_THROUGHPUT_DEGRADATION_CONGESTION',
   ATTRIBUTED_RESOURCE_CONGESTION: 'ATTRIBUTED_RESOURCE_CONGESTION',
   CONGESTION_EPISODE_ALREADY_APPLIED: 'CONGESTION_EPISODE_ALREADY_APPLIED',
   AT_MINIMUM_WINDOW_CONGESTED: 'AT_MINIMUM_WINDOW_CONGESTED',
@@ -56,39 +48,24 @@ const PLACEMENT_ADAPTIVE_BUDGET_REASON = Object.freeze({
 
 const PLACEMENT_ADAPTIVE_WINDOW_DEFAULTS = Object.freeze({
   SOURCE: Object.freeze({
-    initialLimit: PLACEMENT_COPY_CAPACITY.K_SRC,
-    minLimit: 1,
-    maxLimit: 8,
-    additiveIncrease: 1,
-    multiplicativeDecrease: 0.75,
+    initialLimit: PLACEMENT_COPY_CAPACITY.K_SRC, minLimit: 1, maxLimit: 8,
+    additiveIncrease: 1, multiplicativeDecrease: 0.75,
   }),
   TARGET: Object.freeze({
-    initialLimit: PLACEMENT_COPY_CAPACITY.K_TGT,
-    minLimit: 1,
-    maxLimit: 6,
-    additiveIncrease: 1,
-    multiplicativeDecrease: 0.75,
+    initialLimit: PLACEMENT_COPY_CAPACITY.K_TGT, minLimit: 1, maxLimit: 6,
+    additiveIncrease: 1, multiplicativeDecrease: 0.75,
   }),
   TIMING: Object.freeze({
-    minAdjustIntervalMs: 1_000,
-    maxSampleAgeMs: 15_000,
-    requiredHealthySamplesAfterDecrease: 2,
+    minAdjustIntervalMs: 1_000, maxSampleAgeMs: 15_000, requiredHealthySamplesAfterDecrease: 2,
   }),
   THRESHOLDS: Object.freeze({
-    healthyEventLoopDelayMs: 25,
-    congestionEventLoopDelayMs: 80,
-    healthyEluPercent: 75,
-    congestionEluPercent: 92,
-    healthySingleCoreCpuPercent: 80,
-    congestionSingleCoreCpuPercent: 95,
-    healthyInitQueueDelayMs: 50,
-    congestionInitQueueDelayMs: 200,
-    healthyWriteLatencyMs: 25,
-    congestionWriteLatencyMs: 100,
-    healthyTransferQueueDelayMs: 50,
-    congestionTransferQueueDelayMs: 200,
-    baseStageAllowanceMs: 500,
-    minHealthyStageBytesPerMs: 2_048,
+    healthyEventLoopDelayMs: 25, congestionEventLoopDelayMs: 80,
+    healthyEluPercent: 75, congestionEluPercent: 92,
+    healthySingleCoreCpuPercent: 80, congestionSingleCoreCpuPercent: 95,
+    healthyInitQueueDelayMs: 50, congestionInitQueueDelayMs: 200,
+    healthyWriteLatencyMs: 25, congestionWriteLatencyMs: 100,
+    healthyTransferQueueDelayMs: 50, congestionTransferQueueDelayMs: 200,
+    baseStageAllowanceMs: 500, minHealthyStageBytesPerMs: 2_048,
     defaultRequiredMemoryReserveBytes: 64 * 1024 * 1024,
   }),
 });
@@ -117,32 +94,24 @@ function resolveObservationSampleIdentity(observation) {
 }
 
 function isFiniteMetric(val) {
-  return val !== null &&
-    val !== undefined &&
-    typeof val !== 'boolean' &&
-    Number.isFinite(Number(val));
+  return val !== null && val !== undefined &&
+    typeof val !== 'boolean' && Number.isFinite(Number(val));
 }
 
 function hasPrimaryLoadSensor(observation) {
   if (!observation || typeof observation !== 'object') return false;
   const directSensors = [
-    observation.singleCoreCpuPercent,
-    observation.eventLoopDelayMs,
-    observation.eventLoopUtilizationPercent,
-    observation.writeLatencyMs,
-    observation.initQueueDelayMs,
-    observation.transferQueueDelayMs,
+    observation.singleCoreCpuPercent, observation.eventLoopDelayMs,
+    observation.eventLoopUtilizationPercent, observation.writeLatencyMs,
+    observation.initQueueDelayMs, observation.transferQueueDelayMs,
   ];
-  if (directSensors.some(isFiniteMetric)) {
-    return true;
-  }
+  if (directSensors.some(isFiniteMetric)) return true;
   if (isFiniteMetric(observation.cpuUsagePercent) &&
       isFiniteMetric(observation.availableMemoryBytes)) {
     return true;
   }
   return isFiniteMetric(observation.stageDurationMs) &&
-    Number(observation.stageDurationMs) > 0 &&
-    isFiniteMetric(observation.operationBytes);
+    Number(observation.stageDurationMs) > 0 && isFiniteMetric(observation.operationBytes);
 }
 
 function isObservationCompleteForGrowth(observation) {
@@ -255,7 +224,28 @@ function isSingleCoreCpuQueueCongested(observation, thresholds) {
     isMetricStrictlyAbove(observation.transferQueueDelayMs, 0);
 }
 
+function isHostCpuLightlyLoaded(observation, thresholds) {
+  if (!isFiniteMetric(observation?.cpuUsagePercent)) return false;
+  const cpuUsage = Number(observation.cpuUsagePercent);
+  return cpuUsage > 0 && cpuUsage < thresholds.healthySingleCoreCpuPercent / 2;
+}
+
+function hasDirectQueueOrStageSensor(observation) {
+  if (!observation || typeof observation !== 'object') return false;
+  const directQueueSensors = [
+    observation.eventLoopDelayMs,
+    observation.writeLatencyMs,
+    observation.initQueueDelayMs,
+    observation.transferQueueDelayMs,
+  ];
+  if (directQueueSensors.some(isFiniteMetric)) return true;
+  return isFiniteMetric(observation.stageDurationMs) &&
+    Number(observation.stageDurationMs) > 0 &&
+    isFiniteMetric(observation.operationBytes);
+}
+
 function isEventLoopCongested(observation, thresholds) {
+  if (isHostCpuLightlyLoaded(observation, thresholds)) return false;
   if (isMetricAtOrAbove(observation.eventLoopDelayMs, thresholds.congestionEventLoopDelayMs)) {
     return true;
   }
@@ -310,25 +300,31 @@ function isHighUtilizationQueueDelayed(rawUtilPercent, maxHealthyPercent, observ
   return Number(observation.eventLoopDelayMs) > thresholds.healthyEventLoopDelayMs / 2;
 }
 
+function isEventLoopWithinHealthyBand(observation, thresholds) {
+  if (isHostCpuLightlyLoaded(observation, thresholds)) return true;
+  if (isFiniteMetric(observation.eventLoopDelayMs) &&
+      Number(observation.eventLoopDelayMs) > thresholds.healthyEventLoopDelayMs) {
+    return false;
+  }
+  if (!isFiniteMetric(observation.eventLoopUtilizationPercent)) return true;
+  const elu = observation.eventLoopUtilizationPercent;
+  return !isHighUtilizationQueueDelayed(elu, thresholds.healthyEluPercent, observation, thresholds);
+}
+
 function isObservationWithinHealthyGrowthBand(observation, thresholds) {
   const checks = [
-    [observation.eventLoopDelayMs, thresholds.healthyEventLoopDelayMs],
     [observation.initQueueDelayMs, thresholds.healthyInitQueueDelayMs],
     [observation.writeLatencyMs, thresholds.healthyWriteLatencyMs],
     [observation.transferQueueDelayMs, thresholds.healthyTransferQueueDelayMs],
   ];
-  let hasMeasuredLoadSignal = false;
+  let hasMeasuredLoadSignal =
+    isFiniteMetric(observation.eventLoopDelayMs) ||
+    isFiniteMetric(observation.eventLoopUtilizationPercent);
+  if (!isEventLoopWithinHealthyBand(observation, thresholds)) return false;
   for (const [rawVal, maxHealthy] of checks) {
     if (isFiniteMetric(rawVal)) {
       hasMeasuredLoadSignal = true;
       if (Number(rawVal) > maxHealthy) return false;
-    }
-  }
-  if (isFiniteMetric(observation.eventLoopUtilizationPercent)) {
-    hasMeasuredLoadSignal = true;
-    const elu = observation.eventLoopUtilizationPercent;
-    if (isHighUtilizationQueueDelayed(elu, thresholds.healthyEluPercent, observation, thresholds)) {
-      return false;
     }
   }
   if (isFiniteMetric(observation.singleCoreCpuPercent)) {
@@ -528,13 +524,16 @@ function evaluateHealthyWindowGrowth(baseState, bootReset, observation, demand, 
       action: ACTION.HOLD, reason: REASON.OBSERVATION_COOLDOWN_HOLD, nextState: stateWithSample,
     });
   }
-  if (baseState.limit >= config.maxLimit) {
+  const effectiveMaxLimit = hasDirectQueueOrStageSensor(observation) ?
+    config.maxLimit :
+    Math.min(config.maxLimit, Math.max(config.initialLimit, PLACEMENT_COPY_CAPACITY.K_TGT));
+  if (baseState.limit >= effectiveMaxLimit) {
     return buildWindowDecision({
-      limit: config.maxLimit, previousLimit: baseState.limit,
+      limit: baseState.limit, previousLimit: baseState.limit,
       action: ACTION.HOLD, reason: REASON.AT_MAXIMUM_WINDOW, nextState: stateWithSample,
     });
   }
-  const increasedLimit = Math.min(config.maxLimit, baseState.limit + config.additiveIncrease);
+  const increasedLimit = Math.min(effectiveMaxLimit, baseState.limit + config.additiveIncrease);
   return buildWindowDecision({
     limit: increasedLimit, previousLimit: baseState.limit,
     action: ACTION.INCREASE, reason: REASON.HEALTHY_BUDGET_CONSTRAINED_DEMAND,
