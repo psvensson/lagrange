@@ -244,13 +244,8 @@ function hasDirectQueueOrStageSensor(observation) {
     isFiniteMetric(observation.operationBytes);
 }
 
-function isEventLoopCongested(observation, thresholds, currentLimit = null, config = null) {
-  if (isHostCpuLightlyLoaded(observation, thresholds)) {
-    const lightCpuFloor = config ?
-      Math.max(config.minLimit, Math.floor(config.initialLimit * config.multiplicativeDecrease)) :
-      PLACEMENT_COPY_CAPACITY.K_TGT;
-    if (!Number.isFinite(currentLimit) || currentLimit <= lightCpuFloor) return false;
-  }
+function isEventLoopCongested(observation, thresholds) {
+  if (isHostCpuLightlyLoaded(observation, thresholds)) return false;
   if (isMetricAtOrAbove(observation.eventLoopDelayMs, thresholds.congestionEventLoopDelayMs)) {
     return true;
   }
@@ -260,8 +255,8 @@ function isEventLoopCongested(observation, thresholds, currentLimit = null, conf
     isMetricStrictlyAbove(observation.eventLoopDelayMs, thresholds.healthyEventLoopDelayMs);
 }
 
-function classifyDirectSensorCongestion(obs, thresholds, currentLimit = null, config = null) {
-  if (isEventLoopCongested(obs, thresholds, currentLimit, config)) {
+function classifyDirectSensorCongestion(obs, thresholds) {
+  if (isEventLoopCongested(obs, thresholds)) {
     return REASON.EVENT_LOOP_CONGESTION;
   }
   if (isMetricAtOrAbove(obs.writeLatencyMs, thresholds.congestionWriteLatencyMs)) {
@@ -277,14 +272,14 @@ function classifyDirectSensorCongestion(obs, thresholds, currentLimit = null, co
   return null;
 }
 
-function classifyAttributedCongestion(obs, thresholds, currentLimit = null, config = null) {
+function classifyAttributedCongestion(obs, thresholds) {
   if (!obs || typeof obs !== 'object') return null;
   if (obs.congestionAttributed === true) {
     const explicit = obs.congestionReason;
     return typeof explicit === 'string' && explicit.length > 0 ?
       explicit : REASON.ATTRIBUTED_RESOURCE_CONGESTION;
   }
-  const direct = classifyDirectSensorCongestion(obs, thresholds, currentLimit, config);
+  const direct = classifyDirectSensorCongestion(obs, thresholds);
   if (direct !== null) return direct;
   if (isSingleCoreCpuQueueCongested(obs, thresholds)) {
     return REASON.SINGLE_THREAD_CPU_QUEUE_CONGESTION;
@@ -572,9 +567,7 @@ function decideAdaptiveResourceWindow(previousState, observation, demand = {}, r
       observationState: freshness.state, nextState: baseState,
     });
   }
-  const congestionReason = classifyAttributedCongestion(
-    observation, config.thresholds, baseState.limit, config,
-  );
+  const congestionReason = classifyAttributedCongestion(observation, config.thresholds);
   if (congestionReason !== null) {
     return applyCongestionDecrease(baseState, observation, nowMs, congestionReason, config);
   }
