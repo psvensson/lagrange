@@ -232,6 +232,11 @@ function createCommittedStatementOutcomeTable(db, partitionId = null) {
   if (format.outcome === PARTITION_COMMITTED_STATEMENT_FORMAT.ABSENT) {
     db.exec(PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL.CREATE_TABLE);
   }
+  db.exec(STATEMENT_OUTCOME_EFFECTS_SQL.CREATE_TABLE);
+  sqliteConnectionState(db).forgetFact(
+    STATEMENT_OUTCOME_EFFECTS_TABLE,
+    STATEMENT_OUTCOME_EFFECTS_TABLE,
+  );
 }
 
 const UNSETTLED_RECORD = Object.freeze({
@@ -239,9 +244,26 @@ const UNSETTLED_RECORD = Object.freeze({
 });
 
 function capturedRowEffectsTableExistsIn(db) {
-  return sqliteConnectionState(db)
-    .statement(STATEMENT_OUTCOME_EFFECTS_SQL.TABLE_EXISTS)
-    .get(STATEMENT_OUTCOME_EFFECTS_TABLE) !== undefined;
+  const state = sqliteConnectionState(db);
+  return state.committedFact(
+    STATEMENT_OUTCOME_EFFECTS_TABLE,
+    STATEMENT_OUTCOME_EFFECTS_TABLE,
+    () => state
+      .statement(STATEMENT_OUTCOME_EFFECTS_SQL.TABLE_EXISTS)
+      .get(STATEMENT_OUTCOME_EFFECTS_TABLE) !== undefined,
+  );
+}
+
+function persistCapturedRowEffectsIn(service, state, entryKey, affectedRows) {
+  if (!capturedRowEffectsTableExistsIn(service.db)) {
+    service.db.exec(STATEMENT_OUTCOME_EFFECTS_SQL.CREATE_TABLE);
+    state.forgetFact(STATEMENT_OUTCOME_EFFECTS_TABLE, STATEMENT_OUTCOME_EFFECTS_TABLE);
+  }
+  state.runNonApplication(
+    STATEMENT_OUTCOME_EFFECTS_SQL.INSERT,
+    entryKey,
+    JSON.stringify(affectedRows),
+  );
 }
 
 function readCapturedRowEffectsIn(db, entryKey) {
@@ -443,14 +465,7 @@ function recordCommittedStatementOutcome(service, {entryKey, outcome, index,
     result === null ? null : result.lastInsertRowid,
     ownerResultText, commandDigest);
   if (Array.isArray(result?.affectedRows)) {
-    if (!capturedRowEffectsTableExistsIn(service.db)) {
-      service.db.exec(STATEMENT_OUTCOME_EFFECTS_SQL.CREATE_TABLE);
-    }
-    state.runNonApplication(
-      STATEMENT_OUTCOME_EFFECTS_SQL.INSERT,
-      entryKey,
-      JSON.stringify(result.affectedRows),
-    );
+    persistCapturedRowEffectsIn(service, state, entryKey, result.affectedRows);
   }
 }
 

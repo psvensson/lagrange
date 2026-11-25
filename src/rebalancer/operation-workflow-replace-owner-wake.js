@@ -71,6 +71,7 @@ import {
 } from './operation-workflow-dispatch-rearm-evidence.js';
 
 const {
+  OPERATION_WORKFLOW_OWNER_LITERAL,
   OperationType,
   REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
   REMOVE_SAFETY_READINESS_DIMENSION,
@@ -441,7 +442,12 @@ function wakeSingleGrowthPromoteOwner(owner, row) {
   const operation = owner.repository.rowToOperation(row);
   if (!operation) return;
   if (owner.repository.isOperationLocallyOwned(operation)) {
-    owner.scheduleOperationProgressCheck(operation, 0);
+    owner.scheduleObservedProgressRetry?.(
+      operation.operationId,
+      TABLES.SERVICES,
+      OPERATION_WORKFLOW_OWNER_LITERAL.SYNTHETIC_UPSERT,
+      1,
+    );
     return;
   }
   void owner.wakeCoordinatorCreatedRemoteOwner(operation);
