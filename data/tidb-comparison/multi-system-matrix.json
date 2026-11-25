@@ -244,7 +244,27 @@
                   "ambiguousCommits": 0
                 },
                 "drainOverrunMs": 221963.788,
-                "maxLatencyMs": 222242.261
+                "maxLatencyMs": 222242.261,
+                "timingsSec": {
+                  "totalScenarioSec": 721.37,
+                  "clusterReadySec": 236.86,
+                  "semanticGateTotalSec": 185.66,
+                  "warmupSec": 21,
+                  "workloadDrainSec": 241.96,
+                  "postVerifySec": 35.88,
+                  "maxSingleRequestSec": 222.242,
+                  "partsSec": {
+                    "newOrderContentionSec": 69.54,
+                    "visibilitySec": 3.04,
+                    "paymentSec": 5.64,
+                    "orderStatusSec": 10.37,
+                    "deliverySec": 6.39,
+                    "stockLevelSec": 4.74,
+                    "failureAtomicitySec": 4.93,
+                    "retryableConflictSec": 4.23,
+                    "durabilityRestartSec": 76.78
+                  }
+                }
               }
             ],
             "setupFailures": [],
@@ -1362,7 +1382,27 @@
                   "ambiguousCommits": 0
                 },
                 "drainOverrunMs": 0,
-                "maxLatencyMs": 109.835
+                "maxLatencyMs": 109.835,
+                "timingsSec": {
+                  "totalScenarioSec": 101.55,
+                  "clusterReadySec": 24.4,
+                  "semanticGateTotalSec": 43.58,
+                  "warmupSec": 1.82,
+                  "workloadDrainSec": 19.81,
+                  "postVerifySec": 11.93,
+                  "maxSingleRequestSec": 0.11,
+                  "partsSec": {
+                    "newOrderContentionSec": 5.35,
+                    "visibilitySec": 2.5,
+                    "paymentSec": 2.59,
+                    "orderStatusSec": 2.65,
+                    "deliverySec": 2.58,
+                    "stockLevelSec": 2.46,
+                    "failureAtomicitySec": 2.42,
+                    "retryableConflictSec": 2.24,
+                    "durabilityRestartSec": 20.8
+                  }
+                }
               }
             ],
             "setupFailures": [],
@@ -1981,7 +2021,27 @@
                   "ambiguousCommits": 0
                 },
                 "drainOverrunMs": 0,
-                "maxLatencyMs": 45.193
+                "maxLatencyMs": 45.193,
+                "timingsSec": {
+                  "totalScenarioSec": 56.75,
+                  "clusterReadySec": 9.1,
+                  "semanticGateTotalSec": 20.47,
+                  "warmupSec": 1.81,
+                  "workloadDrainSec": 19.81,
+                  "postVerifySec": 5.58,
+                  "maxSingleRequestSec": 0.045,
+                  "partsSec": {
+                    "newOrderContentionSec": 4.22,
+                    "visibilitySec": 1.34,
+                    "paymentSec": 1.4,
+                    "orderStatusSec": 1.43,
+                    "deliverySec": 1.36,
+                    "stockLevelSec": 1.37,
+                    "failureAtomicitySec": 1.37,
+                    "retryableConflictSec": 1.35,
+                    "durabilityRestartSec": 6.63
+                  }
+                }
               }
             ],
             "setupFailures": [],
@@ -2622,7 +2682,27 @@
                   "ambiguousCommits": 0
                 },
                 "drainOverrunMs": 0,
-                "maxLatencyMs": 51.961
+                "maxLatencyMs": 51.961,
+                "timingsSec": {
+                  "totalScenarioSec": 81.77,
+                  "clusterReadySec": 18.34,
+                  "semanticGateTotalSec": 30.36,
+                  "warmupSec": 1.81,
+                  "workloadDrainSec": 19.81,
+                  "postVerifySec": 11.46,
+                  "maxSingleRequestSec": 0.052,
+                  "partsSec": {
+                    "newOrderContentionSec": 4.74,
+                    "visibilitySec": 1.38,
+                    "paymentSec": 1.42,
+                    "orderStatusSec": 1.42,
+                    "deliverySec": 1.45,
+                    "stockLevelSec": 1.41,
+                    "failureAtomicitySec": 1.38,
+                    "retryableConflictSec": 1.46,
+                    "durabilityRestartSec": 15.7
+                  }
+                }
               }
             ],
             "setupFailures": [],

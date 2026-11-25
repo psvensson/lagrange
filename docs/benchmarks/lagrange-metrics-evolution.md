@@ -4,13 +4,21 @@
 
 Each milestone lists the claims it advertised. Lagrange Scenario B is blocked until the compiled risk service journey exists.
 
-## Latest Lagrange measurement (Scenario A)
+## Latest Lagrange measurement (Scenario A) - End-to-End & Phase Execution Speed (seconds)
 
-Admitted v2 measurement for Lagrange 3-node cluster on Scenario A.
+Wall-clock seconds taken by each system to complete the entire Scenario A journey and each major execution phase (lower is faster).
 
-| Configuration | Status | Semantic Gate Proofs | Offered | Issued | Committed | Conflict-Exhausted | Product Error | Correctness Failure | Transport Failure | Harness Fault | Unresolved | Unissued | Run ID |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Lagrange 0.4.0 (3 nodes) | valid-observed (smoke-profile-no-capacity-claim) | 33 | 100 | 100 | 97 | 3 | 0 | 0 | 0 | 0 | 0 | 0 | bench-gcp-lagrange-smoke-a23d0dfc0-20261124-r001 |
+| System / Configuration | Total Scenario (s) | 1. Cluster Startup & Readiness (s) | 2. Dataset & 9-Part Semantic Gate (s) | 3. Warmup (10 txns) (s) | 4. Measured Workload (100 txns) (s) | 5. Final Verify & Teardown (s) | Max Single-Txn (s) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Lagrange 0.4.0 (3 nodes) | 721.37 s | 236.86 s | 185.66 s | 21.00 s | 241.96 s | 35.88 s | 222.242 s |
+
+## Latest Lagrange measurement (Scenario A) - Per-Part Scenario A Time Breakdown (seconds)
+
+Observed seconds taken by each system on each individual part of Scenario A (Parts 1-9 semantic workload cases, Part 10 warmup, and Part 11 measured workload).
+
+| System / Configuration | Part 1: Load & New-Order Contention (s) | Part 2: Visibility (s) | Part 3: Payment (s) | Part 4: Order-Status (s) | Part 5: Delivery (s) | Part 6: Stock-Level (s) | Part 7: Failure-Atomicity (s) | Part 8: Retryable-Conflict (s) | Part 9: Durability Restart & Reload (s) | Part 10: Warmup (10 txns) (s) | Part 11: Measured Workload (100 txns) (s) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Lagrange 0.4.0 (3 nodes) | 69.54 s | 3.04 s | 5.64 s | 10.37 s | 6.39 s | 4.74 s | 4.93 s | 4.23 s | 76.78 s | 21.00 s | 241.96 s |
 
 ## Scenario A smoke runs
 

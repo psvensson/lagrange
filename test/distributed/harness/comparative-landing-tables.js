@@ -106,68 +106,140 @@ function buildTargetSection(matrix, {heading, description, targetIds, columns}) 
   };
 }
 
-const BREAKDOWN_HEADERS = Object.freeze([
-  'Configuration', 'Status', 'Semantic Gate Proofs', 'Offered', 'Issued', 'Committed',
-  'Conflict-Exhausted', 'Product Error', 'Correctness Failure', 'Transport Failure',
-  'Harness Fault', 'Unresolved', 'Unissued', 'Run ID',
+const PHASE_SPEED_HEADERS = Object.freeze([
+  'System / Configuration',
+  'Total Scenario (s)',
+  '1. Cluster Startup & Readiness (s)',
+  '2. Dataset & 9-Part Semantic Gate (s)',
+  '3. Warmup (10 txns) (s)',
+  '4. Measured Workload (100 txns) (s)',
+  '5. Final Verify & Teardown (s)',
+  'Max Single-Txn (s)',
 ]);
 
-function buildBreakdownRow(target, claimKey) {
+const PART_SPEED_HEADERS = Object.freeze([
+  'System / Configuration',
+  'Part 1: Load & New-Order Contention (s)',
+  'Part 2: Visibility (s)',
+  'Part 3: Payment (s)',
+  'Part 4: Order-Status (s)',
+  'Part 5: Delivery (s)',
+  'Part 6: Stock-Level (s)',
+  'Part 7: Failure-Atomicity (s)',
+  'Part 8: Retryable-Conflict (s)',
+  'Part 9: Durability Restart & Reload (s)',
+  'Part 10: Warmup (10 txns) (s)',
+  'Part 11: Measured Workload (100 txns) (s)',
+]);
+
+function fmtSec(value, digits = 2) {
+  return typeof value === 'number' ? `${formatNum(value, digits)} s` : '-';
+}
+
+function buildPhaseSpeedRow(target, claimKey) {
   const cell = target.claims[claimKey];
   if (!cell) throw new Error(`${target.label}/${claimKey}: no admission cell`);
-  const reasons = cell.reasons.length > 0 ? ` (${arrayJoin(cell.reasons, ', ')})` : '';
-  const statusText = `${cell.status}${reasons}`;
-  const a = cell.metrics?.accounting;
-  if (!a) {
+  const t = cell.metrics?.runs?.[0]?.timingsSec;
+  if (!t) {
     return {
       status: cell.status,
-      values: [target.label, statusText, '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'],
+      values: [target.label, '-', '-', '-', '-', '-', '-', '-'],
     };
   }
-  const tf = a.terminalFailures || {};
-  const proofs = Array.isArray(cell.evidence?.semanticProofIds) ?
-    String(cell.evidence.semanticProofIds.length) : '-';
-  const runIds = Array.isArray(cell.evidence?.runIds) && cell.evidence.runIds.length > 0 ?
-    arrayJoin(cell.evidence.runIds, ', ') : '-';
   return {
     status: cell.status,
     values: [
-      target.label, statusText, proofs,
-      String(a.offered), String(a.issued), String(a.committed),
-      String(a.conflictExhausted), String(tf.product_error ?? 0),
-      String(tf.correctness_failure ?? 0), String(tf.transport_failure ?? 0),
-      String(tf.harness_fault ?? 0), String(a.unresolved), String(a.unissued), runIds,
+      target.label,
+      fmtSec(t.totalScenarioSec),
+      fmtSec(t.clusterReadySec),
+      fmtSec(t.semanticGateTotalSec),
+      fmtSec(t.warmupSec),
+      fmtSec(t.workloadDrainSec),
+      fmtSec(t.postVerifySec),
+      fmtSec(t.maxSingleRequestSec, 3),
     ],
   };
 }
 
-function buildMeasurementBreakdownTable(matrix, {heading, description, targetIds, claimKey}) {
-  const targets = arrayMap(targetIds, (id) => arrayFind(matrix.targets, (t) => t.targetId === id));
+function buildPartSpeedRow(target, claimKey) {
+  const cell = target.claims[claimKey];
+  if (!cell) throw new Error(`${target.label}/${claimKey}: no admission cell`);
+  const t = cell.metrics?.runs?.[0]?.timingsSec;
+  const p = t?.partsSec;
+  if (!t || !p) {
+    return {
+      status: cell.status,
+      values: [target.label, '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'],
+    };
+  }
   return {
-    heading,
-    description,
-    headers: BREAKDOWN_HEADERS,
-    rows: arrayMap(targets, (t) => buildBreakdownRow(t, claimKey)),
+    status: cell.status,
+    values: [
+      target.label,
+      fmtSec(p.newOrderContentionSec),
+      fmtSec(p.visibilitySec),
+      fmtSec(p.paymentSec),
+      fmtSec(p.orderStatusSec),
+      fmtSec(p.deliverySec),
+      fmtSec(p.stockLevelSec),
+      fmtSec(p.failureAtomicitySec),
+      fmtSec(p.retryableConflictSec),
+      fmtSec(p.durabilityRestartSec),
+      fmtSec(t.warmupSec),
+      fmtSec(t.workloadDrainSec),
+    ],
   };
+}
+
+function buildMeasurementBreakdownTable(matrix, {heading, targetIds, claimKey}) {
+  const targets = arrayMap(targetIds, (id) => arrayFind(matrix.targets, (t) => t.targetId === id));
+  return [
+    {
+      heading: `${heading} - End-to-End & Phase Execution Speed (seconds)`,
+      description: 'Wall-clock seconds taken by each system to complete the entire Scenario A ' +
+        'journey and each major execution phase (lower is faster).',
+      headers: PHASE_SPEED_HEADERS,
+      rows: arrayMap(targets, (t) => buildPhaseSpeedRow(t, claimKey)),
+    },
+    {
+      heading: `${heading} - Per-Part Scenario A Time Breakdown (seconds)`,
+      description: 'Observed seconds taken by each system on each individual part of Scenario A ' +
+        '(Parts 1-9 semantic workload cases, Part 10 warmup, and Part 11 measured workload).',
+      headers: PART_SPEED_HEADERS,
+      rows: arrayMap(targets, (t) => buildPartSpeedRow(t, claimKey)),
+    },
+  ];
+}
+
+function renderOneBreakdownTableMarkdown(table) {
+  const header = `| ${arrayJoin(table.headers, ' | ')} |`;
+  const rule = `| ${arrayJoin(arrayMap(table.headers, () => '---'), ' | ')} |`;
+  const rows = arrayMap(table.rows, (r) =>
+    `| ${arrayJoin(arrayMap(r.values, mdEscape), ' | ')} |`);
+  return [`## ${table.heading}`, '', table.description, '', header, rule, ...rows, ''];
 }
 
 function renderBreakdownMarkdown(breakdown) {
   if (!breakdown) return [];
-  const header = `| ${arrayJoin(breakdown.headers, ' | ')} |`;
-  const rule = `| ${arrayJoin(arrayMap(breakdown.headers, () => '---'), ' | ')} |`;
-  const rows = arrayMap(breakdown.rows, (r) =>
-    `| ${arrayJoin(arrayMap(r.values, mdEscape), ' | ')} |`);
-  return [`## ${breakdown.heading}`, '', breakdown.description, '', header, rule, ...rows, ''];
+  const tables = Array.isArray(breakdown) ? breakdown : [breakdown];
+  const out = [];
+  for (const table of tables) out.push(...renderOneBreakdownTableMarkdown(table));
+  return out;
+}
+
+function renderOneBreakdownTableHtml(table) {
+  const head = arrayJoin(arrayMap(table.headers, (h) => `<th>${escapeXml(h)}</th>`), '');
+  const rows = arrayMap(table.rows, (r) =>
+    `<tr class="${escapeXml(r.status)}">` +
+    arrayJoin(arrayMap(r.values, (v) => `<td>${escapeXml(v)}</td>`), '') + '</tr>');
+  return `<h2>${escapeXml(table.heading)}</h2><p>${escapeXml(table.description)}</p>` +
+    `<table><thead><tr>${head}</tr></thead><tbody>${arrayJoin(rows, '')}</tbody></table>`;
 }
 
 function renderBreakdownHtml(breakdown) {
   if (!breakdown) return '';
-  const head = arrayJoin(arrayMap(breakdown.headers, (h) => `<th>${escapeXml(h)}</th>`), '');
-  const rows = arrayMap(breakdown.rows, (r) =>
-    `<tr class="${escapeXml(r.status)}">` +
-    arrayJoin(arrayMap(r.values, (v) => `<td>${escapeXml(v)}</td>`), '') + '</tr>');
-  return `<h2>${escapeXml(breakdown.heading)}</h2><p>${escapeXml(breakdown.description)}</p>` +
-    `<table><thead><tr>${head}</tr></thead><tbody>${arrayJoin(rows, '')}</tbody></table>`;
+  const tables = Array.isArray(breakdown) ? breakdown : [breakdown];
+  return arrayJoin(arrayMap(tables, renderOneBreakdownTableHtml), '');
 }
 
 function buildExperimentSection(matrix, experimentId, description) {

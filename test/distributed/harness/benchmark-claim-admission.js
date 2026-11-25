@@ -1157,6 +1157,7 @@ function countsOnly(m) {
     runId: m.runId, runStatus: m.runStatus, offeredRatePerSec: m.offeredRatePerSec,
     repetition: m.repetition,
     accounting: m.accounting, drainOverrunMs: m.drainOverrunMs, maxLatencyMs: m.maxLatencyMs,
+    ...(m.timingsSec ? {timingsSec: m.timingsSec} : {}),
   };
 }
 

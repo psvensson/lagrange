@@ -52,6 +52,11 @@ function cellTitle(cell) {
 }
 
 function cellBadgeText(cell) {
+  const t = cell.metrics?.runs?.[0]?.timingsSec;
+  if (cell.status === CLAIM_CELL_STATUS.VALID_OBSERVED &&
+      typeof t?.totalScenarioSec === 'number' && typeof t?.workloadDrainSec === 'number') {
+    return `${formatNum(t.totalScenarioSec)}s total (${formatNum(t.workloadDrainSec)}s wl)`;
+  }
   const a = cell.metrics?.accounting;
   if (cell.status === CLAIM_CELL_STATUS.VALID_OBSERVED && a) {
     return `${cell.status} (${a.committed}/${a.offered})`;
