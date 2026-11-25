@@ -479,7 +479,9 @@ function advanceHealthySampleState(baseState, observation) {
 }
 
 function isDemandSaturatingBudget(demand, limit) {
-  return (Number(demand.occupancy) || 0) >= limit && (Number(demand.waitingDemandCount) || 0) > 0;
+  const occupancy = Math.max(0, Number(demand.occupancy) || 0);
+  const waiting = Math.max(0, Number(demand.waitingDemandCount) || 0);
+  return waiting > 0 && occupancy + waiting > limit;
 }
 
 function evaluateHealthyWindowGrowth(baseState, bootReset, observation, demand, nowMs, config) {
