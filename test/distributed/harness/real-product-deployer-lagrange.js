@@ -100,6 +100,7 @@ import {
   dockerRunDetached,
   dockerRunOnceCommand,
   execWithStatus,
+  settleConcurrentBatch,
 } from './real-product-remote-shell.js';
 import {
   bindEndpointToContainer,
@@ -616,9 +617,12 @@ async function formLagrangeCluster({ctx, rawSshRun, hosts, image, connection, ro
     campaignId, index: 0}));
   await startJoinerNodes({sshRun, opts, hosts, seedHost, image, connection, campaignId, roles});
   ctx.watchedRoles = [...roles];
-  for (let index = 0; index < hosts.length; index += 1) {
-    nodeReadiness.push(await nodeReady(ctx, hosts[index]));
-  }
+  const readyNodes = await settleConcurrentBatch(
+    hosts,
+    (host) => nodeReady(ctx, host),
+    ctx.settleInFlight ?? null,
+  );
+  nodeReadiness.push(...readyNodes);
   const inspectedProducts = await inspectProducts({
     sshRun,
     opts,
